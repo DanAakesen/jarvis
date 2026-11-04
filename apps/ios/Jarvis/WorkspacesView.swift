@@ -28,6 +28,7 @@ struct WorkspacesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            JarvisPageHeader(title: text(.title), language: language)
             connectionStatus
             kindFilters
             if let notice {
@@ -42,25 +43,11 @@ struct WorkspacesView: View {
             results
         }
         .jarvisAmbientBackground()
-        .navigationTitle(text(.title))
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                JarvisIconButton(
-                    title: text(.refreshAccessibility),
-                    systemImage: "arrow.clockwise",
-                    identifier: "workspaces.refresh",
-                    isBusy: loadState == .loading,
-                    action: refresh
-                )
-            }
-            .sharedBackgroundVisibility(.hidden)
-        }
+        .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             searchField
                 .padding(.top, JarvisDesignTokens.contentSpacing / 2)
                 .padding(.bottom, JarvisDesignTokens.contentSpacing / 2)
-                .background(.regularMaterial)
         }
         .task(id: "\(query)|\(selectedKind?.rawValue ?? "")|\(reloadID)") {
             do {

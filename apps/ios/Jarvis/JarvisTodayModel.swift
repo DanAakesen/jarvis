@@ -57,9 +57,19 @@ final class JarvisTodayModel: ObservableObject {
             timeOfDay: JarvisTimeOfDay(date: now, calendar: timeCalendar),
             nextEvent: JarvisTodayAgenda.nextEntry(calendar.value ?? [], now: now, calendar: timeCalendar),
             tasksDueToday: taskData.value?.lists.today.count ?? 0,
+            stepsToday: steps.value.map { JarvisTodayActivity.todaySteps($0, now: now, calendar: timeCalendar) },
+            workoutsThisWeek: workoutsThisWeek,
             language: language,
             calendar: timeCalendar
         )
+    }
+
+    /// Logged workouts in the last seven days, or nil until the log has loaded.
+    private var workoutsThisWeek: Int? {
+        guard let entries = workouts.value else { return nil }
+        let today = timeCalendar.startOfDay(for: now)
+        guard let from = timeCalendar.date(byAdding: .day, value: -6, to: today) else { return nil }
+        return entries.filter { $0.performedAt >= from }.count
     }
 
     func display(language: JarvisAppLanguage) -> JarvisTodayActivityDisplay {

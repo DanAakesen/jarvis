@@ -5,6 +5,9 @@
 "today.greeting.taskOne" = "You have {1 task} due today.";
 "today.greeting.tasks" = "You have {%ld tasks} due today.";
 "today.greeting.clear" = "Your {day is clear}.";
+"today.greeting.steps" = "You have taken {%ld steps} today.";
+"today.greeting.workoutOne" = "You logged {1 workout} this week.";
+"today.greeting.workouts" = "You logged {%ld workouts} this week.";
 "today.nextUp" = "Next up";
 "today.tomorrow" = "Tomorrow";
 "today.overdue" = "Overdue";
@@ -19,7 +22,7 @@
 "today.nothingPlanned" = "Nothing planned";
 "today.nothingToday" = "Nothing today";
 "today.nothingDue" = "Nothing due";
-"today.calendarUnavailable" = "Calendar unavailable";
+"today.calendarUnavailable" = "Calendar is not connected to the app yet, so no events are shown. Ask Jarvis in chat for your calendar.";
 "today.tasksUnavailable" = "Tasks unavailable";
 "today.markDone" = "Mark done";
 "today.workouts" = "Workouts";
@@ -85,6 +88,8 @@
 "today.lift.barbellRow" = "Barbell row";
 "today.lift.pullUp" = "Pull-up";
 "today.liftType" = "Lift";
+"today.liftName" = "Exercise";
+"today.liftNameHint" = "Type a name. Your earlier exercises show up here.";
 "today.logDate" = "Date";
 "today.setDate" = "Set date";
 "today.clearDate" = "Clear date";

@@ -48,6 +48,7 @@
 "notes.reload" = "Reload latest";
 "notes.titleField" = "Title";
 "notes.folderField" = "Folder";
+"notes.newFolder" = "New folder";
 "notes.contentField" = "Text";
 "notes.dueDate" = "Due date";
 "notes.dueTime" = "Due time";

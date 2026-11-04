@@ -326,14 +326,23 @@ struct JarvisHealthArea: View {
                 .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }
             .scrollIndicators(.hidden)
+            .refreshable {
+                await loadDashboard()
+                await loadLifts()
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-                    segmentSwitcher
+                VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
+                    HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
+                        segmentSwitcher
+                        plusMenu
+                    }
+                    .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
                     searchBar
                 }
                 .padding(.vertical, JarvisDesignTokens.healthSectionSpacing)
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: dashboard?.preset)
         .jarvisAmbientBackground()
         .tint(JarvisDesignTokens.healthAccent)
         .environment(\.locale, language.locale)
@@ -350,6 +359,8 @@ struct JarvisHealthArea: View {
                 language: language,
                 onSaved: { refreshVersion += 1 }
             )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $newWorkoutPresented) {
             JarvisHealthNewWorkoutSheet(
@@ -357,6 +368,8 @@ struct JarvisHealthArea: View {
                 language: language,
                 onSaved: { refreshVersion += 1 }
             )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .task {
             guard observeRefreshEvents, let client else { return }
@@ -373,34 +386,29 @@ struct JarvisHealthArea: View {
     }
 
     private var header: some View {
-        JarvisPageHeader(title: copy.text(.title), language: language) {
-            JarvisIconButton(
-                title: copy.text(.refresh),
-                systemImage: "arrow.clockwise",
-                identifier: "health.refresh",
-                isDisabled: isLoading
-            ) {
-                refreshVersion += 1
+        JarvisPageHeader(title: copy.text(.title), language: language)
+    }
+
+    /// The log menu sits beside the tabs so the thumb reaches it.
+    private var plusMenu: some View {
+        JarvisMenuButton(
+            title: copy.text(.log),
+            systemImage: "plus",
+            identifier: "health.plus"
+        ) {
+            Button {
+                newLiftPresented = true
+            } label: {
+                Label(copy.text(.logLift), systemImage: "dumbbell")
             }
-            JarvisMenuButton(
-                title: copy.text(.log),
-                systemImage: "plus",
-                identifier: "health.plus"
-            ) {
-                Button {
-                    newLiftPresented = true
-                } label: {
-                    Label(copy.text(.logLift), systemImage: "dumbbell")
-                }
-                .disabled(!liftsAvailable || liftsLoading)
-                .accessibilityIdentifier("health.logLift")
-                Button {
-                    newWorkoutPresented = true
-                } label: {
-                    Label(copy.text(.logWorkout), systemImage: "figure.run")
-                }
-                .accessibilityIdentifier("health.logWorkout")
+            .disabled(!liftsAvailable || liftsLoading)
+            .accessibilityIdentifier("health.logLift")
+            Button {
+                newWorkoutPresented = true
+            } label: {
+                Label(copy.text(.logWorkout), systemImage: "figure.run")
             }
+            .accessibilityIdentifier("health.logWorkout")
         }
     }
 
@@ -420,50 +428,27 @@ struct JarvisHealthArea: View {
             ],
             selection: $trackWorkout
         )
-        .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
         .onChange(of: trackWorkout) { _, _ in searchText = "" }
     }
 
     private var periodMenu: some View {
-        JarvisLabelledMenu(title: copy.period(periodPreset), identifier: "health.period") {
-            ForEach(JarvisHealthPeriodPreset.allCases) { preset in
-                Button {
-                    periodPreset = preset
-                } label: {
-                    if periodPreset == preset {
-                        Label(copy.period(preset), systemImage: "checkmark")
-                    } else {
-                        Text(copy.period(preset))
-                    }
-                }
-            }
-        }
+        JarvisPeriodSelector(
+            title: copy.text(.periodLabel),
+            identifierPrefix: "health.period",
+            items: JarvisHealthPeriodPreset.allCases.map {
+                JarvisTabItem(tag: $0, title: copy.period($0), identifier: "health.period.\($0.rawValue)")
+            },
+            selection: $periodPreset
+        )
     }
 
     private var searchBar: some View {
-        HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-            HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                TextField(copy.text(.search), text: $searchText)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityLabel(copy.text(.search))
-                    .accessibilityIdentifier("health.search")
-                if !searchText.isEmpty {
-                    JarvisIconButton(
-                        title: copy.text(.clearSearch),
-                        systemImage: "xmark.circle.fill",
-                        identifier: "health.search.clear"
-                    ) { searchText = "" }
-                }
-            }
-            .padding(.leading, JarvisDesignTokens.healthSectionSpacing)
-            .padding(.trailing, JarvisDesignTokens.notesCompactInset)
-            .frame(minHeight: JarvisDesignTokens.healthControlHeight)
-            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.healthPanelRadius)
-        }
+        JarvisSearchField(
+            placeholder: copy.text(.search),
+            text: $searchText,
+            identifier: "health.search",
+            clearTitle: copy.text(.clearSearch)
+        )
         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
     }
 
@@ -570,7 +555,7 @@ struct JarvisHealthArea: View {
         let previous = dashboard?.preset == periodPreset ? dashboard : nil
         isLoading = true
         defer { isLoading = false }
-        if previous == nil {
+        if dashboard == nil {
             dashboard = JarvisHealthDashboardData(preset: periodPreset)
         }
         guard let client else {

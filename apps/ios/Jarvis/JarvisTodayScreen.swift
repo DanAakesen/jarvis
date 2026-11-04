@@ -90,9 +90,11 @@ struct JarvisTodayScreen: View {
         return JarvisTodayShimmer(isAnimated: !fixtureMode && !reduceMotion) {
             Text(attributedGreeting(value))
                 .font(.system(size: greetingSize, weight: .semibold))
-                .lineLimit(3)
+                .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        .padding(.top, 12)
+        .padding(.bottom, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(value.plainText)
@@ -558,7 +560,7 @@ struct JarvisTodayScreen: View {
             JarvisTodayGymSheet(
                 model: model, language: language, kind: presented.id == "lift" ? .lift : .workout
             )
-            .presentationDetents([.large])
+            .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
     }

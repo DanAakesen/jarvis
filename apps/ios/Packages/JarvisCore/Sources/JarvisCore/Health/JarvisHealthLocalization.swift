@@ -5,6 +5,7 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case dashboard = "health.dashboard"
     case trackWorkout = "health.trackWorkout"
     case refresh = "health.refresh"
+    case periodLabel = "health.periodLabel"
     case search = "health.search"
     case clearSearch = "health.clearSearch"
     case today = "health.period.today"

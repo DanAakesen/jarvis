@@ -97,6 +97,8 @@ struct JarvisProactiveArea: View {
                 focus: request.focus,
                 onSaved: { Task { await settingsSaved() } }
             )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
 

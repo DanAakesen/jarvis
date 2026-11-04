@@ -10753,3 +10753,27 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: the Notifications page is titled Notifications / Notifikationer, and every label on it (away mode, pending confirmations, retry, loading, categories) comes from `JarvisChat.strings` in da and en.
 - Decision: the Notes preview fixture now answers `GET /api/vault/tasks` first, so the headline and hero show in screenshots. Before, the tasks request failed and the page showed only the title, tabs and one row.
 - Not verified: no Simulator run in this environment (Linux). Simulator screenshots (da/en, dark/light), the dark Notes render and the bottom bar overlap still need checking on a Mac.
+
+## 2026-11-04 P15-76: build 66 feedback fixes
+
+- Decision: a success is a log entry, never a notification. `notification-policy.ts` only admits info, warning and error; the feed hides stored success notifications; migration `0075_dismiss_success_notifications` dismisses the ones already stored (its reverse batch is a no-op, because dismissed rows are not restored). Task completion and model deployment success no longer notify. Recording a notification also purges notification rows older than the expiry window.
+- Decision: the Notes "Could not load notes" root cause was strict client parsing. `JarvisNotesClient` threw for the whole list when one entry failed validation (for example a dot-prefixed folder or an over-long path). Unusable entries are now skipped. Not confirmed against production, which is not reachable from this environment.
+- Decision: remembered lift names are stored on the device (`JarvisLiftNameMemory`, UserDefaults). No backend table, because only the owner's phone logs lifts. New-note folders are chosen from the folder tree; a folder exists once a note is saved in it, so no folder endpoint was added.
+- Decision: the Home calendar is not wired in the app. `JarvisTodayDependencies.calendar` stays unavailable because the backend has no owner-facing calendar read route (calendar is agent-only), so Home says that instead of "not available". Workouts read the vault Gym log and were affected by the same notes parsing failure.
+- Decision: refresh buttons are removed; every page uses pull to refresh. The plus sits beside the tabs. Home and Health share `JarvisPeriodSelector`. Sheets open at medium and expand to large.
+- Not done: the Tasks tab keeps its date groups (no four-way segmented filter yet); Health sections are not restyled; the Home calendar has no data source.
+- Not verified: no Simulator build or screenshots (Linux); the iOS app edits are not compiled here. JarvisCore tests (377) and backend checks pass.
+
+## 2026-11-04 P15-76: Factory layout, shared search and headers
+
+- Decision (superseded by the next entry for the project pill): on the Software Factory page the project and filter options sit under the hero, on the same row as the section title, not in a full-width bar above it. The bottom dock has no background; the segment pills and the search field are 12 pt apart.
+- Decision: every page's search field is the shared `JarvisSearchField` (48 pt glass capsule; the text field has the identifier and the clear button `identifier.clear`). Health, Notes, Settings and Factory use it.
+- Decision: all Factory kanban columns start collapsed (`defaultCollapsedColumns()` is every column); the owner expands each one.
+- Decision: pages other than Home and Chat use `JarvisPageHeader` with the navigation bar hidden, so the shared ambient background shows through with no bar or line. Usage and Workspaces were the two that differed (own header; native large title with a bar and a material search background) and now match.
+- Not done: the Notes tab row still sits between the title and the headline/hero; moving it under the hero needs every tab state (loading, empty, error) to render the row itself. Usage has no headline or hero yet. Settings is a list without a hero. Not compile-verified (Linux).
+
+## 2026-11-04 P15-76: Factory filter button and task rows (board update from Dan)
+
+- Decision: the project pill is gone. One round 48 pt glass funnel button (`factory.filters`, accessibility label "Filters" / "Filtre") sits right-aligned on the first section header row. Its small menu checks the selected project and also holds the agent and state filters. On the Releases tab, and on an empty board, it sits alone above the list.
+- Decision: task rows inside a section are indented 16 pt, opaque, with a hairline outline, a 12 pt corner radius and a slightly smaller title (callout) and metadata (caption2). Section headers stay the larger glass buttons.
+- Note: the board rows are in a `LazyVStack` and have no swipe actions today, so none were changed. Not compile-verified (Linux).

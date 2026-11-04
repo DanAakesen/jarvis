@@ -34,17 +34,10 @@ struct JarvisUsageArea: View {
 
     var body: some View {
         VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisInsightsHeader(
+            JarvisPageHeader(
                 title: JarvisDestination.usage.localizedTitle(language: language),
                 language: language
-            ) {
-                JarvisIconButton(
-                    title: text(.refresh),
-                    systemImage: "arrow.clockwise",
-                    identifier: "usage.refresh",
-                    isDisabled: isLoading
-                ) { reloadToken += 1 }
-            }
+            )
             JarvisTabStrip(
                 title: text(.usageRangeLabel),
                 identifierPrefix: "usage.range",
@@ -57,6 +50,7 @@ struct JarvisUsageArea: View {
                     .padding(.horizontal)
                     .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }
+            .refreshable { reloadToken += 1 }
             .accessibilityIdentifier("usage.scroll")
         }
         .jarvisAmbientBackground()
@@ -86,7 +80,7 @@ struct JarvisUsageArea: View {
             load = .failed(.notConfigured)
             return
         }
-        load = .loading
+        if case .loaded = load {} else { load = .loading }
         selectedBucketID = nil
         selectedSliceID = nil
         do {

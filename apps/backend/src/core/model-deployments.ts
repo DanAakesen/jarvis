@@ -272,12 +272,9 @@ function routeErrorMessage(error: unknown): string {
 function reportPendingOperation(
   app: FastifyInstance,
   name: string,
-  verb: 'create' | 'delete',
   completion: Promise<unknown>,
 ): void {
-  void completion.then(async () => {
-    await app.ownerInteractions?.notify('success', `Foundry model deployment ${name} ${verb} request was accepted.`);
-  }, async (error: unknown) => {
+  void completion.then(() => undefined, async (error: unknown) => {
     if (error instanceof ToolRefusal) {
       await app.ownerInteractions?.notify('warning', `Model deployment ${name} was not changed: ${error.message}`)
         .catch(() => undefined);
@@ -354,7 +351,7 @@ export function registerModelDeploymentRoutes(app: FastifyInstance): void {
     }
     try {
       const pendingOperation = await workflow.startCreate(request.body, AbortSignal.timeout(6 * 60_000));
-      reportPendingOperation(app, pendingOperation.name, 'create', pendingOperation.completion);
+      reportPendingOperation(app, pendingOperation.name, pendingOperation.completion);
       return reply.code(202).send({ status: 'approval_pending', name: pendingOperation.name });
     } catch (error) {
       if (!(error instanceof ModelDeploymentError)) app.log.warn('models.deployment_request_failed');
@@ -381,7 +378,7 @@ export function registerModelDeploymentRoutes(app: FastifyInstance): void {
     }
     try {
       const pendingOperation = await workflow.startDelete(request.params.name, AbortSignal.timeout(6 * 60_000));
-      reportPendingOperation(app, pendingOperation.name, 'delete', pendingOperation.completion);
+      reportPendingOperation(app, pendingOperation.name, pendingOperation.completion);
       return reply.code(202).send({ status: 'approval_pending', name: pendingOperation.name });
     } catch (error) {
       if (!(error instanceof ModelDeploymentError)) app.log.warn('models.deployment_request_failed');

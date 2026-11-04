@@ -2,6 +2,7 @@
 "health.dashboard" = "Dashboard";
 "health.trackWorkout" = "Track workout";
 "health.refresh" = "Refresh";
+"health.periodLabel" = "Period";
 "health.search" = "Search health metrics";
 "health.clearSearch" = "Clear search";
 "health.period.today" = "Today";

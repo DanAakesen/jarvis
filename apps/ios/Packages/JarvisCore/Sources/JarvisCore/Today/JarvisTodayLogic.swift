@@ -32,6 +32,8 @@ public struct JarvisTodayGreeting: Equatable, Sendable {
         timeOfDay: JarvisTimeOfDay,
         nextEvent: JarvisTodayCalendarEntry?,
         tasksDueToday: Int,
+        stepsToday: Int? = nil,
+        workoutsThisWeek: Int? = nil,
         language: JarvisAppLanguage,
         calendar: Calendar = .current
     ) -> JarvisTodayGreeting {
@@ -41,23 +43,32 @@ public struct JarvisTodayGreeting: Equatable, Sendable {
         case .afternoon: opening = .greetingAfternoon
         case .evening: opening = .greetingEvening
         }
-        let second: String
+        var sentences = [JarvisTodayLocalization.string(opening, language: language)]
         if let nextEvent {
-            second = JarvisTodayLocalization.string(
+            sentences.append(JarvisTodayLocalization.string(
                 .greetingNextEvent,
                 stripBraces(nextEvent.title),
                 timeText(nextEvent.start, language: language, calendar: calendar),
                 language: language
-            )
-        } else if tasksDueToday == 1 {
-            second = JarvisTodayLocalization.string(.greetingTaskOne, language: language)
-        } else if tasksDueToday > 1 {
-            second = JarvisTodayLocalization.string(.greetingTasks, count: tasksDueToday, language: language)
-        } else {
-            second = JarvisTodayLocalization.string(.greetingClear, language: language)
+            ))
         }
-        let text = JarvisTodayLocalization.string(opening, language: language) + " " + second
-        return JarvisTodayGreeting(segments: parse(text))
+        if tasksDueToday == 1 {
+            sentences.append(JarvisTodayLocalization.string(.greetingTaskOne, language: language))
+        } else if tasksDueToday > 1 {
+            sentences.append(JarvisTodayLocalization.string(.greetingTasks, count: tasksDueToday, language: language))
+        } else if nextEvent == nil {
+            sentences.append(JarvisTodayLocalization.string(.greetingClear, language: language))
+        }
+        // Only values that were actually read: steps and logged workouts are left out until they are known.
+        if let stepsToday, stepsToday > 0 {
+            sentences.append(JarvisTodayLocalization.string(.greetingSteps, count: stepsToday, language: language))
+        }
+        if workoutsThisWeek == 1 {
+            sentences.append(JarvisTodayLocalization.string(.greetingWorkoutOne, language: language))
+        } else if let workoutsThisWeek, workoutsThisWeek > 1 {
+            sentences.append(JarvisTodayLocalization.string(.greetingWorkouts, count: workoutsThisWeek, language: language))
+        }
+        return JarvisTodayGreeting(segments: parse(sentences.joined(separator: " ")))
     }
 
     static func stripBraces(_ value: String) -> String {

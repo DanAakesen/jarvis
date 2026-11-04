@@ -306,7 +306,7 @@ public enum JarvisFactoryPresentation {
     }
 
     public static func defaultCollapsedColumns() -> Set<FactoryBoardColumnID> {
-        [.done]
+        Set(FactoryBoardColumnID.allCases)
     }
 
     public static func availableControls(
