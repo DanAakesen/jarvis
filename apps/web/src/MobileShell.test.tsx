@@ -10,7 +10,7 @@ function Harness({ onNavigate = () => {}, onContext = () => {}, path = '/', ...f
   onContext?: () => void;
   onComposer?: () => void;
   path?: string;
-  dailyEnabled?: boolean;
+  healthEnabled?: boolean;
   proactiveEnabled?: boolean;
   sections?: NonNullable<ComponentProps<typeof MobileMenu>['sections']>;
 }) {
@@ -111,11 +111,11 @@ describe('mobile menu pages', () => {
 
   // Chat, Health and Workspaces stay in the bottom bar; this sheet lists secondary destinations.
   it.each([
-    { dailyEnabled: false, proactiveEnabled: false, pages: ['Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
-    { dailyEnabled: true, proactiveEnabled: false, pages: ['Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
-    { dailyEnabled: false, proactiveEnabled: true, pages: ['Proactive', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
-    { dailyEnabled: true, proactiveEnabled: true, pages: ['Proactive', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
-  ])('lists secondary destinations (daily $dailyEnabled, proactive $proactiveEnabled)', async ({ pages, ...flags }) => {
+    { healthEnabled: false, proactiveEnabled: false, pages: ['Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { healthEnabled: true, proactiveEnabled: false, pages: ['Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { healthEnabled: false, proactiveEnabled: true, pages: ['Proactive', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+    { healthEnabled: true, proactiveEnabled: true, pages: ['Proactive', 'Software Factory', 'Notes', 'Usage', 'Status', 'Settings'] },
+  ])('lists secondary destinations (daily $healthEnabled, proactive $proactiveEnabled)', async ({ pages, ...flags }) => {
     const navigation = await openPages(flags);
     expect(navigation.getAllByRole('link').map((link) => link.textContent)).toEqual(pages);
     expect(within(navigation.getByLabelText('Menu page 1')).getAllByRole('link').map((link) => link.textContent))
@@ -141,7 +141,7 @@ describe('mobile menu pages', () => {
     };
     const user = userEvent.setup();
     const navigate = vi.fn();
-    render(<Harness dailyEnabled path="/health?section=nutrition" onNavigate={navigate} sections={sections} />);
+    render(<Harness healthEnabled path="/health?section=nutrition" onNavigate={navigate} sections={sections} />);
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
     const navigation = within(screen.getByRole('navigation', { name: 'Pages' }));
     expect(navigation.getAllByRole('link').map((link) => link.textContent))
@@ -156,7 +156,7 @@ describe('mobile menu pages', () => {
   });
 
   it('shows no sub-pages when the open area publishes none', async () => {
-    const navigation = await openPages({ dailyEnabled: true });
+    const navigation = await openPages({ healthEnabled: true });
     expect(navigation.getAllByRole('link').map((link) => link.textContent))
       .toEqual(['Software Factory', 'Notes', 'Usage', 'Status', 'Settings']);
   });
@@ -188,14 +188,14 @@ describe('mobile menu pages', () => {
 });
 
 describe('mobile bottom navigation', () => {
-  function BottomNavHarness({ path = '/', dailyEnabled = true }: { path?: string; dailyEnabled?: boolean }) {
+  function BottomNavHarness({ path = '/', healthEnabled = true }: { path?: string; healthEnabled?: boolean }) {
     const [open, setOpen] = useState(false);
     const [workspacesOpen, setWorkspacesOpen] = useState(false);
     return <MemoryRouter initialEntries={[path]}>
-      <MobileBottomNav menuOpen={open} dailyEnabled={dailyEnabled} workspacesOpen={workspacesOpen}
+      <MobileBottomNav menuOpen={open} healthEnabled={healthEnabled} workspacesOpen={workspacesOpen}
         onToggleWorkspaces={() => setWorkspacesOpen((value) => !value)}
         onOpenMenu={() => setOpen((value) => !value)} onNavigate={() => {}} />
-      <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={() => {}} onContext={() => {}} dailyEnabled={dailyEnabled} />
+      <MobileMenu open={open} onClose={() => setOpen(false)} onNavigate={() => {}} onContext={() => {}} healthEnabled={healthEnabled} />
       <div role="region" aria-label="Workspaces pane" hidden={!workspacesOpen} />
     </MemoryRouter>;
   }
@@ -220,7 +220,7 @@ describe('mobile bottom navigation', () => {
   });
 
   it('omits Health when its destination is not enabled and highlights Menu on secondary pages', () => {
-    render(<BottomNavHarness path="/notes" dailyEnabled={false} />);
+    render(<BottomNavHarness path="/notes" healthEnabled={false} />);
     const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' });
     expect(within(navigation).queryByRole('link', { name: 'Health' })).toBeNull();
     expect(within(navigation).getByRole('button', { name: 'Menu' }).getAttribute('aria-current')).toBe('page');

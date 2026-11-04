@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
-import { parseDailyEnabled } from './config/daily-switch.ts';
+import { parseHealthEnabled } from './config/health-switch.ts';
 import { createPublicConfig, isPushEnabled } from './config/public-config.ts';
 import { isProactiveEnabled } from './config/proactive-switch.ts';
 
@@ -12,9 +12,9 @@ const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 export default defineConfig(({ mode }) => {
   const bootstrap: unknown = JSON.parse(readFileSync(new URL('../../infra/bootstrap.output.json', import.meta.url), 'utf8'));
   const settings: { backendUrl: unknown } = JSON.parse(readFileSync(new URL('./config.json', import.meta.url), 'utf8'));
-  const env = loadEnv(mode, repositoryRoot, ['VITE_BACKEND_URL', 'VITE_DAILY_ENABLED', 'VITE_PUSH_ENABLED', 'VITE_PROACTIVE_ENABLED']);
+  const env = loadEnv(mode, repositoryRoot, ['VITE_BACKEND_URL', 'VITE_HEALTH_ENABLED', 'VITE_DAILY_ENABLED', 'VITE_PUSH_ENABLED', 'VITE_PROACTIVE_ENABLED']);
   const publicConfig = createPublicConfig(bootstrap, env.VITE_BACKEND_URL ?? settings.backendUrl);
-  const dailyEnabled = parseDailyEnabled(env.VITE_DAILY_ENABLED);
+  const healthEnabled = parseHealthEnabled(env.VITE_HEALTH_ENABLED ?? env.VITE_DAILY_ENABLED);
 
   return {
     plugins: [react()],
@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
     envPrefix: [],
     define: {
       __JARVIS_CONFIG__: JSON.stringify(publicConfig),
-      __JARVIS_DAILY_ENABLED__: JSON.stringify(dailyEnabled),
+      __JARVIS_HEALTH_ENABLED__: JSON.stringify(healthEnabled),
       __JARVIS_PUSH_ENABLED__: JSON.stringify(isPushEnabled(env.VITE_PUSH_ENABLED)),
       __JARVIS_PROACTIVE_ENABLED__: JSON.stringify(isProactiveEnabled(env.VITE_PROACTIVE_ENABLED)),
     },

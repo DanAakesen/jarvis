@@ -90,3 +90,9 @@
 "health.workoutType.legsCore" = "Ben + core";
 "health.workoutType.cardio" = "Cardio";
 "health.workoutType.other" = "Andet";
+"health.sync" = "Synkroniser Apple Sundhed";
+"health.syncing" = "Synkroniserer…";
+"health.syncNever" = "Ikke synkroniseret endnu";
+"health.syncComplete" = "Synkroniseret %@. Alle datatyper blev læst.";
+"health.syncPartial" = "Delvist synkroniseret %@. Mangler: %@.";
+"health.syncFailed" = "Synkroniseringen mislykkedes. Prøv igen.";

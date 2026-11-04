@@ -13,7 +13,7 @@ const report = {
   codexToolCallsToday: [{ tool: 'web_research', count: '3' }],
   totalEntries: '4',
   truncated: false,
-  dailyToolUsage: {
+  healthToolUsage: {
     date: '2026-10-04',
     tools: [{ tool: 'image_generation', count: '2' }],
   },

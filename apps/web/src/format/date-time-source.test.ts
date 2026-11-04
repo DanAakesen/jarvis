@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 const sourceRoot = join(process.cwd(), 'src');
 const forbiddenDateFormatters = /\bIntl\s*\.\s*DateTimeFormat\b|\.\s*toLocale(?:String|DateString|TimeString)\s*\(/gu;
 const allowlistedDateCalculations = new Map<string, { count: number; reason: string }>([
-  ['daily/period.ts', { count: 1, reason: 'extracts Copenhagen calendar parts for period calculations' }],
-  ['daily/presentation.ts', { count: 1, reason: 'extracts Copenhagen calendar parts for the current data period' }],
+  ['health/period.ts', { count: 1, reason: 'extracts Copenhagen calendar parts for period calculations' }],
+  ['health/presentation.ts', { count: 1, reason: 'extracts Copenhagen calendar parts for the current data period' }],
   ['proactive-data.ts', { count: 2, reason: 'converts Copenhagen wall-clock values for scheduling' }],
 ]);
 

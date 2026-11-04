@@ -49,7 +49,7 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain("CHECK (kind = N'test')");
     expect((await readDownMigration('0054_proactive_push.sql')).sql).toContain('cannot roll back while rows exist');
   });
-  it('stores owner-set Daily training targets without defaults and protects them on rollback', async () => {
+  it('stores owner-set Health training targets without defaults and protects them on rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0061_daily_training_targets.sql');
     expect(migration?.sql).toContain('CREATE TABLE daily.training_targets');
     expect(migration?.sql).toContain('owner_object_id uniqueidentifier NOT NULL');

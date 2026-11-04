@@ -365,22 +365,22 @@ function semanticPairings(): Pairing[] {
     { label: 'Selected text', foreground: 'var(--state-selected-fg)', backgrounds: ['--page', '--surface', '--surface-muted', '--surface-translucent'].map((name) => ({ label: `${name} with selected fill`, layers: [`var(${name})`, 'var(--state-selected-bg)'] })), threshold: 4.5 },
     { label: 'Selected text / hover', foreground: 'var(--state-selected-fg)', backgrounds: ['--page', '--surface', '--surface-translucent'].map((name) => ({ label: `${name} with selected hover`, layers: [`var(${name})`, 'var(--state-selected-hover)'] })), threshold: 4.5 },
     { label: 'Selected text / pressed', foreground: 'var(--state-selected-fg)', backgrounds: ['--page', '--surface', '--surface-translucent'].map((name) => ({ label: `${name} with selected pressed`, layers: [`var(${name})`, 'var(--state-selected-pressed)'] })), threshold: 4.5 },
-    { label: 'Daily stat tile values and deltas', foreground: 'var(--text)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 4.5 },
-    { label: 'Daily/chart axes and target labels', foreground: 'var(--text-muted)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 4.5 },
+    { label: 'Health stat tile values and deltas', foreground: 'var(--text)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 4.5 },
+    { label: 'Health/chart axes and target labels', foreground: 'var(--text-muted)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 4.5 },
     { label: 'Generated chart axes and table text', foreground: 'var(--text-muted)', backgrounds: ['--surface-translucent', '--report-surface'].map((name) => ({ label: name, layers: tokens(name) })), threshold: 4.5 },
-    { label: 'Daily/chart cool series line', foreground: 'var(--glass-edge-cool)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
-    { label: 'Daily/chart cool legend mark', foreground: 'var(--glass-edge-cool)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
-    { label: 'Daily/chart cool series bar (82% opacity)', foreground: 'color-mix(in srgb, var(--glass-edge-cool) 82%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
-    { label: 'Daily/chart warm series line', foreground: 'var(--chart-series-warm)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
-    { label: 'Daily/chart warm legend mark', foreground: 'var(--chart-series-warm)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
-    { label: 'Daily/chart warm series bar (82% opacity)', foreground: 'color-mix(in srgb, var(--chart-series-warm) 82%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
+    { label: 'Health/chart cool series line', foreground: 'var(--glass-edge-cool)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
+    { label: 'Health/chart cool legend mark', foreground: 'var(--glass-edge-cool)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
+    { label: 'Health/chart cool series bar (82% opacity)', foreground: 'color-mix(in srgb, var(--glass-edge-cool) 82%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
+    { label: 'Health/chart warm series line', foreground: 'var(--chart-series-warm)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
+    { label: 'Health/chart warm legend mark', foreground: 'var(--chart-series-warm)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
+    { label: 'Health/chart warm series bar (82% opacity)', foreground: 'color-mix(in srgb, var(--chart-series-warm) 82%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
     { label: 'Generated chart cool series bar (88% opacity)', foreground: 'color-mix(in srgb, var(--glass-edge-cool) 88%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
     { label: 'Generated chart warm series bar (88% opacity)', foreground: 'color-mix(in srgb, var(--chart-series-warm) 88%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
-    { label: 'Daily sparkline trace', foreground: 'var(--focus)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
-    { label: 'Daily meter fill', foreground: 'var(--focus)', backgrounds: [{ label: '--surface', layers: tokens('--surface') }], threshold: 3 },
-    { label: 'Daily legend range key (22% opacity)', foreground: 'color-mix(in srgb, var(--text-muted) 22%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3, allowlistReason: 'The range key is a secondary interval cue; the labeled range, chart series and accessible values table carry the data.' },
-    { label: 'Daily/chart cool area fill (16% opacity)', foreground: 'color-mix(in srgb, var(--glass-edge-cool) 16%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3, allowlistReason: 'Secondary area fill is not the series mark: a 3:1 line, labelled legend, and data table carry the same values.' },
-    { label: 'Daily/chart warm area fill (16% opacity)', foreground: 'color-mix(in srgb, var(--chart-series-warm) 16%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3, allowlistReason: 'Secondary area fill is not the series mark: a 3:1 line, labelled legend, and data table carry the same values.' },
+    { label: 'Health sparkline trace', foreground: 'var(--focus)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3 },
+    { label: 'Health meter fill', foreground: 'var(--focus)', backgrounds: [{ label: '--surface', layers: tokens('--surface') }], threshold: 3 },
+    { label: 'Health legend range key (22% opacity)', foreground: 'color-mix(in srgb, var(--text-muted) 22%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3, allowlistReason: 'The range key is a secondary interval cue; the labeled range, chart series and accessible values table carry the data.' },
+    { label: 'Health/chart cool area fill (16% opacity)', foreground: 'color-mix(in srgb, var(--glass-edge-cool) 16%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3, allowlistReason: 'Secondary area fill is not the series mark: a 3:1 line, labelled legend, and data table carry the same values.' },
+    { label: 'Health/chart warm area fill (16% opacity)', foreground: 'color-mix(in srgb, var(--chart-series-warm) 16%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3, allowlistReason: 'Secondary area fill is not the series mark: a 3:1 line, labelled legend, and data table carry the same values.' },
     { label: 'Generated chart area fill (14% opacity)', foreground: 'color-mix(in srgb, var(--chart-series-warm) 14%, transparent)', backgrounds: [{ label: '--surface-translucent', layers: tokens('--surface-translucent') }], threshold: 3, allowlistReason: 'Secondary area fill is not the series mark: a 3:1 line, labelled legend, and values table carry the same values.' },
     { label: 'Structural rule (not a control boundary)', foreground: 'var(--rule)', backgrounds: ['--page', '--surface', '--surface-translucent'].map((name) => ({ label: name, layers: tokens(name) })), threshold: 3, allowlistReason: 'The token separates content only; interactive controls use the measured --control-rule boundary.' },
     { label: 'Knowledge graph People mark', foreground: 'var(--graph-people)', backgrounds: ['--stage-background', '--stage-floor'].map((name) => ({ label: name, layers: tokens(name) })), threshold: 3 },
@@ -544,16 +544,16 @@ describe('app-wide theme contrast audit', () => {
   it('keeps state meaning available without hue', () => {
     const stateMessage = readFileSync('src/StateMessage.tsx', 'utf8');
     const proactive = readFileSync('src/ProactiveArea.tsx', 'utf8');
-    const dailyChart = readFileSync('src/daily/ui/DailyChart.tsx', 'utf8');
+    const healthChart = readFileSync('src/health/ui/HealthChart.tsx', 'utf8');
     const chartView = readFileSync('src/ChartView.tsx', 'utf8');
 
     expect(stateMessage).toContain("variant === 'error' ? 'alert' : 'status'");
     expect(stateMessage).toContain('aria-hidden="true">{mark}');
     expect(proactive).toContain('className="proactive-new">New</span>');
     expect(proactive).toContain("item.state === 'new' ? 'New'");
-    expect(dailyChart).toContain('aria-label={`${name} legend`}');
-    expect(dailyChart).toContain('data-series-index={seriesIndex}');
-    expect(dailyChart).toContain('<ScrollTable label={`${name} data`}>');
+    expect(healthChart).toContain('aria-label={`${name} legend`}');
+    expect(healthChart).toContain('data-series-index={seriesIndex}');
+    expect(healthChart).toContain('<ScrollTable label={`${name} data`}>');
     expect(chartView).toContain('<ul className="chart-legend" aria-hidden="true">');
     expect(chartView).toContain('<summary>Show values</summary>');
     expect(chartView).toContain('<table aria-label={`${title} values`}>');

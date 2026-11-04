@@ -6,9 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { getSignInGreeting } from './sign-in-greeting';
 import { publishJob } from './jobs-store';
-import { dailyCapabilitiesVersion, dailyQuerySources, factoryBoardColumnIds, isDailyQuery, type DailyQuery, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
-import { dailyFixture, jsonResponse } from './daily/test-support';
-import { expectNoDailyInRenderedContent } from './test/visible-copy';
+import { healthCapabilitiesVersion, healthQuerySources, factoryBoardColumnIds, isHealthQuery, type HealthQuery, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
+import { healthFixture, jsonResponse } from './health/test-support';
+import { expectNoHealthInRenderedContent } from './test/visible-copy';
 
 const {
   createAuthClient,
@@ -174,8 +174,8 @@ afterEach(() => {
 
 describe('Jarvis routes', () => {
   it.each([
-    ['/daily', '/health'],
-    ['/daily?section=data', '/health?section=data'],
+    ['/health', '/health'],
+    ['/health?section=data', '/health?section=data'],
     ['/daily#training-targets', '/health#training-targets'],
   ])('replaces legacy route %s with %s and keeps the URL suffix', async (path, expected) => {
     restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
@@ -526,9 +526,9 @@ describe('Jarvis routes', () => {
 });
 
 describe('App shell', () => {
-  async function renderSignedIn(path = '/', dailyEnabled = false) {
+  async function renderSignedIn(path = '/', healthEnabled = false) {
     restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
-    const rendered = render(<MemoryRouter initialEntries={[path]}><App config={config} dailyEnabled={dailyEnabled} /></MemoryRouter>);
+    const rendered = render(<MemoryRouter initialEntries={[path]}><App config={config} healthEnabled={healthEnabled} /></MemoryRouter>);
     await screen.findByRole('navigation', { name: 'Areas' });
     return rendered;
   }
@@ -591,7 +591,7 @@ describe('App shell', () => {
     })));
     restoreProfile.mockResolvedValue({ name: 'Test User' });
     const user = userEvent.setup();
-    render(<MemoryRouter><App config={config} dailyEnabled={daily} pushEnabled={false} proactiveEnabled={proactive} /></MemoryRouter>);
+    render(<MemoryRouter><App config={config} healthEnabled={daily} pushEnabled={false} proactiveEnabled={proactive} /></MemoryRouter>);
     await screen.findByRole('navigation', { name: 'Areas' });
     const mobileNavigation = within(screen.getByRole('navigation', { name: 'Mobile navigation' }));
     expect(mobileNavigation.getByRole('link', { name: 'Chat' })).not.toBeNull();
@@ -610,7 +610,7 @@ describe('App shell', () => {
 
   it('names every rail control in a hover label and gives each page its own selected tone', async () => {
     restoreProfile.mockResolvedValue({ name: 'Test User' });
-    render(<MemoryRouter><App config={config} dailyEnabled pushEnabled={false} /></MemoryRouter>);
+    render(<MemoryRouter><App config={config} healthEnabled pushEnabled={false} /></MemoryRouter>);
     const rail = within(await screen.findByRole('navigation', { name: 'Areas' }));
     const workspaces = rail.getByRole('button', { name: 'Workspaces' });
     for (const control of [...rail.getAllByRole('link'), workspaces]) {
@@ -818,13 +818,13 @@ describe('App shell', () => {
     };
   }
 
-  it.each([false, true])('leaves Daily routes, navigation and requests disabled by default (phone=%s)', async (phone) => {
+  it.each([false, true])('leaves Health routes, navigation and requests disabled by default (phone=%s)', async (phone) => {
     if (phone) vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
       media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
     })));
     const workspace = streamWorkspaceCommands();
-    await renderSignedIn('/daily');
+    await renderSignedIn('/health');
     await waitFor(() => expect(activityStream).not.toBeNull());
     if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
     expect(screen.queryByRole('link', { name: 'Health' })).toBeNull();
@@ -833,45 +833,45 @@ describe('App shell', () => {
     workspace.publishCommand({ commandId: 'daily-disabled', operation: 'navigate', page: 'daily' });
     await waitFor(() => expect(workspace.ack('daily-disabled')).toBeTruthy());
     expect(JSON.parse(String(workspace.ack('daily-disabled')![1]!.body))).toMatchObject({ applied: false });
-    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname.startsWith('/daily/'))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname.startsWith('/health/'))).toBe(false);
   });
 
-  it.each([false, true])('uses the same gated Daily page and existing refresh stream (phone=%s)', async (phone) => {
+  it.each([false, true])('uses the same gated Health page and existing refresh stream (phone=%s)', async (phone) => {
     if (phone) vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
       matches: query.includes('max-width: 700px'),
       media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
     })));
     const workspace = streamWorkspaceCommands();
     const respond = fetchMock.getMockImplementation()!;
-    const queries: DailyQuery[] = [];
+    const queries: HealthQuery[] = [];
     fetchMock.mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
-      if (path === '/daily/capabilities') return jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: Object.values(dailyQuerySources) });
-      if (path === '/daily/query') {
+      if (path === '/health/capabilities') return jsonResponse({ module: 'health', version: healthCapabilitiesVersion, sources: Object.values(healthQuerySources) });
+      if (path === '/health/query') {
         const query: unknown = JSON.parse(String(init?.body));
-        if (!isDailyQuery(query)) throw new Error('Invalid synthetic Daily query');
+        if (!isHealthQuery(query)) throw new Error('Invalid synthetic Health query');
         queries.push(query);
-        return jsonResponse(dailyFixture(query, [{ metric_name: 'synthetic_shell_measurement', value: 0, unit: 'kg' }]));
+        return jsonResponse(healthFixture(query, [{ metric_name: 'synthetic_shell_measurement', value: 0, unit: 'kg' }]));
       }
       return respond(input, init);
     });
     await renderSignedIn('/', true);
     const navigation = phone ? screen.getByRole('navigation', { name: 'Mobile navigation' }) : screen.getByRole('navigation', { name: 'Areas' });
-    expectNoDailyInRenderedContent(document.body);
+    expectNoHealthInRenderedContent(document.body);
     fireEvent.click(within(navigation).getByRole('link', { name: 'Health' }));
     await screen.findByRole('heading', { name: 'Training' });
-    expectNoDailyInRenderedContent(document.body);
+    expectNoHealthInRenderedContent(document.body);
     expect(screen.queryByRole('tablist', { name: 'Health sections' })).toBeNull();
     await openHealthPage('Data', phone);
     await screen.findByText('Synthetic shell measurement');
     fireEvent.click(screen.getByText('Source, units and coverage'));
     expect(screen.getByText('Health · metrics')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 1, name: 'Data' })).toBeTruthy();
-    expectNoDailyInRenderedContent(document.body);
+    expectNoHealthInRenderedContent(document.body);
     for (const label of ['Workouts', 'Nutrition', 'Body & sleep', 'Briefs', 'Data']) {
       await openHealthPage(label, phone);
       await waitFor(() => expect(screen.queryByText(`Loading ${label}`)).toBeNull());
-      expectNoDailyInRenderedContent(document.body);
+      expectNoHealthInRenderedContent(document.body);
     }
     await waitFor(() => expect(activityStream).not.toBeNull());
     const count = queries.length;
@@ -883,7 +883,7 @@ describe('App shell', () => {
     expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/now/events')).toHaveLength(1);
   });
 
-  it('discards cached Daily rows when the rendered signed-in account changes', async () => {
+  it('discards cached Health rows when the rendered signed-in account changes', async () => {
     restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
     const client = makeAuthClient();
     createAuthClient.mockReturnValue(client);
@@ -892,22 +892,22 @@ describe('App shell', () => {
     let owner = 'first';
     fetchMock.mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
-      if (path === '/daily/capabilities') return owner === 'first'
-        ? jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: Object.values(dailyQuerySources) })
+      if (path === '/health/capabilities') return owner === 'first'
+        ? jsonResponse({ module: 'health', version: healthCapabilitiesVersion, sources: Object.values(healthQuerySources) })
         : jsonResponse({ error: 'forbidden' }, 403);
-      if (path === '/daily/query') {
+      if (path === '/health/query') {
         const query: unknown = JSON.parse(String(init?.body));
-        if (!isDailyQuery(query)) throw new Error('Invalid synthetic Daily query');
-        return jsonResponse(dailyFixture(query, [{ metric_name: 'synthetic_first_owner', value: 1, unit: 'kg' }]));
+        if (!isHealthQuery(query)) throw new Error('Invalid synthetic Health query');
+        return jsonResponse(healthFixture(query, [{ metric_name: 'synthetic_first_owner', value: 1, unit: 'kg' }]));
       }
       return respond(input, init);
     });
     function AccountHarness() {
       const [, refresh] = useState(0);
       return <><button type="button" onClick={() => refresh(value => value + 1)}>Refresh synthetic owner</button>
-        <App config={config} dailyEnabled /></>;
+        <App config={config} healthEnabled /></>;
     }
-    render(<MemoryRouter initialEntries={['/daily']}><AccountHarness /></MemoryRouter>);
+    render(<MemoryRouter initialEntries={['/health']}><AccountHarness /></MemoryRouter>);
     await screen.findByRole('heading', { name: 'Training' });
     await openHealthPage('Data');
     await screen.findByText('Synthetic first owner');
@@ -1915,11 +1915,11 @@ describe('App shell', () => {
     const respond = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
-      if (path === '/daily/capabilities') return jsonResponse({ module: 'daily', version: dailyCapabilitiesVersion, sources: Object.values(dailyQuerySources) });
-      if (path === '/daily/query') {
+      if (path === '/health/capabilities') return jsonResponse({ module: 'health', version: healthCapabilitiesVersion, sources: Object.values(healthQuerySources) });
+      if (path === '/health/query') {
         const query: unknown = JSON.parse(String(init?.body));
-        if (!isDailyQuery(query)) throw new Error('Invalid synthetic Health query');
-        return jsonResponse(dailyFixture(query, []));
+        if (!isHealthQuery(query)) throw new Error('Invalid synthetic Health query');
+        return jsonResponse(healthFixture(query, []));
       }
       return respond(input, init);
     });
@@ -1939,7 +1939,7 @@ describe('App shell', () => {
     expect(pages.getAllByRole('link').filter(link => link.hasAttribute('aria-current'))).toEqual([pages.getByRole('link', { name: 'Overview' })]);
     expect(pages.getByRole('link', { name: 'Overview' }).getAttribute('aria-current')).toBe('page');
     expect(screen.queryByRole('tablist', { name: 'Health sections' })).toBeNull();
-    expectNoDailyInRenderedContent(document.body);
+    expectNoHealthInRenderedContent(document.body);
 
     fireEvent.click(pages.getByRole('link', { name: 'Nutrition' }));
     await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Health' })).toBeNull());
@@ -1969,7 +1969,7 @@ describe('App shell', () => {
     let release = () => {};
     const held = new Promise<void>(resolve => { release = resolve; });
     fetchMock.mockImplementation(async (input, init) => {
-      if (new URL(String(input)).pathname === '/daily/capabilities') await held;
+      if (new URL(String(input)).pathname === '/health/capabilities') await held;
       return respond(input, init);
     });
     await renderSignedIn('/health', true);
@@ -2455,18 +2455,18 @@ describe('App shell', () => {
     expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname === '/operations/sleep')).toBe(false);
   });
 
-  it('keeps Nutrition targets out of Settings while Daily is off', async () => {
+  it('keeps Nutrition targets out of Settings while Health is off', async () => {
     await renderSignedIn('/settings');
 
     expect(await screen.findByRole('heading', { level: 2, name: 'Projects' })).not.toBeNull();
     expect(screen.queryByRole('heading', { name: /^Nutrition targets/u })).toBeNull();
-    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname === '/daily/nutrition-targets')).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname === '/health/nutrition-targets')).toBe(false);
   });
 
-  it('shows Nutrition targets on Settings once Daily is on and reads them as the signed-in owner', async () => {
+  it('shows Nutrition targets on Settings once Health is on and reads them as the signed-in owner', async () => {
     const bound = (label: string, unit: string, min: number, max: number) => ({ label, unit, min, max });
     fetchMock.mockImplementation(async (input) => {
-      const body = new URL(String(input)).pathname === '/daily/nutrition-targets'
+      const body = new URL(String(input)).pathname === '/health/nutrition-targets'
         ? {
           targets: { restingKcal: 1750, deficitKcal: 350, proteinGrams: 110 },
           missing: [],
@@ -2484,8 +2484,8 @@ describe('App shell', () => {
 
     expect(await screen.findByRole('heading', { level: 2, name: /^Nutrition targets/u })).not.toBeNull();
     expect(((await screen.findByLabelText('Resting energy burn (kcal)')) as HTMLInputElement).value).toBe('1750');
-    const read = fetchMock.mock.calls.find(([url]) => new URL(String(url)).pathname === '/daily/nutrition-targets');
-    expect(read?.[0]).toBe('https://api.example.com/daily/nutrition-targets');
+    const read = fetchMock.mock.calls.find(([url]) => new URL(String(url)).pathname === '/health/nutrition-targets');
+    expect(read?.[0]).toBe('https://api.example.com/health/nutrition-targets');
     expect(read?.[1]?.method).toBe('GET');
     expect(new Headers(read?.[1]?.headers).get('Authorization')).toEqual(expect.any(String));
   });

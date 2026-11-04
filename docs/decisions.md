@@ -10802,6 +10802,14 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: Notes folders (Notes and List tabs) start collapsed on first open; expansion is per session (`@State`). The Notes tab shows a Recent strip (label "Seneste" / "Recent") of the 5 most recently modified notes, taken from the knowledge graph nodes via `JarvisNotesPresentation.recentNotes`. 140 pt hairline cards (radius 16) open the note. It is hidden when a folder filter is active, while searching, on empty or failed loads, and uses `JarvisLoadingView` for loading. The strip sits in the list head after the hero; moving the segmented bar below the hero (item 12) is still open.
 - Not verified: nothing was compiled or run on a simulator; the UI test only asserts when notes data exists in the launch scenario.
 
+## Daily renamed to Health; legacy feeds retired (P15-78, 2026-11-04)
+
+- The legacy Daily calendar and Gmail feeds, the `daily_feed` tool and the calendar/attention Health query sources are deleted. Calendar and Gmail use only `apps/backend/src/google`. Tables are kept; no migration was added.
+- Backend module, routes, web module, contracts and env switches are renamed to Health: `/health/*`, `JARVIS_HEALTH_ENABLED`, `VITE_HEALTH_ENABLED`. The old `JARVIS_DAILY_ENABLED` and `VITE_DAILY_ENABLED` are read as fallbacks.
+- Temporary alias: every `/health/*` route is also served at `/daily/*` (`apps/backend/src/health/legacy-alias.ts`, nutrition export paths included). `/daily/capabilities` still reports `module: "daily"`. Remove the alias, the env fallbacks and the web `daily/*` redirect once no build 67 or earlier client remains.
+- Stable identifiers are unchanged: source ids `daily.*`, SQL schema/table names, persisted view ids `daily-*`, `DAILY_HEALTH_*` host variables, and the `daily-health` lock name.
+- iPhone sync: see the next entry.
+
 ## 2026-11-04 P15-80: On-device cache (stale-while-revalidate)
 
 - `JarvisRepository` and `JarvisCache` in JarvisCore (`Cache/`) give stale-while-revalidate reads: fresh cache makes no request, stale cache is shown then refreshed, a failed refresh keeps the cached value and reports the failure. Freshness per kind: calendar 2 min, notes and tasks 5 min, Factory and status 1 min, usage 2 min.
@@ -10817,6 +10825,15 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 
 ## 2026-11-04 P15-79: Health plus menu reuses the Home log sheets
 - Decision: Health's plus menu (log a workout, log a lift) presents `JarvisTodayGymSheet` with the Home model, exactly like the two Home tiles. The Health-only `JarvisHealthNewWorkoutSheet` and `JarvisHealthNewLiftSheet` are removed, so each sheet has one implementation. `testHealthPlusAndHomeTilesOpenTheSameLogSheetsInDanishAndEnglish` compares the sheet identifiers from both entry points. Not compiled or run on a device.
+
+## iPhone Health sync into the existing ingest path (P15-78, 2026-11-04)
+
+- The iOS app reads HealthKit (quantities, sleep, workouts; last 7 days per sync) in `apps/ios/Jarvis/JarvisHealthKitSync.swift` and posts a Health Auto Export-shaped payload to the existing `/api/health/ingest`. No new tables or migration: the existing normaliser writes the same `daily.*` tables the web reads.
+- Idempotency: the payload is canonical, and `Session-Id` is `ios-` plus the SHA-256 of the payload (`JarvisHealthPayloadBuilder`), with `Automation-Id: jarvis-ios`. A retry of identical data is acknowledged; changed data gets a new id.
+- Credential: the app obtains the Health upload credential from `/api/health/upload-credential` (create, rotate if one exists) and keeps it in the Keychain (`health-upload`). Rotating replaces the automations app credential, which is intended once parity is confirmed.
+- Truthful status: the Sync button on the Health page shows complete only when every type was read and uploaded; otherwise it lists the missing types or reports failure. iOS does not reveal denied read types, so only failed reads are listed.
+- iOS now calls `/health/*` and accepts module `health` or `daily`. The `/daily` alias stays until builds ≤67 are gone, since those builds are still installed; removal criteria above are unchanged.
+- Not done: background delivery (`HKObserverQuery` / `BGTaskScheduler`) and a backend-side coverage readout beyond the existing `daily.sync` source.
 
 ## 2026-11-04 P15-81: Cache wired into all pages, ETag on the backend
 

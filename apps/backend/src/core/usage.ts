@@ -22,7 +22,7 @@ export type {
   UsageVerification,
 } from '@jarvis/contracts';
 
-export interface DailyToolCount {
+export interface HealthToolCount {
   tool: string;
   count: string;
 }
@@ -40,8 +40,8 @@ export interface UsageStore {
   list(from: Date | null, to: Date): Promise<{
     entries: UsageEntry[];
     totalEntries: string;
-    dailyToolCounts?: DailyToolCount[];
-    dailyCostTotals?: UsageCostTotal[];
+    healthToolCounts?: HealthToolCount[];
+    healthCostTotals?: UsageCostTotal[];
     monthlyCostTotals?: UsageCostTotal[];
     toolCalls?: UsageToolCallCount[];
   }>;
@@ -177,17 +177,17 @@ export async function registerUsageRoutes(app: FastifyInstance) {
         request.log.warn('usage.codex_tool_counts_unavailable');
       }
     }
-    const { dailyToolCounts = [], ...usageReport } = report;
+    const { healthToolCounts = [], ...usageReport } = report;
     const result = {
       period,
       from: from?.toISOString() ?? null,
       to: to.toISOString(),
       ...usageReport,
-      dailyToolUsage: {
+      healthToolUsage: {
         date: to.toISOString().slice(0, 10),
-        tools: dailyToolCounts,
+        tools: healthToolCounts,
       },
-      dailyCostTotals: report.dailyCostTotals ?? [],
+      healthCostTotals: report.healthCostTotals ?? [],
       monthlyCostTotals: report.monthlyCostTotals ?? [],
       toolCalls: report.toolCalls ?? [],
       roleCoverage,

@@ -3995,7 +3995,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
   select
@@ -4016,7 +4016,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) textarea {
   box-sizing: border-box;
   min-width: 0;
@@ -4045,7 +4045,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
   select, textarea
@@ -4062,7 +4062,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
   select, textarea
@@ -4073,7 +4073,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) select {
   appearance: none;
   --field-padding-end: var(--space-6);
@@ -4122,7 +4122,7 @@ select.form-control {
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(
   input:where(:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"],
     [type="button"], [type="submit"], [type="reset"], [type="image"])),
@@ -4152,7 +4152,7 @@ select.form-control {
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, select, textarea):disabled {
   background-color: var(--disabled-surface);
   color: var(--disabled-text);
@@ -4170,7 +4170,7 @@ select.form-control {
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, textarea):read-only:not(:disabled) {
   background-color: var(--surface-muted);
   cursor: default;
@@ -4178,7 +4178,7 @@ select.form-control {
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, select, textarea)[aria-invalid="true"] {
   border-color: var(--error);
   background-color: var(--error-surface);
@@ -4190,7 +4190,7 @@ select.form-control {
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, select, textarea)[aria-busy="true"] {
   cursor: progress;
 }
@@ -4213,12 +4213,12 @@ select.form-control {
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, select, textarea):autofill,
 .app-shell :is(
   .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
   .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-  .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+  .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
 ) :is(input, select, textarea):-webkit-autofill {
   background-color: var(--surface) !important;
   color: var(--text) !important;
@@ -4311,7 +4311,7 @@ select.form-control {
   .app-shell :is(
     .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
     .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-    .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+    .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
   ) :is(
     input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"]),
     select
@@ -4322,7 +4322,7 @@ select.form-control {
   .app-shell :is(
     .settings-field, .project-form, .task-filter-field, .task-form-field, .task-create-form, .task-control-form,
     .timeline-toolbar, .usage-field, .role-controls, .kanban-search, .kanban-select, .proactive-feed-input,
-    .daily-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
+    .health-page, .notes-title-label, .notes-folder-input-row, .workspaces-rename
   ) textarea {
     min-height: 120px;
     font-size: var(--type-body);
@@ -4357,7 +4357,7 @@ select.form-control {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-.app-shell :is(.settings-field, .task-filter-field, .task-form-field, .task-create-form, .usage-field, .proactive-feed-field, .daily-page) label,
+.app-shell :is(.settings-field, .task-filter-field, .task-form-field, .task-create-form, .usage-field, .proactive-feed-field, .health-page) label,
 .app-shell :is(.timeline-toolbar) label,
 .app-shell :is(.notes-title-label, .notes-source-label) {
   color: var(--text);

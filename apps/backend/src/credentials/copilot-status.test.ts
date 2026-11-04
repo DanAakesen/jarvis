@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CredentialStatusStore, CredentialStatusValue } from './credential-status.js';
 import type { FoundryClient, InvocationSnapshot } from '../foundry/client.js';
-import { checkCopilotStatus, startDailyCopilotStatusJob } from './copilot-status.js';
+import { checkCopilotStatus, startHealthCopilotStatusJob } from './copilot-status.js';
 import { runCodexRenewalOnce } from './codex-renewal.js';
 
 function fixture(status = 200, expiresAt: string | null = null) {
@@ -83,7 +83,7 @@ describe('Copilot credential health', () => {
     const { store, options, updateCopilotStatus } = fixture();
     options.fetch.mockRejectedValue(new Error('private-provider-detail'));
     const onError = vi.fn();
-    const stop = startDailyCopilotStatusJob(store, options, onError);
+    const stop = startHealthCopilotStatusJob(store, options, onError);
     await vi.waitFor(() => expect(onError).toHaveBeenCalledWith());
     stop();
     expect(updateCopilotStatus).not.toHaveBeenCalled();
@@ -92,7 +92,7 @@ describe('Copilot credential health', () => {
   it('checks on readiness and daily without overlapping runs, and stops on close', async () => {
     vi.useFakeTimers();
     const { store, options } = fixture();
-    const stop = startDailyCopilotStatusJob(store, options, vi.fn());
+    const stop = startHealthCopilotStatusJob(store, options, vi.fn());
     await vi.advanceTimersByTimeAsync(0);
     expect(options.fetch).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(24 * 60 * 60_000);

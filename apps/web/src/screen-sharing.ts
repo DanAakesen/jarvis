@@ -177,7 +177,7 @@ function useVisionCapture(
     sessionId: string;
     context?: VisualTurnContext;
   } | null>(null);
-  const cameraPacing = useRef({ nextFrameAt: 0, dailyLimitUntil: 0 });
+  const cameraPacing = useRef({ nextFrameAt: 0, healthLimitUntil: 0 });
   const [sharing, setSharing] = useState(false);
   const [starting, setStarting] = useState(false);
   const [inspecting, setInspecting] = useState(false);
@@ -454,7 +454,7 @@ function useVisionCapture(
         'It cannot confirm changes or new details in the current question. Earlier observation: ';
       return { ...cached, description: prefix + cached.description.slice(0, 5_000 - prefix.length) };
     };
-    if (cameraPacing.current.dailyLimitUntil > Date.now()) return reuse('daily_limit', 'The per-day camera limit was reached.');
+    if (cameraPacing.current.healthLimitUntil > Date.now()) return reuse('daily_limit', 'The per-day camera limit was reached.');
     if (cameraPacing.current.nextFrameAt > Date.now()) return reuse('frame_rate_limited', 'Camera is rate-limited.');
     cameraPacing.current.nextFrameAt = Date.now() + 3_000;
     setObservationNotice('');
@@ -482,7 +482,7 @@ function useVisionCapture(
           (reason.code === 'frame_rate_limited' || reason.code === 'daily_limit')) {
         if (reason.code === 'daily_limit') {
           const now = new Date();
-          cameraPacing.current.dailyLimitUntil = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+          cameraPacing.current.healthLimitUntil = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
         } else cameraPacing.current.nextFrameAt = Date.now() + Math.max(3_000, reason.retryAfterMs ?? 3_000);
         return reuse(reason.code, reason.code === 'daily_limit' ? 'The per-day camera limit was reached.' : 'Camera is rate-limited.');
       }

@@ -36,7 +36,7 @@ export async function checkCopilotStatus(
   await store.updateCopilotStatus(status, secret.expiresAt, secret.lastRenewedAt);
 }
 
-export function startDailyCopilotStatusJob(
+export function startHealthCopilotStatusJob(
   store: CredentialStatusStore,
   options: CopilotStatusOptions,
   onError: () => void,
