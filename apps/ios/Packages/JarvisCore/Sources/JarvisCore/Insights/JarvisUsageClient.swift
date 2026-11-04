@@ -60,7 +60,7 @@ public enum JarvisUsageGroupBy: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-public struct JarvisUsageEntry: Decodable, Equatable, Sendable {
+public struct JarvisUsageEntry: Codable, Equatable, Sendable {
     public let taskId: String?
     public let taskTitle: String?
     public let projectId: String?
@@ -100,7 +100,7 @@ public struct JarvisUsageEntry: Decodable, Equatable, Sendable {
     }
 }
 
-public struct JarvisUsageToolCount: Decodable, Equatable, Sendable {
+public struct JarvisUsageToolCount: Codable, Equatable, Sendable {
     public let tool: String
     public let count: String
 
@@ -110,7 +110,7 @@ public struct JarvisUsageToolCount: Decodable, Equatable, Sendable {
     }
 }
 
-public struct JarvisUsageDailyTools: Decodable, Equatable, Sendable {
+public struct JarvisUsageDailyTools: Codable, Equatable, Sendable {
     public let date: String
     public let tools: [JarvisUsageToolCount]
 
@@ -120,7 +120,7 @@ public struct JarvisUsageDailyTools: Decodable, Equatable, Sendable {
     }
 }
 
-public struct JarvisUsageReport: Decodable, Equatable, Sendable {
+public struct JarvisUsageReport: Codable, Equatable, Sendable {
     public let period: String
     public let from: String?
     public let to: String
@@ -411,6 +411,29 @@ public final class JarvisUsageClient: Sendable {
 
     public init(client: JarvisClient) {
         self.client = client
+    }
+
+    /// Conditional read for the repository layer: sends If-None-Match when a validator is known and maps 304 to
+    /// `notModified`.
+    public func fetchReport(
+        period: JarvisUsagePeriod,
+        validator: String?
+    ) async throws -> JarvisFetchResult<JarvisUsageReport> {
+        let response = try await client.performAuthenticatedRequest(
+            method: .get,
+            path: ["usage"],
+            queryItems: [URLQueryItem(name: "period", value: period.rawValue)],
+            headers: validator.map { ["If-None-Match": $0] } ?? [:],
+            idempotent: true,
+            additionalSuccessStatuses: [304]
+        )
+        if response.statusCode == 304 { return .notModified }
+        guard response.statusCode == 200, response.body.count <= Self.responseLimit,
+              let report = try? JSONDecoder().decode(JarvisUsageReport.self, from: response.body),
+              report.isValid, report.period == period.rawValue else {
+            throw JarvisInsightsError.invalidResponse
+        }
+        return .modified(report, validator: response.header("ETag"))
     }
 
     /// One read per call. The page reloads only on retry, refresh or a period change; nothing polls.
