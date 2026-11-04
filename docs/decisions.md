@@ -10811,3 +10811,6 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Signposts (`OSSignposter`, category `repository`) wrap each page open and refresh.
 - Wired so far: Usage page (repository plus `LazyVStack`). Notes, tasks, calendar, Factory, status, proactive, Health and settings views still read from their clients and are follow-ups. Health stays read directly from HealthKit.
 - Requests on Usage: first open 1, repeat open within 2 min 0 (before: 1 on every open). Not measured on a device.
+
+## 2026-11-04 P15-79: Notes tab bar under the hero
+- Decision: on Notes the Notes / Tasks / List / Graph bar is the last row of the scrolling head (header, phrase, hero, tab bar, Recent strip, list). It stays at the top only while the hero has no data (loading, error, empty), on Graph, and while searching, so the tabs are always reachable. Not compiled or run on a device.

@@ -173,7 +173,7 @@ struct JarvisNotesArea: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            tabSwitcher
+            if !tabsInHead { tabSwitcher }
             if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 selectedContent
             } else {
@@ -315,6 +315,31 @@ struct JarvisNotesArea: View {
         }
     }
 
+    /// The tab bar sits under the hero, inside the scrolling head, once the hero has data. Until then, on the Graph
+    /// tab and while searching, it stays at the top so the tabs are always reachable.
+    private var tabsInHead: Bool {
+        let hasContent: Bool
+        switch selectedTab {
+        case .notes: hasContent = tree != nil && !folderGroups.isEmpty
+        case .list: hasContent = tree != nil && !(folders.isEmpty && (tree?.rootNoteCount ?? 0) == 0)
+        case .tasks:
+            hasContent = taskList.map {
+                let groups = JarvisNotesLogic.taskGroups($0.items, today: $0.today)
+                return !(groups.overdue.isEmpty && groups.today.isEmpty && groups.upcoming.isEmpty && groups.noDate.isEmpty)
+            } ?? false
+        case .graph: hasContent = false
+        }
+        return taskList != nil && hasContent && loadError == nil
+            && searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var pageHeadWithTabs: some View {
+        VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+            pageHead
+            tabSwitcher
+        }
+    }
+
     private var tabSwitcher: some View {
         HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
             JarvisSegmentedBar(
@@ -377,7 +402,7 @@ struct JarvisNotesArea: View {
             Group {
                 JarvisList(head: {
                     VStack(spacing: 0) {
-                        pageHead
+                        pageHeadWithTabs
                         if showsRecent { recentStrip }
                     }
                 }) {
@@ -435,7 +460,7 @@ struct JarvisNotesArea: View {
             } else if folders.isEmpty && (tree?.rootNoteCount ?? 0) == 0 {
                 stateView(icon: "folder", title: copy.emptyList, retry: nil)
             } else {
-                JarvisList(head: { pageHead }) {
+                JarvisList(head: { pageHeadWithTabs }) {
                     if (tree?.rootNoteCount ?? 0) > 0 {
                         Section {
                             if expandedFolders.contains("") {
@@ -665,7 +690,7 @@ struct JarvisNotesArea: View {
             if groups.overdue.isEmpty && groups.today.isEmpty && groups.upcoming.isEmpty && groups.noDate.isEmpty {
                 stateView(icon: "checklist", title: copy.emptyTasks, retry: nil)
             } else {
-                JarvisList(head: { pageHead }) {
+                JarvisList(head: { pageHeadWithTabs }) {
                     if !groups.overdue.isEmpty {
                         Section {
                             ForEach(groups.overdue) { task in taskRow(task, today: list.today) }
