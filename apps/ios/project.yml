@@ -98,6 +98,7 @@ targets:
       - path: Jarvis/JarvisOrbCanvas.swift
       - path: Jarvis/JarvisDesignSystem.swift
       - path: Jarvis/JarvisControls.swift
+      - path: Jarvis/JarvisLoadingView.swift
     dependencies:
       - package: JarvisCore
         product: JarvisCore
