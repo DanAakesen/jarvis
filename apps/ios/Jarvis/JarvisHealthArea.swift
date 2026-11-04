@@ -443,29 +443,12 @@ struct JarvisHealthArea: View {
     }
 
     private var searchBar: some View {
-        HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-            HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                TextField(copy.text(.search), text: $searchText)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityLabel(copy.text(.search))
-                    .accessibilityIdentifier("health.search")
-                if !searchText.isEmpty {
-                    JarvisIconButton(
-                        title: copy.text(.clearSearch),
-                        systemImage: "xmark.circle.fill",
-                        identifier: "health.search.clear"
-                    ) { searchText = "" }
-                }
-            }
-            .padding(.leading, JarvisDesignTokens.healthSectionSpacing)
-            .padding(.trailing, JarvisDesignTokens.notesCompactInset)
-            .frame(minHeight: JarvisDesignTokens.healthControlHeight)
-            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.healthPanelRadius)
-        }
+        JarvisSearchField(
+            placeholder: copy.text(.search),
+            text: $searchText,
+            identifier: "health.search",
+            clearTitle: copy.text(.clearSearch)
+        )
         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
     }
 

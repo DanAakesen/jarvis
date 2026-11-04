@@ -213,25 +213,12 @@ struct JarvisSettingsArea: View {
 
     private var bottomBar: some View {
         HStack(spacing: JarvisDesignTokens.settingsSectionSpacing) {
-            HStack(spacing: JarvisDesignTokens.settingsSectionSpacing) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                TextField(copy(.search), text: $search)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .accessibilityLabel(copy(.search))
-                if !search.isEmpty {
-                    JarvisIconButton(
-                        title: copy(.cancel),
-                        systemImage: "xmark.circle.fill",
-                        identifier: "settings.search.clear"
-                    ) { search = "" }
-                }
-            }
-            .padding(.horizontal, JarvisDesignTokens.settingsSectionSpacing)
-            .frame(height: JarvisDesignTokens.settingsControlHeight)
-            .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.settingsSearchRadius)
+            JarvisSearchField(
+                placeholder: copy(.search),
+                text: $search,
+                identifier: "settings.search",
+                clearTitle: copy(.cancel)
+            )
 
             JarvisIconButton(
                 title: copy(.addDeployment),

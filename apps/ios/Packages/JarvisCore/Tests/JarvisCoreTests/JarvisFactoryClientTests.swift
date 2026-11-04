@@ -23,7 +23,7 @@ final class JarvisFactoryClientTests: XCTestCase {
             .inProgress
         )
         XCTAssertTrue(JarvisFactoryPresentation.cards(from: board, segment: .board, search: "#10").isEmpty)
-        XCTAssertEqual(JarvisFactoryPresentation.defaultCollapsedColumns(), [.done])
+        XCTAssertEqual(JarvisFactoryPresentation.defaultCollapsedColumns(), Set(FactoryBoardColumnID.allCases))
 
         let filteredTasks = try await client.tasks(projectId: "7", agent: .copilot, state: .needsAttention)
         XCTAssertEqual(filteredTasks.tasks.map(\.id), ["41"])

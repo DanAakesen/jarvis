@@ -534,30 +534,12 @@ struct JarvisNotesArea: View {
 
     private var searchBar: some View {
         HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-            HStack(spacing: JarvisDesignTokens.notesMetadataSpacing) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-                TextField(copy.search, text: $searchText)
-                    .textFieldStyle(.plain)
-                    .submitLabel(.search)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .accessibilityLabel(copy.search)
-                    .accessibilityIdentifier("notes.search")
-                if !searchText.isEmpty {
-                    JarvisIconButton(
-                        title: copy.clearSearch,
-                        systemImage: "xmark.circle.fill",
-                        identifier: "notes.search.clear"
-                    ) { searchText = "" }
-                }
-            }
-            .padding(.horizontal, JarvisDesignTokens.labelledHorizontalPadding)
-            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-            .frame(maxWidth: .infinity)
-            .jarvisGlassSurface()
-            .accessibilityElement(children: .contain)
+            JarvisSearchField(
+                placeholder: copy.search,
+                text: $searchText,
+                identifier: "notes.search",
+                clearTitle: copy.clearSearch
+            )
             JarvisLabelledMenu(title: copy.title(for: selectedScope), identifier: "notes.scope") {
                 ForEach(JarvisNotesSearchScope.allCases) { scope in
                     Button(copy.title(for: scope)) { selectedScope = scope }

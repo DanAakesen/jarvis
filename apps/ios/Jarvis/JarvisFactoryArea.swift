@@ -141,9 +141,6 @@ struct JarvisFactoryArea: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            if project != nil {
-                projectControls
-            }
             if previewState == .loading {
                 FactoryLoadingView(copy: copy, releases: segment == .releases)
             } else if client == nil {
@@ -295,7 +292,7 @@ struct JarvisFactoryArea: View {
     }
 
     private var segmentSwitcher: some View {
-        HStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
+        HStack(spacing: JarvisPageHeaderMetrics.spacing) {
             ForEach(FactorySegment.allCases) { item in
                 JarvisLabelledButton(
                     title: segmentTitle(item),
@@ -316,44 +313,49 @@ struct JarvisFactoryArea: View {
         .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
     }
 
-    private var projectControls: some View {
-        HStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
-            JarvisLabelledMenu(
-                title: project?.name ?? copy.text(.project),
-                identifier: "factory.project",
-                isFullWidth: true,
-                accessibilityTitle: copy.text(.project)
-            ) {
-                Picker(copy.text(.project), selection: $selectedProjectID) {
-                    ForEach(projects) { item in
-                        Text(item.name).tag(item.id)
-                    }
-                }
-            }
-
-            if segment != .releases {
-                JarvisMenuButton(
-                    title: copy.text(.filters),
-                    systemImage: "line.3.horizontal.decrease",
-                    identifier: "factory.filters"
+    /// The section title with the project and filter options on the same row, under the hero.
+    @ViewBuilder
+    private var sectionFilterRow: some View {
+        if project != nil {
+            HStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
+                Text(segmentTitle(segment))
+                    .font(.headline)
+                    .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: JarvisDesignTokens.factoryRowSpacing)
+                JarvisLabelledMenu(
+                    title: project?.name ?? copy.text(.project),
+                    identifier: "factory.project",
+                    accessibilityTitle: copy.text(.project)
                 ) {
-                    Picker(copy.text(.agent), selection: $selectedAgent) {
-                        Text(copy.text(.all)).tag("")
-                        ForEach(FactoryAgent.allCases, id: \.rawValue) { agent in
-                            Text(copy.agent(agent)).tag(agent.rawValue)
+                    Picker(copy.text(.project), selection: $selectedProjectID) {
+                        ForEach(projects) { item in
+                            Text(item.name).tag(item.id)
                         }
                     }
-                    Picker(copy.text(.state), selection: $selectedState) {
-                        Text(copy.text(.all)).tag("")
-                        ForEach(FactoryTaskState.allCases, id: \.rawValue) { state in
-                            Text(copy.state(state)).tag(state.rawValue)
+                }
+                if segment != .releases {
+                    JarvisMenuButton(
+                        title: copy.text(.filters),
+                        systemImage: "line.3.horizontal.decrease",
+                        identifier: "factory.filters"
+                    ) {
+                        Picker(copy.text(.agent), selection: $selectedAgent) {
+                            Text(copy.text(.all)).tag("")
+                            ForEach(FactoryAgent.allCases, id: \.rawValue) { agent in
+                                Text(copy.agent(agent)).tag(agent.rawValue)
+                            }
+                        }
+                        Picker(copy.text(.state), selection: $selectedState) {
+                            Text(copy.text(.all)).tag("")
+                            ForEach(FactoryTaskState.allCases, id: \.rawValue) { state in
+                                Text(copy.state(state)).tag(state.rawValue)
+                            }
                         }
                     }
                 }
             }
         }
-        .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
-        .padding(.vertical, JarvisDesignTokens.factoryRowSpacing)
     }
 
     @ViewBuilder
@@ -375,6 +377,7 @@ struct JarvisFactoryArea: View {
                             pipelineHero(board)
                         }
                     }
+                    sectionFilterRow
                     if board.stale {
                         FactoryStatusLine(symbol: "tray.full", text: copy.text(.cached))
                     }
@@ -484,6 +487,9 @@ struct JarvisFactoryArea: View {
                 ))
                 .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
                 .padding(.top, JarvisDesignTokens.factoryRowSpacing)
+                sectionFilterRow
+                    .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
+                    .padding(.vertical, JarvisDesignTokens.factoryRowSpacing)
                 JarvisFactoryReleaseListView(
                     releaseView: releaseView,
                     language: language,
@@ -507,42 +513,20 @@ struct JarvisFactoryArea: View {
     @State private var releaseViewForDestination: FactoryReleaseView?
 
     private var bottomDock: some View {
-        VStack(spacing: JarvisPageHeaderMetrics.dockSpacing) {
+        VStack(spacing: JarvisPageHeaderMetrics.spacing) {
             segmentSwitcher
-            searchField
-        }
-        .padding(.top, JarvisDesignTokens.factorySectionSpacing)
-        .padding(.bottom, JarvisDesignTokens.factorySectionSpacing)
-        .background(.bar)
-    }
-
-    private var searchField: some View {
-        HStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            TextField(
-                copy.text(segment == .releases ? .searchReleases : .search),
-                text: $searchText
-            )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .accessibilityLabel(copy.text(
+            JarvisSearchField(
+                placeholder: copy.text(segment == .releases ? .searchReleases : .search),
+                text: $searchText,
+                identifier: "factory.search",
+                clearTitle: copy.text(.clearSearch),
+                accessibilityTitle: copy.text(
                     segment == .releases ? .searchReleasesAccessibility : .searchAccessibility
-                ))
-                .accessibilityIdentifier("factory.search")
-            if !searchText.isEmpty {
-                JarvisIconButton(
-                    title: copy.text(.clearSearch),
-                    systemImage: "xmark.circle.fill",
-                    identifier: "factory.search.clear"
-                ) { searchText = "" }
-            }
+                )
+            )
+            .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
         }
-        .padding(.horizontal, JarvisDesignTokens.factorySectionSpacing)
-        .frame(height: JarvisDesignTokens.factoryPlusDiameter)
-        .background(.regularMaterial, in: Capsule())
-        .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
+        .padding(.vertical, JarvisPageHeaderMetrics.spacing)
     }
 
     private var emptyBoardTitle: String {

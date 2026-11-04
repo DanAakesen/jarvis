@@ -34,10 +34,10 @@ struct JarvisUsageArea: View {
 
     var body: some View {
         VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisInsightsHeader(
+            JarvisPageHeader(
                 title: JarvisDestination.usage.localizedTitle(language: language),
                 language: language
-            ) {}
+            )
             JarvisTabStrip(
                 title: text(.usageRangeLabel),
                 identifierPrefix: "usage.range",

@@ -10763,3 +10763,11 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: refresh buttons are removed; every page uses pull to refresh. The plus sits beside the tabs. Home and Health share `JarvisPeriodSelector`. Sheets open at medium and expand to large.
 - Not done: the Tasks tab keeps its date groups (no four-way segmented filter yet); Health sections are not restyled; the Home calendar has no data source.
 - Not verified: no Simulator build or screenshots (Linux); the iOS app edits are not compiled here. JarvisCore tests (377) and backend checks pass.
+
+## 2026-11-04 P15-76: Factory layout, shared search and headers
+
+- Decision: on the Software Factory page the project and filter options sit under the hero, on the same row as the section title (for example "Needs Dan"), not in a full-width bar above it. The bottom dock has no background; the segment pills and the search field are 12 pt apart.
+- Decision: every page's search field is the shared `JarvisSearchField` (48 pt glass capsule; the text field has the identifier and the clear button `identifier.clear`). Health, Notes, Settings and Factory use it.
+- Decision: all Factory kanban columns start collapsed (`defaultCollapsedColumns()` is every column); the owner expands each one.
+- Decision: pages other than Home and Chat use `JarvisPageHeader` with the navigation bar hidden, so the shared ambient background shows through with no bar or line. Usage and Workspaces were the two that differed (own header; native large title with a bar and a material search background) and now match.
+- Not done: the Notes tab row still sits between the title and the headline/hero; moving it under the hero needs every tab state (loading, empty, error) to render the row itself. Usage has no headline or hero yet. Settings is a list without a hero. Not compile-verified (Linux).
