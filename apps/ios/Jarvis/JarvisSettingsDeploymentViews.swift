@@ -76,17 +76,7 @@ struct JarvisDeploymentsSettingsView: View {
         .jarvisAmbientBackground()
         .navigationTitle(copy(.deploymentsRow))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                JarvisIconButton(
-                    title: copy(.refresh),
-                    systemImage: "arrow.clockwise",
-                    identifier: "settings.refresh",
-                    isDisabled: loading || removing != nil
-                ) { Task { await load() } }
-            }
-            .sharedBackgroundVisibility(.hidden)
-        }
+        .refreshable { await load() }
         .task {
             if catalogue == nil { await load() }
         }

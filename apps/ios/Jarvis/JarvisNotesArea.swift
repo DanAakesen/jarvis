@@ -244,35 +244,28 @@ struct JarvisNotesArea: View {
     }
 
     private var header: some View {
-        JarvisPageHeader(title: copy.title, language: language) {
-            JarvisIconButton(
-                title: selectedTab == .graph ? copy.resetGraph : copy.refresh,
-                systemImage: "arrow.clockwise",
-                identifier: "notes.refresh"
-            ) {
-                if selectedTab == .graph {
-                    graphSearch = nil
-                }
-                refreshVersion += 1
+        JarvisPageHeader(title: copy.title, language: language)
+    }
+
+    /// The create menu sits beside the tabs so the thumb reaches it.
+    private var plusMenu: some View {
+        JarvisMenuButton(
+            title: copy.create,
+            systemImage: "plus",
+            identifier: "notes.plus",
+            isDisabled: client == nil || signInUnavailable
+        ) {
+            Button {
+                newNoteFolder = selectedFolder
+                newNotePresented = true
+            } label: {
+                Label(copy.newNote, systemImage: "note.text")
             }
-            JarvisMenuButton(
-                title: copy.create,
-                systemImage: "plus",
-                identifier: "notes.plus",
-                isDisabled: client == nil || signInUnavailable
-            ) {
-                Button {
-                    newNoteFolder = selectedFolder
-                    newNotePresented = true
-                } label: {
-                    Label(copy.newNote, systemImage: "note.text")
-                }
-                .accessibilityIdentifier("notes.newNote")
-                Button {
-                    newTaskPresented = true
-                } label: {
-                    Label(copy.newTask, systemImage: "checklist")
-                }
+            .accessibilityIdentifier("notes.newNote")
+            Button {
+                newTaskPresented = true
+            } label: {
+                Label(copy.newTask, systemImage: "checklist")
             }
         }
     }
@@ -313,15 +306,29 @@ struct JarvisNotesArea: View {
     }
 
     private var tabSwitcher: some View {
-        JarvisTabStrip(
-            title: copy.title,
-            identifierPrefix: "notes.tab",
-            items: JarvisNotesTab.allCases.map {
-                JarvisTabItem(tag: $0, title: copy.title(for: $0), identifier: "notes.tab.\($0.rawValue)")
-            },
-            selection: $selectedTab
-        )
+        HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+            JarvisTabStrip(
+                title: copy.title,
+                identifierPrefix: "notes.tab",
+                items: JarvisNotesTab.allCases.map {
+                    JarvisTabItem(tag: $0, title: copy.title(for: $0), identifier: "notes.tab.\($0.rawValue)")
+                },
+                selection: $selectedTab
+            )
+            if selectedTab == .graph {
+                JarvisIconButton(
+                    title: copy.resetGraph,
+                    systemImage: "arrow.counterclockwise",
+                    identifier: "notes.resetGraph"
+                ) {
+                    graphSearch = nil
+                    refreshVersion += 1
+                }
+            }
+            plusMenu
+        }
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+        .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
     }
 
     @ViewBuilder

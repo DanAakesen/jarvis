@@ -28,15 +28,7 @@ struct JarvisStatusArea: View {
             JarvisPageHeader(
                 title: JarvisDestination.status.localizedTitle(language: language),
                 language: language
-            ) {
-                JarvisIconButton(
-                    title: text(.refresh),
-                    systemImage: "arrow.clockwise",
-                    identifier: "status.refresh",
-                    isBusy: state.isLoading && state.snapshot != nil,
-                    isDisabled: state.isLoading
-                ) { reloadToken += 1 }
-            }
+            )
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
                     if let snapshot = state.snapshot {
@@ -53,6 +45,7 @@ struct JarvisStatusArea: View {
                     .padding(.horizontal)
                     .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }
+            .refreshable { await refresh() }
             .accessibilityIdentifier("status.scroll")
         }
         .jarvisAmbientBackground()

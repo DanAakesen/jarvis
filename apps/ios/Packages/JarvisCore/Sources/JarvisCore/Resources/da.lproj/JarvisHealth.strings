@@ -2,6 +2,7 @@
 "health.dashboard" = "Overblik";
 "health.trackWorkout" = "Log træning";
 "health.refresh" = "Opdater";
+"health.periodLabel" = "Periode";
 "health.search" = "Søg i sundhedsdata";
 "health.clearSearch" = "Ryd søgning";
 "health.period.today" = "I dag";

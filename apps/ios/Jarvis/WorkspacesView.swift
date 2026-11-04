@@ -44,18 +44,6 @@ struct WorkspacesView: View {
         .jarvisAmbientBackground()
         .navigationTitle(text(.title))
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                JarvisIconButton(
-                    title: text(.refreshAccessibility),
-                    systemImage: "arrow.clockwise",
-                    identifier: "workspaces.refresh",
-                    isBusy: loadState == .loading,
-                    action: refresh
-                )
-            }
-            .sharedBackgroundVisibility(.hidden)
-        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             searchField
                 .padding(.top, JarvisDesignTokens.contentSpacing / 2)

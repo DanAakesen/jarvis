@@ -49,10 +49,10 @@ final class NavigationReliabilityTests: XCTestCase {
             launch(language: language)
             defer { app.terminate() }
             let pages: [(destination: String, actions: [String])] = [
-                ("health", ["health.refresh", "health.plus"]),
-                ("notes", ["notes.refresh", "notes.plus"]),
-                ("settings", ["settings.refresh"]),
-                ("softwareFactory", ["factory.refresh", "factory.plus"]),
+                ("health", []),
+                ("notes", []),
+                ("settings", []),
+                ("softwareFactory", []),
             ]
             for page in pages {
                 navigate(to: page.destination)

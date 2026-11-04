@@ -146,17 +146,7 @@ struct JarvisRoutinesSettingsView: View {
         .jarvisAmbientBackground()
         .navigationTitle(copy(.routinesRow))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                JarvisIconButton(
-                    title: copy(.refresh),
-                    systemImage: "arrow.clockwise",
-                    identifier: "settings.refresh",
-                    isDisabled: loading || deleting
-                ) { Task { await load() } }
-            }
-            .sharedBackgroundVisibility(.hidden)
-        }
+        .refreshable { await load() }
         .task {
             if routines.isEmpty { await load() }
         }
@@ -272,17 +262,7 @@ struct JarvisMemorySettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: copy(.memorySearch))
         .onSubmit(of: .search) { Task { await load(reset: true) } }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                JarvisIconButton(
-                    title: copy(.refresh),
-                    systemImage: "arrow.clockwise",
-                    identifier: "settings.refresh",
-                    isDisabled: loading || loadingMore
-                ) { Task { await load(reset: true) } }
-            }
-            .sharedBackgroundVisibility(.hidden)
-        }
+        .refreshable { await load(reset: true) }
         .task(id: query) {
             if hasLoaded {
                 do {
@@ -720,17 +700,7 @@ struct JarvisHealthCredentialView: View {
         }
         .navigationTitle(copy(.uploadCredentialRow))
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                JarvisIconButton(
-                    title: copy(.refresh),
-                    systemImage: "arrow.clockwise",
-                    identifier: "settings.refresh",
-                    isDisabled: loading
-                ) { Task { await load() } }
-            }
-            .sharedBackgroundVisibility(.hidden)
-        }
+        .refreshable { await load() }
         .task {
             if credential == nil { await load() }
         }

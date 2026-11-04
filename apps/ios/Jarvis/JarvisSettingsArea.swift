@@ -133,16 +133,7 @@ struct JarvisSettingsArea: View {
     }
 
     private var header: some View {
-        JarvisPageHeader(title: copy(.title), language: language) {
-            JarvisIconButton(
-                title: copy(.refresh),
-                systemImage: "arrow.clockwise",
-                identifier: "settings.refresh",
-                isDisabled: loading
-            ) {
-                Task { await reload() }
-            }
-        }
+        JarvisPageHeader(title: copy(.title), language: language)
     }
 
     private var settingsList: some View {

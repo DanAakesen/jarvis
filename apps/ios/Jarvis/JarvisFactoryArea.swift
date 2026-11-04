@@ -262,25 +262,7 @@ struct JarvisFactoryArea: View {
     private var createIdentity: String { board == nil ? "waiting" : "create-ready" }
 
     private var header: some View {
-        JarvisPageHeader(title: copy.text(.title), language: language) {
-            JarvisIconButton(
-                title: copy.text(.refresh),
-                systemImage: "arrow.clockwise",
-                identifier: "factory.refresh",
-                isBusy: refreshing,
-                isDisabled: client == nil
-            ) {
-                Task { await refresh() }
-            }
-            JarvisIconButton(
-                title: copy.text(.newTask),
-                systemImage: "plus",
-                identifier: "factory.plus",
-                isDisabled: client == nil || projects.isEmpty
-            ) {
-                createPresented = true
-            }
-        }
+        JarvisPageHeader(title: copy.text(.title), language: language)
     }
 
     private var headline: JarvisPagePhrase? {
@@ -311,7 +293,7 @@ struct JarvisFactoryArea: View {
     }
 
     private var segmentSwitcher: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
             ForEach(FactorySegment.allCases) { item in
                 JarvisLabelledButton(
                     title: segmentTitle(item),
@@ -319,6 +301,14 @@ struct JarvisFactoryArea: View {
                     isFullWidth: true,
                     isSelected: segment == item
                 ) { segment = item }
+            }
+            JarvisIconButton(
+                title: copy.text(.newTask),
+                systemImage: "plus",
+                identifier: "factory.plus",
+                isDisabled: client == nil || projects.isEmpty
+            ) {
+                createPresented = true
             }
         }
         .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
@@ -418,6 +408,7 @@ struct JarvisFactoryArea: View {
                 .padding(.top, JarvisDesignTokens.factoryRowSpacing)
                 .padding(.bottom, JarvisDesignTokens.factorySectionSpacing)
             }
+            .refreshable { await refresh() }
             .accessibilityIdentifier("factory.board")
             .onAppear {
                 if previewState == .detail || previewState == .steer {
@@ -502,6 +493,7 @@ struct JarvisFactoryArea: View {
                     self.releaseViewForDestination = releaseView
                     self.releasePresented = true
                 }
+                .refreshable { await refresh() }
             }
         } else {
             FactoryLoadingView(copy: copy, releases: true)
@@ -613,8 +605,8 @@ struct JarvisFactoryArea: View {
         guard !refreshing else { return }
         refreshing = true
         await loadProjects()
-        if segment == .releases { releaseView = nil } else { board = nil }
         refreshVersion += 1
+        await loadSelectedContent()
         refreshing = false
     }
 

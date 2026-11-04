@@ -54,19 +54,17 @@ struct JarvisTodayActivityCard: View {
     }
 
     private var rangeToggle: some View {
-        HStack(spacing: 4) {
-            ForEach(JarvisTodayRange.allCases) { range in
-                let selected = model.activity.range == range
-                JarvisLabelledButton(
-                    title: range.title(language: language),
-                    identifier: "today.range.\(range.rawValue)",
-                    isSelected: selected,
-                    isCompact: true
-                ) { animate { model.activity.setRange(range) } }
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(copy(.period))
+        JarvisPeriodSelector(
+            title: copy(.period),
+            identifierPrefix: "today.range",
+            items: JarvisTodayRange.allCases.map {
+                JarvisTabItem(tag: $0, title: $0.title(language: language), identifier: "today.range.\($0.rawValue)")
+            },
+            selection: Binding(
+                get: { model.activity.range },
+                set: { range in animate { model.activity.setRange(range) } }
+            )
+        )
     }
 
     private func animate(_ change: () -> Void) {

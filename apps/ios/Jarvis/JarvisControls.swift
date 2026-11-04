@@ -487,6 +487,29 @@ struct JarvisTabStrip<Tag: Hashable>: View {
     }
 }
 
+/// The one period selector, shared by Home and Health: a compact segmented row of the shared labelled capsules.
+struct JarvisPeriodSelector<Tag: Hashable>: View {
+    let title: String
+    let identifierPrefix: String
+    let items: [JarvisTabItem<Tag>]
+    @Binding var selection: Tag
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
+                JarvisLabelledButton(
+                    title: item.title,
+                    identifier: item.identifier ?? "\(identifierPrefix).\(index)",
+                    isSelected: selection == item.tag,
+                    isCompact: true
+                ) { selection = item.tag }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+    }
+}
+
 /// A labelled button that opens a menu (the period picker): the same glass, text and chevron.
 struct JarvisLabelledMenu<Content: View>: View {
     let title: String
