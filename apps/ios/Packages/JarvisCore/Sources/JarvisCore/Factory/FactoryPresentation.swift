@@ -107,6 +107,7 @@ public enum JarvisFactoryLocalizationKey: String, CaseIterable, Sendable {
     case requestField = "factory.requestField"
     case modelOptional = "factory.modelOptional"
     case reasoningOptional = "factory.reasoningOptional"
+    case defaultOption = "factory.defaultOption"
     case completionPolicy = "factory.completionPolicy"
     case deliverPullRequest = "factory.deliverPullRequest"
     case completeWithoutDeployment = "factory.completeWithoutDeployment"
@@ -374,4 +375,27 @@ public enum JarvisFactoryConnectionPolicy {
 
     /// Consecutive failed connection attempts before the live-update stream is called offline.
     public static let offlineAfterFailures = 3
+}
+
+/// The optional Model and Reasoning choices on the new-task sheet, taken from the deployed models.
+public enum JarvisFactoryModelOptions {
+    private static let effortOrder = ["minimal", "low", "medium", "high", "xhigh", "max"]
+
+    /// Deployed model names, in the order the backend lists them, without repeats.
+    public static func modelNames(_ deployments: [JarvisModelDeployment]) -> [String] {
+        var seen = Set<String>()
+        return deployments.map(\.name).filter { seen.insert($0).inserted }
+    }
+
+    /// The reasoning efforts the chosen model supports, or every deployed model's efforts while none is chosen,
+    /// from lightest to heaviest.
+    public static func reasoningEfforts(_ deployments: [JarvisModelDeployment], selectedModel: String) -> [String] {
+        let source = selectedModel.isEmpty ? deployments : deployments.filter { $0.name == selectedModel }
+        let efforts = Set(source.flatMap(\.reasoningEfforts))
+        return efforts.sorted { left, right in
+            let l = effortOrder.firstIndex(of: left) ?? effortOrder.count
+            let r = effortOrder.firstIndex(of: right) ?? effortOrder.count
+            return l == r ? left < right : l < r
+        }
+    }
 }

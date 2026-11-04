@@ -230,8 +230,19 @@ struct JarvisChatScreen: View {
         }
         .task(id: handoff?.id) {
             guard let handoff else { return }
-            model.draft = handoff.text
-            composerFocused = true
+            if !handoff.text.isEmpty { model.draft = handoff.text }
+            if let action = handoff.action {
+                composerFocused = true
+                performPlusAction(action)
+            } else {
+                // A message typed on Home is sent here, once the history is in, so it is not replaced by it.
+                var waited = 0
+                while model.isLoading, !Task.isCancelled, waited < 200 {
+                    try? await Task.sleep(for: .milliseconds(50))
+                    waited += 1
+                }
+                if !Task.isCancelled { sendMessage() }
+            }
             onHandoffConsumed()
         }
         .task {
@@ -340,7 +351,7 @@ struct JarvisChatScreen: View {
     @ViewBuilder
     private var conversation: some View {
         if model.isLoading && model.messages.isEmpty {
-            ProgressView("Loading")
+            JarvisLoadingView(title: "Loading")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if let error = model.historyError, model.messages.isEmpty {
             ContentUnavailableView {
@@ -798,58 +809,44 @@ struct JarvisChatScreen: View {
     }
 
     private var plusMenu: some View {
-        JarvisComposerMenuButton(
+        let attachmentsFull = model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount
+        return JarvisComposerPlusMenu(
             title: copy(.plusMenuLabel),
-            systemImage: "plus",
-            identifier: "chat.plus",
             hint: copy(isPreparingCamera ? .cameraStarting : .plusMenuHint),
-            isDisabled: model.isSending || isPreparingCamera
-        ) {
-            Menu {
-                voiceLanguageOption(.da, title: copy(.danish))
-                voiceLanguageOption(.en, title: copy(.english))
-            } label: {
-                Label(copy(.voiceLanguage), systemImage: "globe")
+            identifier: "chat.plus",
+            isDisabled: model.isSending || isPreparingCamera,
+            copy: copy,
+            voiceLanguage: model.voiceLanguage,
+            isScreenSharing: isScreenSharing,
+            isVideoEnabled: isVideoEnabled,
+            languageDisabled: model.fixtureMode || model.isSending,
+            screenShareDisabled: model.fixtureMode || screenShare.state == .starting,
+            videoDisabled: model.fixtureMode,
+            attachDisabled: model.fixtureMode || attachmentsFull,
+            cameraDisabled: (model.fixtureMode && !usesCameraStub) || attachmentsFull,
+            onAction: performPlusAction
+        )
+    }
+
+    private func performPlusAction(_ action: JarvisComposerPlusAction) {
+        switch action {
+        case .voiceLanguage(let language):
+            Task { @MainActor in
+                await Task.yield()
+                await model.setVoiceLanguage(language)
             }
-            .disabled(model.fixtureMode || model.isSending)
-            Button(
-                isScreenSharing ? copy(.stopSharingScreen) : copy(.shareScreen),
-                systemImage: isScreenSharing ? "stop.circle" : "rectangle.on.rectangle"
-            ) {
-                deferred {
-                    if isScreenSharing { stopScreenSharing() } else { openScreenSharePicker() }
-                }
+        case .shareScreen:
+            deferred {
+                if isScreenSharing { stopScreenSharing() } else { openScreenSharePicker() }
             }
-            .accessibilityIdentifier("chat.plus.screenShare")
-            .disabled(model.fixtureMode || screenShare.state == .starting)
-            Button(
-                isVideoEnabled ? copy(.disableVideo) : copy(.enableVideo),
-                systemImage: isVideoEnabled ? "video.slash" : "video"
-            ) {
-                deferred(toggleVideo)
-            }
-            .accessibilityIdentifier("chat.plus.video")
-            .disabled(model.fixtureMode)
-            Menu {
-                Button(copy(.chooseFiles), systemImage: "doc") {
-                    deferred { fileImporterPresented = true }
-                }
-                Button(copy(.photoLibrary), systemImage: "photo.on.rectangle") {
-                    deferred { photosPickerPresented = true }
-                }
-            } label: {
-                Label(copy(.attach), systemImage: "paperclip")
-            }
-            .accessibilityIdentifier("chat.plus.attach")
-            .disabled(model.fixtureMode || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount)
-            Button(copy(.camera), systemImage: "camera") {
-                deferred(openCameraForPhoto)
-            }
-            .accessibilityIdentifier("chat.plus.camera")
-            .disabled(
-                (model.fixtureMode && !usesCameraStub)
-                    || model.pendingAttachments.count >= ChatAttachmentLimits.maximumCount
-            )
+        case .video:
+            deferred(toggleVideo)
+        case .files:
+            deferred { fileImporterPresented = true }
+        case .photos:
+            deferred { photosPickerPresented = true }
+        case .camera:
+            deferred(openCameraForPhoto)
         }
     }
 
@@ -857,21 +854,6 @@ struct JarvisChatScreen: View {
         Task { @MainActor in
             await Task.yield()
             action()
-        }
-    }
-
-    private func voiceLanguageOption(_ language: ChatLanguage, title: String) -> some View {
-        Button {
-            Task { @MainActor in
-                await Task.yield()
-                await model.setVoiceLanguage(language)
-            }
-        } label: {
-            if model.voiceLanguage == language {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
         }
     }
 

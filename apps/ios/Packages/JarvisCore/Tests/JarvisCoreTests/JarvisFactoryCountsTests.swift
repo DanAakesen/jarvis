@@ -46,3 +46,29 @@ final class JarvisFactoryCountsTests: XCTestCase {
         XCTAssertFalse(JarvisFactoryConnectionPolicy.isNetworkFailure(JarvisFactoryClientError.invalidResponse))
     }
 }
+
+final class JarvisFactoryModelOptionsTests: XCTestCase {
+    private func deployment(_ name: String, efforts: [String]) throws -> JarvisModelDeployment {
+        let json = """
+        {"name": "\(name)", "model": "m", "version": "1", "sku": "s", "capacity": 1, "capabilities": [],
+         "reasoningEfforts": \(efforts.map { "\"\($0)\"" }.joined(separator: ",").wrapped)}
+        """
+        return try JSONDecoder().decode(JarvisModelDeployment.self, from: Data(json.utf8))
+    }
+
+    func testOptionsComeFromDeployedModels() throws {
+        let deployments = [
+            try deployment("alpha", efforts: ["high", "low"]),
+            try deployment("beta", efforts: ["medium"]),
+            try deployment("alpha", efforts: ["low"]),
+        ]
+        XCTAssertEqual(JarvisFactoryModelOptions.modelNames(deployments), ["alpha", "beta"])
+        XCTAssertEqual(JarvisFactoryModelOptions.reasoningEfforts(deployments, selectedModel: ""), ["low", "medium", "high"])
+        XCTAssertEqual(JarvisFactoryModelOptions.reasoningEfforts(deployments, selectedModel: "beta"), ["medium"])
+        XCTAssertEqual(JarvisFactoryModelOptions.reasoningEfforts(deployments, selectedModel: "missing"), [])
+    }
+}
+
+private extension String {
+    var wrapped: String { "[\(self)]" }
+}

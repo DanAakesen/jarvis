@@ -44,7 +44,7 @@ struct JarvisHealthDetailView: View {
     var body: some View {
         Group {
             if loading && data == nil {
-                ProgressView(copy.text(.loading))
+                JarvisLoadingView(title: copy.text(.loading))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let failure {
                 ContentUnavailableView {

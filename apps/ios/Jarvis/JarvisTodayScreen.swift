@@ -32,6 +32,8 @@ struct JarvisTodayScreen: View {
     @State private var draft = ""
     @StateObject private var dictation = ChatDictation()
     @State private var dictationFailed = false
+    @State private var flyingText: String?
+    @State private var flightRisen = false
     @ScaledMetric(relativeTo: .largeTitle) private var greetingSize: CGFloat = 25
     @FocusState private var composerFocused: Bool
 
@@ -372,7 +374,7 @@ struct JarvisTodayScreen: View {
 
     private var loadingRow: some View {
         HStack(spacing: 8) {
-            ProgressView()
+            JarvisLoadingView()
             Text(copy(.loading)).font(.footnote).foregroundStyle(.secondary)
         }
         .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
@@ -430,7 +432,43 @@ struct JarvisTodayScreen: View {
         let text = draft
         draft = ""
         composerFocused = false
-        onChat(JarvisChatHandoff(text: text))
+        guard !reduceMotion else {
+            onChat(JarvisChatHandoff(text: text))
+            return
+        }
+        flightRisen = false
+        flyingText = text
+        withAnimation(.easeOut(duration: 0.45)) { flightRisen = true }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            flyingText = nil
+            onChat(JarvisChatHandoff(text: text))
+        }
+    }
+
+    /// The message lifts off the composer and fades while Chat opens, so sending reads as sending.
+    @ViewBuilder
+    private var flyingBubble: some View {
+        if let flyingText {
+            Text(flyingText)
+                .font(.body)
+                .lineLimit(2)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(JarvisDesignTokens.secondaryAccent.opacity(0.28), in: Capsule())
+                .offset(y: flightRisen ? -240 : 0)
+                .opacity(flightRisen ? 0 : 1)
+                .scaleEffect(flightRisen ? 0.92 : 1)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func handOffPlusAction(_ action: JarvisComposerPlusAction) {
+        let text = draft
+        draft = ""
+        composerFocused = false
+        onChat(JarvisChatHandoff(text: text, action: action))
     }
 
     private func chatCopy(_ key: JarvisChatLocalizationKey) -> String {
@@ -482,16 +520,18 @@ struct JarvisTodayScreen: View {
                 onSubmit: sendDraft,
                 header: { EmptyView() },
                 leading: {
-                    JarvisComposerMenuButton(
-                        title: copy(.add),
-                        systemImage: "plus",
-                        identifier: "today.composer.plus"
-                    ) {
-                        Button(copy(.newTask), systemImage: "checklist") { present(.task) }
-                            .accessibilityIdentifier("today.composer.task")
-                        Button(copy(.newNote), systemImage: "note.text") { present(.note) }
-                            .accessibilityIdentifier("today.composer.note")
-                    }
+                    JarvisComposerPlusMenu(
+                        title: chatCopy(.plusMenuLabel),
+                        hint: chatCopy(.plusMenuHint),
+                        identifier: "today.composer.plus",
+                        copy: chatCopy,
+                        languageDisabled: fixtureMode,
+                        screenShareDisabled: fixtureMode,
+                        videoDisabled: fixtureMode,
+                        attachDisabled: fixtureMode,
+                        cameraDisabled: fixtureMode,
+                        onAction: handOffPlusAction
+                    )
                 },
                 actions: {
                     JarvisComposerIconButton(
@@ -525,6 +565,7 @@ struct JarvisTodayScreen: View {
                 }
             )
         }
+        .overlay(alignment: .top) { flyingBubble }
     }
 
     // MARK: Sheets

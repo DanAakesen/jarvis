@@ -659,7 +659,7 @@ private struct ImageRenderer: View {
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
                         case .empty:
-                            ProgressView(text(.loadingImage))
+                            JarvisLoadingView(title: text(.loadingImage))
                                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
                         @unknown default:
                             Label(text(.imageUnavailable), systemImage: "photo")

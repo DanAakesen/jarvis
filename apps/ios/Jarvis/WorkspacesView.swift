@@ -28,7 +28,6 @@ struct WorkspacesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            JarvisPageHeader(title: text(.title), language: language)
             connectionStatus
             kindFilters
             if let notice {
@@ -42,6 +41,7 @@ struct WorkspacesView: View {
             }
             results
         }
+        .jarvisPageHeader { JarvisPageHeader(title: text(.title), language: language) }
         .jarvisAmbientBackground()
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -159,7 +159,7 @@ struct WorkspacesView: View {
         JarvisList {
             if loadState == .loading && items.isEmpty {
                 Section {
-                    ProgressView(text(.loading))
+                    JarvisLoadingView(title: text(.loading))
                         .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
                         .listRowSeparator(.hidden)
                 }
@@ -212,7 +212,7 @@ struct WorkspacesView: View {
     private var statePanel: some View {
         switch loadState {
         case .loading:
-            ProgressView(text(.loading))
+            JarvisLoadingView(title: text(.loading))
                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
         case .ready where !normalizedQuery(query).isEmpty || selectedKind != nil:
             VStack(spacing: JarvisDesignTokens.contentSpacing) {

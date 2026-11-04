@@ -28,7 +28,7 @@ struct JarvisProactiveSettingsView: View {
                     .foregroundStyle(.red)
             }
             if loading && settings == nil {
-                ProgressView(copy(.loading))
+                JarvisLoadingView(title: copy(.loading))
             } else if let settings {
                 Toggle(copy(.proactiveSuggestions), isOn: Binding(
                     get: { !draftPaused },
@@ -114,7 +114,7 @@ struct JarvisRoutinesSettingsView: View {
                 Text(error).foregroundStyle(.red)
             }
             if loading && routines.isEmpty {
-                ProgressView(copy(.loading))
+                JarvisLoadingView(title: copy(.loading))
             } else if routines.isEmpty {
                 Text(copy(.noRoutines)).foregroundStyle(.secondary)
             }
@@ -226,7 +226,7 @@ struct JarvisMemorySettingsView: View {
                 Text(error).foregroundStyle(.red)
             }
             if loading && memories.isEmpty {
-                ProgressView(copy(.loading))
+                JarvisLoadingView(title: copy(.loading))
             } else if memories.isEmpty {
                 Text(copy(.noMemories)).foregroundStyle(.secondary)
             }
@@ -400,7 +400,7 @@ private struct JarvisMemoryEditorView: View {
                 Text(notice).foregroundStyle(.secondary)
             }
             if loading {
-                ProgressView(copy(.loading))
+                JarvisLoadingView(title: copy(.loading))
             } else if !loaded {
                 JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
             } else {
@@ -568,7 +568,7 @@ struct JarvisTargetsSettingsView: View {
                 Text(error).foregroundStyle(.red)
             }
             if loading && targets == nil {
-                ProgressView(copy(.loading))
+                JarvisLoadingView(title: copy(.loading))
             } else if let targets {
                 ForEach(kind.keys, id: \.self) { key in
                     if let bound = targets.bounds[key] {
@@ -690,7 +690,7 @@ struct JarvisHealthCredentialView: View {
                 Text(error).foregroundStyle(.red)
             }
             if loading && credential == nil {
-                ProgressView(copy(.loading))
+                JarvisLoadingView(title: copy(.loading))
             } else if let credential {
                 LabeledContent(copy(.credentialState), value: statusTitle(credential.state))
                 if let expiresAt = credential.expiresAt {
@@ -763,7 +763,7 @@ struct JarvisOwnerSettingsView: View {
                 Text(error).foregroundStyle(.red)
             }
             if loading && name == nil {
-                ProgressView(copy(.loading))
+                JarvisLoadingView(title: copy(.loading))
             } else if let name {
                 LabeledContent(copy(.ownerRow), value: name)
             } else {

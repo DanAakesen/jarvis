@@ -34,11 +34,7 @@ struct JarvisUsageArea: View {
 
     var body: some View {
         VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisPageHeader(
-                title: JarvisDestination.usage.localizedTitle(language: language),
-                language: language
-            )
-            JarvisTabStrip(
+            JarvisSegmentedBar(
                 title: text(.usageRangeLabel),
                 identifierPrefix: "usage.range",
                 items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
@@ -52,6 +48,12 @@ struct JarvisUsageArea: View {
             }
             .refreshable { reloadToken += 1 }
             .accessibilityIdentifier("usage.scroll")
+        }
+        .jarvisPageHeader {
+            JarvisPageHeader(
+                title: JarvisDestination.usage.localizedTitle(language: language),
+                language: language
+            )
         }
         .jarvisAmbientBackground()
         .toolbar(.hidden, for: .navigationBar)

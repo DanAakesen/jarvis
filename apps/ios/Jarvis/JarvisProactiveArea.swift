@@ -61,17 +61,6 @@ struct JarvisProactiveArea: View {
 
     var body: some View {
         VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisPageHeader(
-                title: JarvisDestination.proactive.localizedTitle(language: language),
-                language: language
-            ) {
-                JarvisIconButton(
-                    title: text(.proactiveSettings),
-                    systemImage: "gearshape",
-                    identifier: "proactive.settings",
-                    isDisabled: client == nil
-                ) { editorRequest = EditorRequest(focus: .top) }
-            }
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
                     if case .loaded(let loaded) = status {
@@ -85,6 +74,19 @@ struct JarvisProactiveArea: View {
                     .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }
             .accessibilityIdentifier("proactive.scroll")
+        }
+        .jarvisPageHeader {
+            JarvisPageHeader(
+                title: JarvisDestination.proactive.localizedTitle(language: language),
+                language: language
+            ) {
+                JarvisIconButton(
+                    title: text(.proactiveSettings),
+                    systemImage: "gearshape",
+                    identifier: "proactive.settings",
+                    isDisabled: client == nil
+                ) { editorRequest = EditorRequest(focus: .top) }
+            }
         }
         .jarvisAmbientBackground()
         .toolbar(.hidden, for: .navigationBar)
@@ -312,7 +314,7 @@ struct JarvisProactiveArea: View {
     private var itemsCard: some View {
         JarvisInsightsCard {
             VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-                JarvisTabStrip(
+                JarvisSegmentedBar(
                     title: text(.proactiveTabs),
                     identifierPrefix: "proactive.tabs",
                     items: [

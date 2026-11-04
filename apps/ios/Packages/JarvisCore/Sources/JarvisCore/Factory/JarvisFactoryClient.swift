@@ -205,6 +205,22 @@ public final class JarvisFactoryClient: Sendable {
         return task
     }
 
+    /// The deployed models, for the optional Model and Reasoning choices on a new task.
+    public func deployedModels() async throws -> [JarvisModelDeployment] {
+        let response = try await client.performAuthenticatedRequest(
+            method: .get,
+            path: ["models"],
+            idempotent: true
+        )
+        guard response.statusCode == 200,
+              response.body.count <= Self.maximumResponseBytes,
+              let catalogue = try? JSONDecoder().decode(JarvisModelCatalogue.self, from: response.body),
+              catalogue.deployments.count <= 200 else {
+            throw JarvisFactoryClientError.invalidResponse
+        }
+        return catalogue.deployments
+    }
+
     public func releases(projectId: String) async throws -> FactoryReleaseView {
         guard isValidFactoryID(projectId) else { throw JarvisFactoryClientError.invalidRequest }
         let response = try await client.performAuthenticatedRequest(

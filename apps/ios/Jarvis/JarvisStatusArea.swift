@@ -25,16 +25,12 @@ struct JarvisStatusArea: View {
 
     var body: some View {
         VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisPageHeader(
-                title: JarvisDestination.status.localizedTitle(language: language),
-                language: language
-            )
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
                     if let snapshot = state.snapshot {
                         JarvisPageHeadline(phrase: JarvisStatusPagePhrase.make(snapshot, language: language))
                     }
-                    JarvisTabStrip(
+                    JarvisSegmentedBar(
                         title: text(.statusFilterLabel),
                         identifierPrefix: "status.filter",
                         items: JarvisStatusFilter.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
@@ -47,6 +43,12 @@ struct JarvisStatusArea: View {
             }
             .refreshable { await refresh() }
             .accessibilityIdentifier("status.scroll")
+        }
+        .jarvisPageHeader {
+            JarvisPageHeader(
+                title: JarvisDestination.status.localizedTitle(language: language),
+                language: language
+            )
         }
         .jarvisAmbientBackground()
         .toolbar(.hidden, for: .navigationBar)

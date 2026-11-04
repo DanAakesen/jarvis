@@ -1,0 +1,43 @@
+import SwiftUI
+
+/// The one loading animation, used by every page, sheet and list: three pulsing accent dots with an optional
+/// caption. With Reduce Motion the dots stay still. Replaces every ad-hoc `ProgressView` spinner.
+/// HIG: Loading, Motion, Accessibility. API: accessibilityReduceMotion, repeatForever animation.
+struct JarvisLoadingView: View {
+    var title: String?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulsing = false
+
+    private let dotSize: CGFloat = 10
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(JarvisDesignTokens.primaryAccent)
+                        .frame(width: dotSize, height: dotSize)
+                        .scaleEffect(pulsing ? 1 : 0.55)
+                        .opacity(pulsing ? 1 : 0.4)
+                        .animation(
+                            reduceMotion
+                                ? nil
+                                : .easeInOut(duration: 0.6).repeatForever(autoreverses: true).delay(Double(index) * 0.2),
+                            value: pulsing
+                        )
+                }
+            }
+            if let title {
+                Text(title)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .onAppear { pulsing = true }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title ?? "")
+        .accessibilityHidden(title == nil)
+        .accessibilityIdentifier("jarvis.loading")
+    }
+}

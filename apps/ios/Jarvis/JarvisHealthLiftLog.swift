@@ -23,7 +23,7 @@ struct JarvisHealthLiftLog: View {
         let visibleExercises = exercises.filter(matches)
         let visibleLifts = lifts.filter(matches)
         if loading && lifts.isEmpty {
-            ProgressView(copy.text(.loading))
+            JarvisLoadingView(title: copy.text(.loading))
                 .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.healthChartHeight)
         } else if lifts.isEmpty && !failed {
             ContentUnavailableView(copy.text(.noLifts), systemImage: "dumbbell")

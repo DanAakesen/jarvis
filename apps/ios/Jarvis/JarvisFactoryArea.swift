@@ -140,7 +140,6 @@ struct JarvisFactoryArea: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
             if previewState == .loading {
                 FactoryLoadingView(copy: copy, releases: segment == .releases)
             } else if client == nil {
@@ -165,6 +164,7 @@ struct JarvisFactoryArea: View {
                 boardContent
             }
         }
+        .jarvisPageHeader { header }
         .safeAreaInset(edge: .top, spacing: 0) {
             JarvisTaskActivityNotice(language: language)
         }
@@ -261,7 +261,7 @@ struct JarvisFactoryArea: View {
     private var createIdentity: String { board == nil ? "waiting" : "create-ready" }
 
     private var header: some View {
-        JarvisPageHeader(title: copy.text(.title), language: language)
+        JarvisPageHeader(title: copy.text(.title), language: language) { filterButton }
     }
 
     private var headline: JarvisPagePhrase? {
@@ -301,20 +301,24 @@ struct JarvisFactoryArea: View {
                     isSelected: segment == item
                 ) { segment = item }
             }
-            JarvisIconButton(
-                title: copy.text(.newTask),
-                systemImage: "plus",
-                identifier: "factory.plus",
-                isDisabled: client == nil || projects.isEmpty
-            ) {
-                createPresented = true
-            }
         }
         .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
     }
 
-    /// One round glass filter button. Its small menu has a checkmark on the selected project and, on the board,
-    /// the agent and state filters. It sits on the first section header row, or alone above the releases list.
+    /// The new-task plus sits beside the search field, below the full-width toggle.
+    private var plusButton: some View {
+        JarvisIconButton(
+            title: copy.text(.newTask),
+            systemImage: "plus",
+            identifier: "factory.plus",
+            isDisabled: client == nil || projects.isEmpty
+        ) {
+            createPresented = true
+        }
+    }
+
+    /// One round glass filter button in the header plus position (top right). Its small menu has a checkmark on the
+    /// selected project and, on the board, the agent and state filters.
     @ViewBuilder
     private var filterButton: some View {
         if project != nil {
@@ -381,8 +385,6 @@ struct JarvisFactoryArea: View {
                             }
                     }
                     if filteredCards.isEmpty {
-                        filterButton
-                            .frame(maxWidth: .infinity, alignment: .trailing)
                         Text(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             ? emptyBoardTitle
                             : copy.text(.noSearchResults))
@@ -395,7 +397,7 @@ struct JarvisFactoryArea: View {
                             filteredCards.contains(where: { $0.column == id })
                         }
                         ForEach(visibleColumns, id: \.self) { column in
-                            columnSection(column, showsFilter: column == visibleColumns.first)
+                            columnSection(column)
                         }
                     }
                 }
@@ -417,13 +419,13 @@ struct JarvisFactoryArea: View {
         }
     }
 
-    private func columnSection(_ id: FactoryBoardColumnID, showsFilter: Bool) -> some View {
+    private func columnSection(_ id: FactoryBoardColumnID) -> some View {
         let cards = filteredCards.filter { $0.column == id }.map(\.card)
         let expanded = !collapsedColumns.contains(id)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
             JarvisLabelledButton(
-                title: "\(copy.column(id)) \(cards.count.formatted(.number.locale(language.locale)))",
+                title: "\(copy.column(id)) \(JarvisNumberFormat.compact(cards.count, language: language))",
                 trailingSystemImage: expanded ? "chevron.down" : "chevron.right",
                 identifier: "factory.column.\(id.rawValue)",
                 isFullWidth: true,
@@ -436,7 +438,6 @@ struct JarvisFactoryArea: View {
                     if expanded { collapsedColumns.insert(id) } else { collapsedColumns.remove(id) }
                 }
             }
-                if showsFilter { filterButton }
             }
             if expanded {
                 VStack(spacing: JarvisDesignTokens.factoryRowSpacing) {
@@ -486,10 +487,6 @@ struct JarvisFactoryArea: View {
                 ))
                 .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
                 .padding(.top, JarvisDesignTokens.factoryRowSpacing)
-                filterButton
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
-                    .padding(.vertical, JarvisDesignTokens.factoryRowSpacing)
                 JarvisFactoryReleaseListView(
                     releaseView: releaseView,
                     language: language,
@@ -515,15 +512,18 @@ struct JarvisFactoryArea: View {
     private var bottomDock: some View {
         VStack(spacing: JarvisPageHeaderMetrics.spacing) {
             segmentSwitcher
-            JarvisSearchField(
-                placeholder: copy.text(segment == .releases ? .searchReleases : .search),
-                text: $searchText,
-                identifier: "factory.search",
-                clearTitle: copy.text(.clearSearch),
-                accessibilityTitle: copy.text(
-                    segment == .releases ? .searchReleasesAccessibility : .searchAccessibility
+            HStack(spacing: JarvisPageHeaderMetrics.spacing) {
+                JarvisSearchField(
+                    placeholder: copy.text(segment == .releases ? .searchReleases : .search),
+                    text: $searchText,
+                    identifier: "factory.search",
+                    clearTitle: copy.text(.clearSearch),
+                    accessibilityTitle: copy.text(
+                        segment == .releases ? .searchReleasesAccessibility : .searchAccessibility
+                    )
                 )
-            )
+                plusButton
+            }
             .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
         }
         .padding(.vertical, JarvisPageHeaderMetrics.spacing)
@@ -679,32 +679,9 @@ struct FactoryLoadingView: View {
     let releases: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.factorySectionSpacing) {
-            Text(copy.text(releases ? .loadingReleases : .loadingTasks))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            ForEach(0..<JarvisDesignTokens.factorySkeletonRowCount) { _ in
-                VStack(alignment: .leading, spacing: JarvisDesignTokens.factoryRowSpacing) {
-                    RoundedRectangle(cornerRadius: JarvisDesignTokens.factorySkeletonCornerRadius)
-                        .fill(.quaternary)
-                        .frame(height: JarvisDesignTokens.factorySkeletonTitleHeight)
-                        .frame(maxWidth: .infinity)
-                    RoundedRectangle(cornerRadius: JarvisDesignTokens.factorySkeletonCornerRadius)
-                        .fill(.quaternary)
-                        .frame(
-                            width: JarvisDesignTokens.factorySkeletonSecondaryWidth,
-                            height: JarvisDesignTokens.factorySkeletonSecondaryHeight
-                        )
-                }
-                .padding(.vertical, JarvisDesignTokens.factorySectionSpacing)
-                .redacted(reason: .placeholder)
-                .accessibilityHidden(true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(JarvisDesignTokens.factoryHorizontalInset)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .accessibilityLabel(copy.text(.loading))
+        JarvisLoadingView(title: copy.text(releases ? .loadingReleases : .loadingTasks))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(JarvisDesignTokens.factoryHorizontalInset)
     }
 }
 

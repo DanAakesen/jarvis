@@ -84,7 +84,7 @@ struct JarvisActivitySheet: View {
                             ContentUnavailableView(copy(.activityEmpty), systemImage: "checkmark.circle")
                         }
                     } else {
-                        ProgressView(copy(.activityLoading))
+                        JarvisLoadingView(title: copy(.activityLoading))
                             .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                     }
                 }
@@ -360,7 +360,7 @@ struct JarvisActivitySheet: View {
                 }
                 Spacer(minLength: 0)
                 if busy {
-                    ProgressView()
+                    JarvisLoadingView()
                 } else if group.olderCount > 0 {
                     JarvisIconButton(
                         title: String(format: copy(.clearGroupLabel), title(for: group.category)),

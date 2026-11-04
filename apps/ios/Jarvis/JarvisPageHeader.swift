@@ -11,6 +11,7 @@ enum JarvisPageHeaderMetrics {
     static let actionSize = JarvisDesignTokens.iconButtonDiameter
     static let actionIconSize = JarvisDesignTokens.iconButtonGlyphSize
     static let inset: CGFloat = 16
+    static let heroInset: CGFloat = 20
     static let spacing: CGFloat = 12
     static let actionSpacing: CGFloat = 8
     static let statMinimumWidth: CGFloat = 72
@@ -55,6 +56,15 @@ struct JarvisPageHeader<Actions: View>: View {
 extension JarvisPageHeader where Actions == EmptyView {
     init(title: String, language: JarvisAppLanguage) {
         self.init(title: title, language: language) { EmptyView() }
+    }
+}
+
+extension View {
+    /// Pins the page header over the content with no bar background and no line: the content scrolls behind the
+    /// title and the header buttons. HIG: Navigation bars, Toolbars, Scroll views.
+    func jarvisPageHeader<Header: View>(@ViewBuilder _ header: () -> Header) -> some View {
+        safeAreaInset(edge: .top, spacing: 0) { header() }
+            .scrollEdgeEffectHidden(true, for: .top)
     }
 }
 
@@ -105,7 +115,7 @@ struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(JarvisPageHeaderMetrics.inset)
+        .padding(JarvisPageHeaderMetrics.heroInset)
         .background(
             .regularMaterial,
             in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous)
@@ -142,9 +152,10 @@ struct JarvisPageStatGrid: View {
             ForEach(stats) { stat in
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: JarvisPageHeaderMetrics.actionSpacing / 2) {
-                        Text(stat.value.formatted(.number.locale(language.locale)))
+                        Text(JarvisNumberFormat.compact(stat.value, language: language))
                             .font(.title2.weight(.semibold))
                             .monospacedDigit()
+                        Spacer(minLength: JarvisPageHeaderMetrics.actionSpacing)
                         Image(systemName: stat.systemImage)
                             .font(.subheadline)
                             .foregroundStyle(stat.value > 0 ? stat.tint : Color.secondary)
@@ -192,19 +203,19 @@ struct JarvisPageScaffold<Actions: View, Headline: View, Hero: View, Sections: V
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                headline
+                hero
+                sections
+            }
+            .padding(.horizontal, JarvisPageHeaderMetrics.inset)
+            .padding(.top, title == nil ? JarvisPageHeaderMetrics.spacing : 0)
+            .padding(.bottom, JarvisPageHeaderMetrics.spacing)
+        }
+        .jarvisPageHeader {
             if let title {
                 JarvisPageHeader(title: title, language: language) { actions }
-            }
-            ScrollView {
-                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-                    headline
-                    hero
-                    sections
-                }
-                .padding(.horizontal, JarvisPageHeaderMetrics.inset)
-                .padding(.top, title == nil ? JarvisPageHeaderMetrics.spacing : 0)
-                .padding(.bottom, JarvisPageHeaderMetrics.spacing)
             }
         }
         .jarvisAmbientBackground()
