@@ -41,6 +41,16 @@ final class JarvisUsageSummaryTests: XCTestCase {
         )
     }
 
+    func testUsagePhraseUsesCompactCostOrAGenericLine() {
+        let costed = JarvisUsageSummary(
+            report: report([entry(cost: 1500, at: "2026-11-01T09:00:00Z")]), period: .sevenDays
+        )
+        XCTAssertEqual(JarvisUsagePagePhrase.make(costed, language: .en).plainText, "Dan, your usage is 1.5k DKK.")
+        XCTAssertEqual(JarvisUsagePagePhrase.make(costed, language: .da).plainText, "Dan, dit forbrug er 1,5k kr.")
+        let free = JarvisUsageSummary(report: report([entry(cost: nil, at: "2026-11-01T09:00:00Z")]), period: .sevenDays)
+        XCTAssertEqual(JarvisUsagePagePhrase.make(free, language: .en).plainText, "Dan, here is your usage.")
+    }
+
     func testRangesMapToBucketKindsAndCounts() {
         XCTAssertEqual(JarvisUsagePeriod.default, .thirtyDays)
         XCTAssertEqual(JarvisUsagePeriod.allCases.map(\.rawValue), ["7d", "30d", "90d", "all"])

@@ -33,22 +33,24 @@ struct JarvisUsageArea: View {
     }
 
     var body: some View {
-        VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisSegmentedBar(
-                title: text(.usageRangeLabel),
-                identifierPrefix: "usage.range",
-                items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
-                selection: $period
-            )
-            .padding(.horizontal)
-            ScrollView {
+        ScrollView {
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                if case .loaded(let summary) = load {
+                    JarvisPageHeadline(phrase: JarvisUsagePagePhrase.make(summary, language: language))
+                }
+                JarvisSegmentedBar(
+                    title: text(.usageRangeLabel),
+                    identifierPrefix: "usage.range",
+                    items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                    selection: $period
+                )
                 content
-                    .padding(.horizontal)
-                    .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }
-            .refreshable { reloadToken += 1 }
-            .accessibilityIdentifier("usage.scroll")
+            .padding(.horizontal)
+            .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
         }
+        .refreshable { reloadToken += 1 }
+        .accessibilityIdentifier("usage.scroll")
         .jarvisPageHeader {
             JarvisPageHeader(
                 title: JarvisDestination.usage.localizedTitle(language: language),

@@ -330,6 +330,20 @@ public enum JarvisStatusPagePhrase {
     }
 }
 
+/// Usage header phrase, written from the period total (cost in DKK when the report has costs).
+public enum JarvisUsagePagePhrase {
+    public static func make(_ summary: JarvisUsageSummary, language: JarvisAppLanguage) -> JarvisPagePhrase {
+        let da = language == .da
+        guard summary.usesCost, summary.totalValue > 0 else {
+            return JarvisPagePhrase(markup: da ? "Dan, her er dit {forbrug}." : "Dan, here is your {usage}.")
+        }
+        let amount = JarvisNumberFormat.compact(summary.totalValue, language: language)
+        return JarvisPagePhrase(markup: da
+            ? "Dan, dit forbrug er {\(amount) kr}."
+            : "Dan, your usage is {\(amount) DKK}.")
+    }
+}
+
 /// Proactive header phrase, written from the open suggestions and the next check.
 public enum JarvisProactivePagePhrase {
     public static func make(status: JarvisProactiveStatus, openItems: Int, language: JarvisAppLanguage) -> JarvisPagePhrase {
