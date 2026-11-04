@@ -6,7 +6,7 @@ import WidgetKit
 /// English. Step through each preview's timeline in Xcode; tinted and Liquid Glass rendering come from the preview's
 /// rendering-mode controls.
 private enum PreviewStates {
-    static func gym() -> [JarvisWidgetEntry] {
+    static var gym: [JarvisWidgetEntry] {
         [
             JarvisWidgetSamples.entry(),
             JarvisWidgetSamples.entry(language: .en),
@@ -18,7 +18,7 @@ private enum PreviewStates {
         ]
     }
 
-    static func factory() -> [JarvisWidgetEntry] {
+    static var factory: [JarvisWidgetEntry] {
         [
             JarvisWidgetSamples.entry(),
             JarvisWidgetSamples.entry(language: .en),
@@ -31,11 +31,84 @@ private enum PreviewStates {
     }
 }
 
-#Preview("Gym steps", as: .systemSmall) { JarvisGymStepsWidget() } timeline: { PreviewStates.gym() }
-#Preview("Gym workouts", as: .systemSmall) { JarvisGymWorkoutsWidget() } timeline: { PreviewStates.gym() }
-#Preview("Gym medium", as: .systemMedium) { JarvisGymMediumWidget() } timeline: { PreviewStates.gym() }
-#Preview("Gym large", as: .systemLarge) { JarvisGymLargeWidget() } timeline: { PreviewStates.gym() }
-#Preview("Factory status", as: .systemSmall) { JarvisFactoryStatusWidget() } timeline: { PreviewStates.factory() }
-#Preview("Factory done", as: .systemSmall) { JarvisFactoryDoneWidget() } timeline: { PreviewStates.factory() }
-#Preview("Factory medium", as: .systemMedium) { JarvisFactoryMediumWidget() } timeline: { PreviewStates.factory() }
-#Preview("Factory large", as: .systemLarge) { JarvisFactoryLargeWidget() } timeline: { PreviewStates.factory() }
+/// The `#Preview` timeline closure is a result builder that takes one entry per expression, so each state is listed
+/// as its own expression (an array expression does not conform to `TimelineEntry`).
+#Preview("Gym steps", as: .systemSmall) { JarvisGymStepsWidget() } timeline: {
+    PreviewStates.gym[0]
+    PreviewStates.gym[1]
+    PreviewStates.gym[2]
+    PreviewStates.gym[3]
+    PreviewStates.gym[4]
+    PreviewStates.gym[5]
+    PreviewStates.gym[6]
+}
+
+#Preview("Gym workouts", as: .systemSmall) { JarvisGymWorkoutsWidget() } timeline: {
+    PreviewStates.gym[0]
+    PreviewStates.gym[1]
+    PreviewStates.gym[2]
+    PreviewStates.gym[3]
+    PreviewStates.gym[4]
+    PreviewStates.gym[5]
+    PreviewStates.gym[6]
+}
+
+#Preview("Gym medium", as: .systemMedium) { JarvisGymMediumWidget() } timeline: {
+    PreviewStates.gym[0]
+    PreviewStates.gym[1]
+    PreviewStates.gym[2]
+    PreviewStates.gym[3]
+    PreviewStates.gym[4]
+    PreviewStates.gym[5]
+    PreviewStates.gym[6]
+}
+
+#Preview("Gym large", as: .systemLarge) { JarvisGymLargeWidget() } timeline: {
+    PreviewStates.gym[0]
+    PreviewStates.gym[1]
+    PreviewStates.gym[2]
+    PreviewStates.gym[3]
+    PreviewStates.gym[4]
+    PreviewStates.gym[5]
+    PreviewStates.gym[6]
+}
+
+#Preview("Factory status", as: .systemSmall) { JarvisFactoryStatusWidget() } timeline: {
+    PreviewStates.factory[0]
+    PreviewStates.factory[1]
+    PreviewStates.factory[2]
+    PreviewStates.factory[3]
+    PreviewStates.factory[4]
+    PreviewStates.factory[5]
+    PreviewStates.factory[6]
+}
+
+#Preview("Factory done", as: .systemSmall) { JarvisFactoryDoneWidget() } timeline: {
+    PreviewStates.factory[0]
+    PreviewStates.factory[1]
+    PreviewStates.factory[2]
+    PreviewStates.factory[3]
+    PreviewStates.factory[4]
+    PreviewStates.factory[5]
+    PreviewStates.factory[6]
+}
+
+#Preview("Factory medium", as: .systemMedium) { JarvisFactoryMediumWidget() } timeline: {
+    PreviewStates.factory[0]
+    PreviewStates.factory[1]
+    PreviewStates.factory[2]
+    PreviewStates.factory[3]
+    PreviewStates.factory[4]
+    PreviewStates.factory[5]
+    PreviewStates.factory[6]
+}
+
+#Preview("Factory large", as: .systemLarge) { JarvisFactoryLargeWidget() } timeline: {
+    PreviewStates.factory[0]
+    PreviewStates.factory[1]
+    PreviewStates.factory[2]
+    PreviewStates.factory[3]
+    PreviewStates.factory[4]
+    PreviewStates.factory[5]
+    PreviewStates.factory[6]
+}
