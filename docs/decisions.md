@@ -10766,8 +10766,14 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 
 ## 2026-11-04 P15-76: Factory layout, shared search and headers
 
-- Decision: on the Software Factory page the project and filter options sit under the hero, on the same row as the section title (for example "Needs Dan"), not in a full-width bar above it. The bottom dock has no background; the segment pills and the search field are 12 pt apart.
+- Decision (superseded by the next entry for the project pill): on the Software Factory page the project and filter options sit under the hero, on the same row as the section title, not in a full-width bar above it. The bottom dock has no background; the segment pills and the search field are 12 pt apart.
 - Decision: every page's search field is the shared `JarvisSearchField` (48 pt glass capsule; the text field has the identifier and the clear button `identifier.clear`). Health, Notes, Settings and Factory use it.
 - Decision: all Factory kanban columns start collapsed (`defaultCollapsedColumns()` is every column); the owner expands each one.
 - Decision: pages other than Home and Chat use `JarvisPageHeader` with the navigation bar hidden, so the shared ambient background shows through with no bar or line. Usage and Workspaces were the two that differed (own header; native large title with a bar and a material search background) and now match.
 - Not done: the Notes tab row still sits between the title and the headline/hero; moving it under the hero needs every tab state (loading, empty, error) to render the row itself. Usage has no headline or hero yet. Settings is a list without a hero. Not compile-verified (Linux).
+
+## 2026-11-04 P15-76: Factory filter button and task rows (board update from Dan)
+
+- Decision: the project pill is gone. One round 48 pt glass funnel button (`factory.filters`, accessibility label "Filters" / "Filtre") sits right-aligned on the first section header row. Its small menu checks the selected project and also holds the agent and state filters. On the Releases tab, and on an empty board, it sits alone above the list.
+- Decision: task rows inside a section are indented 16 pt, opaque, with a hairline outline, a 12 pt corner radius and a slightly smaller title (callout) and metadata (caption2). Section headers stay the larger glass buttons.
+- Note: the board rows are in a `LazyVStack` and have no swipe actions today, so none were changed. Not compile-verified (Linux).
