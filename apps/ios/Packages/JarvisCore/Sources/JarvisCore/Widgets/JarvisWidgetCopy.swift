@@ -89,3 +89,15 @@ public enum JarvisWidgetFormat {
         return JarvisWidgetCopy.updated.formatted(formatter.string(from: date), language: language)
     }
 }
+
+extension JarvisWidgetFormat {
+    /// Kilometres with at most one decimal: "5,2" / "5.2".
+    public static func kilometers(_ value: Double, language: JarvisAppLanguage) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = language.locale
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = false
+        formatter.maximumFractionDigits = 1
+        return formatter.string(from: NSNumber(value: value)) ?? "0"
+    }
+}

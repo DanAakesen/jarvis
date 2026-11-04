@@ -199,7 +199,7 @@ public struct JarvisWidgetSnapshotStore: Sendable {
         case snapshot(JarvisWidgetSnapshot)
     }
 
-    private let directory: URL
+    public let directory: URL
 
     public init(directory: URL) {
         self.directory = directory

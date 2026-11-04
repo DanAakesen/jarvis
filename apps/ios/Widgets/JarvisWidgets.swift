@@ -8,6 +8,14 @@ import WidgetKit
 struct JarvisWidgets: WidgetBundle {
     var body: some Widget {
         JarvisFactoryLiveActivityWidget()
+        JarvisGymStepsWidget()
+        JarvisGymWorkoutsWidget()
+        JarvisGymMediumWidget()
+        JarvisGymLargeWidget()
+        JarvisFactoryStatusWidget()
+        JarvisFactoryDoneWidget()
+        JarvisFactoryMediumWidget()
+        JarvisFactoryLargeWidget()
     }
 }
 

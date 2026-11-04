@@ -194,4 +194,42 @@ final class JarvisWidgetTests: XCTestCase {
         XCTAssertEqual(JarvisWidgetFormat.dayLetters(endingOn: monday, language: .en, calendar: calendar).last, "M")
         XCTAssertEqual(JarvisWidgetFormat.dayLetters(endingOn: monday, language: .da, calendar: calendar).first, "T")
     }
+
+    func testActionQueueKeepsOnlyFreshTapsAndEmptiesOnDrain() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let queue = JarvisFactoryWidgetActionQueue(directory: directory)
+        try queue.enqueue(.init(action: .approve, id: "old", requestedAt: now.addingTimeInterval(-3_600)))
+        try queue.enqueue(.init(action: .retry, id: "new", requestedAt: now.addingTimeInterval(-30)))
+        XCTAssertEqual(queue.drain(now: now).map(\.id), ["new"])
+        XCTAssertEqual(queue.drain(now: now), [])
+    }
+
+    @MainActor
+    func testActionsQueueWhenNoHandlerAndFailWithoutQueue() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            JarvisFactoryWidgetActions.queue = nil
+            try? FileManager.default.removeItem(at: directory)
+        }
+        JarvisFactoryWidgetActions.handler = nil
+        JarvisFactoryWidgetActions.queue = nil
+        do {
+            try await JarvisFactoryWidgetActions.perform(.pause, id: "t1")
+            XCTFail("expected failure")
+        } catch {
+            XCTAssertEqual(error as? JarvisFactoryWidgetActions.Failure, .unavailable)
+        }
+        let queue = JarvisFactoryWidgetActionQueue(directory: directory)
+        JarvisFactoryWidgetActions.queue = queue
+        try await JarvisFactoryWidgetActions.perform(.pause, id: "t1")
+        XCTAssertEqual(queue.drain().map(\.action), [.pause])
+    }
+
+    func testKilometersUseLocaleDecimals() {
+        XCTAssertEqual(JarvisWidgetFormat.kilometers(5.24, language: .da), "5,2")
+        XCTAssertEqual(JarvisWidgetFormat.kilometers(5.24, language: .en), "5.2")
+    }
 }
