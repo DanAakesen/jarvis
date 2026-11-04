@@ -10834,3 +10834,11 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Widget buttons are only immediate actions: Godkend, pause, resume, retry as App Intents, bare icons with no text. The intent calls `JarvisFactoryWidgetActions`; the app installs the handler that holds the authenticated clients. If the intent runs in the extension process, the tap is queued in the App Group (action and id only, dropped after 15 minutes) and the app drains it on its next refresh. Approve needs device authentication.
 - Colours: orange accent; blue only for runs versus lifts; red for failed. The only ring is the Gym medium steps ring.
 - Not verified: no Xcode in the sandbox. JarvisCore (`swift test`) covers the snapshot, builders, timeline and action queue. The widget views, intents, previews, the HealthKit workout query and the app publisher were not compiled or rendered; Mac compile, preview and device checks are pending. Apple docs used: WidgetKit (Keeping a widget up to date, Making a configurable widget, Adding interactivity to widgets and Live Activities), App Intents, HIG Widgets.
+
+## Health hero carousel and charts (P15-83)
+
+- The Health page hero is a swipeable carousel (Training, Sleep, Nutrition) with equal card height and page dots. Every Health bar chart uses `JarvisHealthBarChart`: headline is the average (or the tapped day; tap again to return), target chip and dashed target line, weekday labels, bars grow from the baseline.
+- Chart value logic (`JarvisHealthChartValues`) lives in JarvisCore and is unit tested. Missing days stay empty; averages only use recorded days.
+- Sleep goal (default 8 h), kcal (2200), carbs (250 g) and fat (70 g) goals are stored on the device (`JarvisHealthGoals`, Settings > Health goals) because the Daily target API only serves training and resting/deficit/protein targets. Protein keeps using the server target.
+- The hero reads sleep and nutrition days for the last seven days whatever the selected period. The separate Nutrition panel was removed; its protein chart is the Nutrition hero chart. HealthKit already requests every readable type (`JarvisHealthKitAccess`); shown data comes from the Daily reads and shows an empty state when there is none.
+- Not verified: no Xcode in the sandbox, so the app-target edits were not compiled. JarvisCore `swift test` passes.
