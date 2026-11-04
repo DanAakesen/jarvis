@@ -133,7 +133,7 @@ final class JarvisHealthSyncTests: XCTestCase {
     }
 
     func testSyncLocalizationExistsInDanishAndEnglish() {
-        for key in [JarvisHealthLocalizationKey.sync, .syncing, .syncNever, .syncComplete, .syncPartial, .syncFailed, .syncRetry, .syncLastTime] {
+        for key in [JarvisHealthLocalizationKey.sync, .syncing, .syncNever, .syncComplete, .syncPartial, .syncFailed, .syncRetry, .lastSync] {
             XCTAssertNotEqual(JarvisHealthLocalization.string(key, language: .da), key.rawValue)
             XCTAssertNotEqual(JarvisHealthLocalization.string(key, language: .en), key.rawValue)
             XCTAssertNotEqual(

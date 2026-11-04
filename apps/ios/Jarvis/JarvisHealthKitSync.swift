@@ -170,7 +170,7 @@ struct JarvisHealthSyncSection: View {
                 status
             }
             if let lastSync = model.lastSync {
-                Text(String(format: text(.syncLastTime), time(lastSync)))
+                Text("\(text(.lastSync)) · \(time(lastSync))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("health.sync.lastTime")
@@ -185,12 +185,12 @@ struct JarvisHealthSyncSection: View {
         case .neverSynced:
             Text(text(.syncNever)).font(.caption).foregroundStyle(.secondary)
                 .accessibilityIdentifier("health.sync.status")
-        case .complete:
-            Label(text(.syncComplete), systemImage: "checkmark.circle.fill")
+        case let .complete(at):
+            Label(String(format: text(.syncComplete), time(at)), systemImage: "checkmark.circle.fill")
                 .font(.caption).foregroundStyle(.secondary)
                 .accessibilityIdentifier("health.sync.status")
-        case let .partial(_, missing):
-            Label(String(format: text(.syncPartial), missing.joined(separator: ", ")), systemImage: "exclamationmark.circle")
+        case let .partial(at, missing):
+            Label(String(format: text(.syncPartial), time(at), missing.joined(separator: ", ")), systemImage: "exclamationmark.circle")
                 .font(.caption).foregroundStyle(.secondary)
                 .accessibilityIdentifier("health.sync.status")
         case .failed:
