@@ -220,6 +220,7 @@ private final class JarvisGateModel: ObservableObject {
 
         do {
             _ = try await client.createOwnerSession()
+            await JarvisAppCache.clear()
             contentEpoch += 1
             presentation = .lock(.waiting)
             await authenticate()
@@ -245,6 +246,7 @@ private final class JarvisGateModel: ObservableObject {
         do {
             try await tokenStore?.delete()
             try provider?.signOut()
+            await JarvisAppCache.clear()
             contentEpoch += 1
             signOutGeneration += 1
             presentation = .signIn(.idle)

@@ -1,0 +1,185 @@
+import Foundation
+import XCTest
+@testable import JarvisCore
+
+private final class Clock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current = Date(timeIntervalSince1970: 1_000)
+    var now: Date { lock.withLock { current } }
+    func advance(_ seconds: TimeInterval) { lock.withLock { current = current.addingTimeInterval(seconds) } }
+}
+
+private final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    private var validators: [String?] = []
+    var calls: Int { lock.withLock { count } }
+    var seenValidators: [String?] { lock.withLock { validators } }
+    func hit(_ validator: String?) { lock.withLock { count += 1; validators.append(validator) } }
+}
+
+private struct Boom: Error {}
+
+final class JarvisRepositoryTests: XCTestCase {
+    private func collect(_ stream: AsyncStream<JarvisRepositoryUpdate<[String]>>) async -> [JarvisRepositoryUpdate<[String]>] {
+        var all: [JarvisRepositoryUpdate<[String]>] = []
+        for await update in stream { all.append(update) }
+        return all
+    }
+
+    private func make(
+        clock: Clock,
+        counter: Counter,
+        storage: any JarvisCacheStorage = JarvisInMemoryCacheStorage(),
+        kind: JarvisRepositoryKind = .notes,
+        fetch: @escaping JarvisRepository<[String]>.Fetch
+    ) async -> (JarvisCache, JarvisRepository<[String]>) {
+        let cache = JarvisCache(storage: storage) { clock.now }
+        await cache.bind(account: "dan")
+        return (cache, JarvisRepository(cache: cache, kind: kind, fetch: fetch))
+    }
+
+    func testFirstOpenFetchesThenFreshWindowMakesNoRequest() async {
+        let clock = Clock(), counter = Counter()
+        let (_, repo) = await make(clock: clock, counter: counter) { v in
+            counter.hit(v)
+            return .modified(["a"], validator: "v1")
+        }
+        let first = await collect(repo.updates())
+        XCTAssertEqual(first.count, 2)
+        guard case .refreshing = first[0], case .fresh(let value) = first[1] else { return XCTFail("\(first)") }
+        XCTAssertEqual(value, ["a"])
+        clock.advance(299)
+        let second = await collect(repo.updates())
+        XCTAssertEqual(second.count, 1)
+        guard case .cached(let cached, let stale) = second[0] else { return XCTFail("\(second)") }
+        XCTAssertEqual(cached, ["a"])
+        XCTAssertFalse(stale)
+        XCTAssertEqual(counter.calls, 1)
+    }
+
+    func testStaleShowsCachedThenRefreshesWithValidator() async {
+        let clock = Clock(), counter = Counter()
+        let (_, repo) = await make(clock: clock, counter: counter, kind: .factory) { v in
+            counter.hit(v)
+            return v == nil ? .modified(["old"], validator: "v1") : .modified(["new"], validator: "v2")
+        }
+        _ = await collect(repo.updates())
+        clock.advance(61)
+        let updates = await collect(repo.updates())
+        guard updates.count == 2, case .cached(let old, true) = updates[0], case .fresh(let new) = updates[1] else {
+            return XCTFail("\(updates)")
+        }
+        XCTAssertEqual(old, ["old"])
+        XCTAssertEqual(new, ["new"])
+        XCTAssertEqual(counter.seenValidators, [nil, "v1"])
+    }
+
+    func testNotModifiedKeepsValueAndRestartsFreshnessWindow() async {
+        let clock = Clock(), counter = Counter()
+        let (_, repo) = await make(clock: clock, counter: counter) { v in
+            counter.hit(v)
+            return v == nil ? .modified(["a"], validator: "v1") : .notModified
+        }
+        _ = await collect(repo.updates())
+        clock.advance(400)
+        let updates = await collect(repo.updates())
+        guard updates.count == 2, case .fresh(let value) = updates[1] else { return XCTFail("\(updates)") }
+        XCTAssertEqual(value, ["a"])
+        clock.advance(10)
+        _ = await collect(repo.updates())
+        XCTAssertEqual(counter.calls, 2)
+    }
+
+    func testFailureKeepsCachedData() async {
+        let clock = Clock(), counter = Counter()
+        let failing = Counter()
+        let (_, repo) = await make(clock: clock, counter: counter) { v in
+            counter.hit(v)
+            if counter.calls > 1 { failing.hit(v); throw Boom() }
+            return .modified(["kept"], validator: nil)
+        }
+        _ = await collect(repo.updates())
+        let updates = await collect(repo.updates(force: true))
+        guard updates.count == 2, case .failed(_, let cached) = updates[1] else { return XCTFail("\(updates)") }
+        XCTAssertEqual(cached, ["kept"])
+        let after = await repo.cachedValue()
+        XCTAssertEqual(after, ["kept"])
+    }
+
+    func testFailureWithoutCacheIsReportedNotEmpty() async {
+        let (_, repo) = await make(clock: Clock(), counter: Counter()) { _ in throw Boom() }
+        let updates = await collect(repo.updates())
+        guard updates.count == 2, case .failed(_, let cached) = updates[1] else { return XCTFail("\(updates)") }
+        XCTAssertNil(cached)
+    }
+
+    func testForceRefreshesWhileFresh() async {
+        let clock = Clock(), counter = Counter()
+        let (_, repo) = await make(clock: clock, counter: counter) { v in
+            counter.hit(v)
+            return .modified(["a"], validator: nil)
+        }
+        _ = await collect(repo.updates())
+        _ = await collect(repo.updates(force: true))
+        XCTAssertEqual(counter.calls, 2)
+    }
+
+    func testInvalidateForcesNextRequest() async {
+        let clock = Clock(), counter = Counter()
+        let (_, repo) = await make(clock: clock, counter: counter) { v in
+            counter.hit(v)
+            return .modified(["a"], validator: nil)
+        }
+        _ = await collect(repo.updates())
+        await repo.invalidate()
+        _ = await collect(repo.updates())
+        XCTAssertEqual(counter.calls, 2)
+    }
+
+    func testClearOnSignOutRemovesCache() async {
+        let clock = Clock(), counter = Counter()
+        let (cache, repo) = await make(clock: clock, counter: counter) { v in
+            counter.hit(v)
+            return .modified(["secret-free"], validator: nil)
+        }
+        _ = await collect(repo.updates())
+        await cache.clear()
+        let cleared = await repo.cachedValue()
+        XCTAssertNil(cleared)
+        let account = await cache.currentAccount
+        XCTAssertNil(account)
+    }
+
+    func testAccountChangeClearsPreviousAccountData() async {
+        let clock = Clock(), counter = Counter()
+        let (cache, repo) = await make(clock: clock, counter: counter) { _ in .modified(["dan"], validator: nil) }
+        _ = await collect(repo.updates())
+        await cache.bind(account: "dan")
+        let same = await repo.cachedValue()
+        XCTAssertEqual(same, ["dan"])
+        await cache.bind(account: "other")
+        let other = await repo.cachedValue()
+        XCTAssertNil(other)
+    }
+
+    func testFileStoragePersistsAndClears() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("jarvis-cache-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let storage = JarvisFileCacheStorage(root: root)
+        let clock = Clock(), counter = Counter()
+        let (cache, repo) = await make(clock: clock, counter: counter, storage: storage) { _ in .modified(["disk"], validator: "e") }
+        _ = await collect(repo.updates())
+        let reopened = JarvisRepository<[String]>(cache: cache, kind: .notes) { _ in throw Boom() }
+        let value = await reopened.cachedValue()
+        XCTAssertEqual(value, ["disk"])
+        await cache.clear()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.path))
+    }
+
+    func testFreshnessWindowsMatchPolicy() {
+        XCTAssertEqual(JarvisRepositoryKind.calendar.freshness, .seconds(120))
+        XCTAssertEqual(JarvisRepositoryKind.notes.freshness, .seconds(300))
+        XCTAssertEqual(JarvisRepositoryKind.factory.freshness, .seconds(60))
+    }
+}
