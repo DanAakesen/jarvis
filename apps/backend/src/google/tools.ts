@@ -1395,6 +1395,39 @@ export function createGoogleModule(
       pendingActions.onChanged = () => app.nowEventHub.publish({ type: 'refresh' });
       pendingActions.onConfirmationPending = app.notifyApproval;
     },
-    registerRoutes: async () => {},
+    registerRoutes: async (app) => {
+      // The phone reads Dan's primary calendar here (the same read the agenda tool uses). Dan-only by default.
+      app.get<{ Querystring: { from?: string; to?: string } }>('/calendar/events', {
+        schema: {
+          querystring: {
+            type: 'object',
+            properties: { from: { type: 'string', maxLength: 40 }, to: { type: 'string', maxLength: 40 } },
+            additionalProperties: false,
+          },
+        },
+      }, async (request, reply) => {
+        const today = localDateParts(now(), timeZone);
+        const dayStart = zonedMidnightUtc(today.year, today.month, today.day, timeZone);
+        const controller = new AbortController();
+        reply.raw.once('close', () => { if (!reply.raw.writableFinished) controller.abort(); });
+        try {
+          const from = request.query.from ? dateTime(request.query.from, 'from') : dayStart;
+          const to = request.query.to ? dateTime(request.query.to, 'to') : new Date(from.getTime() + 24 * 60 * 60_000);
+          validateWindow(from, to, 31);
+          const payload = await google.request('calendar', calendarViewPath(from, to, 100), { signal: controller.signal });
+          const events = calendarEvents(payload, 100).map((event) => eventSummary(event, timeZone));
+          reply.header('Cache-Control', 'private, no-store');
+          return { timeZone, events, truncated: calendarTruncated(payload, events.length) };
+        } catch (error) {
+          if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
+          if (error instanceof GoogleApiError) {
+            request.log.warn({ kind: error.kind }, 'calendar.events_failed');
+            return reply.code(error.kind === 'throttled' ? 429 : 502).send({ error: googleFailureReason(error) });
+          }
+          if (error instanceof ToolFailure) return reply.code(502).send({ error: error.message });
+          throw error;
+        }
+      });
+    },
   };
 }

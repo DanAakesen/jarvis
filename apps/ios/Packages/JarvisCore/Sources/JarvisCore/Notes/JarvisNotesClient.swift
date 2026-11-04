@@ -231,6 +231,9 @@ public final class JarvisNotesClient: Sendable {
         self.client = client
     }
 
+    /// Today's calendar, read through the same authenticated backend client.
+    public var calendarSource: JarvisBackendCalendarSource { JarvisBackendCalendarSource(client: client) }
+
     public func folderTree() async throws -> VaultNoteTree {
         let response = try await request(method: .get, path: ["notes", "tree"], idempotent: true)
         guard response.body.count <= 1024 * 1024,

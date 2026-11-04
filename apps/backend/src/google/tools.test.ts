@@ -1438,3 +1438,56 @@ describe('Gmail incomplete list responses', () => {
     },
   );
 });
+
+describe('Phone calendar events route', () => {
+  const dan = { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan' };
+
+  function dayApp(request: GoogleApiClient['request']) {
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, createGoogleModule({ request }, {
+        timeZone: 'Europe/Copenhagen', now: () => new Date('2027-03-10T10:00:00Z'),
+      })],
+      auth: async () => dan,
+    });
+    apps.push(app);
+    return app;
+  }
+
+  it('returns the primary calendar events for the requested window in the app shape', async () => {
+    const request = vi.fn<GoogleApiClient['request']>(async () => ({
+      items: [
+        { id: 'a', summary: 'Dentist', start: { dateTime: '2027-03-10T09:00:00+01:00' }, end: { dateTime: '2027-03-10T10:00:00+01:00' }, location: 'Clinic' },
+        { id: 'b', summary: 'Holiday', start: { date: '2027-03-10' }, end: { date: '2027-03-11' } },
+      ],
+    }));
+    const response = await dayApp(request).inject({
+      method: 'GET', url: '/calendar/events?from=2027-03-10T00:00:00Z&to=2027-03-11T00:00:00Z', headers,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.events).toHaveLength(2);
+    expect(body.events[0]).toMatchObject({ id: 'a', subject: 'Dentist', location: 'Clinic' });
+    expect(body.events[1]).toMatchObject({ id: 'b', allDay: true });
+    const path = String(request.mock.calls[0]?.[1]);
+    expect(path).toContain('/calendars/primary/events');
+    expect(path).toContain('timeMin=2027-03-10T00%3A00%3A00.000Z');
+    expect(path).not.toContain('calendarList');
+  });
+
+  it('defaults to today and rejects a bad or oversized window', async () => {
+    const request = vi.fn<GoogleApiClient['request']>(async () => ({ items: [] }));
+    const app = dayApp(request);
+    expect((await app.inject({ method: 'GET', url: '/calendar/events', headers })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/calendar/events?from=tomorrow', headers })).statusCode).toBe(400);
+    expect((await app.inject({
+      method: 'GET', url: '/calendar/events?from=2027-01-01T00:00:00Z&to=2027-06-01T00:00:00Z', headers,
+    })).statusCode).toBe(400);
+  });
+
+  it('reports a Google failure as a bad gateway and keeps agent identities out', async () => {
+    const failing = vi.fn<GoogleApiClient['request']>(async () => { throw new GoogleApiError('forbidden', 403); });
+    expect((await dayApp(failing).inject({ method: 'GET', url: '/calendar/events', headers })).statusCode).toBe(502);
+    const { app } = appFor(vi.fn<GoogleApiClient['request']>(async () => ({ items: [] })));
+    expect((await app.inject({ method: 'GET', url: '/calendar/events', headers })).statusCode).toBe(403);
+  });
+});

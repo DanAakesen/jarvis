@@ -1,4 +1,4 @@
 "NSFaceIDUsageDescription" = "Lås Jarvis op med Face ID.";
 "NSLocationWhenInUseUsageDescription" = "Jarvis bruger din omtrentlige placering til vejret, hvor du er.";
-"NSHealthShareUsageDescription" = "Jarvis læser dit skridttal for at vise det på Hjem. Intet skrives til Sundhed eller uploades.";
-"NSHealthUpdateUsageDescription" = "Jarvis skriver ikke til Sundhed. Det læser kun dit skridttal for at vise det på Hjem.";
+"NSHealthShareUsageDescription" = "Jarvis læser dine sundhedsdata (skridt, træning, søvn, kost, hjerte, kropsmål og aktivitet) for at vise dem i appen. Intet skrives til Sundhed.";
+"NSHealthUpdateUsageDescription" = "Jarvis skriver ikke til Sundhed. Det læser kun dine sundhedsdata for at vise dem i appen.";
