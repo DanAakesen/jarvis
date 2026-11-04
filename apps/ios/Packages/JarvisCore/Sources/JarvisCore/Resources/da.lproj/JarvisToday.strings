@@ -5,6 +5,9 @@
 "today.greeting.taskOne" = "Du har {1 opgave} i dag.";
 "today.greeting.tasks" = "Du har {%ld opgaver} i dag.";
 "today.greeting.clear" = "Din {dag er fri}.";
+"today.greeting.steps" = "Du har gået {%ld skridt} i dag.";
+"today.greeting.workoutOne" = "Du har logget {1 træning} i denne uge.";
+"today.greeting.workouts" = "Du har logget {%ld træninger} i denne uge.";
 "today.nextUp" = "Næste";
 "today.tomorrow" = "I morgen";
 "today.overdue" = "Forfalden";
@@ -19,7 +22,7 @@
 "today.nothingPlanned" = "Intet planlagt";
 "today.nothingToday" = "Intet i dag";
 "today.nothingDue" = "Intet forfalder";
-"today.calendarUnavailable" = "Kalender ikke tilgængelig";
+"today.calendarUnavailable" = "Kalenderen er endnu ikke koblet til appen, så der vises ingen aftaler. Spørg Jarvis i chatten om din kalender.";
 "today.tasksUnavailable" = "Opgaver ikke tilgængelige";
 "today.markDone" = "Markér som udført";
 "today.workouts" = "Træning";

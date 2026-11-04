@@ -45,14 +45,30 @@ final class JarvisTodayTests: XCTestCase {
         let english = JarvisTodayGreeting.make(
             timeOfDay: .afternoon, nextEvent: entry, tasksDueToday: 2, language: .en, calendar: calendar
         )
-        XCTAssertEqual(english.plainText, "Afternoon Dan. Next is Design review at 15:00.")
-        XCTAssertEqual(english.segments.filter(\.isKey).map(\.text), ["Design review", "15:00"])
+        XCTAssertEqual(english.plainText, "Afternoon Dan. Next is Design review at 15:00. You have 2 tasks due today.")
+        XCTAssertEqual(english.segments.filter(\.isKey).map(\.text), ["Design review", "15:00", "2 tasks"])
 
         let danish = JarvisTodayGreeting.make(
             timeOfDay: .morning, nextEvent: nil, tasksDueToday: 3, language: .da, calendar: calendar
         )
         XCTAssertEqual(danish.plainText, "Godmorgen Dan. Du har 3 opgaver i dag.")
         XCTAssertEqual(danish.segments.filter(\.isKey).map(\.text), ["3 opgaver"])
+    }
+
+    func testGreetingAddsStepsAndWorkoutsOnlyWhenKnown() {
+        let known = JarvisTodayGreeting.make(
+            timeOfDay: .morning, nextEvent: nil, tasksDueToday: 0, stepsToday: 4200, workoutsThisWeek: 3,
+            language: .en
+        )
+        XCTAssertEqual(
+            known.plainText,
+            "Morning Dan. Your day is clear. You have taken 4,200 steps today. You logged 3 workouts this week."
+        )
+        let unknown = JarvisTodayGreeting.make(
+            timeOfDay: .morning, nextEvent: nil, tasksDueToday: 0, stepsToday: 0, workoutsThisWeek: 0,
+            language: .en
+        )
+        XCTAssertEqual(unknown.plainText, "Morning Dan. Your day is clear.")
     }
 
     func testGreetingFallsBackToAnHonestClearDayAndNeverInventsValues() {

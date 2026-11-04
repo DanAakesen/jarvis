@@ -10753,3 +10753,13 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Decision: the Notifications page is titled Notifications / Notifikationer, and every label on it (away mode, pending confirmations, retry, loading, categories) comes from `JarvisChat.strings` in da and en.
 - Decision: the Notes preview fixture now answers `GET /api/vault/tasks` first, so the headline and hero show in screenshots. Before, the tasks request failed and the page showed only the title, tabs and one row.
 - Not verified: no Simulator run in this environment (Linux). Simulator screenshots (da/en, dark/light), the dark Notes render and the bottom bar overlap still need checking on a Mac.
+
+## 2026-11-04 P15-76: build 66 feedback fixes
+
+- Decision: a success is a log entry, never a notification. `notification-policy.ts` only admits info, warning and error; the feed hides stored success notifications; migration `0075_dismiss_success_notifications` dismisses the ones already stored (its reverse batch is a no-op, because dismissed rows are not restored). Task completion and model deployment success no longer notify. Recording a notification also purges notification rows older than the expiry window.
+- Decision: the Notes "Could not load notes" root cause was strict client parsing. `JarvisNotesClient` threw for the whole list when one entry failed validation (for example a dot-prefixed folder or an over-long path). Unusable entries are now skipped. Not confirmed against production, which is not reachable from this environment.
+- Decision: remembered lift names are stored on the device (`JarvisLiftNameMemory`, UserDefaults). No backend table, because only the owner's phone logs lifts. New-note folders are chosen from the folder tree; a folder exists once a note is saved in it, so no folder endpoint was added.
+- Decision: the Home calendar is not wired in the app. `JarvisTodayDependencies.calendar` stays unavailable because the backend has no owner-facing calendar read route (calendar is agent-only), so Home says that instead of "not available". Workouts read the vault Gym log and were affected by the same notes parsing failure.
+- Decision: refresh buttons are removed; every page uses pull to refresh. The plus sits beside the tabs. Home and Health share `JarvisPeriodSelector`. Sheets open at medium and expand to large.
+- Not done: the Tasks tab keeps its date groups (no four-way segmented filter yet); Health sections are not restyled; the Home calendar has no data source.
+- Not verified: no Simulator build or screenshots (Linux); the iOS app edits are not compiled here. JarvisCore tests (377) and backend checks pass.
