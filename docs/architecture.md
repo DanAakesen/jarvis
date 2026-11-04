@@ -8581,3 +8581,7 @@ replacement feed. No database schema change.
 ## On-device cache and conditional GET (P15-81)
 
 iOS pages read server lists through `JarvisRepository` (JarvisCore `Cache/`) over `JarvisAppCache` (JSON files in Caches, one account, cleared on sign-out; secrets stay in the Keychain). A fresh entry makes no request; a stale one is shown and revalidated with `If-None-Match`; a failed refresh keeps the cached data. Kinds: notes, tasks, calendar, factory, usage, status, proactive, health, settings, notifications. The backend `conditional-get.ts` `onSend` hook adds a SHA-256 `ETag` and `Cache-Control: private, no-cache` to 200 responses of an allowlisted set of GET routes and returns 304 on a matching `If-None-Match`. Writes in the app invalidate the affected kinds.
+
+## Home screen widgets (P15-82)
+
+`JarvisWidgets` also renders eight Gym and Factory home screen widgets. `JarvisWidgetSnapshotPublisher` (app) builds a versioned snapshot (`JarvisCore/Widgets`) from HealthKit steps and workouts, the Health training targets, Factory tasks and pending confirmations, and writes `widget-snapshot.json` to the App Group; it then reloads the timelines. Widgets read it through `JarvisHomeWidgetProvider` and `JarvisWidgetTimeline` (scheduled entries, visible staleness). Buttons are App Intents (`Shared/FactoryWidgetIntents.swift`) that run through `JarvisFactoryWidgetActions` in the app, or queue in the App Group when the extension process runs them. No credentials are shared.
