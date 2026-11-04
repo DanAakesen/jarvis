@@ -17,4 +17,27 @@ enum JarvisAppCache {
     static func clear() async {
         await shared.clear()
     }
+
+    /// A repository over the app cache for one kind of data. Pages read through it and never call the network
+    /// client directly for cached lists.
+    static func repository<Value: Codable & Sendable & Equatable>(
+        _ kind: JarvisRepositoryKind,
+        scope: String = "",
+        fetch: @escaping JarvisRepository<Value>.Fetch
+    ) async -> JarvisRepository<Value> {
+        await bindIfNeeded()
+        return JarvisRepository(cache: shared, kind: kind, scope: scope, fetch: fetch)
+    }
+
+    /// After a write that changed a cached list, drop that entry so the next open fetches it.
+    static func invalidate(_ kind: JarvisRepositoryKind, scope: String = "") async {
+        await bindIfNeeded()
+        await shared.invalidate(kind: kind, scope: scope)
+    }
+
+    /// After a write that can change every scope of one kind (a saved note, a completed task).
+    static func invalidateAll(_ kind: JarvisRepositoryKind) async {
+        await bindIfNeeded()
+        await shared.invalidateAll(kind: kind)
+    }
 }

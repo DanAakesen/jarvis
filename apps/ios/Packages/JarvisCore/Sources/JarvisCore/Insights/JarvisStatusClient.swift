@@ -1,6 +1,6 @@
 import Foundation
 
-public enum JarvisStatusValue: String, Decodable, CaseIterable, Sendable {
+public enum JarvisStatusValue: String, Codable, CaseIterable, Sendable {
     case ok
     case degraded
     case down
@@ -56,7 +56,7 @@ public enum JarvisStatusCheckID: String, CaseIterable, Sendable {
     }
 }
 
-public struct JarvisStatusEntry: Decodable, Equatable, Sendable, Identifiable {
+public struct JarvisStatusEntry: Codable, Equatable, Sendable, Identifiable {
     public let id: String
     public let status: JarvisStatusValue
     public let checkedAt: String
@@ -72,7 +72,7 @@ public struct JarvisStatusEntry: Decodable, Equatable, Sendable, Identifiable {
     public var check: JarvisStatusCheckID? { JarvisStatusCheckID(rawValue: id) }
 }
 
-public struct JarvisStatusSmokeEntry: Decodable, Equatable, Sendable, Identifiable {
+public struct JarvisStatusSmokeEntry: Codable, Equatable, Sendable, Identifiable {
     public let id: String
     public let status: JarvisStatusValue
     public let checkedAt: String
@@ -86,7 +86,7 @@ public struct JarvisStatusSmokeEntry: Decodable, Equatable, Sendable, Identifiab
     }
 }
 
-public struct JarvisStatusSmoke: Decodable, Equatable, Sendable {
+public struct JarvisStatusSmoke: Codable, Equatable, Sendable {
     public let checkedAt: String
     public let entries: [JarvisStatusSmokeEntry]
 
@@ -98,7 +98,7 @@ public struct JarvisStatusSmoke: Decodable, Equatable, Sendable {
     public var okCount: Int { entries.filter { $0.status == .ok }.count }
 }
 
-public enum JarvisVaultMirrorState: String, Decodable, Sendable {
+public enum JarvisVaultMirrorState: String, Codable, Sendable {
     case notSetUp = "not-set-up"
     case healthy
     case stale
@@ -128,7 +128,7 @@ public enum JarvisVaultMirrorState: String, Decodable, Sendable {
     }
 }
 
-public struct JarvisVaultMirrorCounts: Decodable, Equatable, Sendable {
+public struct JarvisVaultMirrorCounts: Codable, Equatable, Sendable {
     public let approved: Int
     public let pushed: Int
     public let writtenBack: Int
@@ -167,7 +167,7 @@ public struct JarvisVaultMirrorCounts: Decodable, Equatable, Sendable {
     }
 }
 
-public struct JarvisVaultMirror: Decodable, Equatable, Sendable {
+public struct JarvisVaultMirror: Codable, Equatable, Sendable {
     public let state: JarvisVaultMirrorState
     public let lastSuccessAt: String?
     public let writeBack: String?
@@ -206,7 +206,7 @@ public struct JarvisVaultMirror: Decodable, Equatable, Sendable {
     }
 }
 
-public struct JarvisStatusSnapshot: Decodable, Equatable, Sendable {
+public struct JarvisStatusSnapshot: Codable, Equatable, Sendable {
     public let checkedAt: String
     public let entries: [JarvisStatusEntry]
     public let smoke: JarvisStatusSmoke?
@@ -397,6 +397,17 @@ public final class JarvisStatusClient: Sendable {
             idempotent: true,
             timeout: Self.timeout
         )
+        return try Self.parse(response)
+    }
+
+    /// Conditional read for the repository layer.
+    public func fetchSnapshot(validator: String?) async throws -> JarvisFetchResult<JarvisStatusSnapshot> {
+        try await client.conditionalGet(path: ["status"], validator: validator, timeout: Self.timeout) {
+            try Self.parse($0)
+        }
+    }
+
+    private static func parse(_ response: HTTPResponse) throws -> JarvisStatusSnapshot {
         guard response.statusCode == 200, response.body.count <= Self.responseLimit,
               let snapshot = try? JSONDecoder().decode(JarvisStatusSnapshot.self, from: response.body),
               snapshot.isValid else {

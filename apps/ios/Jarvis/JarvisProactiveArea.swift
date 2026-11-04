@@ -113,49 +113,83 @@ struct JarvisProactiveArea: View {
         while !Task.isCancelled {
             try? await Task.sleep(for: JarvisProactiveLogic.refreshInterval)
             if Task.isCancelled { return }
-            await refresh(initial: false)
+            await refresh(initial: false, force: true)
         }
     }
 
-    private func capture<Value>(_ work: () async throws -> Value) async -> Result<Value, Error> {
-        do { return .success(try await work()) } catch { return .failure(error) }
-    }
-
-    private func refresh(initial: Bool) async {
+    /// Reads through the repository: cached data first, a quiet refresh when stale. The 10-second live loop and
+    /// writes pass `force`, so live updates stay live while a plain page open reuses fresh cached data.
+    private func refresh(initial: Bool, force: Bool = false) async {
         guard let client else {
             status = .failed(.notConfigured)
             return
         }
-        var previous: JarvisProactiveStatus?
-        if case .loaded(let value) = status { previous = value } else { status = .loading }
-        async let statusResult = capture { try await client.status() }
-        async let itemsResult = capture { try await client.items(all: false) }
-        let (loadedStatus, loadedItems) = await (statusResult, itemsResult)
-        if Task.isCancelled { return }
-        switch loadedStatus {
-        case .success(let value):
-            status = .loaded(value)
-            if initial || previous?.lastRun != value.lastRun { await loadRuns(client) }
-            if checkMessage == .started, value.lastRun?.status != .running { checkMessage = nil }
-        case .failure(let error):
-            let failure = JarvisInsightsFailure(error)
-            if previous == nil || failure == .unavailable || failure == .signInRequired {
-                status = .failed(failure)
-            } else if let previous {
-                status = .loaded(previous)
+        if case .loaded = status {} else { status = .loading }
+        let statusRepository: JarvisRepository<JarvisProactiveStatus> = await JarvisAppCache.repository(
+            .proactive, scope: "status"
+        ) { try await client.fetchStatus(validator: $0) }
+        let itemsRepository: JarvisRepository<[JarvisProactiveItem]> = await JarvisAppCache.repository(
+            .proactive, scope: "items"
+        ) { try await client.fetchItems(validator: $0) }
+        async let statusDone: Void = consumeStatus(statusRepository, client: client, initial: initial, force: force)
+        async let itemsDone: Void = consumeItems(itemsRepository, force: force)
+        _ = await (statusDone, itemsDone)
+    }
+
+    private func consumeStatus(
+        _ repository: JarvisRepository<JarvisProactiveStatus>,
+        client: JarvisProactiveClient,
+        initial: Bool,
+        force: Bool
+    ) async {
+        var last: JarvisProactiveStatus?
+        if case .loaded(let value) = status { last = value }
+        for await update in repository.updates(force: force) {
+            if Task.isCancelled { return }
+            switch update {
+            case .cached(let value, _), .fresh(let value):
+                let runChanged = last != nil && last?.lastRun != value.lastRun
+                status = .loaded(value)
+                if initial || runChanged { await loadRuns(client, force: force || runChanged) }
+                if checkMessage == .started, value.lastRun?.status != .running { checkMessage = nil }
+                last = value
+            case .refreshing:
+                break
+            case .failed(let error, let cached):
+                let failure = JarvisInsightsFailure(error)
+                if (cached == nil && last == nil) || failure == .unavailable || failure == .signInRequired {
+                    status = .failed(failure)
+                }
             }
-        }
-        switch loadedItems {
-        case .success(let value):
-            openItems = value
-            itemsFailure = nil
-        case .failure(let error):
-            itemsFailure = JarvisInsightsFailure(error)
         }
     }
 
-    private func loadRuns(_ client: JarvisProactiveClient) async {
-        if let loaded = try? await client.runs(limit: 10) { runs = loaded }
+    private func consumeItems(_ repository: JarvisRepository<[JarvisProactiveItem]>, force: Bool) async {
+        for await update in repository.updates(force: force) {
+            if Task.isCancelled { return }
+            switch update {
+            case .cached(let value, _), .fresh(let value):
+                openItems = value
+                itemsFailure = nil
+            case .refreshing:
+                break
+            case .failed(let error, _):
+                itemsFailure = JarvisInsightsFailure(error)
+            }
+        }
+    }
+
+    private func loadRuns(_ client: JarvisProactiveClient, force: Bool) async {
+        let repository: JarvisRepository<[JarvisProactiveRun]> = await JarvisAppCache.repository(
+            .proactive, scope: "runs"
+        ) { try await client.fetchRuns(validator: $0) }
+        for await update in repository.updates(force: force) {
+            if Task.isCancelled { return }
+            switch update {
+            case .cached(let value, _), .fresh(let value): runs = value
+            case .refreshing, .failed: break
+            }
+        }
     }
 
     private func loadEarlierIfNeeded() async {
@@ -174,7 +208,7 @@ struct JarvisProactiveArea: View {
 
     private func settingsSaved() async {
         earlierItems = .loading
-        await refresh(initial: false)
+        await refresh(initial: false, force: true)
         if tab == .earlier { await loadEarlierIfNeeded() }
     }
 
@@ -188,7 +222,7 @@ struct JarvisProactiveArea: View {
         } catch {
             checkMessage = .failed
         }
-        await refresh(initial: false)
+        await refresh(initial: false, force: true)
     }
 
     // MARK: Content
@@ -522,6 +556,7 @@ struct JarvisProactiveArea: View {
         defer { busyIDs.remove(item.id) }
         do {
             let updated = try await client.apply(action, to: item.id)
+            await JarvisAppCache.invalidate(.proactive, scope: "items")
             if case .seen = action {
                 if let index = openItems.firstIndex(where: { $0.id == item.id }) { openItems[index] = updated }
             } else {

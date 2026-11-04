@@ -1,7 +1,7 @@
 import Foundation
 
 /// A calendar entry for the Next up list.
-public struct JarvisTodayCalendarEntry: Equatable, Identifiable, Sendable {
+public struct JarvisTodayCalendarEntry: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     public let title: String
     public let start: Date

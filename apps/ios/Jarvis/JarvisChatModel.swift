@@ -541,6 +541,7 @@ final class JarvisChatModel: ObservableObject {
         defer { resolvingConfirmationDecisions.removeValue(forKey: confirmation.id) }
         do {
             try await nowClient.resolveConfirmation(id: confirmation.id, decision: decision)
+            await JarvisAppCache.invalidate(.notifications)
             locallyResolvedConfirmationIDs.insert(confirmation.id)
             let result: JarvisApprovalLocalizationKey = decision == .approve ? .recorded : .declinedInApp
             activityMessage = JarvisApprovalLocalization.string(result, language: appLanguage)

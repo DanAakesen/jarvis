@@ -236,8 +236,19 @@ public final class JarvisNotesClient: Sendable {
 
     public func folderTree() async throws -> VaultNoteTree {
         let response = try await request(method: .get, path: ["notes", "tree"], idempotent: true)
-        guard response.body.count <= 1024 * 1024,
-              let decoded = try? JSONDecoder().decode(VaultNoteTree.self, from: response.body),
+        return try Self.parseTree(response.body)
+    }
+
+    /// Conditional read for the repository layer.
+    public func fetchFolderTree(validator: String?) async throws -> JarvisFetchResult<VaultNoteTree> {
+        try await client.conditionalGet(path: ["notes", "tree"], validator: validator) {
+            try Self.parseTree($0.body)
+        }
+    }
+
+    private static func parseTree(_ body: Data) throws -> VaultNoteTree {
+        guard body.count <= 1024 * 1024,
+              let decoded = try? JSONDecoder().decode(VaultNoteTree.self, from: body),
               decoded.directories.count <= 10_000,
               decoded.rootNoteCount >= 0, decoded.rootNoteCount <= 10_000,
               JarvisNotesLogic.isISODateTime(decoded.updatedAt) else {
@@ -259,6 +270,28 @@ public final class JarvisNotesClient: Sendable {
         folder: String? = nil,
         offset: Int = 0
     ) async throws -> VaultNotePage {
+        let items = try Self.noteQuery(directory: directory, query: query, folder: folder, offset: offset)
+        let response = try await request(
+            method: .get, path: ["notes"], query: items, idempotent: true
+        )
+        return try Self.parseNotePage(response.body, directory: directory, offset: offset)
+    }
+
+    /// Conditional read of the first page of a folder for the repository layer.
+    public func fetchNotes(
+        directory: String? = nil,
+        folder: String? = nil,
+        validator: String?
+    ) async throws -> JarvisFetchResult<VaultNotePage> {
+        let items = try Self.noteQuery(directory: directory, query: nil, folder: folder, offset: 0)
+        return try await client.conditionalGet(path: ["notes"], queryItems: items, validator: validator) {
+            try Self.parseNotePage($0.body, directory: directory, offset: 0)
+        }
+    }
+
+    private static func noteQuery(
+        directory: String?, query: String?, folder: String?, offset: Int
+    ) throws -> [URLQueryItem] {
         guard (directory.map(JarvisNotesLogic.validFolder) ?? true),
               (folder.map(JarvisNotesLogic.validFolder) ?? true),
               (query?.utf16.count ?? 0) <= 500,
@@ -271,11 +304,12 @@ public final class JarvisNotesClient: Sendable {
         if let query, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             items.append(URLQueryItem(name: "query", value: query))
         }
-        let response = try await request(
-            method: .get, path: ["notes"], query: items, idempotent: true
-        )
-        guard response.body.count <= 4 * 1024 * 1024,
-              let decoded = try? JSONDecoder().decode(VaultNotePage.self, from: response.body),
+        return items
+    }
+
+    private static func parseNotePage(_ body: Data, directory: String?, offset: Int) throws -> VaultNotePage {
+        guard body.count <= 4 * 1024 * 1024,
+              let decoded = try? JSONDecoder().decode(VaultNotePage.self, from: body),
               decoded.notes.count <= 50, decoded.limit == 50, decoded.offset == offset else {
             throw JarvisNotesClientError.invalidResponse
         }
@@ -333,8 +367,21 @@ public final class JarvisNotesClient: Sendable {
             items.append(URLQueryItem(name: "q", value: query))
         }
         let response = try await request(method: .get, path: ["vault", "tasks"], query: items, idempotent: true)
-        guard response.body.count <= 4 * 1024 * 1024,
-              let list = try? JSONDecoder().decode(VaultTaskList.self, from: response.body),
+        return try Self.parseTasks(response.body)
+    }
+
+    /// Conditional read of the open tasks for the repository layer.
+    public func fetchOpenTasks(validator: String?) async throws -> JarvisFetchResult<VaultTaskList> {
+        try await client.conditionalGet(
+            path: ["vault", "tasks"],
+            queryItems: [URLQueryItem(name: "state", value: VaultTaskState.open.rawValue)],
+            validator: validator
+        ) { try Self.parseTasks($0.body) }
+    }
+
+    private static func parseTasks(_ body: Data) throws -> VaultTaskList {
+        guard body.count <= 4 * 1024 * 1024,
+              let list = try? JSONDecoder().decode(VaultTaskList.self, from: body),
               list.items.count <= 500, list.total >= list.items.count, list.total >= 0,
               Self.validDate(list.today), JarvisNotesLogic.isISODateTime(list.readAt),
               list.items.allSatisfy(Self.validTask) else {

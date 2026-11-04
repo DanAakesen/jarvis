@@ -45,6 +45,15 @@ public final class JarvisApprovalsClient: Sendable {
         let response = try await client.performAuthenticatedRequest(
             method: .get, path: ["now"], idempotent: true
         )
+        return try Self.parse(response)
+    }
+
+    /// Conditional read for the repository layer.
+    public func fetchPending(validator: String?) async throws -> JarvisFetchResult<PendingConfirmations> {
+        try await client.conditionalGet(path: ["now"], validator: validator) { try Self.parse($0) }
+    }
+
+    private static func parse(_ response: HTTPResponse) throws -> PendingConfirmations {
         guard response.statusCode == 200, response.body.count <= 1024 * 1024,
               let result = try? JSONDecoder().decode(PendingConfirmations.self, from: response.body),
               result.confirmations.count <= 11,
