@@ -47,6 +47,7 @@
 "insights.usageToolCalls" = "Værktøjskald i dag";
 "insights.usageNoToolCalls" = "Ingen værktøjskald i dag";
 "insights.usageNoUsage" = "Intet forbrug endnu";
+"insights.refreshFailedShowingSaved" = "Kunne ikke opdatere – viser gemte data";
 "insights.usageRecords" = "poster";
 "insights.usagePerDay" = "Pris pr. dag";
 "insights.usagePerWeek" = "Pris pr. uge";
