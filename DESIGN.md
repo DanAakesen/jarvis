@@ -3243,3 +3243,11 @@ The shared segmented component retains the native buttons' selected accessibilit
 trait and 44 pt touch height. Custom composition preserves the approved glass
 surface; it does not introduce a new button style or per-screen glass effect.
 Native compilation, interaction and screenshot acceptance are still pending.
+
+### Home feedback refinement (6 November 2026)
+
+The shorter Home greeting omits health recaps. Task completion and note creation
+reuse Notes' shared brief glass confirmation. Lift/workout sheets keep their saved
+text, with one success haptic and a short opacity/scale transition. All new motion
+honors Reduce Motion; confirmation never blocks another action or sheet dismissal.
+Home's checkbox no longer displays a checkmark before a successful write.

@@ -2309,3 +2309,10 @@ available without repeating long paragraphs. Daily reads, including capabilities
 and nutrition targets, share a two-request concurrency bound and abort queued
 work when its view is left. Original Daily remains canonical; no source,
 permission, writer, coaching, recovery, recomp or TickTick behavior is added.
+
+### Home greeting and confirmed-action polish (owner request, 6 November 2026)
+
+Home's greeting keeps the next event and today's due-task count; steps and workouts
+remain in their cards. Confirmed lift/workout saves, task completions and note
+creation give subtle haptics and short interruptible feedback. Pending tasks cannot
+be submitted twice; failed completion remains visible and retryable. Chat is unchanged.

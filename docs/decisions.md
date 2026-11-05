@@ -10947,3 +10947,11 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+## 6 November 2026 — Shorter Home and successful-action polish
+
+The owner selected these two previous suggestions for this release. Home keeps
+event/task priorities while health stays in the cards. Confirmations follow successful
+writes, and Home completion errors are surfaced rather than swallowed. The existing
+lift/workout saved state remains persistent and dismissible. No Chat change, backend
+contract change or new dependency is required. Native verification is pending.

@@ -3803,3 +3803,8 @@ head passed 46/46 UI tests. Corrected native captures and owner acceptance remai
 pending. No additional workflow/project change or release action is included.
 
 Home/Factory native verification: 48/48 tests pass on 67e83344 (run 42124893512); final EN/dark and DA/light screenshots accepted in artifact 13463371218. The later standalone sweep timed out. App source is unchanged by shared-main reconciliation; merge remains after Notes.
+
+Owner-approved additions: shorter Home greeting and success haptics/transitions for
+lift/workout saves, task completion and note creation. Core greeting assertions and
+the existing native suite cover the new behavior; combined native results are pending.
+The earlier 48-test pass precedes this addition.
