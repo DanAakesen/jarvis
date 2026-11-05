@@ -114,7 +114,9 @@ struct JarvisSectionHeadline<Accessory: View>: View {
         HStack(alignment: .firstTextBaseline, spacing: JarvisPageHeaderMetrics.spacing) {
             Text(title)
                 .font(.title3.weight(.bold))
-                .foregroundStyle(.secondary)
+                // A List header already supplies a secondary foreground style.
+                // Use the semantic color directly to avoid dimming it a second time.
+                .foregroundStyle(Color.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 0)
