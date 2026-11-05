@@ -107,6 +107,7 @@ final class ComponentGalleryUITests: XCTestCase {
 
     private func captureFactory(state: String, language: String, theme: String) {
         app.launchArguments = [
+            "--ui-test-navigation",
             "--screenshot-factory-fixture", "--screenshot-factory-state=\(state)",
             "--screenshot-factory-language=\(language)",
             "-jarvis.appLanguage", language, "-jarvis.appTheme", theme,
@@ -117,6 +118,7 @@ final class ComponentGalleryUITests: XCTestCase {
         let board = app.buttons["factory.segment.board"]
         let releases = app.buttons["factory.segment.releases"]
         XCTAssertTrue(board.waitForExistence(timeout: 15))
+        XCTAssertTrue(board.isHittable, "The fixture must be visible above the authentication gate")
         XCTAssertTrue(board.isSelected)
         XCTAssertTrue(releases.exists)
         XCTAssertFalse(app.buttons["factory.segment.needsDan"].exists)
@@ -124,12 +126,16 @@ final class ComponentGalleryUITests: XCTestCase {
         XCTAssertEqual(board.frame.maxX, releases.frame.minX, accuracy: 1, "Segments touch within one control")
         let needs = app.buttons["factory.column.needs_dan"]
         XCTAssertTrue(needs.waitForExistence(timeout: 10))
-        let taskLink = app.links["factory.row.github.10"]
+        // SwiftUI Link is exposed as a Button on the pinned iOS Simulator.
+        let taskLink = app.buttons["factory.row.github.10"]
         if state == "board" {
             XCTAssertFalse(taskLink.exists, "Board columns start collapsed")
             needs.tap()
         }
         XCTAssertTrue(taskLink.waitForExistence(timeout: 5), "The Needs Dan task remains reachable on Board")
+        XCTAssertEqual(needs.value as? String, language == "da" ? "Udvidet" : "Expanded")
+        XCTAssertTrue(taskLink.isHittable, "The task action must be visible in the expanded column")
+        XCTAssertTrue(app.staticTexts["Synthetic decision"].exists)
         XCTAssertTrue(needs.isHittable, "The old Needs Dan entry scrolls its column into view")
         attach(app.screenshot(), named: "P15-94-factory-\(state)-\(theme)-\(language)")
     }

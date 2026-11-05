@@ -26,3 +26,24 @@ SwiftUI ScrollViewReader/ScrollViewProxy.scrollTo (reveal the column by identity
 The shared glass bar composes native buttons to preserve the approved surface;
 selected traits and touch targets remain explicit. Official search excerpts were
 available, but direct Markdown documentation fetches were blocked in this session.
+
+## Native evidence review — 5 November 2026
+
+Downloaded and inspected artifact 13455396644 from run 42105551008. The default
+Factory test recording shows the sign-in cover while its accessibility tree
+contains the collapsed board underneath. Its launch omitted the existing
+Simulator-only `--ui-test-navigation` argument. The legacy-entry tree exposes
+`factory.row.github.10` as a Button, not a Link. The corrected test uses that
+fixture and observed role, retains the reachability check, and adds the expanded
+state, task title and hittability assertions. Production authentication is unchanged.
+
+Home's English/dark attachment 86F40C70-8CFC-4758-8E91-1F1BDC7C7BA2.png was
+inspected beside the approved board at 402 × 874 points. The Today/Tasks due
+control has one continuous surface and grouped rows have dividers. Fixture data
+and native typography differ. Remaining states and fresh native verification are
+pending; no final visual acceptance is claimed.
+
+Apple excerpts consulted: [XCUIElement.isHittable](https://developer.apple.com/documentation/xcuiautomation/xcuielement/ishittable)
+and [HIG Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility).
+The former distinguishes existence from visibility above another element.
+Direct Apple Markdown fetches were unavailable.

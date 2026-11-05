@@ -7033,3 +7033,11 @@ store, so no HealthKit prompt, network or live credentials are needed. Rim and g
 XCUITest can go idle. Normal launches start on Home; fixture and screenshot runs keep their own start page.
 `ios-ci.yml` lists `-only-testing:JarvisUITests/TodayUITests`. Not run on this Linux runner.
 
+
+## Native board evidence and follow-up checks (Refs #1600; 5 November 2026)
+
+Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
+
+Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
+the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
+from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.

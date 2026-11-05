@@ -10931,3 +10931,11 @@ Home uses the shared row spacing and separators and keeps Today / Tasks due,
 as shown by the merged board. Issue #1600 explicitly gives the board precedence
 over conflicting grouping feedback. The Delegated wording remains an open
 clarification, not a new task-data contract. Native visual acceptance is pending.
+
+## Native board corrections supported by screenshots (Refs #1600; 5 November 2026)
+
+Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
+
+Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
+the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
+from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
