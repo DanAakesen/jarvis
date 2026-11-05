@@ -2024,7 +2024,7 @@ gate, not exclusive timeout causation or original Google/private/device acceptan
 
 Normally compose that accepted main into existing #850, preserving the exact V2
 runner/test blobs, every outside-eight-path main entry and all 381 PLAN pipe lines.
-Prior `467cb5d` passed ten actual CI `38659103136` jobs, four CodeQL
+Prior `468cb5d` passed ten actual CI `38659103136` jobs, four CodeQL
 `38659103178` analyses and pinned Linux runner204/agent398. Next: publish the
 composed head normally, require its fresh full gates, then normal guarded squash,
 normal Deploy and actual exact-released-SHA Runner deploy. The original E9
@@ -2054,7 +2054,7 @@ This reproduces a transport defect, not exclusive live timeout causation.
 Next: freeze, independent narrow review, fresh exact-head full CI/CodeQL and
 normal required release; do not retry the unchanged failed release.
 
-Factory #850's `467cb5d` composition passed fresh ten-job CI/four CodeQL
+Factory #850's `468cb5d` composition passed fresh ten-job CI/four CodeQL
 analyses and actual pinned Linux runner204/agent398. It remains unmerged while
 main's required release is broken. Normal Deploy and exact-released-SHA Runner
 deploy are both required before the authorised single live job. No Google
@@ -2219,7 +2219,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **P15-92 / #1598:** Codex is implementing the shared native page pattern from the board merged in #1603: section headings, separated rows, initial-loading skeletons, hero/filter order and confirm-left/cancel-right sheets. All 467 Core tests and Swift syntax checks pass locally; Mac build, UI screenshots and visual acceptance remain pending. #1599–#1602 follow this shared change.
+- **P15-92 / #1598:** Codex is implementing the shared native page pattern from the board merged in #1603: section headings, separated rows, initial-loading skeletons, hero/filter order and confirm-left/cancel-right sheets. All 468 Core tests and Swift syntax checks pass locally; Mac build, UI screenshots and visual acceptance remain pending. #1599–#1602 follow this shared change.
 
 - **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window
   acknowledgement; iOS detaches observation on lock and refreshes persisted
@@ -3146,7 +3146,7 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 | P9-100 | [#795](https://github.com/DanAakesen/jarvis/issues/795) | Post-deploy acceptance suite for chat behaviours (extend the chat canary) | Add seven named smoke checks with deterministic tool/answer rules and warning-only identity/timestamp wording checks. Keep tool catalogue at 128; smoke allows issue-700 read, count-only job result, a refused Settings navigation and a no-op action gated by exact plain `yes`. No history, chat persistence or tool-call audit. One 55-second deadline; max 16 model rounds × 10,000 input/256 output tokens estimates to $0.03692 at published GPT-5.6-Luna rates; other model costs remain unverified. Offline tests cover pass, missing-tool, warning and approval paths. No migration or web edits; preserve L120/L121 | P9-92 | Complete |
 | P9-88 | [#735](https://github.com/DanAakesen/jarvis/issues/735) | Full GitHub App capability in Jarvis tools | Discover live installation permissions, report enabled operations, add bounded issue/PR/workflow/repository reads and permission-gated writes. Secret-scan outgoing text; direct writes on request; require a later simple approval word for closing, merging, public publication or default-branch writes. The existing three-tool grouped API (`github_capabilities`, `github_read`, `github_write`) retains per-operation validation; #1204 supersedes its former global catalogue-count rationale. Document the tool surface and permission discovery. Offline validation and coordinator live smoke ("what is in issue 700 and its comments?") pending | P10-01 | Complete |
 | P9-93 | [#762](https://github.com/DanAakesen/jarvis/issues/762) | Run CodeQL code scanning on the public repository and triage the first alerts | Add advanced `.github/workflows/codeql.yml` for javascript-typescript, python, and actions scanning on main push/PR and weekly schedule with minimal permissions, action pinning, security-extended queries, and non-blocking concurrency; actionlint passes; document CodeQL in agent-context.md; triage initial CodeQL alerts without application changes | — | Complete |
-| P9-99 | [#794](https://github.com/DanAakesen/jarvis/issues/794) | Trace and reduce chat first-token latency without changing saved model/reasoning settings | Preserve #802 timings, bounded random affinity and no replay. Coordinator content-free baseline correlation identifies turn 1 cold and turns 2–10 warm, affinity 10/10 with no fallback. Ten unique sequential event/span associations and eight exact captured model timings support classification, not elapsed-time guesses. Overall backend median 3.646 s meets <5 s; warm-nine median 3.370 s backend/3.467 s UI, only 3/9 <3 s: warm gate FAIL. Model-to-first-text median 2.790 s remains measured; no resume or post-fix improvement established. Follow-up reuses one invocation-scoped coordination HTTP client without changing steering guards; 30-sample loopback median 53.48→16.77 ms and connections 3→1 are local evidence only. Lifecycle, isolation, failure and cancellation regressions added. No saved settings, prompt, tool, dependency, resource or migration changes. Next: exact-head CI/review and coordinator real post-deploy acceptance; warm-speed, ≤2.5 s and broader #801 remain open. Release/UI temporary snapshot hold settled; partial work only. Refs #794 | P9-84 | Not started |
+| P9-99 | [#794](https://github.com/DanAakesen/jarvis/issues/794) | Trace and reduce chat first-token latency without changing saved model/reasoning settings | Preserve #802 timings, bounded random affinity and no replay. Coordinator content-free baseline correlation identifies turn 1 cold and turns 2–10 warm, affinity 10/10 with no fallback. Ten unique sequential event/span associations and eight exact captured model timings support classification, not elapsed-time guesses. Overall backend median 3.646 s meets <5 s; warm-nine median 3.370 s backend/3.468 s UI, only 3/9 <3 s: warm gate FAIL. Model-to-first-text median 2.790 s remains measured; no resume or post-fix improvement established. Follow-up reuses one invocation-scoped coordination HTTP client without changing steering guards; 30-sample loopback median 53.48→16.77 ms and connections 3→1 are local evidence only. Lifecycle, isolation, failure and cancellation regressions added. No saved settings, prompt, tool, dependency, resource or migration changes. Next: exact-head CI/review and coordinator real post-deploy acceptance; warm-speed, ≤2.5 s and broader #801 remain open. Release/UI temporary snapshot hold settled; partial work only. Refs #794 | P9-84 | Not started |
 
 ### Confirm before P0
 

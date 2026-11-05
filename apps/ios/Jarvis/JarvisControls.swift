@@ -593,7 +593,7 @@ struct JarvisPeriodSelector<Tag: Hashable>: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, JarvisPageHeaderMetrics.rowLineSpacing)
+                        .padding(.horizontal, JarvisDesignTokens.compactSpacing)
                         .frame(minWidth: JarvisDesignTokens.controlMinimumHeight, minHeight: JarvisDesignTokens.controlMinimumHeight)
                         .contentShape(Rectangle())
                 }

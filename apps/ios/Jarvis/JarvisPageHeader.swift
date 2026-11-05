@@ -301,3 +301,43 @@ struct JarvisPageScaffold<Actions: View, Headline: View, Hero: View, Sections: V
         .toolbar(.hidden, for: .navigationBar)
     }
 }
+
+/// Initial page loading has one stable, noninteractive layout. No filters or invented values are exposed.
+/// A single localized announcement replaces the decorative shapes for VoiceOver. Static shapes also honor
+/// Reduce Motion without keeping an animation alive while a request is pending (HIG: Loading, Accessibility).
+struct JarvisPageLoadingView: View {
+    let title: String
+    var identifier = "page.loading"
+    @ScaledMetric(relativeTo: .body) private var lineHeight = JarvisPageHeaderMetrics.skeletonLineHeight
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+            line()
+            line().frame(maxWidth: JarvisPageHeaderMetrics.statMinimumWidth * 3)
+            RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius)
+                .fill(.secondary.opacity(0.12))
+                .frame(height: JarvisPageHeaderMetrics.skeletonHeroHeight)
+            line().frame(maxWidth: JarvisPageHeaderMetrics.statMinimumWidth * 2)
+                .padding(.top, JarvisPageHeaderMetrics.spacing)
+            JarvisRowGroup {
+                ForEach(0..<3, id: \.self) { _ in
+                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                        line()
+                        line().frame(maxWidth: JarvisPageHeaderMetrics.statMinimumWidth * 2)
+                    }
+                    .jarvisListRow()
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityIdentifier(identifier)
+    }
+
+    private func line() -> some View {
+        RoundedRectangle(cornerRadius: JarvisPageHeaderMetrics.rowLineSpacing)
+            .fill(.secondary.opacity(0.16))
+            .frame(height: lineHeight)
+    }
+}

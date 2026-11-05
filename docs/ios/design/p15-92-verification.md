@@ -22,7 +22,7 @@ shared row/heading examples, and sheet actions. They assert rendered positions
 and controls, not that every button is circular. UI fixtures use process-local
 memory caching so a previous test cannot replace a loading scenario with saved data.
 
-Local checks: all 467 JarvisCore tests pass on Swift 6.2, including the new
+Local checks: all 468 JarvisCore tests pass on Swift 6.2, including the new
 localized count contract. All changed Swift sources pass parser checks.
 
 Local Core tests and Swift parser checks do not establish SwiftUI compilation
@@ -32,3 +32,10 @@ Apple guidance used:
 - [Layout](https://developer.apple.com/design/human-interface-guidelines/layout): consistent spacing and grouping; adapt across display sizes.
 - [Loading](https://developer.apple.com/design/human-interface-guidelines/loading): show placeholders promptly and keep other actions available.
 - [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility): Dynamic Type and accessible control labels.
+
+First Mac attempt (run 42075005655, commit 84219890) caught an extension target
+boundary: the page skeleton was placed in the loading file also compiled by the
+Voice Activity target. The skeleton now lives with the app page components, and
+a Core source guard prevents shared controls/loading from depending on those
+app-only types. CI and CodeQL passed on that attempt; native compilation and
+screenshots are being rerun on the correction.
