@@ -1,3 +1,11 @@
+## Codex pickup via labelled issues (P15-91; 5 November 2026)
+
+- A maintainer adds the label `codex-run` to an issue. `.github/workflows/codex-issue.yml` runs `openai/codex-action` on it and opens a PR from branch `codex/issue-N` (`codex/issue-N-<run id>` if that branch exists). Use `codex-run`, not the `Codex` worker label: GitHub label names ignore case, and the worker label only marks a task as taken.
+- Setup, once: add the repository secret `OPENAI_API_KEY`; optionally set the repository variables `CODEX_MODEL` and `CODEX_EFFORT` (empty means the Codex default); turn on the repository setting "Allow GitHub Actions to create and approve pull requests"; create the label with `gh label create codex-run --color 0E8A16 --description "Run Codex on this issue"`.
+- Two jobs: `codex` has only `contents: read` plus the key and uploads a patch; `publish` has the write token, applies the patch and opens the PR. The issue is passed to Codex as a file (`.codex-task/issue.md`), never through an expression in the prompt. The action refuses labelers without write access.
+- The PR title is `<task ID>: <summary>` when the issue title starts with a task ID, otherwise `fix-main:` or `docs:` (docs only when every changed file is Markdown or under `docs/`). The workflow removes the label when it finishes, so adding it again re-runs Codex.
+- Codex runs with the `:workspace` profile: no network, so only offline checks run, and it cannot build iOS. Pushes made with the workflow token do not start CI: run `ci.yml` with `workflow_dispatch` on the branch. A patch that touches `.github/workflows` is not published. Merging this workflow file or later edits to it needs `guarded-merge.ps1 -AllowProtected`.
+
 ## Notes and Home widgets (P15-89 / #1593; 5 November 2026)
 
 - The new widgets live in `apps/ios/Widgets/JarvisNotesWidgetViews.swift` and `JarvisHomeWidgetViews.swift`; the snapshot types, builders, phrases and `JarvisWidgetLink` are in `Packages/JarvisCore/Sources/JarvisCore/Widgets/`. Check them with `swift test` in `apps/ios/Packages/JarvisCore`; the widget views compile only in the iOS CI Simulator job.

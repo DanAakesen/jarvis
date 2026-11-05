@@ -1,3 +1,11 @@
+## 5 November 2026 — Codex pickup via labelled issues, alongside Copilot builders (P15-91)
+
+- Adding the label `codex-run` to an issue runs OpenAI Codex (`openai/codex-action`, pinned by commit) and opens a PR. It sits next to the Copilot coding agent builders; it does not replace them.
+- The trigger label is `codex-run` because the existing `Codex` worker label means "task taken" and GitHub compares label names without case, so a trigger named `codex` would fire whenever a worker claims a task.
+- Security: the Codex job has `contents: read` and the OpenAI key only; a separate job holds the write token and receives a patch artifact. Issue text reaches Codex only as a file. The action's write-access check for the labeler stays on, with no allow-users or allow-bots lists. Codex uses the `:workspace` profile and the default safety strategy.
+- Model and reasoning effort come from repository variables `CODEX_MODEL` and `CODEX_EFFORT`; no model name is fixed in the workflow.
+- Pushes with the workflow token do not trigger CI, so a person starts `ci.yml` with `workflow_dispatch` on the branch before merging.
+
 ## 5 November 2026 — Notes and Home widgets (P15-89 / #1593)
 
 - Six more widgets (small, medium, large for Notes and for Home) join the Gym and Factory ones in the `JarvisWidgets` extension. No buttons, no control items; a tap opens the matching app page through `widgetURL` (`jarvis-widget://notes` or `home`, handled by `onOpenURL` in `ContentView` via `JarvisWidgetLink`).
