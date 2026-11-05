@@ -3300,3 +3300,7 @@ Usage's breakdown order: percentage then emphasized amount. Usage breakdown
 labels and values stack at accessibility sizes. The existing shared-page native
 checks now also capture Usage, Status and Proactive at the largest accessibility
 text size. Corrected native images remain pending.
+
+Settings native screenshot review keeps all four section names readable at default text size with the continuous shared glass segmented bar from P15-94 and full 44-point targets. Larger text uses the shared scrolling strip. Decorative row symbols retain the shared icon size as row text grows, preventing overlap.
+
+The Health hero page indicator exposes a bounded VoiceOver adjustment for Training, Sleep and Nutrition. Its explicit page transition honors Reduce Motion, matching the charts and other non-Chat page transitions.

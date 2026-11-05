@@ -15,7 +15,14 @@ row values. Three native tests cover segments, cross-tab search and navigation.
 
 Local verification: 53 Settings/localization/design-guard Core tests pass on Swift
 6.2.4; changed Swift files pass parser checks. These do not typecheck SwiftUI.
-Native compilation and final screenshots are pending.
+Native run 42121264726 on 4b823206 compiled and passed **49/49** selected UI
+tests, including all three Settings cases. The later standalone screenshot sweep
+reached the job timeout; screenshot artifact 13461059102 was retained. Native
+screenshots revealed truncated normal-size section labels and oversized decorative
+row icons at accessibility XXXL. These are corrected with P15-94's
+continuous shared segmented bar (still a 44-point target), a scrolling strip above
+default text size, and fixed semantic icon geometry. The corrected native result
+and screenshot acceptance are pending; the earlier pass is not final visual acceptance.
 
 Apple documentation read: [Segmented controls](https://developer.apple.com/design/human-interface-guidelines/segmented-controls),
 [Lists and tables](https://developer.apple.com/design/human-interface-guidelines/lists-and-tables),

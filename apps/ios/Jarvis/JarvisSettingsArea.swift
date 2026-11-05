@@ -151,7 +151,7 @@ struct JarvisSettingsArea: View {
     @ViewBuilder
     private var sectionPicker: some View {
         Group {
-            if dynamicTypeSize.isAccessibilitySize {
+            if dynamicTypeSize > .large {
                 JarvisTabStrip(title: copy(.title), identifierPrefix: "settings.section",
                                items: sectionItems, selection: $selectedSection)
             } else {
@@ -411,11 +411,13 @@ struct JarvisSettingsArea: View {
 
     @ViewBuilder
     private func rowContent(_ row: JarvisSettingsRow) -> some View {
-        let layout = dynamicTypeSize.isAccessibilitySize
+        let stacksValue = dynamicTypeSize.isAccessibilitySize || row.disabledHint != nil
+        let layout = stacksValue
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing))
             : AnyLayout(HStackLayout(spacing: JarvisDesignTokens.settingsSectionSpacing))
         HStack(spacing: JarvisPageHeaderMetrics.spacing) {
             Image(systemName: symbol(for: row.id))
+                .font(.system(size: JarvisDesignTokens.settingsIconSize))
                 .foregroundStyle(row.id.hasPrefix("signOut") ? Color.red : JarvisDesignTokens.primaryAccent)
                 .frame(width: JarvisDesignTokens.settingsIconSize)
                 .accessibilityHidden(true)
@@ -424,13 +426,13 @@ struct JarvisSettingsArea: View {
                     .foregroundStyle(row.id.hasPrefix("signOut") ? Color.red : (row.disabledHint == nil ? Color.primary : Color.secondary))
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
-                if !dynamicTypeSize.isAccessibilitySize {
+                if !stacksValue {
                     Spacer(minLength: JarvisDesignTokens.settingsSectionSpacing)
                 }
                 if let value = row.value, !value.isEmpty {
                     Text(value)
                         .foregroundStyle(.secondary)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .lineLimit(stacksValue ? nil : 1)
                         .truncationMode(.middle)
                 }
             }

@@ -21,6 +21,7 @@ enum JarvisHealthHeroPage: Int, CaseIterable, Identifiable {
 }
 
 struct JarvisHealthHeroCarousel<Accessory: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let data: JarvisHealthDashboardData
     let period: JarvisHealthPeriod
     let goals: JarvisHealthGoals
@@ -75,9 +76,18 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(copy.text(.heroPages))
             .accessibilityValue("\(page.rawValue + 1) / \(JarvisHealthHeroPage.allCases.count)")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    page = JarvisHealthHeroPage(rawValue: page.rawValue + 1) ?? page
+                case .decrement:
+                    page = JarvisHealthHeroPage(rawValue: page.rawValue - 1) ?? page
+                @unknown default: break
+                }
+            }
             .accessibilityIdentifier("health.hero.dots")
         }
-        .animation(.easeInOut(duration: 0.2), value: page)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: page)
     }
 }
 

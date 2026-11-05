@@ -11054,3 +11054,11 @@ strip and stacked row values. Chat and the shared orb remain unchanged.
 ## 2026-11-05: P15 Health backlog and retained history
 
 Use anchored HealthKit query pagination and complete-day upload requests rather than discarding a quantity at the whole-window cap. Keep the existing owner-only API and 20,000-item request bound; reject an oversized single day honestly, before any upload. A partial local step snapshot replaces only matching Copenhagen days and cannot mark retained history fresh. Regression tests cover multi-day backlogs, rejection, local midnight and explicit zero readings.
+
+## Settings native geometry correction (5 November 2026)
+
+Native artifact 13461059102 exposed truncated four-way section labels and decorative symbols expanding beyond their reserved row width at accessibility XXXL. Use the existing continuous glass segmented bar from P15-94, with its full hit target, switch Settings to the shared scrolling strip above default text size, and retain fixed semantic symbol geometry. Existing callers keep their defaults; Chat is unchanged.
+
+## Health page accessibility (5 November 2026)
+
+The Health hero indicator previously announced page position but offered no adjustment, and the explicit page transition ignored Reduce Motion. Keep the native pager and existing visual geometry, expose bounded increment/decrement actions on its indicator, and disable the explicit animation under Reduce Motion.

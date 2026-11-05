@@ -7125,3 +7125,7 @@ item-driven note-sheet destination; initialize creation drafts once per sheet.
 Do not reset them when a nested picker dismisses. The graph selection is an explicit
 accessibility container so its Open action retains its identifier. The existing
 native tests cover initial/confirmed nested paths and the real Open action.
+
+Settings run 42121264726 compiled and passed 49/49 selected native tests. Review screenshots as well as assertions: its captures exposed normal-size tab truncation and large-text symbol overlap. The follow-up retains 44-point segment targets and uses scrolling above default text size. Artifact 13461059102 preserves the evidence; corrected captures remain required.
+
+Health hero accessibility uses the existing page indicator as an adjustable control; native swipe assertions remain unchanged. The final follow-up also removes the explicit page animation under Reduce Motion. This does not establish live VoiceOver or HealthKit permission acceptance.
