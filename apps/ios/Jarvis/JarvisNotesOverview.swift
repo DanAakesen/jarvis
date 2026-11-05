@@ -154,7 +154,7 @@ struct JarvisNotesRecentStrip: View {
                 ScrollView(.horizontal) {
                     HStack(spacing: JarvisDesignTokens.notesChipSpacing) {
                         ForEach(notes) { note in
-                            JarvisTileButton(identifier: "notes.recent.\(note.path)",
+                            JarvisContentTileButton(identifier: "notes.recent.\(note.path)",
                                              width: JarvisDesignTokens.notesRecentTileWidth, action: { onOpen(note) }) {
                                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                                     Text(note.title).font(.subheadline.weight(.semibold)).lineLimit(2)
