@@ -2360,3 +2360,9 @@ appear. Native visual acceptance remains pending.
 Settings uses General, Models, Health and Account views. Search reaches settings
 across all views; clearing it returns to the selected view. Existing detail
 editors, explicit save/approval behavior and sign-out confirmation are preserved.
+
+### Native Notes success feedback (owner request, 6 November 2026)
+
+Confirmed note creation and task completion provide a subtle success haptic and a
+brief non-blocking confirmation. Failures and uncertain writes retain their existing
+recovery behavior and never produce success feedback. Chat remains unchanged.

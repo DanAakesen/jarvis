@@ -3304,3 +3304,11 @@ text size. Corrected native images remain pending.
 Settings native screenshot review keeps all four section names readable at default text size with the continuous shared glass segmented bar from P15-94 and full 44-point targets. Larger text uses the shared scrolling strip. Decorative row symbols retain the shared icon size as row text grows, preventing overlap.
 
 The Health hero page indicator exposes a bounded VoiceOver adjustment for Training, Sleep and Nutrition. Its explicit page transition honors Reduce Motion, matching the charts and other non-Chat page transitions.
+### Native confirmed-action feedback (6 November 2026)
+
+`JarvisSuccessFeedback.swift` owns the shared checkmark/text glass confirmation.
+It reuses existing spacing, radius and timing tokens; a new success replaces the
+current one and cancels its expiry. A short opacity/scale transition honors Reduce
+Motion and never consumes touches. Haptics and VoiceOver announcements follow a
+confirmed write. Notes displays this feedback before continuing its existing editor
+navigation; the successful navigation itself remains immediate.

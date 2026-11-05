@@ -170,6 +170,7 @@ struct JarvisNotesArea: View {
     @State private var openedTask: VaultTask?
     @State private var pendingTaskIDs = Set<String>()
     @State private var noticePresented = false
+    @State private var successConfirmation: JarvisSuccessConfirmation?
 
     private var copy: JarvisNotesCopy { JarvisNotesCopy(language: language) }
 
@@ -197,6 +198,7 @@ struct JarvisNotesArea: View {
         }
         .jarvisPageHeader { header }
         .jarvisAmbientBackground()
+        .jarvisSuccessFeedback($successConfirmation)
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !isInitialLoading {
@@ -222,6 +224,7 @@ struct JarvisNotesArea: View {
                     initialFolder: destination.folder,
                     onCreated: { path in
                         newNoteDestination = nil
+                        successConfirmation = JarvisSuccessConfirmation(message: copy.saved)
                         refreshVersion += 1
                         await openNote(path: path)
                     }
@@ -985,6 +988,7 @@ struct JarvisNotesArea: View {
         defer { _ = pendingTaskIDs.remove(task.id) }
         do {
             _ = try await client.setTaskDone(task, done: true)
+            successConfirmation = JarvisSuccessConfirmation(message: copy.completed)
             await JarvisAppCache.invalidateAll(.tasks)
             refreshVersion += 1
         } catch {

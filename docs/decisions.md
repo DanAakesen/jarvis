@@ -11062,3 +11062,10 @@ Native artifact 13461059102 exposed truncated four-way section labels and decora
 ## Health page accessibility (5 November 2026)
 
 The Health hero indicator previously announced page position but offered no adjustment, and the explicit page transition ignored Reduce Motion. Keep the native pager and existing visual geometry, expose bounded increment/decrement actions on its indicator, and disable the explicit animation under Reduce Motion.
+
+## 6 November 2026 — Confirm successful native actions
+
+The owner explicitly requested subtle haptics and interruptible completion feedback
+for lift saves, tasks and note creation. Notes introduces the reusable confirmation
+and applies it after successful client writes. No API or persistence contract changes.
+Physical haptic feel remains a device check; simulator verification is pending.

@@ -3860,3 +3860,8 @@ assertions and adding path readback. Fresh native verification remains pending.
 Settings first native pass: 49/49 selected UI tests passed on 4b823206. Screenshot review found truncated section labels and accessibility-size icon overlap; the final shared segmented bar and Settings symbol sizing await the next native pass. Shared prerequisite #1604 merged as c818a6b3; remaining delivery order is Notes, Home/Factory, Health, Insights, Settings, then backend readiness and TestFlight.
 
 Health final accessibility audit: add VoiceOver adjustment to the existing hero-page indicator and honor Reduce Motion for page transitions. Native verification remains pending; preserve the active run before pushing this follow-up.
+
+Notes 1d8e663f passed 50/50 native UI tests in run 42125346515; the later screenshot
+sweep timed out. New owner-approved success feedback follows confirmed note/task
+writes and awaits combined native verification. Backend deployment remains required
+before TestFlight.
