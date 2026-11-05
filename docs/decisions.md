@@ -10928,3 +10928,11 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+## 2026-11-05 — Extend the approved board alignment to Settings and Voice
+
+The owner expanded the non-Chat page scope to include Settings and Voice and
+authorized TestFlight after verification for the 6 November morning target.
+Settings adopts the board's bottom segments and meaningful section groups while
+retaining existing native detail/save flows. Large text uses a scrolling segment
+strip and stacked row values. Chat and the shared orb remain unchanged.

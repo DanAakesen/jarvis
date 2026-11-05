@@ -3792,3 +3792,12 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+## P15 Settings board continuation (5 November 2026)
+
+Implemented General/Models/Health/Account navigation, board section grouping,
+shared row spacing and accessibility-size adaptation without changing detail
+editors or Chat. Added native section/search/detail cases to the existing selected
+component suite. Scoped Core/localization/design guards: 53 passed; Swift parser
+passed. Native compilation and visual acceptance are pending. Release follows
+#1604, the page PRs, successful Notes backend deployment, then TestFlight.

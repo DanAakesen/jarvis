@@ -7042,3 +7042,11 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+## Settings board follow-up verification
+
+Use the existing ComponentGalleryUITests suite for Settings sections, cross-view
+search and detail navigation in English/dark, Danish/light and accessibility text.
+No workflow or project change is needed. Scoped Core Settings/localization/design
+guards pass 53 tests in the pinned Swift container; syntax parsing passes. Native
+compilation, interaction results and screenshot comparison remain pending.

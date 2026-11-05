@@ -2304,3 +2304,9 @@ available without repeating long paragraphs. Daily reads, including capabilities
 and nutrition targets, share a two-request concurrency bound and abort queued
 work when its view is left. Original Daily remains canonical; no source,
 permission, writer, coaching, recovery, recomp or TickTick behavior is added.
+
+## Native Settings board navigation (5 November 2026)
+
+Settings uses General, Models, Health and Account views. Search reaches settings
+across all views; clearing it returns to the selected view. Existing detail
+editors, explicit save/approval behavior and sign-out confirmation are preserved.
