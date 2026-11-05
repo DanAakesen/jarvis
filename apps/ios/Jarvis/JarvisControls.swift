@@ -257,34 +257,26 @@ struct JarvisIconButton: View {
     }
 }
 
-/// The task checkbox: no border or glass. When checked it animates into a check mark, then runs `action` so the row
-/// clears after the check is seen.
+/// The task checkbox starts the write immediately and prevents repeated taps while it is pending.
+/// The owning screen confirms success only after the write returns.
 struct JarvisCheckButton: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     var identifier: String
+    var isWorking = false
     let action: () -> Void
-    @State private var isChecked = false
 
     var body: some View {
-        Button {
-            guard !isChecked else { return }
-            if reduceMotion { isChecked = true } else { withAnimation(.snappy(duration: 0.25)) { isChecked = true } }
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(reduceMotion ? 0 : 350))
-                action()
-            }
-        } label: {
-            Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+        Button(action: action) {
+            Image(systemName: "circle")
                 .font(.title2)
-                .foregroundStyle(isChecked ? JarvisDesignTokens.primaryAccent : Color.secondary)
-                .contentTransition(.symbolEffect(.replace))
+                .foregroundStyle(.secondary)
+                .opacity(isWorking ? 0.5 : 1)
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isWorking)
         .accessibilityLabel(title)
-        .accessibilityAddTraits(isChecked ? .isSelected : [])
         .accessibilityIdentifier(identifier)
     }
 }

@@ -3865,3 +3865,8 @@ Notes 1d8e663f passed 50/50 native UI tests in run 42125346515; the later screen
 sweep timed out. New owner-approved success feedback follows confirmed note/task
 writes and awaits combined native verification. Backend deployment remains required
 before TestFlight.
+
+Owner-approved additions: shorter Home greeting and success haptics/transitions for
+lift/workout saves, task completion and note creation. Core greeting assertions and
+the existing native suite cover the new behavior; combined native results are pending.
+The earlier 48-test pass precedes this addition.

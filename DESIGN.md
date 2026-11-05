@@ -3312,3 +3312,11 @@ current one and cancels its expiry. A short opacity/scale transition honors Redu
 Motion and never consumes touches. Haptics and VoiceOver announcements follow a
 confirmed write. Notes displays this feedback before continuing its existing editor
 navigation; the successful navigation itself remains immediate.
+
+### Home feedback refinement (6 November 2026)
+
+The shorter Home greeting omits health recaps. Task completion and note creation
+reuse Notes' shared brief glass confirmation. Lift/workout sheets keep their saved
+text, with one success haptic and a short opacity/scale transition. All new motion
+honors Reduce Motion; confirmation never blocks another action or sheet dismissal.
+Home's checkbox no longer displays a checkmark before a successful write.

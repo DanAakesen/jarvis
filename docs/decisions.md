@@ -11069,3 +11069,11 @@ The owner explicitly requested subtle haptics and interruptible completion feedb
 for lift saves, tasks and note creation. Notes introduces the reusable confirmation
 and applies it after successful client writes. No API or persistence contract changes.
 Physical haptic feel remains a device check; simulator verification is pending.
+
+## 6 November 2026 — Shorter Home and successful-action polish
+
+The owner selected these two previous suggestions for this release. Home keeps
+event/task priorities while health stays in the cards. Confirmations follow successful
+writes, and Home completion errors are surfaced rather than swallowed. The existing
+lift/workout saved state remains persistent and dismissible. No Chat change, backend
+contract change or new dependency is required. Native verification is pending.

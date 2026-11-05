@@ -2366,3 +2366,10 @@ editors, explicit save/approval behavior and sign-out confirmation are preserved
 Confirmed note creation and task completion provide a subtle success haptic and a
 brief non-blocking confirmation. Failures and uncertain writes retain their existing
 recovery behavior and never produce success feedback. Chat remains unchanged.
+
+### Home greeting and confirmed-action polish (owner request, 6 November 2026)
+
+Home's greeting keeps the next event and today's due-task count; steps and workouts
+remain in their cards. Confirmed lift/workout saves, task completions and note
+creation give subtle haptics and short interruptible feedback. Pending tasks cannot
+be submitted twice; failed completion remains visible and retryable. Chat is unchanged.

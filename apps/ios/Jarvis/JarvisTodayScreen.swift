@@ -34,6 +34,9 @@ struct JarvisTodayScreen: View {
     @State private var dictationFailed = false
     @State private var flyingText: String?
     @State private var flightRisen = false
+    @State private var successConfirmation: JarvisSuccessConfirmation?
+    @State private var pendingTaskIDs = Set<String>()
+    @State private var taskCompletionFailed = false
     @ScaledMetric(relativeTo: .largeTitle) private var greetingSize: CGFloat = 25
     @FocusState private var composerFocused: Bool
 
@@ -69,6 +72,12 @@ struct JarvisTodayScreen: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
         .toolbar(.hidden, for: .navigationBar)
         .jarvisAmbientBackground()
+        .jarvisSuccessFeedback($successConfirmation)
+        .alert(JarvisNotesCopy(language: language).tasks, isPresented: $taskCompletionFailed) {
+            Button(JarvisNotesCopy(language: language).ok, role: .cancel) {}
+        } message: {
+            Text(JarvisNotesCopy(language: language).unavailable)
+        }
         .onDisappear { dictation.stop() }
         .task {
             await model.refresh()
@@ -314,8 +323,9 @@ struct JarvisTodayScreen: View {
         HStack(spacing: 4) {
             JarvisCheckButton(
                 title: "\(copy(.markDone)): \(task.text)",
-                identifier: "today.task.done.\(task.id)"
-            ) { Task { await model.complete(task) } }
+                identifier: "today.task.done.\(task.id)",
+                isWorking: pendingTaskIDs.contains(task.id)
+            ) { Task { await completeTask(task) } }
             VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                 Text(task.text).font(.body).lineLimit(2)
                 if let due = dueText(task) {
@@ -329,6 +339,19 @@ struct JarvisTodayScreen: View {
         .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("today.task.\(task.id)")
+    }
+
+    private func completeTask(_ task: VaultTask) async {
+        guard !pendingTaskIDs.contains(task.id) else { return }
+        pendingTaskIDs.insert(task.id)
+        defer { pendingTaskIDs.remove(task.id) }
+        do {
+            try await model.complete(task)
+            successConfirmation = JarvisSuccessConfirmation(message: JarvisNotesCopy(language: language).completed)
+        } catch {
+            guard !Task.isCancelled else { return }
+            taskCompletionFailed = true
+        }
     }
 
     private func isOverdue(_ task: VaultTask) -> Bool {
@@ -592,7 +615,10 @@ struct JarvisTodayScreen: View {
                     client: client,
                     copy: JarvisNotesCopy(language: language),
                     initialFolder: "",
-                    onCreated: { _ in sheet = nil }
+                    onCreated: { _ in
+                        sheet = nil
+                        successConfirmation = JarvisSuccessConfirmation(message: JarvisNotesCopy(language: language).saved)
+                    }
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)

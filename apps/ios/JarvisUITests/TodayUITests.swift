@@ -163,6 +163,26 @@ final class TodayUITests: XCTestCase {
         app.buttons["sheet.cancel"].tap()
     }
 
+    func testCompletingATaskConfirmsSuccessAndKeepsOtherTasksUsable() {
+        launch()
+        XCTAssertTrue(screen("today").waitForExistence(timeout: 10))
+        let due = app.buttons["today.tab.due"]
+        for _ in 0..<4 where !due.isHittable { app.swipeUp() }
+        due.tap()
+        let first = app.buttons["today.task.done.t1"]
+        for _ in 0..<4 where !first.isHittable { app.swipeUp() }
+        XCTAssertTrue(first.isHittable)
+        first.tap()
+        let removed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: first)
+        XCTAssertEqual(XCTWaiter.wait(for: [removed], timeout: 5), .completed)
+        let second = app.buttons["today.task.done.t2"]
+        XCTAssertTrue(second.isEnabled, "Confirmation must not block another completion")
+        second.tap()
+        let secondRemoved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: second)
+        XCTAssertEqual(XCTWaiter.wait(for: [secondRemoved], timeout: 5), .completed)
+        XCTAssertTrue(app.textFields["today.input"].isEnabled)
+    }
+
     func testWorkoutSavingNeedsASessionAndTheDateIsSaved() {
         launch()
         let log = app.buttons["today.logWorkout"]
@@ -201,7 +221,15 @@ final class TodayUITests: XCTestCase {
         }
         XCTAssertTrue(save.isEnabled)
         save.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["today.log.status"].waitForExistence(timeout: 5))
+        let saved = app.descendants(matching: .any)["today.log.status"]
+        XCTAssertTrue(saved.waitForExistence(timeout: 5))
+        let confirmed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "Saved"), object: saved)
+        XCTAssertEqual(XCTWaiter.wait(for: [confirmed], timeout: 5), .completed)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "P15-success-lift-dark-en"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        XCTAssertTrue(app.buttons["sheet.cancel"].isEnabled, "Success feedback remains interruptible")
     }
 
     func testTypingShowsSendAndSendOpensChatThenHomeReturns() {
