@@ -170,9 +170,23 @@ struct JarvisNotesArea: View {
 
     private var copy: JarvisNotesCopy { JarvisNotesCopy(language: language) }
 
+    private var isInitialLoading: Bool {
+        guard loadError == nil else { return false }
+        switch selectedTab {
+        case .notes, .list: return tree == nil
+        case .tasks: return taskList == nil
+        case .graph: return graph == nil
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if isInitialLoading {
+                ScrollView {
+                    JarvisPageLoadingView(title: copy.loading, identifier: "notes.loading")
+                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                }
+            } else if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 selectedContent
             } else {
                 searchContent
@@ -182,13 +196,15 @@ struct JarvisNotesArea: View {
         .jarvisAmbientBackground()
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-                if selectedTab == .notes { folderFilters }
-                searchBar
+            if !isInitialLoading {
+                VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+                    if selectedTab == .notes { folderFilters }
+                    searchBar
+                }
+                .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                .padding(.top, JarvisDesignTokens.notesSectionSpacing)
+                .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
             }
-            .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-            .padding(.top, JarvisDesignTokens.notesSectionSpacing)
-            .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
         }
         .task(id: "\(selectedTab.rawValue)-\(refreshVersion)") {
             await loadSelectedTab(force: refreshVersion > 0)

@@ -2804,6 +2804,31 @@ second surface. Skeleton loaders fill the message's width through the
 and the `cards` placeholder shows four columns, two at 900px and narrower and
 one at 700px and narrower.
 
+## Native shared page pattern (P15-92; 5 November 2026)
+
+The build-74 board merged in #1603 is the shared composition reference. Pages
+use a transparent pinned title, the real-data phrase, a hero, then their content.
+Chat, Settings and Voice retain their own composition; Home has no title bar.
+`JarvisSectionHeadline` separates sections outside their surfaces and accepts a
+trailing action. Its explicit semantic secondary color remains consistent inside
+native List headers, which already supply a subdued inherited style. `jarvisListRow` and `JarvisRowGroup` give grouped rows shared
+insets, line spacing and structural separators. Hero geometry remains in
+`JarvisPageHeaderMetrics`; period controls share one glass surface and preserve
+44-point hit targets. Accessibility text sizes move hero accessories below titles.
+
+`JarvisPageLoadingView` is the initial page skeleton. It exposes one localized
+loading announcement, no sample values or operable filters, and uses static
+shapes for reduced motion. Inline operations retain the shared dot indicator.
+Cached content remains visible during quiet refreshes. Sheet toolbars place the
+confirm check on the left and the cancel X on the right, with localized labels.
+
+The Workspaces list retains its native menus, swipe actions, bottom search and
+Pinned/Today/Week/Earlier grouping. Its hero counts the returned items in the
+current view, never claims a server-wide total. The main board has no saved-items
+Workspaces route; `docs/ios/design/workspaces.html` is its separate older reference.
+Native screenshot acceptance is tracked in
+[the verification record](docs/ios/design/p15-92-verification.md).
+
 ## Native iOS colour and Chat look (owner decision, 31 October 2026)
 
 P15-38 / #1478 makes the approved Chat backdrop shared across native screens

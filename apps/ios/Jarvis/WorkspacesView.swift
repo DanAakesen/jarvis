@@ -12,6 +12,7 @@ struct WorkspacesView: View {
     @State private var selectedKind: SavedWorkspaceKind?
     @State private var reloadID = 0
     @State private var loadedFilterKey = ""
+    @State private var hasLoadedPage = false
     @State private var busyItems: Set<String> = []
     @State private var loadingOlder = false
     @State private var hasMore = false
@@ -27,33 +28,21 @@ struct WorkspacesView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            connectionStatus
-            kindFilters
-            if let notice {
-                Text(notice)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, JarvisDesignTokens.contentInset)
-                    .padding(.vertical, JarvisDesignTokens.contentSpacing / 2)
-                    .accessibilityAddTraits(.updatesFrequently)
-            }
-            results
-        }
+        results
         .jarvisPageHeader { JarvisPageHeader(title: text(.title), language: language) }
         .jarvisAmbientBackground()
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            searchField
-                .padding(.top, JarvisDesignTokens.contentSpacing / 2)
-                .padding(.bottom, JarvisDesignTokens.contentSpacing / 2)
+            if hasLoadedPage {
+                searchField
+                    .padding(.top, JarvisDesignTokens.contentSpacing / 2)
+                    .padding(.bottom, JarvisDesignTokens.contentSpacing / 2)
+            }
         }
         .task(id: "\(query)|\(selectedKind?.rawValue ?? "")|\(reloadID)") {
             do {
                 let filterKey = "\(query)|\(selectedKind?.rawValue ?? "")"
                 if loadedFilterKey != filterKey {
-                    items = []
                     hasMore = false
                     loadState = .loading
                 }
@@ -97,7 +86,6 @@ struct WorkspacesView: View {
             .font(.footnote)
             .foregroundStyle(runtime.connectionStatus == .connected ? Color.secondary : Color.orange)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, JarvisDesignTokens.contentInset)
             .padding(.top, JarvisDesignTokens.contentSpacing)
             .accessibilityLabel(formatted(.connectionLabel, runtime.connectionStatus.title(language: language)))
     }
@@ -110,10 +98,10 @@ struct WorkspacesView: View {
                     kindFilterButton(title: kindLabel(kind), kind: kind)
                 }
             }
-            .padding(.horizontal, JarvisDesignTokens.contentInset)
         }
         .scrollIndicators(.hidden)
         .accessibilityLabel(text(.filterByKind))
+        .accessibilityIdentifier("workspaces.filters")
     }
 
     private func kindFilterButton(title: String, kind: SavedWorkspaceKind?) -> some View {
@@ -139,6 +127,7 @@ struct WorkspacesView: View {
                 .autocorrectionDisabled()
                 .submitLabel(.search)
                 .accessibilityLabel(text(.search))
+                .accessibilityIdentifier("workspaces.search")
             if !query.isEmpty {
                 JarvisIconButton(
                     title: text(.clearSearch),
@@ -155,14 +144,44 @@ struct WorkspacesView: View {
         .padding(.bottom, JarvisDesignTokens.contentSpacing / 2)
     }
 
-    private var results: some View {
-        JarvisList {
-            if loadState == .loading && items.isEmpty {
-                Section {
-                    JarvisLoadingView(title: text(.loading))
-                        .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
-                        .listRowSeparator(.hidden)
+    private var isInitialLoading: Bool { loadState == .loading && items.isEmpty && !hasLoadedPage }
+
+    @ViewBuilder private var pageHead: some View {
+        if hasLoadedPage || !items.isEmpty {
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                JarvisPageHeadline(phrase: JarvisPagePhrase(markup: formatted(.pageSummary, items.count)))
+                JarvisPageHeroCard(title: jarvisInsightsText(.overview, language)) {
+                    JarvisPageStatGrid(
+                        stats: SavedWorkspaceKind.allCases.map { kind in
+                            JarvisPageStat(id: kind.rawValue, value: items.filter { $0.kind == kind }.count,
+                                          label: kindLabel(kind), systemImage: symbol(for: kind))
+                        },
+                        language: language
+                    )
                 }
+                .accessibilityIdentifier("workspaces.hero")
+                connectionStatus
+                kindFilters
+                if loadState == .loading {
+                    JarvisLoadingView(title: text(.loading), size: .inline)
+                        .accessibilityIdentifier("workspaces.refreshing")
+                }
+                if let notice {
+                    Text(notice).font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+            }
+            .padding(.horizontal, JarvisPageHeaderMetrics.inset)
+        } else if isInitialLoading {
+            JarvisPageLoadingView(title: text(.loading), identifier: "workspaces.loading")
+                .padding(.horizontal, JarvisPageHeaderMetrics.inset)
+        }
+    }
+
+    private var results: some View {
+        JarvisList(head: { pageHead }) {
+            if isInitialLoading {
+                EmptyView()
             } else if items.isEmpty {
                 Section {
                     statePanel
@@ -184,9 +203,7 @@ struct WorkspacesView: View {
                             workspaceRow(item)
                         }
                     } header: {
-                        Text(groupTitle(group.title))
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+                        JarvisSectionHeadline(groupTitle(group.title))
                             .textCase(nil)
                     }
                 }
@@ -212,8 +229,7 @@ struct WorkspacesView: View {
     private var statePanel: some View {
         switch loadState {
         case .loading:
-            JarvisLoadingView(title: text(.loading))
-                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.emptyStateHeight)
+            JarvisLoadingView(title: text(.loading), size: .inline)
         case .ready where !normalizedQuery(query).isEmpty || selectedKind != nil:
             VStack(spacing: JarvisDesignTokens.contentSpacing) {
                 Label(text(.noMatching), systemImage: "magnifyingglass")
@@ -354,6 +370,7 @@ struct WorkspacesView: View {
             let page = try await client.search(query: normalizedQuery(query), kind: selectedKind)
             guard !Task.isCancelled else { return }
             items = page
+            hasLoadedPage = true
             hasMore = page.count >= JarvisWorkspacesClient.pageSize
             loadedFilterKey = "\(query)|\(selectedKind?.rawValue ?? "")"
             loadState = .ready

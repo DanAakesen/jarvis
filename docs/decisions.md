@@ -10902,3 +10902,29 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - `JarvisRepository` now bounds every refresh (`JarvisRepositoryKind.refreshTimeout`, 20 s). A timeout ends in `failed(JarvisClientError.timedOut)`; cached data stays visible, otherwise the error state with pull to refresh shows. `JarvisCachedSection` also turns a stream that ends while still loading into the error state.
 - The iOS client uses `/health/*` only. `JarvisRepositoryTests` fails on any `path: ["daily"` in JarvisCore, and `apps/backend/src/health/ios-route-contract.test.ts` checks every client `/health/*` path against the backend routes.
 - Notes forces a reload after a save, create or task change (`refreshVersion > 0`) in addition to the existing cache invalidation.
+
+## 5 November 2026 — P15-92 shared native page implementation
+
+Implement the owner's build-74 reference from #1603 through shared SwiftUI
+components: section headlines, grouped rows, one initial page skeleton, and
+confirm-left/cancel-right sheet actions. Keep native 44-point targets and Dynamic
+Type even where the HTML board draws a smaller period control. Use the existing
+Mac screenshot workflow; its selected component UI suite now exercises the page
+order, loading controls and sheet-action geometry. This records implementation
+of the approved issue; native visual acceptance remains pending in
+`ios/design/p15-92-verification.md`.
+
+Dan approved a narrow exception to #1598's prohibition on editing `ios-ci.yml`:
+run the existing screenshot artifact upload with `if: always()`. Run 42075818100
+had captured images but skipped their upload when it reached the job timeout.
+Keep the existing runner, test selection and timeout; this change preserves
+available evidence and does not turn failing tests into successful tests.
+
+
+## 5 November 2026 — Preserve shared heading contrast inside List
+
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.

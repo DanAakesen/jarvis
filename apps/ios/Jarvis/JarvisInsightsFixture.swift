@@ -12,6 +12,7 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
         case empty
         case error
         case offline
+        case loading
     }
 
     static let now = ISO8601DateFormatter().date(from: "2026-10-31T12:00:00Z")!
@@ -43,6 +44,7 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
     }
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        if mode == .loading { try await Task.sleep(for: .seconds(60)) }
         if mode == .offline { throw HTTPTransportFailure.network }
         if mode == .error { return Self.response(500, ["error": "internal_error"]) }
         let components = URLComponents(url: request.url, resolvingAgainstBaseURL: false)

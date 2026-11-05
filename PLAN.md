@@ -2024,7 +2024,7 @@ gate, not exclusive timeout causation or original Google/private/device acceptan
 
 Normally compose that accepted main into existing #850, preserving the exact V2
 runner/test blobs, every outside-eight-path main entry and all 381 PLAN pipe lines.
-Prior `467cb5d` passed ten actual CI `38659103136` jobs, four CodeQL
+Prior `468cb5d` passed ten actual CI `38659103136` jobs, four CodeQL
 `38659103178` analyses and pinned Linux runner204/agent398. Next: publish the
 composed head normally, require its fresh full gates, then normal guarded squash,
 normal Deploy and actual exact-released-SHA Runner deploy. The original E9
@@ -2054,7 +2054,7 @@ This reproduces a transport defect, not exclusive live timeout causation.
 Next: freeze, independent narrow review, fresh exact-head full CI/CodeQL and
 normal required release; do not retry the unchanged failed release.
 
-Factory #850's `467cb5d` composition passed fresh ten-job CI/four CodeQL
+Factory #850's `468cb5d` composition passed fresh ten-job CI/four CodeQL
 analyses and actual pinned Linux runner204/agent398. It remains unmerged while
 main's required release is broken. Normal Deploy and exact-released-SHA Runner
 deploy are both required before the authorised single live job. No Google
@@ -2218,6 +2218,8 @@ Next: camera-only PR, coordinator merge on green CI, then loading recovery and
 Phase 1 delivers the Software Factory. Requirements and page specifications are in [PRODUCT.md](PRODUCT.md); the system and stack in [docs/architecture.md](docs/architecture.md); the data model in [docs/data-model.md](docs/data-model.md); decisions and learnings in [docs/decisions.md](docs/decisions.md).
 
 ## Current focus
+
+- **P15-92 / #1598:** PR #1604 implements the shared native page pattern from the board merged in #1603. All 468 Core tests pass locally. Native compilation, CI and CodeQL passed on edc8ec36; 45/46 UI tests passed, including all four bilingual/light-dark page-order cases. The remaining Workspaces case used a nonexistent sidebar entry; its fixture entry is corrected. The Mac job again timed out during later captures. Dan approved preserving available images with `if: always()` on the existing upload step; all 74 workflow checks pass. Fresh native checks and board/build visual acceptance remain pending; see `docs/ios/design/p15-92-verification.md`. #1599–#1602 follow this shared change.
 
 - **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window
   acknowledgement; iOS detaches observation on lock and refreshes persisted
@@ -3144,7 +3146,7 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 | P9-100 | [#795](https://github.com/DanAakesen/jarvis/issues/795) | Post-deploy acceptance suite for chat behaviours (extend the chat canary) | Add seven named smoke checks with deterministic tool/answer rules and warning-only identity/timestamp wording checks. Keep tool catalogue at 128; smoke allows issue-700 read, count-only job result, a refused Settings navigation and a no-op action gated by exact plain `yes`. No history, chat persistence or tool-call audit. One 55-second deadline; max 16 model rounds × 10,000 input/256 output tokens estimates to $0.03692 at published GPT-5.6-Luna rates; other model costs remain unverified. Offline tests cover pass, missing-tool, warning and approval paths. No migration or web edits; preserve L120/L121 | P9-92 | Complete |
 | P9-88 | [#735](https://github.com/DanAakesen/jarvis/issues/735) | Full GitHub App capability in Jarvis tools | Discover live installation permissions, report enabled operations, add bounded issue/PR/workflow/repository reads and permission-gated writes. Secret-scan outgoing text; direct writes on request; require a later simple approval word for closing, merging, public publication or default-branch writes. The existing three-tool grouped API (`github_capabilities`, `github_read`, `github_write`) retains per-operation validation; #1204 supersedes its former global catalogue-count rationale. Document the tool surface and permission discovery. Offline validation and coordinator live smoke ("what is in issue 700 and its comments?") pending | P10-01 | Complete |
 | P9-93 | [#762](https://github.com/DanAakesen/jarvis/issues/762) | Run CodeQL code scanning on the public repository and triage the first alerts | Add advanced `.github/workflows/codeql.yml` for javascript-typescript, python, and actions scanning on main push/PR and weekly schedule with minimal permissions, action pinning, security-extended queries, and non-blocking concurrency; actionlint passes; document CodeQL in agent-context.md; triage initial CodeQL alerts without application changes | — | Complete |
-| P9-99 | [#794](https://github.com/DanAakesen/jarvis/issues/794) | Trace and reduce chat first-token latency without changing saved model/reasoning settings | Preserve #802 timings, bounded random affinity and no replay. Coordinator content-free baseline correlation identifies turn 1 cold and turns 2–10 warm, affinity 10/10 with no fallback. Ten unique sequential event/span associations and eight exact captured model timings support classification, not elapsed-time guesses. Overall backend median 3.646 s meets <5 s; warm-nine median 3.370 s backend/3.467 s UI, only 3/9 <3 s: warm gate FAIL. Model-to-first-text median 2.790 s remains measured; no resume or post-fix improvement established. Follow-up reuses one invocation-scoped coordination HTTP client without changing steering guards; 30-sample loopback median 53.48→16.77 ms and connections 3→1 are local evidence only. Lifecycle, isolation, failure and cancellation regressions added. No saved settings, prompt, tool, dependency, resource or migration changes. Next: exact-head CI/review and coordinator real post-deploy acceptance; warm-speed, ≤2.5 s and broader #801 remain open. Release/UI temporary snapshot hold settled; partial work only. Refs #794 | P9-84 | Not started |
+| P9-99 | [#794](https://github.com/DanAakesen/jarvis/issues/794) | Trace and reduce chat first-token latency without changing saved model/reasoning settings | Preserve #802 timings, bounded random affinity and no replay. Coordinator content-free baseline correlation identifies turn 1 cold and turns 2–10 warm, affinity 10/10 with no fallback. Ten unique sequential event/span associations and eight exact captured model timings support classification, not elapsed-time guesses. Overall backend median 3.646 s meets <5 s; warm-nine median 3.370 s backend/3.468 s UI, only 3/9 <3 s: warm gate FAIL. Model-to-first-text median 2.790 s remains measured; no resume or post-fix improvement established. Follow-up reuses one invocation-scoped coordination HTTP client without changing steering guards; 30-sample loopback median 53.48→16.77 ms and connections 3→1 are local evidence only. Lifecycle, isolation, failure and cancellation regressions added. No saved settings, prompt, tool, dependency, resource or migration changes. Next: exact-head CI/review and coordinator real post-deploy acceptance; warm-speed, ≤2.5 s and broader #801 remain open. Release/UI temporary snapshot hold settled; partial work only. Refs #794 | P9-84 | Not started |
 
 ### Confirm before P0
 
@@ -3781,3 +3783,12 @@ sustained performance acceptance or permission to resume #717/#741.
 | P15-81 | [#1577](https://github.com/DanAakesen/jarvis/issues/1577) | On-device cache and element-level loading on all pages | Repository reads on Home, Health, Notes, Factory, Status, Proactive, Settings and confirmations; backend ETag/304; write invalidation; tests in JarvisCore and backend. App-target edits not compiled or run on a device. | None | Complete |
 | P15-77 | [#1569](https://github.com/DanAakesen/jarvis/issues/1569) | Build 67 feedback fixes (all pages, composer, HealthKit, calendar) | Compact numbers, Factory counts and Offline root cause, transparent headers, shared loader and segmented bar, Home send and shared plus menu, calendar route and source, HealthKit read types and combined workouts. Not compiled or run on a device. | None | Complete |
 | P15-76 | [#1567](https://github.com/DanAakesen/jarvis/issues/1567) | Build 66 feedback fixes (all pages, notifications, notes backend) | Success notifications stopped and cleaned up, tolerant notes parsing, pull to refresh, plus beside tabs, shared period selector, lift name memory, folder lookup, half-height sheets, task detail, Home greeting with several sentences. Calendar data source, Tasks segmented filters and Health board sections remain. | None | Complete |
+
+
+## P15-92 native heading correction
+
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.

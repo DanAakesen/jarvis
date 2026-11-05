@@ -78,6 +78,16 @@ final class JarvisDesignSystemGuardTests: XCTestCase {
         XCTAssertEqual(try offenders(#":\s*(?:[A-Za-z]+,\s*)*ButtonStyle\b"#, allowing: Self.sharedLayer), [])
     }
 
+    /// These two files also compile in the Voice Activity extension, which has no app page components.
+    func testExtensionSharedControlsDoNotDependOnAppPageComponents() throws {
+        let appOnly = #"\b(?:JarvisPageHeaderMetrics|JarvisPageLoadingView|JarvisRowGroup|JarvisSectionHeadline)\b"#
+        let expression = try NSRegularExpression(pattern: appOnly)
+        for (name, source) in try swiftSources() where ["JarvisControls.swift", "JarvisLoadingView.swift"].contains(name) {
+            let body = code(source)
+            XCTAssertNil(expression.firstMatch(in: body, range: NSRange(body.startIndex..., in: body)), name)
+        }
+    }
+
     func testNoScreenDrawsItsOwnOrb() throws {
         let orbType = #"(?:struct|class|enum)\s+\w*Orb\w*\s*(?:<[^>]*>)?\s*:"#
         XCTAssertEqual(try offenders(orbType, allowing: Self.sharedLayer.union(Self.orbDrawing)), [])

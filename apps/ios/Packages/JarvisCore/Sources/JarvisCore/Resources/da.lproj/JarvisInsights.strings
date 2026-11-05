@@ -244,3 +244,6 @@
 "insights.editorIssuePreferences" = "Højst 12 præferencer";
 "insights.editorEditSources" = "Rediger kilder";
 "insights.editorEditBudget" = "Rediger budget";
+
+"insights.overview" = "Overblik";
+"insights.proactiveLastRun" = "Seneste tjek";

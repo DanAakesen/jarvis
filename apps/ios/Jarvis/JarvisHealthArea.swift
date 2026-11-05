@@ -320,8 +320,7 @@ struct JarvisHealthArea: View {
                                 }
                             }
                         } else {
-                            JarvisLoadingView(title: copy.text(.loading))
-                                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.healthChartHeight)
+                            JarvisPageLoadingView(title: copy.text(.loading), identifier: "health.loading")
                         }
                     }
                 }
@@ -335,16 +334,18 @@ struct JarvisHealthArea: View {
                 await loadLifts()
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
-                    segmentSwitcher
+                if dashboard != nil || trackWorkout {
+                    VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
+                        segmentSwitcher
+                            .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
+                        HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
+                            searchBar
+                            plusMenu
+                        }
                         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
-                    HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-                        searchBar
-                        plusMenu
                     }
-                    .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
+                    .padding(.vertical, JarvisDesignTokens.healthSectionSpacing)
                 }
-                .padding(.vertical, JarvisDesignTokens.healthSectionSpacing)
             }
         }
         .jarvisPageHeader { header }

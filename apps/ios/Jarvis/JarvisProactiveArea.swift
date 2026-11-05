@@ -230,7 +230,7 @@ struct JarvisProactiveArea: View {
     @ViewBuilder private var content: some View {
         switch status {
         case .loading:
-            JarvisInsightsStateView(kind: .loading, language: language, identifier: "proactive.loading")
+            JarvisPageLoadingView(title: text(.loading), identifier: "proactive.loading")
         case .failed(let failure):
             JarvisInsightsStateView(
                 kind: .failure(failure),
@@ -303,73 +303,82 @@ struct JarvisProactiveArea: View {
     }
 
     private func nextCheckCard(_ loaded: JarvisProactiveStatus) -> some View {
-        JarvisInsightsCard {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(sentence(loaded))
-                    .font(.subheadline.weight(.medium))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("proactive.sentence")
-                Text(lastCheckLine(loaded))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("proactive.lastCheck")
-                HStack(spacing: 8) {
-                    JarvisLabelledButton(
-                        title: checkingNow ? text(.proactiveChecking) : text(.proactiveCheckNow),
-                        systemImage: "sparkle.magnifyingglass",
-                        identifier: "proactive.checkNow",
-                        isBusy: checkingNow,
-                        isDisabled: !JarvisProactiveLogic.canCheckNow(loaded)
-                    ) {
-                        Task { await checkNow() }
-                    }
-                    if loaded.paused {
-                        JarvisInsightsBadge(title: text(.proactivePausedBanner), systemImage: "pause.circle")
-                            .accessibilityIdentifier("proactive.paused")
-                    } else if loaded.quietNow {
-                        JarvisInsightsBadge(title: text(.proactiveQuietBanner), systemImage: "moon.zzz")
-                            .accessibilityIdentifier("proactive.quiet")
-                    }
-                    Spacer(minLength: 0)
-                }
-                if let checkMessage {
-                    Text(checkMessage == .started ? text(.proactiveCheckStarted) : text(.proactiveCheckFailed))
+        JarvisPageHeroCard(title: "") {
+            JarvisPageStatGrid(
+                stats: [
+                    JarvisPageStat(id: "open", value: openItems.count, label: text(.proactiveTabOpen), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent),
+                    JarvisPageStat(id: "lastRun", value: 0, label: text(.proactiveLastRun), systemImage: "clock",
+                                   formattedValue: loaded.lastRun.flatMap { JarvisInsightsDates.parse($0.occurredAt) }.map(dateTime) ?? "—"),
+                    JarvisPageStat(id: "sources", value: loaded.sources.filter { $0.state != "disabled" }.count, label: text(.proactiveSources), systemImage: "checklist"),
+                ],
+                language: language
+            )
+            Divider()
+            HStack(spacing: JarvisPageHeaderMetrics.spacing) {
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                    Text(sentence(loaded))
+                        .font(.subheadline.weight(.medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("proactive.sentence")
+                    Text(lastCheckLine(loaded))
                         .font(.caption)
-                        .foregroundStyle(checkMessage == .started ? Color.secondary : Color.red)
-                        .accessibilityIdentifier("proactive.checkMessage")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("proactive.lastCheck")
+                }
+                Spacer(minLength: 0)
+                JarvisIconButton(
+                    title: checkingNow ? text(.proactiveChecking) : text(.proactiveCheckNow),
+                    systemImage: "arrow.clockwise",
+                    identifier: "proactive.checkNow",
+                    isBusy: checkingNow,
+                    isDisabled: !JarvisProactiveLogic.canCheckNow(loaded)
+                ) {
+                    Task { await checkNow() }
                 }
             }
+            if loaded.paused {
+                JarvisInsightsBadge(title: text(.proactivePausedBanner), systemImage: "pause.circle")
+                    .accessibilityIdentifier("proactive.paused")
+            } else if loaded.quietNow {
+                JarvisInsightsBadge(title: text(.proactiveQuietBanner), systemImage: "moon.zzz")
+                    .accessibilityIdentifier("proactive.quiet")
+            }
+            if let checkMessage {
+                Text(checkMessage == .started ? text(.proactiveCheckStarted) : text(.proactiveCheckFailed))
+                    .font(.caption)
+                    .foregroundStyle(checkMessage == .started ? Color.secondary : Color.red)
+                    .accessibilityIdentifier("proactive.checkMessage")
+            }
         }
+        .accessibilityIdentifier("proactive.hero")
     }
 
     // MARK: Items
 
     private var itemsCard: some View {
-        JarvisInsightsCard {
-            VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-                JarvisSegmentedBar(
-                    title: text(.proactiveTabs),
-                    identifierPrefix: "proactive.tabs",
-                    items: [
-                        JarvisTabItem(tag: Tab.open, title: text(.proactiveTabOpen)),
-                        JarvisTabItem(tag: Tab.earlier, title: text(.proactiveTabEarlier)),
-                    ],
-                    selection: $tab
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
+            JarvisSegmentedBar(
+                title: text(.proactiveTabs),
+                identifierPrefix: "proactive.tabs",
+                items: [
+                    JarvisTabItem(tag: Tab.open, title: text(.proactiveTabOpen)),
+                    JarvisTabItem(tag: Tab.earlier, title: text(.proactiveTabEarlier)),
+                ],
+                selection: $tab
+            )
+            if actionFailed {
+                JarvisInsightsBadge(
+                    title: text(.proactiveActionFailed),
+                    systemImage: "exclamationmark.triangle",
+                    tint: .red
                 )
-                if actionFailed {
-                    JarvisInsightsBadge(
-                        title: text(.proactiveActionFailed),
-                        systemImage: "exclamationmark.triangle",
-                        tint: .red
-                    )
-                    .accessibilityIdentifier("proactive.actionFailed")
-                }
-                if tab == .open {
-                    openList
-                } else {
-                    earlierList
-                }
+                .accessibilityIdentifier("proactive.actionFailed")
+            }
+            if tab == .open {
+                openList
+            } else {
+                earlierList
             }
         }
     }
@@ -387,7 +396,7 @@ struct JarvisProactiveArea: View {
                 identifier: "proactive.empty"
             )
         } else {
-            VStack(spacing: 0) {
+            JarvisRowGroup {
                 ForEach(openItems) { item in itemRow(item, actionable: true) }
             }
             .accessibilityIdentifier("proactive.items")
@@ -412,7 +421,7 @@ struct JarvisProactiveArea: View {
                     identifier: "proactive.earlier.empty"
                 )
             } else {
-                VStack(spacing: 0) {
+                JarvisRowGroup {
                     ForEach(items) { item in itemRow(item, actionable: false) }
                 }
                 .accessibilityIdentifier("proactive.earlier")
@@ -455,9 +464,9 @@ struct JarvisProactiveArea: View {
                         .foregroundStyle(symbol.tint)
                         .frame(width: 24, height: 24)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                         Text(item.title)
-                            .font(.subheadline.weight(.medium))
+                            .font(.body)
                             .foregroundStyle(.primary)
                             .multilineTextAlignment(.leading)
                             .lineLimit(isExpanded ? nil : 2)
@@ -475,7 +484,6 @@ struct JarvisProactiveArea: View {
                         .frame(height: 24)
                         .accessibilityHidden(true)
                 }
-                .padding(.vertical, 6)
                 .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
                 .contentShape(Rectangle())
             }
@@ -491,6 +499,7 @@ struct JarvisProactiveArea: View {
                     .padding(.bottom, 10)
             }
         }
+        .jarvisListRow()
     }
 
     private func expanded(_ item: JarvisProactiveItem, actionable: Bool) -> some View {

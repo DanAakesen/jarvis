@@ -602,17 +602,17 @@ struct JarvisHealthPanel<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(.primary)
-            content
+            JarvisSectionHeadline(title)
+            VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(JarvisDesignTokens.healthSectionSpacing)
+            .background(
+                .regularMaterial,
+                in: RoundedRectangle(cornerRadius: JarvisDesignTokens.healthPanelRadius, style: .continuous)
+            )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(JarvisDesignTokens.healthSectionSpacing)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: JarvisDesignTokens.healthPanelRadius, style: .continuous)
-        )
     }
 }
 

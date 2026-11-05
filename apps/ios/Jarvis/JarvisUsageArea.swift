@@ -6,6 +6,7 @@ import SwiftUI
 /// retry, refresh or a new period.
 /// HIG: Charting data, Segmented controls, Layout, Accessibility. API: Charts (BarMark, chartXSelection), Picker.
 struct JarvisUsageArea: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let client: JarvisUsageClient?
     let language: JarvisAppLanguage
     let onRetryConfiguration: () -> Void
@@ -40,12 +41,6 @@ struct JarvisUsageArea: View {
                 if case .loaded(let summary) = load {
                     JarvisPageHeadline(phrase: JarvisUsagePagePhrase.make(summary, language: language))
                 }
-                JarvisSegmentedBar(
-                    title: text(.usageRangeLabel),
-                    identifierPrefix: "usage.range",
-                    items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
-                    selection: $period
-                )
                 if refreshFailedWithCache {
                     Text(text(.refreshFailedShowingSaved))
                         .font(.footnote)
@@ -76,7 +71,7 @@ struct JarvisUsageArea: View {
     @ViewBuilder private var content: some View {
         switch load {
         case .loading:
-            JarvisInsightsStateView(kind: .loading, language: language, identifier: "usage.loading")
+            JarvisPageLoadingView(title: text(.loading), identifier: "usage.loading")
         case .failed(let failure):
             JarvisInsightsStateView(kind: .failure(failure), language: language, identifier: "usage.error") {
                 if client == nil { onRetryConfiguration() }
@@ -128,6 +123,7 @@ struct JarvisUsageArea: View {
 
     @ViewBuilder private func loaded(_ summary: JarvisUsageSummary) -> some View {
         VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
+            overview(summary)
             if summary.isEmpty {
                 JarvisInsightsCard {
                     JarvisInsightsStateView(
@@ -138,7 +134,6 @@ struct JarvisUsageArea: View {
                     )
                 }
             } else {
-                overview(summary)
                 breakdown(summary)
                 topTasks(summary)
             }
@@ -153,48 +148,58 @@ struct JarvisUsageArea: View {
     private func overview(_ summary: JarvisUsageSummary) -> some View {
         let bucket = selectedBucket(summary)
         let totals = summary.totals(in: bucket)
-        return JarvisInsightsCard {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(summary.usesCost ? text(.usageTotalCost) : text(.usageNoCosts))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        if let bucket {
-                            Text(label(for: bucket))
-                                .font(.caption)
-                                .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-                                .accessibilityIdentifier("usage.selection")
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    if bucket != nil {
-                        JarvisIconButton(
-                            title: text(.closeSheet),
-                            systemImage: "xmark",
-                            identifier: "usage.clearSelection"
-                        ) {
-                            selectedBucketID = nil
-                            chartSelection = nil
-                        }
+        return JarvisPageHeroCard(title: text(.overview)) {
+            JarvisPeriodSelector(
+                title: text(.usageRangeLabel),
+                identifierPrefix: "usage.range",
+                items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                selection: $period
+            )
+        } content: {
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                if dynamicTypeSize.isAccessibilitySize {
+                    overviewAmount(summary, bucket: bucket)
+                    chart(summary)
+                } else {
+                    HStack(alignment: .center, spacing: JarvisPageHeaderMetrics.spacing) {
+                        overviewAmount(summary, bucket: bucket)
+                            .frame(minWidth: JarvisPageHeaderMetrics.heroValueMinimumWidth, alignment: .leading)
+                        chart(summary).frame(maxWidth: .infinity)
                     }
                 }
-                Text(valueText(summary.value(in: bucket), summary: summary))
-                    .font(.largeTitle.weight(.semibold))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.5)
-                    .accessibilityIdentifier("usage.total")
-                indicators(summary)
-                chart(summary)
+                Divider()
                 totalsGrid(totals)
             }
+        }
+        .accessibilityIdentifier("usage.hero")
+    }
+
+    private func overviewAmount(_ summary: JarvisUsageSummary, bucket: JarvisUsageBucket?) -> some View {
+        let value = summary.value(in: bucket)
+        let amount = summary.usesCost
+            ? value.formatted(.number.precision(.fractionLength(0...2)).locale(language.locale)) : number(value)
+        return VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.actionSpacing) {
+            (Text(amount + " ") + Text(text(summary.usesCost ? .currencyUnit : .usageRecords)).font(.caption.weight(.semibold)))
+                .font(.largeTitle.weight(.bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .accessibilityLabel(valueText(value, summary: summary))
+                .accessibilityIdentifier("usage.total")
+            if let bucket {
+                Text(label(for: bucket)).font(.caption).accessibilityIdentifier("usage.selection")
+                JarvisIconButton(title: text(.closeSheet), systemImage: "xmark", identifier: "usage.clearSelection") {
+                    selectedBucketID = nil
+                    chartSelection = nil
+                }
+            }
+            indicators(summary)
         }
     }
 
     private func indicators(_ summary: JarvisUsageSummary) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             if summary.hasEstimates {
-                JarvisInsightsBadge(title: text(.usageIncludesEstimates), systemImage: "plusminus")
+                Text(text(.usageIncludesEstimates)).font(.caption).foregroundStyle(.secondary)
                     .accessibilityIdentifier("usage.estimates")
             }
             if summary.truncated {
@@ -248,7 +253,7 @@ struct JarvisUsageArea: View {
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .chartXSelection(value: $chartSelection)
-            .frame(height: 120)
+            .frame(height: JarvisPageHeaderMetrics.compactChartHeight)
             .accessibilityLabel(title)
             .accessibilityHint(text(.usageBarHint))
             .accessibilityIdentifier("usage.chart")
@@ -321,14 +326,15 @@ struct JarvisUsageArea: View {
 
     private func breakdown(_ summary: JarvisUsageSummary) -> some View {
         let slices = summary.slices(by: groupBy)
-        return JarvisInsightsCard(title: text(.usageBreakdown)) {
-            JarvisTabStrip(
+        return JarvisPageHeroCard(title: text(.usageBreakdown)) {
+            JarvisPeriodSelector(
                 title: text(.usageBreakdown),
                 identifierPrefix: "usage.groupBy",
                 items: JarvisUsageGroupBy.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
                 selection: $groupBy
             )
             .onChange(of: groupBy) { _, _ in selectedSliceID = nil }
+        } content: {
             splitBar(slices, summary: summary)
             VStack(spacing: 0) {
                 ForEach(Array(slices.prefix(8).enumerated()), id: \.element.id) { index, slice in
@@ -432,8 +438,9 @@ struct JarvisUsageArea: View {
     private func topTasks(_ summary: JarvisUsageSummary) -> some View {
         let ranks = summary.topTasks()
         let maximum = ranks.map(\.value).max() ?? 0
-        return JarvisInsightsCard(title: text(.usageTopTasks)) {
-            VStack(spacing: 10) {
+        return VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+            JarvisSectionHeadline(text(.usageTopTasks))
+            JarvisRowGroup {
                 ForEach(ranks) { rank in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
@@ -456,6 +463,7 @@ struct JarvisUsageArea: View {
                         .frame(height: 4)
                         .accessibilityHidden(true)
                     }
+                    .jarvisListRow()
                     .accessibilityElement(children: .combine)
                 }
             }

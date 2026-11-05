@@ -465,6 +465,7 @@ struct ContentView: View {
         }
 #if targetEnvironment(simulator)
         if arguments.contains("--screenshot-voice-fixture") { state.navigate(to: .voice) }
+        if navigationFixture, arguments.contains("--ui-test-workspaces") { state.navigate(to: .workspaces) }
 #endif
         return state
     }

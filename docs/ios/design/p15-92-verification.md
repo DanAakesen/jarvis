@@ -1,0 +1,107 @@
+# P15-92 shared page verification
+
+Reference: `board.html` at main commit `2522aca2` (PR #1603). The board's values
+are approved illustrative data. App screenshots use deterministic native test
+fixtures; differing values must not be scored as layout defects.
+
+| Page | Shared change | Native screenshot status |
+| --- | --- | --- |
+| Usage | Hero contains period control; no initial filters; shared section headlines and task rows | Pending Mac run |
+| Status | Summary hero before All/Issues; separated rows | Pending Mac run |
+| Proactive | Summary/next-check hero before Open/Earlier; separated rows and section headlines | Pending Mac run |
+| Notes | Shared initial skeleton without tabs or filters | Pending Mac run; folder redesign belongs to #1599 |
+| Health | Shared initial skeleton and section headlines | Pending Mac run; carousel/data work belongs to #1601 |
+| Factory | Segments above bottom search, below scrolling hero/content; shared skeleton | Pending Mac run; tab/content changes belong to #1600 |
+| Notifications | Transparent pinned header; existing phrase/hero; shared initial skeleton | Pending Mac run |
+| Workspaces | Phrase and current-view hero before kind filters; shared headings/skeleton | Pending Mac run; separate older `workspaces.html` reference |
+| Sheets | Shared confirm left, cancel right | Pending bilingual geometry test |
+
+`ComponentGalleryUITests` is already selected by the existing Mac workflow. The
+new cases attach Usage/Status/Proactive in da/en and light/dark, Workspaces in
+English dark/Danish light, loading states, shared row/heading examples, and sheet
+actions. They assert rendered positions
+and controls, not that every button is circular. UI fixtures use process-local
+memory caching so a previous test cannot replace a loading scenario with saved data.
+
+Local checks: all 468 JarvisCore tests pass on Swift 6.2, including the new
+localized count contract. All changed Swift sources pass parser checks.
+
+Local Core tests and Swift parser checks do not establish SwiftUI compilation
+or visual acceptance. No screenshot is labelled verified before it is inspected.
+
+Apple guidance used:
+- [Layout](https://developer.apple.com/design/human-interface-guidelines/layout): consistent spacing and grouping; adapt across display sizes.
+- [Loading](https://developer.apple.com/design/human-interface-guidelines/loading): show placeholders promptly and keep other actions available.
+- [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility): Dynamic Type and accessible control labels.
+
+First Mac attempt (run 42075005655, commit 84219890) caught an extension target
+boundary: the page skeleton was placed in the loading file also compiled by the
+Voice Activity target. The skeleton now lives with the app page components, and
+a Core source guard prevents shared controls/loading from depending on those
+app-only types.
+
+Second Mac attempt (run 42075818100, commit 7bfef3db): native compilation, CI
+and CodeQL passed. The iPhone 17 Pro UI suite completed 42 tests in 967.6 seconds:
+41 passed, including shared loading, row spacing/actions, bilingual sheet order,
+sidebar navigation and Home tests. The new page-order test failed on its first
+Usage capture because its `staticTexts` lookup did not find `page.headline`.
+The follow-up uses the identifier across accessibility element types, retains the
+position assertions, and captures evidence before those assertions. This fix is
+not verified on a native run yet.
+
+The job exceeded its 45-minute limit later, during the existing screenshot
+sequence. Logs show that it had already written Health and Factory captures.
+The screenshot upload step did not run after cancellation. The 143 MB xcresult
+archive survived as artifact 13442092604; the cloud environment currently blocks
+the OpenAI file-download host returned by the GitHub connector, so its frames
+have not been inspected. No board/native comparison is accepted yet.
+
+Dan approved an exception to #1598's workflow-file restriction on 5 November:
+the existing screenshot-upload step now uses `if: always()` so already captured
+images can be retained after failure or timeout, as the xcresult upload was.
+All 74 workflow-contract tests pass locally with the upload correction. Existing
+Notes sidebar navigation tests also attach the loaded page in English dark and
+Danish light without adding app launches. Their Swift syntax check passes; their
+native captures remain pending.
+
+Third Mac attempt (42085339854, edc8ec36) passed native compilation, CI and CodeQL.
+The UI suite completed 46 tests in 1140 seconds: 45 passed. All four bilingual,
+light/dark Usage/Status/Proactive page-order cases passed, as did loading, shared
+rows/actions and sheet order. The Workspaces case failed before opening its page:
+it looked for a sidebar item that does not exist. The follow-up starts Workspaces
+through a Simulator-only fixture entry point and preserves its geometry/search
+assertions. Its native result remains pending.
+
+The job again timed out during the subsequent screenshot sequence, after exporting
+the page-order attachments and many standalone captures. The old upload condition
+skipped the image archive. Test-result artifact 13446400555 (162 MB) was retained.
+The new upload condition and Notes captures apply to the next run. No native
+image has yet been inspected in this environment because the file-download host
+is blocked.
+
+Prepared follow-up layout corrections place Usage's amount beside its chart,
+remove Proactive's extra hero title, use three equal-width Proactive statistics,
+and keep the Workspaces hero out of a second List-row glass surface. These are
+source-reviewed against the rendered board; native comparison is still pending.
+
+
+## Native image review, 5 November 2026
+
+The archive from run 42093062405 is now downloaded in the continuation workspace.
+Workspaces English/dark (`4DFBB771-442E-46A2-9BBA-33BC44416775.png`) and Danish/light
+(`A99F5709-FEE7-4984-B5F3-18AB45992B17.png`) expose overly faint section headings.
+The component-gallery heading is less subdued, showing the List context matters.
+The shared heading now uses explicit `Color.secondary` instead of hierarchical
+`.secondary`, so the List header's inherited style does not dim it again.
+No per-screen color override was introduced. New native verification is pending.
+
+The older `workspaces.html` reference and native English/dark capture were shown
+side by side at 402 × 874 logical points. The new phrase/overview hero is required
+by #1598 and is not present in that older reference. This is not a pixel-match or
+owner-acceptance claim. The main board has no Workspaces route.
+
+Apple's [foregroundStyle documentation](https://developer.apple.com/documentation/swiftui/view/foregroundstyle(_:))
+and [secondary hierarchical style](https://developer.apple.com/documentation/swiftui/shapestyle/secondary-swift.type.property)
+explain that hierarchical styles modify the enclosing style. Official search
+excerpts were reviewed before making this correction. Existing bilingual native
+Workspaces captures exercise this context; no source-mirroring test was added.

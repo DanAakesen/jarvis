@@ -5,7 +5,15 @@ import JarvisCore
 /// Keychain. The cache belongs to the one signed-in owner and is cleared on sign-out and on every new sign-in.
 /// API: FileManager cachesDirectory, ScenePhase (foreground invalidation) in the callers.
 enum JarvisAppCache {
-    static let shared = JarvisCache(storage: JarvisFileCacheStorage(root: JarvisFileCacheStorage.defaultRoot()))
+    static let shared: JarvisCache = {
+        #if DEBUG
+        // Deterministic UI fixtures must not inherit cached responses from another test's process.
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-navigation") {
+            return JarvisCache(storage: JarvisInMemoryCacheStorage())
+        }
+        #endif
+        return JarvisCache(storage: JarvisFileCacheStorage(root: JarvisFileCacheStorage.defaultRoot()))
+    }()
     private static let owner = "owner"
 
     /// Binds the cache to the signed-in owner before the first read or write.

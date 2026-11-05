@@ -1,6 +1,8 @@
 import Foundation
 
 public enum JarvisInsightsLocalizationKey: String, CaseIterable, Sendable {
+    case overview = "insights.overview"
+    case proactiveLastRun = "insights.proactiveLastRun"
     case retry = "insights.retry"
     case refresh = "insights.refresh"
     case loading = "insights.loading"

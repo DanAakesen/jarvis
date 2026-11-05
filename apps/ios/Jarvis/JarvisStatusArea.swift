@@ -30,12 +30,6 @@ struct JarvisStatusArea: View {
                     if let snapshot = state.snapshot {
                         JarvisPageHeadline(phrase: JarvisStatusPagePhrase.make(snapshot, language: language))
                     }
-                    JarvisSegmentedBar(
-                        title: text(.statusFilterLabel),
-                        identifierPrefix: "status.filter",
-                        items: JarvisStatusFilter.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
-                        selection: $filter
-                    )
                     content
                 }
                     .padding(.horizontal)
@@ -101,7 +95,7 @@ struct JarvisStatusArea: View {
                 reloadToken += 1
             }
         } else {
-            JarvisInsightsStateView(kind: .loading, language: language, identifier: "status.loading")
+            JarvisPageLoadingView(title: text(.loading), identifier: "status.loading")
         }
     }
 
@@ -110,7 +104,29 @@ struct JarvisStatusArea: View {
         let mirror = snapshot.vaultMirror
         let showMirror = mirror.map { filter == .all || $0.displayState(now: now).tone != .ok } ?? false
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-            checkedLine(snapshot)
+            JarvisPageHeroCard(title: text(.overview)) {
+                checkedLine(snapshot)
+            } content: {
+                JarvisPageStatGrid(
+                    stats: JarvisStatusValue.allCases.map { tone in
+                        JarvisPageStat(
+                            id: tone.rawValue,
+                            value: snapshot.entries.filter { $0.status == tone }.count,
+                            label: text(tone.localizationKey),
+                            systemImage: tone == .ok ? "checkmark.circle" : tone == .unknown ? "questionmark.circle" : "exclamationmark.circle",
+                            tint: tone == .down ? .red : JarvisDesignTokens.primaryAccent
+                        )
+                    },
+                    language: language
+                )
+            }
+            .accessibilityIdentifier("status.hero")
+            JarvisSegmentedBar(
+                title: text(.statusFilterLabel),
+                identifierPrefix: "status.filter",
+                items: JarvisStatusFilter.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                selection: $filter
+            )
             if state.isPartial, let failure = state.failure {
                 JarvisInsightsBadge(
                     title: text(.statusPartial) + " · " + text(failure.localizationKey),
@@ -129,11 +145,9 @@ struct JarvisStatusArea: View {
                     )
                 }
             } else {
-                JarvisInsightsCard {
-                    VStack(spacing: 0) {
-                        if let mirror, showMirror { mirrorRow(mirror) }
-                        ForEach(entries) { entry in checkRow(entry) }
-                    }
+                JarvisRowGroup {
+                    if let mirror, showMirror { mirrorRow(mirror) }
+                    ForEach(entries) { entry in checkRow(entry) }
                 }
             }
             smokeCard(snapshot.smoke)
@@ -355,15 +369,15 @@ private struct JarvisStatusRow<Detail: View>: View {
                         .frame(width: 24)
                         .accessibilityHidden(true)
                     Text(title)
-                        .font(.subheadline.weight(.medium))
+                        .font(.body)
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.leading)
                         .lineLimit(2)
                         .layoutPriority(1)
                     Spacer(minLength: 8)
                     Text(toneTitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(tint)
                         .multilineTextAlignment(.trailing)
                         .lineLimit(2)
                     Image(systemName: "chevron.down")
@@ -389,5 +403,6 @@ private struct JarvisStatusRow<Detail: View>: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .jarvisListRow()
     }
 }
