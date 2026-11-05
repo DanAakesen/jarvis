@@ -440,9 +440,7 @@ struct JarvisHealthBarChart: View {
                     )
                     .cornerRadius(JarvisDesignTokens.healthBarRadius)
                     .foregroundStyle(
-                        JarvisDesignTokens.healthAccent.opacity(
-                            selected == nil || selected == day.date ? 1 : 0.35
-                        )
+                        selected == day.date ? JarvisDesignTokens.healthAccent : Color.secondary
                     )
                 }
             }
@@ -452,7 +450,7 @@ struct JarvisHealthBarChart: View {
                         lineWidth: JarvisDesignTokens.healthTargetLineWidth,
                         dash: JarvisDesignTokens.healthTargetLineDash
                     ))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(JarvisDesignTokens.healthAccent)
             }
         }
         .chartYScale(domain: 0...yMax)
