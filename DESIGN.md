@@ -3320,3 +3320,8 @@ reuse Notes' shared brief glass confirmation. Lift/workout sheets keep their sav
 text, with one success haptic and a short opacity/scale transition. All new motion
 honors Reduce Motion; confirmation never blocks another action or sheet dismissal.
 Home's checkbox no longer displays a checkmark before a successful write.
+
+Health screenshot review of run 42124896873 found overlapping 30-day chart labels.
+Long periods now show five evenly spaced date labels; all daily bars and selection
+remain available. Seven-day charts retain weekday labels. This correction joins the
+VoiceOver/Reduce Motion refinement for the next combined native pass.

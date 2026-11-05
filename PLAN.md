@@ -3870,3 +3870,8 @@ Owner-approved additions: shorter Home greeting and success haptics/transitions 
 lift/workout saves, task completion and note creation. Core greeting assertions and
 the existing native suite cover the new behavior; combined native results are pending.
 The earlier 48-test pass precedes this addition.
+
+Health 297d94ba passed 48/48 native UI tests in run 42124896873. Training EN/dark,
+Sleep DA/light and Nutrition EN/dark were inspected; the 30-day Nutrition capture
+exposed crowded labels, now corrected with sparse date ticks. Updated screenshot
+acceptance remains pending.

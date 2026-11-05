@@ -440,6 +440,12 @@ struct JarvisHealthBarChart: View {
         return copy.text(.average)
     }
 
+    private var axisDates: [String] {
+        let dates = values.days.map(\.date)
+        guard dates.count > 7 else { return dates }
+        return (0...4).map { dates[Int((Double(dates.count - 1) * Double($0) / 4).rounded())] }
+    }
+
     private var chart: some View {
         Chart {
             ForEach(values.days) { day in
@@ -467,7 +473,7 @@ struct JarvisHealthBarChart: View {
         .chartXScale(domain: values.days.map(\.date))
         .chartYAxis(.hidden)
         .chartXAxis {
-            AxisMarks(values: values.days.map(\.date)) { value in
+            AxisMarks(values: axisDates) { value in
                 AxisValueLabel {
                     if let date = value.as(String.self) {
                         Text(weekday(date))
@@ -507,7 +513,7 @@ struct JarvisHealthBarChart: View {
         output.locale = language.locale
         output.calendar = Calendar(identifier: .gregorian)
         output.timeZone = TimeZone(secondsFromGMT: 0)
-        output.dateFormat = "EEE"
+        output.dateFormat = values.days.count > 7 ? "d MMM" : "EEE"
         return output.string(from: parsed)
     }
 
