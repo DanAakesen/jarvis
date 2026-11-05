@@ -78,14 +78,14 @@ private struct JarvisNoteFolderPickerContent: View {
                 }
             }
             ForEach(JarvisNotesPresentation.childFolders(in: trimmedFolder, paths: directories + stagedFolders)) { child in
-                Button { folder = child.path; newFolderName = "" } label: {
+                JarvisRowButton(identifier: "notes.create.folder.\(child.path)",
+                                action: { folder = child.path; newFolderName = "" }) {
                     HStack {
                         Label(child.name, systemImage: "folder")
                         Spacer()
                         Image(systemName: "chevron.right").font(.caption)
                     }.foregroundStyle(.primary)
                 }
-                .accessibilityIdentifier("notes.create.folder.\(child.path)")
             }
             HStack {
                 TextField(copy.folderName, text: $newFolderName)

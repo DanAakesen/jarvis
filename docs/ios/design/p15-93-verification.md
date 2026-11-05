@@ -55,3 +55,6 @@ identity and action. The native assertion is retained. Fresh native validation i
 pending; no test-success or visual-acceptance claim is made for these corrections.
 Apple's `View.sheet(item:onDismiss:content:)` and `State.init(wrappedValue:)`
 documentation was read for sheet source-of-truth and per-instance state lifetime.
+
+
+5 November continuation: tab identity is part of the search task key, so a Graph query refreshes task results when switching to Tasks. The existing graph/priority native test now exercises that transition. Recent tiles and folder navigation use shared JarvisTileButton/JarvisRowButton controls; page files no longer own their button surface. Native verification of this follow-up is pending.
