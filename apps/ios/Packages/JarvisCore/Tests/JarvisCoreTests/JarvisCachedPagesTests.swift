@@ -124,18 +124,18 @@ final class JarvisCachedPagesTests: XCTestCase {
 
     func testHealthRepositoriesReadConditionally() async throws {
         try await assertConditional(
-            path: "/api/daily/capabilities",
-            body: #"{"module":"daily","version":6,"sources":["steps"]}"#
+            path: "/api/health/capabilities",
+            body: #"{"module":"health","version":6,"sources":["steps"]}"#
         ) { try await JarvisHealthClient(client: $0).fetchCapabilities(validator: $1) }
         try await assertConditional(
-            path: "/api/daily/training-targets",
+            path: "/api/health/training-targets",
             body: #"{"targets":{"gymSessionsPerWeek":3}}"#
         ) { try await JarvisHealthClient(client: $0).fetchTrainingTargets(validator: $1) }
         try await assertConditional(
-            path: "/api/daily/nutrition-targets",
+            path: "/api/health/nutrition-targets",
             body: #"{"targets":{"proteinGrams":150}}"#
         ) { try await JarvisHealthClient(client: $0).fetchNutritionTargets(validator: $1) }
-        try await assertRejectsInvalidBody(path: "/api/daily/capabilities") {
+        try await assertRejectsInvalidBody(path: "/api/health/capabilities") {
             try await JarvisHealthClient(client: $0).fetchCapabilities(validator: $1)
         }
     }

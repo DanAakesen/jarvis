@@ -10894,3 +10894,10 @@ CI run 41406349242 (accessibility tree of `testCameraSheetOpensFromThePlusMenu`)
 - Sleep goal (default 8 h), kcal (2200), carbs (250 g) and fat (70 g) goals are stored on the device (`JarvisHealthGoals`, Settings > Health goals) because the Daily target API only serves training and resting/deficit/protein targets. Protein keeps using the server target.
 - The hero reads sleep and nutrition days for the last seven days whatever the selected period. The separate Nutrition panel was removed; its protein chart is the Nutrition hero chart. HealthKit already requests every readable type (`JarvisHealthKitAccess`); shown data comes from the Daily reads and shows an empty state when there is none.
 - Not verified: no Xcode in the sandbox, so the app-target edits were not compiled. JarvisCore `swift test` passes.
+
+## 2026-11-05 P15-90: Pages stuck on loading in build 71
+
+- Cause: the build 71 Health conditional reads still requested `/daily/*` (capabilities and both target routes) while the backend serves `/health/*`, and a repository refresh had no hard bound, so a stalled request kept pages on the loading view. Notes also reused its loaded state after a change because the reload after a save or create was not forced.
+- `JarvisRepository` now bounds every refresh (`JarvisRepositoryKind.refreshTimeout`, 20 s). A timeout ends in `failed(JarvisClientError.timedOut)`; cached data stays visible, otherwise the error state with pull to refresh shows. `JarvisCachedSection` also turns a stream that ends while still loading into the error state.
+- The iOS client uses `/health/*` only. `JarvisRepositoryTests` fails on any `path: ["daily"` in JarvisCore, and `apps/backend/src/health/ios-route-contract.test.ts` checks every client `/health/*` path against the backend routes.
+- Notes forces a reload after a save, create or task change (`refreshVersion > 0`), on top of the existing cache invalidation.

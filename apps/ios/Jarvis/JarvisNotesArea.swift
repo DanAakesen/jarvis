@@ -191,7 +191,7 @@ struct JarvisNotesArea: View {
             .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
         }
         .task(id: "\(selectedTab.rawValue)-\(refreshVersion)") {
-            await loadSelectedTab()
+            await loadSelectedTab(force: refreshVersion > 0)
         }
         .task(id: searchKey) {
             await search()
@@ -237,7 +237,10 @@ struct JarvisNotesArea: View {
                     client: client,
                     copy: copy,
                     note: current,
-                    onSaved: { refreshed in editor = refreshed },
+                    onSaved: { refreshed in
+                        editor = refreshed
+                        refreshVersion += 1
+                    },
                     onClose: { editorPresented = false }
                 )
             }

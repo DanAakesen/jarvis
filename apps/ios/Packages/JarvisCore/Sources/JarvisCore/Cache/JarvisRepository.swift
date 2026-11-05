@@ -22,6 +22,9 @@ public enum JarvisRepositoryKind: String, CaseIterable, Sendable {
         }
     }
 
+    /// The longest one refresh may take before the page shows its error state and offers a retry.
+    public static let refreshTimeout: Duration = .seconds(20)
+
     /// The storage key for one kind and an optional scope (a project, a period, a folder).
     public func key(scope: String = "") -> String {
         scope.isEmpty ? rawValue : "\(rawValue):\(scope)"
@@ -121,8 +124,17 @@ public final class JarvisRepository<Value: Codable & Sendable & Equatable>: Send
     private let key: String
     private let freshness: TimeInterval
     private let fetch: Fetch
+    private let refreshTimeout: Duration
 
-    public init(cache: JarvisCache, kind: JarvisRepositoryKind, scope: String = "", fetch: @escaping Fetch) {
+    /// `refreshTimeout` bounds one refresh whatever the transport does, so a page can never wait forever.
+    public init(
+        cache: JarvisCache,
+        kind: JarvisRepositoryKind,
+        scope: String = "",
+        refreshTimeout: Duration = JarvisRepositoryKind.refreshTimeout,
+        fetch: @escaping Fetch
+    ) {
+        self.refreshTimeout = refreshTimeout
         self.cache = cache
         self.key = kind.key(scope: scope)
         let parts = kind.freshness.components
@@ -193,7 +205,9 @@ public final class JarvisRepository<Value: Codable & Sendable & Equatable>: Send
         let refresh = JarvisSignpost.begin("refresh", key)
         defer { JarvisSignpost.end("refresh", refresh) }
         do {
-            let result = try await fetch(value == nil ? nil : entry?.validator)
+            let validator = value == nil ? nil : entry?.validator
+            let fetch = self.fetch
+            let result = try await withDeadline(refreshTimeout) { try await fetch(validator) }
             if Task.isCancelled { return }
             switch result {
             case .modified(let fresh, let validator):
@@ -213,6 +227,70 @@ public final class JarvisRepository<Value: Codable & Sendable & Equatable>: Send
             if Task.isCancelled { return }
             continuation.yield(.failed(error, cached: value))
         }
+    }
+}
+
+/// Runs `operation` and gives up with `JarvisClientError.timedOut` once `timeout` has passed, even when the operation
+/// ignores cancellation. Cancelling the caller cancels the operation and throws `CancellationError`.
+func withDeadline<Result: Sendable>(
+    _ timeout: Duration,
+    _ operation: @escaping @Sendable () async throws -> Result
+) async throws -> Result {
+    let race = DeadlineRace<Result>()
+    return try await withTaskCancellationHandler {
+        try await withCheckedThrowingContinuation { continuation in
+            race.start(continuation, timeout: timeout, operation: operation)
+        }
+    } onCancel: {
+        race.finish(.failure(CancellationError()))
+    }
+}
+
+private final class DeadlineRace<Value: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Value, any Error>?
+    private var tasks: [Task<Void, Never>] = []
+    private var finished = false
+
+    func start(
+        _ continuation: CheckedContinuation<Value, any Error>,
+        timeout: Duration,
+        operation: @escaping @Sendable () async throws -> Value
+    ) {
+        let alreadyFinished = lock.withLock { () -> Bool in
+            if !finished { self.continuation = continuation }
+            return finished
+        }
+        if alreadyFinished {
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+        let worker = Task { [self] in
+            do { finish(.success(try await operation())) } catch { finish(.failure(error)) }
+        }
+        let timer = Task { [self] in
+            try? await Task.sleep(for: timeout)
+            if !Task.isCancelled { finish(.failure(JarvisClientError.timedOut)) }
+        }
+        let cancelNow = lock.withLock { () -> Bool in
+            if !finished { tasks = [worker, timer] }
+            return finished
+        }
+        if cancelNow {
+            worker.cancel()
+            timer.cancel()
+        }
+    }
+
+    func finish(_ result: Result<Value, any Error>) {
+        let (continuation, tasks) = lock.withLock { () -> (CheckedContinuation<Value, any Error>?, [Task<Void, Never>]) in
+            guard !finished else { return (nil, []) }
+            finished = true
+            defer { self.continuation = nil; self.tasks = [] }
+            return (self.continuation, self.tasks)
+        }
+        tasks.forEach { $0.cancel() }
+        continuation?.resume(with: result)
     }
 }
 
@@ -255,6 +333,11 @@ public enum JarvisCardState<Value: Sendable>: Sendable {
     public var isLoading: Bool {
         if case .loading = self { return true }
         return false
+    }
+
+    /// Called when a repository stream ends without ever delivering a value: the section must not stay loading.
+    public mutating func finishLoading() {
+        if case .loading = self { self = .failed(JarvisClientError.networkFailure) }
     }
 
     public mutating func apply(_ update: JarvisRepositoryUpdate<Value>) {

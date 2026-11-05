@@ -164,19 +164,19 @@ public final class JarvisHealthClient: JarvisHealthSyncSender, Sendable {
     /// Conditional reads for the repository layer. Validation matches the plain reads.
     public func fetchCapabilities(validator: String?) async throws -> JarvisFetchResult<JarvisHealthCapabilities> {
         try await client.conditionalGet(
-            path: ["daily", "capabilities"], validator: validator, accept: "application/json;version=6"
+            path: ["health", "capabilities"], validator: validator, accept: "application/json;version=6"
         ) { try self.parseCapabilities($0) }
     }
 
     public func fetchTrainingTargets(validator: String?) async throws -> JarvisFetchResult<JarvisHealthTargets> {
-        try await client.conditionalGet(path: ["daily", "training-targets"], validator: validator) {
+        try await client.conditionalGet(path: ["health", "training-targets"], validator: validator) {
             guard $0.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
             return try self.decode($0.body)
         }
     }
 
     public func fetchNutritionTargets(validator: String?) async throws -> JarvisFetchResult<JarvisNutritionTargets> {
-        try await client.conditionalGet(path: ["daily", "nutrition-targets"], validator: validator) {
+        try await client.conditionalGet(path: ["health", "nutrition-targets"], validator: validator) {
             guard $0.statusCode == 200 else { throw JarvisHealthClientError.invalidResponse }
             return try self.decode($0.body)
         }
