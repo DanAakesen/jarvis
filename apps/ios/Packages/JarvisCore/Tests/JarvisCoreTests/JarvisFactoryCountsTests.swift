@@ -33,7 +33,7 @@ final class JarvisFactoryCountsTests: XCTestCase {
         XCTAssertEqual(counts.review, 7)
         XCTAssertEqual(counts.needs, 1)
         let listed = JarvisFactoryPresentation.cards(from: board, segment: .board)
-        XCTAssertEqual(listed.count, counts.total - counts.needs)
+        XCTAssertEqual(listed.count, counts.total)
         XCTAssertEqual(listed.filter { $0.column == .inProgress }.count, counts.running)
         XCTAssertEqual(listed.filter { $0.column == .inReview }.count, counts.review)
     }

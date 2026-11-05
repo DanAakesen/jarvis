@@ -3,6 +3,17 @@ import XCTest
 @testable import JarvisCore
 
 final class JarvisFactoryClientTests: XCTestCase {
+    func testOnlyBoardAndReleasesRemainAndLegacyNeedsLinksRevealTheBoardColumn() {
+        XCTAssertEqual(FactorySegment.allCases, [.board, .releases])
+        for legacy in ["needs", "needsDan", "needs_dan"] {
+            let target = FactoryNavigationTarget(legacySegment: legacy)
+            XCTAssertEqual(target.segment, .board)
+            XCTAssertEqual(target.column, .needsDan)
+        }
+        XCTAssertNil(FactoryNavigationTarget(legacySegment: "board").column)
+        XCTAssertEqual(FactoryNavigationTarget(legacySegment: "releases").segment, .releases)
+    }
+
     func testFactoryRoutesFilteringControlsIdempotentCreationPolicyAndReleases() async throws {
         let transport = try FixtureTransport(scenario: Data(factoryScenario.utf8))
         let client = JarvisFactoryClient(client: try makeClient(transport))
@@ -13,16 +24,16 @@ final class JarvisFactoryClientTests: XCTestCase {
         let board = try await client.board(projectId: "7")
         XCTAssertTrue(board.stale)
         let boardCards = JarvisFactoryPresentation.cards(from: board, segment: .board)
-        XCTAssertEqual(boardCards.map(\.card.issue.number), [9])
+        XCTAssertEqual(boardCards.map(\.card.issue.number), [10, 9])
         XCTAssertEqual(
-            JarvisFactoryPresentation.cards(from: board, segment: .needsDan).map(\.card.issue.number),
+            boardCards.filter { $0.column == .needsDan }.map(\.card.issue.number),
             [10]
         )
         XCTAssertEqual(
             JarvisFactoryPresentation.cards(from: board, segment: .board, search: "#9").first?.column,
             .inProgress
         )
-        XCTAssertTrue(JarvisFactoryPresentation.cards(from: board, segment: .board, search: "#10").isEmpty)
+        XCTAssertEqual(JarvisFactoryPresentation.cards(from: board, segment: .board, search: "#10").first?.column, .needsDan)
         XCTAssertEqual(JarvisFactoryPresentation.defaultCollapsedColumns(), Set(FactoryBoardColumnID.allCases))
 
         let filteredTasks = try await client.tasks(projectId: "7", agent: .copilot, state: .needsAttention)

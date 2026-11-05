@@ -2219,6 +2219,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P15-94 / #1600:** Home now shares one glass segmented surface and separated calendar/task rows. Factory has Board/Releases only, includes Needs Dan in Board, and reveals the column for its old entry. All 469 Core tests and changed Swift parser checks pass; native screenshot/interaction cases are added, but native visual acceptance is pending. Home follows the published Today/Tasks due grouping under the issue's board-wins rule; Delegated wording remains a clarification.
+
 - **P15-92 / #1598:** PR #1604 implements the shared native page pattern from the board merged in #1603. All 468 Core tests pass locally. Native compilation, CI and CodeQL passed on edc8ec36; 45/46 UI tests passed, including all four bilingual/light-dark page-order cases. The remaining Workspaces case used a nonexistent sidebar entry; its fixture entry is corrected. The Mac job again timed out during later captures. Dan approved preserving available images with `if: always()` on the existing upload step; all 74 workflow checks pass. Fresh native checks and board/build visual acceptance remain pending; see `docs/ios/design/p15-92-verification.md`. #1599–#1602 follow this shared change.
 
 - **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window

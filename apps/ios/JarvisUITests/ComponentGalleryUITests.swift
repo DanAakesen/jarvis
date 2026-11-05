@@ -97,6 +97,43 @@ final class ComponentGalleryUITests: XCTestCase {
         attach(app.screenshot(), named: "Tab strip")
     }
 
+    func testFactoryBoardKeepsNeedsDanWithOnlyTwoTabs() {
+        captureFactory(state: "board", language: "en", theme: "dark")
+    }
+
+    func testLegacyNeedsDanEntryOpensAndRevealsTheBoardColumn() {
+        captureFactory(state: "needs", language: "da", theme: "light")
+    }
+
+    private func captureFactory(state: String, language: String, theme: String) {
+        app.launchArguments = [
+            "--screenshot-factory-fixture", "--screenshot-factory-state=\(state)",
+            "--screenshot-factory-language=\(language)",
+            "-jarvis.appLanguage", language, "-jarvis.appTheme", theme,
+            "-AppleLanguages", "(\(language))", "-AppleLocale", language == "da" ? "da_DK" : "en_US",
+        ]
+        app.launch()
+        defer { app.terminate() }
+        let board = app.buttons["factory.segment.board"]
+        let releases = app.buttons["factory.segment.releases"]
+        XCTAssertTrue(board.waitForExistence(timeout: 15))
+        XCTAssertTrue(board.isSelected)
+        XCTAssertTrue(releases.exists)
+        XCTAssertFalse(app.buttons["factory.segment.needsDan"].exists)
+        XCTAssertEqual(board.frame.width, releases.frame.width, accuracy: 1)
+        XCTAssertEqual(board.frame.maxX, releases.frame.minX, accuracy: 1, "Segments touch within one control")
+        let needs = app.buttons["factory.column.needs_dan"]
+        XCTAssertTrue(needs.waitForExistence(timeout: 10))
+        let taskLink = app.links["factory.row.github.10"]
+        if state == "board" {
+            XCTAssertFalse(taskLink.exists, "Board columns start collapsed")
+            needs.tap()
+        }
+        XCTAssertTrue(taskLink.waitForExistence(timeout: 5), "The Needs Dan task remains reachable on Board")
+        XCTAssertTrue(needs.isHittable, "The old Needs Dan entry scrolls its column into view")
+        attach(app.screenshot(), named: "P15-94-factory-\(state)-\(theme)-\(language)")
+    }
+
     // Separate cases keep each three-page capture below the runner's per-test timeout.
     func testSharedPageOrderDarkEnglish() { captureSharedPages(language: "en", theme: "dark") }
     func testSharedPageOrderLightEnglish() { captureSharedPages(language: "en", theme: "light") }
