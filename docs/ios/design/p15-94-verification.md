@@ -7,8 +7,8 @@ Reference: `board.html` merged in PR #1603. The board is illustrative data.
 - Factory: Board / Releases only. Board includes Needs Dan tasks; legacy Needs Dan
   fixture entry opens Board and expands/scrolls to the column. Columns otherwise
   start collapsed; outlined/indented task rows and fixed controls remain.
-- Pending clarification: the older Delegated wording has no matching section in
-  the published Home board. Issue #1600 says the board wins.
+- Follow the published Home board's Today / Tasks due grouping, as confirmed by
+  the owner's instruction to follow the approved boards.
 
 Core tests cover both available tabs, old Needs Dan targets, inclusion and search
 of Needs Dan cards, default collapsed columns, counts and Home's Today/Due split.
@@ -50,3 +50,18 @@ Direct Apple Markdown fetches were unavailable.
 
 
 5 November recovery review: a failed initial board request keeps the bottom segment and project selector available when projects loaded successfully, allowing a switch to another project or Releases. Native run 42115728133 passed all 48 UI tests at 331702d4, then timed out during the standalone capture sweep; the recovery follow-up still needs native verification.
+
+## Final page verification — 6 November 2026, Copenhagen
+
+Run **42124893512** on `67e83344` compiled and passed **48/48 native tests**,
+including both Factory entry paths and Home in both languages/themes. The later
+standalone capture sweep reached the job timeout; the overall workflow is
+cancelled, not green. Screenshot artifact **13463371218** was retained.
+
+Inspected Factory English/dark `6274939E-D4A6-47C4-9370-8CAEA6B48EC1.png` and
+Danish/light `09270BBF-D2E0-45E8-8D1D-8191532EB3B8.png`, plus Home English/dark
+`5A2198C8-6A69-4AE8-97E7-4BDA29436E2A.png` and Danish/light
+`320B286D-56F0-4710-8EA4-1CB1B8A18904.png`. The shared segments, page margins,
+row hierarchy, native glass dock and translated wrapping are accepted.
+The reconciliation with the shared squash merge changes no source files.
+Final combined validation and the recorded delivery order still apply.
