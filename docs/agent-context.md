@@ -7061,3 +7061,11 @@ cover bounds, missing observations and duplicate daily records. Sleep uses stage
 proportions and real average/night-count summaries; bedtime/wake-up are absent
 from the current contract. Nutrition shows actual logged meals without a target.
 See `p15-95-verification.md` for screenshot provenance and pending native checks.
+
+## Native shared-heading verification
+
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.
