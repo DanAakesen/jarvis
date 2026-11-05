@@ -135,6 +135,7 @@ final class SidebarNavigationTests: XCTestCase {
         app.launchArguments = [
             "--ui-test-navigation",
             "-jarvis.appLanguage", language,
+            "-jarvis.appTheme", language == "en" ? "dark" : "light",
             "-AppleLanguages", "(\(language))",
             "-AppleLocale", language == "da" ? "da_DK" : "en_US",
         ]
@@ -158,5 +159,13 @@ final class SidebarNavigationTests: XCTestCase {
             .completed,
             "Tapping \(destination) must close the drawer"
         )
+        if destination == "notes" {
+            let hero = app.descendants(matching: .any).matching(identifier: "notes.hero").firstMatch
+            XCTAssertTrue(hero.waitForExistence(timeout: 8), "Capture loaded Notes content")
+            let capture = XCTAttachment(screenshot: app.screenshot())
+            capture.name = "P15-92-notes-\(language == "en" ? "dark" : "light")-\(language)"
+            capture.lifetime = .keepAlways
+            add(capture)
+        }
     }
 }

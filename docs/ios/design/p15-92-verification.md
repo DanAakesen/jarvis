@@ -56,6 +56,17 @@ archive survived as artifact 13442092604; the cloud environment currently blocks
 the OpenAI file-download host returned by the GitHub connector, so its frames
 have not been inspected. No board/native comparison is accepted yet.
 
+Dan approved an exception to #1598's workflow-file restriction on 5 November:
+the existing screenshot-upload step now uses `if: always()` so already captured
+images can be retained after failure or timeout, as the xcresult upload was.
+All 74 workflow-contract tests pass locally with the upload correction. Existing
+Notes sidebar navigation tests also attach the loaded page in English dark and
+Danish light without adding app launches. Their Swift syntax check passes; their
+native captures remain pending.
+
+The current Mac run (42085339854, edc8ec36) started before these corrections; it
+has passed native compilation, CI and CodeQL, with UI tests/captures pending.
+
 Prepared follow-up layout corrections place Usage's amount beside its chart,
 remove Proactive's extra hero title, use three equal-width Proactive statistics,
 and keep the Workspaces hero out of a second List-row glass surface. These are

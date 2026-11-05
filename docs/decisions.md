@@ -10913,3 +10913,9 @@ Mac screenshot workflow; its selected component UI suite now exercises the page
 order, loading controls and sheet-action geometry. This records implementation
 of the approved issue; native visual acceptance remains pending in
 `ios/design/p15-92-verification.md`.
+
+Dan approved a narrow exception to #1598's prohibition on editing `ios-ci.yml`:
+run the existing screenshot artifact upload with `if: always()`. Run 42075818100
+had captured images but skipped their upload when it reached the job timeout.
+Keep the existing runner, test selection and timeout; this change preserves
+available evidence and does not turn failing tests into successful tests.
