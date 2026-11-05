@@ -164,10 +164,18 @@ final class ComponentGalleryUITests: XCTestCase {
         app.buttons["health.period.thirtyDays"].tap()
         XCTAssertTrue(app.buttons["health.period.thirtyDays"].isSelected)
         attach(app.screenshot(), named: "P15-95-health-nutrition-\(theme)-\(language)")
-        app.swipeUp()
-        XCTAssertTrue(app.buttons["health.lifts.log"].waitForExistence(timeout: 5))
+        let log = app.buttons["health.lifts.log"]
+        XCTAssertTrue(log.waitForExistence(timeout: 5), "The section must preserve its Log button's identity")
+        let scroll = app.scrollViews.firstMatch
+        for _ in 0..<4 {
+            if log.isHittable && log.frame.minY > app.staticTexts["page.title"].frame.maxY { break }
+            let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+            let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(log.isHittable, "Last lifts must be reachable below the hero")
         attach(app.screenshot(), named: "P15-95-health-sections-\(theme)-\(language)")
-        app.buttons["health.lifts.log"].tap()
+        log.tap()
         XCTAssertTrue(app.textFields["today.lift.name"].waitForExistence(timeout: 5), "Last lifts opens Home's shared sheet")
         attach(app.screenshot(), named: "P15-95-health-log-lift-\(theme)-\(language)")
         app.terminate()

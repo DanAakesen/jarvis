@@ -3795,6 +3795,10 @@ sustained performance acceptance or permission to resume #717/#741.
 
 Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
 
+## Native board verification follow-up (Refs #1601; 5 November 2026)
+
+Last lifts is an explicit accessibility container so its Log child keeps its identifier. The native test retains the Log-to-shared-sheet assertion and scrolls in bounded short steps. The first native comparison prompted a compact chart headline, Training divider and smaller shared hero/chart geometry.
+
 Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
 the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
 from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
