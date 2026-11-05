@@ -1,6 +1,6 @@
 # P15 board integration check
 
-Local integration only; no GitHub PR has been merged or deployed.
+Integration checkpoint only; no GitHub PR has been merged or deployed.
 
 Branches combined on the shared #1604 head `da61e4de`:
 
@@ -18,9 +18,12 @@ suite retains the Factory, Health, Notes, Usage and notification test additions.
 Swift parsing verifies the resolved test file. These checks do not compile the
 combined SwiftUI application or establish its appearance.
 
-Each of Notes, Home/Factory and Health has passed native compilation and CI on
-its own branch. Their native test/capture runs remain active at 20:51 UTC on
-5 November 2026. The Insights CI/source guard follow-up is newly pushed.
+Each of Notes, Home/Factory, Health and Insights has passed native compilation
+on its own branch. Full CI is green on all five PR heads as of 21:03 UTC on
+5 November 2026. The four follow-up native test/capture runs remain active.
+Insights compiled in run 42106346100; its subsequent commit only updates the
+Python source guard to expect the shared heading, and that commit's automatic
+simulator run is pending behind the first run.
 The shared #1604 head passed all 46 UI tests and CI/CodeQL; later capture work
 hit the 45-minute job limit, and both artifacts survived through the approved
 `if: always()` upload. Artifact downloads remain blocked by the cloud allowlist.
