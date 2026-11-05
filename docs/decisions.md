@@ -11050,3 +11050,7 @@ authorized TestFlight after verification for the 6 November morning target.
 Settings adopts the board's bottom segments and meaningful section groups while
 retaining existing native detail/save flows. Large text uses a scrolling segment
 strip and stacked row values. Chat and the shared orb remain unchanged.
+
+## 2026-11-05: P15 Health backlog and retained history
+
+Use anchored HealthKit query pagination and complete-day upload requests rather than discarding a quantity at the whole-window cap. Keep the existing owner-only API and 20,000-item request bound; reject an oversized single day honestly, before any upload. A partial local step snapshot replaces only matching Copenhagen days and cannot mark retained history fresh. Regression tests cover multi-day backlogs, rejection, local midnight and explicit zero readings.
