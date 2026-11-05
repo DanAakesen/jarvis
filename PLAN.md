@@ -3812,3 +3812,8 @@ head passed 46/46 UI tests. Corrected native captures and owner acceptance remai
 pending. No additional workflow/project change or release action is included.
 
 Health final accessibility audit: add VoiceOver adjustment to the existing hero-page indicator and honor Reduce Motion for page transitions. Native verification remains pending; preserve the active run before pushing this follow-up.
+
+Health 297d94ba passed 48/48 native UI tests in run 42124896873. Training EN/dark,
+Sleep DA/light and Nutrition EN/dark were inspected; the 30-day Nutrition capture
+exposed crowded labels, now corrected with sparse date ticks. Updated screenshot
+acceptance remains pending.
