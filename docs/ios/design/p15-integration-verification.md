@@ -1,54 +1,46 @@
-# P15 board integration check
+# P15 board integration verification
 
-Integration checkpoint only; no GitHub PR has been merged or deployed.
+Handoff checkpoint: 5 November 2026, 22:12 UTC. No PR is merged, no backend
+is deployed, and no TestFlight upload has been submitted by this task.
+The owner has now authorised release after verification, targeting 06:00
+Europe/Copenhagen on 6 November. See `p15-resume.md` for exact instructions,
+branch heads, active jobs, artifact IDs, image filenames and remaining work.
 
-Update at 21:52 UTC on 5 November 2026: Factory `331702d4` and Health `9c8df9a6`
-are combined locally, preserving all page tests. Native screenshot/accessibility
-review established the corrections documented in the page verification files.
-Home/Health comparisons were shown in chat; owner acceptance remains outstanding.
-The existing workflow will verify the combined SwiftUI app through a separate
-validation-only PR. No workflow or project settings were changed. Notes retry
-job `127550185888` and Insights job `127547007531` are active; do not duplicate.
-The live workspace still blocks the third Insights archive host. The full local
-pipeline attempt is incomplete because Ruby is absent (59 pass, 15 setup errors).
-The completed local results below belong to the earlier checkpoint.
+Integration contains shared a82c570e, Notes c6ac6d83, Home/Factory 331702d4,
+Health da209e0e and Insights 333d459c. The last two include follow-up commits
+not yet pushed to their page branches. Code integration is 47d2c5cc; the final
+handoff documentation commit follows it. #1609 is validation-only and must not
+be merged in place of the delivery PRs. #1604 must merge first.
 
-Branches combined on the shared #1604 head `da61e4de`:
+Verified in this continuation:
 
-| Issue | PR | Branch head |
-| --- | --- | --- |
-| #1599 Notes | #1605 | c6ac6d83 |
-| #1600 Home/Factory | #1606 | 8c92b956 |
-| #1601 Health | #1607 | 0ef73de0 |
-| #1602 Insights | #1608 | 7eb90fa0 |
+- Genuine shared, Home/Factory, Health and Insights archives downloaded.
+- Home, Training, Sleep, Workspaces and Status board/native pairs shown in chat.
+  Usage, Proactive and shared sheet order also inspected. Corrected heads are
+  not visually accepted; Notifications' old image is a sign-in cover.
+- Factory's authentication fixture/accessibility-role failure and Health's
+  inherited Log identifier were traced to native recordings/accessibility dumps.
+- Shared a82c570e and Factory 331702d4 general CI pass. Shared CodeQL passes.
+- Health 9c8df9a6 and combined d3dafef1 compile on Mac. They precede later
+  summary/chart/Status changes and do not establish current-head compilation.
+- In the official Swift 6.2 container, the new Health summary regression class
+  passed 4/4. The expanded Health/localization selection passed **48/48** with
+  zero failures. Command: `swift test --package-path apps/ios/Packages/JarvisCore
+  --filter 'JarvisHealth|Localization|LocalizedFormat'` on Health da209e0e.
+- `swiftc -frontend -parse` passed on combined HealthHero, StatusArea, UsageArea,
+  PageHeader and ComponentGalleryUITests. Syntax parsing does not typecheck SwiftUI.
+- Whitespace/conflict-marker review passed; no Chat or orb source changed in
+  this continuation.
 
-All 488 combined Core tests, 132 focused backend tests and 74 pipeline checks
-pass locally. The combined backend TypeScript build passes. Append conflicts
-in the project documents preserve all four follow-ups; the selected component
-suite retains the Factory, Health, Notes, Usage and notification test additions.
-Swift parsing verifies the resolved test file. These checks do not compile the
-combined SwiftUI application or establish its appearance.
+Historical evidence from the initial integration checkpoint: 488 Core tests,
+132 focused backend tests, 74 pipeline checks and backend TypeScript build passed.
+Those full suites were not rerun on this final handoff revision. This host has no
+Ruby; its pipeline attempt reached 59 passes and 15 missing-Ruby setup errors.
 
-Each of Notes, Home/Factory, Health and Insights has passed native compilation
-on its own branch. Full CI is green on all five PR heads as of 21:03 UTC on
-5 November 2026. The four follow-up native test/capture runs remain active.
-Insights compiled in run 42106346100; its subsequent commit only updates the
-Python source guard to expect the shared heading, and that commit's automatic
-simulator run is pending behind the first run.
-The shared #1604 head passed all 46 UI tests and CI/CodeQL. Screenshot capture,
-board pairing and both uploads succeeded before cancellation during final cleanup
-at the 45-minute job limit. The approved `if: always()` keeps the upload eligible
-after failures; this run does not demonstrate an upload after a capture failure.
-Artifact downloads remain blocked by the original workspace's cloud allowlist.
-
-Remaining gates: final native test results, actual board/build screenshot
-inspection, combined native verification after integration, and owner acceptance.
-The new Notes backend must be deployed before the updated client is released.
-
-Update at 21:33 UTC: Home/Factory and Health each pass 46/48 native tests, with
-two task-row lookup failures in Factory and two Last lifts Log-button lookup
-failures in Health. Both archives uploaded. Insights passes 48/48 native tests
-and preserves both archives after later capture cancellation. Notes is cancelled
-without a published log/artifact at the last check; no retry has been submitted.
-Current run IDs, exact failures, screenshot filenames and handoff ownership are
-in `p15-resume.md`. All changes remain unmerged and visually unverified.
+Remaining: refresh all native jobs, fix genuine failures, inspect final combined
+images in both languages/themes and large Dynamic Type, finish the newly requested
+Settings/Voice audit while preserving Chat, publish page follow-ups, verify the
+required backend deployment, then upload through the existing TestFlight workflow.
+The outgoing task's `api.github.com` request is proxy-blocked; a NEW public-access
+task is required for workflow dispatch. No credential validity conclusion can be
+inferred from that network failure.

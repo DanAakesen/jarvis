@@ -11029,3 +11029,16 @@ covered by sign-in. The row reserves readable state text, stacking it at large
 Dynamic Type; the test uses the existing Simulator navigation argument. Usage
 emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
 verification is pending; previous UI-test success is not visual acceptance.
+
+
+## 5 November 2026 — Owner authorises verified TestFlight release
+
+The owner requested all non-Chat pages follow the board, with consistent spacing
+and useful section headings; Chat must remain unchanged. Settings/Voice review
+is now in scope but unfinished. The owner subsequently authorised TestFlight
+after verification, targeting 6 November 2026 at 06:00 Europe/Copenhagen. Notes
+requires its backend deployment before client release; #1604 remains first in
+the merge order. Nothing has been merged/deployed/uploaded by this continuation.
+A new task must use the republished environment because the running task blocks
+api.github.com. Exact checkpoint, active runs and remaining work are recorded
+in `docs/ios/design/p15-resume.md`; do not launch duplicate simulator runs.
