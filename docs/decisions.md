@@ -10936,3 +10936,7 @@ authorized TestFlight after verification for the 6 November morning target.
 Settings adopts the board's bottom segments and meaningful section groups while
 retaining existing native detail/save flows. Large text uses a scrolling segment
 strip and stacked row values. Chat and the shared orb remain unchanged.
+
+## Settings native geometry correction (5 November 2026)
+
+Native artifact 13461059102 exposed truncated four-way section labels and decorative symbols expanding beyond their reserved row width at accessibility XXXL. Use a compact-label option on the existing shared segmented bar without reducing its hit target, switch Settings to the shared scrolling strip above default text size, and retain fixed semantic symbol geometry. Existing callers keep their defaults; Chat is unchanged.

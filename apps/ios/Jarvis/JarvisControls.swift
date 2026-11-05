@@ -355,6 +355,7 @@ private struct JarvisLabelledContent: View {
     var isEmphasised = false
     var isDestructive = false
     var isCompact = false
+    var isSegment = false
 
     private var tint: Color {
         if isDestructive { return .red }
@@ -376,7 +377,9 @@ private struct JarvisLabelledContent: View {
                     Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             } else {
-                Text(title).font(isCompact ? .footnote.weight(.semibold) : .body.weight(.semibold)).lineLimit(1)
+                Text(title)
+                    .font(isCompact ? .footnote.weight(.semibold) : (isSegment ? .subheadline.weight(.semibold) : .body.weight(.semibold)))
+                    .lineLimit(1)
             }
             if isLeading { Spacer(minLength: 0) }
             if let trailingSystemImage {
@@ -386,7 +389,7 @@ private struct JarvisLabelledContent: View {
             }
         }
         .foregroundStyle(tint.opacity(isDisabled ? 0.4 : 1))
-        .padding(.horizontal, isCompact ? 10 : JarvisDesignTokens.labelledHorizontalPadding)
+        .padding(.horizontal, isSegment ? JarvisDesignTokens.compactSpacing : (isCompact ? 10 : JarvisDesignTokens.labelledHorizontalPadding))
         .padding(.vertical, isCompact ? 4 : JarvisDesignTokens.labelledVerticalPadding)
         .frame(
             maxWidth: isFullWidth ? .infinity : nil,
@@ -415,6 +418,7 @@ struct JarvisLabelledButton: View {
     var isSelected = false
     var isDestructive = false
     var isCompact = false
+    var isSegment = false
     var hint = ""
     var accessibilityTitle: String?
     var accessibilityValue = ""
@@ -426,7 +430,7 @@ struct JarvisLabelledButton: View {
                 title: title, subtitle: subtitle, systemImage: systemImage, leading: leading,
                 trailingSystemImage: trailingSystemImage, isBusy: isBusy, isDisabled: isDisabled,
                 isFullWidth: isFullWidth, isLeading: isLeading, isEmphasised: isEmphasised || isSelected,
-                isDestructive: isDestructive, isCompact: isCompact
+                isDestructive: isDestructive, isCompact: isCompact, isSegment: isSegment
             )
         }
         .buttonStyle(.plain)
@@ -526,6 +530,7 @@ struct JarvisSegmentedBar<Tag: Hashable>: View {
     let identifierPrefix: String
     let items: [JarvisTabItem<Tag>]
     @Binding var selection: Tag
+    var usesCompactLabels = false
 
     var body: some View {
         HStack(spacing: JarvisDesignTokens.segmentedBarSpacing) {
@@ -534,7 +539,8 @@ struct JarvisSegmentedBar<Tag: Hashable>: View {
                     title: item.title,
                     identifier: item.identifier ?? "\(identifierPrefix).\(index)",
                     isFullWidth: true,
-                    isSelected: selection == item.tag
+                    isSelected: selection == item.tag,
+                    isSegment: usesCompactLabels
                 ) { selection = item.tag }
             }
         }

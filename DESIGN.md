@@ -3221,3 +3221,5 @@ One look, taken from the Chat header: Apple glass, 44 pt target, secondary accen
 - **Gallery**: `JarvisComponentGallery` (debug builds only, launch argument `--component-gallery`, no user-facing entry) shows every button state, the orb at three sizes and the scaffold; `ComponentGalleryUITests` attaches a screenshot.
 - Apple documentation used: Human Interface Guidelines (Buttons, Toolbars, Materials); SwiftUI `Glass`, `glassEffect`, `ButtonStyle.glass` and `Button`.
 
+
+Settings native screenshot review keeps all four section names readable at default text size with compact shared segment labels and full 44-point targets. Larger text uses the shared scrolling strip. Decorative row symbols retain the shared icon size as row text grows, preventing overlap.

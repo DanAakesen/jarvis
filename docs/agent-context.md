@@ -7050,3 +7050,5 @@ search and detail navigation in English/dark, Danish/light and accessibility tex
 No workflow or project change is needed. Scoped Core Settings/localization/design
 guards pass 53 tests in the pinned Swift container; syntax parsing passes. Native
 compilation, interaction results and screenshot comparison remain pending.
+
+Settings run 42121264726 compiled and passed 49/49 selected native tests. Review screenshots as well as assertions: its captures exposed normal-size tab truncation and large-text symbol overlap. The follow-up retains 44-point segment targets and uses scrolling above default text size. Artifact 13461059102 preserves the evidence; corrected captures remain required.
