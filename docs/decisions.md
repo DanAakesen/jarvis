@@ -10991,3 +10991,11 @@ notification sheet through its existing presentation model.
 Local validation: 474 Core tests and 23 backend Usage/Now-feed tests pass.
 Native screenshots and owner acceptance remain pending; the cloud network
 policy still blocks the artifact download host. No pixel-match claim is made.
+
+## Native board corrections supported by screenshots (Refs #1600; 5 November 2026)
+
+Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
+
+Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
+the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
+from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
