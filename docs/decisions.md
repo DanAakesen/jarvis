@@ -10941,3 +10941,11 @@ No deployment is included.
 Graph nodes share folder colors with the legend. Labels appear for search or
 selection, with an explicit Open action; accessible titles/folders remain on all
 nodes. Native visual acceptance is pending in `ios/design/p15-93-verification.md`.
+
+## 5 November 2026 — Preserve shared heading contrast inside List
+
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.

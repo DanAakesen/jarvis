@@ -7041,3 +7041,11 @@ item-driven note-sheet destination; initialize creation drafts once per sheet.
 Do not reset them when a nested picker dismisses. The graph selection is an explicit
 accessibility container so its Open action retains its identifier. The existing
 native tests cover initial/confirmed nested paths and the real Open action.
+
+## Native shared-heading verification
+
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.

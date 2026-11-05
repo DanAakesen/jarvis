@@ -3790,3 +3790,11 @@ sustained performance acceptance or permission to resume #717/#741.
 The Notes retry compiled and passed 48/50 UI tests. Corrected the selected-folder
 sheet snapshot and graph Open accessibility containment, preserving the failing
 assertions and adding path readback. Fresh native verification remains pending.
+
+## P15-92 native heading correction
+
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.
