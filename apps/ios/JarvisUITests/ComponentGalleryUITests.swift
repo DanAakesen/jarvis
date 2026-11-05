@@ -141,7 +141,13 @@ final class ComponentGalleryUITests: XCTestCase {
 
     func testWorkspacesHeroPrecedesFiltersAndKeepsSearchReachable() {
         for (language, theme) in [("en", "dark"), ("da", "light")] {
-            openPage("workspaces", language: language, theme: theme)
+            // Workspaces is opened by workspace commands, not a sidebar item.
+            app.launchArguments = [
+                "--ui-test-navigation", "--ui-test-workspaces",
+                "-jarvis.appLanguage", language, "-jarvis.appTheme", theme,
+                "-AppleLanguages", "(\(language))", "-AppleLocale", language == "da" ? "da_DK" : "en_US",
+            ]
+            app.launch()
             defer { app.terminate() }
             let hero = app.descendants(matching: .any)["workspaces.hero"]
             XCTAssertTrue(hero.waitForExistence(timeout: 10))

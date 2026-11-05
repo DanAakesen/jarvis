@@ -64,8 +64,20 @@ Notes sidebar navigation tests also attach the loaded page in English dark and
 Danish light without adding app launches. Their Swift syntax check passes; their
 native captures remain pending.
 
-The current Mac run (42085339854, edc8ec36) started before these corrections; it
-has passed native compilation, CI and CodeQL, with UI tests/captures pending.
+Third Mac attempt (42085339854, edc8ec36) passed native compilation, CI and CodeQL.
+The UI suite completed 46 tests in 1140 seconds: 45 passed. All four bilingual,
+light/dark Usage/Status/Proactive page-order cases passed, as did loading, shared
+rows/actions and sheet order. The Workspaces case failed before opening its page:
+it looked for a sidebar item that does not exist. The follow-up starts Workspaces
+through a Simulator-only fixture entry point and preserves its geometry/search
+assertions. Its native result remains pending.
+
+The job again timed out during the subsequent screenshot sequence, after exporting
+the page-order attachments and many standalone captures. The old upload condition
+skipped the image archive. Test-result artifact 13446400555 (162 MB) was retained.
+The new upload condition and Notes captures apply to the next run. No native
+image has yet been inspected in this environment because the file-download host
+is blocked.
 
 Prepared follow-up layout corrections place Usage's amount beside its chart,
 remove Proactive's extra hero title, use three equal-width Proactive statistics,
