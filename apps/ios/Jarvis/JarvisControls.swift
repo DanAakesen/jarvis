@@ -1012,3 +1012,40 @@ struct JarvisWaveform: View {
         .accessibilityHidden(true)
     }
 }
+
+/// A shared navigation row with a full accessible touch target.
+struct JarvisRowButton<Content: View>: View {
+    let identifier: String
+    let action: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        Button(action: action) {
+            content()
+                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+/// A horizontally browsable action tile. Surface and geometry belong to the control layer.
+struct JarvisTileButton<Content: View>: View {
+    let identifier: String
+    let width: CGFloat
+    let action: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        Button(action: action) {
+            content()
+                .frame(width: width, alignment: .leading)
+                .padding(JarvisDesignTokens.labelledHorizontalPadding)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+                .foregroundStyle(.primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+    }
+}

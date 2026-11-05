@@ -432,18 +432,14 @@ struct JarvisNotesArea: View {
                         stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
                     } else {
                         ForEach(childFolders) { folder in
-                            Button { navigateToFolder(folder.path) } label: {
+                            JarvisRowButton(identifier: "notes.folder.\(folder.path)", action: { navigateToFolder(folder.path) }) {
                                 HStack(spacing: JarvisPageHeaderMetrics.spacing) {
                                     Image(systemName: "chevron.right").font(.caption.weight(.semibold))
                                     Image(systemName: "folder").foregroundStyle(JarvisNotesFolderPalette.color(folder.path))
                                     Text(folder.name).foregroundStyle(.primary)
                                     Spacer()
                                 }
-                                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.notesRowMinimumHeight, alignment: .leading)
-                                .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("notes.folder.\(folder.path)")
                         }
                         if directoryNotes[selectedFolder] != nil {
                             JarvisSectionHeadline(selectedFolder.isEmpty ? copy.vaultRoot : String(selectedFolder.split(separator: "/").last ?? "")) {
@@ -608,7 +604,7 @@ struct JarvisNotesArea: View {
     }
 
     private var searchKey: String {
-        "\(searchText.trimmingCharacters(in: .whitespacesAndNewlines))|\(selectedScope.rawValue)|\(refreshVersion)"
+        "\(searchText.trimmingCharacters(in: .whitespacesAndNewlines))|\(selectedScope.rawValue)|\(selectedTab.rawValue)|\(refreshVersion)"
     }
 
     private func noteRow(_ note: VaultNoteSummary) -> some View {

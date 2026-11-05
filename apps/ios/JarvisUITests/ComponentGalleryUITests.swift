@@ -435,7 +435,13 @@ final class ComponentGalleryUITests: XCTestCase {
         notesTap(nodeID)
         XCTAssertTrue(app.buttons["notes.graph.open"].waitForExistence(timeout: 5))
         attach(app.screenshot(), named: "P15-93-notes-graph-selected-dark-en")
+        let search = app.textFields["notes.search"]
+        XCTAssertTrue(search.isHittable)
+        search.tap()
+        search.typeText("Review")
         notesTap("notes.tab.tasks", upward: false)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Review release")).firstMatch.waitForExistence(timeout: 8))
+        notesTap("notes.search.clear")
         notesTap("notes.plus")
         notesTap("notes.newTask")
         let title = app.descendants(matching: .any).matching(identifier: "notes.create.title").firstMatch
