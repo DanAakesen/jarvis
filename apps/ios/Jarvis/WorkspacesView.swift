@@ -43,6 +43,8 @@ struct WorkspacesView: View {
             do {
                 let filterKey = "\(query)|\(selectedKind?.rawValue ?? "")"
                 if loadedFilterKey != filterKey {
+                    items = []
+                    notice = nil
                     hasMore = false
                     loadState = .loading
                 }
@@ -149,6 +151,7 @@ struct WorkspacesView: View {
     @ViewBuilder private var pageHead: some View {
         if hasLoadedPage || !items.isEmpty {
             VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                if loadState == .ready || loadState == .stale {
                 JarvisPageHeadline(phrase: JarvisPagePhrase(markup: formatted(.pageSummary, items.count)))
                 JarvisPageHeroCard(title: jarvisInsightsText(.overview, language)) {
                     JarvisPageStatGrid(
@@ -160,6 +163,7 @@ struct WorkspacesView: View {
                     )
                 }
                 .accessibilityIdentifier("workspaces.hero")
+                }
                 connectionStatus
                 kindFilters
                 if loadState == .loading {
@@ -391,9 +395,11 @@ struct WorkspacesView: View {
             return
         }
         loadingOlder = true
+        let requestedFilter = "\(query)|\(selectedKind?.rawValue ?? "")"
         defer { loadingOlder = false }
         do {
             let page = try await client.search(query: normalizedQuery(query), kind: selectedKind, before: oldest.createdAt)
+            guard !Task.isCancelled, requestedFilter == "\(query)|\(selectedKind?.rawValue ?? "")" else { return }
             let knownIDs = Set(items.map(\.id))
             items.append(contentsOf: page.filter { !knownIDs.contains($0.id) })
             hasMore = page.count >= JarvisWorkspacesClient.pageSize

@@ -74,6 +74,7 @@ struct JarvisUsageArea: View {
         case .loading:
             JarvisPageLoadingView(title: text(.loading), identifier: "usage.loading")
         case .failed(let failure):
+            if client != nil { periodSelector }
             JarvisInsightsStateView(kind: .failure(failure), language: language, identifier: "usage.error") {
                 if client == nil { onRetryConfiguration() }
                 forceReload = true
@@ -151,16 +152,20 @@ struct JarvisUsageArea: View {
         summary.buckets.first { $0.id == selectedBucketID }
     }
 
-    private func overview(_ summary: JarvisUsageSummary) -> some View {
-        let bucket = selectedBucket(summary)
-        let totals = summary.totals(in: bucket)
-        return JarvisPageHeroCard(title: text(.overview)) {
+    private var periodSelector: some View {
             JarvisPeriodSelector(
                 title: text(.usageRangeLabel),
                 identifierPrefix: "usage.range",
                 items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey), identifier: "usage.range.\($0.rawValue)") },
                 selection: $period
             )
+    }
+
+    private func overview(_ summary: JarvisUsageSummary) -> some View {
+        let bucket = selectedBucket(summary)
+        let totals = summary.totals(in: bucket)
+        return JarvisPageHeroCard(title: text(.overview)) {
+            periodSelector
         } content: {
             VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
                 if dynamicTypeSize.isAccessibilitySize {
