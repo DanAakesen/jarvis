@@ -2354,3 +2354,9 @@ two-column source list (one column at accessibility text sizes). Read failures
 remain visible. Notifications uses grouped rows, clear-all for any dismissible
 item and the existing running/failed task presentation; successful jobs do not
 appear. Native visual acceptance remains pending.
+
+## Native Settings board navigation (5 November 2026)
+
+Settings uses General, Models, Health and Account views. Search reaches settings
+across all views; clearing it returns to the selected view. Existing detail
+editors, explicit save/approval behavior and sign-out confirmation are preserved.

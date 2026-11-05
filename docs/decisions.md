@@ -11042,3 +11042,11 @@ the merge order. Nothing has been merged/deployed/uploaded by this continuation.
 A new task must use the republished environment because the running task blocks
 api.github.com. Exact checkpoint, active runs and remaining work are recorded
 in `docs/ios/design/p15-resume.md`; do not launch duplicate simulator runs.
+
+## 2026-11-05 — Extend the approved board alignment to Settings and Voice
+
+The owner expanded the non-Chat page scope to include Settings and Voice and
+authorized TestFlight after verification for the 6 November morning target.
+Settings adopts the board's bottom segments and meaningful section groups while
+retaining existing native detail/save flows. Large text uses a scrolling segment
+strip and stacked row values. Chat and the shared orb remain unchanged.

@@ -3,6 +3,9 @@
 "settings.models" = "Modeller";
 "settings.health" = "Sundhed";
 "settings.account" = "Konto";
+"settings.behaviour" = "Adfærd";
+"settings.goals" = "Mål";
+"settings.upload" = "Upload";
 "settings.refresh" = "Opdater";
 "settings.search" = "Søg";
 "settings.add" = "Tilføj";

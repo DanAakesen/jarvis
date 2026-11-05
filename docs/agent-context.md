@@ -7109,3 +7109,11 @@ the merge order. Nothing has been merged/deployed/uploaded by this continuation.
 A new task must use the republished environment because the running task blocks
 api.github.com. Exact checkpoint, active runs and remaining work are recorded
 in `docs/ios/design/p15-resume.md`; do not launch duplicate simulator runs.
+
+## Settings board follow-up verification
+
+Use the existing ComponentGalleryUITests suite for Settings sections, cross-view
+search and detail navigation in English/dark, Danish/light and accessibility text.
+No workflow or project change is needed. Scoped Core Settings/localization/design
+guards pass 53 tests in the pinned Swift container; syntax parsing passes. Native
+compilation, interaction results and screenshot comparison remain pending.

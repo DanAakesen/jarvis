@@ -3841,3 +3841,12 @@ the merge order. Nothing has been merged/deployed/uploaded by this continuation.
 A new task must use the republished environment because the running task blocks
 api.github.com. Exact checkpoint, active runs and remaining work are recorded
 in `docs/ios/design/p15-resume.md`; do not launch duplicate simulator runs.
+
+## P15 Settings board continuation (5 November 2026)
+
+Implemented General/Models/Health/Account navigation, board section grouping,
+shared row spacing and accessibility-size adaptation without changing detail
+editors or Chat. Added native section/search/detail cases to the existing selected
+component suite. Scoped Core/localization/design guards: 53 passed; Swift parser
+passed. Native compilation and visual acceptance are pending. Release follows
+#1604, the page PRs, successful Notes backend deployment, then TestFlight.

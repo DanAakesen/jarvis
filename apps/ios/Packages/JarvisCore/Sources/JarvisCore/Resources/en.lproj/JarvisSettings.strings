@@ -3,6 +3,9 @@
 "settings.models" = "Models";
 "settings.health" = "Health";
 "settings.account" = "Account";
+"settings.behaviour" = "Behaviour";
+"settings.goals" = "Goals";
+"settings.upload" = "Upload";
 "settings.refresh" = "Refresh";
 "settings.search" = "Search";
 "settings.add" = "Add";

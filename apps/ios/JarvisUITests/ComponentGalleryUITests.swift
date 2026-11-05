@@ -485,4 +485,56 @@ final class ComponentGalleryUITests: XCTestCase {
         }
         return element
     }
+    func testSettingsSectionsSearchAndDetailsDarkEnglish() {
+        exerciseSettings(language: "en", theme: "dark")
+    }
+
+    func testSettingsSectionsSearchAndDetailsLightDanish() {
+        exerciseSettings(language: "da", theme: "light")
+    }
+
+    func testSettingsAccessibilityTextKeepsSectionsAndRowsReachable() {
+        exerciseSettings(language: "da", theme: "dark", largeText: true)
+    }
+
+    private func exerciseSettings(language: String, theme: String, largeText: Bool = false) {
+        app.launchArguments = [
+            "--ui-test-navigation", "--screenshot-settings-fixture",
+            "-jarvis.appLanguage", language, "-jarvis.appTheme", theme,
+            "-AppleLanguages", "(\(language))", "-AppleLocale", language == "da" ? "da_DK" : "en_US",
+            "-AppleInterfaceStyle", theme == "dark" ? "Dark" : "Light",
+        ] + (largeText ? ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] : [])
+        app.launch()
+        defer { app.terminate() }
+        let general = app.buttons["settings.section.general"]
+        XCTAssertTrue(general.waitForExistence(timeout: 15))
+        XCTAssertTrue(general.isSelected)
+        let languageRow = app.descendants(matching: .any).matching(identifier: "settings.row.language").firstMatch
+        XCTAssertTrue(languageRow.isHittable)
+        XCTAssertGreaterThanOrEqual(languageRow.frame.height, 44)
+        attach(app.screenshot(), named: "P15-settings-general-\(language)-\(theme)-large-\(largeText)")
+        for section in ["models", "health", "account"] {
+            let segment = app.buttons["settings.section.\(section)"]
+            if !segment.isHittable {
+                app.scrollViews.containing(.button, identifier: "settings.section.general").firstMatch.swipeLeft()
+            }
+            XCTAssertTrue(segment.isHittable)
+            segment.tap()
+            XCTAssertTrue(segment.isSelected)
+            let firstRow = ["models": "jarvis", "health": "training", "account": "owner"][section]!
+            XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "settings.row.\(firstRow)").firstMatch.waitForExistence(timeout: 5))
+            XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "settings.row.language").firstMatch.exists)
+            attach(app.screenshot(), named: "P15-settings-\(section)-\(language)-\(theme)-large-\(largeText)")
+        }
+        let search = app.textFields["settings.search"]
+        search.tap()
+        search.typeText(language == "da" ? "Stemme" : "Voice")
+        let voice = app.descendants(matching: .any).matching(identifier: "settings.row.voice").firstMatch
+        XCTAssertTrue(voice.waitForExistence(timeout: 5), "Search reaches General while Account is selected")
+        XCTAssertTrue(voice.isHittable)
+        voice.tap()
+        XCTAssertTrue(app.navigationBars.firstMatch.waitForExistence(timeout: 5), "Search keeps the existing detail navigation")
+        attach(app.screenshot(), named: "P15-settings-search-detail-\(language)-\(theme)-large-\(largeText)")
+    }
+
 }
