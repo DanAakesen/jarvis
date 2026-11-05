@@ -2,7 +2,8 @@ import JarvisCore
 import SwiftUI
 import WidgetKit
 
-/// The eight Gym and Factory home screen widgets. No controls, no Live Activity changes. Each refreshes on the
+/// The Gym, Factory, Notes and Home home screen widgets. No controls, no Live Activity changes; the Notes and Home
+/// widgets have no buttons at all and open the matching page when tapped. Each refreshes on the
 /// scheduled timeline from `JarvisHomeWidgetProvider`; nothing animates, so Reduce Motion needs no special case.
 private func homeWidget<Content: View>(
     _ kind: JarvisWidgetKind,
@@ -63,5 +64,41 @@ struct JarvisFactoryMediumWidget: Widget {
 struct JarvisFactoryLargeWidget: Widget {
     var body: some WidgetConfiguration {
         homeWidget(.factoryLarge, name: .softwareFactory, family: .systemLarge) { JarvisFactoryLargeWidgetView(entry: $0).padding(16) }
+    }
+}
+
+struct JarvisNotesSmallWidget: Widget {
+    var body: some WidgetConfiguration {
+        homeWidget(.notesSmall, name: .displayNameNotes, family: .systemSmall) { JarvisNotesSmallWidgetView(entry: $0).padding(14) }
+    }
+}
+
+struct JarvisNotesMediumWidget: Widget {
+    var body: some WidgetConfiguration {
+        homeWidget(.notesMedium, name: .displayNameNotes, family: .systemMedium) { JarvisNotesMediumWidgetView(entry: $0).padding(16) }
+    }
+}
+
+struct JarvisNotesLargeWidget: Widget {
+    var body: some WidgetConfiguration {
+        homeWidget(.notesLarge, name: .displayNameNotes, family: .systemLarge) { JarvisNotesLargeWidgetView(entry: $0).padding(16) }
+    }
+}
+
+struct JarvisHomeSmallWidget: Widget {
+    var body: some WidgetConfiguration {
+        homeWidget(.homeSmall, name: .displayNameHome, family: .systemSmall) { JarvisHomeSmallWidgetView(entry: $0).padding(14) }
+    }
+}
+
+struct JarvisHomeMediumWidget: Widget {
+    var body: some WidgetConfiguration {
+        homeWidget(.homeMedium, name: .displayNameHome, family: .systemMedium) { JarvisHomeMediumWidgetView(entry: $0).padding(16) }
+    }
+}
+
+struct JarvisHomeLargeWidget: Widget {
+    var body: some WidgetConfiguration {
+        homeWidget(.homeLarge, name: .displayNameHome, family: .systemLarge) { JarvisHomeLargeWidgetView(entry: $0).padding(16) }
     }
 }

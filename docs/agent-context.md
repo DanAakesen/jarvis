@@ -1,3 +1,9 @@
+## Notes and Home widgets (P15-89 / #1593; 5 November 2026)
+
+- The new widgets live in `apps/ios/Widgets/JarvisNotesWidgetViews.swift` and `JarvisHomeWidgetViews.swift`; the snapshot types, builders, phrases and `JarvisWidgetLink` are in `Packages/JarvisCore/Sources/JarvisCore/Widgets/`. Check them with `swift test` in `apps/ios/Packages/JarvisCore`; the widget views compile only in the iOS CI Simulator job.
+- Add widget strings to `JarvisWidgetCopy` in both languages with the same placeholders. Do not edit `apps/ios/project.yml` or `.github/workflows/ios-ci.yml` here (owned by the widgets re-enable PR #1591).
+- Widgets in the Notes and Home topics must have no `Button` or intent; tapping opens the app page through `widgetURL`.
+
 ## Widgets temporarily not embedded (P15-87 / #1589; 5 November 2026)
 
 - `apps/ios/project.yml` no longer embeds `JarvisWidgets` in the Jarvis app, so the archive skips it. The target and all widget sources stay. The iOS metadata check in `ios-ci.yml` asserts this temporary state.

@@ -1,3 +1,12 @@
+## 5 November 2026 — Notes and Home widgets (P15-89 / #1593)
+
+- Six more widgets (small, medium, large for Notes and for Home) join the Gym and Factory ones in the `JarvisWidgets` extension. No buttons, no control items; a tap opens the matching app page through `widgetURL` (`jarvis-widget://notes` or `home`, handled by `onOpenURL` in `ContentView` via `JarvisWidgetLink`).
+- Snapshot: `JarvisWidgetSnapshot` gains `notes` (today's open tasks with title and time or date, latest notes with title and edited time) and `home` (approvals needed, runs in progress). Version stays 1: a custom decoder reads missing sections as loading, so older snapshots still decode. Home also draws the Gym, Factory and Notes sections already in the snapshot for its tiles and rows; its timeline schedules a stale entry for each of them.
+- The publisher adds no new endpoint: tasks and notes are read through the same cached repositories (`.tasks`/`open`, `.notes`/`home`) as the Home page, and Home is derived from the Factory numbers (approvals = awaiting, running = running).
+- The Home orb is `JarvisWidgetOrb`, a static SwiftUI copy of the shared orb look (dark glass, cyan rim, orange tangled centre), because the widget target cannot compile the app's `JarvisOrb` without a `project.yml` change (that file belongs to #1591). `JarvisDesignSystemGuardTests` allows it by file name. Switch to the shared orb once the target compiles it.
+- Loading draws a static skeleton for the new widgets. Stale data is dimmed with an "Updated HH:mm" line. Strings are in `JarvisWidgetCopy` (da and en, same placeholders).
+- Not verified here: no Xcode, so the widget views, previews and publisher are compiled by CI only; JarvisCore `swift test` covers the snapshot, builders, phrases, timeline and links.
+
 ## 5 November 2026 — Widgets temporarily not embedded (P15-87 / #1589)
 
 TestFlight build 69 failed to archive: the `.widgets` App ID has no provisioning profile with the App Groups capability. Decision: stop embedding `JarvisWidgets` in the Jarvis app (target and sources kept; app and broadcast app group entitlements unchanged) so the rest ships. The iOS CI check asserts the temporary state. To re-enable, the owner adds App Groups to the `.widgets` App ID in the portal, then the embed dependency and CI check are restored.

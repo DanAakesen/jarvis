@@ -232,4 +232,132 @@ final class JarvisWidgetTests: XCTestCase {
         XCTAssertEqual(JarvisWidgetFormat.kilometers(5.24, language: .da), "5,2")
         XCTAssertEqual(JarvisWidgetFormat.kilometers(5.24, language: .en), "5.2")
     }
+
+    // MARK: Notes and Home
+
+    private func taskList(_ items: String) throws -> VaultTaskList {
+        let json = """
+        {"items": [\(items)], "readAt": "2026-11-05T08:00:00Z", "today": "2026-11-05", "total": 3, "truncated": false}
+        """
+        return try JSONDecoder().decode(VaultTaskList.self, from: Data(json.utf8))
+    }
+
+    private func vaultTask(_ id: String, _ text: String, due: String?, time: String? = nil, done: Bool = false) -> String {
+        """
+        {"id": "\(id)", "text": "\(text)", "done": \(done), "dueDate": \(due.map { "\"\($0)\"" } ?? "null"),
+         "dueTime": \(time.map { "\"\($0)\"" } ?? "null"), "dueAt": null, "priority": "normal",
+         "path": "Work/\(id).md", "line": 1, "heading": null, "version": "v"}
+        """
+    }
+
+    private func vaultNotes() throws -> [VaultNoteSummary] {
+        let json = """
+        [{"path": "Work/a.md", "title": "Older", "folder": "Work", "directory": "Work", "updatedAt": "2026-11-01T08:00:00Z"},
+         {"path": "Work/b.md", "title": "Newest", "folder": "Work", "directory": "Work", "updatedAt": "2026-11-05T07:30:00Z"}]
+        """
+        return try JSONDecoder().decode([VaultNoteSummary].self, from: Data(json.utf8))
+    }
+
+    func testNotesBuilderKeepsTodaysOpenTasksAndTheLatestNotesNewestFirst() throws {
+        let list = try taskList([
+            vaultTask("1", "Call", due: "2026-11-05", time: "14:00"),
+            vaultTask("2", "Overdue", due: "2026-11-01"),
+            vaultTask("3", "Done", due: "2026-11-05", done: true),
+            vaultTask("4", "Plan", due: "2026-11-05"),
+        ].joined(separator: ","))
+        let data = JarvisWidgetBuilder.notes(now: now, calendar: calendar, tasks: list, notes: try vaultNotes())
+        XCTAssertEqual(data.tasksToday, 2)
+        XCTAssertEqual(data.tasks.map(\.title), ["Plan", "Call"])
+        XCTAssertEqual(data.tasks.last?.time, "14:00")
+        XCTAssertNotNil(data.tasks.first?.dueDate)
+        XCTAssertEqual(data.notes.map(\.title), ["Newest", "Older"])
+        XCTAssertFalse(data.isEmpty)
+        XCTAssertTrue(JarvisWidgetBuilder.notes(now: now, calendar: calendar, tasks: try taskList(""), notes: []).isEmpty)
+    }
+
+    func testHomeBuilderUsesTheFactoryNumbers() {
+        let home = JarvisWidgetBuilder.home(now: now, factory: factory())
+        XCTAssertEqual(home.approvals, 1)
+        XCTAssertEqual(home.running, 2)
+    }
+
+    func testPhrases() throws {
+        let notes = JarvisNotesWidgetData(
+            generatedAt: now, tasksToday: 3, tasks: [],
+            notes: [.init(id: "n", title: "Ideas", editedAt: now)]
+        )
+        XCTAssertEqual(JarvisWidgetPhrase.notes(notes, language: .en), "3 tasks today. Latest note: Ideas.")
+        XCTAssertEqual(JarvisWidgetPhrase.notes(notes, language: .da), "3 opgaver i dag. Seneste note: Ideas.")
+        var one = notes
+        one.tasksToday = 1
+        one.notes = []
+        XCTAssertEqual(JarvisWidgetPhrase.notes(one, language: .en), "1 task today.")
+        one.tasksToday = 0
+        XCTAssertEqual(JarvisWidgetPhrase.notes(one, language: .en), "No tasks today.")
+        XCTAssertEqual(JarvisWidgetPhrase.noTasksToday(language: .da), "Ingen opgaver i dag")
+        XCTAssertEqual(JarvisWidgetPhrase.now(.init(generatedAt: now, approvals: 2, running: 5), language: .en), "2 approvals needed")
+        XCTAssertEqual(JarvisWidgetPhrase.now(.init(generatedAt: now, approvals: 0, running: 1), language: .en), "1 run in progress")
+        XCTAssertEqual(JarvisWidgetPhrase.now(.init(generatedAt: now, approvals: 0, running: 0), language: .da), "Alt roligt")
+        let gym = JarvisWidgetPhrase.gym(self.gym(), language: .en)
+        XCTAssertEqual(gym.title, "Workouts 2 of 6")
+        XCTAssertEqual(gym.detail, "4 to go")
+    }
+
+    func testTaskAndNoteTimes() {
+        let timed = JarvisNotesWidgetData.Task(id: "1", title: "Call", time: "14:00")
+        XCTAssertEqual(JarvisWidgetPhrase.when(timed, language: .en, calendar: calendar), "14:00")
+        XCTAssertNil(JarvisWidgetPhrase.when(.init(id: "2", title: "x"), language: .en, calendar: calendar))
+        XCTAssertEqual(JarvisWidgetPhrase.edited(now, now: now, language: .en, calendar: calendar).prefix(7), "Edited ")
+    }
+
+    func testSnapshotWithoutNotesAndHomeStillDecodes() throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(snapshot())
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object.removeValue(forKey: "notes")
+        object.removeValue(forKey: "home")
+        let old = try JSONSerialization.data(withJSONObject: object)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(JarvisWidgetSnapshot.self, from: old)
+        XCTAssertEqual(decoded.version, JarvisWidgetSnapshot.currentVersion)
+        XCTAssertEqual(decoded.gym.value?.stepsToday, 6_400)
+        XCTAssertEqual(decoded.notes.status, .loading)
+        XCTAssertNil(decoded.home.value)
+    }
+
+    func testNotesAndHomeTimelines() {
+        let notes = JarvisNotesWidgetData(generatedAt: now, tasksToday: 0, tasks: [], notes: [])
+        let home = JarvisHomeWidgetData(generatedAt: now, approvals: 0, running: 0)
+        let full = JarvisWidgetSnapshot(
+            language: .en, gym: .init(status: .ok, value: gym()), factory: .init(status: .ok, value: factory()),
+            notes: .init(status: .ok, value: notes), home: .init(status: .ok, value: home)
+        )
+        let notesPlan = JarvisWidgetTimeline.plan(for: .snapshot(full), topic: .notes, now: now)
+        XCTAssertEqual(notesPlan.entries[0].notes, .empty)
+        XCTAssertEqual(notesPlan.entries.count, 2)
+        // "All quiet" is content, never the empty state.
+        guard case .content(_, let stale) = notesPlan.entries[0].home else { return XCTFail("content expected") }
+        XCTAssertFalse(stale)
+        // Gym (30 min), the others (15 min): Home schedules both stale moments.
+        let homePlan = JarvisWidgetTimeline.plan(for: .snapshot(full), topic: .home, now: now)
+        XCTAssertEqual(homePlan.entries.count, 3)
+        XCTAssertEqual(JarvisWidgetTimeline.plan(for: .missing, topic: .home, now: now).entries[0].notes, .loading)
+        XCTAssertEqual(JarvisWidgetTimeline.plan(for: .unreadable, topic: .notes, now: now).entries[0].home, .error)
+    }
+
+    func testEveryWidgetKindMapsToATopic() {
+        XCTAssertEqual(JarvisWidgetKind.allCases.count, 14)
+        XCTAssertEqual(JarvisWidgetKind.notesLarge.topic, .notes)
+        XCTAssertEqual(JarvisWidgetKind.homeSmall.topic, .home)
+        XCTAssertEqual(Set(JarvisWidgetKind.allCases.map(\.rawValue)).count, 14)
+    }
+
+    func testWidgetLinksOpenTheMatchingPage() {
+        XCTAssertEqual(JarvisWidgetLink.destination(for: JarvisWidgetLink.url(for: .notes)), .notes)
+        XCTAssertEqual(JarvisWidgetLink.destination(for: JarvisWidgetLink.url(for: .home)), .today)
+        XCTAssertNil(JarvisWidgetLink.destination(for: URL(string: "https://notes")!))
+        XCTAssertNil(JarvisWidgetLink.destination(for: URL(string: "jarvis-widget://unknown")!))
+    }
 }

@@ -16,6 +16,12 @@ struct JarvisWidgets: WidgetBundle {
         JarvisFactoryDoneWidget()
         JarvisFactoryMediumWidget()
         JarvisFactoryLargeWidget()
+        JarvisNotesSmallWidget()
+        JarvisNotesMediumWidget()
+        JarvisNotesLargeWidget()
+        JarvisHomeSmallWidget()
+        JarvisHomeMediumWidget()
+        JarvisHomeLargeWidget()
     }
 }
 

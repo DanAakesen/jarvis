@@ -7,6 +7,8 @@ import WidgetKit
 enum JarvisWidgetPalette {
     static let lift = Color.orange
     static let run = Color.blue
+    /// The secondary colour of the Notes and Home widgets: a warm grey that sits beside the orange accent.
+    static let stone = Color(red: 0.66, green: 0.64, blue: 0.62)
 
     static func status(_ status: JarvisFactoryWidgetData.Status) -> Color {
         switch status {
@@ -72,12 +74,18 @@ struct JarvisWidgetStateView<Value: Equatable & Sendable, Content: View>: View {
     let state: JarvisWidgetViewState<Value>
     let language: JarvisAppLanguage
     let emptyCopy: JarvisWidgetCopy
+    /// Loading draws this many skeleton rows instead of the message line; zero keeps the message.
+    var skeletonRows = 0
     @ViewBuilder let content: (Value, Bool) -> Content
 
     var body: some View {
         switch state {
         case .loading:
-            JarvisWidgetMessage(symbol: "ellipsis", text: JarvisWidgetCopy.loading.text(language: language))
+            if skeletonRows > 0 {
+                JarvisWidgetSkeleton(rows: skeletonRows, language: language)
+            } else {
+                JarvisWidgetMessage(symbol: "ellipsis", text: JarvisWidgetCopy.loading.text(language: language))
+            }
         case .empty:
             JarvisWidgetMessage(symbol: "tray", text: emptyCopy.text(language: language))
         case .error:
@@ -87,6 +95,34 @@ struct JarvisWidgetStateView<Value: Equatable & Sendable, Content: View>: View {
         case .content(let value, let isStale):
             content(value, isStale)
         }
+    }
+}
+
+/// Loading skeleton: a short heading bar and rows of muted bars. Static, so Reduce Motion needs no special case.
+struct JarvisWidgetSkeleton: View {
+    let rows: Int
+    let language: JarvisAppLanguage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            bar(fraction: 0.4, height: 14)
+            ForEach(0..<rows, id: \.self) { index in
+                bar(fraction: index.isMultiple(of: 2) ? 0.92 : 0.66, height: 10)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(JarvisWidgetCopy.loading.text(language: language))
+    }
+
+    private func bar(fraction: Double, height: CGFloat) -> some View {
+        GeometryReader { proxy in
+            RoundedRectangle(cornerRadius: height / 2)
+                .fill(Color.secondary.opacity(0.22))
+                .frame(width: proxy.size.width * fraction)
+        }
+        .frame(height: height)
     }
 }
 
