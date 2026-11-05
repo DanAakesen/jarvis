@@ -10940,3 +10940,12 @@ notification sheet through its existing presentation model.
 Local validation: 474 Core tests and 23 backend Usage/Now-feed tests pass.
 Native screenshots and owner acceptance remain pending; the cloud network
 policy still blocks the artifact download host. No pixel-match claim is made.
+
+
+## 5 November 2026 — Preserve Status state text and truthful screenshot fixtures
+
+Native evidence exposed a clipped Status state label and a Notifications capture
+covered by sign-in. The row reserves readable state text, stacking it at large
+Dynamic Type; the test uses the existing Simulator navigation argument. Usage
+emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
+verification is pending; previous UI-test success is not visual acceptance.

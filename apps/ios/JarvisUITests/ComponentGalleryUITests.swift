@@ -124,7 +124,7 @@ final class ComponentGalleryUITests: XCTestCase {
 
     func testNotificationsHasHeroAndKeepsApprovalActionsInBothLanguages() {
         for (language, theme) in [("en", "dark"), ("da", "light")] {
-            app.launchArguments = ["--screenshot-calendar-change-fixture", "--screenshot-notifications-open",
+            app.launchArguments = ["--ui-test-navigation", "--screenshot-calendar-change-fixture", "--screenshot-notifications-open",
                 "-jarvis.appLanguage", language, "-jarvis.appTheme", theme]
             app.launch()
             let hero = app.descendants(matching: .any)["notifications.hero"]

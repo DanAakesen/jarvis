@@ -7047,3 +7047,12 @@ and screenshot inspection remain separate from these Linux checks.
 Do not restore a mandatory `dailyToolUsage` field: inspect the current
 `UsageReport` TypeScript contract and `/usage` response before changing decoding.
 A browser-rendered reference is not evidence of native visual correctness.
+
+
+## Native Insights image evidence
+
+Native evidence exposed a clipped Status state label and a Notifications capture
+covered by sign-in. The row reserves readable state text, stacking it at large
+Dynamic Type; the test uses the existing Simulator navigation argument. Usage
+emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
+verification is pending; previous UI-test success is not visual acceptance.

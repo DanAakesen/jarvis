@@ -336,6 +336,7 @@ struct JarvisStatusArea: View {
 
 /// One expandable row. The whole header is the button; the sentence under it appears when it is open.
 private struct JarvisStatusRow<Detail: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let tone: JarvisStatusValue
     let toneTitle: String
@@ -367,7 +368,7 @@ private struct JarvisStatusRow<Detail: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button(action: onToggle) {
-                HStack(spacing: 10) {
+                HStack(spacing: JarvisDesignTokens.rowSpacing) {
                     Image(systemName: symbol)
                         .foregroundStyle(tint)
                         .frame(width: 24)
@@ -375,15 +376,19 @@ private struct JarvisStatusRow<Detail: View>: View {
                     VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                         Text(title).font(.body).foregroundStyle(.primary).lineLimit(2)
                         if let subtitle { Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                        if dynamicTypeSize.isAccessibilitySize {
+                            Text(toneTitle).font(.caption.weight(.semibold)).foregroundStyle(tint)
+                        }
                     }
                     .multilineTextAlignment(.leading)
-                    .layoutPriority(1)
-                    Spacer(minLength: 8)
-                    Text(toneTitle)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(tint)
-                        .multilineTextAlignment(.trailing)
-                        .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if !dynamicTypeSize.isAccessibilitySize {
+                        Text(toneTitle)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(tint)
+                            .fixedSize()
+                            .layoutPriority(1)
+                    }
                     Image(systemName: "chevron.down")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)

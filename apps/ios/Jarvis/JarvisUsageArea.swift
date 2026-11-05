@@ -250,9 +250,9 @@ struct JarvisUsageArea: View {
                     y: .value(title, bucket.value)
                 )
                 .foregroundStyle(
-                    selectedBucketID == nil || selectedBucketID == bucket.id
+                    (selectedBucketID ?? summary.buckets.last?.id) == bucket.id
                         ? JarvisDesignTokens.primaryAccent
-                        : JarvisDesignTokens.primaryAccent.opacity(0.35)
+                        : Color.secondary
                 )
                 .cornerRadius(3)
             }
