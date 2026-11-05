@@ -1504,27 +1504,32 @@ CI retains both scheme and dedicated navigation result bundles on
 failure, including failures before screenshot capture completes.
 No iOS-specific backend routes are added.
 
-### iOS Notes area (P15-12)
+### iOS Notes area (P15-12; P15-93 follow-up)
 
 The Notes destination composes the existing `JarvisNotesClient` from the shared
 `JarvisClient`, app `URLSessionTransport` and Keychain token store. The client
 uses only the shared routes documented in `docs/ios/integration-contract.md`:
 `/notes/tree`, `/notes`,
-`/notes/note`, `/vault/tasks`, `/knowledge/graph` and `/knowledge/search`.
+`/notes/note`, `/notes/folders`, `/vault/tasks`, `/knowledge/graph` and `/knowledge/search`.
 Graph search loads the graph before resolving result node IDs. The SwiftUI
 destination owns presentation state; typed route validation, task grouping,
 folder-tree construction and deterministic graph positions live in `JarvisCore`.
 The app's persisted `jarvis.appLanguage` preference selects the localized
 JarvisCore resource catalog and date locale, defaulting to Danish; it does not
-read or write the separate backend voice-language setting. No iOS-only backend
-route, local database or offline cache is added.
+read or write the separate backend voice-language setting. Recent successful
+openings use the existing account-bound cache under a key that survives note
+refresh and clears on sign-out. No offline write queue is added.
 
 The app currently has no native Entra sign-in provider. The Notes composition
 can use a stored owner session; when none is available, the provider returns a
 visible sign-in error rather than generating a token or fixture response.
-Standalone folder creation, note delete/rename/move, task delete and priority
-on task creation remain unavailable because the shared backend has no matching
-screen route or payload.
+P15-93 adds owner-only `POST /notes/folders` with a bounded visible path. It writes
+an empty `.gitkeep` marker, refreshes the existing folder inventory and never
+indexes the marker as a note. Duplicate paths return 409; uncertain writes are not
+automatically retried. The UI retains confirmed paths while the folder index
+catches up. Task creation accepts optional normal/medium/high priority. These
+backend changes must precede the new client release. Note delete/rename/move and
+task delete remain unavailable.
 
 ### iOS Settings area (P15-20)
 
@@ -5170,11 +5175,12 @@ unless the task text, tick state, due date, time and priority all read back as i
 returns `commit: null`. The commit message is `jarvis: edit a task`. PATCH, PUT and POST all return the line's new `version` (a
 tick or an edit changes the line, so the next change sends the returned one). The write carries the file SHA and retries once; a
 changed or conflicting line returns 409, a refused path or scope 400.
-`POST /vault/tasks` takes `{text, scope: personal|work, due?, time?}`
+`POST /vault/tasks` takes `{text, scope: personal|work, due?, time?, priority?}`
 (`time` is `HH:MM` and needs `due`),
 strips control characters, comments and metadata emoji, caps text at 200 characters,
 refuses secret-looking text, and appends `- [ ] text` (with `📅 date`, plus ` HH:MM` when
-timed) to
+timed, and `⏫`/`🔼` for optional high/medium priority; normal or omitted priority
+adds no marker) to
 `Personal/Inbox.md` or `Work/Inbox.md`, creating the note when missing and refusing
 an open code fence or an oversized file. Both commit as Jarvis (`jarvis: complete a
 task`, `reopen a task`, `edit a task` or `add a task`), refresh the notes index and log

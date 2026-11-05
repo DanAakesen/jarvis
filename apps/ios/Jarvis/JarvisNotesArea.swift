@@ -5,7 +5,6 @@ import SwiftUI
 private enum JarvisNotesTab: String, CaseIterable, Identifiable {
     case notes
     case tasks
-    case list
     case graph
 
     var id: String { rawValue }
@@ -39,15 +38,14 @@ struct JarvisNotesCopy {
     var all: String { text(.all) }
     var notes: String { text(.notes) }
     var tasks: String { text(.tasks) }
-    var list: String { text(.list) }
     var graph: String { text(.graph) }
     var newNote: String { text(.newNote) }
+    var newFolderTitle: String { text(.newFolder) }
     var newTask: String { text(.newTask) }
     var retry: String { text(.retry) }
     var loading: String { text(.loading) }
     var emptyNotes: String { text(.emptyNotes) }
     var emptyTasks: String { text(.emptyTasks) }
-    var emptyList: String { text(.emptyList) }
     var emptyGraph: String { text(.emptyGraph) }
     var noResults: String { text(.noResults) }
     var offline: String { text(.offline) }
@@ -62,7 +60,14 @@ struct JarvisNotesCopy {
     var reload: String { text(.reload) }
     var titleField: String { text(.titleField) }
     var folderField: String { text(.folderField) }
-    func newFolder(_ name: String) -> String { "\(text(.newFolder)): \(name)" }
+    var priority: String { text(.priority) }
+    var folderName: String { text(.folderName) }
+    var newFolderHere: String { text(.newFolderHere) }
+    var useFolder: String { text(.useFolder) }
+    var parentFolder: String { text(.parentFolder) }
+    var folderSavedWithNote: String { text(.folderSavedWithNote) }
+    var folderInvalidName: String { text(.folderInvalidName) }
+    var folderAlreadyExists: String { text(.folderAlreadyExists) }
     var contentField: String { text(.contentField) }
     var dueDate: String { text(.dueDate) }
     var dueTime: String { text(.dueTime) }
@@ -78,8 +83,6 @@ struct JarvisNotesCopy {
     var priorityNormal: String { text(.priorityNormal) }
     var complete: String { text(.complete) }
     var completed: String { text(.completed) }
-    var showGraphList: String { text(.showGraphList) }
-    var showGraph: String { text(.showGraph) }
     var resetGraph: String { text(.resetGraph) }
     var vaultRoot: String { text(.vaultRoot) }
     var loadMore: String { text(.loadMore) }
@@ -112,7 +115,6 @@ struct JarvisNotesCopy {
         switch tab {
         case .notes: notes
         case .tasks: tasks
-        case .list: list
         case .graph: graph
         }
     }
@@ -138,11 +140,7 @@ struct JarvisNotesArea: View {
     @State private var searchText = ""
     @State private var refreshVersion = 0
     @State private var tree: VaultNoteTree?
-    @State private var folders: [VaultFolderNode] = []
-    @State private var expandedFolders = Set<String>()
-    @State private var groupNotes: [String: [VaultNoteSummary]] = [:]
-    @State private var groupHasMore: [String: Bool] = [:]
-    @State private var groupLoading = Set<String>()
+    @State private var recentVisits: [JarvisNoteVisit] = []
     @State private var directoryNotes: [String: [VaultNoteSummary]] = [:]
     @State private var directoryHasMore: [String: Bool] = [:]
     @State private var directoryLoading = Set<String>()
@@ -162,6 +160,8 @@ struct JarvisNotesArea: View {
     @State private var editorPresented = false
     @State private var openingNotePaths = Set<String>()
     @State private var newNotePresented = false
+    @State private var newFolderPresented = false
+    @State private var confirmedFolders = Set<String>()
     @State private var newTaskPresented = false
     @State private var openedTask: VaultTask?
     @State private var newNoteFolder = ""
@@ -173,7 +173,7 @@ struct JarvisNotesArea: View {
     private var isInitialLoading: Bool {
         guard loadError == nil else { return false }
         switch selectedTab {
-        case .notes, .list: return tree == nil
+        case .notes: return tree == nil
         case .tasks: return taskList == nil
         case .graph: return graph == nil
         }
@@ -186,7 +186,7 @@ struct JarvisNotesArea: View {
                     JarvisPageLoadingView(title: copy.loading, identifier: "notes.loading")
                         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
                 }
-            } else if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            } else if selectedTab == .graph || searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 selectedContent
             } else {
                 searchContent
@@ -198,7 +198,6 @@ struct JarvisNotesArea: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if !isInitialLoading {
                 VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-                    if selectedTab == .notes { folderFilters }
                     searchBar
                 }
                 .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
@@ -224,6 +223,20 @@ struct JarvisNotesArea: View {
                         await openNote(path: path)
                     }
                 )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+            }
+        }
+        .sheet(isPresented: $newFolderPresented) {
+            if let client {
+                JarvisNewFolderSheet(client: client, copy: copy, initialFolder: selectedFolder) { path in
+                    newFolderPresented = false
+                    confirmedFolders.insert(path)
+                    selectedTab = .notes
+                    selectedFolder = path
+                    directoryNotes[path] = []
+                    directoryHasMore[path] = false
+                }
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
@@ -289,16 +302,21 @@ struct JarvisNotesArea: View {
                 Label(copy.newNote, systemImage: "note.text")
             }
             .accessibilityIdentifier("notes.newNote")
+            Button { newFolderPresented = true } label: {
+                Label(copy.newFolderTitle, systemImage: "folder.badge.plus")
+            }
+            .accessibilityIdentifier("notes.newFolder")
             Button {
                 newTaskPresented = true
             } label: {
                 Label(copy.newTask, systemImage: "checklist")
             }
+            .accessibilityIdentifier("notes.newTask")
         }
     }
 
-    /// The page head, as the first scrolling row: data phrase, Overview hero, then the Notes / Tasks / List / Graph
-    /// segmented bar and, on Notes, the Recent strip. Nothing but the bar shows until the data is loaded.
+    /// The page head, as the first scrolling row: data phrase, Overview hero, then the Notes / Tasks / Graph
+    /// segmented bar and, on Notes, the Recent strip. The shared skeleton is shown until the first data arrives.
     @ViewBuilder
     private var pageHead: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
@@ -311,10 +329,12 @@ struct JarvisNotesArea: View {
                 overviewHero
             }
             tabSwitcher
-            if selectedTab == .notes, let graph {
+            if selectedTab == .notes, selectedFolder.isEmpty, let graph {
                 JarvisNotesRecentStrip(
                     title: copy.recent,
-                    notes: JarvisNotesPresentation.recentNotes(graph),
+                    notes: JarvisNotesPresentation.recentlyOpenedNotes(graph, visits: recentVisits),
+                    visits: recentVisits,
+                    language: language,
                     onOpen: { node in Task { await openNote(path: node.path) } }
                 )
             }
@@ -341,10 +361,6 @@ struct JarvisNotesArea: View {
         )
     }
 
-    private var graphFolderCounts: [String: Int] {
-        Dictionary(uniqueKeysWithValues: (graph.map { JarvisNotesPresentation.folderShares($0) } ?? []).map { ($0.folder, $0.count) })
-    }
-
     private var tabSwitcher: some View {
         HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
             JarvisSegmentedBar(
@@ -362,6 +378,7 @@ struct JarvisNotesArea: View {
                     identifier: "notes.resetGraph"
                 ) {
                     graphSearch = nil
+                    searchText = ""
                     refreshVersion += 1
                 }
             }
@@ -385,43 +402,79 @@ struct JarvisNotesArea: View {
             notesContent
         case .tasks:
             tasksContent
-        case .list:
-            listContent
         case .graph:
             graphContent
         }
     }
 
+    private var currentDirectoryNotes: [VaultNoteSummary] {
+        JarvisNotesPresentation.directoryNotes(directoryNotes[selectedFolder] ?? [], in: selectedFolder)
+    }
+
+    private var childFolders: [VaultFolderNode] {
+        JarvisNotesPresentation.childFolders(in: selectedFolder, paths: (tree?.directories ?? []) + Array(confirmedFolders))
+    }
+
     private var notesContent: some View {
-        Group {
-            if loading && tree == nil {
-                tabState(icon: "note.text", title: copy.loading, retry: nil)
-            } else if let loadError {
-                tabState(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
-            } else if tree != nil, folderGroups.isEmpty {
-                VStack(spacing: 0) {
-                    JarvisPageHeadline(phrase: JarvisNotesPagePhrase.empty(language: language))
-                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-                    tabState(icon: "note.text", title: copy.emptyNotes, retry: nil)
-                }
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
-                        pageHead
-                        VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
-                            ForEach(visibleFolderGroups, id: \.self) { folder in
-                                folderSection(folder)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                pageHead
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                    if let parent = JarvisNotesPresentation.parentFolder(of: selectedFolder) {
+                        JarvisTextButton(title: copy.back, identifier: "notes.folder.back") { navigateToFolder(parent) }
+                        Text(selectedFolder.replacingOccurrences(of: "/", with: " / "))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("notes.folder.breadcrumb")
+                    }
+                    if let loadError {
+                        stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
+                    } else {
+                        ForEach(childFolders) { folder in
+                            Button { navigateToFolder(folder.path) } label: {
+                                HStack(spacing: JarvisPageHeaderMetrics.spacing) {
+                                    Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                                    Image(systemName: "folder").foregroundStyle(JarvisNotesFolderPalette.color(folder.path))
+                                    Text(folder.name).foregroundStyle(.primary)
+                                    Spacer()
+                                }
+                                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.notesRowMinimumHeight, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("notes.folder.\(folder.path)")
+                        }
+                        if directoryNotes[selectedFolder] != nil {
+                            JarvisSectionHeadline(selectedFolder.isEmpty ? copy.vaultRoot : String(selectedFolder.split(separator: "/").last ?? "")) {
+                                Text("\(currentDirectoryNotes.count)\(directoryHasMore[selectedFolder] == true ? "+" : "")")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("notes.folder.count")
+                            }
+                            if currentDirectoryNotes.isEmpty {
+                                Text(copy.emptyNotes).font(.subheadline).foregroundStyle(.secondary)
+                            } else {
+                                JarvisRowGroup {
+                                    ForEach(currentDirectoryNotes) { note in noteRow(note) }
+                                }
                             }
                         }
-                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                        if directoryLoading.contains(selectedFolder) {
+                            JarvisLoadingView(title: copy.loading, size: .inline)
+                        } else if directoryHasMore[selectedFolder] == true {
+                            JarvisTextButton(title: copy.loadMore) { Task { await loadMoreDirectory(selectedFolder) } }
+                        }
                     }
                 }
-                .contentMargins(.bottom, JarvisNotesOverviewMetrics.bottomClearance, for: .scrollContent)
-                .scrollContentBackground(.hidden)
-                .refreshable { await loadSelectedTab(force: true) }
-                .accessibilityIdentifier("notes.scroll")
+                .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
             }
         }
+        .refreshable { await loadSelectedTab(force: true) }
+        .accessibilityIdentifier("notes.scroll")
+    }
+
+    private func navigateToFolder(_ folder: String) {
+        selectedFolder = folder
+        loadError = nil
+        Task { await loadDirectory(folder, offset: 0) }
     }
 
     private var tasksContent: some View {
@@ -439,35 +492,6 @@ struct JarvisNotesArea: View {
         }
     }
 
-    private var listContent: some View {
-        Group {
-            if loading && tree == nil {
-                tabState(icon: "folder", title: copy.loading, retry: nil)
-            } else if let loadError {
-                tabState(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
-            } else if folders.isEmpty && (tree?.rootNoteCount ?? 0) == 0 {
-                tabState(icon: "folder", title: copy.emptyList, retry: nil)
-            } else {
-                JarvisList(head: { pageHead }) {
-                    if (tree?.rootNoteCount ?? 0) > 0 {
-                        Section {
-                            if expandedFolders.contains("") {
-                                directoryContent("")
-                            }
-                        } header: {
-                            folderHeader("", inList: true)
-                        }
-                    }
-                    ForEach(folders) { folder in folderRow(folder) }
-                }
-                .listStyle(.plain)
-                .contentMargins(.bottom, JarvisNotesOverviewMetrics.bottomClearance, for: .scrollContent)
-                .scrollContentBackground(.hidden)
-                .refreshable { await loadSelectedTab(force: true) }
-            }
-        }
-    }
-
     private var graphContent: some View {
         Group {
             if loading && graph == nil {
@@ -480,10 +504,18 @@ struct JarvisNotesArea: View {
                 } else {
                     VStack(spacing: 0) {
                         pageHead
+                        if searchLoading {
+                            JarvisLoadingView(title: copy.loading, size: .inline)
+                        } else if let searchError {
+                            Text(searchError).font(.caption).foregroundStyle(.secondary)
+                        } else if !searchText.isEmpty, graphSearch?.hits.isEmpty == true {
+                            Text(copy.noResults).font(.caption).foregroundStyle(.secondary)
+                        }
                         JarvisNotesGraphView(
                             graph: graph,
                             copy: copy,
-                            onOpen: { node in await openNote(path: node.path) }
+                            onOpen: { node in await openNote(path: node.path) },
+                            searchMatches: Set(graphSearch?.hits.map(\.nodeId) ?? [])
                         )
                         .id(refreshVersion)
                         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
@@ -547,20 +579,6 @@ struct JarvisNotesArea: View {
         }
     }
 
-    private var folderFilters: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: JarvisDesignTokens.notesChipSpacing) {
-                folderFilter("", title: copy.all)
-                ForEach(topLevelFolders, id: \.self) { folder in
-                    folderFilter(folder, title: folder)
-                }
-            }
-            .padding(.horizontal, JarvisDesignTokens.notesCompactInset)
-        }
-        .scrollIndicators(.hidden)
-        .accessibilityLabel(copy.folderField)
-    }
-
     private var searchBar: some View {
         HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
             JarvisSearchField(
@@ -573,26 +591,11 @@ struct JarvisNotesArea: View {
         }
     }
 
-    private var folderGroups: [String] {
-        var groups = topLevelFolders
-        if (tree?.rootNoteCount ?? 0) > 0 { groups.insert("", at: 0) }
-        return groups
-    }
-
-    private var visibleFolderGroups: [String] {
-        selectedFolder.isEmpty ? folderGroups : folderGroups.filter { $0 == selectedFolder }
-    }
-
-    private var topLevelFolders: [String] {
-        Array(Set((tree?.directories ?? []).compactMap { $0.split(separator: "/").first.map(String.init) }))
-            .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-    }
-
     private var visibleSearchNotes: [KnowledgeSearchHit] {
         guard let hits = graphSearch?.hits else { return [] }
         guard selectedFolder.isEmpty else {
             return hits.filter { hit in
-                graphSearch?.graph.nodes.first(where: { $0.id == hit.nodeId })?.folder == selectedFolder
+                graphSearch?.graph.nodes.first(where: { $0.id == hit.nodeId })?.directory == selectedFolder
             }
         }
         return hits
@@ -604,87 +607,6 @@ struct JarvisNotesArea: View {
 
     private var searchKey: String {
         "\(searchText.trimmingCharacters(in: .whitespacesAndNewlines))|\(selectedScope.rawValue)|\(refreshVersion)"
-    }
-
-    private func folderFilter(_ folder: String, title: String) -> some View {
-        JarvisLabelledButton(title: title, isSelected: selectedFolder == folder) { selectedFolder = folder }
-    }
-
-    /// One folder of the Notes tab in the Software Factory list style: a rounded outlined header row, then its notes
-    /// in a transparent rounded container indented 16 pt more, rows separated by hairlines.
-    private func folderSection(_ folder: String) -> some View {
-        let notes = groupNotes[folder] ?? []
-        return VStack(alignment: .leading, spacing: JarvisDesignTokens.notesChipSpacing) {
-            folderHeader(folder, inList: false)
-            if expandedFolders.contains(folder) {
-                VStack(spacing: 0) {
-                    ForEach(Array(notes.enumerated()), id: \.element.id) { index, note in
-                        if index > 0 { JarvisNotesHairline() }
-                        noteRow(note)
-                            .padding(.horizontal, JarvisDesignTokens.notesSectionSpacing)
-                    }
-                    if groupLoading.contains(folder) {
-                        JarvisLoadingView()
-                            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.notesRowMinimumHeight)
-                    } else if groupHasMore[folder] == true {
-                        JarvisLabelledButton(title: copy.loadMore) {
-                            Task { await loadMoreNotes(in: folder) }
-                        }
-                        .padding(JarvisDesignTokens.notesChipSpacing)
-                    } else if groupNotes[folder] != nil && notes.isEmpty {
-                        Text(copy.emptyNotes)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.notesRowMinimumHeight)
-                    }
-                }
-                .jarvisHairlineOutline(radius: JarvisNotesOverviewMetrics.listRadius)
-                .padding(.leading, JarvisNotesOverviewMetrics.listIndent)
-                .accessibilityIdentifier("notes.folder.rows")
-            }
-        }
-    }
-
-    private func folderHeader(_ folder: String, inList: Bool) -> some View {
-        let isExpanded = expandedFolders.contains(folder)
-        let title = folder.isEmpty ? copy.vaultRoot : folder
-        let count = graphFolderCounts[folder] ?? (inList
-            ? directoryNotes[folder]?.count
-            : groupHasMore[folder] == true ? nil : groupNotes[folder]?.count)
-        return Button {
-            toggleFolder(folder)
-        } label: {
-            HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-                Circle()
-                    .fill(JarvisDesignTokens.primaryAccent)
-                    .frame(width: 8, height: 8)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(.headline)
-                Spacer()
-                if let count {
-                    Text(String(count))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, JarvisDesignTokens.notesChipSpacing)
-                        .padding(.vertical, JarvisDesignTokens.notesInlineSpacing / 2)
-                        .background(Color.primary.opacity(0.08), in: Capsule())
-                }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: JarvisDesignTokens.notesChevronSize, weight: .semibold))
-                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, JarvisDesignTokens.notesSectionSpacing + JarvisDesignTokens.notesInlineSpacing)
-            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.notesRowMinimumHeight, alignment: .leading)
-            .contentShape(Rectangle())
-            .foregroundStyle(.primary)
-        }
-        .buttonStyle(.plain)
-        .jarvisHairlineOutline(radius: JarvisNotesOverviewMetrics.listRadius)
-        .accessibilityLabel(title)
-        .accessibilityValue(isExpanded ? copy.expanded : copy.collapsed)
-        .accessibilityIdentifier("notes.folder.header")
     }
 
     private func noteRow(_ note: VaultNoteSummary) -> some View {
@@ -700,54 +622,61 @@ struct JarvisNotesArea: View {
                         .font(.system(size: JarvisDesignTokens.notesIconSize))
                         .foregroundStyle(.secondary)
                 }
-                Text(note.title)
-                    .foregroundStyle(.primary)
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                    Text(note.title).foregroundStyle(.primary)
+                    Text(JarvisNotesLocalization.formattedUpdatedDate(note.updatedAt, language: copy.language))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Spacer()
-                Text(JarvisNotesLocalization.formattedUpdatedDate(note.updatedAt, language: copy.language))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.notesRowMinimumHeight, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .jarvisListRow()
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(openingNotePaths.contains(note.path))
         .accessibilityLabel(note.title)
+        .accessibilityIdentifier("notes.note.\(note.path)")
     }
 
     private func taskListView(_ list: VaultTaskList) -> some View {
         let groups = JarvisNotesLogic.taskGroups(list.items, today: list.today)
         return Group {
             if groups.overdue.isEmpty && groups.today.isEmpty && groups.upcoming.isEmpty && groups.noDate.isEmpty {
-                tabState(icon: "checklist", title: copy.emptyTasks, retry: nil)
+                ScrollView {
+                    VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+                        pageHead
+                        stateView(icon: "checklist", title: copy.emptyTasks, retry: nil)
+                    }
+                }
             } else {
                 JarvisList(head: { pageHead }) {
                     if !groups.overdue.isEmpty {
                         Section {
                             ForEach(groups.overdue) { task in taskRow(task, today: list.today) }
                         } header: {
-                            Text(copy.overdue)
+                            JarvisSectionHeadline(copy.overdue)
                         }
                     }
                     if !groups.today.isEmpty {
                         Section {
                             ForEach(groups.today) { task in taskRow(task, today: list.today) }
                         } header: {
-                            Text(copy.today)
+                            JarvisSectionHeadline(copy.today)
                         }
                     }
                     if !groups.upcoming.isEmpty {
                         Section {
                             ForEach(groups.upcoming) { task in taskRow(task, today: list.today) }
                         } header: {
-                            Text(copy.upcoming)
+                            JarvisSectionHeadline(copy.upcoming)
                         }
                     }
                     if !groups.noDate.isEmpty {
                         Section {
                             ForEach(groups.noDate) { task in taskRow(task, today: list.today) }
                         } header: {
-                            Text(copy.noDate)
+                            JarvisSectionHeadline(copy.noDate)
                         }
                     }
                 }
@@ -772,7 +701,7 @@ struct JarvisNotesArea: View {
             Button {
                 openedTask = task
             } label: {
-            VStack(alignment: .leading, spacing: JarvisDesignTokens.notesInlineSpacing) {
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                 Text(task.text).foregroundStyle(.primary)
                 HStack(spacing: JarvisDesignTokens.notesMetadataSpacing) {
                     Text(task.scope == .work ? copy.work : copy.personal)
@@ -794,6 +723,8 @@ struct JarvisNotesArea: View {
             .accessibilityIdentifier("notes.task.open")
         }
         .frame(minHeight: JarvisDesignTokens.notesRowMinimumHeight)
+        .jarvisListRow(separator: false)
+        .listRowInsets(EdgeInsets())
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !task.done {
                 Button {
@@ -840,63 +771,6 @@ struct JarvisNotesArea: View {
         .accessibilityIdentifier("notes.task.detail")
     }
 
-    @ViewBuilder
-    private func folderRow(_ folder: VaultFolderNode) -> some View {
-        DisclosureGroup(isExpanded: folderBinding(folder.path)) {
-            directoryContent(folder.path)
-            ForEach(folder.children) { child in AnyView(folderRow(child)) }
-        } label: {
-            HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-                Image(systemName: "folder")
-                    .font(.system(size: JarvisDesignTokens.notesIconSize))
-                    .foregroundStyle(.primary)
-                Text(folder.name).foregroundStyle(.primary)
-                Spacer()
-                if directoryHasMore[folder.path] != true, let count = directoryNotes[folder.path]?.count {
-                    Text(String(count)).font(.subheadline).foregroundStyle(.secondary)
-                }
-            }
-            .frame(minHeight: JarvisDesignTokens.notesRowMinimumHeight)
-            .contentShape(Rectangle())
-        }
-        .contextMenu {
-            Button {
-                newNoteFolder = folder.path
-                newNotePresented = true
-            } label: {
-                Label(copy.newNote, systemImage: "note.text")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func directoryContent(_ directory: String) -> some View {
-        ForEach(directoryNotes[directory] ?? []) { note in
-            noteRow(note)
-        }
-        if directoryLoading.contains(directory) {
-            JarvisLoadingView().frame(maxWidth: .infinity)
-        } else if directoryHasMore[directory] == true {
-            JarvisLabelledButton(title: copy.loadMore) {
-                Task { await loadMoreDirectory(directory) }
-            }
-        }
-    }
-
-    private func folderBinding(_ folder: String) -> Binding<Bool> {
-        Binding(
-            get: { expandedFolders.contains(folder) },
-            set: { expanded in
-                if expanded {
-                    expandedFolders.insert(folder)
-                    Task { await loadDirectory(folder, offset: 0) }
-                } else {
-                    expandedFolders.remove(folder)
-                }
-            }
-        )
-    }
-
     private func stateView(icon: String, title: String, retry: (() -> Void)?) -> some View {
         VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
             Image(systemName: icon)
@@ -923,6 +797,8 @@ struct JarvisNotesArea: View {
             loading = false
             return
         }
+        await JarvisAppCache.bindIfNeeded()
+        recentVisits = await JarvisAppCache.shared.recentNoteVisits()
         loading = true
         loadError = nil
         loadRetryUnavailable = false
@@ -930,7 +806,7 @@ struct JarvisNotesArea: View {
         defer { loading = false }
         do {
             switch selectedTab {
-            case .notes, .list:
+            case .notes:
                 if force || graph == nil, let result = try? await client.graph() {
                     guard !Task.isCancelled else { return }
                     graph = result
@@ -948,7 +824,7 @@ struct JarvisNotesArea: View {
                     let resolved = await repository.resolve(force: force)
                     guard !Task.isCancelled else { return }
                     if let nextTree = resolved.value {
-                        if nextTree != tree { await applyTree(nextTree, force: force) }
+                        if force || nextTree != tree { await applyTree(nextTree, force: force) }
                     } else if let error = resolved.error {
                         throw error
                     }
@@ -1010,39 +886,14 @@ struct JarvisNotesArea: View {
 
     private func applyTree(_ nextTree: VaultNoteTree, force: Bool) async {
         tree = nextTree
-        folders = JarvisNotesPresentation.folderTree(nextTree.directories)
-        if !topLevelFolders.contains(selectedFolder) { selectedFolder = "" }
-        groupNotes = [:]
+        confirmedFolders.subtract(nextTree.directories)
+        if !selectedFolder.isEmpty,
+           !(nextTree.directories + Array(confirmedFolders)).contains(where: { $0 == selectedFolder || $0.hasPrefix(selectedFolder + "/") }) {
+            selectedFolder = ""
+        }
         directoryNotes = [:]
-        groupHasMore = [:]
         directoryHasMore = [:]
-        if nextTree.rootNoteCount > 0 {
-            expandedFolders.insert("")
-            await loadDirectory("", offset: 0, force: force)
-        }
-    }
-
-    private func loadNoteGroup(_ folder: String, offset: Int, force: Bool = false) async {
-        guard let client, !groupLoading.contains(folder) else { return }
-        groupLoading.insert(folder)
-        defer { _ = groupLoading.remove(folder) }
-        do {
-            let page = try await (offset == 0
-                ? firstPage(client, folder: folder, force: force)
-                : client.notes(folder: folder, offset: offset))
-            let previous = offset == 0 ? [] : groupNotes[folder] ?? []
-            groupNotes[folder] = previous + page.notes
-            groupHasMore[folder] = page.hasMore
-        } catch {
-            guard !Task.isCancelled else { return }
-            loadError = message(for: error)
-            loadRetryUnavailable = authorizationUnavailable(error)
-            signInUnavailable = loadRetryUnavailable
-        }
-    }
-
-    private func loadMoreNotes(in folder: String) async {
-        await loadNoteGroup(folder, offset: groupNotes[folder]?.count ?? 0)
+        await loadDirectory(selectedFolder, offset: 0, force: force)
     }
 
     private func loadDirectory(_ directory: String, offset: Int, force: Bool = false) async {
@@ -1057,7 +908,7 @@ struct JarvisNotesArea: View {
             directoryNotes[directory] = previous + page.notes
             directoryHasMore[directory] = page.hasMore
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, directory == selectedFolder else { return }
             signInUnavailable = authorizationUnavailable(error)
             loadError = message(for: error)
             loadRetryUnavailable = signInUnavailable
@@ -1066,21 +917,6 @@ struct JarvisNotesArea: View {
 
     private func loadMoreDirectory(_ directory: String) async {
         await loadDirectory(directory, offset: directoryNotes[directory]?.count ?? 0)
-    }
-
-    private func toggleFolder(_ folder: String) {
-        if expandedFolders.contains(folder) {
-            expandedFolders.remove(folder)
-        } else {
-            expandedFolders.insert(folder)
-            Task {
-                if selectedTab == .notes {
-                    await loadNoteGroup(folder, offset: 0)
-                } else {
-                    await loadDirectory(folder, offset: 0)
-                }
-            }
-        }
     }
 
     private func search() async {
@@ -1104,13 +940,13 @@ struct JarvisNotesArea: View {
         graphSearch = nil
         taskSearch = nil
         do {
-            if selectedScope != .tasks {
+            if selectedScope != .tasks || selectedTab == .graph {
                 let result = try await client.searchGraph(query)
                 guard !Task.isCancelled else { return }
                 graphSearch = result
                 graph = result.graph
             }
-            if selectedScope != .notes {
+            if selectedScope != .notes && selectedTab != .graph {
                 let result = try await client.tasks(query: query, state: .all)
                 guard !Task.isCancelled else { return }
                 taskSearch = result
@@ -1134,6 +970,8 @@ struct JarvisNotesArea: View {
             guard !Task.isCancelled else { return }
             editor = note
             editorPresented = true
+            await JarvisAppCache.shared.recordNoteOpen(path: path)
+            recentVisits = await JarvisAppCache.shared.recentNoteVisits()
         } catch {
             guard !Task.isCancelled else { return }
             signInUnavailable = authorizationUnavailable(error)
@@ -1187,6 +1025,7 @@ struct JarvisNotesArea: View {
             case .noteConflict: return copy.conflict
             case .writeOutcomeUnknown: return copy.unknownWrite
             case .taskConflict: return copy.taskChanged
+            case .folderAlreadyExists: return copy.folderAlreadyExists
             case .noteNotFound: return copy.noteMissing
             case .invalidRequest, .invalidResponse: return copy.unavailable
             }

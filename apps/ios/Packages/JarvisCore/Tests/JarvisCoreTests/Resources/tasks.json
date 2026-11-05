@@ -97,7 +97,8 @@
         "text": "Synthetic new task",
         "scope": "personal",
         "due": "2026-10-31",
-        "time": "10:00"
+        "time": "10:00",
+        "priority": "high"
       },
       "response": {
         "statusCode": 200,

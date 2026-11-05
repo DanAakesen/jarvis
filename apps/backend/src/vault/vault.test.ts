@@ -1432,6 +1432,32 @@ describe('GitHub vault', () => {
     expect((await forbidden.inject({ url: '/knowledge/search?q=project', headers: apiAuthorization })).statusCode).toBe(403);
   });
 
+  it('creates an empty nested folder without inventing a note and rejects unsafe or duplicate paths', async () => {
+    const { github, module } = moduleFor({ remote: { 'Work/Projects/existing.md': { sha: sha('a'), content: '# Existing' } } });
+    await module.synchronize(signal());
+    const app = memoryApiApp(module);
+    const created = await app.inject({ method: 'POST', url: '/notes/folders', headers: apiAuthorization,
+      payload: { path: 'Work/Projects/Research' } });
+    expect(created.statusCode).toBe(200);
+    expect(created.json()).toMatchObject({ path: 'Work/Projects/Research', commit: expect.stringMatching(/^[a-f0-9]{40}$/u) });
+    expect(github.files.get('Work/Projects/Research/.gitkeep')?.content).toBe('');
+    await module.synchronize(signal());
+    expect((await app.inject({ url: '/notes/tree', headers: apiAuthorization })).json().directories)
+      .toContain('Work/Projects/Research');
+    expect((await app.inject({ url: '/notes?directory=Work%2FProjects%2FResearch', headers: apiAuthorization })).json().notes)
+      .toEqual([]);
+    for (const path of ['Work/Projects/Research', 'Work/Projects', 'Work/Projects/existing.md']) {
+      expect((await app.inject({ method: 'POST', url: '/notes/folders', headers: apiAuthorization, payload: { path } })).statusCode).toBe(409);
+    }
+    for (const path of ['../escape', '/absolute', 'Work/.hidden/New', 'Work/.git/New', 'Work//New', 'Work/New?query']) {
+      expect((await app.inject({ method: 'POST', url: '/notes/folders', headers: apiAuthorization, payload: { path } })).statusCode).toBe(400);
+    }
+    expect((await app.inject({ method: 'POST', url: '/notes/folders', payload: { path: 'Work/Denied' } })).statusCode).toBe(401);
+    const forbidden = memoryApiApp(module, { auth: async () => ({ objectId: 'not-dan', tenantId: apiConfig.auth.tenantId, displayName: 'Other' }) });
+    expect((await forbidden.inject({ method: 'POST', url: '/notes/folders', headers: apiAuthorization, payload: { path: 'Work/Denied' } })).statusCode).toBe(403);
+    expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(1);
+  });
+
   it('lists, reads, creates and edits owner notes, then refreshes the index', async () => {
     const log = vi.fn();
     const { github, indexStore, module } = moduleFor({

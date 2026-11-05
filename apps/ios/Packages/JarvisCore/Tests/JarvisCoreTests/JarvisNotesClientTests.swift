@@ -56,6 +56,32 @@ final class JarvisNotesClientTests: XCTestCase {
         XCTAssertEqual(JarvisNotesLocalization.formattedDueDate("invalid", language: .da), "invalid")
     }
 
+    func testFolderCreationValidatesPathsAndNeverRetriesUncertainWrites() async throws {
+        let transport = try notesFixture("folders")
+        let notes = JarvisNotesClient(client: try makeClient(transport))
+        for path in ["", "../escape", "Work/.hidden/New", String(repeating: "a", count: 172)] {
+            do {
+                _ = try await notes.createFolder(path: path)
+                XCTFail("Expected invalid folder path")
+            } catch {
+                XCTAssertEqual(error as? JarvisNotesClientError, .invalidRequest)
+            }
+        }
+        let created = try await notes.createFolder(path: "Work/Projects/Research")
+        XCTAssertEqual(created.path, "Work/Projects/Research")
+        for expected in [JarvisNotesClientError.folderAlreadyExists, .writeOutcomeUnknown, .writeOutcomeUnknown] {
+            do {
+                _ = try await notes.createFolder(path: "Work/Projects/Research")
+                XCTFail("Expected folder creation error")
+            } catch {
+                XCTAssertEqual(error as? JarvisNotesClientError, expected)
+            }
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 4, "Uncertain POSTs must not be retried")
+        await assertConsumed(transport)
+    }
+
     func testNotesTreeListReadCreateAndConflictUseSharedRoutes() async throws {
         let transport = try notesFixture("notes")
         let notes = JarvisNotesClient(client: try makeClient(transport))
@@ -111,6 +137,21 @@ final class JarvisNotesClientTests: XCTestCase {
         XCTAssertEqual(page.notes.map(\.path), ["Work/ok.md"])
     }
 
+    func testRootNotesUseTheEmptyFolderReturnedByTheBackend() async throws {
+        let scenario = """
+        {"version": 1, "interactions": [{"method": "GET", "path": "/api/notes",
+         "query": {"limit": "50", "offset": "0", "directory": ""},
+         "response": {"statusCode": 200, "body": {"notes": [
+          {"path": "welcome.md", "title": "Welcome", "folder": "", "directory": "", "updatedAt": "2026-11-05T09:00:00Z"},
+          {"path": "Work/project.md", "title": "Project", "folder": "Work", "directory": "Work", "updatedAt": "2026-11-05T09:00:00Z"}
+         ], "limit": 50, "offset": 0, "hasMore": false}}}]}
+        """
+        let transport = try FixtureTransport(scenario: Data(scenario.utf8))
+        let page = try await JarvisNotesClient(client: try makeClient(transport)).notes(directory: "")
+        XCTAssertEqual(page.notes.map(\.path), ["welcome.md"])
+        await assertConsumed(transport)
+    }
+
     func testTasksGroupCompleteCreateAndDoNotRetryUnknownWrites() async throws {
         let transport = try notesFixture("tasks")
         let notes = JarvisNotesClient(client: try makeClient(transport))
@@ -128,7 +169,8 @@ final class JarvisNotesClientTests: XCTestCase {
             text: "Synthetic new task",
             scope: .personal,
             due: "2026-10-31",
-            time: "10:00"
+            time: "10:00",
+            priority: .high
         )
         do {
             _ = try await notes.createTask(text: "Synthetic uncertain task", scope: .work)
