@@ -213,6 +213,17 @@ final class ComponentGalleryUITests: XCTestCase {
         }
     }
 
+    func testUsageErrorKeepsPeriodRecoveryAvailable() {
+        openPage("usage", extra: ["--ui-test-insights=error"])
+        defer { app.terminate() }
+        XCTAssertTrue(app.descendants(matching: .any)["usage.error"].waitForExistence(timeout: 8))
+        let week = app.buttons["usage.range.7d"]
+        XCTAssertTrue(week.isHittable)
+        week.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["usage.error"].waitForExistence(timeout: 8))
+        XCTAssertTrue(week.isHittable)
+    }
+
     func testInitialLoadingHidesFiltersAndUsesOnePageSkeleton() {
         for destination in ["usage", "status", "proactive"] {
             openPage(destination, extra: ["--ui-test-insights=loading"])

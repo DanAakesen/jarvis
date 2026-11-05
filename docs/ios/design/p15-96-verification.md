@@ -79,3 +79,6 @@ Usage's breakdown order: percentage then emphasized amount. Usage breakdown
 labels and values stack at accessibility sizes. The existing shared-page native
 checks now also capture Usage, Status and Proactive at the largest accessibility
 text size. Corrected native images remain pending.
+
+
+5 November recovery review: Usage retains its shared period selector after a failed request. Workspaces clears records and the count hero when the filter changes, so failed searches cannot relabel a previous result set; same-filter refresh still retains stale data. Initial loading still hides filters. Native verification of this follow-up is pending.
