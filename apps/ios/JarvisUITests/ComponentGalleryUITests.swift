@@ -167,6 +167,50 @@ final class ComponentGalleryUITests: XCTestCase {
         app.terminate()
     }
 
+    func testUsageCurrentContractAndEveryPeriodAndBreakdownControl() {
+        openPage("usage")
+        defer { app.terminate() }
+        let total = app.descendants(matching: .any)["usage.total"]
+        XCTAssertTrue(total.waitForExistence(timeout: 10))
+        for period in ["7d", "30d", "90d", "all"] {
+            let before = total.label
+            app.buttons["usage.range.\(period)"].tap()
+            let updated = NSPredicate { _, _ in total.exists && total.label != before }
+            XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: updated, object: nil)], timeout: 8), .completed)
+            XCTAssertTrue(app.buttons["usage.range.\(period)"].isSelected)
+        }
+        attach(app.screenshot(), named: "P15-96-usage-all-dark-en")
+        for group in ["agent", "source", "project"] {
+            let control = app.buttons["usage.groupBy.\(group)"]
+            for _ in 0..<3 { if control.isHittable { break }; app.swipeUp() }
+            XCTAssertTrue(control.isHittable)
+            control.tap()
+            XCTAssertTrue(control.isSelected)
+            let expected = group == "project" ? "p-web" : group == "source" ? "sandbox" : "codex"
+            XCTAssertTrue(app.buttons["usage.slice.\(expected)"].waitForExistence(timeout: 3))
+        }
+        attach(app.screenshot(), named: "P15-96-usage-breakdown-dark-en")
+    }
+
+    func testNotificationsHasHeroAndKeepsApprovalActionsInBothLanguages() {
+        for (language, theme) in [("en", "dark"), ("da", "light")] {
+            app.launchArguments = ["--screenshot-calendar-change-fixture", "--screenshot-notifications-open",
+                "-jarvis.appLanguage", language, "-jarvis.appTheme", theme]
+            app.launch()
+            let hero = app.descendants(matching: .any)["notifications.hero"]
+            XCTAssertTrue(hero.waitForExistence(timeout: 12))
+            let phrase = app.descendants(matching: .any).matching(identifier: "page.headline").firstMatch
+            XCTAssertTrue(phrase.exists)
+            XCTAssertGreaterThanOrEqual(hero.frame.minY, phrase.frame.maxY)
+            XCTAssertTrue(app.buttons["chat.notifications.done"].isHittable)
+            let approval = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "confirmation-approve-")).firstMatch
+            XCTAssertTrue(approval.exists)
+            XCTAssertFalse(approval.isEnabled, "Synthetic approval must never execute a calendar change")
+            attach(app.screenshot(), named: "P15-96-notifications-\(theme)-\(language)")
+            app.terminate()
+        }
+    }
+
     // Separate cases keep each three-page capture below the runner's per-test timeout.
     func testSharedPageOrderDarkEnglish() { captureSharedPages(language: "en", theme: "dark") }
     func testSharedPageOrderLightEnglish() { captureSharedPages(language: "en", theme: "light") }

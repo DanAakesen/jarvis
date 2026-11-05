@@ -247,3 +247,12 @@
 
 "insights.overview" = "Overview";
 "insights.proactiveLastRun" = "Last run";
+
+"insights.usageToolCallsPeriod" = "Tool calls in this period";
+
+"insights.usageNoToolCallsPeriod" = "No tool calls in this period";
+
+"insights.usageToolsUnavailable" = "Tool counts are unavailable";
+
+"insights.showMore" = "Show %d more";
+"insights.showLess" = "Show less";

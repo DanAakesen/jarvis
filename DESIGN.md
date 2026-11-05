@@ -3266,3 +3266,20 @@ Local HealthKit steps/workouts supplement retained server data. Unsynced device
 workouts do not offer a backend-only detail link. Last lifts combines retained
 Health history with existing Home vault logs; incomplete vault reads remain
 visible as partial. No illustrative board number is used as live app data.
+
+## Native insight board alignment (P15-96; 5 November 2026)
+
+Reuse P15-92 heroes, section headlines and grouped row geometry. Usage keeps its
+period inside Overview and grouping inside Breakdown, with the first three
+ranked tasks visible. Status rows show a title, concise real detail, state word
+and disclosure; Vault mirror and Smoke report form a separate group below.
+Proactive uses a compact two-column source group, falling back to one column
+for accessibility sizes, and an expandable three-item findings group.
+Notifications uses shared section headlines and row insets while preserving
+approval controls, grouping and dismiss gestures. Workspaces keeps its native
+list/swipe actions and bottom search with the shared line and row spacing.
+
+The published Status and Proactive reference images were inspected. These are
+board renders, not native evidence. All five audited pages still require actual
+Mac screenshot inspection; see `docs/ios/design/p15-96-verification.md`. The
+continuous shared page segments are supplied by P15-94 / #1606.

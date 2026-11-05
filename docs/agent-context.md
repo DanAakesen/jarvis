@@ -7044,3 +7044,17 @@ vault lift notes. Native capture coverage is in the existing selected
 source merging and rendered/large-type layouts still require Apple execution.
 The native sync continues to use the existing owner-only route and unchanged
 schema. HealthKit body-fat fractions are labelled as such for normalization.
+
+## Native insight validation (P15-96; 5 November 2026)
+
+Verified locally with Swift 6.2: `swift test --package-path
+apps/ios/Packages/JarvisCore` (474 tests). Backend Node 22 validation:
+`npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts
+src/database/now-feed-store.test.ts` (23 tests). The selected native component
+suite captures the five audited pages and exercises every Usage period and
+breakdown selection against the current API-shaped fixture. Native compilation
+and screenshot inspection remain separate from these Linux checks.
+
+Do not restore a mandatory `dailyToolUsage` field: inspect the current
+`UsageReport` TypeScript contract and `/usage` response before changing decoding.
+A browser-rendered reference is not evidence of native visual correctness.

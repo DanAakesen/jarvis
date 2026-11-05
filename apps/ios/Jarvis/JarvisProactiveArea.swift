@@ -37,8 +37,12 @@ struct JarvisProactiveArea: View {
         case failed
     }
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
     @State private var status: JarvisInsightsLoad<JarvisProactiveStatus> = .loading
+    @State private var itemsLoaded = false
+    @State private var showAllItems = false
+    @State private var statusRefreshFailed = false
     @State private var openItems: [JarvisProactiveItem] = []
     @State private var itemsFailure: JarvisInsightsFailure?
     @State private var earlierItems: JarvisInsightsLoad<[JarvisProactiveItem]> = .loading
@@ -63,9 +67,9 @@ struct JarvisProactiveArea: View {
         VStack(spacing: JarvisDesignTokens.healthRowSpacing) {
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-                    if case .loaded(let loaded) = status {
+                    if case .loaded(let loaded) = status, itemsLoaded {
                         JarvisPageHeadline(
-                            phrase: JarvisProactivePagePhrase.make(status: loaded, openItems: openItems.count, language: language)
+                            phrase: JarvisProactivePagePhrase.make(status: loaded, openItems: openItems.count, language: language, firstTitle: openItems.first?.title)
                         )
                     }
                     content
@@ -150,12 +154,14 @@ struct JarvisProactiveArea: View {
             case .cached(let value, _), .fresh(let value):
                 let runChanged = last != nil && last?.lastRun != value.lastRun
                 status = .loaded(value)
+                statusRefreshFailed = false
                 if initial || runChanged { await loadRuns(client, force: force || runChanged) }
                 if checkMessage == .started, value.lastRun?.status != .running { checkMessage = nil }
                 last = value
             case .refreshing:
                 break
             case .failed(let error, let cached):
+                statusRefreshFailed = true
                 let failure = JarvisInsightsFailure(error)
                 if (cached == nil && last == nil) || failure == .unavailable || failure == .signInRequired {
                     status = .failed(failure)
@@ -170,6 +176,7 @@ struct JarvisProactiveArea: View {
             switch update {
             case .cached(let value, _), .fresh(let value):
                 openItems = value
+                itemsLoaded = true
                 itemsFailure = nil
             case .refreshing:
                 break
@@ -244,6 +251,9 @@ struct JarvisProactiveArea: View {
         case .loaded(let loaded):
             VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
                 nextCheckCard(loaded)
+                if statusRefreshFailed || (itemsLoaded && itemsFailure != nil) {
+                    Text(text(.refreshFailedShowingSaved)).font(.footnote).foregroundStyle(.secondary)
+                }
                 itemsCard
                 sourcesCard(loaded)
                 budgetCard(loaded.budget)
@@ -306,7 +316,7 @@ struct JarvisProactiveArea: View {
         JarvisPageHeroCard(title: "") {
             JarvisPageStatGrid(
                 stats: [
-                    JarvisPageStat(id: "open", value: openItems.count, label: text(.proactiveTabOpen), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent),
+                    JarvisPageStat(id: "open", value: openItems.count, label: text(.proactiveTabOpen), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent, formattedValue: itemsLoaded ? nil : "—"),
                     JarvisPageStat(id: "lastRun", value: 0, label: text(.proactiveLastRun), systemImage: "clock",
                                    formattedValue: loaded.lastRun.flatMap { JarvisInsightsDates.parse($0.occurredAt) }.map(dateTime) ?? "—"),
                     JarvisPageStat(id: "sources", value: loaded.sources.filter { $0.state != "disabled" }.count, label: text(.proactiveSources), systemImage: "checklist"),
@@ -384,7 +394,9 @@ struct JarvisProactiveArea: View {
     }
 
     @ViewBuilder private var openList: some View {
-        if openItems.isEmpty, let itemsFailure {
+        if !itemsLoaded, itemsFailure == nil {
+            JarvisInsightsStateView(kind: .loading, language: language, identifier: "proactive.items.loading")
+        } else if openItems.isEmpty, let itemsFailure {
             JarvisInsightsStateView(kind: .failure(itemsFailure), language: language, identifier: "proactive.items.error") {
                 reloadToken += 1
             }
@@ -397,7 +409,12 @@ struct JarvisProactiveArea: View {
             )
         } else {
             JarvisRowGroup {
-                ForEach(openItems) { item in itemRow(item, actionable: true) }
+                ForEach(showAllItems ? openItems : Array(openItems.prefix(3))) { item in itemRow(item, actionable: true) }
+                if openItems.count > 3 {
+                    JarvisTextButton(title: showAllItems ? text(.showLess) : JarvisInsightsLocalization.format(.showMore, language: language, openItems.count - 3),
+                        identifier: "proactive.showMore") { showAllItems.toggle() }
+                        .jarvisListRow(separator: false)
+                }
             }
             .accessibilityIdentifier("proactive.items")
         }
@@ -480,7 +497,7 @@ struct JarvisProactiveArea: View {
                     Image(systemName: "chevron.down")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
                         .frame(height: 24)
                         .accessibilityHidden(true)
                 }
@@ -595,34 +612,46 @@ struct JarvisProactiveArea: View {
     // MARK: Sources, budget and runs
 
     private func sourcesCard(_ loaded: JarvisProactiveStatus) -> some View {
-        JarvisInsightsCard(
-            title: text(.proactiveSources),
-            accessory: AnyView(
-                JarvisIconButton(
-                    title: text(.editorEditSources),
-                    systemImage: "pencil",
-                    identifier: "proactive.editSources"
-                ) { editorRequest = EditorRequest(focus: .sources) }
-            )
-        ) {
-            VStack(spacing: 0) {
-                ForEach(loaded.sources) { source in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(text(source.id.localizationKey))
-                            .font(.subheadline)
-                            .layoutPriority(1)
-                        Spacer(minLength: 8)
-                        Text(sourceLine(source))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.trailing)
-                            .lineLimit(2)
-                    }
-                    .padding(.vertical, 8)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("proactive.source.\(source.id.rawValue)")
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
+            JarvisSectionHeadline(text(.proactiveSources)) {
+                JarvisIconButton(title: text(.editorEditSources), systemImage: "pencil", identifier: "proactive.editSources") {
+                    editorRequest = EditorRequest(focus: .sources)
                 }
             }
+            JarvisRowGroup {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0),
+                    count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 0) {
+                    ForEach(loaded.sources) { source in
+                        HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
+                            Image(systemName: sourceSymbol(source.id))
+                                .foregroundStyle(source.state == "ok" ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent)
+                                .frame(width: JarvisDesignTokens.iconSize).accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                                Text(text(source.id.localizationKey)).font(.subheadline)
+                                Text(sourceLine(source)).font(.caption).foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .jarvisListRow()
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("proactive.source.\(source.id.rawValue)")
+                    }
+                }
+            }
+        }
+    }
+
+    private func sourceSymbol(_ source: JarvisProactiveSourceID) -> String {
+        switch source {
+        case .todos: "checklist"
+        case .calendar: "calendar"
+        case .mail: "envelope"
+        case .weather: "cloud.sun"
+        case .factory: "chevron.left.forwardslash.chevron.right"
+        case .news: "globe"
+        case .travel: "airplane"
+        case .x: "text.bubble"
         }
     }
 

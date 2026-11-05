@@ -267,7 +267,7 @@ struct WorkspacesView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: JarvisDesignTokens.iconSize, height: JarvisDesignTokens.iconSize)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(item.title)
                                 .font(.body.weight(.semibold))
@@ -324,12 +324,12 @@ struct WorkspacesView: View {
                 }
             }
         }
-        .padding(.vertical, JarvisDesignTokens.listRowVerticalInset)
+        .padding(.vertical, JarvisPageHeaderMetrics.rowVerticalInset)
         .listRowInsets(EdgeInsets(
             top: 0,
-            leading: JarvisDesignTokens.contentInset,
+            leading: JarvisPageHeaderMetrics.rowInset,
             bottom: 0,
-            trailing: JarvisDesignTokens.contentInset / 2
+            trailing: JarvisPageHeaderMetrics.rowInset
         ))
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button(text(item.pinned ? .unpin : .pin), systemImage: item.pinned ? "pin.slash" : "pin") {

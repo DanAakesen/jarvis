@@ -14,6 +14,8 @@ final class JarvisInsightsLocalizationTests: XCTestCase {
 
     func testFormattedStringsFillTheirArguments() {
         XCTAssertEqual(JarvisInsightsLocalization.format(.minutesAgo, language: .en, 5), "5 min ago")
+        XCTAssertEqual(JarvisInsightsLocalization.format(.showMore, language: .en, 3), "Show 3 more")
+        XCTAssertEqual(JarvisInsightsLocalization.format(.showMore, language: .da, 3), "Vis 3 mere")
         XCTAssertEqual(
             JarvisInsightsLocalization.format(.usageTruncated, language: .en, 1000, "1482"),
             "Latest 1,000 of 1482"
@@ -58,7 +60,7 @@ final class JarvisUsageSummaryTests: XCTestCase {
         XCTAssertEqual(JarvisUsageSummary(report: data, period: .sevenDays).buckets.count, 7)
         XCTAssertEqual(JarvisUsageSummary(report: data, period: .thirtyDays).buckets.count, 30)
         let weeks = JarvisUsageSummary(report: data, period: .ninetyDays).buckets
-        XCTAssertEqual(weeks.count, 13)
+        XCTAssertEqual(weeks.count, 14)
         XCTAssertTrue(weeks.allSatisfy { $0.kind == .week })
         let months = JarvisUsageSummary(report: data, period: .all).buckets
         XCTAssertEqual(months.map(\.startKey), ["2026-11-01"])
@@ -84,7 +86,27 @@ final class JarvisUsageSummaryTests: XCTestCase {
         XCTAssertEqual(weeks.last?.startKey, "2026-11-02")
         XCTAssertEqual(weeks.last?.endKey, "2026-11-08")
         XCTAssertEqual(weeks.last?.value, 1)
-        XCTAssertEqual(weeks[11].endKey, "2026-11-01")
+        XCTAssertEqual(weeks[weeks.count - 2].endKey, "2026-11-01")
+    }
+
+    func testRollingRangeKeepsTheFirstPartialDayAndWeek() {
+        for (period, first) in [(JarvisUsagePeriod.sevenDays, "2026-10-26T10:00:00Z"), (.ninetyDays, "2026-08-04T10:00:00Z")] {
+            let data = JarvisUsageReport(period: period.rawValue, from: first, to: "2026-11-02T10:00:00Z",
+                entries: [entry(cost: 12, at: first), entry(cost: 3, at: "2026-11-02T08:00:00Z")], totalEntries: "2")
+            let summary = JarvisUsageSummary(report: data, period: period)
+            XCTAssertEqual(summary.buckets.reduce(0) { $0 + $1.value }, summary.totalValue)
+            XCTAssertEqual(summary.buckets.first?.value, 12)
+        }
+    }
+
+    func testLongAllTimeChartRetainsOldAndRecentCostsWithinTheBucketCap() {
+        let summary = JarvisUsageSummary(report: report([
+            entry(cost: 10, at: "2010-01-01T12:00:00Z"), entry(cost: 4, at: "2026-11-02T08:00:00Z")
+        ], period: "all"), period: .all)
+        XCTAssertEqual(summary.buckets.count, JarvisUsageSummary.maximumBuckets)
+        XCTAssertEqual(summary.buckets.first?.startKey, "2010-01-01")
+        XCTAssertEqual(summary.buckets.last?.startKey, "2026-11-01")
+        XCTAssertEqual(summary.buckets.reduce(0) { $0 + $1.value }, 14)
     }
 
     func testCostIsTheMeasureWhenAnyCostExists() {
@@ -208,6 +230,50 @@ final class JarvisUsageSummaryTests: XCTestCase {
         let requests = await transport.recordedRequests()
         XCTAssertEqual(requests.map(\.path), ["/api/usage"])
         XCTAssertEqual(requests.first?.query, ["period": "7d"])
+    }
+
+    func testCurrentBackendContractDecodesWithoutLegacyDailyTools() async throws {
+        // Shape emitted by registerUsageRoutes, including distinct period and Health-only counts.
+        let payload = """
+        {"period":"30d","from":"2026-10-03T00:00:00Z","to":"2026-11-02T10:00:00Z",
+         "entries":[],"totalEntries":"0","truncated":false,
+         "healthToolUsage":{"date":"2026-11-02","tools":[{"tool":"health_read","count":"19"}]},
+         "healthCostTotals":[],"monthlyCostTotals":[],"roleCoverage":[],
+         "toolCalls":[{"tool":"web_research","count":"7","costStatus":"unverified"}],
+         "codexToolCallsToday":[{"tool":"web_research","count":"2"}]}
+        """
+        let transport = try FixtureTransport(scenario: Data("""
+        {"version":1,"interactions":[{"method":"GET","path":"/api/usage","query":{"period":"30d"},
+        "response":{"statusCode":200,"headers":{"ETag":"usage-v2"},"body":\(payload)}}]}
+        """.utf8))
+        let client = JarvisUsageClient(client: try insightsClient(transport))
+        guard case .modified(let report, let validator) = try await client.fetchReport(period: .thirtyDays, validator: nil) else {
+            return XCTFail("Expected current backend report")
+        }
+        XCTAssertEqual(validator, "usage-v2")
+        XCTAssertNil(report.dailyToolUsage)
+        let summary = JarvisUsageSummary(report: report, period: .thirtyDays)
+        XCTAssertEqual(summary.toolCalls, [JarvisUsageToolCount(tool: "web_research", count: "7")])
+        XCTAssertFalse(summary.toolCallsAreDaily)
+        XCTAssertEqual(summary.codexResearchCalls, 2)
+        let cached = try JSONDecoder().decode(JarvisUsageReport.self, from: JSONEncoder().encode(report))
+        XCTAssertEqual(cached, report)
+    }
+
+    func testLegacyToolCountsStayDailyAndMissingCountsStayUnknown() throws {
+        let legacy = JarvisUsageReport(period: "7d", from: nil, to: "2026-11-02T10:00:00Z",
+            entries: [], totalEntries: "0", dailyToolUsage: JarvisUsageDailyTools(date: "2026-11-02",
+                tools: [JarvisUsageToolCount(tool: "calendar", count: "4")]))
+        let summary = JarvisUsageSummary(report: legacy, period: .sevenDays)
+        XCTAssertTrue(summary.toolCallsAreDaily)
+        XCTAssertTrue(summary.toolCallsAvailable)
+        XCTAssertEqual(summary.toolCalls.first?.count, "4")
+        let noCounts = report([])
+        XCTAssertTrue(noCounts.isValid)
+        XCTAssertFalse(JarvisUsageSummary(report: noCounts, period: .sevenDays).toolCallsAvailable)
+        let negative = JarvisUsageReport(period: "7d", from: nil, to: "2026-11-02T10:00:00Z",
+            entries: [], totalEntries: "0", toolCalls: [JarvisUsageToolCount(tool: "web_research", count: "-1")])
+        XCTAssertFalse(negative.isValid)
     }
 
     func testClientRejectsAReportForAnotherPeriod() async throws {

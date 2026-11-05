@@ -10970,3 +10970,24 @@ implementation; native visual and real-device HealthKit acceptance are pending.
 
 P15-95 also labels HealthKit body-fat values as fractions (0–1), allowing the
 existing normalizer to retain the correct percentage (0.20 becomes 20%).
+
+## 5 November 2026 — P15-96 current Usage response and remaining board pages
+
+The Usage decoder required `dailyToolUsage`, whereas the current backend emits
+`healthToolUsage` and period `toolCalls`. Accept both current responses and old
+cache entries, keep the scopes separate, and report missing counts as unknown.
+Retain the existing conditional-read and account/period cache boundary. New
+regressions cover the actual backend shape, legacy data, every period's ETag
+read, invalid counts, rolling range edges and the all-time chart cap.
+
+Audit Usage, Status, Proactive, Notifications and Workspaces against the
+published reference and shared page pattern. Workspaces has a separate older
+reference; do not call the main board's Home fallback a Workspaces reference.
+Keep native interactions and Dynamic Type. Shared grouped rows replace the
+remaining inconsistent notification/source layouts. Status exposes stale
+evidence and real check details. Successful background jobs stay out of the
+notification sheet through its existing presentation model.
+
+Local validation: 474 Core tests and 23 backend Usage/Now-feed tests pass.
+Native screenshots and owner acceptance remain pending; the cloud network
+policy still blocks the artifact download host. No pixel-match claim is made.

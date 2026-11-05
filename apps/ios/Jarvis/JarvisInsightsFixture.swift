@@ -131,11 +131,12 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
             "period": period,
             "from": from,
             "to": Self.iso(Self.now),
-            "codexToolCallsToday": mode == .empty ? [] : [["tool": "research", "count": "3"]],
+            "codexToolCallsToday": mode == .empty ? [] : [["tool": "web_research", "count": "3"]],
             "entries": entries,
             "totalEntries": String(entries.count),
             "truncated": false,
-            "dailyToolUsage": [
+            "toolCalls": mode == .empty ? [] : [["tool": "web_research", "count": "5", "costStatus": "unverified"], ["tool": "image_generation", "count": "2", "costStatus": "unverified"]],
+            "healthToolUsage": [
                 "date": "2026-10-31",
                 "tools": mode == .empty ? [] : [["tool": "web_search", "count": "5"], ["tool": "calendar", "count": "2"]],
             ],

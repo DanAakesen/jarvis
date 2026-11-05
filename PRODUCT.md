@@ -2337,3 +2337,20 @@ Native rendering and real-device source parity remain unverified.
 
 P15-95 also labels HealthKit body-fat values as fractions (0–1), allowing the
 existing normalizer to retain the correct percentage (0.20 becomes 20%).
+
+## iPhone insight pages (P15-96; 5 November 2026)
+
+Usage accepts the current `/usage` contract and retained legacy cache reports.
+The Overview contains the range, real total, reconciled chart and summary;
+Breakdown contains Project/Agent/Source, followed by three expandable Top tasks.
+Period tool counts, legacy daily counts and unavailable counts stay distinct.
+Switching ranges clears the prior range's figures; explicit refresh bypasses
+fresh cache. Large numbers use the shared k/M formatter in Danish and English.
+
+Status identifies affected checks and stale evidence, shows row details and
+groups Vault mirror with an expandable Smoke report below the checks. Proactive
+shows its first real finding and next check, three expandable findings and a
+two-column source list (one column at accessibility text sizes). Read failures
+remain visible. Notifications uses grouped rows, clear-all for any dismissible
+item and the existing running/failed task presentation; successful jobs do not
+appear. Native visual acceptance remains pending.

@@ -20,6 +20,7 @@ struct JarvisUsageArea: View {
     @State private var reloadToken = 0
     @State private var refreshFailedWithCache = false
     @State private var forceReload = false
+    @State private var showAllTasks = false
 
     private struct LoadKey: Hashable {
         let period: JarvisUsagePeriod
@@ -75,6 +76,7 @@ struct JarvisUsageArea: View {
         case .failed(let failure):
             JarvisInsightsStateView(kind: .failure(failure), language: language, identifier: "usage.error") {
                 if client == nil { onRetryConfiguration() }
+                forceReload = true
                 reloadToken += 1
             }
         case .loaded(let summary):
@@ -91,16 +93,19 @@ struct JarvisUsageArea: View {
         let force = forceReload
         forceReload = false
         selectedBucketID = nil
+        chartSelection = nil
         selectedSliceID = nil
         refreshFailedWithCache = false
-        await JarvisAppCache.bindIfNeeded()
         let selected = period
+        // Reset before the cache bind can suspend, so old totals never acquire the new range label.
+        if case .loaded(let summary) = load, summary.period == selected {} else { load = .loading }
+        await JarvisAppCache.bindIfNeeded()
+        guard !Task.isCancelled else { return }
         let repository = JarvisRepository<JarvisUsageReport>(
             cache: JarvisAppCache.shared,
             kind: .usage,
             scope: selected.rawValue
         ) { try await client.fetchReport(period: selected, validator: $0) }
-        if case .loaded = load {} else { load = .loading }
         for await update in repository.updates(force: force) {
             if Task.isCancelled { return }
             switch update {
@@ -117,6 +122,7 @@ struct JarvisUsageArea: View {
                 }
             }
         }
+        if !Task.isCancelled, case .loading = load { load = .failed(.failed) }
     }
 
     // MARK: Loaded
@@ -152,7 +158,7 @@ struct JarvisUsageArea: View {
             JarvisPeriodSelector(
                 title: text(.usageRangeLabel),
                 identifierPrefix: "usage.range",
-                items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey), identifier: "usage.range.\($0.rawValue)") },
                 selection: $period
             )
         } content: {
@@ -177,7 +183,7 @@ struct JarvisUsageArea: View {
     private func overviewAmount(_ summary: JarvisUsageSummary, bucket: JarvisUsageBucket?) -> some View {
         let value = summary.value(in: bucket)
         let amount = summary.usesCost
-            ? value.formatted(.number.precision(.fractionLength(0...2)).locale(language.locale)) : number(value)
+            ? cost(value) : number(value)
         return VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.actionSpacing) {
             (Text(amount + " ") + Text(text(summary.usesCost ? .currencyUnit : .usageRecords)).font(.caption.weight(.semibold)))
                 .font(.largeTitle.weight(.bold))
@@ -215,7 +221,7 @@ struct JarvisUsageArea: View {
                         title: text(.usageRefreshReport),
                         systemImage: "arrow.clockwise",
                         identifier: "usage.refreshReport"
-                    ) { reloadToken += 1 }
+                    ) { forceReload = true; reloadToken += 1 }
                 }
                 .accessibilityIdentifier("usage.truncated")
             }
@@ -277,7 +283,11 @@ struct JarvisUsageArea: View {
         case .day:
             return JarvisInsightsDates.template(start, "dMMM", language: language)
         case .month:
-            return JarvisInsightsDates.template(start, "MMMyyyy", language: language)
+            let first = JarvisInsightsDates.template(start, "MMMyyyy", language: language)
+            if bucket.startKey.prefix(7) != bucket.endKey.prefix(7), let end = JarvisInsightsDates.date(fromDayKey: bucket.endKey) {
+                return first + " – " + JarvisInsightsDates.template(end, "MMMyyyy", language: language)
+            }
+            return first
         case .week:
             let end = JarvisInsightsDates.date(fromDayKey: bucket.endKey) ?? start
             return JarvisInsightsDates.template(start, "dMMM", language: language) + " – "
@@ -330,7 +340,7 @@ struct JarvisUsageArea: View {
             JarvisPeriodSelector(
                 title: text(.usageBreakdown),
                 identifierPrefix: "usage.groupBy",
-                items: JarvisUsageGroupBy.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                items: JarvisUsageGroupBy.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey), identifier: "usage.groupBy.\($0.rawValue)") },
                 selection: $groupBy
             )
             .onChange(of: groupBy) { _, _ in selectedSliceID = nil }
@@ -441,7 +451,7 @@ struct JarvisUsageArea: View {
         return VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
             JarvisSectionHeadline(text(.usageTopTasks))
             JarvisRowGroup {
-                ForEach(ranks) { rank in
+                ForEach(showAllTasks ? ranks : Array(ranks.prefix(3))) { rank in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
                             Text(taskTitle(rank))
@@ -466,6 +476,11 @@ struct JarvisUsageArea: View {
                     .jarvisListRow()
                     .accessibilityElement(children: .combine)
                 }
+                if ranks.count > 3 {
+                    JarvisTextButton(title: showAllTasks ? text(.showLess) : JarvisInsightsLocalization.format(.showMore, language: language, ranks.count - 3),
+                        identifier: "usage.showMore") { showAllTasks.toggle() }
+                        .jarvisListRow(separator: false)
+                }
             }
             .accessibilityIdentifier("usage.topTasks")
         }
@@ -484,10 +499,10 @@ struct JarvisUsageArea: View {
     }
 
     private func toolCalls(_ summary: JarvisUsageSummary) -> some View {
-        JarvisInsightsCard(title: text(.usageToolCalls)) {
+        JarvisInsightsCard(title: text(summary.toolCallsAreDaily ? .usageToolCalls : .usageToolCallsPeriod)) {
             VStack(alignment: .leading, spacing: 8) {
                 if summary.toolCalls.isEmpty {
-                    Text(text(.usageNoToolCalls))
+                    Text(text(!summary.toolCallsAvailable ? .usageToolsUnavailable : summary.toolCallsAreDaily ? .usageNoToolCalls : .usageNoToolCallsPeriod))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } else {
@@ -499,7 +514,7 @@ struct JarvisUsageArea: View {
                                 .truncationMode(.middle)
                                 .layoutPriority(1)
                             Spacer(minLength: 8)
-                            Text(call.count)
+                            Text(number(Double(call.count) ?? 0))
                                 .font(.subheadline.weight(.semibold))
                                 .monospacedDigit()
                         }
@@ -521,17 +536,21 @@ struct JarvisUsageArea: View {
     // MARK: Formatting
 
     private func number(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0)).locale(language.locale))
+        JarvisNumberFormat.compact(value, language: language)
     }
 
     private func compact(_ value: Double) -> String {
-        value.formatted(.number.notation(.compactName).precision(.fractionLength(0...1)).locale(language.locale))
+        JarvisNumberFormat.compact(value, language: language)
+    }
+
+    private func cost(_ value: Double) -> String {
+        value >= 999.5 ? compact(value) : value.formatted(.number.precision(.fractionLength(0...2)).locale(language.locale))
     }
 
     /// Cost in DKK when the report carries cost; otherwise the number of records, as the page says it counts.
     private func valueText(_ value: Double, summary: JarvisUsageSummary) -> String {
         if summary.usesCost {
-            let amount = value.formatted(.number.precision(.fractionLength(0...2)).locale(language.locale))
+            let amount = cost(value)
             return amount + " " + text(.currencyUnit)
         }
         return number(value) + " " + text(.usageRecords)
