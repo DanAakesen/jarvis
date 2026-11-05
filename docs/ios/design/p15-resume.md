@@ -1,6 +1,6 @@
 # Resume the P15 board implementation
 
-Checkpoint: 5 November 2026, 21:11 UTC. Re-query GitHub for current run results.
+Checkpoint: 5 November 2026, 21:26 UTC. Re-query GitHub for current run results.
 No PR is merged or deployed. Visual acceptance is outstanding. Do not claim the
 native screens match the board: no native PNG has yet been downloaded or viewed.
 
@@ -53,9 +53,9 @@ has not been compiled on Mac. Linux cannot validate native rendering/HealthKit.
 | Page PR | Simulator run | Mac job | Status at checkpoint |
 | --- | --- | --- | --- |
 | #1604 | 42093062405 | 127475876887 | 46 UI tests and capture/upload steps passed; cleanup cancellation |
-| #1605 | 42100772453 | 127502647878 | Cancellation reported; results uploading; test log pending |
-| #1606 | 42105551008 | 127519285321 | Test/capture step running |
-| #1607 | 42105556333 | 127519304298 | Test/capture step running |
+| #1605 | 42100772453 | 127502647878 | Cancelled; log unavailable and no artifacts published at 21:21 UTC |
+| #1606 | 42105551008 | 127519285321 | Result upload running |
+| #1607 | 42105556333 | 127519304298 | 46/48 UI tests pass; two Log-button failures; artifacts uploaded |
 | #1608 application code | 42106346100 | 127522068091 | Test/capture step running |
 | #1608 guard follow-up | 42106990041 | Query jobs | Pending behind previous run |
 
@@ -64,6 +64,28 @@ images after test failures too. Read completed job logs for individual failures
 and the total. Do not weaken checks. Avoid unrelated pushes to an active page PR:
 they trigger another long simulator run. PR descriptions can record new results
 without pushing a documentation-only commit. Re-run appropriate checks after fixes.
+
+### Health failure to investigate first
+
+Both `testHealthPeriodsDarkEnglish` and `testHealthPeriodsLightDanish` fail at
+`ComponentGalleryUITests.swift:125`: `health.lifts.log` does not exist after the
+30-day selection and one upward swipe. All preceding three-hero and period
+placement/selection checks passed. Inspect the native screen and accessibility
+tree before assuming this is only test scrolling or changing assertions.
+The Log button is declared in `lastLiftsSection`; the fixture passes `todayModel`.
+
+Health screenshot artifact `13453284660` (381,717,883 bytes):
+https://github.com/DanAakesen/jarvis/actions/runs/42105556333/artifacts/13453284660
+
+Health xcresult artifact: `13454732251`. English/dark hero attachments:
+
+- Training: `7F580EE3-ABCB-477A-A256-C64D28FF9C3B.png`
+- Sleep: `6E4CCD1E-6EDD-4776-9841-A9E39B636094.png`
+- Nutrition: `A9C9260D-8993-4607-B4DC-9BEAFFCD6124.png`
+
+The owner reports republishing `jarvis2` at approximately 21:26 UTC. This original
+workspace still has its old enforced network policy. Use the updated environment
+for the new task and verify download access there.
 
 ## Screenshot download blocker
 
