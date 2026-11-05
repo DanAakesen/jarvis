@@ -3802,4 +3802,4 @@ component suite. Scoped Core/localization/design guards: 53 passed; Swift parser
 passed. Native compilation and visual acceptance are pending. Release follows
 #1604, the page PRs, successful Notes backend deployment, then TestFlight.
 
-Settings first native pass: 49/49 selected UI tests passed on 4b823206. Screenshot review found truncated section labels and accessibility-size icon overlap; corrected shared segment sizing and Settings symbol sizing await the next native pass. Shared prerequisite #1604 merged as c818a6b3; remaining delivery order is Notes, Home/Factory, Health, Insights, Settings, then backend readiness and TestFlight.
+Settings first native pass: 49/49 selected UI tests passed on 4b823206. Screenshot review found truncated section labels and accessibility-size icon overlap; the final shared segmented bar and Settings symbol sizing await the next native pass. Shared prerequisite #1604 merged as c818a6b3; remaining delivery order is Notes, Home/Factory, Health, Insights, Settings, then backend readiness and TestFlight.

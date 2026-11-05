@@ -3222,4 +3222,4 @@ One look, taken from the Chat header: Apple glass, 44 pt target, secondary accen
 - Apple documentation used: Human Interface Guidelines (Buttons, Toolbars, Materials); SwiftUI `Glass`, `glassEffect`, `ButtonStyle.glass` and `Button`.
 
 
-Settings native screenshot review keeps all four section names readable at default text size with compact shared segment labels and full 44-point targets. Larger text uses the shared scrolling strip. Decorative row symbols retain the shared icon size as row text grows, preventing overlap.
+Settings native screenshot review keeps all four section names readable at default text size with the continuous shared glass segmented bar from P15-94 and full 44-point targets. Larger text uses the shared scrolling strip. Decorative row symbols retain the shared icon size as row text grows, preventing overlap.

@@ -19,8 +19,8 @@ Native run 42121264726 on 4b823206 compiled and passed **49/49** selected UI
 tests, including all three Settings cases. The later standalone screenshot sweep
 reached the job timeout; screenshot artifact 13461059102 was retained. Native
 screenshots revealed truncated normal-size section labels and oversized decorative
-row icons at accessibility XXXL. These are corrected with the shared control's
-compact segment label layout (still a 44-point target), a scrolling strip above
+row icons at accessibility XXXL. These are corrected with P15-94's
+continuous shared segmented bar (still a 44-point target), a scrolling strip above
 default text size, and fixed semantic icon geometry. The corrected native result
 and screenshot acceptance are pending; the earlier pass is not final visual acceptance.
 

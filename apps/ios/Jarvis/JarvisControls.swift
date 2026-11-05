@@ -355,7 +355,6 @@ private struct JarvisLabelledContent: View {
     var isEmphasised = false
     var isDestructive = false
     var isCompact = false
-    var isSegment = false
 
     private var tint: Color {
         if isDestructive { return .red }
@@ -377,9 +376,7 @@ private struct JarvisLabelledContent: View {
                     Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             } else {
-                Text(title)
-                    .font(isCompact ? .footnote.weight(.semibold) : (isSegment ? .subheadline.weight(.semibold) : .body.weight(.semibold)))
-                    .lineLimit(1)
+                Text(title).font(isCompact ? .footnote.weight(.semibold) : .body.weight(.semibold)).lineLimit(1)
             }
             if isLeading { Spacer(minLength: 0) }
             if let trailingSystemImage {
@@ -389,7 +386,7 @@ private struct JarvisLabelledContent: View {
             }
         }
         .foregroundStyle(tint.opacity(isDisabled ? 0.4 : 1))
-        .padding(.horizontal, isSegment ? JarvisDesignTokens.compactSpacing : (isCompact ? 10 : JarvisDesignTokens.labelledHorizontalPadding))
+        .padding(.horizontal, isCompact ? 10 : JarvisDesignTokens.labelledHorizontalPadding)
         .padding(.vertical, isCompact ? 4 : JarvisDesignTokens.labelledVerticalPadding)
         .frame(
             maxWidth: isFullWidth ? .infinity : nil,
@@ -418,7 +415,6 @@ struct JarvisLabelledButton: View {
     var isSelected = false
     var isDestructive = false
     var isCompact = false
-    var isSegment = false
     var hint = ""
     var accessibilityTitle: String?
     var accessibilityValue = ""
@@ -430,7 +426,7 @@ struct JarvisLabelledButton: View {
                 title: title, subtitle: subtitle, systemImage: systemImage, leading: leading,
                 trailingSystemImage: trailingSystemImage, isBusy: isBusy, isDisabled: isDisabled,
                 isFullWidth: isFullWidth, isLeading: isLeading, isEmphasised: isEmphasised || isSelected,
-                isDestructive: isDestructive, isCompact: isCompact, isSegment: isSegment
+                isDestructive: isDestructive, isCompact: isCompact
             )
         }
         .buttonStyle(.plain)
@@ -523,27 +519,36 @@ struct JarvisTabStrip<Tag: Hashable>: View {
     }
 }
 
-/// The long full-width segmented bar for a page's second row of tabs (Board / Needs Dan / Releases): every tab shares
-/// the row equally. Carousels of pills, such as the Notes folders, keep `JarvisTabStrip`.
+/// One full-width glass surface with equal-width segments. Individual segments have no separate glass chrome.
 struct JarvisSegmentedBar<Tag: Hashable>: View {
     let title: String
     let identifierPrefix: String
     let items: [JarvisTabItem<Tag>]
     @Binding var selection: Tag
-    var usesCompactLabels = false
 
     var body: some View {
-        HStack(spacing: JarvisDesignTokens.segmentedBarSpacing) {
+        HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                JarvisLabelledButton(
-                    title: item.title,
-                    identifier: item.identifier ?? "\(identifierPrefix).\(index)",
-                    isFullWidth: true,
-                    isSelected: selection == item.tag,
-                    isSegment: usesCompactLabels
-                ) { selection = item.tag }
+                Button { selection = item.tag } label: {
+                    Text(item.title)
+                        .font(.subheadline.weight(selection == item.tag ? .semibold : .regular))
+                        .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
+                        .contentShape(Rectangle())
+                        .background {
+                            if selection == item.tag {
+                                Capsule().fill(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
+                                    .padding(JarvisDesignTokens.segmentedSelectionInset)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection == item.tag ? .isSelected : [])
+                .accessibilityIdentifier(item.identifier ?? "\(identifierPrefix).\(index)")
             }
         }
+        .jarvisGlassCapsule()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
     }

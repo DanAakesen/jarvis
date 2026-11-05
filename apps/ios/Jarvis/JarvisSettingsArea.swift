@@ -156,7 +156,7 @@ struct JarvisSettingsArea: View {
                                items: sectionItems, selection: $selectedSection)
             } else {
                 JarvisSegmentedBar(title: copy(.title), identifierPrefix: "settings.section",
-                                   items: sectionItems, selection: $selectedSection, usesCompactLabels: true)
+                                   items: sectionItems, selection: $selectedSection)
             }
         }
         .padding(.horizontal, JarvisPageHeaderMetrics.inset)
