@@ -22,6 +22,8 @@ enum JarvisPageHeaderMetrics {
     static let rowLineSpacing: CGFloat = 4
     static let skeletonLineHeight: CGFloat = 18
     static let skeletonHeroHeight: CGFloat = 156
+    static let heroValueMinimumWidth: CGFloat = 112
+    static let compactChartHeight: CGFloat = 96
 }
 
 /// Title bar: the title is left aligned, bold and about 32 pt (scaling with Dynamic Type and wrapping rather than
@@ -174,12 +176,12 @@ struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-            if dynamicTypeSize.isAccessibilitySize {
+            if !title.isEmpty, dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.actionSpacing) {
                     heading
                     accessory
                 }
-            } else {
+            } else if !title.isEmpty {
                 HStack(alignment: .firstTextBaseline) {
                     heading
                     Spacer(minLength: JarvisPageHeaderMetrics.actionSpacing)
@@ -219,12 +221,14 @@ struct JarvisPageStat: Identifiable {
 
 /// Counts in a row that wraps at large Dynamic Type sizes. Each stat reads as one element.
 struct JarvisPageStatGrid: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let stats: [JarvisPageStat]
     let language: JarvisAppLanguage
 
     var body: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: JarvisPageHeaderMetrics.statMinimumWidth), spacing: JarvisPageHeaderMetrics.spacing, alignment: .topLeading)],
+            columns: Array(repeating: GridItem(.flexible(), spacing: JarvisPageHeaderMetrics.spacing, alignment: .topLeading),
+                           count: dynamicTypeSize.isAccessibilitySize ? 1 : max(1, min(stats.count, 4))),
             alignment: .leading,
             spacing: JarvisPageHeaderMetrics.spacing
         ) {
@@ -233,6 +237,8 @@ struct JarvisPageStatGrid: View {
                     HStack(spacing: JarvisPageHeaderMetrics.actionSpacing / 2) {
                         Text(stat.formattedValue ?? JarvisNumberFormat.compact(stat.value, language: language))
                             .font(.title.weight(.bold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                             .monospacedDigit()
                         Spacer(minLength: JarvisPageHeaderMetrics.actionSpacing)
                         Image(systemName: stat.systemImage)

@@ -10,9 +10,9 @@ enum JarvisFixtureScenario {
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!
             ),
-            transport: FixtureTransport(scenario: try fixtureScenarioData(
+            transport: WorkspaceFixtureTransport(base: FixtureTransport(scenario: try fixtureScenarioData(
                 emptyActivity: emptyActivity, calendarChangeLanguage: calendarChangeLanguage
-            )),
+            ))),
             tokenStore: FixtureTokenStore(),
             accessTokenProvider: FixtureTokenProvider()
         )
@@ -157,6 +157,28 @@ enum JarvisFixtureScenario {
       }]
     }
     """#
+
+    /// Keep the ordered chat playback intact while allowing an independently opened saved-items page.
+    private struct WorkspaceFixtureTransport: HTTPTransport {
+        let base: FixtureTransport
+
+        func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+            guard request.method == .get, request.url.path == "/api/workspaces" else {
+                return try await base.send(request)
+            }
+            return HTTPResponse(statusCode: 200, headers: ["content-type": "application/json"], body: Data(Self.response.utf8))
+        }
+
+        func stream(_ request: HTTPRequest) async throws -> HTTPStreamResponse { try await base.stream(request) }
+
+        private static let response = #"""
+        {"items":[
+            {"id":"research:00000000-0000-0000-0000-000000000001","title":"Weekly status — synthetic","kind":"research","createdAt":"2026-11-05T09:00:00Z","promptSummary":"Sample project summary","pinned":true},
+            {"id":"html_app:00000000-0000-0000-0000-000000000002","title":"Budget calculator — synthetic","kind":"html_app","createdAt":"2026-11-05T08:00:00Z","promptSummary":"Sample monthly costs","pinned":false},
+            {"id":"research:00000000-0000-0000-0000-000000000003","title":"Trip research — synthetic","kind":"research","createdAt":"2026-11-04T09:00:00Z","promptSummary":"Sample itinerary","pinned":false}
+          ]}
+        """#
+    }
 
     private static let scenario = #"""
     {

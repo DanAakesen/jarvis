@@ -603,13 +603,15 @@ struct JarvisHealthPanel<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
             JarvisSectionHeadline(title)
-            content
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(JarvisDesignTokens.healthSectionSpacing)
-                .background(
-                    .regularMaterial,
-                    in: RoundedRectangle(cornerRadius: JarvisDesignTokens.healthPanelRadius, style: .continuous)
-                )
+            VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
+                content
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(JarvisDesignTokens.healthSectionSpacing)
+            .background(
+                .regularMaterial,
+                in: RoundedRectangle(cornerRadius: JarvisDesignTokens.healthPanelRadius, style: .continuous)
+            )
         }
     }
 }

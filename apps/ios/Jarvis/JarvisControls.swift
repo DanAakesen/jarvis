@@ -590,11 +590,17 @@ struct JarvisPeriodSelector<Tag: Hashable>: View {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Button { selection = item.tag } label: {
                     Text(item.title)
-                        .font(.caption.weight(.semibold))
+                        .font(.caption.weight(selection == item.tag ? .bold : .regular))
                         .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
                         .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, JarvisDesignTokens.compactSpacing)
                         .frame(minWidth: JarvisDesignTokens.controlMinimumHeight, minHeight: JarvisDesignTokens.controlMinimumHeight)
+                        .background {
+                            if selection == item.tag {
+                                Capsule().fill(Color.primary.opacity(0.08))
+                                    .padding(.vertical, JarvisDesignTokens.compactSpacing)
+                            }
+                        }
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

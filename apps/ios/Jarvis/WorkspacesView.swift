@@ -86,7 +86,6 @@ struct WorkspacesView: View {
             .font(.footnote)
             .foregroundStyle(runtime.connectionStatus == .connected ? Color.secondary : Color.orange)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, JarvisDesignTokens.contentInset)
             .padding(.top, JarvisDesignTokens.contentSpacing)
             .accessibilityLabel(formatted(.connectionLabel, runtime.connectionStatus.title(language: language)))
     }
@@ -99,10 +98,10 @@ struct WorkspacesView: View {
                     kindFilterButton(title: kindLabel(kind), kind: kind)
                 }
             }
-            .padding(.horizontal, JarvisDesignTokens.contentInset)
         }
         .scrollIndicators(.hidden)
         .accessibilityLabel(text(.filterByKind))
+        .accessibilityIdentifier("workspaces.filters")
     }
 
     private func kindFilterButton(title: String, kind: SavedWorkspaceKind?) -> some View {
@@ -128,6 +127,7 @@ struct WorkspacesView: View {
                 .autocorrectionDisabled()
                 .submitLabel(.search)
                 .accessibilityLabel(text(.search))
+                .accessibilityIdentifier("workspaces.search")
             if !query.isEmpty {
                 JarvisIconButton(
                     title: text(.clearSearch),
@@ -144,37 +144,44 @@ struct WorkspacesView: View {
         .padding(.bottom, JarvisDesignTokens.contentSpacing / 2)
     }
 
-    private var results: some View {
-        JarvisList {
-            if hasLoadedPage || !items.isEmpty {
-                Section {
-                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-                        JarvisPageHeadline(phrase: JarvisPagePhrase(markup: formatted(.pageSummary, items.count)))
-                        JarvisPageHeroCard(title: jarvisInsightsText(.overview, language)) {
-                            JarvisPageStatGrid(
-                                stats: SavedWorkspaceKind.allCases.map { kind in
-                                    JarvisPageStat(id: kind.rawValue, value: items.filter { $0.kind == kind }.count,
-                                                  label: kindLabel(kind), systemImage: symbol(for: kind))
-                                },
-                                language: language
-                            )
-                        }
-                        .accessibilityIdentifier("workspaces.hero")
-                        connectionStatus
-                        kindFilters
-                        if let notice {
-                            Text(notice).font(.footnote).foregroundStyle(.secondary)
-                                .accessibilityAddTraits(.updatesFrequently)
-                        }
-                    }
-                    .listRowSeparator(.hidden)
+    private var isInitialLoading: Bool { loadState == .loading && items.isEmpty && !hasLoadedPage }
+
+    @ViewBuilder private var pageHead: some View {
+        if hasLoadedPage || !items.isEmpty {
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                JarvisPageHeadline(phrase: JarvisPagePhrase(markup: formatted(.pageSummary, items.count)))
+                JarvisPageHeroCard(title: jarvisInsightsText(.overview, language)) {
+                    JarvisPageStatGrid(
+                        stats: SavedWorkspaceKind.allCases.map { kind in
+                            JarvisPageStat(id: kind.rawValue, value: items.filter { $0.kind == kind }.count,
+                                          label: kindLabel(kind), systemImage: symbol(for: kind))
+                        },
+                        language: language
+                    )
+                }
+                .accessibilityIdentifier("workspaces.hero")
+                connectionStatus
+                kindFilters
+                if loadState == .loading {
+                    JarvisLoadingView(title: text(.loading), size: .inline)
+                        .accessibilityIdentifier("workspaces.refreshing")
+                }
+                if let notice {
+                    Text(notice).font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityAddTraits(.updatesFrequently)
                 }
             }
-            if loadState == .loading && items.isEmpty && !hasLoadedPage {
-                Section {
-                    JarvisPageLoadingView(title: text(.loading), identifier: "workspaces.loading")
-                        .listRowSeparator(.hidden)
-                }
+            .padding(.horizontal, JarvisPageHeaderMetrics.inset)
+        } else if isInitialLoading {
+            JarvisPageLoadingView(title: text(.loading), identifier: "workspaces.loading")
+                .padding(.horizontal, JarvisPageHeaderMetrics.inset)
+        }
+    }
+
+    private var results: some View {
+        JarvisList(head: { pageHead }) {
+            if isInitialLoading {
+                EmptyView()
             } else if items.isEmpty {
                 Section {
                     statePanel

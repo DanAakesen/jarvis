@@ -303,7 +303,7 @@ struct JarvisProactiveArea: View {
     }
 
     private func nextCheckCard(_ loaded: JarvisProactiveStatus) -> some View {
-        JarvisPageHeroCard(title: text(.overview)) {
+        JarvisPageHeroCard(title: "") {
             JarvisPageStatGrid(
                 stats: [
                     JarvisPageStat(id: "open", value: openItems.count, label: text(.proactiveTabOpen), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent),
@@ -313,41 +313,42 @@ struct JarvisProactiveArea: View {
                 ],
                 language: language
             )
-            VStack(alignment: .leading, spacing: 8) {
-                Text(sentence(loaded))
-                    .font(.subheadline.weight(.medium))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("proactive.sentence")
-                Text(lastCheckLine(loaded))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("proactive.lastCheck")
-                HStack(spacing: 8) {
-                    JarvisLabelledButton(
-                        title: checkingNow ? text(.proactiveChecking) : text(.proactiveCheckNow),
-                        systemImage: "sparkle.magnifyingglass",
-                        identifier: "proactive.checkNow",
-                        isBusy: checkingNow,
-                        isDisabled: !JarvisProactiveLogic.canCheckNow(loaded)
-                    ) {
-                        Task { await checkNow() }
-                    }
-                    if loaded.paused {
-                        JarvisInsightsBadge(title: text(.proactivePausedBanner), systemImage: "pause.circle")
-                            .accessibilityIdentifier("proactive.paused")
-                    } else if loaded.quietNow {
-                        JarvisInsightsBadge(title: text(.proactiveQuietBanner), systemImage: "moon.zzz")
-                            .accessibilityIdentifier("proactive.quiet")
-                    }
-                    Spacer(minLength: 0)
-                }
-                if let checkMessage {
-                    Text(checkMessage == .started ? text(.proactiveCheckStarted) : text(.proactiveCheckFailed))
+            Divider()
+            HStack(spacing: JarvisPageHeaderMetrics.spacing) {
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                    Text(sentence(loaded))
+                        .font(.subheadline.weight(.medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("proactive.sentence")
+                    Text(lastCheckLine(loaded))
                         .font(.caption)
-                        .foregroundStyle(checkMessage == .started ? Color.secondary : Color.red)
-                        .accessibilityIdentifier("proactive.checkMessage")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("proactive.lastCheck")
                 }
+                Spacer(minLength: 0)
+                JarvisIconButton(
+                    title: checkingNow ? text(.proactiveChecking) : text(.proactiveCheckNow),
+                    systemImage: "arrow.clockwise",
+                    identifier: "proactive.checkNow",
+                    isBusy: checkingNow,
+                    isDisabled: !JarvisProactiveLogic.canCheckNow(loaded)
+                ) {
+                    Task { await checkNow() }
+                }
+            }
+            if loaded.paused {
+                JarvisInsightsBadge(title: text(.proactivePausedBanner), systemImage: "pause.circle")
+                    .accessibilityIdentifier("proactive.paused")
+            } else if loaded.quietNow {
+                JarvisInsightsBadge(title: text(.proactiveQuietBanner), systemImage: "moon.zzz")
+                    .accessibilityIdentifier("proactive.quiet")
+            }
+            if let checkMessage {
+                Text(checkMessage == .started ? text(.proactiveCheckStarted) : text(.proactiveCheckFailed))
+                    .font(.caption)
+                    .foregroundStyle(checkMessage == .started ? Color.secondary : Color.red)
+                    .accessibilityIdentifier("proactive.checkMessage")
             }
         }
         .accessibilityIdentifier("proactive.hero")
@@ -465,7 +466,7 @@ struct JarvisProactiveArea: View {
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                         Text(item.title)
-                            .font(.subheadline.weight(.medium))
+                            .font(.body)
                             .foregroundStyle(.primary)
                             .multilineTextAlignment(.leading)
                             .lineLimit(isExpanded ? nil : 2)

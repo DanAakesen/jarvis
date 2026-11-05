@@ -17,8 +17,9 @@ fixtures; differing values must not be scored as layout defects.
 | Sheets | Shared confirm left, cancel right | Pending bilingual geometry test |
 
 `ComponentGalleryUITests` is already selected by the existing Mac workflow. The
-new cases attach Usage/Status/Proactive in da/en and light/dark, loading states,
-shared row/heading examples, and sheet actions. They assert rendered positions
+new cases attach Usage/Status/Proactive in da/en and light/dark, Workspaces in
+English dark/Danish light, loading states, shared row/heading examples, and sheet
+actions. They assert rendered positions
 and controls, not that every button is circular. UI fixtures use process-local
 memory caching so a previous test cannot replace a loading scenario with saved data.
 
@@ -37,5 +38,25 @@ First Mac attempt (run 42075005655, commit 84219890) caught an extension target
 boundary: the page skeleton was placed in the loading file also compiled by the
 Voice Activity target. The skeleton now lives with the app page components, and
 a Core source guard prevents shared controls/loading from depending on those
-app-only types. CI and CodeQL passed on that attempt; native compilation and
-screenshots are being rerun on the correction.
+app-only types.
+
+Second Mac attempt (run 42075818100, commit 7bfef3db): native compilation, CI
+and CodeQL passed. The iPhone 17 Pro UI suite completed 42 tests in 967.6 seconds:
+41 passed, including shared loading, row spacing/actions, bilingual sheet order,
+sidebar navigation and Home tests. The new page-order test failed on its first
+Usage capture because its `staticTexts` lookup did not find `page.headline`.
+The follow-up uses the identifier across accessibility element types, retains the
+position assertions, and captures evidence before those assertions. This fix is
+not verified on a native run yet.
+
+The job exceeded its 45-minute limit later, during the existing screenshot
+sequence. Logs show that it had already written Health and Factory captures.
+The screenshot upload step did not run after cancellation. The 143 MB xcresult
+archive survived as artifact 13442092604; the cloud environment currently blocks
+the OpenAI file-download host returned by the GitHub connector, so its frames
+have not been inspected. No board/native comparison is accepted yet.
+
+Prepared follow-up layout corrections place Usage's amount beside its chart,
+remove Proactive's extra hero title, use three equal-width Proactive statistics,
+and keep the Workspaces hero out of a second List-row glass surface. These are
+source-reviewed against the rendered board; native comparison is still pending.

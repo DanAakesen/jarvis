@@ -97,30 +97,59 @@ final class ComponentGalleryUITests: XCTestCase {
         attach(app.screenshot(), named: "Tab strip")
     }
 
-    /// These captures run in the existing Mac suite; every assertion uses rendered geometry.
-    func testSharedPageOrderAndCaptureDanishAndEnglishInBothThemes() {
-        for language in ["en", "da"] {
-            for theme in ["dark", "light"] {
-                for destination in ["usage", "status", "proactive"] {
-                    openPage(destination, language: language, theme: theme)
-                    let hero = app.descendants(matching: .any)["\(destination).hero"]
-                    XCTAssertTrue(hero.waitForExistence(timeout: 10), "\(destination) hero")
-                    let phrase = app.staticTexts["page.headline"]
-                    XCTAssertTrue(phrase.exists)
-                    XCTAssertGreaterThanOrEqual(hero.frame.minY, phrase.frame.maxY, "Phrase precedes hero")
-                    let prefix = destination == "usage" ? "usage.range." : destination == "status" ? "status.filter." : "proactive.tabs."
-                    let filter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
-                    XCTAssertTrue(filter.exists)
-                    if destination == "usage" {
-                        XCTAssertGreaterThanOrEqual(filter.frame.minY, hero.frame.minY, "Usage period is inside hero")
-                        XCTAssertLessThanOrEqual(filter.frame.maxY, hero.frame.maxY)
-                    } else {
-                        XCTAssertGreaterThanOrEqual(filter.frame.minY, hero.frame.maxY, "Filters follow hero")
-                    }
-                    attach(app.screenshot(), named: "P15-92-\(destination)-\(theme)-\(language)")
-                    app.terminate()
-                }
+    // Separate cases keep each three-page capture below the runner's per-test timeout.
+    func testSharedPageOrderDarkEnglish() { captureSharedPages(language: "en", theme: "dark") }
+    func testSharedPageOrderLightEnglish() { captureSharedPages(language: "en", theme: "light") }
+    func testSharedPageOrderDarkDanish() { captureSharedPages(language: "da", theme: "dark") }
+    func testSharedPageOrderLightDanish() { captureSharedPages(language: "da", theme: "light") }
+
+    private func captureSharedPages(language: String, theme: String) {
+        defer { app.terminate() }
+        for destination in ["usage", "status", "proactive"] {
+            openPage(destination, language: language, theme: theme, launch: destination == "usage")
+            let hero = app.descendants(matching: .any)["\(destination).hero"]
+            XCTAssertTrue(hero.waitForExistence(timeout: 10), "\(destination) hero")
+            attach(app.screenshot(), named: "P15-92-\(destination)-\(theme)-\(language)")
+            // The shared phrase exposes one accessibility element; SwiftUI may classify it as Other.
+            let phrase = app.descendants(matching: .any).matching(identifier: "page.headline").firstMatch
+            XCTAssertTrue(phrase.exists)
+            XCTAssertGreaterThanOrEqual(hero.frame.minY, phrase.frame.maxY, "Phrase precedes hero")
+            let prefix = destination == "usage" ? "usage.range." : destination == "status" ? "status.filter." : "proactive.tabs."
+            let filter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+            XCTAssertTrue(filter.exists)
+            if destination == "usage" {
+                XCTAssertGreaterThanOrEqual(filter.frame.minY, hero.frame.minY, "Usage period is inside hero")
+                XCTAssertLessThanOrEqual(filter.frame.maxY, hero.frame.maxY)
+            } else {
+                XCTAssertGreaterThanOrEqual(filter.frame.minY, hero.frame.maxY, "Filters follow hero")
             }
+            let geometry = [
+                "screen": ["x": app.frame.minX, "y": app.frame.minY, "width": app.frame.width, "height": app.frame.height],
+                "hero": ["x": hero.frame.minX, "y": hero.frame.minY, "width": hero.frame.width, "height": hero.frame.height],
+                "phrase": ["x": phrase.frame.minX, "y": phrase.frame.minY, "width": phrase.frame.width, "height": phrase.frame.height],
+                "filter": ["x": filter.frame.minX, "y": filter.frame.minY, "width": filter.frame.width, "height": filter.frame.height],
+            ]
+            if let data = try? JSONSerialization.data(withJSONObject: geometry, options: [.sortedKeys, .prettyPrinted]),
+               let json = String(data: data, encoding: .utf8) {
+                let bounds = XCTAttachment(string: json)
+                bounds.name = "P15-92-\(destination)-\(theme)-\(language)-geometry"
+                bounds.lifetime = .keepAlways
+                add(bounds)
+            }
+        }
+    }
+
+    func testWorkspacesHeroPrecedesFiltersAndKeepsSearchReachable() {
+        for (language, theme) in [("en", "dark"), ("da", "light")] {
+            openPage("workspaces", language: language, theme: theme)
+            defer { app.terminate() }
+            let hero = app.descendants(matching: .any)["workspaces.hero"]
+            XCTAssertTrue(hero.waitForExistence(timeout: 10))
+            attach(app.screenshot(), named: "P15-92-workspaces-\(theme)-\(language)")
+            let filters = app.descendants(matching: .any)["workspaces.filters"]
+            XCTAssertGreaterThanOrEqual(filters.frame.minY, hero.frame.maxY)
+            XCTAssertTrue(app.textFields["workspaces.search"].isHittable)
+            XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Weekly status")).firstMatch.exists)
         }
     }
 
@@ -130,7 +159,8 @@ final class ComponentGalleryUITests: XCTestCase {
             defer { app.terminate() }
             let loading = app.descendants(matching: .any)["\(destination).loading"]
             XCTAssertTrue(loading.waitForExistence(timeout: 8))
-            XCTAssertFalse(app.staticTexts["page.headline"].exists, "No invented phrase while loading")
+            XCTAssertFalse(app.descendants(matching: .any).matching(identifier: "page.headline").firstMatch.exists,
+                           "No invented phrase while loading")
             let prefix = destination == "usage" ? "usage.range." : destination == "status" ? "status.filter." : "proactive.tabs."
             XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).count, 0)
             XCTAssertTrue(app.buttons["navigation.openSidebar"].isHittable, "Navigation stays available")
@@ -172,16 +202,18 @@ final class ComponentGalleryUITests: XCTestCase {
         let detail = app.staticTexts["gallery.row.0.detail"]
         let next = app.staticTexts["gallery.row.1.title"]
         XCTAssertGreaterThan(detail.frame.minY, title.frame.maxY, "Lines have breathing room")
-        XCTAssertGreaterThanOrEqual(next.frame.minY - detail.frame.maxY, 20, "Rows are visibly separated")
+        XCTAssertGreaterThanOrEqual(next.frame.minY - detail.frame.maxY, 19.5, "Rows are separated by 20 pt (allowing half-point rounding)")
         attach(app.screenshot(), named: "P15-92-shared-section-and-rows")
     }
 
-    private func openPage(_ destination: String, language: String = "en", theme: String = "dark", extra: [String] = []) {
-        app.launchArguments = [
-            "--ui-test-navigation", "-jarvis.appLanguage", language, "-jarvis.appTheme", theme,
-            "-AppleLanguages", "(\(language))", "-AppleLocale", language == "da" ? "da_DK" : "en_US",
-        ] + extra
-        app.launch()
+    private func openPage(_ destination: String, language: String = "en", theme: String = "dark", extra: [String] = [], launch: Bool = true) {
+        if launch {
+            app.launchArguments = [
+                "--ui-test-navigation", "-jarvis.appLanguage", language, "-jarvis.appTheme", theme,
+                "-AppleLanguages", "(\(language))", "-AppleLocale", language == "da" ? "da_DK" : "en_US",
+            ] + extra
+            app.launch()
+        }
         let menu = app.buttons["navigation.openSidebar"]
         XCTAssertTrue(menu.waitForExistence(timeout: 10))
         menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
