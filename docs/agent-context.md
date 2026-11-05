@@ -1,7 +1,6 @@
-## Widgets temporarily not embedded (P15-87 / #1589; 5 November 2026)
+## Widgets embedded again (P15-88 / #1591; 5 November 2026)
 
-- `apps/ios/project.yml` no longer embeds `JarvisWidgets` in the Jarvis app, so the archive skips it. The target and all widget sources stay. The iOS metadata check in `ios-ci.yml` asserts this temporary state.
-- Owner, in the Apple developer portal: add the App Groups capability (same group as the app) to the App ID ending `.widgets`, regenerate its provisioning profile, then restore `- target: JarvisWidgets` with `embed: true` in the Jarvis dependencies and flip the `ios-ci.yml` check back.
+- `apps/ios/project.yml` embeds `JarvisWidgets` in the Jarvis app again (`embed: true`), so the Gym and Factory widgets ship in the archive. The owner added the existing App Group to the `.widgets` App ID. The temporary skip from P15-87 / #1589 is removed, and the iOS metadata check in `ios-ci.yml` asserts the embed.
 
 ## Health rename commands (P15-78 / #1571; 4 November 2026)
 
