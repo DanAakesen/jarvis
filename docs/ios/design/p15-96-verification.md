@@ -62,3 +62,12 @@ These follow-up corrections are source-reviewed but await native compilation,
 new screenshots and visual verification. The continuation is checkpointing them
 through the integration branch without interrupting the active Insights run
 42106990041 / 127547007531. Push the page follow-up only after refreshing that run.
+
+## Preserve Chat in the release scope
+
+The final diff audit found an inherited change to `JarvisChatModel.shouldShowNowBar`.
+The owner explicitly excludes Chat from board alignment, so that predicate is
+restored exactly to main. Notifications keeps its page-specific grouping/filtering;
+Chat source and shared orb appearance stay unchanged. The earlier statement that
+this change also suppresses Chat's Now bar for completed background tasks is
+superseded.
