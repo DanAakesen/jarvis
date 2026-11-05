@@ -97,6 +97,99 @@ final class ComponentGalleryUITests: XCTestCase {
         attach(app.screenshot(), named: "Tab strip")
     }
 
+    /// These captures run in the existing Mac suite; every assertion uses rendered geometry.
+    func testSharedPageOrderAndCaptureDanishAndEnglishInBothThemes() {
+        for language in ["en", "da"] {
+            for theme in ["dark", "light"] {
+                for destination in ["usage", "status", "proactive"] {
+                    openPage(destination, language: language, theme: theme)
+                    let hero = app.descendants(matching: .any)["\(destination).hero"]
+                    XCTAssertTrue(hero.waitForExistence(timeout: 10), "\(destination) hero")
+                    let phrase = app.staticTexts["page.headline"]
+                    XCTAssertTrue(phrase.exists)
+                    XCTAssertGreaterThanOrEqual(hero.frame.minY, phrase.frame.maxY, "Phrase precedes hero")
+                    let prefix = destination == "usage" ? "usage.range." : destination == "status" ? "status.filter." : "proactive.tabs."
+                    let filter = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+                    XCTAssertTrue(filter.exists)
+                    if destination == "usage" {
+                        XCTAssertGreaterThanOrEqual(filter.frame.minY, hero.frame.minY, "Usage period is inside hero")
+                        XCTAssertLessThanOrEqual(filter.frame.maxY, hero.frame.maxY)
+                    } else {
+                        XCTAssertGreaterThanOrEqual(filter.frame.minY, hero.frame.maxY, "Filters follow hero")
+                    }
+                    attach(app.screenshot(), named: "P15-92-\(destination)-\(theme)-\(language)")
+                    app.terminate()
+                }
+            }
+        }
+    }
+
+    func testInitialLoadingHidesFiltersAndUsesOnePageSkeleton() {
+        for destination in ["usage", "status", "proactive"] {
+            openPage(destination, extra: ["--ui-test-insights=loading"])
+            defer { app.terminate() }
+            let loading = app.descendants(matching: .any)["\(destination).loading"]
+            XCTAssertTrue(loading.waitForExistence(timeout: 8))
+            XCTAssertFalse(app.staticTexts["page.headline"].exists, "No invented phrase while loading")
+            let prefix = destination == "usage" ? "usage.range." : destination == "status" ? "status.filter." : "proactive.tabs."
+            XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).count, 0)
+            XCTAssertTrue(app.buttons["navigation.openSidebar"].isHittable, "Navigation stays available")
+            attach(app.screenshot(), named: "P15-92-\(destination)-loading")
+        }
+    }
+
+    func testSheetConfirmIsOnLeftAndCancelOnRightInBothLanguages() {
+        for language in ["en", "da"] {
+            openPage("proactive", language: language)
+            defer { app.terminate() }
+            XCTAssertTrue(app.buttons["proactive.settings"].waitForExistence(timeout: 8))
+            app.buttons["proactive.settings"].tap()
+            let confirm = app.buttons["sheet.confirm"]
+            let cancel = app.buttons["sheet.cancel"]
+            XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+            XCTAssertTrue(cancel.exists)
+            XCTAssertLessThan(confirm.frame.midX, app.frame.midX, "Confirm occupies the left side")
+            XCTAssertGreaterThan(cancel.frame.midX, app.frame.midX, "Cancel occupies the right side")
+            XCTAssertEqual(confirm.frame.midY, cancel.frame.midY, accuracy: 5)
+            attach(app.screenshot(), named: "P15-92-sheet-actions-\(language)")
+            cancel.tap()
+            XCTAssertTrue(app.buttons["proactive.settings"].waitForExistence(timeout: 5))
+        }
+    }
+
+    func testSectionActionWorksAndRowsHaveSeparateLinesAndSpacing() {
+        launchGallery()
+        defer { app.terminate() }
+        let action = galleryElement("gallery.section.action")
+        for _ in 0..<8 {
+            if action.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(action.isHittable)
+        action.tap()
+        XCTAssertEqual(app.staticTexts["gallery.section.result"].label, "Actions: 1")
+        let title = app.staticTexts["gallery.row.0.title"]
+        let detail = app.staticTexts["gallery.row.0.detail"]
+        let next = app.staticTexts["gallery.row.1.title"]
+        XCTAssertGreaterThan(detail.frame.minY, title.frame.maxY, "Lines have breathing room")
+        XCTAssertGreaterThanOrEqual(next.frame.minY - detail.frame.maxY, 20, "Rows are visibly separated")
+        attach(app.screenshot(), named: "P15-92-shared-section-and-rows")
+    }
+
+    private func openPage(_ destination: String, language: String = "en", theme: String = "dark", extra: [String] = []) {
+        app.launchArguments = [
+            "--ui-test-navigation", "-jarvis.appLanguage", language, "-jarvis.appTheme", theme,
+            "-AppleLanguages", "(\(language))", "-AppleLocale", language == "da" ? "da_DK" : "en_US",
+        ] + extra
+        app.launch()
+        let menu = app.buttons["navigation.openSidebar"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        let destinationButton = app.buttons["navigation.\(destination)"]
+        XCTAssertTrue(destinationButton.waitForExistence(timeout: 5))
+        destinationButton.tap()
+    }
+
     /// Finds a gallery element by identifier whatever its accessibility type, scrolling the page until it appears.
     private func galleryElement(_ id: String) -> XCUIElement {
         let element = app.descendants(matching: .any).matching(identifier: id).firstMatch

@@ -140,7 +140,6 @@ struct JarvisFactoryArea: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if showsSegmentRow { segmentRow }
             if previewState == .loading {
                 FactoryLoadingView(copy: copy, releases: segment == .releases)
             } else if client == nil {
@@ -172,7 +171,12 @@ struct JarvisFactoryArea: View {
         .jarvisAmbientBackground()
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            bottomDock
+            if showsSegmentRow {
+                VStack(spacing: 0) {
+                    segmentRow
+                    bottomDock
+                }
+            }
         }
         .task {
             await loadProjects()
@@ -293,10 +297,10 @@ struct JarvisFactoryArea: View {
     }
 
     private var showsSegmentRow: Bool {
-        previewState != .loading && client != nil && !projects.isEmpty
+        previewState != .loading && client != nil && (board != nil || releaseView != nil)
     }
 
-    /// The second row, under the title: the narrowed segmented bar with the filter button to its right.
+    /// The full-width toggle above the search row, below the page's scrolling content.
     private var segmentRow: some View {
         HStack(spacing: JarvisPageHeaderMetrics.spacing) {
             JarvisSegmentedBar(
@@ -702,9 +706,10 @@ struct FactoryLoadingView: View {
     let releases: Bool
 
     var body: some View {
-        JarvisLoadingView(title: copy.text(releases ? .loadingReleases : .loadingTasks))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        ScrollView {
+            JarvisPageLoadingView(title: copy.text(releases ? .loadingReleases : .loadingTasks), identifier: "factory.loading")
             .padding(JarvisDesignTokens.factoryHorizontalInset)
+        }
     }
 }
 

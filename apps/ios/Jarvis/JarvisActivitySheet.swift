@@ -18,7 +18,6 @@ struct JarvisActivitySheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                header
                 ScrollView {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatSheetRowSpacing) {
                     if let error = model.activityError, model.nowFeed == nil {
@@ -84,14 +83,14 @@ struct JarvisActivitySheet: View {
                             ContentUnavailableView(copy(.activityEmpty), systemImage: "checkmark.circle")
                         }
                     } else {
-                        JarvisLoadingView(title: copy(.activityLoading))
-                            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                        JarvisPageLoadingView(title: copy(.activityLoading), identifier: "notifications.loading")
                     }
                 }
                 .padding(JarvisDesignTokens.chatHorizontalInset)
             }
             .scrollIndicators(.visible)
             .refreshable { await model.refreshActivity() }
+            .jarvisPageHeader { header }
             }
             .jarvisAmbientBackground()
             .toolbar(.hidden, for: .navigationBar)

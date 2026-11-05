@@ -31,25 +31,18 @@ struct JarvisInsightsCard<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
             if title != nil || accessory != nil {
-                HStack(spacing: JarvisDesignTokens.healthRowSpacing) {
-                    if let title {
-                        Text(title)
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                            .accessibilityAddTraits(.isHeader)
-                    }
-                    Spacer(minLength: 0)
+                JarvisSectionHeadline(title ?? "") {
                     if let accessory { accessory }
                 }
             }
             content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(JarvisDesignTokens.healthSectionSpacing)
+                .background(
+                    .regularMaterial,
+                    in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous)
+                )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(JarvisDesignTokens.healthSectionSpacing)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous)
-        )
     }
 }
 

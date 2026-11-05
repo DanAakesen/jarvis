@@ -40,12 +40,6 @@ struct JarvisUsageArea: View {
                 if case .loaded(let summary) = load {
                     JarvisPageHeadline(phrase: JarvisUsagePagePhrase.make(summary, language: language))
                 }
-                JarvisSegmentedBar(
-                    title: text(.usageRangeLabel),
-                    identifierPrefix: "usage.range",
-                    items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
-                    selection: $period
-                )
                 if refreshFailedWithCache {
                     Text(text(.refreshFailedShowingSaved))
                         .font(.footnote)
@@ -76,7 +70,7 @@ struct JarvisUsageArea: View {
     @ViewBuilder private var content: some View {
         switch load {
         case .loading:
-            JarvisInsightsStateView(kind: .loading, language: language, identifier: "usage.loading")
+            JarvisPageLoadingView(title: text(.loading), identifier: "usage.loading")
         case .failed(let failure):
             JarvisInsightsStateView(kind: .failure(failure), language: language, identifier: "usage.error") {
                 if client == nil { onRetryConfiguration() }
@@ -128,6 +122,7 @@ struct JarvisUsageArea: View {
 
     @ViewBuilder private func loaded(_ summary: JarvisUsageSummary) -> some View {
         VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
+            overview(summary)
             if summary.isEmpty {
                 JarvisInsightsCard {
                     JarvisInsightsStateView(
@@ -138,7 +133,6 @@ struct JarvisUsageArea: View {
                     )
                 }
             } else {
-                overview(summary)
                 breakdown(summary)
                 topTasks(summary)
             }
@@ -153,7 +147,14 @@ struct JarvisUsageArea: View {
     private func overview(_ summary: JarvisUsageSummary) -> some View {
         let bucket = selectedBucket(summary)
         let totals = summary.totals(in: bucket)
-        return JarvisInsightsCard {
+        return JarvisPageHeroCard(title: text(.overview)) {
+            JarvisPeriodSelector(
+                title: text(.usageRangeLabel),
+                identifierPrefix: "usage.range",
+                items: JarvisUsagePeriod.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                selection: $period
+            )
+        } content: {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -189,6 +190,7 @@ struct JarvisUsageArea: View {
                 totalsGrid(totals)
             }
         }
+        .accessibilityIdentifier("usage.hero")
     }
 
     private func indicators(_ summary: JarvisUsageSummary) -> some View {
@@ -321,14 +323,15 @@ struct JarvisUsageArea: View {
 
     private func breakdown(_ summary: JarvisUsageSummary) -> some View {
         let slices = summary.slices(by: groupBy)
-        return JarvisInsightsCard(title: text(.usageBreakdown)) {
-            JarvisTabStrip(
+        return JarvisPageHeroCard(title: text(.usageBreakdown)) {
+            JarvisPeriodSelector(
                 title: text(.usageBreakdown),
                 identifierPrefix: "usage.groupBy",
                 items: JarvisUsageGroupBy.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
                 selection: $groupBy
             )
             .onChange(of: groupBy) { _, _ in selectedSliceID = nil }
+        } content: {
             splitBar(slices, summary: summary)
             VStack(spacing: 0) {
                 ForEach(Array(slices.prefix(8).enumerated()), id: \.element.id) { index, slice in
@@ -432,8 +435,9 @@ struct JarvisUsageArea: View {
     private func topTasks(_ summary: JarvisUsageSummary) -> some View {
         let ranks = summary.topTasks()
         let maximum = ranks.map(\.value).max() ?? 0
-        return JarvisInsightsCard(title: text(.usageTopTasks)) {
-            VStack(spacing: 10) {
+        return VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+            JarvisSectionHeadline(text(.usageTopTasks))
+            JarvisRowGroup {
                 ForEach(ranks) { rank in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
@@ -456,6 +460,7 @@ struct JarvisUsageArea: View {
                         .frame(height: 4)
                         .accessibilityHidden(true)
                     }
+                    .jarvisListRow()
                     .accessibilityElement(children: .combine)
                 }
             }

@@ -244,3 +244,6 @@
 "insights.editorIssuePreferences" = "At most 12 preferences";
 "insights.editorEditSources" = "Edit sources";
 "insights.editorEditBudget" = "Edit budget";
+
+"insights.overview" = "Overview";
+"insights.proactiveLastRun" = "Last run";

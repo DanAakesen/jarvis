@@ -1,6 +1,7 @@
 import Foundation
 
 public enum JarvisWorkspaceLocalizationKey: String, CaseIterable, Sendable {
+    case pageSummary = "workspace.pageSummary"
     case title = "workspace.title"
     case allKinds = "workspace.allKinds"
     case kindReports = "workspace.kindReports"

@@ -7,6 +7,7 @@ import SwiftUI
 /// can compare the screenshot against the design board. Release builds do not compile it.
 struct JarvisComponentGallery: View {
     @State private var galleryTab = "Notes"
+    @State private var sectionActionCount = 0
 
     var body: some View {
         NavigationStack {
@@ -90,6 +91,21 @@ struct JarvisComponentGallery: View {
                     JarvisComposerIconButton(title: "Send", systemImage: "paperplane.fill", identifier: "gallery.composer") {}
                 }
             }
+            JarvisSectionHeadline("Section heading") {
+                JarvisTextButton(title: "Log", identifier: "gallery.section.action") { sectionActionCount += 1 }
+            }
+            JarvisRowGroup {
+                ForEach(0..<2, id: \.self) { index in
+                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                        Text("Row \(index + 1)").accessibilityIdentifier("gallery.row.\(index).title")
+                        Text("Supporting line").font(.caption).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("gallery.row.\(index).detail")
+                    }
+                    .jarvisListRow(separator: index == 0)
+                }
+            }
+            Text("Actions: \(sectionActionCount)").accessibilityIdentifier("gallery.section.result")
+            JarvisPageLoadingView(title: "Loading", identifier: "gallery.page.loading")
         }
     }
 }

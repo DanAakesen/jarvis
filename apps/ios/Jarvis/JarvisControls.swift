@@ -578,7 +578,7 @@ struct JarvisSearchField: View {
     }
 }
 
-/// The one period selector, shared by Home and Health: a compact segmented row of the shared labelled capsules.
+/// A compact period control inside a hero, with one glass surface and accessible 44 pt targets.
 struct JarvisPeriodSelector<Tag: Hashable>: View {
     let title: String
     let identifierPrefix: String
@@ -586,18 +586,44 @@ struct JarvisPeriodSelector<Tag: Hashable>: View {
     @Binding var selection: Tag
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                JarvisLabelledButton(
-                    title: item.title,
-                    identifier: item.identifier ?? "\(identifierPrefix).\(index)",
-                    isSelected: selection == item.tag,
-                    isCompact: true
-                ) { selection = item.tag }
+                Button { selection = item.tag } label: {
+                    Text(item.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, JarvisPageHeaderMetrics.rowLineSpacing)
+                        .frame(minWidth: JarvisDesignTokens.controlMinimumHeight, minHeight: JarvisDesignTokens.controlMinimumHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection == item.tag ? .isSelected : [])
+                .accessibilityIdentifier(item.identifier ?? "\(identifierPrefix).\(index)")
             }
         }
+        .jarvisGlassCapsule()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
+    }
+}
+
+/// A quiet text action beside a section heading, such as Log or Show all.
+struct JarvisTextButton: View {
+    let title: String
+    var identifier = ""
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(JarvisDesignTokens.primaryAccent)
+                .frame(minWidth: JarvisDesignTokens.controlMinimumHeight, minHeight: JarvisDesignTokens.controlMinimumHeight)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
     }
 }
 
@@ -765,7 +791,7 @@ struct JarvisSheetCloseButton: View {
     }
 }
 
-/// Toolbar content every sheet shares: check mark to confirm, X to close, both icon-only and trailing.
+/// Toolbar content every sheet shares: confirm on the left and close on the right, both icon-only.
 struct JarvisSheetToolbar: ToolbarContent {
     let confirmTitle: String
     let closeTitle: String
@@ -775,7 +801,7 @@ struct JarvisSheetToolbar: ToolbarContent {
     let onClose: () -> Void
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .topBarLeading) {
             JarvisSheetConfirmButton(
                 title: confirmTitle,
                 isWorking: isWorking,

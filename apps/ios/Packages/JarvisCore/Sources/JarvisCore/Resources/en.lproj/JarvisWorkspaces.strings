@@ -113,3 +113,5 @@
 "workspace.statusWarning" = "Warning";
 "workspace.statusError" = "Error";
 "workspace.statusUnknown" = "Unknown";
+
+"workspace.pageSummary" = "Saved items in this view: {%ld}.";

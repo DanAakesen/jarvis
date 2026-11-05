@@ -113,3 +113,5 @@
 "workspace.statusWarning" = "Advarsel";
 "workspace.statusError" = "Fejl";
 "workspace.statusUnknown" = "Ukendt";
+
+"workspace.pageSummary" = "Gemte elementer i denne visning: {%ld}.";

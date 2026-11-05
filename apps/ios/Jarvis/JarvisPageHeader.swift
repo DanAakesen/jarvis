@@ -11,12 +11,17 @@ enum JarvisPageHeaderMetrics {
     static let actionSize = JarvisDesignTokens.iconButtonDiameter
     static let actionIconSize = JarvisDesignTokens.iconButtonGlyphSize
     static let inset: CGFloat = 16
-    static let heroInset: CGFloat = 20
+    static let heroInset: CGFloat = 16
     static let spacing: CGFloat = 12
     static let actionSpacing: CGFloat = 8
     static let statMinimumWidth: CGFloat = 72
     static let dockSpacing: CGFloat = 16
     static let groupRadius: CGFloat = 14
+    static let rowInset: CGFloat = 16
+    static let rowVerticalInset: CGFloat = 10
+    static let rowLineSpacing: CGFloat = 4
+    static let skeletonLineHeight: CGFloat = 18
+    static let skeletonHeroHeight: CGFloat = 156
 }
 
 /// Title bar: the title is left aligned, bold and about 32 pt (scaling with Dynamic Type and wrapping rather than
@@ -77,12 +82,13 @@ struct JarvisPageHeadline: View {
         phrase.segments.reduce(Text("")) { partial, segment in
             partial + Text(segment.text)
                 .foregroundStyle(segment.isKey ? JarvisDesignTokens.primaryAccent : Color.primary)
+                .fontWeight(segment.isKey ? .bold : .regular)
         }
     }
 
     var body: some View {
         text
-            .font(.title3.weight(.semibold))
+            .font(.title2)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .ignore)
@@ -91,8 +97,63 @@ struct JarvisPageHeadline: View {
     }
 }
 
+/// A section heading outside its content surface, with an optional trailing action.
+/// The accessory stays a real control and the heading remains a VoiceOver heading at every text size.
+struct JarvisSectionHeadline<Accessory: View>: View {
+    let title: String
+    let accessory: Accessory
+
+    init(_ title: String, @ViewBuilder accessory: () -> Accessory) {
+        self.title = title
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: JarvisPageHeaderMetrics.spacing) {
+            Text(title)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: 0)
+            accessory
+        }
+        .padding(.horizontal, JarvisPageHeaderMetrics.rowLineSpacing)
+        .padding(.top, JarvisPageHeaderMetrics.spacing)
+    }
+}
+
+extension JarvisSectionHeadline where Accessory == EmptyView {
+    init(_ title: String) { self.init(title) { EmptyView() } }
+}
+
+/// Shared spacing and structural separation for rows inside a grouped surface.
+/// The caller owns the row's content and action; this modifier never adds a nested button.
+extension View {
+    func jarvisListRow(separator: Bool = true) -> some View {
+        self
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, JarvisPageHeaderMetrics.rowInset)
+            .padding(.vertical, JarvisPageHeaderMetrics.rowVerticalInset)
+            .overlay(alignment: .bottom) {
+                if separator { Divider() }
+            }
+    }
+}
+
+struct JarvisRowGroup<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 0, content: content)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+            .clipShape(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+    }
+}
+
 /// The one hero component under the headline.
 struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let accessory: Accessory
     let content: Content
@@ -113,12 +174,17 @@ struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title)
-                    .font(.headline)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: JarvisPageHeaderMetrics.actionSpacing)
-                accessory
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.actionSpacing) {
+                    heading
+                    accessory
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline) {
+                    heading
+                    Spacer(minLength: JarvisPageHeaderMetrics.actionSpacing)
+                    accessory
+                }
             }
             content
         }
@@ -129,6 +195,10 @@ struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
             in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius, style: .continuous)
         )
         .accessibilityElement(children: .contain)
+    }
+
+    private var heading: some View {
+        Text(title).font(.headline).accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -144,6 +214,7 @@ struct JarvisPageStat: Identifiable {
     let label: String
     let systemImage: String
     var tint: Color = .secondary
+    var formattedValue: String?
 }
 
 /// Counts in a row that wraps at large Dynamic Type sizes. Each stat reads as one element.
@@ -160,8 +231,8 @@ struct JarvisPageStatGrid: View {
             ForEach(stats) { stat in
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: JarvisPageHeaderMetrics.actionSpacing / 2) {
-                        Text(JarvisNumberFormat.compact(stat.value, language: language))
-                            .font(.title2.weight(.semibold))
+                        Text(stat.formattedValue ?? JarvisNumberFormat.compact(stat.value, language: language))
+                            .font(.title.weight(.bold))
                             .monospacedDigit()
                         Spacer(minLength: JarvisPageHeaderMetrics.actionSpacing)
                         Image(systemName: stat.systemImage)
@@ -176,7 +247,7 @@ struct JarvisPageStatGrid: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(stat.label), \(stat.value.formatted(.number.locale(language.locale)))")
+                .accessibilityLabel("\(stat.label), \(stat.formattedValue ?? stat.value.formatted(.number.locale(language.locale)))")
             }
         }
     }

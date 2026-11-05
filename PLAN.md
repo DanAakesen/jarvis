@@ -2219,6 +2219,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P15-92 / #1598:** Codex is implementing the shared native page pattern from the board merged in #1603: section headings, separated rows, initial-loading skeletons, hero/filter order and confirm-left/cancel-right sheets. All 467 Core tests and Swift syntax checks pass locally; Mac build, UI screenshots and visual acceptance remain pending. #1599–#1602 follow this shared change.
+
 - **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window
   acknowledgement; iOS detaches observation on lock and refreshes persisted
   history/jobs and active-turn replay on return. Automatic background-job/Factory
