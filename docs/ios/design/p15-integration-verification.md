@@ -2,6 +2,17 @@
 
 Integration checkpoint only; no GitHub PR has been merged or deployed.
 
+Update at 21:52 UTC on 5 November 2026: Factory `331702d4` and Health `9c8df9a6`
+are combined locally, preserving all page tests. Native screenshot/accessibility
+review established the corrections documented in the page verification files.
+Home/Health comparisons were shown in chat; owner acceptance remains outstanding.
+The existing workflow will verify the combined SwiftUI app through a separate
+validation-only PR. No workflow or project settings were changed. Notes retry
+job `127550185888` and Insights job `127547007531` are active; do not duplicate.
+The live workspace still blocks the third Insights archive host. The full local
+pipeline attempt is incomplete because Ruby is absent (59 pass, 15 setup errors).
+The completed local results below belong to the earlier checkpoint.
+
 Branches combined on the shared #1604 head `da61e4de`:
 
 | Issue | PR | Branch head |

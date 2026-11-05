@@ -1,8 +1,42 @@
 # Resume the P15 board implementation
 
-Checkpoint: 5 November 2026, 21:33 UTC. Re-query GitHub for current run results.
-No PR is merged or deployed. Visual acceptance is outstanding. Do not claim the
-native screens match the board: no native PNG has yet been downloaded or viewed.
+Checkpoint update: 5 November 2026, 21:52 UTC. Re-query GitHub for current results.
+No PR is merged or deployed. Owner visual acceptance is outstanding.
+
+The continuation downloaded and visually inspected genuine shared, Home/Factory
+and Health evidence. Home and Health board/native comparisons were shown in chat
+at the native 402 × 874 logical viewport. The approved board is unchanged.
+Factory's default failure recording showed the sign-in cover; its legacy-entry
+accessibility tree exposed the GitHub action as a Button. Health's parent section
+identifier masked the Log button identifier. The corrections preserve and extend
+assertions; their new Mac results are pending:
+
+- #1606 `331702d43317a8c8d3d9853f0fe74abaaece58fa`: existing navigation fixture,
+  correct native accessibility role, expanded/title/hittability assertions.
+  General CI passed; simulator run `42115728133` is active.
+- #1607 `9c8df9a6620739e527f1198699a8dcb5dedcd7f9`: explicit accessibility container,
+  bounded scrolling, compact chart headline/hero and Training divider.
+  Simulator run `42115737406` is active.
+- Notes has exactly one retry, job `127550185888` in run `42100772453`.
+  Native compilation passed; UI tests/capture are active.
+- Insights follow-up `42106990041` / `127547007531` remains active. No duplicate.
+
+The integration branch includes both corrections. A validation-only PR will run
+the existing Mac workflow on the combined app; delivery remains in #1604–#1608.
+The current Linux workspace has no Swift or Ruby. Its pipeline attempt reaches
+59 passing cases and 15 Ruby setup errors. Do not misreport these as app failures
+or a passing full suite. The previous checkpoint's completed local tests below
+remain historical evidence.
+
+This task's live network policy remains restricted to the two configured archive
+hosts despite the owner enabling public access in the saved environment. A fresh
+Insights URL from `sdmntprnortheu.oaiusercontent.com` still returned 403 at 21:50
+UTC. The runtime status is read-only; do not bypass the policy. Insights images
+have not yet been inspected. Existing downloaded images are under
+`/workspace/artifacts/p15/` in the continuation workspace.
+
+The following sections preserve the 21:33 UTC handoff and are superseded by this
+update where stated.
 
 The owner has started task `01a1ad9b-d18b-706b-b8fe-57274d3c006d` (Jarvis2) to
 continue in the republished environment. The originating task is handing over
