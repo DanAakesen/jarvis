@@ -7,9 +7,9 @@
 - Loading draws a static skeleton for the new widgets. Stale data is dimmed with an "Updated HH:mm" line. Strings are in `JarvisWidgetCopy` (da and en, same placeholders).
 - Not verified here: no Xcode, so the widget views, previews and publisher are compiled by CI only; JarvisCore `swift test` covers the snapshot, builders, phrases, timeline and links.
 
-## 5 November 2026 — Widgets temporarily not embedded (P15-87 / #1589)
+## 5 November 2026 — Widgets embedded again (P15-88 / #1591)
 
-TestFlight build 69 failed to archive: the `.widgets` App ID has no provisioning profile with the App Groups capability. Decision: stop embedding `JarvisWidgets` in the Jarvis app (target and sources kept; app and broadcast app group entitlements unchanged) so the rest ships. The iOS CI check asserts the temporary state. To re-enable, the owner adds App Groups to the `.widgets` App ID in the portal, then the embed dependency and CI check are restored.
+The owner added the existing App Group to the `.widgets` App ID in the Apple developer portal, so the extension can be signed. Decision: embed `JarvisWidgets` in the Jarvis app again and remove the temporary skip from P15-87 (Refs #1589). The iOS CI check now asserts the embed. Widget sources and user-facing strings are unchanged.
 
 ## 1 November 2026 — iOS preview builds and release train (P15-50 / #1502)
 
