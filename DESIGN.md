@@ -2810,7 +2810,8 @@ The build-74 board merged in #1603 is the shared composition reference. Pages
 use a transparent pinned title, the real-data phrase, a hero, then their content.
 Chat, Settings and Voice retain their own composition; Home has no title bar.
 `JarvisSectionHeadline` separates sections outside their surfaces and accepts a
-trailing action. `jarvisListRow` and `JarvisRowGroup` give grouped rows shared
+trailing action. Its explicit semantic secondary color remains consistent inside
+native List headers, which already supply a subdued inherited style. `jarvisListRow` and `JarvisRowGroup` give grouped rows shared
 insets, line spacing and structural separators. Hero geometry remains in
 `JarvisPageHeaderMetrics`; period controls share one glass surface and preserve
 44-point hit targets. Accessibility text sizes move hero accessories below titles.

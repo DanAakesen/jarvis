@@ -3783,3 +3783,12 @@ sustained performance acceptance or permission to resume #717/#741.
 | P15-81 | [#1577](https://github.com/DanAakesen/jarvis/issues/1577) | On-device cache and element-level loading on all pages | Repository reads on Home, Health, Notes, Factory, Status, Proactive, Settings and confirmations; backend ETag/304; write invalidation; tests in JarvisCore and backend. App-target edits not compiled or run on a device. | None | Complete |
 | P15-77 | [#1569](https://github.com/DanAakesen/jarvis/issues/1569) | Build 67 feedback fixes (all pages, composer, HealthKit, calendar) | Compact numbers, Factory counts and Offline root cause, transparent headers, shared loader and segmented bar, Home send and shared plus menu, calendar route and source, HealthKit read types and combined workouts. Not compiled or run on a device. | None | Complete |
 | P15-76 | [#1567](https://github.com/DanAakesen/jarvis/issues/1567) | Build 66 feedback fixes (all pages, notifications, notes backend) | Success notifications stopped and cleaned up, tolerant notes parsing, pull to refresh, plus beside tabs, shared period selector, lift name memory, folder lookup, half-height sheets, task detail, Home greeting with several sentences. Calendar data source, Tasks segmented filters and Health board sections remain. | None | Complete |
+
+
+## P15-92 native heading correction
+
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.

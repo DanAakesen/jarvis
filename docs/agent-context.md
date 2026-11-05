@@ -7033,3 +7033,12 @@ store, so no HealthKit prompt, network or live credentials are needed. Rim and g
 XCUITest can go idle. Normal launches start on Home; fixture and screenshot runs keep their own start page.
 `ios-ci.yml` lists `-only-testing:JarvisUITests/TodayUITests`. Not run on this Linux runner.
 
+
+
+## Native shared-heading verification
+
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.

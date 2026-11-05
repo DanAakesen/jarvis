@@ -10919,3 +10919,12 @@ run the existing screenshot artifact upload with `if: always()`. Run 42075818100
 had captured images but skipped their upload when it reached the job timeout.
 Keep the existing runner, test selection and timeout; this change preserves
 available evidence and does not turn failing tests into successful tests.
+
+
+## 5 November 2026 — Preserve shared heading contrast inside List
+
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.
