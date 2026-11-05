@@ -7070,3 +7070,12 @@ Last lifts is an explicit accessibility container so its Log child keeps its ide
 Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
 the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
 from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
+
+
+## Native shared-heading verification
+
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.

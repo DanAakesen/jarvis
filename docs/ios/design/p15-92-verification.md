@@ -83,3 +83,25 @@ Prepared follow-up layout corrections place Usage's amount beside its chart,
 remove Proactive's extra hero title, use three equal-width Proactive statistics,
 and keep the Workspaces hero out of a second List-row glass surface. These are
 source-reviewed against the rendered board; native comparison is still pending.
+
+
+## Native image review, 5 November 2026
+
+The archive from run 42093062405 is now downloaded in the continuation workspace.
+Workspaces English/dark (`4DFBB771-442E-46A2-9BBA-33BC44416775.png`) and Danish/light
+(`A99F5709-FEE7-4984-B5F3-18AB45992B17.png`) expose overly faint section headings.
+The component-gallery heading is less subdued, showing the List context matters.
+The shared heading now uses explicit `Color.secondary` instead of hierarchical
+`.secondary`, so the List header's inherited style does not dim it again.
+No per-screen color override was introduced. New native verification is pending.
+
+The older `workspaces.html` reference and native English/dark capture were shown
+side by side at 402 × 874 logical points. The new phrase/overview hero is required
+by #1598 and is not present in that older reference. This is not a pixel-match or
+owner-acceptance claim. The main board has no Workspaces route.
+
+Apple's [foregroundStyle documentation](https://developer.apple.com/documentation/swiftui/view/foregroundstyle(_:))
+and [secondary hierarchical style](https://developer.apple.com/documentation/swiftui/shapestyle/secondary-swift.type.property)
+explain that hierarchical styles modify the enclosing style. Official search
+excerpts were reviewed before making this correction. Existing bilingual native
+Workspaces captures exercise this context; no source-mirroring test was added.
