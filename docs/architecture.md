@@ -8585,3 +8585,21 @@ iOS pages read server lists through `JarvisRepository` (JarvisCore `Cache/`) ove
 ## Home screen widgets (P15-82)
 
 `JarvisWidgets` also renders eight Gym and Factory home screen widgets. `JarvisWidgetSnapshotPublisher` (app) builds a versioned snapshot (`JarvisCore/Widgets`) from HealthKit steps and workouts, the Health training targets, Factory tasks and pending confirmations, and writes `widget-snapshot.json` to the App Group; it then reloads the timelines. Widgets read it through `JarvisHomeWidgetProvider` and `JarvisWidgetTimeline` (scheduled entries, visible staleness). Buttons are App Intents (`Shared/FactoryWidgetIntents.swift`) that run through `JarvisFactoryWidgetActions` in the app, or queue in the App Group when the extension process runs them. No credentials are shared.
+
+## Native Usage contract and page data (P15-96)
+
+`JarvisUsageReport` decodes current `toolCalls` and `healthToolUsage` plus optional
+legacy `dailyToolUsage`. The backend does not emit the previously mandatory
+legacy field; requiring it caused valid `/usage` responses to fail decoding.
+The existing account/period-scoped repository and ETag contract remain in use.
+Tool-call scope is explicit in the summary; Health-only counters are never
+relabeled as general tool counts. Bounded count validation rejects malformed
+values. Rolling chart buckets include the first partial day/week; all-time
+charts coalesce old history into a labelled first range within the 60-bucket
+cap, so all plotted values reconcile with the returned report.
+
+Status/Proactive phrases use their loaded evidence. Proactive distinguishes
+unloaded findings from an observed zero and exposes retained-read failures.
+Notifications uses `BackgroundTaskPresentation` for running/actionable/quiet
+jobs; completed jobs no longer keep its background section or Now bar visible.
+The existing server expiry and success exclusion remain the feed authority.

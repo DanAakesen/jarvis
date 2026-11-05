@@ -2304,3 +2304,20 @@ available without repeating long paragraphs. Daily reads, including capabilities
 and nutrition targets, share a two-request concurrency bound and abort queued
 work when its view is left. Original Daily remains canonical; no source,
 permission, writer, coaching, recovery, recomp or TickTick behavior is added.
+
+## iPhone insight pages (P15-96; 5 November 2026)
+
+Usage accepts the current `/usage` contract and retained legacy cache reports.
+The Overview contains the range, real total, reconciled chart and summary;
+Breakdown contains Project/Agent/Source, followed by three expandable Top tasks.
+Period tool counts, legacy daily counts and unavailable counts stay distinct.
+Switching ranges clears the prior range's figures; explicit refresh bypasses
+fresh cache. Large numbers use the shared k/M formatter in Danish and English.
+
+Status identifies affected checks and stale evidence, shows row details and
+groups Vault mirror with an expandable Smoke report below the checks. Proactive
+shows its first real finding and next check, three expandable findings and a
+two-column source list (one column at accessibility text sizes). Read failures
+remain visible. Notifications uses grouped rows, clear-all for any dismissible
+item and the existing running/failed task presentation; successful jobs do not
+appear. Native visual acceptance remains pending.

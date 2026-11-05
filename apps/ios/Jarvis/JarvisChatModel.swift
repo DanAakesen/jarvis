@@ -154,7 +154,8 @@ final class JarvisChatModel: ObservableObject {
     }
 
     var shouldShowNowBar: Bool {
-        !backgroundTasks.isEmpty || nowFeed.map {
+        !backgroundPresentation.running.isEmpty || !backgroundPresentation.actionable.isEmpty ||
+            !backgroundPresentation.quiet.isEmpty || nowFeed.map {
             activeConfirmation != nil ||
                 !$0.running.isEmpty ||
                 !$0.items.isEmpty

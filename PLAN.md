@@ -2219,6 +2219,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P15-96 / #1602:** Current Usage contract decoding, range/cache handling, reconciled charts and all five page audits are implemented locally. All 474 Core and 23 backend Usage/Now-feed checks pass. Native build, board/build comparison and owner acceptance remain pending; see `docs/ios/design/p15-96-verification.md`. Reuses #1604 and the shared segmented-bar change in #1606.
 - **P15-92 / #1598:** PR #1604 implements the shared native page pattern from the board merged in #1603. All 468 Core tests pass locally. Native compilation, CI and CodeQL passed on edc8ec36; 45/46 UI tests passed, including all four bilingual/light-dark page-order cases. The remaining Workspaces case used a nonexistent sidebar entry; its fixture entry is corrected. The Mac job again timed out during later captures. Dan approved preserving available images with `if: always()` on the existing upload step; all 74 workflow checks pass. Fresh native checks and board/build visual acceptance remain pending; see `docs/ios/design/p15-92-verification.md`. #1599–#1602 follow this shared change.
 
 - **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window

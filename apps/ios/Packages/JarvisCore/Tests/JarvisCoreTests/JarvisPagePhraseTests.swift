@@ -74,7 +74,17 @@ final class JarvisPagePhraseTests: XCTestCase {
         let healthy = JarvisStatusSnapshot(checkedAt: "2026-11-02T08:00:00Z", entries: [entry("a", .ok), entry("b", .ok)])
         XCTAssertEqual(JarvisStatusPagePhrase.make(healthy, language: .en).plainText, "Dan, all 2 checks are healthy.")
         let down = JarvisStatusSnapshot(checkedAt: "2026-11-02T08:00:00Z", entries: [entry("a", .down), entry("b", .ok)])
-        XCTAssertEqual(JarvisStatusPagePhrase.make(down, language: .en).plainText, "Dan, 1 check is down.")
+        XCTAssertEqual(JarvisStatusPagePhrase.make(down, language: .en).plainText, "Dan, A is down. 1 of 2 checks are healthy.")
+    }
+
+    func testStatusPhraseMarksOldEvidenceAndEmptyChecks() {
+        let empty = JarvisStatusSnapshot(checkedAt: "2026-11-02T08:00:00Z", entries: [])
+        XCTAssertEqual(JarvisStatusPagePhrase.make(empty, language: .en).plainText, "Dan, there are no checks yet.")
+        let snapshot = JarvisStatusSnapshot(checkedAt: "2026-11-02T08:00:00Z", entries: [
+            JarvisStatusEntry(id: "database", status: .ok, checkedAt: "2026-11-02T08:00:00Z")])
+        let now = JarvisInsightsDates.parse("2026-11-02T09:00:00Z")!
+        XCTAssertTrue(JarvisStatusPagePhrase.make(snapshot, language: .en, now: now).plainText.contains("stale"))
+        XCTAssertTrue(JarvisStatusPagePhrase.make(snapshot, language: .da, now: now).plainText.contains("forældede"))
     }
 
     func testProactivePhraseCountsOpenItems() {

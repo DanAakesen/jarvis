@@ -28,7 +28,7 @@ struct JarvisStatusArea: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
                     if let snapshot = state.snapshot {
-                        JarvisPageHeadline(phrase: JarvisStatusPagePhrase.make(snapshot, language: language))
+                        JarvisPageHeadline(phrase: JarvisStatusPagePhrase.make(snapshot, language: language, now: now))
                     }
                     content
                 }
@@ -135,7 +135,7 @@ struct JarvisStatusArea: View {
                 )
                 .accessibilityIdentifier("status.partial")
             }
-            if entries.isEmpty && !showMirror {
+            if entries.isEmpty {
                 JarvisInsightsCard {
                     JarvisInsightsStateView(
                         kind: .empty,
@@ -146,11 +146,13 @@ struct JarvisStatusArea: View {
                 }
             } else {
                 JarvisRowGroup {
-                    if let mirror, showMirror { mirrorRow(mirror) }
                     ForEach(entries) { entry in checkRow(entry) }
                 }
             }
-            smokeCard(snapshot.smoke)
+            JarvisRowGroup {
+                if let mirror, showMirror { mirrorRow(mirror) }
+                smokeRow(snapshot.smoke)
+            }
         }
     }
 
@@ -197,7 +199,8 @@ struct JarvisStatusArea: View {
             toneTitle: text(entry.status.localizationKey),
             isExpanded: expanded.contains(entry.id),
             identifier: "status.row.\(entry.id)",
-            language: language
+            language: language,
+            subtitle: reasonText(reason) ?? checkedText(entry.checkedAt)
         ) {
             toggle(entry.id)
         } detail: {
@@ -231,7 +234,8 @@ struct JarvisStatusArea: View {
             toneTitle: text(displayState.localizationKey),
             isExpanded: expanded.contains("vault-mirror"),
             identifier: "status.row.vault-mirror",
-            language: language
+            language: language,
+            subtitle: lastSuccessText(mirror)
         ) {
             toggle("vault-mirror")
         } detail: {
@@ -303,32 +307,31 @@ struct JarvisStatusArea: View {
         )
     }
 
-    private func smokeCard(_ smoke: JarvisStatusSmoke?) -> some View {
-        JarvisInsightsCard(title: text(.statusSmoke)) {
-            if let smoke {
-                let allOK = smoke.okCount == smoke.entries.count
-                HStack(spacing: 8) {
-                    Image(systemName: allOK ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                        .foregroundStyle(allOK ? JarvisDesignTokens.secondaryAccent : JarvisDesignTokens.primaryAccent)
-                        .accessibilityHidden(true)
-                    Text(
-                        JarvisInsightsLocalization.format(
-                            .statusSmokeSummary, language: language, smoke.okCount, smoke.entries.count
-                        )
-                    )
-                    .font(.subheadline)
-                    Spacer(minLength: 0)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("status.smoke")
-            } else {
-                Text(text(.statusSmokeNone))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("status.smoke")
-            }
-        }
+    private func checkedText(_ timestamp: String) -> String? {
+        guard let date = JarvisInsightsDates.parse(timestamp) else { return nil }
+        return JarvisInsightsLocalization.format(.statusChecked, language: language,
+            JarvisInsightsDates.format(date, language: language, dateStyle: .none, timeStyle: .short))
     }
+
+    private func smokeRow(_ smoke: JarvisStatusSmoke?) -> some View {
+        let tone: JarvisStatusValue = smoke.map { $0.entries.isEmpty ? .unknown : $0.okCount == $0.entries.count ? .ok : .degraded } ?? .unknown
+        return JarvisStatusRow(title: text(.statusSmoke), tone: tone,
+            toneTitle: smoke.map { "\($0.okCount)/\($0.entries.count)" } ?? "—",
+            isExpanded: expanded.contains("smoke"), identifier: "status.smoke", language: language,
+            subtitle: smoke.flatMap { checkedText($0.checkedAt) } ?? text(.statusSmokeNone)) {
+                toggle("smoke")
+            } detail: {
+                if let smoke {
+                    ForEach(smoke.entries) { entry in
+                        VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                            Text(JarvisStatusLogic.readable(entry.id) + " · " + text(entry.status.localizationKey))
+                            if let reason = entry.reason { Text(JarvisStatusLogic.readable(reason)).foregroundStyle(.secondary) }
+                        }.font(.subheadline)
+                    }
+                } else { Text(text(.statusSmokeNone)).font(.subheadline).foregroundStyle(.secondary) }
+            }
+    }
+
 }
 
 /// One expandable row. The whole header is the button; the sentence under it appears when it is open.
@@ -339,6 +342,7 @@ private struct JarvisStatusRow<Detail: View>: View {
     let isExpanded: Bool
     let identifier: String
     let language: JarvisAppLanguage
+    var subtitle: String? = nil
     let onToggle: () -> Void
     @ViewBuilder let detail: () -> Detail
 
@@ -368,12 +372,12 @@ private struct JarvisStatusRow<Detail: View>: View {
                         .foregroundStyle(tint)
                         .frame(width: 24)
                         .accessibilityHidden(true)
-                    Text(title)
-                        .font(.body)
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(2)
-                        .layoutPriority(1)
+                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                        Text(title).font(.body).foregroundStyle(.primary).lineLimit(2)
+                        if let subtitle { Text(subtitle).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                    }
+                    .multilineTextAlignment(.leading)
+                    .layoutPriority(1)
                     Spacer(minLength: 8)
                     Text(toneTitle)
                         .font(.caption.weight(.semibold))
@@ -383,7 +387,7 @@ private struct JarvisStatusRow<Detail: View>: View {
                     Image(systemName: "chevron.down")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
                         .accessibilityHidden(true)
                 }
                 .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
@@ -391,7 +395,7 @@ private struct JarvisStatusRow<Detail: View>: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(title + ", " + toneTitle)
+            .accessibilityLabel([title, subtitle, toneTitle].compactMap { $0 }.joined(separator: ", "))
             .accessibilityValue(isExpanded ? "1" : "0")
             .accessibilityHint(jarvisInsightsText(.statusExpand, language))
             .accessibilityAddTraits(.isButton)

@@ -7033,3 +7033,17 @@ store, so no HealthKit prompt, network or live credentials are needed. Rim and g
 XCUITest can go idle. Normal launches start on Home; fixture and screenshot runs keep their own start page.
 `ios-ci.yml` lists `-only-testing:JarvisUITests/TodayUITests`. Not run on this Linux runner.
 
+
+## Native insight validation (P15-96; 5 November 2026)
+
+Verified locally with Swift 6.2: `swift test --package-path
+apps/ios/Packages/JarvisCore` (474 tests). Backend Node 22 validation:
+`npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts
+src/database/now-feed-store.test.ts` (23 tests). The selected native component
+suite captures the five audited pages and exercises every Usage period and
+breakdown selection against the current API-shaped fixture. Native compilation
+and screenshot inspection remain separate from these Linux checks.
+
+Do not restore a mandatory `dailyToolUsage` field: inspect the current
+`UsageReport` TypeScript contract and `/usage` response before changing decoding.
+A browser-rendered reference is not evidence of native visual correctness.
