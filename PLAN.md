@@ -3798,3 +3798,8 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+Notes 1d8e663f passed 50/50 native UI tests in run 42125346515; the later screenshot
+sweep timed out. New owner-approved success feedback follows confirmed note/task
+writes and awaits combined native verification. Backend deployment remains required
+before TestFlight.

@@ -2310,3 +2310,9 @@ available without repeating long paragraphs. Daily reads, including capabilities
 and nutrition targets, share a two-request concurrency bound and abort queued
 work when its view is left. Original Daily remains canonical; no source,
 permission, writer, coaching, recovery, recomp or TickTick behavior is added.
+
+### Native Notes success feedback (owner request, 6 November 2026)
+
+Confirmed note creation and task completion provide a subtle success haptic and a
+brief non-blocking confirmation. Failures and uncertain writes retain their existing
+recovery behavior and never produce success feedback. Chat remains unchanged.

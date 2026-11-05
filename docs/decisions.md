@@ -10949,3 +10949,10 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+## 6 November 2026 — Confirm successful native actions
+
+The owner explicitly requested subtle haptics and interruptible completion feedback
+for lift saves, tasks and note creation. Notes introduces the reusable confirmation
+and applies it after successful client writes. No API or persistence contract changes.
+Physical haptic feel remains a device check; simulator verification is pending.

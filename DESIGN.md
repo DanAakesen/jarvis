@@ -3233,3 +3233,11 @@ One look, taken from the Chat header: Apple glass, 44 pt target, secondary accen
 - **Gallery**: `JarvisComponentGallery` (debug builds only, launch argument `--component-gallery`, no user-facing entry) shows every button state, the orb at three sizes and the scaffold; `ComponentGalleryUITests` attaches a screenshot.
 - Apple documentation used: Human Interface Guidelines (Buttons, Toolbars, Materials); SwiftUI `Glass`, `glassEffect`, `ButtonStyle.glass` and `Button`.
 
+### Native confirmed-action feedback (6 November 2026)
+
+`JarvisSuccessFeedback.swift` owns the shared checkmark/text glass confirmation.
+It reuses existing spacing, radius and timing tokens; a new success replaces the
+current one and cancels its expiry. A short opacity/scale transition honors Reduce
+Motion and never consumes touches. Haptics and VoiceOver announcements follow a
+confirmed write. Notes displays this feedback before continuing its existing editor
+navigation; the successful navigation itself remains immediate.
