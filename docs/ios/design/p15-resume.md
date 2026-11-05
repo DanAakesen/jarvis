@@ -1,6 +1,6 @@
 # Resume the P15 board implementation
 
-Checkpoint: 5 November 2026, 21:26 UTC. Re-query GitHub for current run results.
+Checkpoint: 5 November 2026, 21:28 UTC. Re-query GitHub for current run results.
 No PR is merged or deployed. Visual acceptance is outstanding. Do not claim the
 native screens match the board: no native PNG has yet been downloaded or viewed.
 
@@ -54,7 +54,7 @@ has not been compiled on Mac. Linux cannot validate native rendering/HealthKit.
 | --- | --- | --- | --- |
 | #1604 | 42093062405 | 127475876887 | 46 UI tests and capture/upload steps passed; cleanup cancellation |
 | #1605 | 42100772453 | 127502647878 | Cancelled; log unavailable and no artifacts published at 21:21 UTC |
-| #1606 | 42105551008 | 127519285321 | Result upload running |
+| #1606 | 42105551008 | 127519285321 | 46/48 UI tests pass; two Factory task lookup failures; artifacts uploaded |
 | #1607 | 42105556333 | 127519304298 | 46/48 UI tests pass; two Log-button failures; artifacts uploaded |
 | #1608 application code | 42106346100 | 127522068091 | Test/capture step running |
 | #1608 guard follow-up | 42106990041 | Query jobs | Pending behind previous run |
@@ -86,6 +86,23 @@ Health xcresult artifact: `13454732251`. English/dark hero attachments:
 The owner reports republishing `jarvis2` at approximately 21:26 UTC. This original
 workspace still has its old enforced network policy. Use the updated environment
 for the new task and verify download access there.
+
+### Factory failures
+
+Both `testFactoryBoardKeepsNeedsDanWithOnlyTwoTabs` and
+`testLegacyNeedsDanEntryOpensAndRevealsTheBoardColumn` fail at
+`ComponentGalleryUITests.swift:132`. The query
+`app.links["factory.row.github.10"]` finds no task after opening the column.
+Two-tab, Board-selected and equal/touching segment assertions passed before
+that point. Investigate the rendered row and accessibility role/query; do not
+assume either a missing task or a harmless test issue without inspecting it.
+The existing Home suite passes. Full suite: 46/48 pass.
+
+Home/Factory screenshot artifact `13455396644` (308,428,543 bytes):
+https://github.com/DanAakesen/jarvis/actions/runs/42105551008/artifacts/13455396644
+
+Xcresult artifact: `13454987248`. Home English/dark attachment:
+`86F40C70-8CFC-4758-8E91-1F1BDC7C7BA2.png`.
 
 ## Screenshot download blocker
 
