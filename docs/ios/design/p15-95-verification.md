@@ -51,3 +51,27 @@ Apple excerpts consulted: [AccessibilityChildBehavior.contain](https://developer
 [XCUIElement.isHittable](https://developer.apple.com/documentation/xcuiautomation/xcuielement/ishittable)
 and [HIG Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility).
 Direct Apple Markdown fetches were unavailable.
+
+
+The first Sleep screenshot (`6E4CCD1E-6EDD-4776-9841-A9E39B636094.png`) was
+compared to the approved Sleep carousel at 402 × 874 logical points. It showed a
+single progress ring, no stage legend markers or divided summary row, and wasted
+vertical space. The follow-up uses native Swift Charts SectorMark stage proportions,
+labelled legend markers, and the shared summary row geometry. Missing stage values
+remain unknown and use the total-progress fallback rather than invented segments.
+Nutrition receives the same summary geometry and its existing real meal counts.
+
+Source review also found both heroes retained the latest day's totals when a longer
+period was selected. New Core summaries average recorded days inside the selected
+period, deduplicate daily records and do not zero-fill unrecorded days. Regression
+cases cover range boundaries, one-day versus multi-day results, missing stages and
+nutrients, duplicate meal rows and unlogged days. These new tests await CI execution;
+this workspace has no Swift. The source does not provide bedtime/wake-up fields,
+so Sleep uses observed average hours and recorded-night count instead. Nutrition
+uses actual logged meals without a fabricated target. These differences from the
+illustrative board are explicit and still require owner review.
+
+Apple's [SectorMark documentation](https://developer.apple.com/documentation/charts/sectormark)
+was reviewed through official search excerpts before implementation. It describes
+using category proportions to form a meaningful total. Native screenshots after
+these changes remain pending; the earlier 9c8df9a6 head compiled successfully.

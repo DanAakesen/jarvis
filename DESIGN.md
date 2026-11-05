@@ -3256,6 +3256,13 @@ figures, and a steps chart. All charts retain their average/day selection,
 Settings target and compact numbers. The shared chart summary and hero geometry
 are compacted after the first native comparison; fresh validation is required, including large
 Dynamic Type.
+Sleep now uses recorded stage proportions with matching text legends when all
+stages are available; missing stages stay unknown. Sleep and Nutrition summary
+values follow the selected period instead of retaining the latest day's values.
+The Sleep summary uses observed average hours and recorded-night count because
+the current source contract has no bedtime/wake-up fields. Nutrition shows daily
+mean calories (calories left for Today) and the actual logged-meal count; it does
+not invent a meal target. Both keep the board's divided two-column summary row.
 
 Below the hero: Last lifts with the shared Log text action, Recent sessions,
 then Body trend. Rows use shared spacing and separators. The duplicate summary

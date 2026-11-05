@@ -114,6 +114,9 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case kcalEaten = "health.kcalEaten"
     case sleepChart = "health.sleepChart"
     case heroPages = "health.heroPages"
+    case nightsRecorded = "health.nightsRecorded"
+    case mealsLogged = "health.mealsLogged"
+    case dailyAverage = "health.dailyAverage"
 }
 
 public enum JarvisHealthLocalization {
