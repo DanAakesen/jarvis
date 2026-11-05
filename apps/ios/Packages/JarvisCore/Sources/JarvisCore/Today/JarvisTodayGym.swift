@@ -113,19 +113,25 @@ public struct JarvisGymLogEntry: Equatable, Sendable {
     /// Workout length in minutes and active energy in kilocalories; zero when the source does not know them.
     public let durationMinutes: Double
     public let activeKilocalories: Double
+    public let healthKitID: String?
+    public let healthActivity: String?
 
     public init(
         performedAt: Date,
         session: JarvisGymSessionType,
         lift: JarvisGymLift? = nil,
         durationMinutes: Double = 0,
-        activeKilocalories: Double = 0
+        activeKilocalories: Double = 0,
+        healthKitID: String? = nil,
+        healthActivity: String? = nil
     ) {
         self.performedAt = performedAt
         self.session = session
         self.lift = lift
         self.durationMinutes = durationMinutes
         self.activeKilocalories = activeKilocalories
+        self.healthKitID = healthKitID
+        self.healthActivity = healthActivity
     }
 }
 
@@ -310,5 +316,63 @@ public struct JarvisCombinedGymLogStore: JarvisGymLogStore {
         }
         if !succeeded, let firstError { throw firstError }
         return merged.sorted { $0.performedAt > $1.performedAt }
+    }
+}
+
+/// A bounded read of the existing Home log notes. Partial means older notes may contain more lifts.
+public struct JarvisGymLiftHistory: Sendable {
+    public let entries: [JarvisGymLogEntry]
+    public let partial: Bool
+}
+
+extension JarvisGymLogNote {
+    public static func lift(from content: String) -> JarvisGymLift? {
+        let pattern = #"^- Lift: (.+) · ([0-9]+(?:\.[0-9]+)?) kg × ([0-9]+) × ([0-9]+)$"#
+        guard let expression = try? NSRegularExpression(pattern: pattern, options: .anchorsMatchLines),
+              let match = expression.firstMatch(in: content, range: NSRange(content.startIndex..., in: content)) else { return nil }
+        func field(_ index: Int) -> String? {
+            Range(match.range(at: index), in: content).map { String(content[$0]) }
+        }
+        guard let exercise = field(1), let weight = field(2).flatMap(Double.init),
+              let reps = field(3).flatMap(Int.init), let sets = field(4).flatMap(Int.init) else { return nil }
+        let lift = JarvisGymLift(exercise: exercise, weightKg: weight, reps: reps, sets: sets)
+        return lift.isValid ? lift : nil
+    }
+}
+
+extension JarvisVaultGymLogStore {
+    /// Reads existing notes without migrating or rewriting the owner's log. All reads are bounded and cancellable.
+    public func recentLifts(since: Date, maximumNoteReads: Int = 30) async throws -> JarvisGymLiftHistory {
+        let deadline = ContinuousClock.now + .seconds(25)
+        var candidates: [(path: String, date: Date, session: JarvisGymSessionType)] = []
+        var offset = 0
+        var partial = false
+        for pageIndex in 0..<maximumPages {
+            try Task.checkCancellation()
+            guard ContinuousClock.now < deadline else { partial = true; break }
+            let page = try await client.notes(directory: JarvisGymLogNote.folder, offset: offset)
+            for note in page.notes {
+                if let parsed = JarvisGymLogNote.parse(path: note.path, timeZone: timeZone), parsed.performedAt >= since {
+                    candidates.append((note.path, parsed.performedAt, parsed.session))
+                }
+            }
+            if !page.hasMore { break }
+            if pageIndex == maximumPages - 1 { partial = true }
+            offset += page.limit
+        }
+        let limit = min(max(maximumNoteReads, 1), 100)
+        partial = partial || candidates.count > limit
+        var entries: [JarvisGymLogEntry] = []
+        for candidate in candidates.sorted(by: { $0.date > $1.date }).prefix(limit) {
+            try Task.checkCancellation()
+            guard ContinuousClock.now < deadline else { partial = true; break }
+            let note = try await client.readNote(path: candidate.path)
+            if let lift = JarvisGymLogNote.lift(from: note.content) {
+                entries.append(JarvisGymLogEntry(performedAt: candidate.date, session: candidate.session, lift: lift))
+            } else if note.content.contains("- Lift:") {
+                partial = true
+            }
+        }
+        return JarvisGymLiftHistory(entries: entries, partial: partial)
     }
 }

@@ -59,13 +59,13 @@ final class JarvisHealthSyncTests: XCTestCase {
         XCTAssertTrue(requests.allSatisfy { $0.anchor == nil })
     }
 
-    func testFirstSyncReadsAWeekAndLaterSyncsStartAtTheAnchorsDay() {
+    func testFirstSyncReadsSevenWholeCalendarDaysAndLaterSyncsStartAtTheAnchorsDay() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         XCTAssertEqual(
             JarvisHealthSyncWindow.start(anchor: nil, now: now, calendar: calendar),
-            now.addingTimeInterval(-7 * 86_400)
+            calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now))
         )
         let anchor = now.addingTimeInterval(-3_600)
         XCTAssertEqual(
@@ -76,6 +76,16 @@ final class JarvisHealthSyncTests: XCTestCase {
             JarvisHealthSyncWindow.start(anchor: now.addingTimeInterval(86_400), now: now, calendar: calendar),
             calendar.startOfDay(for: now)
         )
+    }
+
+    func testSyncWindowUsesCopenhagenMidnightAcrossTheDSTBoundary() {
+        let formatter = ISO8601DateFormatter()
+        let now = formatter.date(from: "2026-10-25T23:30:00Z")!
+        let start = JarvisHealthSyncWindow.recentStart(now: now, days: 7)
+        XCTAssertEqual(formatter.string(from: start), "2026-10-19T22:00:00Z")
+        XCTAssertEqual(JarvisHealthLogic.day(formatter.string(from: start)), "2026-10-20")
+        let lateWorkout = formatter.date(from: "2026-10-19T22:30:00Z")!
+        XCTAssertGreaterThanOrEqual(lateWorkout, start, "The first local day's workout must not be dropped at UTC midnight")
     }
 
     func testCompleteSyncSendsEverythingAndAdvancesTheAnchor() async {

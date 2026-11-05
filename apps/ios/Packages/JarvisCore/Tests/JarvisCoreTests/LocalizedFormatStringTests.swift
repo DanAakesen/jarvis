@@ -20,6 +20,7 @@ final class LocalizedFormatStringTests: XCTestCase {
         "factory.issueNumber": ["ld"],
         "factory.blockedBy": ["ld"],
         "health.target": ["@"],
+        "health.totalTarget": ["@"],
         "health.syncComplete": ["@"],
         "health.syncPartial": ["@", "@"],
         "today.greeting.nextEvent": ["@", "@"],

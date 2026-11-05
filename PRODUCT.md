@@ -2304,3 +2304,25 @@ available without repeating long paragraphs. Daily reads, including capabilities
 and nutrition targets, share a two-request concurrency bound and abort queued
 work when its view is left. Original Daily remains canonical; no source,
 permission, writer, coaching, recovery, recomp or TickTick behavior is added.
+
+### Native Health data and board alignment (P15-95 / #1601)
+
+Health offers Today, 7 days and 30 days on every hero page. Last lifts, Recent
+sessions and Body trend follow the hero; Log uses Home's existing sheet. Body
+trend identifies its 30-day window and each latest reading's date.
+
+Steps use merged HealthKit daily statistics, not sums of overlapping iPhone and
+Watch sample streams. Explicit sync refreshes the visible 30 days of step totals,
+workouts and body measurements, including late Watch records. Local phone reads
+can display current steps and workouts before upload. Legacy HealthKit numeric
+workout descriptions still classify correctly, and date boundaries follow the
+backend's Europe/Copenhagen day.
+
+Existing Home vault lift notes remain readable without migration or rewriting.
+The recent-note read is bounded and labels incomplete results. Stored and local
+workouts match by HealthKit ID; legacy manual gym logs follow Home's existing
+two-hour gym-session match. Distinct HealthKit IDs remain distinct workouts.
+Native rendering and real-device source parity remain unverified.
+
+P15-95 also labels HealthKit body-fat values as fractions (0–1), allowing the
+existing normalizer to retain the correct percentage (0.20 becomes 20%).

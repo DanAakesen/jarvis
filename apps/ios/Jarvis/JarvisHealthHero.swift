@@ -25,20 +25,24 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
     let period: JarvisHealthPeriod
     let goals: JarvisHealthGoals
     let language: JarvisAppLanguage
+    let client: JarvisHealthClient?
     let accessory: Accessory
 
+    @ScaledMetric(relativeTo: .body) private var heroHeight = JarvisDesignTokens.healthHeroHeight
     @State private var page: JarvisHealthHeroPage = .training
 
     init(
         data: JarvisHealthDashboardData,
         period: JarvisHealthPeriod,
         goals: JarvisHealthGoals,
+        client: JarvisHealthClient?,
         language: JarvisAppLanguage,
         @ViewBuilder accessory: () -> Accessory
     ) {
         self.data = data
         self.period = period
         self.goals = goals
+        self.client = client
         self.language = language
         self.accessory = accessory()
     }
@@ -52,15 +56,15 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
                     .fillingHeight()
                     .tag(JarvisHealthHeroPage.training)
                     .accessibilityIdentifier(JarvisHealthHeroPage.training.identifier)
-                JarvisHealthSleepHero(data: data, period: period, goals: goals, language: language)
+                JarvisHealthSleepHero(data: data, period: period, goals: goals, language: language, client: client, accessory: accessory)
                     .tag(JarvisHealthHeroPage.sleep)
                     .accessibilityIdentifier(JarvisHealthHeroPage.sleep.identifier)
-                JarvisHealthNutritionHero(data: data, period: period, goals: goals, language: language)
+                JarvisHealthNutritionHero(data: data, period: period, goals: goals, language: language, client: client, accessory: accessory)
                     .tag(JarvisHealthHeroPage.nutrition)
                     .accessibilityIdentifier(JarvisHealthHeroPage.nutrition.identifier)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: JarvisDesignTokens.healthHeroHeight)
+            .frame(height: heroHeight)
             HStack(spacing: JarvisDesignTokens.healthMenuSpacing) {
                 ForEach(JarvisHealthHeroPage.allCases) { item in
                     Circle()
@@ -77,11 +81,14 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
     }
 }
 
-struct JarvisHealthSleepHero: View {
+struct JarvisHealthSleepHero<Accessory: View>: View {
     let data: JarvisHealthDashboardData
     let period: JarvisHealthPeriod
     let goals: JarvisHealthGoals
     let language: JarvisAppLanguage
+
+    let client: JarvisHealthClient?
+    let accessory: Accessory
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
 
@@ -99,13 +106,13 @@ struct JarvisHealthSleepHero: View {
         JarvisHealthChartValues(
             values: nights.compactMapValues(\.total),
             endingOn: period.endDate,
-            count: 7,
+            count: max(period.dayCount, 7),
             target: goals.sleepHours
         )
     }
 
     var body: some View {
-        JarvisPageHeroCard(title: copy.text(.sleep)) {
+        JarvisPageHeroCard(title: copy.text(.sleep), accessory: { accessory }) {
             if data.sleep.state == .loading || data.sleep.state == .notServed ||
                 data.sleep.state == .failed || data.sleep.state == .offline {
                 JarvisHealthStateLine(state: data.sleep.state, language: language)
@@ -119,12 +126,21 @@ struct JarvisHealthSleepHero: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
             HStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
-                JarvisHealthHeroRing(
-                    progress: JarvisHealthLogic.ringProgress(value: latest?.total, target: goals.sleepHours),
-                    text: latest?.total.map { formatHours($0, language: language) } ?? "—",
-                    unit: copy.text(.hourShort),
-                    tint: JarvisDesignTokens.healthAccent
-                )
+                NavigationLink {
+                    let day = latest?.date ?? period.endDate
+                    JarvisHealthDetailView(client: client, capabilities: data.capabilities,
+                        kind: .sleep(day, JarvisHealthPeriod(startDate: day, endDate: day)!), language: language)
+                } label: {
+                    JarvisHealthHeroRing(
+                        progress: JarvisHealthLogic.ringProgress(value: latest?.total, target: goals.sleepHours),
+                        text: latest?.total.map { formatHours($0, language: language) } ?? "—",
+                        unit: copy.text(.hourShort),
+                        tint: JarvisDesignTokens.healthAccent
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(copy.text(.sleep))
+                .accessibilityIdentifier("health.sleep.details")
                 VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
                     stageRow(.deepSleep, latest?.deep)
                     stageRow(.remSleep, latest?.rem)
@@ -156,11 +172,14 @@ struct JarvisHealthSleepHero: View {
     }
 }
 
-struct JarvisHealthNutritionHero: View {
+struct JarvisHealthNutritionHero<Accessory: View>: View {
     let data: JarvisHealthDashboardData
     let period: JarvisHealthPeriod
     let goals: JarvisHealthGoals
     let language: JarvisAppLanguage
+
+    let client: JarvisHealthClient?
+    let accessory: Accessory
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
 
@@ -173,7 +192,7 @@ struct JarvisHealthNutritionHero: View {
     }
 
     var body: some View {
-        JarvisPageHeroCard(title: copy.text(.nutrition)) {
+        JarvisPageHeroCard(title: copy.text(.nutrition), accessory: { accessory }) {
             if data.nutritionDays.state == .loading || data.nutritionDays.state == .notServed ||
                 data.nutritionDays.state == .failed || data.nutritionDays.state == .offline {
                 JarvisHealthStateLine(state: data.nutritionDays.state, language: language)
@@ -189,12 +208,20 @@ struct JarvisHealthNutritionHero: View {
         let kcal = values(.kcal)[day]
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
             HStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
-                JarvisHealthHeroRing(
-                    progress: JarvisHealthLogic.ringProgress(value: kcal, target: goals.kcal),
-                    text: kcal.map { formatNumber($0, language: language) } ?? "—",
-                    unit: "kcal",
-                    tint: JarvisDesignTokens.healthAccent
-                )
+                NavigationLink {
+                    JarvisHealthDetailView(client: client, capabilities: data.capabilities,
+                        kind: .meals(period), language: language)
+                } label: {
+                    JarvisHealthHeroRing(
+                        progress: JarvisHealthLogic.ringProgress(value: kcal, target: goals.kcal),
+                        text: kcal.map { formatNumber($0, language: language) } ?? "—",
+                        unit: "kcal",
+                        tint: JarvisDesignTokens.healthAccent
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(copy.text(.nutrition))
+                .accessibilityIdentifier("health.nutrition.details")
                 VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
                     macroRow(.protein, values(.protein)[day], proteinTarget)
                     macroRow(.carbs, values(.carbs)[day], goals.carbsGrams)
@@ -212,7 +239,7 @@ struct JarvisHealthNutritionHero: View {
             }
             JarvisHealthBarChart(
                 values: JarvisHealthChartValues(
-                    values: values(.protein), endingOn: period.endDate, count: 7, target: proteinTarget
+                    values: values(.protein), endingOn: period.endDate, count: max(period.dayCount, 7), target: proteinTarget
                 ),
                 unit: "g",
                 title: copy.text(.proteinChart),

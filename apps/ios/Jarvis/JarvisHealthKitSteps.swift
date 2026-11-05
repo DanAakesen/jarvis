@@ -4,13 +4,14 @@ import JarvisCore
 /// Today's steps from HealthKit, where the owner has allowed it. Read-only: nothing is written or uploaded.
 /// The first request asks for every readable Health type (`JarvisHealthKitAccess`).
 struct JarvisHealthKitStepsSource: JarvisTodayStepsSource {
+    var calendar = Calendar.current
+
     func steps(now: Date, days: Int) async throws -> JarvisStepsSnapshot {
         guard let type = HKObjectType.quantityType(forIdentifier: .stepCount) else {
             throw JarvisTodayDataError.unavailable
         }
         let store = HKHealthStore()
         try await JarvisHealthKitAccess.requestReadAccess(store)
-        let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
         let start = calendar.date(byAdding: .day, value: -(max(days, 1) - 1), to: today) ?? today
         let hourly = try await collect(
@@ -46,7 +47,8 @@ struct JarvisHealthKitStepsSource: JarvisTodayStepsSource {
                 quantitySamplePredicate: predicate,
                 options: .cumulativeSum,
                 anchorDate: anchor,
-                intervalComponents: interval
+                intervalComponents: DateComponents(calendar: calendar, timeZone: calendar.timeZone,
+                                                   day: interval.day, hour: interval.hour)
             )
             query.initialResultsHandler = { _, collection, error in
                 if error != nil {
@@ -55,7 +57,8 @@ struct JarvisHealthKitStepsSource: JarvisTodayStepsSource {
                 }
                 var values: [(Date, Int)] = []
                 collection?.enumerateStatistics(from: start, to: end) { statistics, _ in
-                    let count = statistics.sumQuantity()?.doubleValue(for: .count()) ?? 0
+                    guard let quantity = statistics.sumQuantity() else { return }
+                    let count = quantity.doubleValue(for: .count())
                     values.append((statistics.startDate, Int(count.rounded())))
                 }
                 continuation.resume(returning: values)

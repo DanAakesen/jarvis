@@ -97,6 +97,39 @@ final class ComponentGalleryUITests: XCTestCase {
         attach(app.screenshot(), named: "Tab strip")
     }
 
+    func testHealthPeriodsDarkEnglish() { captureHealthHeroes(language: "en", theme: "dark") }
+    func testHealthPeriodsLightDanish() { captureHealthHeroes(language: "da", theme: "light") }
+
+    private func captureHealthHeroes(language: String, theme: String) {
+        openPage("health", language: language, theme: theme, launch: true)
+        let training = app.descendants(matching: .any)["health.hero.training"]
+        XCTAssertTrue(training.waitForExistence(timeout: 15))
+        let periodIDs = ["today", "sevenDays", "thirtyDays"].map { "health.period.\($0)" }
+        for id in periodIDs { XCTAssertTrue(app.buttons[id].exists, id) }
+        XCTAssertFalse(app.buttons["health.period.yesterday"].exists)
+        let initial = app.buttons["health.period.today"].frame
+        XCTAssertTrue(app.descendants(matching: .any)["health.training.donut"].exists)
+        attach(app.screenshot(), named: "P15-95-health-training-\(theme)-\(language)")
+        training.swipeLeft()
+        let sleep = app.descendants(matching: .any)["health.hero.sleep"]
+        XCTAssertTrue(sleep.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["health.period.today"].frame.minY, initial.minY, accuracy: 1)
+        attach(app.screenshot(), named: "P15-95-health-sleep-\(theme)-\(language)")
+        sleep.swipeLeft()
+        XCTAssertTrue(app.descendants(matching: .any)["health.hero.nutrition"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["health.period.today"].frame.minY, initial.minY, accuracy: 1)
+        app.buttons["health.period.thirtyDays"].tap()
+        XCTAssertTrue(app.buttons["health.period.thirtyDays"].isSelected)
+        attach(app.screenshot(), named: "P15-95-health-nutrition-\(theme)-\(language)")
+        app.swipeUp()
+        XCTAssertTrue(app.buttons["health.lifts.log"].waitForExistence(timeout: 5))
+        attach(app.screenshot(), named: "P15-95-health-sections-\(theme)-\(language)")
+        app.buttons["health.lifts.log"].tap()
+        XCTAssertTrue(app.textFields["today.lift.name"].waitForExistence(timeout: 5), "Last lifts opens Home's shared sheet")
+        attach(app.screenshot(), named: "P15-95-health-log-lift-\(theme)-\(language)")
+        app.terminate()
+    }
+
     // Separate cases keep each three-page capture below the runner's per-test timeout.
     func testSharedPageOrderDarkEnglish() { captureSharedPages(language: "en", theme: "dark") }
     func testSharedPageOrderLightEnglish() { captureSharedPages(language: "en", theme: "light") }

@@ -8585,3 +8585,30 @@ iOS pages read server lists through `JarvisRepository` (JarvisCore `Cache/`) ove
 ## Home screen widgets (P15-82)
 
 `JarvisWidgets` also renders eight Gym and Factory home screen widgets. `JarvisWidgetSnapshotPublisher` (app) builds a versioned snapshot (`JarvisCore/Widgets`) from HealthKit steps and workouts, the Health training targets, Factory tasks and pending confirmations, and writes `widget-snapshot.json` to the App Group; it then reloads the timelines. Widgets read it through `JarvisHomeWidgetProvider` and `JarvisWidgetTimeline` (scheduled entries, visible staleness). Buttons are App Intents (`Shared/FactoryWidgetIntents.swift`) that run through `JarvisFactoryWidgetActions` in the app, or queue in the App Group when the extension process runs them. No credentials are shared.
+
+## Native Health source alignment (P15-95 / #1601; 5 November 2026)
+
+`JarvisHealthKitReader` uploads one merged `HKStatisticsCollectionQuery`
+`.cumulativeSum` step total per Copenhagen day through the unchanged owner-only
+`POST /health/sync` sample contract. The existing normalizer/upsert replaces
+that metric day; the app no longer uploads overlapping raw step streams.
+Steps, workouts and body measurements re-read 30 calendar days; other types
+keep the existing incremental window, now starting on a complete local day.
+Truncated quantity reads are not uploaded as complete daily totals. Workout
+activity names are stable rather than enum debug descriptions.
+
+Health's dashboard can read merged local steps and Home's combined workout
+source without uploading. Local/synced workout IDs deduplicate; unsynced records
+retain a usable row without attempting unavailable backend detail. Local dates
+and retained timestamp fallbacks use Copenhagen boundaries. A failed local read
+does not erase retained server data.
+
+`JarvisVaultGymLogStore.recentLifts` lists existing `Personal/Gym log` notes and
+reads at most 30 recent note bodies, with cancellation and a 25-second budget
+checked between bounded requests. It parses the same validated format Home
+writes and exposes partial coverage. The Health view combines those lifts with
+its existing SQL lift history; the logging path and stored notes are unchanged.
+Body catalogue/metric queries use a 30-day window and retain measurement dates.
+
+P15-95 also labels HealthKit body-fat values as fractions (0–1), allowing the
+existing normalizer to retain the correct percentage (0.20 becomes 20%).
