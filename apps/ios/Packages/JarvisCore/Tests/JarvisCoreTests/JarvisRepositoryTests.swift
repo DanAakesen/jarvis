@@ -114,6 +114,64 @@ final class JarvisRepositoryTests: XCTestCase {
         XCTAssertNil(cached)
     }
 
+    func testRefreshThatNeverReturnsEndsInFailureWithoutCache() async {
+        let cache = JarvisCache(storage: JarvisInMemoryCacheStorage())
+        await cache.bind(account: "dan")
+        let repo = JarvisRepository<[String]>(cache: cache, kind: .notes, refreshTimeout: .milliseconds(50)) { _ in
+            await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
+            return .modified(["never"], validator: nil)
+        }
+        let updates = await collect(repo.updates())
+        guard updates.count == 2, case .refreshing = updates[0], case .failed(let error, let cached) = updates[1] else {
+            return XCTFail("\(updates)")
+        }
+        XCTAssertEqual(error as? JarvisClientError, .timedOut)
+        XCTAssertNil(cached)
+        var state = JarvisCardState<[String]>.loading
+        for update in updates { state.apply(update) }
+        guard case .failed = state else { return XCTFail("state stayed \(state)") }
+    }
+
+    func testTimedOutRefreshKeepsCachedValue() async {
+        let clock = Clock(), counter = Counter()
+        let cache = JarvisCache(storage: JarvisInMemoryCacheStorage()) { clock.now }
+        await cache.bind(account: "dan")
+        let repo = JarvisRepository<[String]>(cache: cache, kind: .notes, refreshTimeout: .milliseconds(50)) { v in
+            counter.hit(v)
+            if counter.calls == 1 { return .modified(["kept"], validator: nil) }
+            try await Task.sleep(for: .seconds(30))
+            return .modified(["late"], validator: nil)
+        }
+        _ = await collect(repo.updates())
+        let updates = await collect(repo.updates(force: true))
+        guard updates.count == 2, case .failed(let error, let cached) = updates[1] else { return XCTFail("\(updates)") }
+        XCTAssertEqual(error as? JarvisClientError, .timedOut)
+        XCTAssertEqual(cached, ["kept"])
+    }
+
+    func testStreamEndingWhileLoadingBecomesFailure() {
+        var state = JarvisCardState<[String]>.loading
+        state.finishLoading()
+        guard case .failed = state else { return XCTFail("\(state)") }
+        var loaded = JarvisCardState<[String]>.loaded(["a"], refreshFailed: false)
+        loaded.finishLoading()
+        XCTAssertEqual(loaded.value, ["a"])
+    }
+
+    func testClientPathsUseHealthNotTheRetiredDailyPrefix() throws {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources")
+        let walker = try XCTUnwrap(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
+        var checked = 0
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            checked += 1
+            XCTAssertFalse(text.contains(#"path: ["daily""#), "\(url.lastPathComponent) requests a retired /daily route")
+        }
+        XCTAssertGreaterThan(checked, 0)
+    }
+
     func testForceRefreshesWhileFresh() async {
         let clock = Clock(), counter = Counter()
         let (_, repo) = await make(clock: clock, counter: counter) { v in

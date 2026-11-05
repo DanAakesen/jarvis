@@ -70,5 +70,6 @@ struct JarvisCachedSection<Value: Codable & Sendable & Equatable, Content: View>
             if Task.isCancelled { return }
             state.apply(update)
         }
+        if !Task.isCancelled { state.finishLoading() }
     }
 }
