@@ -54,7 +54,7 @@ jobs:
             abort "voice activity extension target is required" unless project.dig("targets", "JarvisVoiceActivity", "type") == "app-extension"
             abort "voice activity must share attributes and intents" unless project.dig("targets", "JarvisVoiceActivity", "sources").any? { |source| source["path"] == "Shared" }
             abort "Danish must be the development language" unless project.dig("options", "developmentLanguage") == "da"
-            abort "WidgetKit extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisWidgets" && dependency["embed"] == true }
+            abort "WidgetKit extension must stay out of the app until the App Groups capability is added to the widgets App ID (#1589)" if dependencies.any? { |dependency| dependency["target"] == "JarvisWidgets" }
             bridge_header = project.dig("targets", "JarvisBroadcast", "settings", "base", "SWIFT_OBJC_BRIDGING_HEADER")
             abort "ReplayKit stop bridge is missing" unless bridge_header && File.file?(File.join("apps/ios", bridge_header))
             abort "unexpected deployment target" unless project.dig("targets", "Jarvis", "deploymentTarget") == "26.0"
