@@ -24,9 +24,11 @@ on its own branch. Full CI is green on all five PR heads as of 21:03 UTC on
 Insights compiled in run 42106346100; its subsequent commit only updates the
 Python source guard to expect the shared heading, and that commit's automatic
 simulator run is pending behind the first run.
-The shared #1604 head passed all 46 UI tests and CI/CodeQL; later capture work
-hit the 45-minute job limit, and both artifacts survived through the approved
-`if: always()` upload. Artifact downloads remain blocked by the cloud allowlist.
+The shared #1604 head passed all 46 UI tests and CI/CodeQL. Screenshot capture,
+board pairing and both uploads succeeded before cancellation during final cleanup
+at the 45-minute job limit. The approved `if: always()` keeps the upload eligible
+after failures; this run does not demonstrate an upload after a capture failure.
+Artifact downloads remain blocked by the original workspace's cloud allowlist.
 
 Remaining gates: final native test results, actual board/build screenshot
 inspection, combined native verification after integration, and owner acceptance.

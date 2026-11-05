@@ -42,15 +42,17 @@ application compilation. Insights compiled at `7e2acc4082c2f403e98d5ebf58fe748f0
 its only later change updates the existing Python pipeline guard to expect the
 shared section heading instead of the old `Text` heading.
 
-The shared PR passed all 46 native UI tests. Later capture work reached the
-45-minute limit. The approved upload change preserved both result artifacts.
+The shared PR passed all 46 native UI tests. Capture, board pairing and both
+uploads completed successfully; cancellation happened during final cleanup at
+the 45-minute limit. Both result artifacts are available. This run does not
+demonstrate a post-failure upload; the approved condition makes that step eligible.
 The combined branch passes 488 Core tests, 132 focused backend tests, 74 pipeline
 checks and the backend TypeScript build locally. The combined SwiftUI application
 has not been compiled on Mac. Linux cannot validate native rendering/HealthKit.
 
 | Page PR | Simulator run | Mac job | Status at checkpoint |
 | --- | --- | --- | --- |
-| #1604 | 42093062405 | 127475876887 | 46 UI tests passed; later capture timeout |
+| #1604 | 42093062405 | 127475876887 | 46 UI tests and capture/upload steps passed; cleanup cancellation |
 | #1605 | 42100772453 | 127502647878 | Cancellation reported; results uploading; test log pending |
 | #1606 | 42105551008 | 127519285321 | Test/capture step running |
 | #1607 | 42105556333 | 127519304298 | Test/capture step running |
