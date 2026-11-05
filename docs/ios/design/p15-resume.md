@@ -1,8 +1,15 @@
 # Resume the P15 board implementation
 
-Checkpoint: 5 November 2026, 21:28 UTC. Re-query GitHub for current run results.
+Checkpoint: 5 November 2026, 21:33 UTC. Re-query GitHub for current run results.
 No PR is merged or deployed. Visual acceptance is outstanding. Do not claim the
 native screens match the board: no native PNG has yet been downloaded or viewed.
+
+The owner has started task `01a1ad9b-d18b-706b-b8fe-57274d3c006d` (Jarvis2) to
+continue in the republished environment. The originating task is handing over
+code changes and reruns. **No Notes retry was submitted**: the intended retry
+was stopped when the owner confirmed the new task existed. Avoid duplicate runs.
+The new task's initial instruction was only startup/preparation; this file is
+the implementation handoff once the owner asks that task to continue it.
 
 ## User's working agreement
 
@@ -56,8 +63,8 @@ has not been compiled on Mac. Linux cannot validate native rendering/HealthKit.
 | #1605 | 42100772453 | 127502647878 | Cancelled; log unavailable and no artifacts published at 21:21 UTC |
 | #1606 | 42105551008 | 127519285321 | 46/48 UI tests pass; two Factory task lookup failures; artifacts uploaded |
 | #1607 | 42105556333 | 127519304298 | 46/48 UI tests pass; two Log-button failures; artifacts uploaded |
-| #1608 application code | 42106346100 | 127522068091 | Test/capture step running |
-| #1608 guard follow-up | 42106990041 | Query jobs | Pending behind previous run |
+| #1608 application code | 42106346100 | 127522068091 | 48/48 UI tests pass; later capture cancelled; both uploads succeeded |
+| #1608 guard follow-up | 42106990041 | 127547007531 | Started; follow this run rather than launching a duplicate |
 
 An active capture step does not prove the UI tests passed: the workflow captures
 images after test failures too. Read completed job logs for individual failures
@@ -103,6 +110,28 @@ https://github.com/DanAakesen/jarvis/actions/runs/42105551008/artifacts/13455396
 
 Xcresult artifact: `13454987248`. Home English/dark attachment:
 `86F40C70-8CFC-4758-8E91-1F1BDC7C7BA2.png`.
+
+### Insights native result
+
+All 48 UI tests passed on application-code head `7e2acc40`, including every Usage
+period/group and both notification languages. Later capture was cancelled, but
+scheme and screenshot uploads succeeded after cancellation. Board pairing was
+skipped in this run, so make the comparisons explicitly from the approved board.
+The only later commit updates a Python guard; its automatic Mac run is active.
+
+Insights screenshot artifact `13453588831` (336,371,273 bytes):
+https://github.com/DanAakesen/jarvis/actions/runs/42106346100/artifacts/13453588831
+
+Xcresult artifact: `13455259341`. English/dark native attachment filenames:
+
+| Screen | Filename |
+| --- | --- |
+| Usage | CEA401D2-376F-419C-8ED4-B75B4DA68A1F.png |
+| Status | 8B1DB06F-A214-46C8-9A67-B693844B7872.png |
+| Proactive | AFBF2349-74EA-4F46-BB11-13F20DA405A1.png |
+| Notifications | 4AB99A94-8D87-4211-AF5A-9AEE581D5504.png |
+| Usage all periods | E579BBD5-4407-49AD-849C-0EDFDC4D4E0C.png |
+| Usage breakdown | 219F846E-3B1B-4D04-939C-D734B20F4AE8.png |
 
 ## Screenshot download blocker
 

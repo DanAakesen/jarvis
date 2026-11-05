@@ -33,3 +33,11 @@ Artifact downloads remain blocked by the original workspace's cloud allowlist.
 Remaining gates: final native test results, actual board/build screenshot
 inspection, combined native verification after integration, and owner acceptance.
 The new Notes backend must be deployed before the updated client is released.
+
+Update at 21:33 UTC: Home/Factory and Health each pass 46/48 native tests, with
+two task-row lookup failures in Factory and two Last lifts Log-button lookup
+failures in Health. Both archives uploaded. Insights passes 48/48 native tests
+and preserves both archives after later capture cancellation. Notes is cancelled
+without a published log/artifact at the last check; no retry has been submitted.
+Current run IDs, exact failures, screenshot filenames and handoff ownership are
+in `p15-resume.md`. All changes remain unmerged and visually unverified.
