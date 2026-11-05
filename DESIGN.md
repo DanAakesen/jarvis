@@ -3325,3 +3325,10 @@ Health screenshot review of run 42124896873 found overlapping 30-day chart label
 Long periods now show five evenly spaced date labels; all daily bars and selection
 remain available. Seven-day charts retain weekday labels. This correction joins the
 VoiceOver/Reduce Motion refinement for the next combined native pass.
+
+### Insights large-text screenshot correction (6 November 2026)
+
+At accessibility sizes, the shared pinned header uses native regular material so
+scrolling content does not collide with its title. Page and period choices scroll
+horizontally, and Usage totals become full-width rows with unrestricted wrapping.
+Normal text keeps the approved continuous shared segmented bar and grid.

@@ -550,12 +550,23 @@ struct JarvisTabStrip<Tag: Hashable>: View {
 
 /// One full-width glass surface with equal-width segments. Individual segments have no separate glass chrome.
 struct JarvisSegmentedBar<Tag: Hashable>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let identifierPrefix: String
     let items: [JarvisTabItem<Tag>]
     @Binding var selection: Tag
 
+    @ViewBuilder
     var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            JarvisTabStrip(title: title, identifierPrefix: identifierPrefix,
+                           items: items, selection: $selection)
+        } else {
+            segments
+        }
+    }
+
+    private var segments: some View {
         HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Button { selection = item.tag } label: {
@@ -620,12 +631,27 @@ struct JarvisSearchField: View {
 
 /// A compact period control inside a hero, with one glass surface and accessible 44 pt targets.
 struct JarvisPeriodSelector<Tag: Hashable>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let identifierPrefix: String
     let items: [JarvisTabItem<Tag>]
     @Binding var selection: Tag
 
+    @ViewBuilder
     var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            ScrollView(.horizontal) {
+                segments.fixedSize(horizontal: true, vertical: false)
+                    .padding(.vertical, 2)
+            }
+            .scrollIndicators(.hidden)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            segments
+        }
+    }
+
+    private var segments: some View {
         HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Button { selection = item.tag } label: {

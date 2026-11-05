@@ -11077,3 +11077,11 @@ event/task priorities while health stays in the cards. Confirmations follow succ
 writes, and Home completion errors are surfaced rather than swallowed. The existing
 lift/workout saved state remains persistent and dismissible. No Chat change, backend
 contract change or new dependency is required. Native verification is pending.
+
+## 6 November 2026 — Correct native accessibility-size overlap
+
+Insights run 42124893661 passed 50/50 native UI tests, but screenshots at accessibility
+XXXL exposed transparent-header overlap, clipped totals and crowded period labels.
+The shared header/controls and Usage layout now adapt at accessibility sizes. Chat
+has no callers of these components and is unchanged. Fresh native captures remain
+required; the previous test pass is not visual acceptance.

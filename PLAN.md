@@ -3875,3 +3875,8 @@ Health 297d94ba passed 48/48 native UI tests in run 42124896873. Training EN/dar
 Sleep DA/light and Nutrition EN/dark were inspected; the 30-day Nutrition capture
 exposed crowded labels, now corrected with sparse date ticks. Updated screenshot
 acceptance remains pending.
+
+Insights 084dcfc1 passed 50/50 native UI tests in run 42124893661. Normal EN/dark
+Usage, Status, Proactive and Notifications captures were inspected. Accessibility-size
+overlap and clipped totals prompted shared header/control and Usage layout fixes;
+combined native re-verification is pending.
