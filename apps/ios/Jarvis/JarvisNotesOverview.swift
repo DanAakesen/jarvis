@@ -1,6 +1,17 @@
 import JarvisCore
 import SwiftUI
 
+enum JarvisNotesFolderPalette {
+    static func color(_ folder: String) -> Color {
+        switch folder.split(separator: "/").first?.lowercased() {
+        case "work": JarvisDesignTokens.primaryAccent
+        case "personal": JarvisDesignTokens.notesFolderPersonal
+        case "people": JarvisDesignTokens.ambientWarm
+        default: Color.secondary
+        }
+    }
+}
+
 enum JarvisNotesOverviewMetrics {
     static let hairline: CGFloat = 0.5
     static let listRadius: CGFloat = 20
@@ -33,17 +44,7 @@ struct JarvisNotesOverviewHero: View {
     let rootTitle: String
     let language: JarvisAppLanguage
 
-    private var palette: [Color] {
-        [
-            JarvisDesignTokens.primaryAccent,
-            JarvisDesignTokens.secondaryAccent,
-            JarvisDesignTokens.primaryAccent.opacity(0.55),
-            JarvisDesignTokens.secondaryAccent.opacity(0.55),
-            Color.secondary.opacity(0.6),
-        ]
-    }
-
-    private func color(_ index: Int) -> Color { palette[index % palette.count] }
+    private func color(_ index: Int) -> Color { JarvisNotesFolderPalette.color(shares[index].folder) }
 
     private func name(_ share: JarvisNotesFolderShare) -> String {
         share.folder.isEmpty ? rootTitle : share.folder
@@ -142,18 +143,39 @@ struct JarvisNotesOverviewHero: View {
 struct JarvisNotesRecentStrip: View {
     let title: String
     let notes: [KnowledgeGraphNode]
+    let visits: [JarvisNoteVisit]
+    let language: JarvisAppLanguage
     let onOpen: (KnowledgeGraphNode) -> Void
 
     var body: some View {
         if !notes.isEmpty {
             VStack(alignment: .leading, spacing: JarvisDesignTokens.notesInlineSpacing) {
-                Text(title)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                JarvisSectionHeadline(title)
                 ScrollView(.horizontal) {
                     HStack(spacing: JarvisDesignTokens.notesChipSpacing) {
                         ForEach(notes) { note in
-                            JarvisLabelledButton(title: note.title, identifier: "notes.recent.item") { onOpen(note) }
+                            Button { onOpen(note) } label: {
+                                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                                    Text(note.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                                    HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
+                                        Circle().fill(JarvisNotesFolderPalette.color(note.folder))
+                                            .frame(width: JarvisDesignTokens.notesChipSpacing, height: JarvisDesignTokens.notesChipSpacing)
+                                        Text(note.directory.isEmpty ? JarvisNotesLocalization.string(.vaultRoot, language: language) : note.directory)
+                                            .lineLimit(1)
+                                    }
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    if let visit = visits.first(where: { $0.path == note.path }) {
+                                        Text(visit.openedAt.formatted(.dateTime.day().month(.abbreviated).hour().minute().locale(language.locale)))
+                                            .font(.caption2).foregroundStyle(.secondary)
+                                    }
+                                }
+                                .frame(width: JarvisDesignTokens.notesRecentTileWidth, alignment: .leading)
+                                .padding(JarvisPageHeaderMetrics.heroInset)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+                                .foregroundStyle(.primary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("notes.recent.\(note.path)")
                         }
                     }
                 }

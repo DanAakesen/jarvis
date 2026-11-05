@@ -2220,6 +2220,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 ## Current focus
 
 - **P15-92 / #1598:** PR #1604 implements the shared native page pattern from the board merged in #1603. All 468 Core tests pass locally. Native compilation, CI and CodeQL passed on edc8ec36; 45/46 UI tests passed, including all four bilingual/light-dark page-order cases. The remaining Workspaces case used a nonexistent sidebar entry; its fixture entry is corrected. The Mac job again timed out during later captures. Dan approved preserving available images with `if: always()` on the existing upload step; all 74 workflow checks pass. Fresh native checks and board/build visual acceptance remain pending; see `docs/ios/design/p15-92-verification.md`. #1599–#1602 follow this shared change.
+- **P15-93 / #1599:** Notes follow-up is implemented on a separate branch based on #1598, which must merge first. Root/direct-folder browsing, matching counts, Back, nested note and empty-folder creation, last-opened tiles, graph labels/colors and task-create priority are covered by 476 passing Core tests and 89 backend tests. Native interaction checks and captures are prepared; Mac compilation and board/build visual acceptance are pending. See `docs/ios/design/p15-93-verification.md`.
 
 - **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window
   acknowledgement; iOS detaches observation on lock and refreshes persisted

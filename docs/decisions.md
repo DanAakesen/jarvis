@@ -10919,3 +10919,25 @@ run the existing screenshot artifact upload with `if: always()`. Run 42075818100
 had captured images but skipped their upload when it reached the job timeout.
 Keep the existing runner, test selection and timeout; this change preserves
 available evidence and does not turn failing tests into successful tests.
+
+## 5 November 2026 — P15-93 Notes follows the published three-tab board
+
+Issue #1599 and board PR #1603 supersede P15-12's separate List tab. Notes owns
+root/direct-folder browsing with Back and a count derived from the displayed
+notes. Root notes use the backend's empty folder string; the client must not
+reject them as malformed summaries. Recent tracks successful openings in the
+account-bound cache, survives note refresh, and clears on sign-out.
+
+The New note picker stages a child of the open folder and explains that the note
+save persists it. The separate New folder sheet uses owner-only `POST /notes/folders`;
+the backend writes an empty `.gitkeep` marker so Git can retain a folder without
+inventing a note. The folder inventory already includes paths from non-Markdown
+files, while the marker never enters note counts or the graph. The existing
+task-create route gains optional normal/medium/high priority, encoded with the
+same Markdown markers used by task editing; old callers may omit it. The backend
+and folder-creation changes must be deployed before releasing the new client.
+No deployment is included.
+
+Graph nodes share folder colors with the legend. Labels appear for search or
+selection, with an explicit Open action; accessible titles/folders remain on all
+nodes. Native visual acceptance is pending in `ios/design/p15-93-verification.md`.
