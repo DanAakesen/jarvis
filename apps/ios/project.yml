@@ -37,8 +37,9 @@ targets:
         embed: true
       - target: JarvisVoiceActivity
         embed: true
-      - target: JarvisWidgets
-        embed: true
+      # Temporary (Refs DanAakesen/jarvis#1589): the widgets extension is not embedded or
+      # archived until the App Groups capability is added to the .widgets App ID.
+      # To re-enable, restore: - target: JarvisWidgets / embed: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.danaakesen.jarvis

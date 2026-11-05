@@ -1,3 +1,8 @@
+## Widgets temporarily not embedded (P15-87 / #1589; 5 November 2026)
+
+- `apps/ios/project.yml` no longer embeds `JarvisWidgets` in the Jarvis app, so the archive skips it. The target and all widget sources stay. The iOS metadata check in `ios-ci.yml` asserts this temporary state.
+- Owner, in the Apple developer portal: add the App Groups capability (same group as the app) to the App ID ending `.widgets`, regenerate its provisioning profile, then restore `- target: JarvisWidgets` with `embed: true` in the Jarvis dependencies and flip the `ios-ci.yml` check back.
+
 ## Health rename commands (P15-78 / #1571; 4 November 2026)
 
 - Backend: `cd apps/backend && npx vitest run src/health`; web: `cd apps/web && npx vitest run src/health`; contracts: `cd packages/contracts && npm test`; iOS sync logic: `cd apps/ios/Packages/JarvisCore && swift test --filter JarvisHealthSyncTests`. The iOS app target compiles only on macOS CI.

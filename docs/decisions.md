@@ -1,3 +1,7 @@
+## 5 November 2026 — Widgets temporarily not embedded (P15-87 / #1589)
+
+TestFlight build 69 failed to archive: the `.widgets` App ID has no provisioning profile with the App Groups capability. Decision: stop embedding `JarvisWidgets` in the Jarvis app (target and sources kept; app and broadcast app group entitlements unchanged) so the rest ships. The iOS CI check asserts the temporary state. To re-enable, the owner adds App Groups to the `.widgets` App ID in the portal, then the embed dependency and CI check are restored.
+
 ## 1 November 2026 — iOS preview builds and release train (P15-50 / #1502)
 
 Allow a write-authorized manual TestFlight dispatch from an intended PR branch
