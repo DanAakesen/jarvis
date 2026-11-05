@@ -10949,3 +10949,11 @@ covered by sign-in. The row reserves readable state text, stacking it at large
 Dynamic Type; the test uses the existing Simulator navigation argument. Usage
 emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
 verification is pending; previous UI-test success is not visual acceptance.
+
+## 5 November 2026 — Preserve shared heading contrast inside List
+
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.
