@@ -32,3 +32,9 @@ Apple primary references consulted: [HIG Segmented controls](https://developer.a
 and SwiftUI `View.task(id:...)` (cancellation/recreation when selection changes).
 Official documentation search excerpts were available. Existing Swift Charts,
 shared controls and native list interactions are reused.
+
+CI follow-up: the approval source guard now checks `JarvisSectionHeadline`
+while retaining its localized labels, fixture-only disabled actions and bilingual
+capture checks. All 74 pipeline tests pass locally. The full script suite has
+240 passes and three environment errors because this Linux workspace lacks
+PowerShell; GitHub's configured runner supplies it.
