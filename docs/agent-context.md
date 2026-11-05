@@ -7069,3 +7069,5 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+Health hero accessibility uses the existing page indicator as an adjustable control; native swipe assertions remain unchanged. The final follow-up also removes the explicit page animation under Reduce Motion. This does not establish live VoiceOver or HealthKit permission acceptance.

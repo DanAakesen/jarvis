@@ -3256,3 +3256,5 @@ Local HealthKit steps/workouts supplement retained server data. Unsynced device
 workouts do not offer a backend-only detail link. Last lifts combines retained
 Health history with existing Home vault logs; incomplete vault reads remain
 visible as partial. No illustrative board number is used as live app data.
+
+The Health hero page indicator exposes a bounded VoiceOver adjustment for Training, Sleep and Nutrition. Its explicit page transition honors Reduce Motion, matching the charts and other non-Chat page transitions.

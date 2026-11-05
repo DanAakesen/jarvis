@@ -3810,3 +3810,5 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+Health final accessibility audit: add VoiceOver adjustment to the existing hero-page indicator and honor Reduce Motion for page transitions. Native verification remains pending; preserve the active run before pushing this follow-up.
