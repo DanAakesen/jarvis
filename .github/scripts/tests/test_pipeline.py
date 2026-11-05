@@ -1328,7 +1328,7 @@ class SafeFailureTests(unittest.TestCase):
         self.assertIn("JarvisApprovalLocalization.string(.decline, language: appLanguage)", sheet)
         self.assertIn("JarvisApprovalLocalization.string(.sending, language: appLanguage)", sheet)
         self.assertIn("? copy(.activityCalendarChange)", sheet)
-        self.assertIn("Text(copy(.activityPending))", sheet)
+        self.assertIn("JarvisSectionHeadline(copy(.activityPending))", sheet)
         self.assertIn("? copy(.activityFixtureApproval)", sheet)
         strings = ROOT / "apps/ios/Packages/JarvisCore/Sources/JarvisCore/Resources"
         for language, expected in (
