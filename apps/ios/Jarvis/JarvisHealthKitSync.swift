@@ -55,13 +55,9 @@ struct JarvisHealthKitReader {
                 let isBody = ["body_mass", "body_fat_percentage", "lean_body_mass"].contains(name)
                 let quantityWindow = isBody
                     ? HKQuery.predicateForSamples(withStart: recentStart, end: now, options: []) : window
-                let descriptor = HKSampleQueryDescriptor(
-                    predicates: [.quantitySample(type: type, predicate: quantityWindow)],
-                    sortDescriptors: [SortDescriptor(\.startDate)], limit: 20_000
+                let results = try await readSamples(
+                    store: store, predicate: .quantitySample(type: type, predicate: quantityWindow)
                 )
-                let results = try await descriptor.result(for: store)
-                // A truncated cumulative day must never replace its complete stored value.
-                guard results.count < 20_000 else { unread.append(name); continue }
                 samples += results.map {
                     JarvisHealthSample(
                         id: $0.uuid.uuidString, metric: name, unit: label, start: $0.startDate, end: $0.endDate,
@@ -77,11 +73,8 @@ struct JarvisHealthKitReader {
         var sleep: [JarvisHealthSleepSegment] = []
         if let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) {
             do {
-                let descriptor = HKSampleQueryDescriptor(
-                    predicates: [.categorySample(type: type, predicate: window)],
-                    sortDescriptors: [SortDescriptor(\.startDate)], limit: 20_000
-                )
-                sleep = try await descriptor.result(for: store).map {
+                let results = try await readSamples(store: store, predicate: .categorySample(type: type, predicate: window))
+                sleep = results.map {
                     JarvisHealthSleepSegment(
                         id: $0.uuid.uuidString, stage: Self.stage($0.value), start: $0.startDate, end: $0.endDate,
                         source: $0.sourceRevision.source.name
@@ -94,10 +87,7 @@ struct JarvisHealthKitReader {
         var workouts: [JarvisHealthWorkoutSample] = []
         do {
             let workoutWindow = HKQuery.predicateForSamples(withStart: recentStart, end: now, options: .strictStartDate)
-            let descriptor = HKSampleQueryDescriptor(
-                predicates: [.workout(workoutWindow)], sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)], limit: 2_000
-            )
-            let results = try await descriptor.result(for: store)
+            let results = try await readSamples(store: store, predicate: .workout(workoutWindow))
             workouts = results.map {
                 JarvisHealthWorkoutSample(
                     id: $0.uuid.uuidString, activity: Self.activityName($0.workoutActivityType),
@@ -108,13 +98,37 @@ struct JarvisHealthKitReader {
                         .sumQuantity()?.doubleValue(for: .meter())
                 )
             }
-            if results.count < 2_000 { read.append("workout") } else { unread.append("workout") }
+            read.append("workout")
         } catch { unread.append("workout") }
 
         return JarvisHealthSyncBatch(
             samples: samples, sleep: sleep, workouts: workouts, readTypes: read,
             deniedOrUnreadTypes: unread, windowStart: min(start, recentStart), windowEnd: now
         )
+    }
+
+    /// Resume each bounded query with HealthKit's cursor, including deletion-only pages.
+    /// The server receives complete Copenhagen days, never an arbitrary page of a cumulative day.
+    /// The page budget bounds work for a corrupt/unreasonably large store; failure cannot advance the sync anchor.
+    private func readSamples<Sample: HKSample>(
+        store: HKHealthStore, predicate: HKSamplePredicate<Sample>
+    ) async throws -> [Sample] {
+        var anchor: HKQueryAnchor?
+        var samples: [UUID: Sample] = [:]
+        let pageSize = 2_000
+        for _ in 0..<500 {
+            try Task.checkCancellation()
+            let page = try await HKAnchoredObjectQueryDescriptor(
+                predicates: [predicate], anchor: anchor, limit: pageSize
+            ).result(for: store)
+            for sample in page.addedSamples { samples[sample.uuid] = sample }
+            for deleted in page.deletedObjects { samples.removeValue(forKey: deleted.uuid) }
+            anchor = page.newAnchor
+            if page.addedSamples.count + page.deletedObjects.count < pageSize {
+                return samples.values.sorted { $0.startDate < $1.startDate }
+            }
+        }
+        throw JarvisHealthSyncError.unavailable
     }
 
     /// HealthKit resolves overlapping iPhone/Watch sources. Never add per-source sample sums ourselves.

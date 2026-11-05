@@ -125,3 +125,20 @@ private extension JSONValue {
         return nil
     }
 }
+
+/// Local merged step totals replace only the Copenhagen days the phone actually read.
+public enum JarvisHealthStepDays {
+    public static func merging(retained: [[String: JSONValue]], local: [Date: Int]) -> [[String: JSONValue]] {
+        var byDay: [String: [String: JSONValue]] = [:]
+        for row in retained {
+            guard case .string(let raw)? = row["metric_date"],
+                  let day = JarvisHealthLogic.day(raw) else { continue }
+            byDay[day] = row
+        }
+        for (date, value) in local where value >= 0 {
+            let day = JarvisHealthPeriod.make(.today, now: date).startDate
+            byDay[day] = ["metric_date": .string(day), "unit": .string("count"), "value": .number(Double(value))]
+        }
+        return byDay.keys.sorted().compactMap { byDay[$0] }
+    }
+}

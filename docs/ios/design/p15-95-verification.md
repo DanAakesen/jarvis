@@ -75,3 +75,6 @@ Apple's [SectorMark documentation](https://developer.apple.com/documentation/cha
 was reviewed through official search excerpts before implementation. It describes
 using category proportions to form a meaningful total. Native screenshots after
 these changes remain pending; the earlier 9c8df9a6 head compiled successfully.
+
+
+5 November recovery review: HealthKit quantity, sleep and workout reads use 2,000-item anchored pages (including deletion-only pages), with cancellation and a 500-page safety budget. Upload requests keep each complete Copenhagen metric day/sleep end-day together under the existing 20,000-item server limit. A single oversized day fails before uploading instead of replacing a total with incomplete data; successful complete sync alone advances the durable date anchor. Local step snapshots replace matching days while retaining absent server days and their freshness. The 12 Health sync tests pass, including a 24,000-sample two-day backlog, oversized-day rejection and Copenhagen-day zero/history merging. Native run 42115737406 passed 48 UI tests on the earlier head; final native verification is pending. Apple HKAnchoredObjectQueryDescriptor, its initializer and Result documentation were read directly before implementation.

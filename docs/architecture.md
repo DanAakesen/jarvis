@@ -8594,7 +8594,7 @@ iOS pages read server lists through `JarvisRepository` (JarvisCore `Cache/`) ove
 that metric day; the app no longer uploads overlapping raw step streams.
 Steps, workouts and body measurements re-read 30 calendar days; other types
 keep the existing incremental window, now starting on a complete local day.
-Truncated quantity reads are not uploaded as complete daily totals. Workout
+Quantity, sleep and workout queries resume bounded pages with HealthKit anchors. Uploads group complete Copenhagen metric days and sleep end-days; a single day over the server limit fails before any upload. Only a fully read/uploaded batch advances the durable sync date anchor. Local step data replaces matching days and retains missing server history and freshness. Workout
 activity names are stable rather than enum debug descriptions.
 
 Health's dashboard can read merged local steps and Home's combined workout

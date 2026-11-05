@@ -114,13 +114,29 @@ public struct JarvisHealthSyncRequest: Equatable, Sendable {
         self.workouts = workouts
     }
 
-    /// Never split a metric across requests: the backend recomputes each metric day from the samples it receives,
-    /// so a day must arrive whole. One request per metric, then one for sleep and one for workouts.
+    public static let maximumItems = 20_000
+
+    /// A request contains a complete metric day (or sleep end-day), matching the server's replacement grain.
+    /// A long backlog can exceed the request limit overall without truncating or splitting a cumulative day.
     public static func requests(for batch: JarvisHealthSyncBatch, anchor: Date?) -> [JarvisHealthSyncRequest] {
+        let calendar = JarvisHealthSyncWindow.calendar
         let byMetric = Dictionary(grouping: batch.samples, by: \.metric)
-        var requests = byMetric.keys.sorted().map { JarvisHealthSyncRequest(anchor: anchor, samples: byMetric[$0] ?? []) }
-        if !batch.sleep.isEmpty { requests.append(JarvisHealthSyncRequest(anchor: anchor, sleep: batch.sleep)) }
-        if !batch.workouts.isEmpty { requests.append(JarvisHealthSyncRequest(anchor: anchor, workouts: batch.workouts)) }
+        var requests: [JarvisHealthSyncRequest] = []
+        for metric in byMetric.keys.sorted() {
+            let days = Dictionary(grouping: byMetric[metric] ?? []) { calendar.startOfDay(for: $0.start) }
+            for day in days.keys.sorted() {
+                requests.append(JarvisHealthSyncRequest(anchor: anchor, samples: days[day] ?? []))
+            }
+        }
+        let nights = Dictionary(grouping: batch.sleep) { calendar.startOfDay(for: $0.end) }
+        for day in nights.keys.sorted() {
+            requests.append(JarvisHealthSyncRequest(anchor: anchor, sleep: nights[day] ?? []))
+        }
+        let workouts = batch.workouts.sorted { $0.id < $1.id }
+        for offset in stride(from: 0, to: workouts.count, by: maximumItems) {
+            requests.append(JarvisHealthSyncRequest(anchor: anchor,
+                workouts: Array(workouts[offset..<min(offset + maximumItems, workouts.count)])))
+        }
         return requests
     }
 
@@ -238,7 +254,13 @@ public struct JarvisHealthSyncRunner: Sendable {
     public func sync(_ batch: JarvisHealthSyncBatch) async -> JarvisHealthSyncState {
         guard !batch.readTypes.isEmpty else { return .failed }
         do {
-            for request in JarvisHealthSyncRequest.requests(for: batch, anchor: store.anchor) {
+            let requests = JarvisHealthSyncRequest.requests(for: batch, anchor: store.anchor)
+            // Refuse a single oversized day before writing anything; never overwrite it with a truncated total.
+            guard requests.allSatisfy({ $0.samples.count + $0.sleep.count + $0.workouts.count <= JarvisHealthSyncRequest.maximumItems }) else {
+                return .failed
+            }
+            for request in requests {
+                try Task.checkCancellation()
                 try await sender.send(request)
             }
         } catch {

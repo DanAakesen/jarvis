@@ -540,15 +540,16 @@ struct JarvisHealthArea: View {
     private func withDeviceWorkouts(_ original: JarvisHealthDashboardData) -> JarvisHealthDashboardData {
         var data = original
         let formatter = ISO8601DateFormatter()
-        if let deviceSteps {
-            data.steps.items = deviceSteps.daily.sorted { $0.key < $1.key }.map { day, value in
-                ["metric_date": .string(JarvisHealthLogic.day(formatter.string(from: day))!),
-                 "unit": .string("count"), "value": .number(Double(value))]
-            }
+        if let deviceSteps, !deviceSteps.daily.isEmpty {
+            let hadRetainedDays = !data.steps.items.isEmpty
+            data.steps.items = JarvisHealthStepDays.merging(retained: data.steps.items, local: deviceSteps.daily)
             data.steps.state = .available
-            data.steps.failure = nil
-            data.steps.isStale = false
-            data.steps.updatedAt = formatter.string(from: now)
+            // Retained days keep their source freshness; a partial phone snapshot cannot refresh the whole series.
+            if !hadRetainedDays {
+                data.steps.failure = nil
+                data.steps.isStale = false
+                data.steps.updatedAt = formatter.string(from: now)
+            }
         }
         if deviceWorkoutsFailed {
             data.workouts.failure = .failed

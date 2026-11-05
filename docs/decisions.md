@@ -10953,3 +10953,8 @@ cover bounds, missing observations and duplicate daily records. Sleep uses stage
 proportions and real average/night-count summaries; bedtime/wake-up are absent
 from the current contract. Nutrition shows actual logged meals without a target.
 See `p15-95-verification.md` for screenshot provenance and pending native checks.
+
+
+## 2026-11-05: P15 Health backlog and retained history
+
+Use anchored HealthKit query pagination and complete-day upload requests rather than discarding a quantity at the whole-window cap. Keep the existing owner-only API and 20,000-item request bound; reject an oversized single day honestly, before any upload. A partial local step snapshot replaces only matching Copenhagen days and cannot mark retained history fresh. Regression tests cover multi-day backlogs, rejection, local midnight and explicit zero readings.
