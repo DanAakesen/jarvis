@@ -47,15 +47,42 @@ enum JarvisWidgetSamples {
         )
     }
 
+    static func notes(language: JarvisAppLanguage = .da) -> JarvisNotesWidgetData {
+        let da = language == .da
+        let today = calendar.startOfDay(for: now)
+        return JarvisNotesWidgetData(
+            generatedAt: now,
+            tasksToday: 3,
+            tasks: [
+                .init(id: "k1", title: da ? "Ring til tandlægen" : "Call the dentist", time: "14:00", dueDate: today),
+                .init(id: "k2", title: da ? "Send faktura" : "Send invoice", dueDate: today),
+                .init(id: "k3", title: da ? "Planlæg ugen" : "Plan the week", time: "17:30", dueDate: today),
+            ],
+            notes: [
+                .init(id: "n1", title: da ? "Idéer til widgets" : "Widget ideas", editedAt: now.addingTimeInterval(-1_800)),
+                .init(id: "n2", title: da ? "Mødenoter" : "Meeting notes", editedAt: now.addingTimeInterval(-90_000)),
+                .init(id: "n3", title: da ? "Indkøb" : "Shopping", editedAt: now.addingTimeInterval(-200_000)),
+            ]
+        )
+    }
+
+    static var home: JarvisHomeWidgetData {
+        JarvisHomeWidgetData(generatedAt: now, approvals: 1, running: 2)
+    }
+
     static func entry(
         gym: JarvisWidgetViewState<JarvisGymWidgetData>? = nil,
         factory: JarvisWidgetViewState<JarvisFactoryWidgetData>? = nil,
+        notes: JarvisWidgetViewState<JarvisNotesWidgetData>? = nil,
+        home: JarvisWidgetViewState<JarvisHomeWidgetData>? = nil,
         language: JarvisAppLanguage = .da
     ) -> JarvisWidgetEntry {
         JarvisWidgetEntry(
             date: now, language: language,
             gym: gym ?? .content(Self.gym, isStale: false),
-            factory: factory ?? .content(Self.factory(language: language), isStale: false)
+            factory: factory ?? .content(Self.factory(language: language), isStale: false),
+            notes: notes ?? .content(Self.notes(language: language), isStale: false),
+            home: home ?? .content(Self.home, isStale: false)
         )
     }
 }

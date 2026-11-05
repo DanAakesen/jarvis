@@ -3,7 +3,7 @@ import HealthKit
 import JarvisCore
 import WidgetKit
 
-/// Writes the small versioned snapshot the Gym and Factory home screen widgets read, and runs the widgets' immediate
+/// Writes the small versioned snapshot the Gym, Factory, Notes and Home home screen widgets read, and runs the widgets' immediate
 /// Factory actions. HealthKit data stays on the device; the snapshot holds display numbers only, never a token.
 @MainActor
 final class JarvisWidgetSnapshotPublisher {
@@ -13,6 +13,7 @@ final class JarvisWidgetSnapshotPublisher {
     private var factoryClient: JarvisFactoryClient?
     private var approvalsClient: JarvisApprovalsClient?
     private var healthClient: JarvisHealthClient?
+    private var notesClient: JarvisNotesClient?
     private var isRefreshing = false
 
     private init() {}
@@ -21,6 +22,7 @@ final class JarvisWidgetSnapshotPublisher {
         factoryClient = JarvisFactoryClient(client: client)
         approvalsClient = JarvisApprovalsClient(client: client)
         healthClient = JarvisHealthClient(client: client)
+        notesClient = JarvisNotesClient(client: client)
         JarvisFactoryWidgetActions.queue = store.map { JarvisFactoryWidgetActionQueue(directory: $0.directory) }
         JarvisFactoryWidgetActions.handler = { [weak self] action, id in
             guard let self else { throw JarvisFactoryWidgetActions.Failure.unavailable }
@@ -30,7 +32,7 @@ final class JarvisWidgetSnapshotPublisher {
         Task { await refresh() }
     }
 
-    /// Runs taps the widget could not run itself, then rewrites both sections and reloads the timelines.
+    /// Runs taps the widget could not run itself, then rewrites every section and reloads the timelines.
     func refresh() async {
         guard let store, !isRefreshing else { return }
         isRefreshing = true
@@ -48,9 +50,12 @@ final class JarvisWidgetSnapshotPublisher {
         let now = Date()
         async let gym = loadGym(now: now)
         async let factory = loadFactory(now: now, language: language)
-        let (gymResult, factoryResult) = await (gym, factory)
+        async let notes = loadNotes(now: now)
+        let (gymResult, factoryResult, notesResult) = await (gym, factory, notes)
         apply(gymResult, to: &snapshot.gym)
         apply(factoryResult, to: &snapshot.factory)
+        apply(notesResult, to: &snapshot.notes)
+        apply(factoryResult.map { JarvisWidgetBuilder.home(now: now, factory: $0) }, to: &snapshot.home)
         try? store.save(snapshot)
         WidgetCenter.shared.reloadAllTimelines()
     }
@@ -121,6 +126,21 @@ final class JarvisWidgetSnapshotPublisher {
         } catch {
             return .failure(error)
         }
+    }
+
+    /// Today's tasks and the latest notes, read through the same cached repositories the Home and Notes pages use, so
+    /// a fresh cache costs no request.
+    private func loadNotes(now: Date) async -> Result<JarvisNotesWidgetData, Error> {
+        guard let notesClient else { return .failure(JarvisTodayDataError.unavailable) }
+        let tasks: JarvisResolved<VaultTaskList> = await JarvisAppCache.repository(.tasks, scope: "open") {
+            try await notesClient.fetchOpenTasks(validator: $0)
+        }.resolve()
+        let notes: JarvisResolved<VaultNotePage> = await JarvisAppCache.repository(.notes, scope: "home") {
+            try await notesClient.fetchNotes(validator: $0)
+        }.resolve()
+        guard let list = tasks.value else { return .failure(tasks.error ?? JarvisClientError.networkFailure) }
+        guard let page = notes.value else { return .failure(notes.error ?? JarvisClientError.networkFailure) }
+        return .success(JarvisWidgetBuilder.notes(now: now, calendar: .current, tasks: list, notes: page.notes))
     }
 
     /// Lifts (strength training) and runs from Apple Health, with distance and active energy.

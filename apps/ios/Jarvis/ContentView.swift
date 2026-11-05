@@ -159,6 +159,9 @@ struct ContentView: View {
         .onReceive(navigation.navigationRequested) { request in
             prepareNavigation(to: request.to, from: request.from)
         }
+        .onOpenURL { url in
+            if let destination = JarvisWidgetLink.destination(for: url) { navigate(to: destination) }
+        }
     }
 
     private func sidebarShell(

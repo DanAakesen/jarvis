@@ -139,6 +139,41 @@ public enum JarvisWidgetBuilder {
         )
     }
 
+    /// Today's open tasks (due today, in the app's order) and the latest notes, from lists the app already loaded.
+    public static func notes(
+        now: Date,
+        calendar: Calendar,
+        tasks: VaultTaskList,
+        notes: [VaultNoteSummary]
+    ) -> JarvisNotesWidgetData {
+        let dayFormatter = DateFormatter()
+        dayFormatter.locale = Locale(identifier: "en_US_POSIX")
+        dayFormatter.calendar = calendar
+        dayFormatter.timeZone = calendar.timeZone
+        dayFormatter.dateFormat = "yyyy-MM-dd"
+        let due = JarvisNotesLogic.taskGroups(tasks.items, today: tasks.today).today
+        let latest: [JarvisNotesWidgetData.Note] = notes
+            .compactMap { note in
+                parseDate(note.updatedAt).map { JarvisNotesWidgetData.Note(id: note.path, title: note.title, editedAt: $0) }
+            }
+            .sorted { $0.editedAt > $1.editedAt }
+        return JarvisNotesWidgetData(
+            generatedAt: now,
+            tasksToday: due.count,
+            tasks: due.map {
+                JarvisNotesWidgetData.Task(
+                    id: $0.id, title: $0.text, time: $0.dueTime, dueDate: $0.dueDate.flatMap(dayFormatter.date(from:))
+                )
+            },
+            notes: latest
+        )
+    }
+
+    /// What needs Dan (approvals) and what is running, taken from the Factory numbers so both always agree.
+    public static func home(now: Date, factory: JarvisFactoryWidgetData) -> JarvisHomeWidgetData {
+        JarvisHomeWidgetData(generatedAt: now, approvals: factory.awaiting, running: factory.running)
+    }
+
     private static func parseDate(_ value: String) -> Date? {
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

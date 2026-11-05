@@ -1,6 +1,6 @@
 import Foundation
 
-/// The small, versioned snapshot the app writes into the App Group for the Gym and Factory home screen widgets.
+/// The small, versioned snapshot the app writes into the App Group for the Gym, Factory, Notes and Home widgets.
 /// It holds display data only: no tokens, secrets or identifiers beyond the opaque task and confirmation ids a
 /// widget button needs. Each section is written and aged on its own, so a failed Factory refresh never hides Gym.
 public struct JarvisWidgetSnapshot: Codable, Equatable, Sendable {
@@ -12,16 +12,33 @@ public struct JarvisWidgetSnapshot: Codable, Equatable, Sendable {
     public var language: String
     public var gym: Section<JarvisGymWidgetData>
     public var factory: Section<JarvisFactoryWidgetData>
+    public var notes: Section<JarvisNotesWidgetData>
+    public var home: Section<JarvisHomeWidgetData>
 
     public init(
         language: JarvisAppLanguage = .default,
         gym: Section<JarvisGymWidgetData> = .init(),
-        factory: Section<JarvisFactoryWidgetData> = .init()
+        factory: Section<JarvisFactoryWidgetData> = .init(),
+        notes: Section<JarvisNotesWidgetData> = .init(),
+        home: Section<JarvisHomeWidgetData> = .init()
     ) {
         version = Self.currentVersion
         self.language = language.rawValue
         self.gym = gym
         self.factory = factory
+        self.notes = notes
+        self.home = home
+    }
+
+    /// Snapshots written before the Notes and Home sections existed still decode: the missing sections read as loading.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decode(Int.self, forKey: .version)
+        language = try container.decode(String.self, forKey: .language)
+        gym = try container.decode(Section<JarvisGymWidgetData>.self, forKey: .gym)
+        factory = try container.decode(Section<JarvisFactoryWidgetData>.self, forKey: .factory)
+        notes = try container.decodeIfPresent(Section<JarvisNotesWidgetData>.self, forKey: .notes) ?? .init()
+        home = try container.decodeIfPresent(Section<JarvisHomeWidgetData>.self, forKey: .home) ?? .init()
     }
 
     public var appLanguage: JarvisAppLanguage { JarvisAppLanguage(rawValue: language) ?? .default }
@@ -185,6 +202,67 @@ public struct JarvisFactoryWidgetData: Codable, Equatable, Sendable {
         case .review: review
         case .failed: failed
         }
+    }
+}
+
+/// What the Notes widgets show: today's open tasks and the latest notes, as display text and dates only.
+public struct JarvisNotesWidgetData: Codable, Equatable, Sendable {
+    public struct Task: Codable, Equatable, Identifiable, Sendable {
+        public var id: String
+        public var title: String
+        /// "HH:mm" when the task has a time of day.
+        public var time: String?
+        public var dueDate: Date?
+
+        public init(id: String, title: String, time: String? = nil, dueDate: Date? = nil) {
+            self.id = id
+            self.title = title
+            self.time = time
+            self.dueDate = dueDate
+        }
+    }
+
+    public struct Note: Codable, Equatable, Identifiable, Sendable {
+        public var id: String
+        public var title: String
+        public var editedAt: Date
+
+        public init(id: String, title: String, editedAt: Date) {
+            self.id = id
+            self.title = title
+            self.editedAt = editedAt
+        }
+    }
+
+    public static let maxTasks = 5
+    public static let maxNotes = 3
+
+    public var generatedAt: Date
+    /// How many tasks are due today; `tasks` holds the first few.
+    public var tasksToday: Int
+    public var tasks: [Task]
+    public var notes: [Note]
+
+    public init(generatedAt: Date, tasksToday: Int, tasks: [Task], notes: [Note]) {
+        self.generatedAt = generatedAt
+        self.tasksToday = max(tasksToday, tasks.count, 0)
+        self.tasks = Array(tasks.prefix(Self.maxTasks))
+        self.notes = Array(notes.prefix(Self.maxNotes))
+    }
+
+    public var isEmpty: Bool { tasksToday == 0 && notes.isEmpty }
+}
+
+/// What the Home widgets add to the Gym, Factory and Notes data they also show: what needs Dan, and what is running.
+public struct JarvisHomeWidgetData: Codable, Equatable, Sendable {
+    public var generatedAt: Date
+    public var approvals: Int
+    public var running: Int
+
+    public init(generatedAt: Date, approvals: Int, running: Int) {
+        self.generatedAt = generatedAt
+        self.approvals = max(approvals, 0)
+        self.running = max(running, 0)
     }
 }
 

@@ -1,3 +1,12 @@
+## 5 November 2026 — Notes and Home widgets (P15-89 / #1593)
+
+- Six more widgets (small, medium, large for Notes and for Home) join the Gym and Factory ones in the `JarvisWidgets` extension. No buttons, no control items; a tap opens the matching app page through `widgetURL` (`jarvis-widget://notes` or `home`, handled by `onOpenURL` in `ContentView` via `JarvisWidgetLink`).
+- Snapshot: `JarvisWidgetSnapshot` gains `notes` (today's open tasks with title and time or date, latest notes with title and edited time) and `home` (approvals needed, runs in progress). Version stays 1: a custom decoder reads missing sections as loading, so older snapshots still decode. Home also draws the Gym, Factory and Notes sections already in the snapshot for its tiles and rows; its timeline schedules a stale entry for each of them.
+- The publisher adds no new endpoint: tasks and notes are read through the same cached repositories (`.tasks`/`open`, `.notes`/`home`) as the Home page, and Home is derived from the Factory numbers (approvals = awaiting, running = running).
+- The Home orb is `JarvisWidgetOrb`, a static SwiftUI copy of the shared orb look (dark glass, cyan rim, orange tangled centre), because the widget target cannot compile the app's `JarvisOrb` without a `project.yml` change (that file belongs to #1591). `JarvisDesignSystemGuardTests` allows it by file name. Switch to the shared orb once the target compiles it.
+- Loading draws a static skeleton for the new widgets. Stale data is dimmed with an "Updated HH:mm" line. Strings are in `JarvisWidgetCopy` (da and en, same placeholders).
+- Not verified here: no Xcode, so the widget views, previews and publisher are compiled by CI only; JarvisCore `swift test` covers the snapshot, builders, phrases, timeline and links.
+
 ## 5 November 2026 — Widgets embedded again (P15-88 / #1591)
 
 The owner added the existing App Group to the `.widgets` App ID in the Apple developer portal, so the extension can be signed. Decision: embed `JarvisWidgets` in the Jarvis app again and remove the temporary skip from P15-87 (Refs #1589). The iOS CI check now asserts the embed. Widget sources and user-facing strings are unchanged.

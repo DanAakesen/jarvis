@@ -7,6 +7,8 @@ import XCTest
 /// Allowed exceptions, by file name:
 /// - `JarvisControls.swift` and `JarvisDesignSystem.swift` own every glass surface, button style and orb component.
 /// - `JarvisOrbCanvas.swift` is the one orb drawing (a port of the web orb), which `JarvisOrb` wraps.
+/// - `JarvisWidgetOrb.swift` is the widget extension's static copy of that orb: the extension cannot compile the app's
+///   canvas, so it draws the same look (dark glass, cyan rim, orange tangled centre) once, without motion.
 /// - `JarvisComponentGallery.swift` only shows the shared components and defines none of its own.
 /// - `.buttonStyle(.plain)` and `JarvisPressableRowButtonStyle` stay allowed in screens: they only make a whole content
 ///   row (a note, a list item, a chart slice, a disclosure header) tappable and draw no chrome. Anything that looks like a
@@ -15,7 +17,7 @@ import XCTest
 /// Any other file that needs a new look must add it to the shared layer instead of adding an exception here.
 final class JarvisDesignSystemGuardTests: XCTestCase {
     private static let sharedLayer: Set<String> = ["JarvisControls.swift", "JarvisDesignSystem.swift"]
-    private static let orbDrawing: Set<String> = ["JarvisOrbCanvas.swift"]
+    private static let orbDrawing: Set<String> = ["JarvisOrbCanvas.swift", "JarvisWidgetOrb.swift"]
 
     private func swiftSources() throws -> [(name: String, text: String)] {
         var root = URL(fileURLWithPath: #filePath)
