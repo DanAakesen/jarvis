@@ -7087,3 +7087,12 @@ cover bounds, missing observations and duplicate daily records. Sleep uses stage
 proportions and real average/night-count summaries; bedtime/wake-up are absent
 from the current contract. Nutrition shows actual logged meals without a target.
 See `p15-95-verification.md` for screenshot provenance and pending native checks.
+
+
+## Native Insights image evidence
+
+Native evidence exposed a clipped Status state label and a Notifications capture
+covered by sign-in. The row reserves readable state text, stacking it at large
+Dynamic Type; the test uses the existing Simulator navigation argument. Usage
+emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
+verification is pending; previous UI-test success is not visual acceptance.

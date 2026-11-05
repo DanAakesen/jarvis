@@ -3291,3 +3291,12 @@ The published Status and Proactive reference images were inspected. These are
 board renders, not native evidence. All five audited pages still require actual
 Mac screenshot inspection; see `docs/ios/design/p15-96-verification.md`. The
 continuous shared page segments are supplied by P15-94 / #1606.
+
+
+## Native Status row and Usage chart refinement
+
+Native evidence exposed a clipped Status state label and a Notifications capture
+covered by sign-in. The row reserves readable state text, stacking it at large
+Dynamic Type; the test uses the existing Simulator navigation argument. Usage
+emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
+verification is pending; previous UI-test success is not visual acceptance.

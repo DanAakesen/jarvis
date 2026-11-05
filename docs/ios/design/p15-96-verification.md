@@ -38,3 +38,27 @@ while retaining its localized labels, fixture-only disabled actions and bilingua
 capture checks. All 74 pipeline tests pass locally. The full script suite has
 240 passes and three environment errors because this Linux workspace lacks
 PowerShell; GitHub's configured runner supplies it.
+
+
+## Native image inspection, 5 November 2026
+
+The archive from run 42106346100 was downloaded successfully after a fresh
+connector URL used the permitted Poland host. Usage, Status and Proactive were
+visually inspected at 402 × 874 logical points. The Status board/native pair
+was shown in chat: Foundry voice's long detail squeezed its state label almost
+to zero width. The correction reserves the state word's intrinsic width and
+places it under the title at accessibility text sizes. Shared spacing tokens
+replace the local row gap. Usage now emphasizes the selected or latest bucket,
+with neutral other bars, matching the reference's emphasis.
+
+The Notifications attachment `4AB99A94-8D87-4211-AF5A-9AEE581D5504.png` actually
+shows the sign-in cover. The test now includes the existing Simulator navigation
+argument; its geometry, reachable close action and disabled synthetic-approval
+assertions remain intact. Do not count the previous PNG as Notifications visual
+acceptance, even though that suite passed 48/48 tests.
+
+Apple Layout/Accessibility guidance used above applies to the adaptive row.
+These follow-up corrections are source-reviewed but await native compilation,
+new screenshots and visual verification. The continuation is checkpointing them
+through the integration branch without interrupting the active Insights run
+42106990041 / 127547007531. Push the page follow-up only after refreshing that run.
