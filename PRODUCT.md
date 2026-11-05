@@ -1301,6 +1301,11 @@ partial; the graph carries counts and completeness only, never task text.
 
 #### Software Factory — task view
 
+Native Factory has Board and Releases tabs. Needs Dan remains a column on Board;
+opening the older Needs Dan entry reveals that column. Home follows the published
+board's Today / Tasks due grouping, with no Yesterday group. The older request
+for a Delegated section is unresolved; no new data source is inferred from it.
+
 | Data points | Actions |
 | --- | --- |
 | GitHub Project columns: Backlog, Needs Dan, Ready, In progress, In review, Done | Create a linked GitHub issue and task (project, agent, text, optional model/reasoning override) |

@@ -34,7 +34,7 @@ final class TodayUITests: XCTestCase {
         }
     }
 
-    /// Home against the concept board (docs/ios/design/today.html): big phrase, the workouts and steps card with
+    /// Home captures against the published board (docs/ios/design/board.html): big phrase, the workouts and steps card with
     /// every row, two equal quick-action tiles, the Today / Tasks control and the real Chat composer.
     func testHomeMatchesTheBoardInDarkAndLightDanishAndEnglish() {
         for language in ["da", "en"] {
@@ -54,7 +54,12 @@ final class TodayUITests: XCTestCase {
                 let lift = app.buttons["today.logLift"]
                 XCTAssertTrue(workout.exists && lift.exists)
                 XCTAssertEqual(workout.frame.width, lift.frame.width, accuracy: 1, "Quick actions are equal tiles")
-                XCTAssertTrue(app.buttons["today.tab.today"].exists && app.buttons["today.tab.due"].exists)
+                let todayTab = app.buttons["today.tab.today"]
+                let dueTab = app.buttons["today.tab.due"]
+                XCTAssertTrue(todayTab.exists && dueTab.exists)
+                XCTAssertEqual(todayTab.frame.width, dueTab.frame.width, accuracy: 1)
+                XCTAssertEqual(todayTab.frame.maxX, dueTab.frame.minX, accuracy: 1, "Home segments share one continuous control")
+                XCTAssertGreaterThanOrEqual(todayTab.frame.height, 44)
                 XCTAssertTrue(app.buttons["today.plus"].exists)
                 XCTAssertTrue(app.textFields["today.input"].exists)
                 XCTAssertTrue(app.buttons["today.composer.plus"].exists, "Composer plus on the left")

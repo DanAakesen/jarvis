@@ -3074,11 +3074,11 @@ The existing CI screenshot set is unchanged under the iOS Mac-run cost guard.
 ## Native iOS Software Factory (P15-19; 31 October 2026)
 
 The approved Factory screen uses the existing Notes chrome: a Software Factory
-title and refresh control, a text-only Board / Needs Dan / Releases switcher,
-and a fixed glass search field plus round create button. The project menu and
-board filter sit above the grouped content. Board groups follow In progress,
-In review, Ready, Backlog and Done, with Done collapsed initially; Needs Dan
-shows only the selected project's Needs Dan / NeedsAttention work. Releases open
+title and refresh control, one glass Board / Releases switcher, and a fixed
+glass search field plus round create button. The narrowed switcher sits above
+search with the project/filter button on its right. Board groups follow Needs
+Dan, In progress, In review, Ready, Backlog and Done and start collapsed.
+An existing Needs Dan entry selects Board, expands that column and scrolls to it. Releases open
 a native detail list for status, commit, workflow runs, deployments, linked
 tasks and the existing compact commit records.
 
@@ -3099,7 +3099,7 @@ alone. Danish/English copy and date formatting come from `JarvisCore`,
 with the app language defaulting to Danish. System type sizes, appearance,
 VoiceOver labels, and native scrolling remain intact.
 
-Board and Needs Dan intentionally use one selected project per request. There is
+Board intentionally uses one selected project per request. There is
 no all-project aggregation. Existing APIs own project placement and live
 invalidation; task details use the resumable task event stream. No APNs,
 project administration, git graph, backfill, or sandbox UI is represented.
@@ -3228,3 +3228,17 @@ One look, taken from the Chat header: Apple glass, 44 pt target, secondary accen
 - **Gallery**: `JarvisComponentGallery` (debug builds only, launch argument `--component-gallery`, no user-facing entry) shows every button state, the orb at three sizes and the scaffold; `ComponentGalleryUITests` attaches a screenshot.
 - Apple documentation used: Human Interface Guidelines (Buttons, Toolbars, Materials); SwiftUI `Glass`, `glassEffect`, `ButtonStyle.glass` and `Button`.
 
+
+## Home and Factory board alignment (P15-94 / #1600; 5 November 2026)
+
+Home uses one full-width glass surface for equal-width Today / Tasks due
+segments, with the selected surface inside the same control. Calendar and task
+rows use the shared row insets, internal line spacing and structural dividers.
+The published `board.html` shows Today / Tasks due, without a Delegated or
+Yesterday group. Follow that grouping as required by the issue's board-wins
+rule; a clarification about the older Delegated feedback is still pending.
+
+The shared segmented component retains the native buttons' selected accessibility
+trait and 44 pt touch height. Custom composition preserves the approved glass
+surface; it does not introduce a new button style or per-screen glass effect.
+Native compilation, interaction and screenshot acceptance are still pending.

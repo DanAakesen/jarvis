@@ -519,8 +519,7 @@ struct JarvisTabStrip<Tag: Hashable>: View {
     }
 }
 
-/// The long full-width segmented bar for a page's second row of tabs (Board / Needs Dan / Releases): every tab shares
-/// the row equally. Carousels of pills, such as the Notes folders, keep `JarvisTabStrip`.
+/// One full-width glass surface with equal-width segments. Individual segments have no separate glass chrome.
 struct JarvisSegmentedBar<Tag: Hashable>: View {
     let title: String
     let identifierPrefix: String
@@ -528,16 +527,28 @@ struct JarvisSegmentedBar<Tag: Hashable>: View {
     @Binding var selection: Tag
 
     var body: some View {
-        HStack(spacing: JarvisDesignTokens.segmentedBarSpacing) {
+        HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                JarvisLabelledButton(
-                    title: item.title,
-                    identifier: item.identifier ?? "\(identifierPrefix).\(index)",
-                    isFullWidth: true,
-                    isSelected: selection == item.tag
-                ) { selection = item.tag }
+                Button { selection = item.tag } label: {
+                    Text(item.title)
+                        .font(.subheadline.weight(selection == item.tag ? .semibold : .regular))
+                        .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
+                        .contentShape(Rectangle())
+                        .background {
+                            if selection == item.tag {
+                                Capsule().fill(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
+                                    .padding(JarvisDesignTokens.segmentedSelectionInset)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection == item.tag ? .isSelected : [])
+                .accessibilityIdentifier(item.identifier ?? "\(identifierPrefix).\(index)")
             }
         }
+        .jarvisGlassCapsule()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
     }

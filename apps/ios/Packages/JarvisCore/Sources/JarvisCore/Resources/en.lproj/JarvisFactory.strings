@@ -29,7 +29,6 @@
 "factory.loadingReleases" = "Loading releases";
 "factory.emptyProjects" = "No active projects";
 "factory.emptyBoard" = "No tasks";
-"factory.emptyNeedsDan" = "Nothing needs Dan";
 "factory.emptyReleases" = "No releases";
 "factory.noSearchResults" = "No search results";
 "factory.issueNumber" = "Issue #%ld";

@@ -62,11 +62,11 @@ enum JarvisFactoryPreviewState: String {
     case newtask
 
     var segment: FactorySegment {
-        switch self {
-        case .needs: .needsDan
-        case .releases, .release: .releases
-        default: .board
-        }
+        target.segment
+    }
+
+    var target: FactoryNavigationTarget {
+        FactoryNavigationTarget(legacySegment: self == .release ? "releases" : rawValue)
     }
 }
 
@@ -130,6 +130,9 @@ struct JarvisFactoryArea: View {
         self.previewState = previewState
         self.liveUpdatesEnabled = liveUpdatesEnabled
         _segment = State(initialValue: previewState?.segment ?? .board)
+        if let column = previewState?.target.column {
+            _collapsedColumns = State(initialValue: JarvisFactoryPresentation.defaultCollapsedColumns().subtracting([column]))
+        }
         _searchText = State(initialValue: previewState == .search ? "Synthetic" : "")
         if previewState == .offline {
             _connection = State(initialValue: .offline)
@@ -374,58 +377,67 @@ struct JarvisFactoryArea: View {
                 action: { refreshVersion += 1 }
             )
         } else if let board {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.factorySectionSpacing) {
-                    if let headline {
-                        JarvisPageHeadline(phrase: headline)
-                        if segment == .board, board.columns.contains(where: { !$0.cards.isEmpty }) {
-                            pipelineHero(board)
-                        }
-                    }
-                    if board.stale {
-                        FactoryStatusLine(symbol: "tray.full", text: copy.text(.cached))
-                    }
-                    if connection != .connected {
-                        FactoryStatusLine(
-                            symbol: connection == .offline ? "wifi.slash" : "arrow.triangle.2.circlepath",
-                            text: connection == .offline ? copy.text(.offline) : copy.text(.reconnecting)
-                        )
-                    }
-                    if contentError {
-                        FactoryStatusLine(symbol: "exclamationmark.triangle", text: copy.text(.actionFailed))
-                            .overlay(alignment: .trailing) {
-                                JarvisLabelledButton(title: copy.text(.retry)) { refreshVersion += 1 }
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.factorySectionSpacing) {
+                        if let headline {
+                            JarvisPageHeadline(phrase: headline)
+                            if segment == .board, board.columns.contains(where: { !$0.cards.isEmpty }) {
+                                pipelineHero(board)
                             }
+                        }
+                        if board.stale {
+                            FactoryStatusLine(symbol: "tray.full", text: copy.text(.cached))
+                        }
+                        if connection != .connected {
+                            FactoryStatusLine(
+                                symbol: connection == .offline ? "wifi.slash" : "arrow.triangle.2.circlepath",
+                                text: connection == .offline ? copy.text(.offline) : copy.text(.reconnecting)
+                            )
+                        }
+                        if contentError {
+                            FactoryStatusLine(symbol: "exclamationmark.triangle", text: copy.text(.actionFailed))
+                                .overlay(alignment: .trailing) {
+                                    JarvisLabelledButton(title: copy.text(.retry)) { refreshVersion += 1 }
+                                }
+                        }
+                        if filteredCards.isEmpty {
+                            Text(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? emptyBoardTitle
+                                : copy.text(.noSearchResults))
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, JarvisDesignTokens.factorySectionSpacing * 2)
+                        } else {
+                            let visibleColumns = JarvisFactoryPresentation.boardColumnOrder.filter { id in
+                                filteredCards.contains(where: { $0.column == id })
+                            }
+                            ForEach(visibleColumns, id: \.self) { column in
+                                columnSection(column)
+                                    .id(column)
+                            }
+                        }
                     }
-                    if filteredCards.isEmpty {
-                        Text(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            ? emptyBoardTitle
-                            : copy.text(.noSearchResults))
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, JarvisDesignTokens.factorySectionSpacing * 2)
-                    } else {
-                        let visibleColumns = JarvisFactoryPresentation.boardColumnOrder.filter { id in
-                            filteredCards.contains(where: { $0.column == id })
-                        }
-                        ForEach(visibleColumns, id: \.self) { column in
-                            columnSection(column)
-                        }
+                    .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
+                    .padding(.top, JarvisDesignTokens.factoryRowSpacing)
+                    .padding(.bottom, JarvisDesignTokens.factorySectionSpacing)
+                }
+                .refreshable { await refresh() }
+                .accessibilityIdentifier("factory.board")
+                .onAppear {
+                    if previewState == .detail || previewState == .steer {
+                        selectedTaskID = "21"
+                        taskPresented = true
+                    }
+                    if previewState == .newtask { createPresented = true }
+                }
+                .task(id: boardTaskID) {
+                    if let column = previewState?.target.column {
+                        await Task.yield()
+                        proxy.scrollTo(column, anchor: .top)
                     }
                 }
-                .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
-                .padding(.top, JarvisDesignTokens.factoryRowSpacing)
-                .padding(.bottom, JarvisDesignTokens.factorySectionSpacing)
-            }
-            .refreshable { await refresh() }
-            .accessibilityIdentifier("factory.board")
-            .onAppear {
-                if previewState == .detail || previewState == .steer {
-                    selectedTaskID = "21"
-                    taskPresented = true
-                }
-                if previewState == .newtask { createPresented = true }
             }
         } else {
             FactoryLoadingView(copy: copy, releases: false)
@@ -540,13 +552,12 @@ struct JarvisFactoryArea: View {
     }
 
     private var emptyBoardTitle: String {
-        segment == .needsDan ? copy.text(.emptyNeedsDan) : copy.text(.emptyBoard)
+        copy.text(.emptyBoard)
     }
 
     private func segmentTitle(_ value: FactorySegment) -> String {
         switch value {
         case .board: copy.text(.board)
-        case .needsDan: copy.text(.needsDan)
         case .releases: copy.text(.releases)
         }
     }

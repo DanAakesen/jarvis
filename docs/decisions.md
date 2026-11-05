@@ -10919,3 +10919,15 @@ run the existing screenshot artifact upload with `if: always()`. Run 42075818100
 had captured images but skipped their upload when it reached the job timeout.
 Keep the existing runner, test selection and timeout; this change preserves
 available evidence and does not turn failing tests into successful tests.
+
+## 5 November 2026 — Home and Factory follow the merged board (P15-94 / #1600)
+
+Keep Factory's Needs Dan tasks in Board while removing its separate tab. Board
+and Releases share one glass segmented surface. Preserve default collapsed
+columns, indented outlined rows, filter placement and search/create placement;
+legacy Needs Dan screenshot entry expands and reveals that column.
+
+Home uses the shared row spacing and separators and keeps Today / Tasks due,
+as shown by the merged board. Issue #1600 explicitly gives the board precedence
+over conflicting grouping feedback. The Delegated wording remains an open
+clarification, not a new task-data contract. Native visual acceptance is pending.
