@@ -107,3 +107,8 @@
 "health.syncPartial" = "Delvist synkroniseret %@. Mangler: %@.";
 "health.syncFailed" = "Synkroniseringen mislykkedes. Prøv igen.";
 "health.syncRetry" = "Prøv igen";
+
+"health.training" = "Træning";
+"health.activeTime" = "Aktiv tid";
+"health.lastLifts" = "Seneste løft";
+"health.totalTarget" = "af %@";

@@ -10953,3 +10953,20 @@ No deployment is included.
 Graph nodes share folder colors with the legend. Labels appear for search or
 selection, with an explicit Open action; accessible titles/folders remain on all
 nodes. Native visual acceptance is pending in `ios/design/p15-93-verification.md`.
+
+## 5 November 2026 — Health source parity and dashboard (P15-95 / #1601)
+
+Use merged HealthKit statistics for step counts; raw overlapping source samples
+were being added by the normalizer. Re-read 30 days of steps/workouts/body values
+for late or corrected records. Display current permitted phone readings without
+requiring an upload, while keeping retained server data and failures visible.
+Keep Copenhagen day boundaries and recognize older numeric workout names.
+
+Read Home's existing vault lift notes into Last lifts instead of changing or
+migrating the owner's logging workflow. Bound note reads and disclose partial
+coverage. Keep the board's three hero periods, one training donut and section
+order. Body trend uses a labelled 30-day window and dated values. This is local
+implementation; native visual and real-device HealthKit acceptance are pending.
+
+P15-95 also labels HealthKit body-fat values as fractions (0–1), allowing the
+existing normalizer to retain the correct percentage (0.20 becomes 20%).

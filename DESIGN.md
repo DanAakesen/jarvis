@@ -3157,8 +3157,7 @@ preference.
 The checked-in `docs/ios/design/board.html?screen=health&tab=track&lang=da`
 shows Exercises and History only. Plus opens **New lift** with name, kg, reps
 and sets and past-exercise quick-add chips; no form or save status sits on the
-tab. Native logging reuses the shared lift routes from #1423. Last lifts remains
-omitted from the Dashboard. The existing one-boot simulator screenshot job now
+tab. Native logging reuses the shared lift routes from #1423. Last lifts is restored to the Dashboard in P15-95, above Recent sessions and Body trend. The existing one-boot simulator screenshot job now
 includes Track workout, New lift and empty states in both languages and themes,
 with a board link beside the artifact in its PR comment. Linux Chromium review
 covers the board, not native rendering; simulator compilation/captures and owner
@@ -3246,3 +3245,24 @@ The shared segmented component retains the native buttons' selected accessibilit
 trait and 44 pt touch height. Custom composition preserves the approved glass
 surface; it does not introduce a new button style or per-screen glass effect.
 Native compilation, interaction and screenshot acceptance are still pending.
+
+## Health board alignment (P15-95 / #1601; 5 November 2026)
+
+The Health carousel uses Training, Sleep and Nutrition with the same compact
+Today / 7 days / 30 days control in every hero header; 7 days is the initial
+selection. Training uses one workout donut, Gym/Run legend, steps and active-time
+figures, and a steps chart. All charts retain their average/day selection,
+Settings target and compact numbers. The shared hero height is reduced from
+500 to 440 pt; native screenshot validation is still required, including large
+Dynamic Type.
+
+Below the hero: Last lifts with the shared Log text action, Recent sessions,
+then Body trend. Rows use shared spacing and separators. The duplicate summary
+block is removed. Body trend reads a labelled 30-day window and shows the reading
+date, so Today does not suppress an earlier measurement. The latest daily value
+precedes a daily average. Log and plus open the same Home lift/workout sheets.
+
+Local HealthKit steps/workouts supplement retained server data. Unsynced device
+workouts do not offer a backend-only detail link. Last lifts combines retained
+Health history with existing Home vault logs; incomplete vault reads remain
+visible as partial. No illustrative board number is used as live app data.

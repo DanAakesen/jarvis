@@ -7033,3 +7033,14 @@ store, so no HealthKit prompt, network or live credentials are needed. Rim and g
 XCUITest can go idle. Normal launches start on Home; fixture and screenshot runs keep their own start page.
 `ios-ci.yml` lists `-only-testing:JarvisUITests/TodayUITests`. Not run on this Linux runner.
 
+
+## Health board/source checks (P15-95 / #1601)
+
+Use `swift test` in `apps/ios/Packages/JarvisCore`, plus backend Vitest
+`src/health/sync/device-sync.test.ts`. The Core checks include local calendar/DST
+bounds, old workout names, workout identity matching and reading saved Home
+vault lift notes. Native capture coverage is in the existing selected
+`ComponentGalleryUITests`; no workflow or project change is needed. HealthKit
+source merging and rendered/large-type layouts still require Apple execution.
+The native sync continues to use the existing owner-only route and unchanged
+schema. HealthKit body-fat fractions are labelled as such for normalization.

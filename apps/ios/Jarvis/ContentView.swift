@@ -134,7 +134,8 @@ struct ContentView: View {
             )
         ))
         _healthClient = State(initialValue: healthFixtureMode
-            ? try? JarvisHealthLiftFixture.makeClient(language: healthLanguage ?? .da, empty: healthState == "empty")
+            ? (healthState == nil ? JarvisHealthPreview.makeClient()
+                : try? JarvisHealthLiftFixture.makeClient(language: healthLanguage ?? .da, empty: healthState == "empty"))
             : Self.makeHealthClient(fixtureMode: fixtureMode))
         let insightsClient = navigationFixtureMode ? JarvisInsightsFixture.makeClient() : Self.makeInsightsClient()
         _usageClient = State(initialValue: insightsClient.map { JarvisUsageClient(client: $0) })
@@ -414,7 +415,7 @@ struct ContentView: View {
             case .notes:
                 notesClient = Self.makeNotesClient(fixtureMode: true)
             case .health:
-                healthClient = try? JarvisHealthLiftFixture.makeClient(language: language, empty: false)
+                healthClient = JarvisHealthPreview.makeClient()
             case .softwareFactory:
                 factoryClient = Self.makeFactoryClient(previewState: .board, fixtureMode: true)
             default: break

@@ -200,9 +200,20 @@ public final class JarvisHealthUserDefaultsAnchorStore: JarvisHealthSyncAnchorSt
 public enum JarvisHealthSyncWindow {
     public static let firstSyncDays = 7
 
-    public static func start(anchor: Date?, now: Date, calendar: Calendar = .current) -> Date {
+    public static var calendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Copenhagen")!
+        return calendar
+    }
+
+    public static func recentStart(now: Date, days: Int = 30, calendar: Calendar = Self.calendar) -> Date {
+        let today = calendar.startOfDay(for: now)
+        return calendar.date(byAdding: .day, value: -(max(days, 1) - 1), to: today) ?? today
+    }
+
+    public static func start(anchor: Date?, now: Date, calendar: Calendar = Self.calendar) -> Date {
         guard let anchor else {
-            return calendar.date(byAdding: .day, value: -firstSyncDays, to: now) ?? now
+            return recentStart(now: now, days: firstSyncDays, calendar: calendar)
         }
         return calendar.startOfDay(for: min(anchor, now))
     }

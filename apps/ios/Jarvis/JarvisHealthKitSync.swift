@@ -7,7 +7,6 @@ import SwiftUI
 /// and the batch is only ever called complete when every query succeeded.
 struct JarvisHealthKitReader {
     private static let quantities: [(HKQuantityTypeIdentifier, String, HKUnit, String)] = [
-        (.stepCount, "step_count", .count(), "count"),
         (.distanceWalkingRunning, "walking_running_distance", .meterUnit(with: .kilo), "km"),
         (.distanceCycling, "cycling_distance", .meterUnit(with: .kilo), "km"),
         (.flightsClimbed, "flights_climbed", .count(), "count"),
@@ -24,7 +23,7 @@ struct JarvisHealthKitReader {
         (.bodyMassIndex, "body_mass_index", .count(), "count"),
         (.height, "height", .meterUnit(with: .centi), "cm"),
         (.waistCircumference, "waist_circumference", .meterUnit(with: .centi), "cm"),
-        (.bodyFatPercentage, "body_fat_percentage", .percent(), "%"),
+        (.bodyFatPercentage, "body_fat_percentage", .percent(), "fraction"),
         (.leanBodyMass, "lean_body_mass", .gramUnit(with: .kilo), "kg"),
         (.dietaryEnergyConsumed, "dietary_energy", .kilocalorie(), "kcal"),
         (.dietaryProtein, "protein", .gram(), "g"),
@@ -41,15 +40,28 @@ struct JarvisHealthKitReader {
         var samples: [JarvisHealthSample] = []
         var read: [String] = []
         var unread: [String] = []
+        // Re-read the visible 30-day range: late Watch uploads and corrected totals must replace old days.
+        let recentStart = JarvisHealthSyncWindow.recentStart(now: now)
+        do {
+            samples += try await dailySteps(store: store, from: recentStart, to: now)
+            read.append("step_count")
+        } catch {
+            unread.append("step_count")
+        }
 
         for (identifier, name, unit, label) in Self.quantities {
             guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { continue }
             do {
+                let isBody = ["body_mass", "body_fat_percentage", "lean_body_mass"].contains(name)
+                let quantityWindow = isBody
+                    ? HKQuery.predicateForSamples(withStart: recentStart, end: now, options: []) : window
                 let descriptor = HKSampleQueryDescriptor(
-                    predicates: [.quantitySample(type: type, predicate: window)],
+                    predicates: [.quantitySample(type: type, predicate: quantityWindow)],
                     sortDescriptors: [SortDescriptor(\.startDate)], limit: 20_000
                 )
                 let results = try await descriptor.result(for: store)
+                // A truncated cumulative day must never replace its complete stored value.
+                guard results.count < 20_000 else { unread.append(name); continue }
                 samples += results.map {
                     JarvisHealthSample(
                         id: $0.uuid.uuidString, metric: name, unit: label, start: $0.startDate, end: $0.endDate,
@@ -81,12 +93,14 @@ struct JarvisHealthKitReader {
 
         var workouts: [JarvisHealthWorkoutSample] = []
         do {
+            let workoutWindow = HKQuery.predicateForSamples(withStart: recentStart, end: now, options: .strictStartDate)
             let descriptor = HKSampleQueryDescriptor(
-                predicates: [.workout(window)], sortDescriptors: [SortDescriptor(\.startDate)], limit: 2_000
+                predicates: [.workout(workoutWindow)], sortDescriptors: [SortDescriptor(\.startDate, order: .reverse)], limit: 2_000
             )
-            workouts = try await descriptor.result(for: store).map {
+            let results = try await descriptor.result(for: store)
+            workouts = results.map {
                 JarvisHealthWorkoutSample(
-                    id: $0.uuid.uuidString, activity: String(describing: $0.workoutActivityType),
+                    id: $0.uuid.uuidString, activity: Self.activityName($0.workoutActivityType),
                     start: $0.startDate, end: $0.endDate,
                     activeEnergyKcal: $0.statistics(for: HKQuantityType(.activeEnergyBurned))?
                         .sumQuantity()?.doubleValue(for: .kilocalorie()),
@@ -94,13 +108,65 @@ struct JarvisHealthKitReader {
                         .sumQuantity()?.doubleValue(for: .meter())
                 )
             }
-            read.append("workout")
+            if results.count < 2_000 { read.append("workout") } else { unread.append("workout") }
         } catch { unread.append("workout") }
 
         return JarvisHealthSyncBatch(
             samples: samples, sleep: sleep, workouts: workouts, readTypes: read,
-            deniedOrUnreadTypes: unread, windowStart: start, windowEnd: now
+            deniedOrUnreadTypes: unread, windowStart: min(start, recentStart), windowEnd: now
         )
+    }
+
+    /// HealthKit resolves overlapping iPhone/Watch sources. Never add per-source sample sums ourselves.
+    private func dailySteps(store: HKHealthStore, from start: Date, to end: Date) async throws -> [JarvisHealthSample] {
+        let type = HKQuantityType(.stepCount)
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: type,
+                quantitySamplePredicate: HKQuery.predicateForSamples(withStart: start, end: end, options: []),
+                options: .cumulativeSum,
+                anchorDate: start,
+                intervalComponents: DateComponents(calendar: JarvisHealthSyncWindow.calendar,
+                                                  timeZone: JarvisHealthSyncWindow.calendar.timeZone, day: 1)
+            )
+            query.initialResultsHandler = { _, collection, error in
+                if let error { continuation.resume(throwing: error); return }
+                guard let collection else {
+                    continuation.resume(throwing: JarvisTodayDataError.failed)
+                    return
+                }
+                var days: [JarvisHealthSample] = []
+                collection.enumerateStatistics(from: start, to: end) { statistic, _ in
+                    // Missing or denied readings are not zero-step days.
+                    guard let quantity = statistic.sumQuantity() else { return }
+                    days.append(JarvisHealthSample(
+                        id: "steps-\(Int(statistic.startDate.timeIntervalSince1970))",
+                        metric: "step_count", unit: "count", start: statistic.startDate,
+                        end: min(statistic.endDate, end), value: quantity.doubleValue(for: .count()),
+                        source: "Apple Health merged statistics"
+                    ))
+                }
+                continuation.resume(returning: days)
+            }
+            store.execute(query)
+        }
+    }
+
+    static func activityName(_ type: HKWorkoutActivityType) -> String {
+        switch type {
+        case .traditionalStrengthTraining: "traditional_strength_training"
+        case .functionalStrengthTraining: "functional_strength_training"
+        case .coreTraining: "core_training"
+        case .crossTraining: "cross_training"
+        case .highIntensityIntervalTraining: "high_intensity_interval_training"
+        case .running: "running"
+        case .walking: "walking"
+        case .cycling: "cycling"
+        case .swimming: "swimming"
+        case .hiking: "hiking"
+        case .yoga: "yoga"
+        default: "healthkit_\(type.rawValue)"
+        }
     }
 
     private static func stage(_ value: Int) -> String {
