@@ -300,7 +300,8 @@ struct JarvisFactoryArea: View {
     }
 
     private var showsSegmentRow: Bool {
-        previewState != .loading && client != nil && (board != nil || releaseView != nil)
+        previewState != .loading && client != nil &&
+            (board != nil || releaseView != nil || (contentError && !projects.isEmpty))
     }
 
     /// The full-width toggle above the search row, below the page's scrolling content.

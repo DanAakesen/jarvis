@@ -47,3 +47,6 @@ Apple excerpts consulted: [XCUIElement.isHittable](https://developer.apple.com/d
 and [HIG Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility).
 The former distinguishes existence from visibility above another element.
 Direct Apple Markdown fetches were unavailable.
+
+
+5 November recovery review: a failed initial board request keeps the bottom segment and project selector available when projects loaded successfully, allowing a switch to another project or Releases. Native run 42115728133 passed all 48 UI tests at 331702d4, then timed out during the standalone capture sweep; the recovery follow-up still needs native verification.
