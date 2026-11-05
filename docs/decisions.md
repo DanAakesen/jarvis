@@ -10957,3 +10957,11 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+## 6 November 2026 — Correct native accessibility-size overlap
+
+Insights run 42124893661 passed 50/50 native UI tests, but screenshots at accessibility
+XXXL exposed transparent-header overlap, clipped totals and crowded period labels.
+The shared header/controls and Usage layout now adapt at accessibility sizes. Chat
+has no callers of these components and is unchanged. Fresh native captures remain
+required; the previous test pass is not visual acceptance.

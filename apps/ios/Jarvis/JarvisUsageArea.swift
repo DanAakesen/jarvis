@@ -304,7 +304,8 @@ struct JarvisUsageArea: View {
 
     private func totalsGrid(_ totals: JarvisUsageTotals) -> some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 72), spacing: 8, alignment: .topLeading)],
+            columns: [GridItem(dynamicTypeSize.isAccessibilitySize ? .flexible() : .adaptive(minimum: 72),
+                               spacing: 8, alignment: .topLeading)],
             alignment: .leading,
             spacing: 8
         ) {
@@ -319,12 +320,12 @@ struct JarvisUsageArea: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(value)
                 .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.7)
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)

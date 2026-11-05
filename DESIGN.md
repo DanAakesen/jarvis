@@ -3263,3 +3263,10 @@ Usage's breakdown order: percentage then emphasized amount. Usage breakdown
 labels and values stack at accessibility sizes. The existing shared-page native
 checks now also capture Usage, Status and Proactive at the largest accessibility
 text size. Corrected native images remain pending.
+
+### Insights large-text screenshot correction (6 November 2026)
+
+At accessibility sizes, the shared pinned header uses native regular material so
+scrolling content does not collide with its title. Page and period choices scroll
+horizontally, and Usage totals become full-width rows with unrestricted wrapping.
+Normal text keeps the approved continuous shared segmented bar and grid.

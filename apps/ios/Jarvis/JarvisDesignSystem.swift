@@ -210,6 +210,8 @@ enum JarvisDesignTokens {
     static let notesGraphEdgeWidth: CGFloat = 1
     static let notesInlineSpacing: CGFloat = 4
     static let segmentedBarSpacing: CGFloat = 12
+    static let segmentedSelectionInset: CGFloat = 3
+    static let segmentedSelectionOpacity: Double = 0.08
     static let notesMetadataSpacing: CGFloat = 8
     static let notesChevronSize: CGFloat = 12
     static let notesTaskActionSize: CGFloat = 22

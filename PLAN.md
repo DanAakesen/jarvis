@@ -3801,3 +3801,8 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+Insights 084dcfc1 passed 50/50 native UI tests in run 42124893661. Normal EN/dark
+Usage, Status, Proactive and Notifications captures were inspected. Accessibility-size
+overlap and clipped totals prompted shared header/control and Usage layout fixes;
+combined native re-verification is pending.

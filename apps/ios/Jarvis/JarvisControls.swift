@@ -519,25 +519,47 @@ struct JarvisTabStrip<Tag: Hashable>: View {
     }
 }
 
-/// The long full-width segmented bar for a page's second row of tabs (Board / Needs Dan / Releases): every tab shares
-/// the row equally. Carousels of pills, such as the Notes folders, keep `JarvisTabStrip`.
+/// One full-width glass surface with equal-width segments. Individual segments have no separate glass chrome.
 struct JarvisSegmentedBar<Tag: Hashable>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let identifierPrefix: String
     let items: [JarvisTabItem<Tag>]
     @Binding var selection: Tag
 
+    @ViewBuilder
     var body: some View {
-        HStack(spacing: JarvisDesignTokens.segmentedBarSpacing) {
+        if dynamicTypeSize.isAccessibilitySize {
+            JarvisTabStrip(title: title, identifierPrefix: identifierPrefix,
+                           items: items, selection: $selection)
+        } else {
+            segments
+        }
+    }
+
+    private var segments: some View {
+        HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                JarvisLabelledButton(
-                    title: item.title,
-                    identifier: item.identifier ?? "\(identifierPrefix).\(index)",
-                    isFullWidth: true,
-                    isSelected: selection == item.tag
-                ) { selection = item.tag }
+                Button { selection = item.tag } label: {
+                    Text(item.title)
+                        .font(.subheadline.weight(selection == item.tag ? .semibold : .regular))
+                        .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
+                        .contentShape(Rectangle())
+                        .background {
+                            if selection == item.tag {
+                                Capsule().fill(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
+                                    .padding(JarvisDesignTokens.segmentedSelectionInset)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection == item.tag ? .isSelected : [])
+                .accessibilityIdentifier(item.identifier ?? "\(identifierPrefix).\(index)")
             }
         }
+        .jarvisGlassCapsule()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
     }
@@ -580,12 +602,27 @@ struct JarvisSearchField: View {
 
 /// A compact period control inside a hero, with one glass surface and accessible 44 pt targets.
 struct JarvisPeriodSelector<Tag: Hashable>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let identifierPrefix: String
     let items: [JarvisTabItem<Tag>]
     @Binding var selection: Tag
 
+    @ViewBuilder
     var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            ScrollView(.horizontal) {
+                segments.fixedSize(horizontal: true, vertical: false)
+                    .padding(.vertical, 2)
+            }
+            .scrollIndicators(.hidden)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            segments
+        }
+    }
+
+    private var segments: some View {
         HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Button { selection = item.tag } label: {
