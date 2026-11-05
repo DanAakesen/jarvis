@@ -147,10 +147,16 @@ final class ComponentGalleryUITests: XCTestCase {
     func testSharedPageOrderDarkDanish() { captureSharedPages(language: "da", theme: "dark") }
     func testSharedPageOrderLightDanish() { captureSharedPages(language: "da", theme: "light") }
 
-    private func captureSharedPages(language: String, theme: String) {
+    func testSharedPagesAtAccessibilityTextSize() {
+        captureSharedPages(language: "en", theme: "dark", largeText: true)
+    }
+
+    private func captureSharedPages(language: String, theme: String, largeText: Bool = false) {
         defer { app.terminate() }
         for destination in ["usage", "status", "proactive"] {
-            openPage(destination, language: language, theme: theme, launch: destination == "usage")
+            openPage(destination, language: language, theme: theme,
+                     extra: largeText ? ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] : [],
+                     launch: destination == "usage")
             let hero = app.descendants(matching: .any)["\(destination).hero"]
             XCTAssertTrue(hero.waitForExistence(timeout: 10), "\(destination) hero")
             attach(app.screenshot(), named: "P15-92-\(destination)-\(theme)-\(language)")
@@ -173,6 +179,10 @@ final class ComponentGalleryUITests: XCTestCase {
                 "phrase": ["x": phrase.frame.minX, "y": phrase.frame.minY, "width": phrase.frame.width, "height": phrase.frame.height],
                 "filter": ["x": filter.frame.minX, "y": filter.frame.minY, "width": filter.frame.width, "height": filter.frame.height],
             ]
+            if largeText {
+                app.swipeUp()
+                attach(app.screenshot(), named: "P15-\(destination)-accessibility-text")
+            }
             if let data = try? JSONSerialization.data(withJSONObject: geometry, options: [.sortedKeys, .prettyPrinted]),
                let json = String(data: data, encoding: .utf8) {
                 let bounds = XCTAttachment(string: json)

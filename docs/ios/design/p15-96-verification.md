@@ -71,3 +71,11 @@ restored exactly to main. Notifications keeps its page-specific grouping/filteri
 Chat source and shared orb appearance stay unchanged. The earlier statement that
 this change also suppresses Chat's Now bar for completed background tasks is
 superseded.
+
+## Final Insights board details
+
+Board/native comparison adds the missing Overview title to Proactive and restores
+Usage's breakdown order: percentage then emphasized amount. Usage breakdown
+labels and values stack at accessibility sizes. The existing shared-page native
+checks now also capture Usage, Status and Proactive at the largest accessibility
+text size. Corrected native images remain pending.

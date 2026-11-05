@@ -3254,3 +3254,11 @@ covered by sign-in. The row reserves readable state text, stacking it at large
 Dynamic Type; the test uses the existing Simulator navigation argument. Usage
 emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
 verification is pending; previous UI-test success is not visual acceptance.
+
+## Final Insights board details
+
+Board/native comparison adds the missing Overview title to Proactive and restores
+Usage's breakdown order: percentage then emphasized amount. Usage breakdown
+labels and values stack at accessibility sizes. The existing shared-page native
+checks now also capture Usage, Status and Proactive at the largest accessibility
+text size. Corrected native images remain pending.
