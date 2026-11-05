@@ -38,3 +38,20 @@ Apple guidance used: [Lists and tables](https://developer.apple.com/design/human
 and [Layout](https://developer.apple.com/design/human-interface-guidelines/layout).
 Folder chevrons navigate a hierarchy; Back retains the parent location. Shared
 controls provide touch targets and semantic labels.
+
+## Native retry findings, 5 November 2026
+
+Run 42100772453 attempt 2 compiled and ran 50 UI tests: 48 passed, 2 failed.
+New note lost the selected parent folder when presenting a Boolean-driven sheet;
+the test observed `Research` instead of `Work / Projects / Research`. Presentation
+now carries a folder snapshot with SwiftUI's item-driven sheet, and each creation
+sheet initializes its draft once so returning from the nested folder picker does
+not reset the choice. The existing test checks both the initial and confirmed paths.
+
+The graph failure's native AX dump (`0CCB4F77-2D20-4BA1-B46A-012C56AE77A3.txt`,
+screenshot artifact 13458686297) shows the Open button inherited the selection
+container's identifier. Explicit child containment preserves the button's own
+identity and action. The native assertion is retained. Fresh native validation is
+pending; no test-success or visual-acceptance claim is made for these corrections.
+Apple's `View.sheet(item:onDismiss:content:)` and `State.init(wrappedValue:)`
+documentation was read for sheet source-of-truth and per-instance state lifetime.

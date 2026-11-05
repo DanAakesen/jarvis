@@ -46,6 +46,7 @@ struct JarvisNotesGraphView: View {
                 }
                 .padding(JarvisPageHeaderMetrics.heroInset)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("notes.graph.selection")
             }
         }

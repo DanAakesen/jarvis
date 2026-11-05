@@ -135,7 +135,6 @@ private struct JarvisNoteFolderPickerContent: View {
 struct JarvisNewFolderSheet: View {
     let client: JarvisNotesClient
     let copy: JarvisNotesCopy
-    let initialFolder: String
     let onCreated: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -144,6 +143,13 @@ struct JarvisNewFolderSheet: View {
     @State private var saving = false
     @State private var errorMessage: String?
     @State private var retryUnavailable = false
+
+    init(client: JarvisNotesClient, copy: JarvisNotesCopy, initialFolder: String, onCreated: @escaping (String) -> Void) {
+        self.client = client
+        self.copy = copy
+        self.onCreated = onCreated
+        _parent = State(initialValue: initialFolder)
+    }
 
     private var path: String? {
         guard let value = JarvisNotesPresentation.newFolderPath(named: name, in: parent), value.utf16.count <= 171 else { return nil }
@@ -168,7 +174,6 @@ struct JarvisNewFolderSheet: View {
                     onConfirm: { Task { await create() } }, onClose: { dismiss() })
             }
         }
-        .onAppear { parent = initialFolder }
     }
 
     private func create() async {
@@ -197,7 +202,6 @@ struct JarvisNewFolderSheet: View {
 struct JarvisNewNoteSheet: View {
     let client: JarvisNotesClient
     let copy: JarvisNotesCopy
-    let initialFolder: String
     let onCreated: (String) async -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -208,6 +212,14 @@ struct JarvisNewNoteSheet: View {
     @State private var errorMessage: String?
     @State private var outcomeUnknown = false
     @State private var authorizationUnavailable = false
+
+    init(client: JarvisNotesClient, copy: JarvisNotesCopy, initialFolder: String, onCreated: @escaping (String) async -> Void) {
+        self.client = client
+        self.copy = copy
+        self.onCreated = onCreated
+        _folder = State(initialValue: initialFolder)
+    }
+
     var body: some View {
         NavigationStack {
             JarvisForm {
@@ -239,7 +251,6 @@ struct JarvisNewNoteSheet: View {
                 )
             }
         }
-        .onAppear { folder = initialFolder }
 
     }
 

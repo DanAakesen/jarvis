@@ -3784,3 +3784,9 @@ sustained performance acceptance or permission to resume #717/#741.
 | P15-81 | [#1577](https://github.com/DanAakesen/jarvis/issues/1577) | On-device cache and element-level loading on all pages | Repository reads on Home, Health, Notes, Factory, Status, Proactive, Settings and confirmations; backend ETag/304; write invalidation; tests in JarvisCore and backend. App-target edits not compiled or run on a device. | None | Complete |
 | P15-77 | [#1569](https://github.com/DanAakesen/jarvis/issues/1569) | Build 67 feedback fixes (all pages, composer, HealthKit, calendar) | Compact numbers, Factory counts and Offline root cause, transparent headers, shared loader and segmented bar, Home send and shared plus menu, calendar route and source, HealthKit read types and combined workouts. Not compiled or run on a device. | None | Complete |
 | P15-76 | [#1567](https://github.com/DanAakesen/jarvis/issues/1567) | Build 66 feedback fixes (all pages, notifications, notes backend) | Success notifications stopped and cleaned up, tolerant notes parsing, pull to refresh, plus beside tabs, shared period selector, lift name memory, folder lookup, half-height sheets, task detail, Home greeting with several sentences. Calendar data source, Tasks segmented filters and Health board sections remain. | None | Complete |
+
+## P15-93 native retry correction
+
+The Notes retry compiled and passed 48/50 UI tests. Corrected the selected-folder
+sheet snapshot and graph Open accessibility containment, preserving the failing
+assertions and adding path readback. Fresh native verification remains pending.
