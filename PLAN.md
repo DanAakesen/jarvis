@@ -3804,20 +3804,12 @@ passed. Native compilation and visual acceptance are pending. Release follows
 
 Settings first native pass: 49/49 selected UI tests passed on 4b823206. Screenshot review found truncated section labels and accessibility-size icon overlap; the final shared segmented bar and Settings symbol sizing await the next native pass. Shared prerequisite #1604 merged as c818a6b3; remaining delivery order is Notes, Home/Factory, Health, Insights, Settings, then backend readiness and TestFlight.
 
-## Suggested next UI polish (6 November 2026; proposals only)
+## Owner-selected polish and remaining proposals (6 November 2026)
 
-The owner requested suggestions before signing off for the night. These are
-follow-up ideas, not additions to the authorised board-alignment release:
+The owner authorised the shorter Home greeting and subtle success haptics with
+interruptible transitions for lift saves, task completion and note creation in this
+release. Notes and Home/Factory own those changes, with Reduce Motion support.
 
-- Shorten Home's greeting to the next event and most important action; keep steps
-  and workout details in their existing cards so more useful content is visible.
-- Unify approvals, failed tasks and decisions in one Needs you queue, explaining
-  what each action will unblock.
-- Use one restrained freshness vocabulary across Health, Usage and Status, with
-  consistent updated/syncing/partial-data presentation.
-- Preserve per-page period, folder, filter and scroll position across navigation.
-- Add subtle haptics and short, interruptible completion feedback to successful
-  lift saves, task completion and note creation; retain Reduce Motion support.
-
-Prioritise the shorter Home greeting in a future board revision. None of these
-proposals changes tonight's scope or authorises new product behavior.
+Remaining suggestions are proposals only: an actionable Needs you queue, consistent
+freshness language, remembered page selections, task Undo and evidence-backed Health
+comparisons. They do not expand this release's scope.
