@@ -3880,3 +3880,13 @@ Insights 084dcfc1 passed 50/50 native UI tests in run 42124893661. Normal EN/dar
 Usage, Status, Proactive and Notifications captures were inspected. Accessibility-size
 overlap and clipped totals prompted shared header/control and Usage layout fixes;
 combined native re-verification is pending.
+
+## Owner-selected polish and remaining proposals (6 November 2026)
+
+The owner authorised the shorter Home greeting and subtle success haptics with
+interruptible transitions for lift saves, task completion and note creation in this
+release. Notes and Home/Factory own those changes, with Reduce Motion support.
+
+Remaining suggestions are proposals only: an actionable Needs you queue, consistent
+freshness language, remembered page selections, task Undo and evidence-backed Health
+comparisons. They do not expand this release's scope.
