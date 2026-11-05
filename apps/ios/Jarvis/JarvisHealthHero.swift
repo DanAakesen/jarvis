@@ -324,27 +324,24 @@ struct JarvisHealthBarChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.notesInlineSpacing) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(values.headline(selected: selected).map(format) ?? "—")
-                            .font(.title2.weight(.semibold))
-                            .contentTransition(.numericText())
-                        Text(unit)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(caption)
+                (
+                    Text(values.headline(selected: selected).map(format) ?? "—")
+                        .font(.headline)
+                    + Text(" \(unit) · \(caption)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                        .foregroundColor(.secondary)
+                )
+                .fixedSize(horizontal: false, vertical: true)
+                .contentTransition(.numericText())
                 Spacer(minLength: 0)
                 if let target = values.target {
-                    Text("\(copy.text(.targetLabel)) \(format(target)) \(unit)")
+                    Text("\(copy.text(.targetLabel)) \(format(target))")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(JarvisDesignTokens.healthAccent)
                         .padding(.horizontal, JarvisDesignTokens.healthMenuSpacing + 2)
                         .padding(.vertical, 4)
                         .background(JarvisDesignTokens.healthAccent.opacity(0.15), in: Capsule())
+                        .accessibilityLabel("\(copy.text(.targetLabel)) \(format(target)) \(unit)")
                         .accessibilityIdentifier("\(identifier).target")
                 }
             }

@@ -30,3 +30,24 @@ HKStatistics/HKStatisticsOptions (merged statistics and cumulative sums),
 HKWorkoutActivityType, HKUnit.percent and Charts SectorMark. Official documentation/search
 excerpts were available; some direct Markdown fetches were blocked. The training
 donut uses native Charts SectorMark, and section/period actions reuse shared controls.
+
+## Native evidence review — 5 November 2026
+
+Downloaded artifact 13453284660 from run 42105556333 and compared the Training
+PNG 7F580EE3-ABCB-477A-A256-C64D28FF9C3B.png with the approved board at the native
+402 × 874-point viewport. Sample data differs. The native chart summary used an
+extra line, Training lacked the summary divider, and the hero was taller. The
+follow-up compacts the chart summary, restores the divider and reduces the shared
+chart/hero heights. Native system materials remain; continuous bottom segments
+come from #1606 and still need integrated verification.
+
+Both failure accessibility dumps contain a Log Button, but the section identifier
+`health.lastLifts` overwrote its `health.lifts.log` identifier. An explicit
+accessibility container now retains the child identities. The test preserves the
+exact Log-button and shared-sheet checks, using bounded short scrolling until Log
+is hittable below the pinned header. Fresh native results remain required.
+
+Apple excerpts consulted: [AccessibilityChildBehavior.contain](https://developer.apple.com/documentation/swiftui/accessibilitychildbehavior/contain),
+[XCUIElement.isHittable](https://developer.apple.com/documentation/xcuiautomation/xcuielement/ishittable)
+and [HIG Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility).
+Direct Apple Markdown fetches were unavailable.

@@ -491,6 +491,7 @@ struct JarvisHealthArea: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("health.lastLifts")
     }
 

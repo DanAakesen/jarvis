@@ -34,6 +34,7 @@ struct JarvisHealthRingsSection<Accessory: View>: View {
                         workoutLegend(.run, title: .run, tint: JarvisDesignTokens.healthAccentSecondary)
                     }
                 }
+                Divider()
                 HStack(alignment: .top, spacing: JarvisDesignTokens.healthSectionSpacing) {
                     trainingStat(stepCount.map { formatNumber($0, language: language) } ?? "—", title: .steps)
                     Divider()

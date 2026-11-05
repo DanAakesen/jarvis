@@ -7044,3 +7044,11 @@ vault lift notes. Native capture coverage is in the existing selected
 source merging and rendered/large-type layouts still require Apple execution.
 The native sync continues to use the existing owner-only route and unchanged
 schema. HealthKit body-fat fractions are labelled as such for normalization.
+
+## Native board evidence and follow-up checks (Refs #1601; 5 November 2026)
+
+Last lifts is an explicit accessibility container so its Log child keeps its identifier. The native test retains the Log-to-shared-sheet assertion and scrolls in bounded short steps. The first native comparison prompted a compact chart headline, Training divider and smaller shared hero/chart geometry.
+
+Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
+the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
+from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.

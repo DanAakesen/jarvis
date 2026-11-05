@@ -10936,3 +10936,11 @@ implementation; native visual and real-device HealthKit acceptance are pending.
 
 P15-95 also labels HealthKit body-fat values as fractions (0–1), allowing the
 existing normalizer to retain the correct percentage (0.20 becomes 20%).
+
+## Native board corrections supported by screenshots (Refs #1601; 5 November 2026)
+
+Last lifts is an explicit accessibility container so its Log child keeps its identifier. The native test retains the Log-to-shared-sheet assertion and scrolls in bounded short steps. The first native comparison prompted a compact chart headline, Training divider and smaller shared hero/chart geometry.
+
+Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
+the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
+from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.

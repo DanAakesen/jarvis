@@ -3234,8 +3234,8 @@ The Health carousel uses Training, Sleep and Nutrition with the same compact
 Today / 7 days / 30 days control in every hero header; 7 days is the initial
 selection. Training uses one workout donut, Gym/Run legend, steps and active-time
 figures, and a steps chart. All charts retain their average/day selection,
-Settings target and compact numbers. The shared hero height is reduced from
-500 to 440 pt; native screenshot validation is still required, including large
+Settings target and compact numbers. The shared chart summary and hero geometry
+are compacted after the first native comparison; fresh validation is required, including large
 Dynamic Type.
 
 Below the hero: Last lifts with the shared Log text action, Recent sessions,
