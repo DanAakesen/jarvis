@@ -159,12 +159,15 @@ struct JarvisNotesArea: View {
     @State private var editor: VaultNote?
     @State private var editorPresented = false
     @State private var openingNotePaths = Set<String>()
-    @State private var newNotePresented = false
+    private struct NewNoteDestination: Identifiable {
+        let id = UUID()
+        let folder: String
+    }
+    @State private var newNoteDestination: NewNoteDestination?
     @State private var newFolderPresented = false
     @State private var confirmedFolders = Set<String>()
     @State private var newTaskPresented = false
     @State private var openedTask: VaultTask?
-    @State private var newNoteFolder = ""
     @State private var pendingTaskIDs = Set<String>()
     @State private var noticePresented = false
 
@@ -211,14 +214,14 @@ struct JarvisNotesArea: View {
         .task(id: searchKey) {
             await search()
         }
-        .sheet(isPresented: $newNotePresented) {
+        .sheet(item: $newNoteDestination) { destination in
             if let client {
                 JarvisNewNoteSheet(
                     client: client,
                     copy: copy,
-                    initialFolder: newNoteFolder,
+                    initialFolder: destination.folder,
                     onCreated: { path in
-                        newNotePresented = false
+                        newNoteDestination = nil
                         refreshVersion += 1
                         await openNote(path: path)
                     }
@@ -296,8 +299,7 @@ struct JarvisNotesArea: View {
             isDisabled: client == nil || signInUnavailable
         ) {
             Button {
-                newNoteFolder = selectedFolder
-                newNotePresented = true
+                newNoteDestination = NewNoteDestination(folder: selectedFolder)
             } label: {
                 Label(copy.newNote, systemImage: "note.text")
             }

@@ -7117,3 +7117,11 @@ search and detail navigation in English/dark, Danish/light and accessibility tex
 No workflow or project change is needed. Scoped Core Settings/localization/design
 guards pass 53 tests in the pinned Swift container; syntax parsing passes. Native
 compilation, interaction results and screenshot comparison remain pending.
+
+## Notes native creation and graph corrections
+
+Notes retry 42100772453 passed 48/50 native tests. Keep the selected folder in the
+item-driven note-sheet destination; initialize creation drafts once per sheet.
+Do not reset them when a nested picker dismisses. The graph selection is an explicit
+accessibility container so its Open action retains its identifier. The existing
+native tests cover initial/confirmed nested paths and the real Open action.

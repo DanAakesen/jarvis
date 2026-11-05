@@ -3850,3 +3850,9 @@ editors or Chat. Added native section/search/detail cases to the existing select
 component suite. Scoped Core/localization/design guards: 53 passed; Swift parser
 passed. Native compilation and visual acceptance are pending. Release follows
 #1604, the page PRs, successful Notes backend deployment, then TestFlight.
+
+## P15-93 native retry correction
+
+The Notes retry compiled and passed 48/50 UI tests. Corrected the selected-folder
+sheet snapshot and graph Open accessibility containment, preserving the failing
+assertions and adding path readback. Fresh native verification remains pending.
