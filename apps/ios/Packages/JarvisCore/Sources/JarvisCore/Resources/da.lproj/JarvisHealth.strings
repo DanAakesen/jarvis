@@ -112,3 +112,7 @@
 "health.activeTime" = "Aktiv tid";
 "health.lastLifts" = "Seneste løft";
 "health.totalTarget" = "af %@";
+
+"health.nightsRecorded" = "Nætter registreret";
+"health.mealsLogged" = "Måltider logget";
+"health.dailyAverage" = "Dagligt gennemsnit";

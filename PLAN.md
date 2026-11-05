@@ -3793,3 +3793,12 @@ Last lifts is an explicit accessibility container so its Log child keeps its ide
 Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
 the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
 from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
+
+
+## Health period summaries and carousel evidence
+
+Sleep and Nutrition summaries now follow the selected period. Core regressions
+cover bounds, missing observations and duplicate daily records. Sleep uses stage
+proportions and real average/night-count summaries; bedtime/wake-up are absent
+from the current contract. Nutrition shows actual logged meals without a target.
+See `p15-95-verification.md` for screenshot provenance and pending native checks.

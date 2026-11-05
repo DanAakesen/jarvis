@@ -112,3 +112,7 @@
 "health.activeTime" = "Active time";
 "health.lastLifts" = "Last lifts";
 "health.totalTarget" = "of %@";
+
+"health.nightsRecorded" = "Nights recorded";
+"health.mealsLogged" = "Meals logged";
+"health.dailyAverage" = "Daily average";
