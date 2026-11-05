@@ -386,30 +386,35 @@ struct JarvisUsageArea: View {
         Button {
             selectedSliceID = selectedSliceID == slice.id ? nil : slice.id
         } label: {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(palette[index % palette.count])
-                    .frame(width: 10, height: 10)
-                    .accessibilityHidden(true)
-                Text(sliceTitle(slice))
-                    .font(.subheadline)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .layoutPriority(1)
-                Spacer(minLength: 8)
-                Text(valueText(slice.value, summary: summary))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Text("\(slice.share) %")
-                    .font(.subheadline.weight(.semibold))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .frame(minWidth: 44, alignment: .trailing)
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing))
+                : AnyLayout(HStackLayout(spacing: JarvisPageHeaderMetrics.actionSpacing))
+            layout {
+                HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
+                    Circle()
+                        .fill(palette[index % palette.count])
+                        .frame(width: 10, height: 10)
+                        .accessibilityHidden(true)
+                    Text(sliceTitle(slice))
+                        .font(.subheadline)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .truncationMode(.tail)
+                        .layoutPriority(1)
+                }
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
+                HStack(spacing: JarvisPageHeaderMetrics.spacing) {
+                    Text("\(slice.share) %")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                    Text(valueText(slice.value, summary: summary))
+                        .font(.subheadline.weight(.semibold))
+                        .monospacedDigit()
+                }
+                .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(.primary)
-            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+            .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.chatMinimumTapTarget, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

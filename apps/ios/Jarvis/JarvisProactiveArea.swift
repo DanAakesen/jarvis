@@ -313,7 +313,7 @@ struct JarvisProactiveArea: View {
     }
 
     private func nextCheckCard(_ loaded: JarvisProactiveStatus) -> some View {
-        JarvisPageHeroCard(title: "") {
+        JarvisPageHeroCard(title: text(.overview)) {
             JarvisPageStatGrid(
                 stats: [
                     JarvisPageStat(id: "open", value: openItems.count, label: text(.proactiveTabOpen), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent, formattedValue: itemsLoaded ? nil : "—"),
