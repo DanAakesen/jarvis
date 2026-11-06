@@ -88,3 +88,20 @@ none reads widgetFamily, so the unnecessary override is removed. Its intentional
 WidgetKit host background now has a named ambient-test exception that asserts the
 entire file is one DEBUG-and-simulator conditional with no alternate branch.
 This does not relax production page backgrounds. Native rendering is still pending.
+
+## First native review
+
+Run 42243718420 compiled the actual widget views. Its gallery test stopped on a
+1.17-point optical text offset within the shared symbol/title header, before its
+explicit screenshot. The retained gallery recording (source SHA256
+2afd6932dc64a7b8e9fb89336ea0d3627d9c58abd2143b05da1feb37ae80a7f6) was inspected at 27 seconds:
+all three English/dark titles, Workouts ring/equal 2×2 grid/week dots, Factory
+compact counts/both task rows/actions and Notes summary/next item fit. No widget
+production-layout correction was indicated by that image.
+
+The test now permits the observed optical title offset within 2 points of the top
+inset, while retaining complete 16-point content-inset checks at 0.5-point precision,
+left alignment, card dimensions and all metric/count/action bounds. Captures occur
+before assertions so failures retain the visible layout. Danish/light was not
+reached and remains required in the corrected native run. This is content-gallery
+inspection, not SpringBoard/tint/device acceptance.

@@ -60,3 +60,36 @@ exception; production-page checks remain unchanged. Native build found only the
 read-only widgetFamily environment injection in that gallery. The explicit medium
 views need no environment override, so it is removed. Fresh whole-candidate
 qualification remains required.
+
+## First rendered qualification and corrections
+
+Candidate 7acb5ec5 passed CI 42243718659, all 502 Core tests and CodeQL 42243718445.
+Native 42243718420 compiled and ran 68 UI tests: 64 passed and 4 failed. Historical
+point selection passed in both languages. The retained English/Danish plots show
+real sparse dates, independent scales and visible points; the header and individual
+glass dock controls have no full-width material backing.
+
+The Health navigation failures are real: the recording and hierarchy show only a
+Back button and blank destination. Detail's initial empty Group mounted neither
+content nor its load/navigation modifiers. A concrete ZStack now shows loading
+from the initial nil-data state, and retains recovery/empty/loaded states. The
+existing test must find the titled navigation bar and loaded Measurements section,
+then verify that Back preserves selected reading and dashboard position.
+
+Review also caught compact-number formatting rounding 72.4 kg to 72 kg. Body readings,
+axes, detail rows and accessible summaries now use localized decimal formatting
+(up to two fraction digits). Both language checks require the fixture's 72.4 kg
+reading with the correct decimal separator.
+
+The AX recording shows a full chart fits above the dock, but test swipes coast
+past the valid position and oscillate. Bounded slow drags now hold before release;
+complete-plot visibility assertions remain. This is a test-gesture correction,
+not a reduction of Dynamic Type or plotted information. Failure captures are
+retained before assertion. Fresh qualification is still required.
+
+Original evidence artifact 13520459974 exceeded the connector's 512 MiB limit.
+Artifact-only extraction 42255492646 retained images/index 13521619175
+(SHA256 38b37b862831f8fe058e2e6878cb21ca8c9e74b9ce4044310cc2a01ad929a9be)
+and motion 13522686301; extraction 42256149686 retained failed-test recordings
+13522028042 (SHA256 e4dc1fea90bf8102e12095d996b7ba56de700e2c9ab7cfad54ed028ec055594e).
+These jobs read existing evidence only and did not build or run a simulator.

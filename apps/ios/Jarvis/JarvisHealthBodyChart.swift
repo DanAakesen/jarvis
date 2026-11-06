@@ -76,7 +76,7 @@ struct JarvisHealthBodyChart: View {
     }
 
     private func value(_ reading: JarvisBodyTrend.Reading) -> some View {
-        Text("\(formatNumber(reading.value, language: language)) \(reading.unit)")
+        Text("\(formatBodyMeasurement(reading.value, language: language)) \(reading.unit)")
             .font(.title3.weight(.semibold)).monospacedDigit()
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -142,7 +142,7 @@ struct JarvisBodyTrendPlot: View {
                 AxisGridLine().foregroundStyle(Color.secondary.opacity(0.15))
                 AxisValueLabel {
                     if let value = axis.as(Double.self) {
-                        Text(formatNumber(value, language: language))
+                        Text(formatBodyMeasurement(value, language: language))
                     }
                 }
             }
@@ -178,7 +178,7 @@ struct JarvisBodyTrendPlot: View {
         guard let point = trend.readings.first(where: { $0.id == selectedID }) ?? trend.latest else {
             return copy.text(.empty)
         }
-        return "\(JarvisHealthLocalization.formattedDate(point.day, language: language)): \(formatNumber(point.value, language: language)) \(point.unit)"
+        return "\(JarvisHealthLocalization.formattedDate(point.day, language: language)): \(formatBodyMeasurement(point.value, language: language)) \(point.unit)"
     }
 
     private func shortDate(_ date: Date) -> String {
@@ -189,4 +189,9 @@ struct JarvisBodyTrendPlot: View {
         return formatter.string(from: date)
     }
 
+}
+
+/// Body readings need decimal precision; compact activity counts round below one thousand.
+func formatBodyMeasurement(_ value: Double, language: JarvisAppLanguage) -> String {
+    value.formatted(.number.locale(language.locale).precision(.fractionLength(0...2)).grouping(.never))
 }

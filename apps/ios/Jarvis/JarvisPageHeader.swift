@@ -397,13 +397,13 @@ private struct JarvisLoadingShimmer: ViewModifier {
                         let phase = timeline.date.timeIntervalSinceReferenceDate
                             .truncatingRemainder(dividingBy: 2.4) / 2.4
                         let travel = layoutDirection == .rightToLeft ? 1 - phase : phase
-                        LinearGradient(colors: [.clear, .primary.opacity(0.3), .clear],
+                        LinearGradient(colors: [.clear, .primary.opacity(0.14), .clear],
                                        startPoint: .leading, endPoint: .trailing)
                             .frame(width: geometry.size.width * 0.35)
                             .offset(x: geometry.size.width * (travel * 1.35 - 0.35))
                     }
                 }
-                .mask(content)
+                .clipShape(RoundedRectangle(cornerRadius: JarvisPageHeaderMetrics.rowLineSpacing))
                 .accessibilityHidden(true)
             }
         }

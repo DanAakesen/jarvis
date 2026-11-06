@@ -206,9 +206,10 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
             --screenshot-chat-fixture --screenshot-factory-fixture \
             --screenshot-factory-state=loading --screenshot-factory-language=en
+          sleep 2
           xcrun simctl io "$DEVICE_ID" recordVideo --codec=h264 --force "$SCREENSHOT_DIR/loading-shimmer.mp4" &
           LOADING_CAPTURE_PID=$!
-          sleep 4
+          sleep 7
           kill -INT "$LOADING_CAPTURE_PID"
           wait "$LOADING_CAPTURE_PID"
           xcrun simctl ui "$DEVICE_ID" appearance light
@@ -436,7 +437,18 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-screenshots-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/ios-screenshots/
+          path: |
+            ${{ runner.temp }}/ios-screenshots/
+            !${{ runner.temp }}/ios-screenshots/ui-test-attachments/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload native UI test evidence separately
+        if: always()
+        id: ui-evidence
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-ui-evidence-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ios-screenshots/ui-test-attachments/
           if-no-files-found: error
           retention-days: 14
       - name: Post or update screenshot comment
@@ -446,6 +458,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           UI_TEST_RESULT: ${{ steps.capture.outputs.result }}
           ARTIFACT_URL: ${{ steps.screenshots.outputs.artifact-url }}
+          UI_EVIDENCE_URL: ${{ steps.ui-evidence.outputs.artifact-url }}
           BOARD_URL: ${{ github.server_url }}/${{ github.repository }}/blob/${{ github.sha }}/docs/ios/design/surfaces.html
         run: |
           set -euo pipefail
@@ -462,7 +475,8 @@ jobs:
           the production Needs you sheet with Danish/English Approve and Decline controls.
           This Simulator-only calendar_change fixture is synthetic: decisions are disabled,
           no live calendar access or writes occur, and these images do not prove backend execution.
-          \`ui-test-attachments/\` includes retained XCUI screenshots and the export manifest.
+          [Native UI test evidence]($UI_EVIDENCE_URL) retains XCUI screenshots, failure recordings
+          and the export manifest separately so each review archive stays downloadable.
 
           Voice screenshots use Simulator-only synthetic sessions (no microphone, sign-in, or network).
           Compare \`voice-lock-listening-en.png\` beside \`voice-approved-board.png\`.

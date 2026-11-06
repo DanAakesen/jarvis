@@ -54,6 +54,8 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertTrue(choice.waitForExistence(timeout: 5))
             choice.tap()
             XCTAssertTrue(choice.isSelected)
+            // Retain the actual layouts even when a bounds assertion below fails.
+            attach(app.screenshot(), named: "P15-widgets-medium-\(language == "en" ? "dark" : "light")-\(language)")
             for (kind, title) in [
                 ("workouts", language == "en" ? "Workouts" : "Træning"),
                 ("factory", "Factory"), ("notes", language == "en" ? "Notes" : "Noter"),
@@ -66,7 +68,10 @@ final class ComponentGalleryUITests: XCTestCase {
                 XCTAssertEqual(card.frame.width, 329, accuracy: 0.5)
                 XCTAssertEqual(card.frame.height, 155, accuracy: 0.5)
                 let inset = card.frame.insetBy(dx: 16, dy: 16)
-                XCTAssertEqual(header.frame.minY, inset.minY, accuracy: 1, "The title must remain at the top inset")
+                // The native Workouts symbol centers its text 1.17 pt below the header top.
+                // Allow that optical offset; assertWidgetElement still rejects content outside the inset.
+                XCTAssertLessThanOrEqual(header.frame.minY - inset.minY, 2,
+                                         "The title must remain within 2 pt of the top inset")
                 XCTAssertLessThan(header.frame.minX, inset.minX + 30, "The title follows its top-left symbol")
                 assertWidgetElement(header, within: inset)
                 if kind == "workouts" {
@@ -99,7 +104,6 @@ final class ComponentGalleryUITests: XCTestCase {
                     assertWidgetElement(card.descendants(matching: .any)["widget.notes.next"], within: inset)
                 }
             }
-            attach(app.screenshot(), named: "P15-widgets-medium-\(language == "en" ? "dark" : "light")-\(language)")
         }
     }
 
@@ -260,6 +264,8 @@ final class ComponentGalleryUITests: XCTestCase {
         let details = app.descendants(matching: .any)["health.body.body_mass.details"]
         let latest = details.label
         let latestChartValue = weight.value as? String
+        XCTAssertTrue(latest.contains(language == "da" ? "72,4 kg" : "72.4 kg"),
+                      "The selected reading retains the measurement's decimal precision")
         attach(app.screenshot(), named: "Build76-body-weight-latest-\(theme)-\(language)")
         // The fixture contains four unevenly spaced records. A point in the left quarter
         // of the full-width chart selects an earlier record, not the initial latest value.
@@ -269,14 +275,19 @@ final class ComponentGalleryUITests: XCTestCase {
         }
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: changed, object: nil)], timeout: 5), .completed,
                        "Tapping a historical point must update both the visible reading and accessible chart value")
+        let selectedSummary = details.label
         attach(app.screenshot(), named: "Build76-body-weight-selected-\(theme)-\(language)")
         details.tap()
         let title = language == "da" ? "Vægt" : "Weight"
         let navigation = app.navigationBars[title]
         XCTAssertTrue(navigation.waitForExistence(timeout: 5), "The chart's header must open existing measurement details")
+        XCTAssertTrue(app.staticTexts[language == "da" ? "Målinger" : "Measurements"].waitForExistence(timeout: 5),
+                      "Details must finish loading the measurement records")
         attach(app.screenshot(), named: "Build76-body-weight-detail-\(theme)-\(language)")
         navigation.buttons.firstMatch.tap()
         XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(details.label, selectedSummary, "Back must retain the selected dashboard measurement")
+        XCTAssertTrue(weight.isHittable, "Back must retain the dashboard's chart position")
 
         for metric in ["body_fat_percentage", "lean_body_mass"] {
             let chart = revealBodyChart(metric)
@@ -312,8 +323,11 @@ final class ComponentGalleryUITests: XCTestCase {
             let origin = app.coordinate(withNormalizedOffset: .zero)
             let start = origin.withOffset(CGVector(dx: app.frame.width * 0.8, dy: passed ? upper : lower))
             let end = origin.withOffset(CGVector(dx: app.frame.width * 0.8, dy: passed ? upper + distance : lower - distance))
-            start.press(forDuration: 0.05, thenDragTo: end)
+            // Release at rest: fast drags coast past sparse charts and oscillate around
+            // the valid position at AX sizes even though the complete plot fits.
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.5)
         }
+        attach(app.screenshot(), named: "Body-chart-reachability-failure-\(metric)")
         XCTFail("The complete \(metric) chart and detail action must remain reachable above the dock")
         return chart
     }

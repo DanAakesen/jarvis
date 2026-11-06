@@ -106,3 +106,22 @@ CodeQL42236610687. Its app compiled in native run42236610739, but that run
 was cancelled when the owner added widget and Body trend corrections. No full
 native pass or visual acceptance is claimed for that superseded source. The
 combined candidate requires one fresh native run after all edits.
+
+## Rendered follow-up
+
+Native 42243718420 ran 64/68 successfully; see Body trend and widget records for the
+four failures. Inspected Health dark English/light Danish, scrolled Health at AX
+size and task source details. Header space is transparent and reserves the title;
+Search/Plus and the joined selector float without a full-width backing.
+Loading stills and the short motion sample confine the effect to text bars, but
+masking by a translucent placeholder attenuates its highlight twice. The correction
+clips to each bar's rounded geometry and uses a restrained 14% peak highlight.
+Hero/group surfaces remain static and all motion suppression remains.
+
+The initial movie captured startup and only 1.78 seconds. The existing capture now
+waits for launch and records 7 seconds, enough for multiple 2.4-second cycles. Native
+UI attachments are uploaded separately from the broad screenshot sweep to keep
+review archives below the connector download limit. No test, screenshot or failure
+recording is removed. Fresh native/motion inspection remains required. The candidate
+also includes the localized Copilot policy-unverified explanation in its existing
+runtime picker; it does not change Chat appearance.

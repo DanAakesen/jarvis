@@ -43,8 +43,10 @@ struct JarvisHealthDetailView: View {
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
 
     var body: some View {
-        Group {
-            if loading && data == nil {
+        ZStack {
+            // A concrete initial state owns the load task and navigation preferences.
+            // An empty Group never mounted them when a measurement was first opened.
+            if data == nil && failure == nil && !unavailable {
                 JarvisLoadingView(title: copy.text(.loading))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let failure {
@@ -222,7 +224,7 @@ struct JarvisHealthDetailView: View {
             Section(copy.text(.metricTrend)) {
                 if let selected {
                     healthValue(JarvisHealthLocalization.formattedDate(selected.day, language: language),
-                                "\(formatNumber(selected.value, language: language)) \(selected.unit)")
+                                "\(formatBodyMeasurement(selected.value, language: language)) \(selected.unit)")
                     JarvisBodyTrendPlot(trend: trend, period: period, title: copy.text(title),
                                         language: language, selectedID: $selectedMetricReading)
                     if trend.excludesOtherUnits {
@@ -236,7 +238,7 @@ struct JarvisHealthDetailView: View {
                        let value = row["value"]?.numberValue ?? row["avg_value"]?.numberValue {
                         healthValue(
                             JarvisHealthLocalization.formattedDate(date, language: language),
-                            "\(formatNumber(value, language: language)) \(row["unit"]?.stringValue ?? "")"
+                            "\(formatBodyMeasurement(value, language: language)) \(row["unit"]?.stringValue ?? "")"
                         )
                     }
                 }
