@@ -584,11 +584,51 @@ and its visuals are accepted. That single native run compiled and is still activ
 
 The release-state implementation requires successful qualification for the merged
 PR head, matching the final full tree. A manual CI run on main is not a substitute.
-After native 42258268925 and its rendered evidence pass, incorporate current main
-into #1621 and record the final scoped evidence. Prove the entire apps/ios tree is
-still `d3f0f3c1c7e71bd0ed0d97b0b7c11520255ad12a`, retain that native result, and
-cancel the automatically queued unchanged simulator before boot. Regular CI and
-CodeQL must qualify the resulting PR head before its guarded merge. The normal
-deployment then checks readiness and Current acceptance using that exact receipt.
-No additional simulator execution or TestFlight upload is authorized by a pending
-result alone; the owner's release authorization remains in effect after checks.
+Candidate dce71639 includes accepted main before its fresh qualification. Regular
+CI and CodeQL must qualify that full tree before guarded merge. The normal deploy
+then checks readiness and Current acceptance using the exact receipt. Reuse native
+evidence on main only after successful tests/visual review and app/test tree identity.
+
+## 18:13 UTC — Native 66/68 reviewed; final rendered corrections qualifying
+
+Native 42258268925 checked out f924537b132f4c2f729a2cf034bfb777bc189ab5 and ran
+68 tests: 66 passed and two failed. The camera-menu case left its enabled menu open
+after a correctly targeted tap; production camera code is unchanged since build 76.
+The widget case compared intrinsic combined AX text widths (24 vs 26.33 pt) instead
+of allocated columns. Both Health language/detail/Back cases and AX Health passed.
+
+Inspected actual English/dark and Danish/light body charts: latest 72.4 kg / 72,4 kg,
+8 October historical selection, populated measurement detail and preserved selection
+on Back. Sparse Body fat and single-point Lean mass use separate scales with real
+dates; the complete plot fits above the dock at accessibility text size. English
+medium widgets have aligned top-left headings, balanced columns and compact Factory
+content. Danish widget capture was not reached and is not accepted for this source.
+
+Task rows, generic-source suppression/full detail provenance, clear floating docks,
+and Settings/Usage/Status/Proactive normal/large-text headers were inspected. Both
+normal task languages exposed pinned headers covering task text. The correction
+renders each heading as an ordinary clear first row, preserving native swipe actions.
+Health-detail section titles now use the shared primary-color heading. Existing
+tests verify heading/row separation and allocated widget column bounds; both widget
+languages are captured before assertions. Camera tests wait for enabled+hittable,
+tap once, then require menu dismissal before the original sheet checks. No retry,
+arbitrary app delay or production camera change was added.
+
+The loading movie contains 193 frames / 6.398 seconds: sequential frame inspection
+shows per-element shine through more than two cycles, with static card surfaces.
+Reduced-motion fixture captures have identical content pixels. UI artifact
+13526639272 has SHA256 713f7c91721629f022b0e3f45e2e0262b24a4a9953c7c1b79d3def26d0e84eff;
+screenshot/motion artifact 13527575489 has SHA256
+5ec689af0d4465868e4ca2f908ee3edfe0655d94c3f2568a4f36ee34b2363bdf.
+Downloaded archives were hash-verified and selected PNGs, manifests, motion and all
+25 camera/gallery failure attachments retained under /tmp/p15-native-df56 and
+/tmp/p15-native-df56-motion. ZIP copies were removed to conserve disk; complete
+remote evidence remains. The scheme archive is 13526888382, SHA256
+d72f9cea0792ab2e2e3c38954231bccb7a75ad0233927d1dcae5a844a17814d5.
+
+Correction 7bb5fba2 and current accepted main merged into candidate
+`dce71639a0aee8232a07e149e563e48555ed10c8`, full tree
+`60493e67e0176d4dcd41eb6d533d031413bc5f70`, app/test tree
+`c45cc6b07fa0754bd100ca9b1db25e069b7daeff`. Exactly one new native 42268563484
+(job 128066843487), CI 42268563357 and CodeQL 42268563412 qualify these changed
+views/tests. The df56 failure is retained and is not reused as a release pass.

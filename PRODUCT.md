@@ -2453,6 +2453,8 @@ icon/title, readable content spacing and unclipped counters/details.
 Measurement details must visibly load, offer recovery when needed, and return to
 the selected dashboard reading and scroll position. Displayed body values retain
 decimal precision; compact activity-count rounding must not alter a measurement.
+Task-group headings must scroll without covering rows. Health-detail section titles
+use the same primary-color headline treatment as the dashboard.
 
 Copilot comparison availability requires demonstrated compatibility with Jarvis's
 complete trusted policy, including changing per-turn instructions. Configuration

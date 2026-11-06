@@ -1,71 +1,49 @@
 ## Current owner feedback — 6 November 2026, build 76
 
 Owner-reported passes: cold Voice/unified transcript, Home send/camera, task/reminder
-workflow and Health pull refresh. Compact task rows accepted. PR #1621 now combines
-per-element shimmer, generic-source suppression with full detail provenance,
+workflow and Health pull refresh. Compact task rows are accepted. PR #1621 combines
+per-element shimmer, useful task-source labels with full detail provenance,
 transparent protected headers/docks, shared clear-glass selectors, three medium
-widget layouts and real Body trend plots. Earlier candidates stopped before boot
-on compiler/fixture checks. Candidate 7acb5ec5 passed CI, 502 Core tests and CodeQL,
-but native 42243718420 finished 64/68. Actual recordings exposed blank Health
-measurement details, decimal rounding and test gesture/alignment assumptions.
-Corrected candidate df56bcaa passed CI 42258269045, all 502 Core tests and
-CodeQL 42258268841. Its single native qualification 42258268925 remains active. It retains e0d6821e’s app/test tree; the follow-up updates two
-workflow assertions for split evidence retention. The old Mac job was cancelled
-before simulator boot. Inspect bilingual/large-text charts, widgets, surfaces and loading
-motion before merge/upload. No duplicate simulator was used to retrieve evidence.
+widget layouts and real Body trend plots.
 
-Normal deployment 42248895975 and Current acceptance passed through #1623 / 11463376.
-Fixed stored-policy diagnostic 42252117950 failed both developer and system roles:
-the response did not satisfy policy precedence/update sentinels. Earlier matrices
-show ordinary user input succeeds but trusted-role response input is rejected.
-Copilot remains incompatible with the complete per-turn Jarvis policy. PR #1624 merged as 1fb0f908 after CI/CodeQL; normal deployment 42258321357
-is accepted, including all 15 Current conversation checks. It adds an exact target/model/effort/transport compatibility receipt, fail-closed new
-and existing test turns, and a specific web/iOS explanation. Only a full-policy,
-two-turn precedence/update canary can grant that receipt; never demote or omit
-Jarvis policy to enable the option. Normal runtime and UI release can proceed.
+Candidate df56bcaa passed CI, 502 Core tests and CodeQL; native 42258268925 ran
+66/68 successfully. Both Health language/detail/Back cases and accessibility Health
+passed, and actual charts, headers, task rows and full loading motion were reviewed.
+The two failures were camera-menu activation and an intrinsic widget text-width
+assertion. Review also exposed pinned task headings overlapping rows. Corrected
+candidate dce71639 keeps headings in normal list flow, uses primary-color Health
+detail headings, measures widget column geometry, captures both widget languages
+before assertions and synchronizes the single camera-menu test tap.
 
-## Managed policy request qualification — 6 November 2026
+The candidate includes accepted main before qualification. Its app/test tree is
+c45cc6b07fa0754bd100ca9b1db25e069b7daeff. One fresh native 42268563484, CI 42268563357
+and CodeQL 42268563412 qualify this combined correction. Inspect final bilingual
+widgets, task-group scrolling and Health-detail headings before merge/upload.
+Retain failed evidence; do not repeat an unchanged simulator to retrieve artifacts.
 
-The 30 October #1373 evidence records a real Responses 4xx after native binding,
-but its discarded exception cannot identify the rejected field. The old canary
-sent a plain string without per-turn instructions and could miss that failure.
-The fixed canary now shares the real managed request builder and complete normal
-chat instruction composition, sends only synthetic reference/user input, refuses
-tool requests and cleans up its own native conversation. Activation requires its
-`requestShape: managed_policy` success marker. Bounded stage/provider metadata is
-independently filtered into deployment diagnostics; raw content remains private.
+## Backend and runtime comparison status
 
-Initial local validation: 446 hosted tests (shared model loop, runtime, policy transport,
-provider diagnostics and chat entrypoint), 13 handoff tests, scoped Ruff and shell
-syntax. No iOS source changes. Deployment subsequently exposed and corrected the
-unsupported top-level instructions override; the complete-policy developer-input
-request still returns generic HTTP 400. See the current delivery record and active
-follow-up below. Keep the full-policy acceptance requirement while isolating that
-remaining constraint with fixed synthetic inputs; owner conversation parity remains
-unverified.
+PR #1624 merged as 1fb0f908 after CI/CodeQL. Normal deployment 42258321357 is accepted,
+including all 15 Current conversation checks. The gate binds exact target/model/
+effort/transport compatibility to a full-policy, two-turn precedence/update canary.
+Missing or stale evidence blocks both new and existing Copilot test turns with a
+specific web/iOS explanation. Never demote or omit Jarvis policy to enable the option.
 
-## Runtime testing on iOS and comparison activation — 6 November 2026
+Copilot itself remains incompatible: fixed diagnostics accepted ordinary user input,
+rejected trusted-role response input, and failed stored-policy precedence/replacement
+sentinels. No working comparison is claimed. The iOS Plus runtime-testing sheet and
+web availability/retry flow shipped in build 76; current user-only provider success
+does not qualify Jarvis operation. Normal Current and the UI release can proceed.
+See [the delivery record](docs/ios/design/p15-device-feedback-2026-11-06.md) for exact
+runs, retained evidence, previous failures and acceptance boundaries.
 
-Implemented locally: the shared native Plus menu opens an explicit isolated
-runtime-test sheet with typed availability/session binding, streaming, Stop reply,
-history review and durable blocked-session recovery. Web has in-place availability
-retry; missing server activation now has a specific reason. The manual comparison
-handoff has a default-off immutable definition refresh for changed Jarvis tools
-and identity; existing exact matches are reused and old versions preserved.
+## Completed owner workflow slice
 
-Verified locally: 80 backend runtime tests, 146 web tests, backend/web builds,
-scoped ESLint and 39 provisioning/handoff/deploy-plan checks; synthetic Chromium inspection at desktop/phone in both
-themes covers disabled choices, availability retry, create failure/retry, scoped
-streaming and return. Native compilation and all 68 Simulator tests subsequently
-passed in run 42202162500, with inspected runtime-selector and shared-page captures.
-Actual managed inference remains unverified: the original comparison activation
-failed before its canary; a corrected version-creation route now provisions, but
-the current full-policy response fails with HTTP 400. The screenshot reason identifies an
-absent verifier at the time of the report, not the cause of missing production
-configuration. Normal backend/hosted-agent deployment and original conversation
-acceptance passed. Build 76 has uploaded with the verified native changes. Next:
-isolate the remaining response constraint and verify the comparison. Do not
-claim live Copilot success from local fixtures or a selectable option alone.
+Build 76 uploaded from ab464314 at 12:14:34 UTC / 13:14:34 Copenhagen and the owner
+confirmed it is available. It includes unified typed/voice history, cold Voice
+readiness, Home send/camera handoff, Health pull refresh, shared tool schema/error
+hints, high-priority vault task/reminder timing and approval-gated own-code bug or
+feature proposals. These remain implemented; new device feedback is the active work.
 
 ## P15-78 — retire Daily feeds, rename Daily to Health, iPhone Health sync (#1571)
 

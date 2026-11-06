@@ -8775,7 +8775,10 @@ and device checks remain the source for host margins/tinting.
 Measurement details now mount a concrete initial loading container so their task
 and navigation preferences exist before data arrives. Local chart selection and
 scroll state survive the records push/pop; body-specific decimal formatting is
-shared by plot labels, accessible summaries and records.
+shared by plot labels, accessible summaries and records. Task group headings are
+ordinary clear first rows in native List sections, avoiding pinned-header overlap
+while retaining per-task swipe completion. Health-detail headings reuse the shared
+section component; no query, persistence or navigation boundary changes.
 
 ### Copilot policy compatibility receipt (6 November)
 

@@ -11323,3 +11323,14 @@ full-policy precedence/replacement turns; discovery and execution both enforce i
 Give web/iOS a specific explanation while Current remains usable. This is a
 reviewed correction direction; deployment and live verification are recorded
 separately and must not be inferred from local tests.
+
+## 6 November 2026 — Rendered task headings and native failure boundaries
+
+The df56bcaa images show sticky plain-List task-group headers covering rows in both
+languages. Keep each heading as a clear first row in its section, preserving native
+swipe actions. Reuse primary-color section headings throughout Health details.
+These are actual rendering corrections, separate from test-only widget AX text
+width and camera-menu synchronization assumptions. Do not add camera delays or
+retry taps without a confirmed application defect. Retain both widget languages
+before assertions and every failed attempt's evidence. Candidate dce71639 includes
+accepted main and needs its own exact CI/native qualification before release.

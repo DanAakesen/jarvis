@@ -3463,7 +3463,8 @@ Each metric uses its actual date spacing and independent labelled scale; sparse
 series show recorded points, including a single reading, and missing days are not
 zeroes. Point inspection updates the value/date; the metric heading opens records.
 The 30-day window remains independent of the hero period. Accessibility text scales
-the chart and reduces date-label density. Native evidence is pending.
+the chart and reduces date-label density. Both normal languages and AX plots were
+inspected in df56bcaa; detail selection and Back checks passed.
 
 The later screenshot supersedes the quiet material selector rail: joined choices
 use one content-bearing clear-glass surface like Search, with a moving tonal
@@ -3473,11 +3474,16 @@ Workouts balances a 2×2 metric grid beside its ring; Factory compacts counters 
 rows within existing 16 pt insets. Native content captures do not establish WidgetKit
 Home Screen tint/host rendering.
 
-Rendered follow-up: English/dark widget content fits with the shared top-left
-headings and balanced grid; Danish/light still requires its next capture. Sparse
-body charts and transparent Health header/dock were inspected. Decimal readings
-now retain up to two fraction digits, and detail has a concrete initial loading
-state. Loading highlights clip to each bar's opaque geometry at a restrained 14%
-peak instead of being attenuated by the translucent placeholder twice. Corrected
-rendering and motion remain pending native df56bcaa qualification in 42258268925.
-General CI, all 502 Core tests and CodeQL passed for this candidate.
+Rendered follow-up: df56bcaa English/dark widget content fits with shared top-left
+headings and balanced columns. The test's width failure compared intrinsic text
+unions; checks now use column origins/spans and bounds. Both languages are captured
+before assertions so Danish evidence is retained even after a failure. Danish
+widget rendering remains unreviewed for df56bcaa.
+
+Actual EN/DA charts retain decimals, sparse dates, single points and usable details;
+Back retains selection. Health detail now adopts the shared primary-color headings.
+Task-group headers in a plain List were pinning over scrolling tasks: render them
+as ordinary clear first rows within their native sections, preserving swipe actions.
+The 6.398-second loading recording shows per-bar shine and static card surfaces;
+reduced-motion fixture pixels are identical. These subsequent heading/test changes
+qualify in dce71639 / native 42268563484; do not claim acceptance before fresh review.

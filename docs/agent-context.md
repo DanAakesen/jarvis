@@ -7254,16 +7254,21 @@ can hide the intentionally nonblocking UI-test result. Gallery widget evidence i
 actual SwiftUI content, not SpringBoard/tint acceptance. Default gh auth works;
 the expired private config/device code must not be reused.
 
-Native 7acb finished 64/68; its actual recordings distinguish blank measurement
-detail from test-only widget optical offset and fast-drag overshoot. Corrected
-df56bcaa passed CI 42258269045 (502 Core tests) and CodeQL 42258268841; native
-42258268925 is the single active qualification. It retains e0d6821e’s app/test
-tree; the older native job was cancelled before simulator boot after two workflow
-archive assertions needed updating. The original
-archive exceeded the 512 MiB connector limit. Artifact-only extraction reused its
-captures without a build/simulator; future native evidence uploads separately from
-the broad screenshot sweep. Keep raw failure records and their hashes. Do not
-rerun unchanged suites merely to download artifacts.
+Native 7acb finished 64/68; df56bcaa finished 66/68 after actual recording-guided
+corrections. Its Health EN/DA detail/Back and AX cases passed. Camera-menu activation
+and an intrinsic widget text-width comparison failed. Actual task captures also
+exposed pinned headings overlapping rows. Candidate dce71639 includes accepted
+main, flow/header corrections and precise existing-test synchronization/geometry;
+app/test tree c45cc6b07fa0754bd100ca9b1db25e069b7daeff. Native 42268563484, CI 42268563357
+and CodeQL 42268563412 qualify it once. Review both widget languages and changed
+heading/scroll states before accepting the source.
+
+The original archive exceeded the connector's 512 MiB limit. Artifact-only
+extraction reused it without build/simulator; UI evidence now uploads separately.
+Retain failure records/hashes and avoid reruns for artifact retrieval. Exact-tree
+release qualification must bind the final merged PR head; manual main CI is not a
+substitute. Include current main before qualification. After a successful native
+run, cancel any automatic main simulator only after proving app/test tree identity.
 
 Copilot receipt qualification requires exact full-policy output on two changing
 sentinel turns, including conflicting user input. Never stamp receipt configuration
