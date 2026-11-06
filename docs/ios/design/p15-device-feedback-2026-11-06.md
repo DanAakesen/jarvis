@@ -73,9 +73,24 @@ corrects only that request and its diagnostic label, retaining initial creation,
 ownership/readback checks and uncertain-write recovery. Candidate 43395466 passed
 25 focused tests, scoped lint/compilation, CI 42217710063 and CodeQL 42217709998.
 It merged as 67f02a58 with an identical source tree and unchanged app/test tree.
-Normal Deploy 42219180536 and explicit activation 42219195236 are in progress. The API
+Normal Deploy 42219180536 later failed during registry authentication; explicit
+activation 42219195236 is still in progress. The API
 contract establishes the bug but does not retrospectively identify the operation
 behind the earlier opaque error. Live activation remains unverified.
+
+In normal Deploy 42219180536, backend job 127902277829 successfully built and
+pushed the image at 13:03:14 UTC. Its next `az acr manifest show-metadata` command
+failed at 13:03:18 with the generic AAD/admin-credentials authentication error.
+No Container Apps update or Copilot mutation occurred. The already queued manual
+run has a fresh OIDC login, reuses successful infrastructure, and retries the
+image build/read stage; no separate retry was dispatched.
+
+Azure CLI's registry helper requests a separate audience token and hides its
+underlying warning under `--only-show-errors`. A stale federated assertion after
+the long build/queue is plausible, but the generic error does not prove expiry.
+A bounded workflow correction is being prepared: refresh the same pinned OIDC
+login after each backend/agent build and before digest lookup. It adds no role,
+password/admin fallback or write-retry loop.
 
 ## Release authorization
 
