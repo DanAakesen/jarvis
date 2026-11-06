@@ -7034,6 +7034,18 @@ XCUITest can go idle. Normal launches start on Home; fixture and screenshot runs
 `ios-ci.yml` lists `-only-testing:JarvisUITests/TodayUITests`. Not run on this Linux runner.
 
 
+## Notes native creation and graph corrections
+
+Notes retry 42100772453 passed 48/50 native tests. Keep the selected folder in the
+item-driven note-sheet destination; initialize creation drafts once per sheet.
+Do not reset them when a nested picker dismisses. The graph selection is an explicit
+accessibility container so its Open action retains its identifier. The existing
+native tests cover initial/confirmed nested paths and the real Open action.
+
+## Native board evidence and follow-up checks (Refs #1600; 5 November 2026)
+
+Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
+
 ## Health board/source checks (P15-95 / #1601)
 
 Use `swift test` in `apps/ios/Packages/JarvisCore`, plus backend Vitest
@@ -7044,6 +7056,23 @@ vault lift notes. Native capture coverage is in the existing selected
 source merging and rendered/large-type layouts still require Apple execution.
 The native sync continues to use the existing owner-only route and unchanged
 schema. HealthKit body-fat fractions are labelled as such for normalization.
+
+## Native board evidence and follow-up checks (Refs #1601; 5 November 2026)
+
+Last lifts is an explicit accessibility container so its Log child keeps its identifier. The native test retains the Log-to-shared-sheet assertion and scrolls in bounded short steps. The first native comparison prompted a compact chart headline, Training divider and smaller shared hero/chart geometry.
+
+Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
+the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
+from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
+
+
+## Health summary regression checks
+
+Sleep and Nutrition summaries now follow the selected period. Core regressions
+cover bounds, missing observations and duplicate daily records. Sleep uses stage
+proportions and real average/night-count summaries; bedtime/wake-up are absent
+from the current contract. Nutrition shows actual logged meals without a target.
+See `p15-95-verification.md` for screenshot provenance and pending native checks.
 
 ## Native insight validation (P15-96; 5 November 2026)
 
@@ -7059,35 +7088,6 @@ Do not restore a mandatory `dailyToolUsage` field: inspect the current
 `UsageReport` TypeScript contract and `/usage` response before changing decoding.
 A browser-rendered reference is not evidence of native visual correctness.
 
-## Native board evidence and follow-up checks (Refs #1600; 5 November 2026)
-
-Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
-
-## Native board evidence and follow-up checks (Refs #1601; 5 November 2026)
-
-Last lifts is an explicit accessibility container so its Log child keeps its identifier. The native test retains the Log-to-shared-sheet assertion and scrolls in bounded short steps. The first native comparison prompted a compact chart headline, Training divider and smaller shared hero/chart geometry.
-
-Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
-the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
-from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
-
-
-## Native shared-heading verification
-
-Native Workspaces screenshots show List section headings dimmed twice by the
-inherited foreground style. The shared component now uses explicit semantic
-`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
-head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
-pending. No additional workflow/project change or release action is included.
-
-## Health summary regression checks
-
-Sleep and Nutrition summaries now follow the selected period. Core regressions
-cover bounds, missing observations and duplicate daily records. Sleep uses stage
-proportions and real average/night-count summaries; bedtime/wake-up are absent
-from the current contract. Nutrition shows actual logged meals without a target.
-See `p15-95-verification.md` for screenshot provenance and pending native checks.
-
 
 ## Native Insights image evidence
 
@@ -7097,18 +7097,15 @@ Dynamic Type; the test uses the existing Simulator navigation argument. Usage
 emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
 verification is pending; previous UI-test success is not visual acceptance.
 
+## Native shared-heading verification
 
-## P15 public-network continuation
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.
 
-The owner requested all non-Chat pages follow the board, with consistent spacing
-and useful section headings; Chat must remain unchanged. Settings/Voice review
-is now in scope but unfinished. The owner subsequently authorised TestFlight
-after verification, targeting 6 November 2026 at 06:00 Europe/Copenhagen. Notes
-requires its backend deployment before client release; #1604 remains first in
-the merge order. Nothing has been merged/deployed/uploaded by this continuation.
-A new task must use the republished environment because the running task blocks
-api.github.com. Exact checkpoint, active runs and remaining work are recorded
-in `docs/ios/design/p15-resume.md`; do not launch duplicate simulator runs.
+Health hero accessibility uses the existing page indicator as an adjustable control; native swipe assertions remain unchanged. The final follow-up also removes the explicit page animation under Reduce Motion. This does not establish live VoiceOver or HealthKit permission acceptance.
 
 ## Settings board follow-up verification
 
@@ -7118,14 +7115,20 @@ No workflow or project change is needed. Scoped Core Settings/localization/desig
 guards pass 53 tests in the pinned Swift container; syntax parsing passes. Native
 compilation, interaction results and screenshot comparison remain pending.
 
-## Notes native creation and graph corrections
-
-Notes retry 42100772453 passed 48/50 native tests. Keep the selected folder in the
-item-driven note-sheet destination; initialize creation drafts once per sheet.
-Do not reset them when a nested picker dismisses. The graph selection is an explicit
-accessibility container so its Open action retains its identifier. The existing
-native tests cover initial/confirmed nested paths and the real Open action.
-
 Settings run 42121264726 compiled and passed 49/49 selected native tests. Review screenshots as well as assertions: its captures exposed normal-size tab truncation and large-text symbol overlap. The follow-up retains 44-point segment targets and uses scrolling above default text size. Artifact 13461059102 preserves the evidence; corrected captures remain required.
 
-Health hero accessibility uses the existing page indicator as an adjustable control; native swipe assertions remain unchanged. The final follow-up also removes the explicit page animation under Reduce Motion. This does not establish live VoiceOver or HealthKit permission acceptance.
+## P15 release continuation — 6 November 2026, 01:12 UTC
+
+Use `docs/ios/design/p15-resume.md` and `p15-integration-verification.md` for the
+current state; they supersede the historical pending/native/setup notes above.
+Shared, Notes, Home/Factory, Health and Insights are merged in order. The required
+Notes backend deploy passed readiness and live acceptance. Settings is the final
+owner PR; its next automatic native run is the only intended combined run. Never
+merge #1609. Final task-test setup, chart labels and native header treatment require
+that run before Settings merge and the already authorised TestFlight upload.
+
+Refreshed GitHub access works with `env -u GH_TOKEN GH_CONFIG_DIR=/tmp/p15-gh-auth`.
+The injected GH_TOKEN is stale; never print it. The Linux Core job alone is pinned
+to ubuntu-24.04 for the existing Swift setup action; fresh CI passed. Local worktrees
+use /tmp/p15-workspace because the original volume is full. Do not build Docker
+locally. Cancel redundant native runs by exact head, preserving the Settings run.

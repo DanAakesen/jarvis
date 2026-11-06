@@ -1,11 +1,12 @@
 # P15 continuation and release checkpoint
 
-Updated 6 November 2026, 00:35 UTC. Read AGENTS.md and
-`p15-integration-verification.md`. The original checkpoint was `ab346d91`.
+Updated 6 November 2026, 01:12 UTC. Read AGENTS.md and
+[p15-integration-verification.md](p15-integration-verification.md).
+Original checkpoint: `ab346d91` on `codex/p15-board-integration`.
 
 The owner authorised the non-Chat consistency pass, merges, required Notes backend
 and TestFlight for **6 November 06:00 Europe/Copenhagen = 05:00 UTC**. Work directly,
-without subagents or duplicate simulator runs. The owner is sleeping. New explicit
+without subagents or duplicate simulator runs. The owner is sleeping. Explicit
 additions are the shorter Home greeting and subtle haptics/interruptible feedback
 for confirmed lift saves, task completion and note creation. Other suggestions
 remain proposals. ChatModel, ChatScreen and shared orb source remain unchanged.
@@ -15,62 +16,62 @@ remain proposals. ChatModel, ChatScreen and shared orb source remain unchanged.
 The recorded squash order is #1604 → #1605 → #1606 → #1607 → #1608 → #1610.
 **Never merge #1609**; it is combined validation only.
 
-- Shared #1604 merged as `c818a6b3`.
-- Notes #1605 merged as `70dfe424`, after CI 42135284949 passed, including 476 Core
-  tests. Deployment 42136945743 applied the backend and passed deterministic runtime
-  readiness (jobs 127627768044 / 127630252947). Live conversation acceptance is pending.
-- Home/Factory #1606 merged as `1bb81a44`, after CI 42137020863 passed, including
-  477 Core tests. Main is currently this commit.
-- Health #1607 is published at `9c7daae4`, reconciled with main. CI 42137475088 has
-  passed 487 Core tests; other selected checks remain active.
-- Insights #1608 and Settings #1610 still need reconciliation, publication and CI,
-  then merge in that order. Local Settings head `98cc6179` adds verification docs.
-- No TestFlight workflow has been dispatched. Notes backend readiness and final
-  native visual acceptance precede the upload.
+| Delivery | Merged commit | General CI / Core tests |
+| --- | --- | --- |
+| Shared #1604 | c818a6b3 | Accepted prerequisite |
+| Notes #1605 | 70dfe424 | 42135284949 / 476 passed |
+| Home/Factory #1606 | 1bb81a44 | 42137020863 / 477 passed |
+| Health #1607 | 4ccdad38 | 42137475088 / 487 passed |
+| Insights #1608 | 2b865706 | 42138510164 / 493 passed |
+| Settings #1610 | Not merged | Final corrections prepared on top of all prerequisites |
 
-## Final native evidence in progress
+Main is `2b865706`. Notes backend deployment **42136945743 succeeded**, including
+apply (127627768044), deterministic readiness (127630252947) and live conversation
+acceptance (127630421938). No TestFlight workflow has been dispatched.
 
-Combined native run **42134678739**, job **127619694894**, uses source **7aa08ec6**.
-It has compiled and is running UI/capture checks. Its entire `apps/ios` tree is
-**418a4878b80d8aff940b6d7119f99191f369f590**. Do not push integration again until
-this evidence is retained: the PR synchronize event would cancel the active run.
-Local integration differs only in documentation and the necessary Linux runner pin.
+## Native evidence and next run
 
-The prior combined source 4ea30d09 passed 61/61 native tests in 42129251285 and
-493/493 Core tests in general CI 42129251491. Corrected Settings captures in artifact
-13465195628 were inspected in English/dark, Danish/light and accessibility XXXL,
-including sections and search detail. The new run adds the shorter Home greeting,
-success feedback and task recovery, sparse monthly Health labels, lower Health
-captures and shared/Insights accessibility fixes. The older pass is not proof of
-those additions. Existing page evidence and limitations are in the verification file.
+Combined run **42134678739**, job **127619694894**, at `7aa08ec6` compiled and
+passed **61/62 native tests**. The new task test selected Tasks due while looking
+for today's fixture tasks. It now expands Today and retains both completion,
+removal and continued-usability assertions. Lift capture now explicitly selects
+dark appearance to match its attachment name.
 
-GitHub moved ubuntu-latest to Ubuntu 26.04, unsupported by the pinned Swift action.
-Notes pins only the Linux Core job to the previously passing ubuntu-24.04 image.
-This necessary compatibility exception was announced under the existing direct
-release authorisation. No checks, Mac execution, project or signing behavior changed.
-Fresh Notes/Home CI passed. The setup failures are not test passes.
+Artifact **13468046343** was inspected for the shorter Home greeting in EN/dark
+and DA/light, successful lift save, Health monthly/lower sections, Insights AX and
+Settings AX. Monthly edge labels still truncated and normal-size scrolled content
+crossed the pinned title. Final corrections anchor monthly end labels inwards,
+retain intrinsic date width and enable native soft scroll-edge treatment.
 
-## Execution and finishing
+Publish these corrections once through Settings #1610, preserving its automatic
+native run as the sole final combined verification. Do not run integration in
+parallel. Inspect corrected chart boundaries, scrolled headers and task-success
+results before merging Settings. The prior 4ea30d09 pass (61/61, 42129251285)
+establishes corrected Settings geometry, not the newer success feedback.
 
-Live worktrees are `/workspace/jarvis` and `/workspace/jarvis-{notes,factory,health,
+## Execution and release
+
+Worktrees are `/workspace/jarvis` and `/workspace/jarvis-{notes,factory,health,
 insights,settings}`, symlinked to `/tmp/p15-workspace`. The original volume is full;
-backups remain as `*-before-scratch`. Do not start local Docker builds. Artifact ZIPs
-and selected native PNGs are under `/tmp/p15-*`; avoid extracting large recordings
-without a concrete need. `/tmp/p15-release-evidence.json` retains checkpoints.
+backups remain as `*-before-scratch`. Do not start local Docker builds. Retained
+artifacts and selected native PNGs are under `/tmp/p15-*`.
 
 GitHub CLI: `env -u GH_TOKEN GH_CONFIG_DIR=/tmp/p15-gh-auth gh ...`.
-Git network calls use that environment plus `-c credential.helper=` and
-`-c credential.helper='!gh auth git-credential'`. Push now works; never print tokens.
-The old `gh pr edit` fails on Projects classic; use REST PATCH with a JSON body file.
-Connected GitHub tools retrieve completed job logs and artifact download references.
+Git network calls also use `-c credential.helper=` and
+`-c credential.helper='!gh auth git-credential'`. Never print credentials.
+Use REST PATCH with a JSON body file for PR metadata; this CLI's `pr edit` fails
+on Projects classic. Connected GitHub tools retrieve completed logs and artifacts.
 
-Each PR push and main merge starts an automatic native workflow. Cancel redundant
-ones by exact branch/head, preserving combined run 42134678739. The local helper
-`/tmp/p15_cancel_redundant_native.py BRANCH HEAD` handles delayed events and force
-cancellation if normal cancellation stalls. Do not dispatch another simulator run.
+PR pushes and main merges start automatic native workflows. Cancel redundant ones
+by exact branch/head, preserving the intended Settings run. Local helper:
+`/tmp/p15_cancel_redundant_native.py BRANCH HEAD`. Do not dispatch duplicate runs.
+The Linux Core job is pinned to ubuntu-24.04 because ubuntu-latest moved to 26.04,
+unsupported by the existing Swift action. This necessary compatibility exception
+was announced under the release authorisation; no checks, Mac execution, project,
+signing or TestFlight workflow changed. Fresh delivery CI passed.
 
-Finish the current screenshots and assertions, merge remaining owners in order,
-and compare the final whole app/test tree with the verified integration. Copy final
-resume/verification records into the last delivery PR. Confirm Notes deployment,
-then dispatch unchanged `ios-testflight.yml` on main with `branch=main`. Track actual
-upload/build number separately from Apple processing and physical-device acceptance.
+After accepted native evidence and Settings CI, merge #1610 last. Compare the whole
+`apps/ios` tree on main with the verified Settings source, check protected Chat/orb
+and project/signing files, then dispatch unchanged `ios-testflight.yml` on main with
+`branch=main`. Track upload/build number separately from Apple processing. Close
+#1609 without merging once validation is complete. Record the final evidence.

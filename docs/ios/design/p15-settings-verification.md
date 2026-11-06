@@ -42,3 +42,9 @@ text uses the scrolling strip. Row symbols stay at the shared size while labels 
 values stack and wrap. Search-to-detail and all section navigation assertions pass.
 The new shared accessibility header refinement is included in the subsequent full
 run; existing Settings screen source is unchanged.
+
+Combined 7aa08ec6 (42134678739) passed all Settings cases and all 27 component
+cases. Its overall result was 61/62 because the new Home completion test selected
+the wrong task group. The Settings AX General capture was inspected with the
+shared accessibility header; label and symbol layout remains readable. The final
+normal-size native scroll-edge correction joins one new combined Settings run.

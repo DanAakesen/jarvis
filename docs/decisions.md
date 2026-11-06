@@ -10920,18 +10920,6 @@ had captured images but skipped their upload when it reached the job timeout.
 Keep the existing runner, test selection and timeout; this change preserves
 available evidence and does not turn failing tests into successful tests.
 
-## 5 November 2026 — Home and Factory follow the merged board (P15-94 / #1600)
-
-Keep Factory's Needs Dan tasks in Board while removing its separate tab. Board
-and Releases share one glass segmented surface. Preserve default collapsed
-columns, indented outlined rows, filter placement and search/create placement;
-legacy Needs Dan screenshot entry expands and reveals that column.
-
-Home uses the shared row spacing and separators and keeps Today / Tasks due,
-as shown by the merged board. Issue #1600 explicitly gives the board precedence
-over conflicting grouping feedback. The Delegated wording remains an open
-clarification, not a new task-data contract. Native visual acceptance is pending.
-
 ## 5 November 2026 — P15-93 Notes follows the published three-tab board
 
 Issue #1599 and board PR #1603 supersede P15-12's separate List tab. Notes owns
@@ -10954,6 +10942,22 @@ Graph nodes share folder colors with the legend. Labels appear for search or
 selection, with an explicit Open action; accessible titles/folders remain on all
 nodes. Native visual acceptance is pending in `ios/design/p15-93-verification.md`.
 
+## 5 November 2026 — Home and Factory follow the merged board (P15-94 / #1600)
+
+Keep Factory's Needs Dan tasks in Board while removing its separate tab. Board
+and Releases share one glass segmented surface. Preserve default collapsed
+columns, indented outlined rows, filter placement and search/create placement;
+legacy Needs Dan screenshot entry expands and reveals that column.
+
+Home uses the shared row spacing and separators and keeps Today / Tasks due,
+as shown by the merged board. Issue #1600 explicitly gives the board precedence
+over conflicting grouping feedback. The Delegated wording remains an open
+clarification, not a new task-data contract. Native visual acceptance is pending.
+
+## Native board corrections supported by screenshots (Refs #1600; 5 November 2026)
+
+Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
+
 ## 5 November 2026 — Health source parity and dashboard (P15-95 / #1601)
 
 Use merged HealthKit statistics for step counts; raw overlapping source samples
@@ -10970,6 +10974,28 @@ implementation; native visual and real-device HealthKit acceptance are pending.
 
 P15-95 also labels HealthKit body-fat values as fractions (0–1), allowing the
 existing normalizer to retain the correct percentage (0.20 becomes 20%).
+
+## Native board corrections supported by screenshots (Refs #1601; 5 November 2026)
+
+Last lifts is an explicit accessibility container so its Log child keeps its identifier. The native test retains the Log-to-shared-sheet assertion and scrolls in bounded short steps. The first native comparison prompted a compact chart headline, Training divider and smaller shared hero/chart geometry.
+
+Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
+the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
+from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
+
+
+## 5 November 2026 — Health summaries use recorded data for the selected period
+
+Sleep and Nutrition summaries now follow the selected period. Core regressions
+cover bounds, missing observations and duplicate daily records. Sleep uses stage
+proportions and real average/night-count summaries; bedtime/wake-up are absent
+from the current contract. Nutrition shows actual logged meals without a target.
+See `p15-95-verification.md` for screenshot provenance and pending native checks.
+
+
+## 2026-11-05: P15 Health backlog and retained history
+
+Use anchored HealthKit query pagination and complete-day upload requests rather than discarding a quantity at the whole-window cap. Keep the existing owner-only API and 20,000-item request bound; reject an oversized single day honestly, before any upload. A partial local step snapshot replaces only matching Copenhagen days and cannot mark retained history fresh. Regression tests cover multi-day backlogs, rejection, local midnight and explicit zero readings.
 
 ## 5 November 2026 — P15-96 current Usage response and remaining board pages
 
@@ -10992,35 +11018,6 @@ Local validation: 474 Core tests and 23 backend Usage/Now-feed tests pass.
 Native screenshots and owner acceptance remain pending; the cloud network
 policy still blocks the artifact download host. No pixel-match claim is made.
 
-## Native board corrections supported by screenshots (Refs #1600; 5 November 2026)
-
-Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
-
-## Native board corrections supported by screenshots (Refs #1601; 5 November 2026)
-
-Last lifts is an explicit accessibility container so its Log child keeps its identifier. The native test retains the Log-to-shared-sheet assertion and scrolls in bounded short steps. The first native comparison prompted a compact chart headline, Training divider and smaller shared hero/chart geometry.
-
-Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
-the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
-from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
-
-
-## 5 November 2026 — Preserve shared heading contrast inside List
-
-Native Workspaces screenshots show List section headings dimmed twice by the
-inherited foreground style. The shared component now uses explicit semantic
-`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
-head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
-pending. No additional workflow/project change or release action is included.
-
-## 5 November 2026 — Health summaries use recorded data for the selected period
-
-Sleep and Nutrition summaries now follow the selected period. Core regressions
-cover bounds, missing observations and duplicate daily records. Sleep uses stage
-proportions and real average/night-count summaries; bedtime/wake-up are absent
-from the current contract. Nutrition shows actual logged meals without a target.
-See `p15-95-verification.md` for screenshot provenance and pending native checks.
-
 
 ## 5 November 2026 — Preserve Status state text and truthful screenshot fixtures
 
@@ -11030,38 +11027,13 @@ Dynamic Type; the test uses the existing Simulator navigation argument. Usage
 emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
 verification is pending; previous UI-test success is not visual acceptance.
 
+## 5 November 2026 — Preserve shared heading contrast inside List
 
-## 5 November 2026 — Owner authorises verified TestFlight release
-
-The owner requested all non-Chat pages follow the board, with consistent spacing
-and useful section headings; Chat must remain unchanged. Settings/Voice review
-is now in scope but unfinished. The owner subsequently authorised TestFlight
-after verification, targeting 6 November 2026 at 06:00 Europe/Copenhagen. Notes
-requires its backend deployment before client release; #1604 remains first in
-the merge order. Nothing has been merged/deployed/uploaded by this continuation.
-A new task must use the republished environment because the running task blocks
-api.github.com. Exact checkpoint, active runs and remaining work are recorded
-in `docs/ios/design/p15-resume.md`; do not launch duplicate simulator runs.
-
-## 2026-11-05 — Extend the approved board alignment to Settings and Voice
-
-The owner expanded the non-Chat page scope to include Settings and Voice and
-authorized TestFlight after verification for the 6 November morning target.
-Settings adopts the board's bottom segments and meaningful section groups while
-retaining existing native detail/save flows. Large text uses a scrolling segment
-strip and stacked row values. Chat and the shared orb remain unchanged.
-
-## 2026-11-05: P15 Health backlog and retained history
-
-Use anchored HealthKit query pagination and complete-day upload requests rather than discarding a quantity at the whole-window cap. Keep the existing owner-only API and 20,000-item request bound; reject an oversized single day honestly, before any upload. A partial local step snapshot replaces only matching Copenhagen days and cannot mark retained history fresh. Regression tests cover multi-day backlogs, rejection, local midnight and explicit zero readings.
-
-## Settings native geometry correction (5 November 2026)
-
-Native artifact 13461059102 exposed truncated four-way section labels and decorative symbols expanding beyond their reserved row width at accessibility XXXL. Use the existing continuous glass segmented bar from P15-94, with its full hit target, switch Settings to the shared scrolling strip above default text size, and retain fixed semantic symbol geometry. Existing callers keep their defaults; Chat is unchanged.
-
-## Health page accessibility (5 November 2026)
-
-The Health hero indicator previously announced page position but offered no adjustment, and the explicit page transition ignored Reduce Motion. Keep the native pager and existing visual geometry, expose bounded increment/decrement actions on its indicator, and disable the explicit animation under Reduce Motion.
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.
 
 ## 6 November 2026 — Confirm successful native actions
 
@@ -11069,22 +11041,6 @@ The owner explicitly requested subtle haptics and interruptible completion feedb
 for lift saves, tasks and note creation. Notes introduces the reusable confirmation
 and applies it after successful client writes. No API or persistence contract changes.
 Physical haptic feel remains a device check; simulator verification is pending.
-
-## 6 November 2026 — Shorter Home and successful-action polish
-
-The owner selected these two previous suggestions for this release. Home keeps
-event/task priorities while health stays in the cards. Confirmations follow successful
-writes, and Home completion errors are surfaced rather than swallowed. The existing
-lift/workout saved state remains persistent and dismissible. No Chat change, backend
-contract change or new dependency is required. Native verification is pending.
-
-## 6 November 2026 — Correct native accessibility-size overlap
-
-Insights run 42124893661 passed 50/50 native UI tests, but screenshots at accessibility
-XXXL exposed transparent-header overlap, clipped totals and crowded period labels.
-The shared header/controls and Usage layout now adapt at accessibility sizes. Chat
-has no callers of these components and is unchanged. Fresh native captures remain
-required; the previous test pass is not visual acceptance.
 
 ## 6 November 2026 — Restore the working Linux Swift runner for release
 
@@ -11097,3 +11053,48 @@ necessary compatibility exception to the board issues' no-workflow-edit scope,
 within the owner's subsequent instruction to finish verification and release
 directly. It does not change checks, Mac execution, signing or TestFlight. Recheck
 CI rather than treating the infrastructure failure as a successful test result.
+
+## 6 November 2026 — Shorter Home and successful-action polish
+
+The owner selected these two previous suggestions for this release. Home keeps
+event/task priorities while health stays in the cards. Confirmations follow successful
+writes, and Home completion errors are surfaced rather than swallowed. The existing
+lift/workout saved state remains persistent and dismissible. No Chat change, backend
+contract change or new dependency is required. Native verification is pending.
+
+## Health page accessibility (5 November 2026)
+
+The Health hero indicator previously announced page position but offered no adjustment, and the explicit page transition ignored Reduce Motion. Keep the native pager and existing visual geometry, expose bounded increment/decrement actions on its indicator, and disable the explicit animation under Reduce Motion.
+
+## 6 November 2026 — Correct native accessibility-size overlap
+
+Insights run 42124893661 passed 50/50 native UI tests, but screenshots at accessibility
+XXXL exposed transparent-header overlap, clipped totals and crowded period labels.
+The shared header/controls and Usage layout now adapt at accessibility sizes. Chat
+has no callers of these components and is unchanged. Fresh native captures remain
+required; the previous test pass is not visual acceptance.
+
+## 2026-11-05 — Extend the approved board alignment to Settings and Voice
+
+The owner expanded the non-Chat page scope to include Settings and Voice and
+authorized TestFlight after verification for the 6 November morning target.
+Settings adopts the board's bottom segments and meaningful section groups while
+retaining existing native detail/save flows. Large text uses a scrolling segment
+strip and stacked row values. Chat and the shared orb remain unchanged.
+
+## Settings native geometry correction (5 November 2026)
+
+Native artifact 13461059102 exposed truncated four-way section labels and decorative symbols expanding beyond their reserved row width at accessibility XXXL. Use the existing continuous glass segmented bar from P15-94, with its full hit target, switch Settings to the shared scrolling strip above default text size, and retain fixed semantic symbol geometry. Existing callers keep their defaults; Chat is unchanged.
+
+## 6 November 2026 — Final combined native findings
+
+Run 42134678739 compiled and passed 61/62 UI tests. The new completion test opened
+Tasks due for fixture tasks due today; the recording confirms the production
+split is correct. Select and expand Today while retaining both removal and
+continued-usability assertions. Explicitly select dark for the lift success capture.
+
+Actual Health images still showed truncated monthly endpoint dates and normal-size
+rows behind the pinned title. Use native AxisValueLabel anchors/intrinsic width and
+restore the iOS soft scroll-edge effect, retaining the AX material. Apple API docs
+were read directly; no new dependency or custom blur is needed. Verify these actual
+findings in one combined Settings run before the final merge. Chat remains unchanged.

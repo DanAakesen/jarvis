@@ -446,6 +446,13 @@ struct JarvisHealthBarChart: View {
         return (0...4).map { dates[Int((Double(dates.count - 1) * Double($0) / 4).rounded())] }
     }
 
+    private func axisLabelAnchor(_ date: String) -> UnitPoint? {
+        guard values.days.count > 7 else { return nil }
+        if date == values.days.first?.date { return .topLeading }
+        if date == values.days.last?.date { return .topTrailing }
+        return .top
+    }
+
     private var chart: some View {
         Chart {
             ForEach(values.days) { day in
@@ -474,9 +481,13 @@ struct JarvisHealthBarChart: View {
         .chartYAxis(.hidden)
         .chartXAxis {
             AxisMarks(values: axisDates) { value in
-                AxisValueLabel {
-                    if let date = value.as(String.self) {
+                if let date = value.as(String.self) {
+                    AxisValueLabel(
+                        centered: values.days.count > 7 ? false : nil,
+                        anchor: axisLabelAnchor(date)
+                    ) {
                         Text(weekday(date))
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                 }
             }

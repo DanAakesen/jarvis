@@ -2219,14 +2219,16 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **P15-94 / #1600:** Home now shares one glass segmented surface and separated calendar/task rows. Factory has Board/Releases only, includes Needs Dan in Board, and reveals the column for its old entry. All 469 Core tests and changed Swift parser checks pass; native screenshot/interaction cases are added, but native visual acceptance is pending. Home follows the published Today/Tasks due grouping under the issue's board-wins rule; Delegated wording remains a clarification.
-
-- **P15-95 / #1601:** Health now has the board's three periods, training donut/chart and Last lifts/Recent sessions/Body trend order. Merged HealthKit step totals replace raw overlapping-source sums; local workouts and saved Home lift notes join the dashboard without changing the write path. Core regressions and backend sync tests pass locally. Native visual acceptance and device-source parity are pending; see `docs/ios/design/p15-95-verification.md`.
-
-
-- **P15-96 / #1602:** Current Usage contract decoding, range/cache handling, reconciled charts and all five page audits are implemented locally. All 474 Core and 23 backend Usage/Now-feed checks pass. Native build, board/build comparison and owner acceptance remain pending; see `docs/ios/design/p15-96-verification.md`. Reuses #1604 and the shared segmented-bar change in #1606.
-- **P15-92 / #1598:** PR #1604 implements the shared native page pattern from the board merged in #1603. All 468 Core tests pass locally. Native compilation, CI and CodeQL passed on edc8ec36; 45/46 UI tests passed, including all four bilingual/light-dark page-order cases. The remaining Workspaces case used a nonexistent sidebar entry; its fixture entry is corrected. The Mac job again timed out during later captures. Dan approved preserving available images with `if: always()` on the existing upload step; all 74 workflow checks pass. Fresh native checks and board/build visual acceptance remain pending; see `docs/ios/design/p15-92-verification.md`. #1599–#1602 follow this shared change.
-- **P15-93 / #1599:** Notes follow-up is implemented on a separate branch based on #1598, which must merge first. Root/direct-folder browsing, matching counts, Back, nested note and empty-folder creation, last-opened tiles, graph labels/colors and task-create priority are covered by 476 passing Core tests and 89 backend tests. Native interaction checks and captures are prepared; Mac compilation and board/build visual acceptance are pending. See `docs/ios/design/p15-93-verification.md`.
+- **P15 board delivery (#1598–#1602 and Settings):** Shared #1604, Notes #1605,
+  Home/Factory #1606, Health #1607 and Insights #1608 merged in order; main is
+  `2b865706`. Notes backend deploy 42136945743 passed readiness and live acceptance.
+  Settings is reconciled last. Combined 7aa08ec6 compiled and passed 61/62 native
+  tests; the remaining test selected the wrong task tab. Its setup and two observed
+  visual findings (monthly boundary labels, scrolled header overlap) are corrected
+  for one final Settings native run. All prerequisite CI passed, latest 493 Core
+  tests. Merge Settings only after that verification, compare the released app tree,
+  then upload TestFlight for 6 November 06:00 Copenhagen. Never merge validation
+  PR #1609. See `docs/ios/design/p15-integration-verification.md`.
 
 - **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window
   acknowledgement; iOS detaches observation on lock and refreshes persisted
@@ -3791,6 +3793,12 @@ sustained performance acceptance or permission to resume #717/#741.
 | P15-77 | [#1569](https://github.com/DanAakesen/jarvis/issues/1569) | Build 67 feedback fixes (all pages, composer, HealthKit, calendar) | Compact numbers, Factory counts and Offline root cause, transparent headers, shared loader and segmented bar, Home send and shared plus menu, calendar route and source, HealthKit read types and combined workouts. Not compiled or run on a device. | None | Complete |
 | P15-76 | [#1567](https://github.com/DanAakesen/jarvis/issues/1567) | Build 66 feedback fixes (all pages, notifications, notes backend) | Success notifications stopped and cleaned up, tolerant notes parsing, pull to refresh, plus beside tabs, shared period selector, lift name memory, folder lookup, half-height sheets, task detail, Home greeting with several sentences. Calendar data source, Tasks segmented filters and Health board sections remain. | None | Complete |
 
+## P15-93 native retry correction
+
+The Notes retry compiled and passed 48/50 UI tests. Corrected the selected-folder
+sheet snapshot and graph Open accessibility containment, preserving the failing
+assertions and adding path readback. Fresh native verification remains pending.
+
 ## Native board verification follow-up (Refs #1600; 5 November 2026)
 
 Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
@@ -3804,14 +3812,6 @@ the unchanged pipeline suite currently reaches 59 passing cases and 15 setup err
 from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
 
 
-## P15-92 native heading correction
-
-Native Workspaces screenshots show List section headings dimmed twice by the
-inherited foreground style. The shared component now uses explicit semantic
-`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
-head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
-pending. No additional workflow/project change or release action is included.
-
 ## Health period summaries and carousel evidence
 
 Sleep and Nutrition summaries now follow the selected period. Core regressions
@@ -3819,7 +3819,6 @@ cover bounds, missing observations and duplicate daily records. Sleep uses stage
 proportions and real average/night-count summaries; bedtime/wake-up are absent
 from the current contract. Nutrition shows actual logged meals without a target.
 See `p15-95-verification.md` for screenshot provenance and pending native checks.
-
 
 ## P15-96 visual follow-up
 
@@ -3829,47 +3828,31 @@ Dynamic Type; the test uses the existing Simulator navigation argument. Usage
 emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
 verification is pending; previous UI-test success is not visual acceptance.
 
+## P15-92 native heading correction
 
-## P15 continuation handoff and release target
-
-The owner requested all non-Chat pages follow the board, with consistent spacing
-and useful section headings; Chat must remain unchanged. Settings/Voice review
-is now in scope but unfinished. The owner subsequently authorised TestFlight
-after verification, targeting 6 November 2026 at 06:00 Europe/Copenhagen. Notes
-requires its backend deployment before client release; #1604 remains first in
-the merge order. Nothing has been merged/deployed/uploaded by this continuation.
-A new task must use the republished environment because the running task blocks
-api.github.com. Exact checkpoint, active runs and remaining work are recorded
-in `docs/ios/design/p15-resume.md`; do not launch duplicate simulator runs.
-
-## P15 Settings board continuation (5 November 2026)
-
-Implemented General/Models/Health/Account navigation, board section grouping,
-shared row spacing and accessibility-size adaptation without changing detail
-editors or Chat. Added native section/search/detail cases to the existing selected
-component suite. Scoped Core/localization/design guards: 53 passed; Swift parser
-passed. Native compilation and visual acceptance are pending. Release follows
-#1604, the page PRs, successful Notes backend deployment, then TestFlight.
-
-## P15-93 native retry correction
-
-The Notes retry compiled and passed 48/50 UI tests. Corrected the selected-folder
-sheet snapshot and graph Open accessibility containment, preserving the failing
-assertions and adding path readback. Fresh native verification remains pending.
-
-Settings first native pass: 49/49 selected UI tests passed on 4b823206. Screenshot review found truncated section labels and accessibility-size icon overlap; the final shared segmented bar and Settings symbol sizing await the next native pass. Shared prerequisite #1604 merged as c818a6b3; remaining delivery order is Notes, Home/Factory, Health, Insights, Settings, then backend readiness and TestFlight.
-
-Health final accessibility audit: add VoiceOver adjustment to the existing hero-page indicator and honor Reduce Motion for page transitions. Native verification remains pending; preserve the active run before pushing this follow-up.
+Native Workspaces screenshots show List section headings dimmed twice by the
+inherited foreground style. The shared component now uses explicit semantic
+`Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
+head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
+pending. No additional workflow/project change or release action is included.
 
 Notes 1d8e663f passed 50/50 native UI tests in run 42125346515; the later screenshot
 sweep timed out. New owner-approved success feedback follows confirmed note/task
 writes and awaits combined native verification. Backend deployment remains required
 before TestFlight.
 
+Release infrastructure correction: ubuntu-latest moved to unsupported Ubuntu 26.04.
+The Linux Swift job now pins the previously passing ubuntu-24.04 image; checks and
+Mac/TestFlight steps are unchanged. Fresh CI is required before Notes/backend delivery.
+
+Home/Factory native verification: 48/48 tests pass on 67e83344 (run 42124893512); final EN/dark and DA/light screenshots accepted in artifact 13463371218. The later standalone sweep timed out. App source is unchanged by shared-main reconciliation; merge remains after Notes.
+
 Owner-approved additions: shorter Home greeting and success haptics/transitions for
 lift/workout saves, task completion and note creation. Core greeting assertions and
 the existing native suite cover the new behavior; combined native results are pending.
 The earlier 48-test pass precedes this addition.
+
+Health final accessibility audit: add VoiceOver adjustment to the existing hero-page indicator and honor Reduce Motion for page transitions. Native verification remains pending; preserve the active run before pushing this follow-up.
 
 Health 297d94ba passed 48/48 native UI tests in run 42124896873. Training EN/dark,
 Sleep DA/light and Nutrition EN/dark were inspected; the 30-day Nutrition capture
@@ -3881,6 +3864,17 @@ Usage, Status, Proactive and Notifications captures were inspected. Accessibilit
 overlap and clipped totals prompted shared header/control and Usage layout fixes;
 combined native re-verification is pending.
 
+## P15 Settings board continuation (5 November 2026)
+
+Implemented General/Models/Health/Account navigation, board section grouping,
+shared row spacing and accessibility-size adaptation without changing detail
+editors or Chat. Added native section/search/detail cases to the existing selected
+component suite. Scoped Core/localization/design guards: 53 passed; Swift parser
+passed. Native compilation and visual acceptance are pending. Release follows
+#1604, the page PRs, successful Notes backend deployment, then TestFlight.
+
+Settings first native pass: 49/49 selected UI tests passed on 4b823206. Screenshot review found truncated section labels and accessibility-size icon overlap; the final shared segmented bar and Settings symbol sizing await the next native pass. Shared prerequisite #1604 merged as c818a6b3; remaining delivery order is Notes, Home/Factory, Health, Insights, Settings, then backend readiness and TestFlight.
+
 ## Owner-selected polish and remaining proposals (6 November 2026)
 
 The owner authorised the shorter Home greeting and subtle success haptics with
@@ -3891,10 +3885,6 @@ Remaining suggestions are proposals only: an actionable Needs you queue, consist
 freshness language, remembered page selections, task Undo and evidence-backed Health
 comparisons, actionable empty states and draft preservation. They do not expand
 this release's scope.
-
-Release infrastructure correction: ubuntu-latest moved to unsupported Ubuntu 26.04.
-The Linux Swift job now pins the previously passing ubuntu-24.04 image; checks and
-Mac/TestFlight steps are unchanged. Fresh CI is required before Notes/backend delivery.
 
 Settings corrected source is accepted in combined native run 42129251285 (61/61 UI
 tests), artifact 13465195628. General EN/dark, DA/light and AX XXXL plus Models,

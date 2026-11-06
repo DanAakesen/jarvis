@@ -3224,6 +3224,14 @@ One look, taken from the Chat header: Apple glass, 44 pt target, secondary accen
 - **Gallery**: `JarvisComponentGallery` (debug builds only, launch argument `--component-gallery`, no user-facing entry) shows every button state, the orb at three sizes and the scaffold; `ComponentGalleryUITests` attaches a screenshot.
 - Apple documentation used: Human Interface Guidelines (Buttons, Toolbars, Materials); SwiftUI `Glass`, `glassEffect`, `ButtonStyle.glass` and `Button`.
 
+### Native confirmed-action feedback (6 November 2026)
+
+`JarvisSuccessFeedback.swift` owns the shared checkmark/text glass confirmation.
+It reuses existing spacing, radius and timing tokens; a new success replaces the
+current one and cancels its expiry. A short opacity/scale transition honors Reduce
+Motion and never consumes touches. Haptics and VoiceOver announcements follow a
+confirmed write. Notes displays this feedback before continuing its existing editor
+navigation; the successful navigation itself remains immediate.
 
 ## Home and Factory board alignment (P15-94 / #1600; 5 November 2026)
 
@@ -3238,6 +3246,14 @@ The shared segmented component retains the native buttons' selected accessibilit
 trait and 44 pt touch height. Custom composition preserves the approved glass
 surface; it does not introduce a new button style or per-screen glass effect.
 Native compilation, interaction and screenshot acceptance are still pending.
+
+### Home feedback refinement (6 November 2026)
+
+The shorter Home greeting omits health recaps. Task completion and note creation
+reuse Notes' shared brief glass confirmation. Lift/workout sheets keep their saved
+text, with one success haptic and a short opacity/scale transition. All new motion
+honors Reduce Motion; confirmation never blocks another action or sheet dismissal.
+Home's checkbox no longer displays a checkmark before a successful write.
 
 ## Health board alignment (P15-95 / #1601; 5 November 2026)
 
@@ -3266,6 +3282,13 @@ Local HealthKit steps/workouts supplement retained server data. Unsynced device
 workouts do not offer a backend-only detail link. Last lifts combines retained
 Health history with existing Home vault logs; incomplete vault reads remain
 visible as partial. No illustrative board number is used as live app data.
+
+The Health hero page indicator exposes a bounded VoiceOver adjustment for Training, Sleep and Nutrition. Its explicit page transition honors Reduce Motion, matching the charts and other non-Chat page transitions.
+
+Health screenshot review of run 42124896873 found overlapping 30-day chart labels.
+Long periods now show five evenly spaced date labels; all daily bars and selection
+remain available. Seven-day charts retain weekday labels. This correction joins the
+VoiceOver/Reduce Motion refinement for the next combined native pass.
 
 ## Native insight board alignment (P15-96; 5 November 2026)
 
@@ -3301,34 +3324,20 @@ labels and values stack at accessibility sizes. The existing shared-page native
 checks now also capture Usage, Status and Proactive at the largest accessibility
 text size. Corrected native images remain pending.
 
-Settings native screenshot review keeps all four section names readable at default text size with the continuous shared glass segmented bar from P15-94 and full 44-point targets. Larger text uses the shared scrolling strip. Decorative row symbols retain the shared icon size as row text grows, preventing overlap.
-
-The Health hero page indicator exposes a bounded VoiceOver adjustment for Training, Sleep and Nutrition. Its explicit page transition honors Reduce Motion, matching the charts and other non-Chat page transitions.
-### Native confirmed-action feedback (6 November 2026)
-
-`JarvisSuccessFeedback.swift` owns the shared checkmark/text glass confirmation.
-It reuses existing spacing, radius and timing tokens; a new success replaces the
-current one and cancels its expiry. A short opacity/scale transition honors Reduce
-Motion and never consumes touches. Haptics and VoiceOver announcements follow a
-confirmed write. Notes displays this feedback before continuing its existing editor
-navigation; the successful navigation itself remains immediate.
-
-### Home feedback refinement (6 November 2026)
-
-The shorter Home greeting omits health recaps. Task completion and note creation
-reuse Notes' shared brief glass confirmation. Lift/workout sheets keep their saved
-text, with one success haptic and a short opacity/scale transition. All new motion
-honors Reduce Motion; confirmation never blocks another action or sheet dismissal.
-Home's checkbox no longer displays a checkmark before a successful write.
-
-Health screenshot review of run 42124896873 found overlapping 30-day chart labels.
-Long periods now show five evenly spaced date labels; all daily bars and selection
-remain available. Seven-day charts retain weekday labels. This correction joins the
-VoiceOver/Reduce Motion refinement for the next combined native pass.
-
 ### Insights large-text screenshot correction (6 November 2026)
 
 At accessibility sizes, the shared pinned header uses native regular material so
 scrolling content does not collide with its title. Page and period choices scroll
 horizontally, and Usage totals become full-width rows with unrestricted wrapping.
 Normal text keeps the approved continuous shared segmented bar and grid.
+
+Settings native screenshot review keeps all four section names readable at default text size with the continuous shared glass segmented bar from P15-94 and full 44-point targets. Larger text uses the shared scrolling strip. Decorative row symbols retain the shared icon size as row text grows, preventing overlap.
+
+## Final native scroll and chart boundaries (6 November 2026)
+
+Combined screenshots exposed normal-size content passing through pinned titles and
+monthly chart endpoints truncating. Enable the native soft scroll-edge effect for
+shared page headers; keep the stronger accessibility material. Monthly dates use
+intrinsic width and inward anchors at the first/last day. The approved transparent
+ambient composition and all bars/selection remain. These final corrections require
+new native screenshots; current evidence is in `p15-integration-verification.md`.
