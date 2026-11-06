@@ -16,14 +16,14 @@
 ## CI merge gate and timings (P15-67 / #1543; 3 November 2026)
 
 - `CI result` (the check named in the branch rules) covers only quick jobs. `ci.yml` calls `ios-ci.yml` with `simulator: skip`, so the `iOS` check there is the Linux JarvisCore job (about 10 minutes at most; no Simulator).
-- The slow Simulator job (`iOS Simulator`, macos-26, 45-minute limit) runs in `.github/workflows/ios-simulator.yml` on every non-draft PR and push to `main` that touches `apps/ios/**` or the two iOS workflow files. It reports its own check and does not delay or block `CI result`. Docs-only and plan-only changes never match its path filter.
+- The slow Simulator job (`iOS Simulator`, macos-26, 75-minute limit with #1621) runs in `.github/workflows/ios-simulator.yml` on every non-draft PR and push to `main` that touches `apps/ios/**` or the two iOS workflow files. It reports its own check and does not delay or block `CI result`. Docs-only and plan-only changes never match its path filter. The 6 November combined run 42202162500 passed 68 UI tests and retained captures in 62m49s. The build-76 feedback pass reuses those tests/launches and reserves more export headroom; per-test limits remain 120/150 seconds.
 - A failed Simulator run on `main` (push or nightly) opens or updates the single issue "Nightly iOS UI tests failing".
 - New pushes cancel older runs of the same PR (`ci.yml` and `ios-simulator.yml` concurrency groups).
 - `CI result` writes a "CI timing" table (job, duration, result) to the run summary through `.github/scripts/ci_timing.py`.
 - Workflow tests (`.github/scripts/tests`) clear `GITHUB_REF`, `GITHUB_REF_NAME`, `GITHUB_BASE_REF`, `GITHUB_HEAD_REF`, `GITHUB_EVENT_NAME` and `GITHUB_ACTIONS` (`hermetic.py`), so preview or integration branches do not change their result.
 - Baseline from the last 40 runs: median successful run 44 minutes; Simulator job 43 minutes (38 for boot, UI tests and screenshots, 3 for the build); Backend 9, Web 4, Vault mirror 3, Database 3, Python 2. Expected gate time is now the slowest non-Simulator job (Backend, about 9 minutes). The Simulator after-timing is not measured yet: read it from the first `iOS Simulator` run's timing table and record it here. Sharding the UI tests and a pull-request smoke subset are not done because the workflow tests require one Simulator boot and one `xcodebuild test`; decide with measured data.
 - Branch rules: if a rule requires the old check `iOS / iOS Simulator build and navigation tests`, the owner must remove it; `CI result` stays the only required check.
-- Existing UI tests already wait on state (`waitForExistence`, `XCTNSPredicateExpectation`); the only sleep is the intentional launch delay in `SidebarNavigationTests`. Failure names are in the run summaries, not in job logs; verify per-test causes there.
+- Existing UI tests wait on state (`waitForExistence`, `XCTNSPredicateExpectation`). Short intentional delays also separate loading-motion frames and the `SidebarNavigationTests` launch fixture. Failure names are in the run summaries, not in job logs; verify per-test causes there.
 
 ## Apple documentation before iOS implementation (owner requirement, 1 November 2026)
 
@@ -74,6 +74,14 @@ canary success. It retains only validated stage/status/code/parameter/exception
 metadata; never print the private response or provider message. No new owner-auth
 bypass, tools, claim reset or automatic mutation retry is added.
 
+The live response rejected the top-level instructions override. The corrected
+shared builder sends the full policy as typed developer input on each new turn
+or policy change, without promoting user/reference/tool data. Its turn-local cache
+avoids identical continuation repeats. Deploy this hosted-agent change before
+checking the already configured comparison with `provision_managed_chat=true`;
+leave definition refresh false so the existing exact version must be reused.
+Inspect current inventory first if an earlier provisioning write was uncertain.
+
 Run hosted pytest for `test_managed_runtime_factory.py`,
 `test_managed_policy_client.py`, `test_managed_provider_cause.py`,
 `test_model_client.py` and `test_chat_runtime.py`, plus scoped Ruff. Run
@@ -82,6 +90,15 @@ The synthetic request must match actual policy instructions and must expose a
 synthetic 400 that the old request misses. Live success remains unverified;
 follow the canary with the ordinary authenticated isolated owner conversation,
 never `/status/smoke` as a substitute for Copilot acceptance.
+
+For the remaining generic request failure, qualify and deploy the hosted diagnostic
+before explicitly dispatching `diagnose_managed_chat=true` on main. Leave all
+inspect/provision/refresh inputs false. This path compares four fixed synthetic
+request shapes on the existing target without configuration writes. Its completion
+marker reports diagnostic execution, never readiness; inspect each shape's actual
+status and the separate full-policy canary. Run the factory/provider/chat tests,
+handoff and diagnostic-output tests, and existing deployment workflow checks.
+Keep raw diagnostic response files private and delete them after filtering.
 
 ## Managed policy cause diagnostics (#1373; 30 October 2026)
 
@@ -7224,3 +7241,56 @@ simulator run only after confirming the app/test tree is identical. Deploy the
 backend and shared identity agent first, verify readiness/live acceptance, then
 use unchanged TestFlight signing/upload on main. The previous build 75 checkpoint
 is historical and does not verify these new changes.
+
+## Build 76 follow-up qualification — 6 November 2026
+
+Use one combined native run for PR #1621's shimmer/chrome/task-source corrections,
+clear-glass selectors, body graphs and widget layouts. Preserve existing 68 tests
+and 120/150 second per-test limits; job cap 75 minutes accommodates retained captures.
+Initial a559 native run 42236610739 compiled then was cancelled as superseded; it is not
+a pass. SwiftUI/WidgetKit compilation is unavailable in the Linux workspace.
+Review actual artifacts, test counts and frame captures: workflow success alone
+can hide the intentionally nonblocking UI-test result. Gallery widget evidence is
+actual SwiftUI content, not SpringBoard/tint acceptance. Default gh auth works;
+the expired private config/device code must not be reused.
+
+Native 7acb finished 64/68; df56bcaa finished 66/68 after actual recording-guided
+corrections. Its Health EN/DA detail/Back and AX cases passed. Camera-menu activation
+and an intrinsic widget text-width comparison failed. Actual task captures also
+exposed pinned headings overlapping rows. Candidate dce71639 includes accepted
+main, flow/header corrections and precise existing-test synchronization/geometry;
+app/test tree c45cc6b07fa0754bd100ca9b1db25e069b7daeff. Native 42268563484, CI 42268563357
+and CodeQL 42268563412 qualify it once. Review both widget languages and changed
+heading/scroll states before accepting the source.
+
+The original archive exceeded the connector's 512 MiB limit. Artifact-only
+extraction reused it without build/simulator; UI evidence now uploads separately.
+Retain failure records/hashes and avoid reruns for artifact retrieval. Exact-tree
+release qualification must bind the final merged PR head; manual main CI is not a
+substitute. Include current main before qualification. After a successful native
+run, cancel any automatic main simulator only after proving app/test tree identity.
+
+Copilot receipt qualification requires exact full-policy output on two changing
+sentinel turns, including conflicting user input. Never stamp receipt configuration
+from a diagnostic matrix, metadata-only read or unqualified plain text response.
+The receipt is private deployment configuration, not a client override or owner
+approval replacement. Preserve valid evidence on normal deploy and invalidate it
+when target/settings/transport no longer match.
+
+### Final gallery-only qualification
+
+Native dce71639 / 42268563484 passed 67 cases; the gallery alone timed out on
+redundant AX queries. Candidate 1766b727 reads each settled element snapshot once,
+retaining every geometry assertion and 120/150-second limits. Production app and
+all other tests are unchanged. Focused 42280276801 binds exact source and both trees,
+retains result bundle/captures/provenance and requires the selected case to pass.
+Reuse the 67 passing cases only with this source proof. The validation-only workflow
+branch must never merge. Automatic duplicate 42280051712 cancelled with no executed
+steps. Final CI 42280051912 and its receipt match 1766b727/full tree 8c185635;
+focused 42280276801 passed one case with zero failures. Main 380782a0 matches both
+trees exactly. Automatic main native 42281871658 was force-cancelled during partial
+compilation, with Boot iPhone Simulator still pending and no start time. Normal
+Deploy 42281871580 passed readiness/all 15 Current acceptance checks, then TestFlight
+42282578034 uploaded build 77 from exact main 380782a0. This qualification/release
+is complete; Apple processing/owner visibility is not yet confirmed. Do not repeat
+an unchanged full simulator suite.

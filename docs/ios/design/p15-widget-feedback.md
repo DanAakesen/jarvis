@@ -1,6 +1,6 @@
 # Build 76 Home Screen widget feedback
 
-6 November 2026 — English native content reviewed; corrected full qualification pending.
+6 November 2026 — bilingual native content inspected and gallery qualification passed.
 
 The owner reported three medium-widget defects: Workouts placed its heading in
 the right column beside the ring, Factory clipped its heading above oversized
@@ -133,3 +133,18 @@ Production app, Core and widget sources are unchanged from dce71639. Qualify thi
 one corrected case on that identical application and retain the other 67 passing
 cases, rather than repeating the complete simulator suite. The focused workflow
 is validation-only and must never merge into production.
+
+## Accepted native source
+
+CI 42280051912 and CodeQL 42280051874 passed for 1766b727. Native coverage is
+67 passing cases in 42268563484 plus the gallery-only pass in 42280276801 on
+identical production source. The gallery caches settled AX geometry; all checks
+and per-test limits remain. Both final widget captures, corrected task scrolling
+and Health-detail headings were inspected. Main 380782a0 exactly matches full tree
+8c18563542ef60ac423d4397ba3a3bc7d1837989 and app/test tree
+70f5cefe1e153390376cfab48b50e099c1f7fde4. See the delivery record for hashes, retained
+failures and release status. This supersedes pending-native statements above.
+
+Build 77 uploaded successfully in TestFlight 42282578034 after normal deployment
+42281871580 passed readiness and all 15 Current checks. Exact source, upload time
+and remaining device/Apple-processing limits are in the delivery record.

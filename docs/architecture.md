@@ -4,7 +4,7 @@
 - The legacy Daily calendar/Gmail feeds are removed; Calendar and Gmail use only `apps/backend/src/google`.
 - iPhone data flow: HealthKit → `JarvisHealthKitReader` (since the anchor) → `JarvisHealthSyncRequest` → owner-only `POST /health/sync` (`health/routes/sync.ts`, `health/sync/`) → same normaliser and `daily.*` tables as the automations app (P15-86). Source ids, schema and table names keep the `daily` name.
 
-### Native refresh orchestration (6 November 2026; local, unverified)
+### Native refresh orchestration (6 November 2026)
 
 ContentView owns one JarvisHealthSyncModel for Home and Health. Pull-to-refresh
 awaits its coalesced HealthKit read/upload, invalidates Health cache after complete
@@ -12,6 +12,9 @@ or partial success, then refreshes the screen's server and device sources. Healt
 also rereads vault lifts and device workouts/steps. Fixture mode never queries or
 uploads the real HealthKit store. Existing complete-day uploads and durable-anchor
 rules stay in JarvisHealthSyncRunner; the old manual sync view is removed.
+The combined source passed CI and 68 native tests in run 42202162500. Real
+HealthKit permission/failure combinations and exhaustive ingestion parity remain
+device checks. The owner subsequently reported that build 76 pull refresh works.
 
 ## Suggestion-to-approval binding (P15-46 / #1494)
 
@@ -77,6 +80,13 @@ and unverified identities stop the handoff. Old versions remain; only the separa
 comparison selector and its three backend activation values change. The existing
 readback/fingerprint/canary checks still follow activation.
 
+The separate default-off `inspect_managed_chat` input reads preflight metadata,
+version inventory, exact definition matches and the current pin without changing
+them. It rejects provision/refresh combinations and exits before backend
+configuration or inference. Failed Azure requests expose only a fixed operation,
+method, write-attempt flag and recognized status/code; private provider content
+is discarded. Inspection is not evidence of successful activation or inference.
+
 Migration 0069 adds owner-bound immutable test-runtime metadata and an opaque
 server-only native conversation reference to existing SQL sessions. The normal UI
 feed explicitly excludes test sessions; internal context/source reads retain
@@ -90,8 +100,8 @@ managed chat client. Unconfigured managed selections fail without fallback.
 The independent managed protocol adapter uses an agent-scoped HTTP Responses
 client and native conversation continuations, with existing backend function
 execution. Its definition validator requires the selected model/effort, immutable
-version, exact functions and disabled extra built-ins. It is not wired into
-production. Durable turn/source claims and an internal agent-authenticated binding
+version, exact functions and disabled extra built-ins. Only a verified, explicitly
+selected test runtime can reach it. Durable turn/source claims and an internal agent-authenticated binding
 client now cover provider creation and continuations; uncertain work stays active
 without automatic replay. `ManagedPolicyClient` reuses the existing application
 policies through a narrow provider transport seam. The lazy factory and pinned
@@ -103,12 +113,21 @@ metadata blocks the infrastructure apply. This persistence does not change the
 production runtime default. SQL personal memory, blob artifacts, the
 Voice Live relay and subscription-backed Factory are unchanged.
 
+After the live endpoint rejected a top-level instructions override, managed
+requests carry the complete composed policy in a typed developer input message.
+User/reference messages and tool outputs retain their original roles and native
+input cursor. A turn-local cache suppresses identical policy on tool continuations;
+new application turns and exact policy changes send the full policy again. The
+cache updates only after response creation returns and does not change claim or
+uncertain-outcome handling. Policy input persists in the native conversation once
+per turn/change; this repair adds no history deletion or database field.
+
 The UI keeps normal chat mounted and opens a new labelled test conversation from
 the chat menu. Default active-turn discovery excludes test sessions. Availability
 fails closed for unverified Copilot; it is not a substitute for live model access
 or authorization. See [adapter boundaries](managed-chat-adapter.md).
 
-The existing AAD-protected hosted Invocations endpoint also accepts two exact
+The existing AAD-protected hosted Invocations endpoint also accepts three exact
 administrative operations. The manifest operation reads static Jarvis instructions
 and authoritative function schemas without user context, inference or function
 execution. The fixed text canary uses the actual bridge credential and an owned
@@ -122,6 +141,17 @@ request contract, not owner authorization, durable claims or tool execution. Nor
 chat still requires delegated authorization and verified stored source messages.
 The default-off manual Deploy job uses these operations with existing OIDC and
 never assigns roles or changes the normal runtime default.
+
+The fixed `managed_request_diagnostics` operation compares plain text, user
+messages, a short trusted developer message and the full production policy. Each
+attempt verifies the same configured target and owns a new synthetic conversation;
+there are no owner claims, history reads, tool execution or automatic inference
+retries. Attempts, total work and cleanup have explicit bounds. The diagnostic
+result cannot satisfy full-policy canary acceptance. Its default-off manual workflow
+path is incompatible with inspect/provision/refresh and exits before agent creation,
+pin changes or backend configuration. Nested provider codes and targets survive
+only through closed vocabularies, independently filtered again before log output;
+raw error prose and private identifiers remain excluded.
 
 ## Whole-Jarvis logging source boundaries (#1341; 29 October 2026)
 
@@ -8702,7 +8732,9 @@ Microphone readiness requires a nonempty PCM frame; a five-second initial captur
 deadline, unexpected stream end or send failure enters existing recovery. Failed
 generation callbacks are ignored. This addresses confirmed missing readiness and
 error handling, but the owner's exact cold-start audio failure has not been
-reproduced on hardware in this Linux workspace. Native validation is held.
+reproduced on hardware in this Linux workspace. Native run 42202162500 compiled
+the final app and passed all 68 UI tests; this does not establish hardware audio
+startup or HealthKit permission behavior.
 
 ### Owner workflows, approval and exact task timing (6 November)
 
@@ -8726,3 +8758,37 @@ the task time, and suppresses the generic early deadline alert. Legacy tasks ret
 the one-hour lead. Delivery revalidates the open high-priority task and its timing;
 completion/rescheduling cancels obsolete reminders. Quiet hours, preference gates,
 delivery caps and provider-acceptance semantics remain. No SQL migration is needed.
+
+### Native Body trend presentation and widget qualification (6 November)
+
+`JarvisBodyTrend` in Core prepares the existing health metric query rows: finite
+dated values, latest unit, sparse chronological observations. Dashboard and metric
+detail share `JarvisBodyTrendPlot`; selection stays local to the view. Queries,
+cache, HealthKit ingest and backend contracts are unchanged. Mixed-unit exclusions,
+pagination and stale reads retain visible state.
+
+The app's DEBUG simulator gallery compiles the existing widget view/sample sources
+to inspect actual SwiftUI medium layouts at 329 × 155 pt with the same 16 pt inset.
+It disables sample actions and creates no new network/data path. WidgetKit previews
+and device checks remain the source for host margins/tinting.
+
+Measurement details now mount a concrete initial loading container so their task
+and navigation preferences exist before data arrives. Local chart selection and
+scroll state survive the records push/pop; body-specific decimal formatting is
+shared by plot labels, accessible summaries and records. Task group headings are
+ordinary clear first rows in native List sections, avoiding pinned-header overlap
+while retaining per-task swipe completion. Health-detail headings reuse the shared
+section component; no query, persistence or navigation boundary changes.
+
+### Copilot policy compatibility receipt (6 November)
+
+The deployed gate binds SHA256 evidence to policy transport revision, normalized
+project URL, native agent name/version, definition fingerprint, model and effort.
+Backend discovery, new runtime-test sessions, existing sends and internal claims
+require matching evidence. Read-only admin metadata and synthetic diagnostics stay
+available for recovery. Activation clears an old receipt before changing target
+and grants a new one only after full production-policy canary turns demonstrate
+precedence and replacement. Provisioning and backend independently compute the
+same receipt. Ordinary Current conversations and owner approval rules are unchanged.
+Native stored-policy diagnostics failed; no working Copilot policy channel is
+claimed. See PR #1624 and the device-feedback record for actual qualification.

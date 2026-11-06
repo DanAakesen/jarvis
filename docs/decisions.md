@@ -1,3 +1,20 @@
+## 6 November 2026 — Diagnose request shapes without changing the managed target
+
+After the confirmed instructions-override repair, the live provider still returned
+HTTP 400 `invalid_request` without a parameter. Published limits do not establish
+a further model or input-role incompatibility. Compare four fixed synthetic inputs
+on the same verified target through the existing authenticated administrative
+boundary. Use separate owned conversations, bounded attempts/cleanup, no tools,
+owner history or claim changes, and no retries. A separately selected diagnostic
+path must exit before provisioning, pinning or backend configuration.
+
+Retain only known nested provider codes/targets and independently filter output
+before logging. A regex-safe string is not sufficient proof that it contains no
+private data. Diagnostic completion is evidence for investigation, never runtime
+readiness; the production-policy canary and actual isolated owner conversation
+remain separate acceptance checks. Do not reduce the trusted policy, change the
+approved model profile or create another version merely to make a simpler probe pass.
+
 ## 6 November 2026 — Qualify the managed policy provider request
 
 The old fixed canary omitted the message list and per-turn instructions present
@@ -11233,3 +11250,107 @@ priority metadata and bounded completion glyphs address the accompanying task-ro
 layout defects. The retained images establish the defects; corrected Simulator
 inspection is still required. The Apple Markdown documentation was read directly
 after the connected web reader could not consume its Markdown content type.
+
+Final qualification: run 42202162500 passed all 68 UI tests, and corrected native
+task/selector captures were inspected. The verified candidate merged through
+#1614 as ab464314. Backend deployment, comparison activation and TestFlight
+outcomes are recorded separately in the device-feedback delivery record; this
+source qualification does not by itself establish those live outcomes.
+
+## 6 November 2026 — Release verified app while comparison activation continues
+
+The normal backend dependency and live conversation acceptance passed before
+TestFlight dispatch. Upload the accepted app source independently of the optional
+Copilot comparison repair, following the owner's release authorization and existing
+partial-delivery cadence. Build 76 uploaded from ab464314 at 12:14:34 UTC; Apple
+processing remains unconfirmed. Runtime availability continues to enforce its
+existing verification boundary. A selectable option alone never proves inference.
+
+After provisioning returned only azure_request_failed, add content-free operation
+diagnostics and a separate GET-only inspection mode before any mutation retry.
+PR #1615 preserves ownership/identity checks and exact-version reuse after an
+uncertain write. It adds no grant, default runtime change or automatic write retry.
+Its CI/CodeQL passed; live inspection and activation outcomes belong in the
+device-feedback delivery record.
+
+## 6 November 2026 — Preserve per-turn policy in supported managed input
+
+The live Copilot canary reached the provisioned target but rejected top-level
+instructions with HTTP 400, invalid_payload, parameter instructions. Send the
+complete composed policy as typed developer input, which the documented Foundry
+message contract gives precedence over user input. Preserve the original roles
+of references and tool outputs. Both actual turns and the canary use the same
+request builder; do not replace the canary with a simpler request that bypasses
+the failed policy path.
+
+Send full policy at each application turn and exact policy change. A turn-local
+cache avoids identical tool-continuation repeats and updates only after response
+creation returns. Native policy input persists once per turn/change; no history
+deletion or new database state is introduced. Existing claims and uncertain-write
+handling remain unchanged. PR #1619 passed CI/CodeQL and merged as cac5d05d;
+live provider acceptance is recorded separately in the delivery record.
+
+## 6 November 2026 — Owner corrects Body trend and shared surfaces
+
+The owner rejects measurement rows and flat selector/header/dock backings in
+build 76. Replace Body trend rows with real date-aware native plots, preserve a
+single observation as a point and expose measurement details. Separate units and
+mark partial/stale data. Use one content-bearing clear-glass surface for joined
+selectors to match Search without nested refraction. Medium widgets share top-left
+headings and compact content within their existing margins. These are approved
+choices; fresh native evidence is required before release.
+
+The first Copilot request matrix succeeds for plain/simple-user messages but fails
+for typed developer/full-policy requests. Keep both role and encoding as hypotheses;
+qualify fixed controls before changing the trusted policy transport. Diagnostic
+completion is not comparison acceptance.
+
+## 6 November 2026 — Correct rendered detail loading and require policy compatibility
+
+Native 7acb inspection confirms blank measurement detail due to its initial empty
+Group; mount a concrete loading container before data. Preserve decimal readings
+in graph/records and selected reading/scroll on Back. AX charts fit; use slow held
+test drags to avoid coast, keeping full visibility assertions. Widget headers fit
+with a 1.17 pt optical symbol/text offset; allow up to 2 pt within unchanged 16 pt bounds.
+Fresh native qualification remains required: df56bcaa retains e0d6821e’s
+app/test tree and corrects two archive-retention assertions. CI, 502 Core tests
+and CodeQL passed; native 42258268925 remains active.
+
+The stored trusted-role diagnostic also failed policy application after user-only
+requests succeeded. Do not discard or demote Jarvis policy to enable Copilot. The
+compatibility gate requires exact target/model/effort/transport evidence from two
+full-policy precedence/replacement turns; discovery and execution both enforce it.
+Give web/iOS a specific explanation while Current remains usable. This is a
+reviewed correction direction; deployment and live verification are recorded
+separately and must not be inferred from local tests.
+
+## 6 November 2026 — Rendered task headings and native failure boundaries
+
+The df56bcaa images show sticky plain-List task-group headers covering rows in both
+languages. Keep each heading as a clear first row in its section, preserving native
+swipe actions. Reuse primary-color section headings throughout Health details.
+These are actual rendering corrections, separate from test-only widget AX text
+width and camera-menu synchronization assumptions. Do not add camera delays or
+retry taps without a confirmed application defect. Retain both widget languages
+before assertions and every failed attempt's evidence. Candidate dce71639 includes
+accepted main and needs its own exact CI/native qualification before release.
+
+## 6 November 2026 — Reuse settled widget geometry within unchanged assertions
+
+The dce71639 gallery exceeded 120 seconds because each repeated AX frame/identifier
+query crosses the application boundary. Read one snapshot per settled element and
+reuse its frame; retain every bounds, alignment and disabled-action assertion.
+The other 67 native cases passed and all production source is unchanged. Run only
+the corrected gallery with the same limits, exact-source provenance and failure
+artifacts. Both language widget captures and corrected heading/scroll views were
+visually accepted; this does not establish SpringBoard or physical-device behavior.
+
+## 6 November 2026 — Release the verified UI corrections as build 77
+
+PR #1621 merged at 380782a0 with identical qualified full/app trees. Accept native
+coverage as 67 unchanged full-suite passes plus one corrected gallery-only pass,
+with explicit source proof and actual bilingual captures. Keep the failed full-run
+record. Normal Deploy 42281871580 passed readiness and all 15 Current checks before
+unchanged TestFlight 42282578034 uploaded build 77 at 19:54:10 UTC / 20:54:10 Copenhagen.
+Copilot remains unqualified because trusted-policy compatibility failed; this
+release does not activate it or treat plain provider responses as sufficient.

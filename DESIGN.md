@@ -3429,3 +3429,66 @@ width; segmented choices fall back to the shared scrolling layout when needed.
 Priority metadata uses explicit text with its flag and natural vertical sizing.
 Completion glyphs keep a bounded size inside accessible targets. Corrected native
 captures are required before accepting these changes.
+
+Final run 42202162500 passed all 68 UI tests. Its actual English/dark and
+Danish/light task groups, completion/details and accessibility-size bottom capture
+confirm compact priority rows and usable search-dock clearance. The identical app
+source in eb333e62 also has inspected Settings, Home, Health, Usage, Status,
+Proactive and runtime captures: selected labels are sharp, and normal Danish
+Settings labels are complete. Native selection and loading frames were inspected;
+tactile feel remains a device check. Retained artifacts and capture limitations
+are recorded in `docs/ios/design/p15-device-feedback-2026-11-06.md`.
+
+### Build 76 owner feedback: transparent chrome and local loading motion
+
+The owner accepts the compact task rows but rejects the generic `Tasks` source
+label, card-wide shimmer and rectangular material regions behind the header and
+bottom controls. This supersedes the earlier scrolled/AX header material and Tasks
+dock backing choice. Headers stay transparent; reserve and clip the scrolling
+content below them so rows cannot cross the title. Search, Plus and Health's
+dashboard selector float over the shared ambient scene with their own glass
+surfaces and safe-area clearance. Keep control-level Reduce Transparency support.
+
+Loading highlights belong only inside individual placeholder elements. Hero and
+group surfaces remain quiet; shared motion still stops for Reduce Motion, inactive
+scenes and removed content. Compact task metadata suppresses exact generic task
+headings/file names while retaining useful note/project context and full sources
+in details. This is the approved correction direction; fresh native rendering and
+motion evidence is required before accepting the implementation.
+
+### Build 76 follow-up: body graphs, glass selectors and widgets
+
+The owner now requests full-width Body trend graphs instead of rows/small sparklines.
+Each metric uses its actual date spacing and independent labelled scale; sparse
+series show recorded points, including a single reading, and missing days are not
+zeroes. Point inspection updates the value/date; the metric heading opens records.
+The 30-day window remains independent of the hero period. Accessibility text scales
+the chart and reduces date-label density. Both normal languages and AX plots were
+inspected in df56bcaa; detail selection and Back checks passed.
+
+The later screenshot supersedes the quiet material selector rail: joined choices
+use one content-bearing clear-glass surface like Search, with a moving tonal
+selection and shared press response. Avoid overlapping optical layers that refract
+text. Every medium Workouts/Factory/Notes widget has the same top-left icon/title.
+Workouts balances a 2×2 metric grid beside its ring; Factory compacts counters and
+rows within existing 16 pt insets. Native content captures do not establish WidgetKit
+Home Screen tint/host rendering.
+
+Rendered follow-up: df56bcaa English/dark widget content fits with shared top-left
+headings and balanced columns. The test's width failure compared intrinsic text
+unions; checks now use column origins/spans and bounds. Both languages are captured
+before assertions so Danish evidence is retained even after a failure. Danish
+widget rendering remains unreviewed for df56bcaa.
+
+Actual EN/DA charts retain decimals, sparse dates, single points and usable details;
+Back retains selection. Health detail now adopts the shared primary-color headings.
+Task-group headers in a plain List were pinning over scrolling tasks: render them
+as ordinary clear first rows within their native sections, preserving swipe actions.
+The 6.398-second loading recording shows per-bar shine and static card surfaces;
+reduced-motion fixture pixels are identical. Fresh dce71639 captures confirm
+normal-flow task headings, primary Health-detail
+headings and both widget languages. All three widget titles fit at top left; Workouts
+has aligned columns, Factory retains two rows and Danish Notes fits its summary.
+The corrected gallery passed in 42280276801 on unchanged production views and its
+final bilingual captures were inspected. Build 77 includes this composition. These
+are native content captures, not SpringBoard/tint or live-refresh evidence.

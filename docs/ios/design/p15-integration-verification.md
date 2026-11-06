@@ -6,6 +6,17 @@ pending-state notes in page verification documents. Reference: approved board.ht
 from #1603, rendered unchanged at 402 × 874 logical points / scale 3. The board is
 a composition reference, not evidence of the native app or live backend data.
 
+For the later owner-approved device-feedback batch, use the
+[current delivery record](p15-device-feedback-2026-11-06.md). The original
+build-75 acceptance below does not qualify those subsequent changes. Build 76
+was uploaded and accepted for functional owner testing. The current graph/widget/
+surface correction is merged as 380782a0 from qualified 1766b727 in #1621.
+Native coverage is 67 passing cases in 42268563484 plus one focused gallery pass
+in 42280276801 on identical production source. CI/CodeQL and visual inspection
+passed. Normal Deploy 42281871580 was accepted and build 77 uploaded successfully
+in 42282578034. Earlier failures and processing limitations remain in the delivery
+record. No additional simulator run is required for this unchanged source.
+
 ## Scope and delivery
 
 All non-Chat pages share consistent headings, spacing, grouped rows, controls and

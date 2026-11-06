@@ -2441,3 +2441,22 @@ inline loading uses the shared dots. Both stop when inactive/offscreen and respe
 Reduce Motion. Navigation stays available and real content replaces loading as
 soon as it arrives. Release follows successful checks and native visual review,
 with backend/agent readiness before the dependent TestFlight upload.
+
+### Body trend graphs and medium widget consistency (6 November 2026)
+
+Health's Body trend shows actual 30-day measurement graphs directly on the
+dashboard, including single readings, with accessible point inspection and records
+details. Weight/body fat/lean mass keep separate units/scales and no synthetic
+missing-day values. Workouts, Factory and Notes medium widgets share a top-left
+icon/title, readable content spacing and unclipped counters/details.
+
+Measurement details must visibly load, offer recovery when needed, and return to
+the selected dashboard reading and scroll position. Displayed body values retain
+decimal precision; compact activity-count rounding must not alter a measurement.
+Task-group headings must scroll without covering rows. Health-detail section titles
+use the same primary-color headline treatment as the dashboard.
+
+Copilot comparison availability requires demonstrated compatibility with Jarvis's
+complete trusted policy, including changing per-turn instructions. Configuration
+or a plain response alone is insufficient. If compatibility is absent or stale,
+explain why the test runtime is unavailable and keep Current usable.

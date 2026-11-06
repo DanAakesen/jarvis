@@ -1,4 +1,47 @@
-# P15 completed release checkpoint
+# P15 release checkpoints
+
+## Completed device-feedback release — build 77
+
+The owner is testing build 76 and accepts Voice/history, Home send/camera,
+task/reminder creation, Health pull refresh and compact task rows. The released UI
+follow-up is PR #1621: local shimmer, generic task-source suppression, transparent
+headers/floating docks, clear-glass selectors, consistent medium widgets and real
+Body trend graphs.
+
+Build **77 uploaded successfully at 19:54:10 UTC / 20:54:10 Copenhagen** in unchanged TestFlight
+workflow [42282578034](https://github.com/DanAakesen/jarvis/actions/runs/42282578034),
+from main `380782a02712322090de54d577991420351f460e` (#1621). Apple processing and
+owner visibility of this build are not independently confirmed.
+
+CI 42280051912 passed, including 502 Core tests, and CodeQL 42280051874 passed.
+Native coverage is 67 passing cases in 42268563484 plus the focused gallery pass
+in 42280276801 on identical production source. Both widget languages, Health
+charts/detail/Back, accessibility, task scrolling and transparent controls were
+inspected; unchanged shimmer was reviewed in a complete 6.398-second recording.
+Earlier failed attempts remain in the delivery record and are not described as
+passes. Widget host tint/refresh, physical haptics and live HealthKit remain device
+checks.
+
+Merged full tree: `8c18563542ef60ac423d4397ba3a3bc7d1837989`; app/test tree:
+`70f5cefe1e153390376cfab48b50e099c1f7fde4`. Both exactly match the qualified candidate.
+Automatic main Simulator 42281871658 was stopped during partial compilation before
+boot, after proving identity. Normal Deploy 42281871580 was accepted with readiness
+and all 15 Current conversation checks passing before TestFlight dispatch.
+
+Backend PR #1624 / 1fb0f908 deployed successfully in 42258321357 with all 15 Current
+acceptance checks passing. Its exact compatibility gate is accepted. Copilot itself
+remains unqualified because trusted-policy diagnostics failed; do not activate it
+by omitting/demoting Jarvis instructions or repeat provisioning without new evidence.
+
+Build 76 uploaded from ab464314 in 42215302636 at 12:14:34 UTC / 13:14:34 Copenhagen;
+the owner confirmed it is available. Its app/test tree was b9bd418f6d41c1fb9cc35450d1da9711eaf1c81a,
+with 68/68 native tests and inspected captures. Later instructions authorize the
+functional Chat/voice fixes and runtime-testing Plus option while preserving Chat
+appearance. The previous CI hold was lifted; release remains authorized after checks.
+Read the [delivery record](p15-device-feedback-2026-11-06.md) for full provenance and
+historical failures. Do not reuse build 76 evidence for the changed rendering.
+
+## Original board release — build 75
 
 The non-Chat board alignment and owner-selected Home/success polish were uploaded
 to TestFlight as **build 75**. Read the [release record](p15-release-2026-11-06.md)

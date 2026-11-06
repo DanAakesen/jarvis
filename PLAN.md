@@ -1,46 +1,61 @@
-## Managed policy request qualification — 6 November 2026
+## Current release — 6 November 2026, build 77
 
-The 30 October #1373 evidence records a real Responses 4xx after native binding,
-but its discarded exception cannot identify the rejected field. The old canary
-sent a plain string without per-turn instructions and could miss that failure.
-The fixed canary now shares the real managed request builder and complete normal
-chat instruction composition, sends only synthetic reference/user input, refuses
-tool requests and cleans up its own native conversation. Activation requires its
-`requestShape: managed_policy` success marker. Bounded stage/provider metadata is
-independently filtered into deployment diagnostics; raw content remains private.
+Owner-reported passes: cold Voice/unified transcript, Home send/camera, task/reminder
+workflow and Health pull refresh. Compact task rows are accepted. PR #1621 combines
+per-element shimmer, useful task-source labels with full detail provenance,
+transparent protected headers/docks, shared clear-glass selectors, three medium
+widget layouts and real Body trend plots.
 
-Local validation: 446 hosted tests (shared model loop, runtime, policy transport,
-provider diagnostics and chat entrypoint), 13 handoff tests, scoped Ruff and shell
-syntax. No iOS source changes. Next: deploy the hosted agent before the handoff,
-capture the actual cause if rejected, correct only a proven incompatibility, then
-verify a real isolated owner conversation. This closes a qualification gap; it
-does not establish that the historical live request now works.
+Build **77 uploaded successfully at 19:54:10 UTC / 20:54:10 Copenhagen** in unchanged TestFlight
+workflow [42282578034](https://github.com/DanAakesen/jarvis/actions/runs/42282578034),
+from main `380782a02712322090de54d577991420351f460e` (#1621). Apple processing and
+owner visibility of this build are not independently confirmed.
 
-## Runtime testing on iOS and comparison activation — 6 November 2026
+CI 42280051912 passed, including 502 Core tests, and CodeQL 42280051874 passed.
+Native coverage is 67 passing cases in 42268563484 plus the focused gallery pass
+in 42280276801 on identical production source. Both widget languages, Health
+charts/detail/Back, accessibility, task scrolling and transparent controls were
+inspected; unchanged shimmer was reviewed in a complete 6.398-second recording.
+Earlier failed attempts remain in the delivery record and are not described as
+passes. Widget host tint/refresh, physical haptics and live HealthKit remain device
+checks.
 
-Implemented locally: the shared native Plus menu opens an explicit isolated
-runtime-test sheet with typed availability/session binding, streaming, Stop reply,
-history review and durable blocked-session recovery. Web has in-place availability
-retry; missing server activation now has a specific reason. The manual comparison
-handoff has a default-off immutable definition refresh for changed Jarvis tools
-and identity; existing exact matches are reused and old versions preserved.
+Merged full tree: `8c18563542ef60ac423d4397ba3a3bc7d1837989`; app/test tree:
+`70f5cefe1e153390376cfab48b50e099c1f7fde4`. Both exactly match the qualified candidate.
+Automatic main Simulator 42281871658 was stopped during partial compilation before
+boot, after proving identity. Normal Deploy 42281871580 was accepted with readiness
+and all 15 Current conversation checks passing before TestFlight dispatch.
 
-Verified locally: 80 backend runtime tests, 146 web tests, backend/web builds,
-scoped ESLint and 39 provisioning/handoff/deploy-plan checks; synthetic Chromium inspection at desktop/phone in both
-themes covers disabled choices, availability retry, create failure/retry, scoped
-streaming and return. Native compilation/Simulator and actual managed inference
-remain pending. The screenshot reason identifies an absent verifier at the time of
-the report, not the cause of missing production configuration. Next: coordinator
-integrates this with the current batch, runs one combined native qualification,
-deploys backend/hosted agent first, explicitly refreshes/activates the comparison,
-checks canary and original conversation path, then releases TestFlight. Do not
-claim live Copilot success from local fixtures or a selectable option alone.
+## Backend and runtime comparison status
+
+PR #1624 merged as 1fb0f908 after CI/CodeQL. Normal deployment 42258321357 is accepted,
+including all 15 Current conversation checks. The gate binds exact target/model/
+effort/transport compatibility to a full-policy, two-turn precedence/update canary.
+Missing or stale evidence blocks both new and existing Copilot test turns with a
+specific web/iOS explanation. Never demote or omit Jarvis policy to enable the option.
+
+Copilot itself remains incompatible: fixed diagnostics accepted ordinary user input,
+rejected trusted-role response input, and failed stored-policy precedence/replacement
+sentinels. No working comparison is claimed. The iOS Plus runtime-testing sheet and
+web availability/retry flow shipped in build 76; current user-only provider success
+does not qualify Jarvis operation. Normal Current is accepted and build 77 is uploaded.
+See [the delivery record](docs/ios/design/p15-device-feedback-2026-11-06.md) for exact
+runs, retained evidence, previous failures and acceptance boundaries.
+
+## Completed owner workflow slice
+
+Build 76 uploaded from ab464314 at 12:14:34 UTC / 13:14:34 Copenhagen and the owner
+confirmed it is available. It includes unified typed/voice history, cold Voice
+readiness, Home send/camera handoff, Health pull refresh, shared tool schema/error
+hints, high-priority vault task/reminder timing and approval-gated own-code bug or
+feature proposals. These remain implemented. Build 77 delivers the subsequent
+visual corrections.
 
 ## P15-78 — retire Daily feeds, rename Daily to Health, iPhone Health sync (#1571)
 
 - Done: feeds removed, rename with temporary `/daily` alias, iOS `/health/*`, Sync button and ingest payload with Swift tests.
-- P15-86 (#1587): owner-only `POST /health/sync`, anchor, Sync button states and last-sync time done; app target compiled only by CI.
-- Open: background sync (HKObserverQuery/BGTask), alias removal once builds ≤67 are gone, macOS CI build of the app target.
+- P15-86 (#1587): owner-only `POST /health/sync`, anchors and native compilation verified. The owner subsequently confirmed build 76 pull-to-refresh; the explicit sync/status block was removed at their request.
+- Open: background sync (HKObserverQuery/BGTask) and alias removal once builds ≤67 are gone.
 
 ## P15-51 — approval flow polish (#1504)
 
@@ -2257,31 +2272,30 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **Task-list board correction:** Owner-reported mismatch in Notes → Tasks is
-  implemented with inset groups, quiet completion controls, section counts,
-  trailing dates and readable Markdown titles. New synthetic long-title and
-  large-text captures plus completion/detail checks await the single PR native
-  run. The board correction preserves Chat's appearance.
-  The owner lifted the CI/release hold after the final loading request. PR #1614
-  is being completed for one combined native run, backend/agent deployment and
-  TestFlight upload after successful checks and visual review.
-  The held batch now also includes shared glass selection/press feedback, equal
-  selector padding, primary-color section headings, and Home/Health pull-to-refresh
-  that syncs Apple Health before reloading data. Later owner reports also authorize
-  shared tool discovery/validation guidance, reminder schema alignment, voice
-  capture startup recovery, unified voice/chat history and reliable Home send/camera
-  handoffs. Combined native run 42185446322 at 7dba227a passed all 68 UI tests and
-  retained captures. Visual inspection found blurred glass labels, inflated
-  priority rows and truncated Danish Settings choices; shared corrections and a
-  row-height regression assertion were qualified at eb333e62. General CI
-  42193478117 and CodeQL passed, including 7,361 backend tests (one skipped),
-  497 Core tests and the Python workflow guards. Native run 42193478110 passed
-  65/68 tests; fresh captures show compact priority rows and sharp selection labels.
-  Three test failures require a fresh run: sub-micropoint AX measurement error and
-  two completion taps behind the fixed header after scrolling. The test now reveals
-  the whole control before tapping and retains completion/detail assertions.
-  Complete the remaining native checks and visual review before merge. See
-  `docs/ios/design/p15-device-feedback-2026-11-06.md`.
+- **Device-feedback delivery (#1614): source merged and verified.** Compact task
+  groups, shared glass/padding/headings, Health pull refresh, animated loading,
+  tool/reminder guidance, high-priority task intent, approval-bound own-code changes,
+  voice/history/Home handoffs and web/iOS runtime testing are implemented.
+  Candidate 7e5ef535 passed CI 42202162550, CodeQL 42202162436 and all 68 native
+  tests in 42202162500. Corrected task groups/details/large-text bottom clearance
+  and shared selectors were visually inspected. #1614 merged as ab464314 with an
+  identical app/test tree. Redundant main/scheduled simulator runs were cancelled
+  only after proving source equality with retained passing runs.
+  Normal Deploy 42210649006 passed backend/agent readiness and live acceptance.
+  Comparison activation 42212979149 failed during provisioning with the generic
+  azure_request_failed result, before the canary. Read-only diagnostics merged
+  through #1615; inspection confirmed one older version and no current-manifest
+  match. The documented version-creation endpoint mismatch is corrected in #1617,
+  qualified and merged as 67f02a58. Provisioning succeeded, but the live response
+  rejected the instructions override; #1619 qualified and merged the full-policy
+  developer-input correction. Its live check reused the version but failed with
+  generic HTTP 400; a separate fixed-input diagnostic is being prepared.
+  #1618's post-build OIDC refresh also qualified and
+  merged after a separate registry authentication failure. Verified source ab464314 uploaded as
+  TestFlight build 76 at 12:14:34 UTC in run 42215302636 while separate Copilot
+  activation continues. The owner confirmed build 76 is visible in TestFlight. The owner
+  explicitly authorized this delivery. See
+  `docs/ios/design/p15-device-feedback-2026-11-06.md` for evidence and device limits.
 
 - **P15 board delivery (#1598–#1602 and Settings): Complete.** All owning PRs merged
   in the recorded order. Notes backend deployment passed readiness and live
@@ -3994,20 +4008,35 @@ research, Health and milestone facilities are reused; no duplicate job system.
 
 ### Active follow-up qualification
 
-- Implemented: own-code bug/feature proposal gates; shared identity/task awareness;
-  high-priority vault task defaults, replay protection and exact-time reminder marker;
-  general validation/schema repair; unified transcript and Home handoff corrections;
-  shared glass/padding/headings, Health pull refresh and animated loading.
-- Qualification: general CI 42179796923 passed the full selected set, including
-  7,361 backend tests (one skipped) and 493 Core tests. The final runtime addition
-  passed 80 backend, 146 web and 39 provisioning/deployment tests, backend/web
-  builds, scoped lint and browser checks at phone/desktop widths in both themes.
-- Next: retain the current native results, push the combined candidate to #1614,
-  qualify its new runtime UI and inspect the captured changes. Then merge, wait
-  for backend/agent readiness and acceptance, explicitly activate/verify the
-  Copilot comparison, and upload the verified main app to TestFlight. Physical
-  voice startup, HealthKit permission and haptic feel still require the owner's
-  device. No live Copilot success or upload is claimed yet.
+- Owner testing of build 76 confirms Voice/history, Home send/camera, task/reminder
+  creation and Health pull refresh work. New approved visual corrections: confine
+  shimmer to individual placeholders, suppress generic task-source labels, remove
+  the Notes dock slab, and keep shared headers/Health dock transparent without
+  scrolling overlap. Prepare one combined native candidate and fresh visual/motion
+  qualification; previous app-tree evidence does not cover these edits.
+- Implemented and merged through #1614: own-code bug/feature proposal gates;
+  shared identity/task awareness; high-priority vault task defaults, replay
+  protection and exact-time reminder marker; general validation/schema repair;
+  unified transcript and Home handoff corrections; shared glass/padding/headings,
+  Health pull refresh, animated loading, and web/iOS runtime testing.
+- Final qualification: CI 42202162550 and CodeQL 42202162436 passed. Native run
+  42202162500 passed 68/68 UI tests and retained inspected screenshots. Earlier
+  visual and test-positioning failures remain documented, with their corrections.
+- Delivery: normal Deploy 42210649006 passed for merged source ab464314, including
+  readiness/live acceptance. Explicit Copilot activation 42212979149 failed in
+  provisioning before the canary. Read-only inspection confirmed one older version
+  and no current-manifest match. #1617's corrected version-creation route passed
+  CI/CodeQL and merged. Provisioning succeeded; the live canary rejected the
+  instructions override. #1619 passed CI/CodeQL and merged; its normal deploy passed,
+  but comparison 42227506332 reused the version and failed with generic HTTP 400
+  `invalid_request`. Prepare a separately selected fixed-input diagnostic to isolate
+  the provider constraint; preserve full-policy acceptance and existing claims.
+  TestFlight build 76
+  uploaded from verified source ab464314; activation needs no app rebuild.
+  Physical voice startup,
+  HealthKit permissions and haptic feel still require the owner's device.
+  The owner confirmed build 76 is visible in TestFlight and began device testing.
+  Live Copilot success remains unverified.
 
 ### UI/UX recommendations requested on 6 November
 

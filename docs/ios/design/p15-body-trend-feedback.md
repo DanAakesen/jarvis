@@ -1,5 +1,8 @@
 # Body trend and selector feedback — 6 November 2026
 
+Qualified and merged in #1621 / 380782a0; native EN/DA/detail/Back and accessibility
+checks passed. Actual release status is in the device-feedback delivery record.
+
 The owner rejected build 76's body-measurement rows and requested graphs on the
 Health dashboard. The checked-in board has small row sparklines; this later
 request replaces that composition with full-width native plots in the existing
@@ -117,3 +120,18 @@ The separate screenshot/motion artifact 13527575489 has SHA256
 5ec689af0d4465868e4ca2f908ee3edfe0655d94c3f2568a4f36ee34b2363bdf.
 Both archives were downloaded and hash-verified; selected evidence remains locally
 under /tmp/p15-native-df56 and /tmp/p15-native-df56-motion.
+
+## Accepted native source
+
+CI 42280051912 and CodeQL 42280051874 passed for 1766b727. Native coverage is
+67 passing cases in 42268563484 plus the gallery-only pass in 42280276801 on
+identical production source. The gallery caches settled AX geometry; all checks
+and per-test limits remain. Both final widget captures, corrected task scrolling
+and Health-detail headings were inspected. Main 380782a0 exactly matches full tree
+8c18563542ef60ac423d4397ba3a3bc7d1837989 and app/test tree
+70f5cefe1e153390376cfab48b50e099c1f7fde4. See the delivery record for hashes, retained
+failures and release status. This supersedes pending-native statements above.
+
+Build 77 uploaded successfully in TestFlight 42282578034 after normal deployment
+42281871580 passed readiness and all 15 Current checks. Exact source, upload time
+and remaining device/Apple-processing limits are in the delivery record.
