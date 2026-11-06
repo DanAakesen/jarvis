@@ -1,3 +1,23 @@
+## 6 November 2026 — Explicit native runtime tests and comparison refresh
+
+The owner requested repair of the disabled web Copilot choice and equivalent
+runtime testing in iOS, while keeping normal voice/chat unified. Keep experiments
+in an explicitly labelled sheet with immutable runtime binding and scoped history.
+Expose a specific missing-activation reason and a read-only availability retry;
+never enable Copilot from UI configuration alone. Native client tests cover exact
+binding, scoped history and recovery that cannot clear an uncertain managed claim.
+
+Tool and identity revisions make the earlier exact single-version provisioner
+insufficient. Add a default-off, explicitly requested comparison-definition refresh:
+reuse one exact manifest match or create one immutable version, preserve earlier
+versions, verify identity/pin/readback/fingerprint, then run the existing canary.
+No automatic retry follows an uncertain write; a subsequent reviewed invocation
+can discover and reuse its unique exact match. Reject ambiguous/unowned inventory.
+No new credential, grant, default-runtime change or claim reset is authorized by
+this implementation. The user has authorized this scoped release; the coordinator
+owns backend/agent-before-TestFlight deployment and live acceptance. Local fixture
+evidence does not establish live managed inference or native device behavior.
+
 ## 5 November 2026 — Notes and Home widgets (P15-89 / #1593)
 
 - Six more widgets (small, medium, large for Notes and for Home) join the Gym and Factory ones in the `JarvisWidgets` extension. No buttons, no control items; a tap opens the matching app page through `widgetURL` (`jarvis-widget://notes` or `home`, handled by `onOpenURL` in `ContentView` via `JarvisWidgetLink`).

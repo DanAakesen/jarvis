@@ -1,3 +1,23 @@
+## Runtime testing on iOS and comparison activation — 6 November 2026
+
+Implemented locally: the shared native Plus menu opens an explicit isolated
+runtime-test sheet with typed availability/session binding, streaming, Stop reply,
+history review and durable blocked-session recovery. Web has in-place availability
+retry; missing server activation now has a specific reason. The manual comparison
+handoff has a default-off immutable definition refresh for changed Jarvis tools
+and identity; existing exact matches are reused and old versions preserved.
+
+Verified locally: 80 backend runtime tests, 146 web tests, backend/web builds,
+scoped ESLint and 39 provisioning/handoff/deploy-plan checks; synthetic Chromium inspection at desktop/phone in both
+themes covers disabled choices, availability retry, create failure/retry, scoped
+streaming and return. Native compilation/Simulator and actual managed inference
+remain pending. The screenshot reason identifies an absent verifier at the time of
+the report, not the cause of missing production configuration. Next: coordinator
+integrates this with the current batch, runs one combined native qualification,
+deploys backend/hosted agent first, explicitly refreshes/activates the comparison,
+checks canary and original conversation path, then releases TestFlight. Do not
+claim live Copilot success from local fixtures or a selectable option alone.
+
 ## P15-78 — retire Daily feeds, rename Daily to Health, iPhone Health sync (#1571)
 
 - Done: feeds removed, rename with temporary `/daily` alias, iOS `/health/*`, Sync button and ingest payload with Swift tests.

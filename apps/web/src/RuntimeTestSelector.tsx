@@ -8,9 +8,11 @@ export type RuntimeAvailability = { available: boolean; reason?: string };
 export type RuntimeTestAvailability = Partial<Record<TestRuntime, RuntimeAvailability>>;
 
 /** Availability is supplied by the caller; missing information never enables a runtime. */
-export function RuntimeTestSelector({ availability, disabledReason, onStart, onClose }: {
+export function RuntimeTestSelector({ availability, disabledReason, checking = false, onRefresh, onStart, onClose }: {
   availability: RuntimeTestAvailability;
   disabledReason?: string | undefined;
+  checking?: boolean;
+  onRefresh?: () => void;
   onStart: (runtime: TestRuntime) => Promise<void>;
   onClose: () => void;
 }) {
@@ -20,7 +22,7 @@ export function RuntimeTestSelector({ availability, disabledReason, onStart, onC
   const [error, setError] = useState('');
   const inFlight = useRef(false);
   const start = async () => {
-    if (!selected || !availability[selected]?.available || disabledReason || inFlight.current) return;
+    if (!selected || !availability[selected]?.available || disabledReason || checking || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     setError('');
@@ -37,14 +39,14 @@ export function RuntimeTestSelector({ availability, disabledReason, onStart, onC
   return <Modal title="Test agent runtime" titleId={`${id}-title`} onClose={onClose} busy={busy} allowDismissAfterEdit
     className="runtime-test-selector" footer={<div className="button-group">
       <button type="button" className="secondary-button" disabled={busy} onClick={onClose}>Cancel</button>
-      <button type="button" className="primary-button" disabled={busy || !selected || !availability[selected]?.available || Boolean(disabledReason)}
+      <button type="button" className="primary-button" disabled={busy || checking || !selected || !availability[selected]?.available || Boolean(disabledReason)}
         aria-busy={busy || undefined} onClick={() => { void start(); }}>
         {busy && <Loader variant="inline" label="Opening test conversation" />}
         {error ? 'Try again' : 'Open test conversation'}
       </button>
     </div>}>
     <p id={`${id}-description`}>Choose a runtime to open a new, separate test conversation. Your normal conversation stays unchanged. The runtime cannot change during a conversation.</p>
-    <fieldset disabled={busy || Boolean(disabledReason)} aria-describedby={`${id}-description`}>
+    <fieldset disabled={busy || checking || Boolean(disabledReason)} aria-describedby={`${id}-description`}>
       <legend>Runtime</legend>
       {(['current', 'copilot'] as const).map(runtime => {
         const option = availability[runtime];
@@ -59,6 +61,8 @@ export function RuntimeTestSelector({ availability, disabledReason, onStart, onC
         </label>;
       })}
     </fieldset>
+    {checking && <Loader variant="text" label="Checking runtimes" />}
+    {onRefresh && <button type="button" className="secondary-button" disabled={busy || checking} onClick={onRefresh}>Check again</button>}
     {disabledReason && <p role="status">{disabledReason}</p>}
     {error && <p role="alert">{error}</p>}
   </Modal>;

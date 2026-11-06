@@ -3,6 +3,68 @@ import XCTest
 @testable import JarvisCore
 
 final class JarvisChatClientTests: XCTestCase {
+    func testRuntimeAvailabilityAndExplicitSessionCreation() async throws {
+        let transport = FakeChatTransport([
+            .response(jsonResponse(status: 200, body: ["current": ["available": true],
+                "copilot": ["available": false, "reason": "copilot_not_configured"]])),
+            .response(jsonResponse(status: 201, body: ["id": "99", "channel": "chat", "language": "en", "runtimeTest": "current"])),
+            .response(jsonResponse(status: 200, body: ["messages": [], "nextCursor": NSNull()])),
+        ])
+        let chat = makeChatClient(transport: transport)
+        let availability = try await chat.runtimeTestAvailability()
+        XCTAssertTrue(availability[.current].available)
+        XCTAssertFalse(availability[.copilot].available)
+        XCTAssertEqual(availability[.copilot].reason, "copilot_not_configured")
+        let session = try await chat.createSession(language: .en, runtimeTest: .current)
+        XCTAssertEqual(session.runtimeTest, .current)
+        _ = try await chat.history(sessionId: session.id)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests[0].url.path, "/api/conversation/runtime-tests")
+        let body = try JSONSerialization.jsonObject(with: requests[1].body!) as? [String: String]
+        XCTAssertEqual(body, ["channel": "chat", "language": "en", "runtimeTest": "current"])
+        XCTAssertTrue(requests[2].url.absoluteString.contains("sessionId=99"))
+    }
+
+    func testRuntimeSessionCannotSilentlyFallBackToAnotherRuntime() async throws {
+        for returned in [nil, "current"] as [String?] {
+            var body = ["id": "99", "channel": "chat", "language": "en"]
+            body["runtimeTest"] = returned
+            let chat = makeChatClient(transport: FakeChatTransport([.response(jsonResponse(status: 201, body: body))]))
+            do {
+                _ = try await chat.createSession(language: .en, runtimeTest: .copilot)
+                XCTFail("A requested Copilot session must never fall back")
+            } catch { XCTAssertEqual(error as? JarvisChatClientError, .invalidResponse) }
+        }
+    }
+
+    func testScopedRuntimeHistoryRejectsOtherConversationMessages() async throws {
+        let chat = makeChatClient(transport: FakeChatTransport([.response(jsonResponse(status: 200, body: [
+            "messages": [["id": "1", "sessionId": "12", "channel": "chat", "language": "en", "role": "dan", "text": "Other session",
+                          "interrupted": false, "at": "2026-11-06T00:00:00Z", "toolCalls": [], "attachments": []]],
+            "nextCursor": NSNull(),
+        ]))]))
+        do {
+            _ = try await chat.history(sessionId: "99")
+            XCTFail("Scoped history must be isolated")
+        } catch { XCTAssertEqual(error as? JarvisChatClientError, .invalidResponse) }
+    }
+
+    func testRuntimeRecoveryNeverClearsAnUncertainManagedClaim() {
+        var recovery = ChatRuntimeRecovery()
+        recovery.failed(code: "managed_policy_turn_failed")
+        XCTAssertTrue(recovery.requiresHistoryReview)
+        XCTAssertTrue(recovery.sessionBlocked)
+        recovery.historyReviewed()
+        XCTAssertFalse(recovery.requiresHistoryReview)
+        XCTAssertTrue(recovery.sessionBlocked)
+        var temporary = ChatRuntimeRecovery()
+        temporary.failed(code: nil)
+        XCTAssertTrue(temporary.requiresHistoryReview)
+        XCTAssertFalse(temporary.sessionBlocked)
+        temporary.historyReviewed()
+        XCTAssertFalse(temporary.requiresHistoryReview)
+    }
+
     func testCreatesSessionAndStreamsACompleteTurn() async throws {
         let transport = FakeChatTransport([
             .response(jsonResponse(status: 201, body: [

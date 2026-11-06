@@ -60,6 +60,23 @@ closed reasons. See [the field contract](managed-policy-client.md#safe-policy-fa
 
 ## Runtime test candidate (#1350; 29 October 2026)
 
+The native client now reads `/conversation/runtime-tests` and includes an optional
+immutable `runtimeTest` when explicitly creating a test session. It validates the
+returned runtime and rejects history rows from a different requested session. A
+separate sheet owns its session, draft, streamed reply, cancellation and recovery;
+it never updates `JarvisChatModel`. Normal global history and active-turn discovery
+already exclude runtime tests. `copilot_not_configured` means no managed verifier
+is wired; `copilot_not_verified` means configured metadata does not verify. No raw
+provider body is returned by availability.
+
+An explicit `refresh_managed_chat_definition` deployment input may create one new
+immutable version of the existing comparison agent when no current-manifest match
+exists. Unique exact matches are reused, including on a later operator-reviewed
+retry after uncertain creation. Ambiguous matches, unowned versions, unknown pins
+and unverified identities stop the handoff. Old versions remain; only the separate
+comparison selector and its three backend activation values change. The existing
+readback/fingerprint/canary checks still follow activation.
+
 Migration 0069 adds owner-bound immutable test-runtime metadata and an opaque
 server-only native conversation reference to existing SQL sessions. The normal UI
 feed explicitly excludes test sessions; internal context/source reads retain

@@ -83,6 +83,9 @@ class ManagedHandoffTests(unittest.TestCase):
         workflow = (ROOT / ".github/workflows/deploy.yml").read_text()
         input_block = workflow.split("  workflow_dispatch:", 1)[1].split("\npermissions:", 1)[0]
         self.assertIn("provision_managed_chat:", input_block)
+        refresh = input_block.split("refresh_managed_chat_definition:", 1)[1]
+        self.assertIn("default: false", refresh)
+        self.assertIn("REFRESH_MANAGED_CHAT_DEFINITION: ${{ inputs.refresh_managed_chat_definition }}", workflow)
         self.assertIn("type: boolean", input_block)
         self.assertIn("default: false", input_block)
         job = workflow.split("  managed-chat-comparison:", 1)[1].split("\n  acceptance:", 1)[0]
@@ -117,6 +120,13 @@ class ManagedHandoffTests(unittest.TestCase):
         update = next(args for name, args in calls if args[:2] == ["containerapp", "update"])
         self.assertNotIn("--replace-env-vars", update)
         self.assertNotIn("--remove-env-vars", update)
+
+    def test_refresh_definition_flag_is_forwarded_only_when_explicit(self):
+        for value, expected in [("true", True), ("false", False), ("", False)]:
+            result, calls = self.run_handoff(REFRESH_MANAGED_CHAT_DEFINITION=value)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            args = next(args for name, args in calls if name == "python")
+            self.assertEqual("--refresh-definition" in args, expected)
 
     def test_invalid_activation_never_updates_backend(self):
         result, calls = self.run_handoff(BAD_ACTIVATION="1")

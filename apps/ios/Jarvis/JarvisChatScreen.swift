@@ -16,11 +16,13 @@ enum ActivitySheetKind: String, Identifiable {
 private enum ChatSheet: Identifiable {
     case activity(ActivitySheetKind)
     case camera
+    case runtimeTest
 
     var id: String {
         switch self {
         case .activity(let kind): "activity-\(kind.id)"
         case .camera: "camera"
+        case .runtimeTest: "runtimeTest"
         }
     }
 }
@@ -127,6 +129,7 @@ struct JarvisChatScreen: View {
     private var onBackToToday: (() -> Void)? {
         navigation.cameFromToday ? { navigation.navigate(to: .today) } : nil
     }
+    private let runtimeTestClient: JarvisChatClient?
     private let screenShareBridge = VoiceScreenShareBridge()
 
     init(
@@ -143,6 +146,7 @@ struct JarvisChatScreen: View {
             startupError: startupError
         )
         _model = StateObject(wrappedValue: chatModel)
+        runtimeTestClient = client.map { JarvisChatClient(client: $0) }
         self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
         self.onNavigate = onNavigate
         _handoff = handoff
@@ -275,6 +279,11 @@ struct JarvisChatScreen: View {
                         model.nowFeed?.confirmations.contains(where: { $0.actionKind == .calendarChange }) == true
                             ? [.large] : [.medium, .large]
                     )
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
+            case .runtimeTest:
+                JarvisRuntimeTestSheet(client: runtimeTestClient, language: model.voiceLanguage, appLanguage: appLanguage)
+                    .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
             case .camera:
@@ -829,6 +838,8 @@ struct JarvisChatScreen: View {
                 await Task.yield()
                 await model.setVoiceLanguage(language)
             }
+        case .testRuntime:
+            deferred { presentedSheet = .runtimeTest }
         case .shareScreen:
             deferred {
                 if isScreenSharing { stopScreenSharing() } else { openScreenSharePicker() }

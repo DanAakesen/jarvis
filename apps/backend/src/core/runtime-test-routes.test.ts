@@ -35,7 +35,7 @@ describe('runtime test routing', () => {
     const { app } = setup();
     const response = await app.inject({ url: '/conversation/runtime-tests', headers });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ current: { available: true }, copilot: { available: false, reason: 'copilot_not_verified' } });
+    expect(response.json()).toEqual({ current: { available: true }, copilot: { available: false, reason: 'copilot_not_configured' } });
     expect(response.headers['cache-control']).toBe('no-store');
   });
   it('creates only a new current test session with the authenticated owner identity', async () => {

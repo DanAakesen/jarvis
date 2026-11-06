@@ -137,6 +137,22 @@ scoped Ruff/compilation and exact-head CI before reviewed release and handoff.
 
 ## Runtime comparison preparation (#1350; 29 October 2026)
 
+6 November follow-up: once the combined backend/hosted agent revision is deployed
+and qualified, the release coordinator can use the existing manual Deploy with
+`provision_managed_chat=true` and, for the explicitly approved tool/identity update,
+`refresh_managed_chat_definition=true`. Ordinary deployments and default false
+inputs do not create comparison versions. Inspect fixed provisioning/canary reason
+codes on failure; do not replay an uncertain mutation automatically. A later
+reviewed run can reuse a unique exact matching version. No Azure grants, normal
+runtime cutover, claim reset or manual secret changes are part of this repair.
+
+Focused checks include provisioning/handoff/deploy-plan Python tests, runtime
+availability/routes and web selector/client/conversation tests, JarvisCore chat
+client/recovery/localization tests, and the existing ChatComposer XCUITest for
+explicit test isolation. Coordinate one combined native run with the release
+owner. `RUNTIME_TEST_EVIDENCE_DIR` can direct the existing synthetic browser check
+to a scratch directory without rewriting retained screenshots.
+
 Use the existing pinned dependencies; the protocol adapter adds no production
 package. Hosted checks cover managed protocol/definition, source routing and
 retained voice. Backend checks cover runtime session/store/migration and routes;

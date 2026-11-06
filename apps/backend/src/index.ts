@@ -1171,7 +1171,7 @@ try {
       managedRuntime,
       conversationRuntimeTests: async () => ({
         current: { available: Boolean(conversationAgent) },
-        copilot: { available: Boolean(await readManagedTarget()) },
+        copilot: await readManagedTarget() ? { available: true } : { available: false, reason: 'copilot_not_verified' },
       }),
     } : {}),
     ...(healthUpload && healthProcessor && healthCapabilities ? { healthUpload, healthProcessor, healthCapabilities } : {}),

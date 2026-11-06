@@ -22,6 +22,12 @@ on:
         default: false
         required: false
 
+      refresh_managed_chat_definition:
+        description: Explicitly refresh the comparison definition if current tools changed
+        type: boolean
+        default: false
+        required: false
+
 permissions:
   contents: read
 
@@ -488,6 +494,8 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - name: Provision and verify the explicitly requested comparison
+        env:
+          REFRESH_MANAGED_CHAT_DEFINITION: ${{ inputs.refresh_managed_chat_definition }}
         run: bash .github/scripts/provision_managed_chat_handoff.sh
 
   acceptance:

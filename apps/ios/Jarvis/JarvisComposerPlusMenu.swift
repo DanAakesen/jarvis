@@ -4,6 +4,7 @@ import SwiftUI
 /// What a choice in the composer plus menu asks for. Chat performs it directly; Home hands it to Chat.
 enum JarvisComposerPlusAction: Equatable {
     case voiceLanguage(ChatLanguage)
+    case testRuntime
     case shareScreen
     case video
     case files
@@ -12,7 +13,7 @@ enum JarvisComposerPlusAction: Equatable {
 }
 
 /// The one composer plus menu, shared by Chat and Home so both open exactly the same choices: voice language,
-/// screen sharing, video, attach (files, photo library) and camera. The screens differ only in what they do with
+/// runtime tests, screen sharing, video, attach (files, photo library) and camera. The screens differ only in what they do with
 /// the chosen action and which entries are disabled. Identifiers are `identifier`, `identifier.screenShare`,
 /// `identifier.video`, `identifier.attach` and `identifier.camera`.
 /// HIG: Menus, Toolbars. API: Menu, Label.
@@ -47,6 +48,8 @@ struct JarvisComposerPlusMenu: View {
                 Label(copy(.voiceLanguage), systemImage: "globe")
             }
             .disabled(languageDisabled)
+            Button(copy(.runtimeTest), systemImage: "flask") { onAction(.testRuntime) }
+                .accessibilityIdentifier("\(identifier).testRuntime")
             Button(
                 isScreenSharing ? copy(.stopSharingScreen) : copy(.shareScreen),
                 systemImage: isScreenSharing ? "stop.circle" : "rectangle.on.rectangle"

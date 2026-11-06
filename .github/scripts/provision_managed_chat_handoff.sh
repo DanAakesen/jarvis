@@ -25,9 +25,13 @@ if ! timeout 210s az rest --method POST --url "$invocations" --resource https://
   fail managed_chat_manifest_unavailable
 fi
 # Existing hosted identity reads its normal tool registry; no tool executes here.
+refresh_args=()
+if [[ "${REFRESH_MANAGED_CHAT_DEFINITION:-false}" == true ]]; then
+  refresh_args+=(--refresh-definition)
+fi
 python .github/scripts/provision_managed_chat.py --project-id "$project_id" \
   --project-endpoint "$project_endpoint" --manifest "$private_dir/manifest.json" \
-  --output "$private_dir/activation.json" --apply
+  --output "$private_dir/activation.json" --apply "${refresh_args[@]}"
 if ! jq -e --arg endpoint "$project_endpoint" '
   type == "object" and (keys | sort) == ["agentName", "fingerprint", "projectEndpoint", "version"] and
   .projectEndpoint == $endpoint and .agentName == "jarvis-main-copilot-preview" and

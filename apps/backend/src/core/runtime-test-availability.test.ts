@@ -10,7 +10,7 @@ describe('runtime test availability', () => {
   });
   it('requires explicit managed verification while preserving configured Current', async () => {
     expect(await readRuntimeTests({ storageAvailable: true, currentAvailable: true })).toEqual({
-      current: { available: true }, copilot: { available: false, reason: 'copilot_not_verified' },
+      current: { available: true }, copilot: { available: false, reason: 'copilot_not_configured' },
     });
   });
   it('keeps a verifier failure content-free and fails closed', async () => {

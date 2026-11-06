@@ -118,3 +118,33 @@
 "chat.activity.release" = "Releases and deployments";
 "chat.activity.credential" = "Credential warnings";
 "chat.activity.alert" = "Alerts";
+
+// Explicit isolated runtime tests.
+"chat.runtime.runtimeTest" = "Test agent runtime";
+"chat.runtime.runtimeTestIntro" = "Choose a runtime for a separate test conversation. Your normal voice and chat history stays together. The runtime cannot change during a test.";
+"chat.runtime.runtimeCurrent" = "Current";
+"chat.runtime.runtimeOpen" = "Open test conversation";
+"chat.runtime.runtimeChecking" = "Checking runtimes";
+"chat.runtime.runtimeRetry" = "Check again";
+"chat.runtime.runtimeUnavailable" = "This runtime is unavailable.";
+"chat.runtime.runtimeNotConfigured" = "Copilot testing has not been activated on the server.";
+"chat.runtime.runtimeNotVerified" = "The selected settings and Copilot runtime have not been verified.";
+"chat.runtime.runtimeVerificationFailed" = "Could not verify Copilot. Try checking again.";
+"chat.runtime.runtimeStorageUnavailable" = "Conversation storage is unavailable.";
+"chat.runtime.runtimeSettingsMismatch" = "Copilot needs a configuration update for the selected chat settings.";
+"chat.runtime.runtimeDefinitionMismatch" = "Copilot needs a configuration update before testing.";
+"chat.runtime.runtimeTitle" = "Test conversation";
+"chat.runtime.runtimeHistoryNotice" = "Test messages stay out of your normal conversation.";
+"chat.runtime.runtimeEmpty" = "Send a message to try this runtime.";
+"chat.runtime.runtimeReturn" = "Return to normal conversation";
+"chat.runtime.runtimeMessage" = "Test message";
+"chat.runtime.runtimeSending" = "Waiting for test reply";
+"chat.runtime.runtimeStop" = "Stop reply";
+"chat.runtime.runtimeRefreshHistory" = "Refresh test history";
+"chat.runtime.runtimeHistoryFailed" = "Could not load test history. Refresh it before sending again.";
+"chat.runtime.runtimeCreateFailed" = "Could not open the test. Check availability and try again.";
+"chat.runtime.runtimeUncertain" = "The reply may have completed or performed an action. Refresh history and check action status before sending a new message. Nothing will be resent automatically.";
+"chat.runtime.runtimeBlocked" = "This test has an unfinished reply and cannot continue safely. Check history and action status, then return to your normal conversation. Refreshing does not clear the unfinished reply.";
+"chat.runtime.runtimeStopFailed" = "Could not confirm that the reply stopped. Wait for the reply and check action status.";
+"chat.runtime.runtimeYou" = "You";
+"chat.runtime.older" = "Load older messages";

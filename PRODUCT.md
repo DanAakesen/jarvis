@@ -41,6 +41,14 @@ no automatic resend, claim reset, new runtime controls or default change.
 
 ## Approved main chat harness replacement (#1350; 29 October 2026)
 
+The 6 November follow-up exposes the same explicit runtime test through the
+shared iOS Home/Chat Plus menu. Test messages remain scoped to their test session;
+normal typed and voice messages retain their single combined history. Both clients
+show unavailable reasons and let the owner check availability again. Missing
+server activation is distinguished from failed configuration verification. A
+changed Jarvis tool/identity definition can be refreshed only through the explicit
+comparison deployment input; this does not select Copilot for normal chat.
+
 Replace the custom main chat loop through a controlled, switchable Foundry
 Copilot-harness migration after fixing the live baseline. Preserve native audio,
 Jarvis identity, existing tools/approvals, SQL memory, blob artifacts and separate

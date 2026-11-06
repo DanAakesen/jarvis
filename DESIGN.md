@@ -1,5 +1,16 @@
 ## Approved runtime test entry (#1350; 29 October 2026)
 
+On iOS, Test agent runtime follows Voice language in the shared Home/Chat Plus
+menu. A large sheet uses the shared glass choice buttons, loading feedback and
+composer. The title names the chosen runtime and stays marked as a test. The
+normal Chat view remains mounted with its draft. Disabled choices show the server
+reason; Check again re-reads availability. Closing is allowed during read-only
+loads and blocked during session creation or a reply; Stop reply requests server
+cancellation and keeps reading the saved reply. An uncertain managed claim stays
+blocked even after Refresh test history. Copy is Danish/English. Native Simulator
+inspection remains pending; the web selector/retry flow was inspected at 390 and
+1440 pixels in both themes with reduced motion included (6 November).
+
 The existing chat menu will contain Test agent runtime. Dan chooses Current or
 Copilot and opens a separate, clearly labelled conversation. Normal chats stay
 unchanged; do not switch runtimes mid-conversation. The local candidate opens an

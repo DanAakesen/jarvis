@@ -61,7 +61,75 @@ class FakeAzure:
                 "agent_endpoint": {"version_selector": self.selector}}
 
 
+class VersionedAzure(FakeAzure):
+    def __init__(self):
+        super().__init__(existing=True)
+        self.versions = [copy.deepcopy(self.version)]
+        self.versions[0]["definition"]["instructions"] = "Previous reviewed synthetic instructions"
+        self.selector = {"version_selection_rules": [{"type": "FixedRatio", "agent_version": "1", "traffic_percentage": 100}]}
+
+    def inventory(self, path):
+        if "/versions" in path:
+            self.calls.append(("GET", path, None))
+            return copy.deepcopy(self.versions)
+        return super().inventory(path)
+
+    def data(self, path, method="GET", body=None):
+        if method == "POST":
+            self.calls.append((method, path, body))
+            self.versions.append({**copy.deepcopy(self.version), "version": str(len(self.versions) + 1),
+                                  "definition": copy.deepcopy(body["definition"])})
+            if self.fail_create:
+                raise script.Blocked("azure_request_failed")
+            return {}
+        if "/versions/" in path:
+            self.calls.append((method, path, body))
+            return copy.deepcopy(next(value for value in self.versions if value["version"] == path.rsplit("/", 1)[1]))
+        return super().data(path, method, body)
+
+
 class ProvisionTests(unittest.TestCase):
+    def test_refresh_is_explicit_preserves_old_version_and_reuses_exact_new_match(self):
+        azure = VersionedAzure()
+        expected = script.definition(MANIFEST)
+        with self.assertRaisesRegex(script.Blocked, "^agent_definition_mismatch$"):
+            script.provision(azure, expected)
+        self.assertFalse(any(call[0] != "GET" for call in azure.calls))
+        original = copy.deepcopy(azure.versions[0])
+        activation = script.provision(azure, expected, refresh_definition=True)
+        self.assertEqual(activation["version"], "2")
+        self.assertEqual(azure.versions[0], original)
+        self.assertEqual([call[0] for call in azure.calls if call[0] != "GET"], ["POST", "PATCH"])
+        azure.calls.clear()
+        self.assertEqual(script.provision(azure, expected), activation)
+        self.assertFalse(any(call[0] != "GET" for call in azure.calls))
+
+    def test_uncertain_create_is_not_retried_and_later_run_discovers_exact_match(self):
+        azure = VersionedAzure()
+        azure.fail_create = True
+        expected = script.definition(MANIFEST)
+        with self.assertRaisesRegex(script.Blocked, "^azure_request_failed$"):
+            script.provision(azure, expected, refresh_definition=True)
+        self.assertEqual([call[0] for call in azure.calls if call[0] != "GET"], ["POST"])
+        self.assertEqual(azure.selector["version_selection_rules"][0]["agent_version"], "1")
+        azure.calls.clear()
+        self.assertEqual(script.provision(azure, expected, refresh_definition=True)["version"], "2")
+        self.assertEqual([call[0] for call in azure.calls if call[0] != "GET"], ["PATCH"])
+
+    def test_refresh_rejects_ambiguous_matches_unowned_versions_and_unknown_pin(self):
+        for change in ["ambiguous", "unowned", "pin"]:
+            with self.subTest(change=change):
+                azure = VersionedAzure()
+                if change == "ambiguous":
+                    azure.versions = [copy.deepcopy(azure.version), {**copy.deepcopy(azure.version), "version": "2"}]
+                elif change == "unowned":
+                    azure.versions[0]["metadata"] = {}
+                else:
+                    azure.selector["version_selection_rules"][0]["agent_version"] = "unreviewed"
+                with self.assertRaises(script.Blocked):
+                    script.provision(azure, script.definition(MANIFEST), refresh_definition=True)
+                self.assertFalse(any(call[0] != "GET" for call in azure.calls))
+
     def test_creates_one_version_pins_only_new_name_and_reuses_without_mutation(self):
         azure = FakeAzure()
         first = script.provision(azure, script.definition(MANIFEST))
