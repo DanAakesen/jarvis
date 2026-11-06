@@ -164,6 +164,15 @@ jobs:
       - name: Build the backend image in ACR
         run: |
           az acr build --registry "$REGISTRY" --image "jarvis-backend:$IMAGE_TAG" --file apps/backend/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --build-arg "JARVIS_DEPLOYED_COMMIT=$GITHUB_SHA" --only-show-errors .
+      # A remote build/queue can outlast the assertion used by the first login.
+      - name: Refresh Azure login before reading the backend image digest
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Resolve the backend image digest
+        run: |
           digest=$(az acr manifest show-metadata --registry "$REGISTRY" --name "jarvis-backend:$IMAGE_TAG" --subscription "$SUBSCRIPTION_ID" --query digest --output tsv --only-show-errors)
           [[ "$digest" == sha256:* ]] || { echo "::error::ACR image has no manifest digest"; exit 1; }
           echo "IMAGE=$REGISTRY_HOST/jarvis-backend@$digest" >>"$GITHUB_ENV"
@@ -252,6 +261,14 @@ jobs:
       - name: Build the Jarvis agent image in ACR
         run: |
           az acr build --registry "$REGISTRY" --image "jarvis-agent:$IMAGE_TAG" --file agents/jarvis/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --only-show-errors agents/jarvis
+      - name: Refresh Azure login before reading the agent image digest
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Resolve the Jarvis agent image digest
+        run: |
           digest=$(az acr manifest show-metadata --registry "$REGISTRY" --name "jarvis-agent:$IMAGE_TAG" --subscription "$SUBSCRIPTION_ID" --query digest --output tsv --only-show-errors)
           [[ "$digest" =~ ^sha256:[0-9a-fA-F]{64}$ ]] || { echo "::error::ACR agent image has no valid digest."; exit 1; }
           echo "AGENT_IMAGE=$REGISTRY_HOST/jarvis-agent@$digest" >>"$GITHUB_ENV"

@@ -42,6 +42,37 @@ name-only subject, so re-run bootstrap once before the first successful Deploy.
 See the [Azure constraints](../docs/agent-context.md#azure) and
 [architecture](../docs/architecture.md).
 
+## Authentication after remote image builds
+
+The backend and hosted-agent Deploy jobs obtain a fresh GitHub OIDC assertion
+through the existing pinned `azure/login` action after each remote ACR build and
+immediately before reading its manifest digest. The action uses the same existing
+client, tenant and subscription; permissions, image tags, digest guards, deployment
+readiness and release receipts are unchanged. Failed login or metadata resolution
+stops the job before image deployment. There is no automatic build/write retry,
+admin credential fallback or new secret.
+
+On 6 November, normal Deploy
+[42219180536](https://github.com/DanAakesen/jarvis/actions/runs/42219180536), backend
+job `127902277829`, successfully pushed ACR run `dtrq` at 13:03:14 UTC. Manifest
+lookup failed four seconds later with the generic non-interactive authentication
+error, more than eleven minutes after login. Container Apps was not updated by
+that job. The already-queued manual deployment used its own fresh login; its
+outcome must be checked separately rather than inferred from this correction.
+
+The original failure's underlying cause is unproven. Azure CLI's
+[ACR authentication code](https://github.com/Azure/azure-cli/blob/dev/src/azure-cli/azure/cli/command_modules/acr/_docker_utils.py)
+requests an access token for the registry audience and logs underlying token
+failures as warnings before the generic final error; `--only-show-errors` hides
+those warnings. A stale federated assertion is consistent with the timing, but
+the retained message does not distinguish expiry, authorization or connectivity.
+The [Azure CLI federation issue](https://github.com/Azure/azure-cli/issues/28708)
+documents the passed-assertion refresh limitation. The pinned login action's
+[OIDC flow](https://github.com/Azure/login/blob/a641126d1b8aa4d1fa005f4f92df94a3a4c4c906/src/Cli/AzureCliLogin.ts)
+requests a new GitHub assertion on each invocation, avoiding dependence on the
+pre-build assertion when acquiring the registry token. No raw tokens or debug
+authentication logs are added to deployment output.
+
 ## Application alerts
 
 The three scheduled-query rules match `jarvis.alert` traces whose

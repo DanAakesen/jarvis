@@ -1592,6 +1592,34 @@ class SafeFailureTests(unittest.TestCase):
         plan_permissions = deploy[deploy.index("  plan:"):deploy.index("    outputs:")]
         self.assertIn("pull-requests: read", plan_permissions)
 
+    def test_acr_metadata_has_fresh_oidc_after_remote_build_and_before_deployment(self):
+        deploy = (ROOT / ".github/workflows/deploy.yml").read_text()
+        for part, image_variable, deployment in [
+            ("backend", "IMAGE", "az containerapp update"),
+            ("agent", "AGENT_IMAGE", 'az rest --method post --url "$versions?api-version=v1"'),
+        ]:
+            with self.subTest(part=part):
+                job = workflow_recipe(deploy, part)
+                steps = job.split("      - ")[1:]
+                builds = [index for index, step in enumerate(steps) if "az acr build " in step]
+                reads = [index for index, step in enumerate(steps) if "az acr manifest show-metadata " in step]
+                self.assertEqual(len(builds), 1)
+                self.assertEqual(reads, [builds[0] + 2])
+                login = steps[builds[0] + 1]
+                initial_login = next(step for step in steps if "uses: azure/login@" in step)
+                self.assertEqual(login[login.index("uses: azure/login@"):],
+                                 initial_login[initial_login.index("uses: azure/login@"):])
+                self.assertNotIn("if:", login)
+                self.assertNotIn("continue-on-error:", login)
+                digest = steps[reads[0]]
+                self.assertIn(f'--name "jarvis-{part}:$IMAGE_TAG"', digest)
+                self.assertIn('--query digest --output tsv --only-show-errors', digest)
+                self.assertIn('exit 1;', digest)
+                self.assertIn(f'echo "{image_variable}=$REGISTRY_HOST/jarvis-{part}@$digest"', digest)
+                self.assertLess(reads[0], next(index for index, step in enumerate(steps) if deployment in step))
+                self.assertIn("id-token: write", job)
+                self.assertNotIn("--password", job)
+
     def test_cli_invalid_inputs_never_echo_payloads(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "private.json"
