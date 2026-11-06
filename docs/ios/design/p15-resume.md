@@ -1,48 +1,52 @@
 # P15 continuation and release checkpoint
 
-Updated 5 November 2026, 23:22 UTC. Read AGENTS.md and
-`p15-integration-verification.md` for the current scope/evidence. The original
-checkpoint was `ab346d91`; that handoff is superseded by this continuation.
+Updated 6 November 2026, 00:05 UTC. Read AGENTS.md and
+`p15-integration-verification.md`. The original checkpoint was `ab346d91`.
 
-The owner requested every non-Chat page follow the approved board, with consistent
-spacing, geometry, useful section headings and restrained native Apple glass. They
-authorised release for **6 November 2026, 06:00 Europe/Copenhagen = 05:00 UTC**.
-Work directly, without subagents, duplicate simulator runs or further confirmation.
+The owner authorised the non-Chat board consistency pass, merges, required Notes
+backend deployment and TestFlight for **6 November 06:00 Europe/Copenhagen =
+05:00 UTC**. Work directly, without subagents or duplicate simulator runs. The owner
+is sleeping; existing authorisation is sufficient. New explicit additions are a
+shorter Home greeting and subtle haptics/interruptible feedback on successful lift
+saves, task completion and note creation. Other suggestions remain proposals.
 
-Shared #1604 merged first as `c818a6b3`. Deliver **#1605, #1606, #1607, #1608,
-#1610**, in that order. #1609 is combined validation only: never merge it. All
-owning PRs target main after the shared squash. Resolve squash-history conflicts
-without dropping verified source changes. Notes `/notes/folders` must deploy from
-main before TestFlight. No page merge or upload has happened yet.
+Shared #1604 merged as `c818a6b3`. Deliver **#1605 Notes, #1606 Home/Factory,
+#1607 Health, #1608 Insights, #1610 Settings**, in that order. **Never merge #1609**;
+it is combined validation only. Notes `/notes/folders` must deploy successfully
+from main before TestFlight. No page PR or TestFlight upload has happened yet.
 
-Current native runs: Notes 42125346515, Factory 42124893512, Health 42124896873,
-Insights 42124893661. Settings 42121264726 passed 49/49 but screenshots prompted
-geometry fixes. The combined f868f435 general CI passed with 493 Core tests. Its
-native run and the queued intermediate Settings run are superseded by final
-Settings/Health accessibility edits; use one final combined native run. Refresh
-GitHub rather than relying on this snapshot.
+Integration contains all latest owning-branch changes. Since published `4ea30d09`,
+it includes confirmed-action feedback, Home completion recovery, the shorter greeting,
+Health's sparse monthly chart dates, extra lower-section captures, and accessibility
+header/control/Usage corrections. ChatModel, ChatScreen and Orb remain unchanged.
+All branch work is committed locally; publish once run 42129251285 has retained its
+Settings/Notes evidence, then use one new combined native pass for the new source.
+The current run predates these additions and is not their release proof.
 
-Local branches include the final corrections. Notes ac3c346b reconciles main with
-an identical source tree to 1d8e663f. Health 3757b4a7 adds reduced-motion/VoiceOver
-paging after its data corrections. Settings 65ebe24b uses P15-94's final continuous
-shared segmented bar, fixed semantic symbols, wrapped disabled-state text and a
-scrolling strip above default text size. Integration d662d9a1 contains those changes;
-this documentation commit follows it. Preserve ongoing page runs until their
-artifacts are retained, then synchronize branches for delivery.
+Latest page native results: Notes 42125346515 **50/50**, Factory 42124893512 **48/48**,
+Health 42124896873 **48/48**, Insights 42124893661 **50/50**. Later standalone sweeps
+hit the 45-minute job limit; these are UI-suite passes, not green overall workflows.
+All screenshot artifacts were retained. Factory/Home EN/dark and DA/light, Notes
+root/creation/graph, and normal Insights EN/dark and DA/light were inspected. Health's
+30-day labels and Insights accessibility captures prompted the new fixes. Settings's
+corrected geometry is in the active combined run. Combined general CI 42129251491
+passed **493/493 Core tests** on 4ea30d09; new code still needs verification.
 
-The current public-network workspace works. GitHub access was refreshed through
-normal device login; do not reuse the stale injected GH_TOKEN. CLI commands use
-`env -u GH_TOKEN GH_CONFIG_DIR=/tmp/p15-gh-auth gh ...`; git uses the same environment
-and its gh credential helper. Never print credential values. GitHub's connected
-tools can download logs/artifacts when CLI artifact redirects fail.
+Live worktrees are `/workspace/jarvis` and `/workspace/jarvis-{notes,factory,health,
+insights,settings}`, symlinked to `/tmp/p15-workspace`. The original volume is full;
+backups remain as `*-before-scratch`. Do not start more local Docker builds. Artifact
+ZIPs/selected PNGs are under `/tmp/p15-*-final`; avoid extracting large recordings
+without a concrete need. `/tmp/p15-release-evidence.json` records checkpoints.
 
-The original volume filled during local container verification. Live worktrees are
-preserved under `/tmp/p15-workspace` and `/workspace/jarvis*` symlinks point there;
-original directories remain as `*-before-scratch` backups. Continue using the
-normal worktree paths. Native verification runs on GitHub's existing Mac workflow.
-Local release evidence is recorded in `/tmp/p15-release-evidence.json`.
+GitHub CLI uses the refreshed OAuth login:
+`env -u GH_TOKEN GH_CONFIG_DIR=/tmp/p15-gh-auth gh ...`.
+Git uses the same environment with cleared credential helpers and
+`-c credential.helper='!gh auth git-credential'`. Never print credentials. Connected
+GitHub tools can retrieve completed job logs and artifacts if CLI redirects fail.
+A prior git push failed in `commit_refs_rules`; publishing an identical tree through
+the Git API worked without force. Preserve local history before any reconciliation.
 
-After final acceptance, follow `docs/agent-context.md`'s owner-started TestFlight
-procedure and the unchanged `.github/workflows/ios-testflight.yml`. Dispatch main
-with matching `branch=main`, track signing/archive/upload and report the build
-number. Do not claim Apple processing or device acceptance without evidence.
+After native acceptance, merge owning PRs in order, compare the final app/test tree
+with the verified integration, confirm Notes backend readiness, and dispatch the
+unchanged `ios-testflight.yml` on main with `branch=main`. Track upload/build number;
+Apple processing and physical-device behavior require separate evidence.

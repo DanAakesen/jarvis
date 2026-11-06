@@ -76,3 +76,40 @@ deployment/readiness, and dispatch the existing `ios-testflight.yml` on main wit
 `branch=main`. Report upload/build number separately from Apple processing.
 Physical HealthKit permissions, live VoiceOver and signed-device acceptance cannot
 be established by simulator fixtures. No workflow/project/signing change is required.
+
+## 6 November 00:05 UTC update — owner-selected polish
+
+The earlier snapshot above is historical. Shared #1604 remains the only merged PR.
+The owner explicitly added the shorter Home greeting and confirmed-action feedback.
+Home now retains event/task priorities while health details remain in their cards.
+Note creation and task completion reuse a brief glass checkmark/text confirmation;
+lift/workout sheets retain their saved label. Native success haptics occur only after
+confirmed writes. Transitions are short, replaceable and disabled under Reduce Motion;
+feedback never consumes touches. Home no longer checks a task before its request
+finishes, and failed/uncertain writes refresh task versions and display truthful recovery.
+
+Page UI-suite results: Notes **50/50** (42125346515, artifact 13464535955), Factory
+**48/48** (42124893512, artifact 13463371218), Health **48/48** (42124896873, artifact
+13462884002), Insights **50/50** (42124893661, artifact 13463890651). Their later
+standalone capture sweeps timed out. These passes precede the newest polish.
+Combined 4ea30d09 general CI **42129251491** passed with **493/493 Core tests**;
+native run **42129251285** is still collecting corrected Settings evidence.
+
+Additional inspected captures: Notes root, selected Graph and the nested-folder
+creation sheet; Usage, Status, Proactive and Notifications in English/dark and
+Danish/light; Health Training EN/dark, Sleep DA/light, Nutrition in both languages.
+Health monthly chart labels overlapped and now use five date ticks. Insights AX XXXL
+captures exposed header/content overlap, cramped period controls and clipped totals;
+shared headers/controls and Usage now adapt at accessibility sizes. These corrections
+and the new success feedback require the next single combined native pass. Existing
+Health checks now retain lower-section screenshots during that same pass.
+
+Apple Markdown documentation was read directly on 6 November for
+[sensoryFeedback](https://developer.apple.com/documentation/swiftui/view/sensoryfeedback(_:trigger:condition:)),
+[Playing haptics](https://developer.apple.com/design/human-interface-guidelines/playing-haptics)
+(best practices and iOS notification feedback),
+[Reduce Motion](https://developer.apple.com/documentation/swiftui/environmentvalues/accessibilityreducemotion)
+and [AxisMarks](https://developer.apple.com/documentation/charts/axismarks).
+The implementation uses the native success pattern and motion preference. The brief
+shared visual confirmation is app composition, not a claim that Apple specifies its
+exact geometry. Physical haptic feel remains unverified by simulator tests.
