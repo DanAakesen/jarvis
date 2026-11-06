@@ -396,13 +396,14 @@ class DiagnosticFixture(CanaryFixture):
                                              "object": "conversation.deleted"})
         if request.url.path.endswith("/responses"):
             inputs = json.loads(request.content)["input"]
-            if isinstance(inputs, str):
-                shape = "plain_text"
-            elif inputs[0]["role"] == "user":
-                shape = "user_messages"
+            message = inputs[0]
+            if message["role"] == "user":
+                shape = "typed_user"
+            elif message["role"] == "developer":
+                shape = "developer_string"
             else:
-                shape = ("managed_policy" if "Shared backend capability block" in str(inputs)
-                         else "developer_message")
+                shape = ("system_message" if isinstance(message["content"], list)
+                         else "system_string")
             self.shapes.append(shape)
             self.fault = self.failures.get(shape)
             if self.fault == "hang":
@@ -415,11 +416,11 @@ class DiagnosticFixture(CanaryFixture):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failures,statuses", [
     ({}, ["ok"] * 4),
-    ({"user_messages": "input"}, ["ok", "unavailable", "ok", "ok"]),
-    ({"developer_message": "developer", "managed_policy": "developer"},
+    ({"typed_user": "input"}, ["unavailable", "ok", "ok", "ok"]),
+    ({"developer_string": "developer"}, ["ok", "unavailable", "ok", "ok"]),
+    ({"system_message": "input", "system_string": "input"},
      ["ok", "ok", "unavailable", "unavailable"]),
-    ({"managed_policy": "developer"}, ["ok", "ok", "ok", "unavailable"]),
-    ({"plain_text": "timeout", "user_messages": "tool"},
+    ({"typed_user": "timeout", "developer_string": "tool"},
      ["unavailable", "unavailable", "ok", "ok"]),
 ])
 async def test_diagnostics_compare_owned_shapes_without_readiness_or_tools(failures, statuses):
@@ -428,12 +429,19 @@ async def test_diagnostics_compare_owned_shapes_without_readiness_or_tools(failu
         result = await runtime.diagnose_requests()
     assert result["status"] == "diagnostic"  # Never the canary's status=ok.
     assert [row["status"] for row in result["results"]] == statuses
-    assert f.shapes == ["plain_text", "user_messages", "developer_message", "managed_policy"]
+    assert f.shapes == ["typed_user", "developer_string", "system_message", "system_string"]
     assert f.created == f.deleted and len(set(f.created)) == 4
     requests = [json.loads(r.content) for r in f.requests if r.url.path.endswith("/responses")]
     assert [r["conversation"] for r in requests] == f.created
     assert all(set(r) == {"input", "conversation", "stream"} for r in requests)
-    assert requests[1]["input"] == requests[2]["input"][1:] == requests[3]["input"][1:]
+    assert all(r["input"][1:] == requests[0]["input"][1:] for r in requests)
+    policy = "You are a helpful assistant. Do not call tools."
+    assert [r["input"][0] for r in requests] == [
+        {"type": "message", "role": "user", "content": [{"type": "input_text", "text": policy}]},
+        {"role": "developer", "content": policy},
+        {"type": "message", "role": "system", "content": [{"type": "input_text", "text": policy}]},
+        {"role": "system", "content": policy},
+    ]
     assert not any("/claim" in r.url.path for r in f.requests)
     assert not any(r.url.path.startswith("/tools/") or r.url.path == "/factory/context"
                    for r in f.backend.requests)
@@ -443,7 +451,7 @@ async def test_diagnostics_compare_owned_shapes_without_readiness_or_tools(failu
 @pytest.mark.asyncio
 async def test_diagnostic_attempt_deadline_cleans_owned_conversation_then_continues(monkeypatch):
     monkeypatch.setattr("managed_runtime_factory.DIAGNOSTIC_ATTEMPT_SECONDS", 0.02)
-    f = DiagnosticFixture({"plain_text": "hang"})
+    f = DiagnosticFixture({"typed_user": "hang"})
     async with f.runtime() as (runtime, _):
         result = await runtime.diagnose_requests()
     assert result["results"][0]["reason"] == "managed_probe_timeout"
@@ -454,7 +462,7 @@ async def test_diagnostic_attempt_deadline_cleans_owned_conversation_then_contin
 
 @pytest.mark.asyncio
 async def test_diagnostic_cancellation_propagates_after_only_owned_cleanup():
-    f = DiagnosticFixture({"plain_text": "hang"})
+    f = DiagnosticFixture({"typed_user": "hang"})
     async with f.runtime() as (runtime, _):
         task = asyncio.create_task(runtime.diagnose_requests())
         await asyncio.wait_for(f.started.wait(), 1)
@@ -462,7 +470,7 @@ async def test_diagnostic_cancellation_propagates_after_only_owned_cleanup():
         with pytest.raises(asyncio.CancelledError):
             await task
     assert f.created == f.deleted and len(f.created) == 1
-    assert f.shapes == ["plain_text"]
+    assert f.shapes == ["typed_user"]
 
 
 @pytest.mark.asyncio
@@ -505,4 +513,4 @@ async def test_diagnostic_target_change_aborts_before_another_conversation_or_in
     assert result["results"][1]["reason"] == "managed_probe_target_changed"
     assert all(row["status"] == "skipped" for row in result["results"][2:])
     assert f.created == f.deleted and len(f.created) == 1
-    assert f.shapes == ["plain_text"]
+    assert f.shapes == ["typed_user"]

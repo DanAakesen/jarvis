@@ -24,7 +24,7 @@ REASONS = frozenset({
 })
 STAGES = frozenset({"settings", "target_setup", "definition_readback", "conversation_create",
                     "response_start", "response_stream", "diagnostic_budget"})
-SHAPES = ("plain_text", "user_messages", "developer_message", "managed_policy")
+SHAPES = ("typed_user", "developer_string", "system_message", "system_string")
 
 
 def known(value, allowed, fallback="not_reported"):

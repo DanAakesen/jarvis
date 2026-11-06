@@ -54,7 +54,7 @@ elif args[:2] == ['rest','--method']:
         print(os.environ.get('DIAGNOSTIC_BODY', json.dumps({'status':'diagnostic','results':[
             {'shape':shape,'status':'unavailable','reason':'managed_probe_failed','stage':'response_start',
              'providerCause':{'code':'invalid_request','details':[{'code':'UnsupportedParameter','target':'input.role'}]}}
-            for shape in ['plain_text','user_messages','developer_message','managed_policy']]})))
+            for shape in ['typed_user','developer_string','system_message','system_string']]})))
     else:
         assert operation == {'operation':'managed_text_canary'}
         if os.environ.get('CANARY_HTTP_FAILURE'):
@@ -167,7 +167,7 @@ class ManagedHandoffTests(unittest.TestCase):
             "providerCause": {"code": "private_identifier", "param": "private_identifier",
                 "exceptionType": "PrivateIdentifier", "details": [{"code": "private_identifier",
                     "target": "private_identifier", "message": "private"}]}}
-            for shape in ["plain_text", "user_messages", "developer_message", "managed_policy"]]}
+            for shape in ["typed_user", "developer_string", "system_message", "system_string"]]}
         result, _ = self.run_handoff(DIAGNOSE_MANAGED_CHAT="true", DIAGNOSTIC_BODY=json.dumps(body))
         self.assertEqual(result.returncode, 0)
         self.assertNotIn("private", result.stdout + result.stderr)

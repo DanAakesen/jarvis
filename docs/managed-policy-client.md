@@ -142,8 +142,12 @@ The older #1373 failure did not identify its rejected parameter. The 6 November
 activation above established rejection of `instructions` for the actual
 full-policy canary. After the developer-message correction, run 42227506332 instead
 returned HTTP 400 `invalid_request` with no parameter. The remaining constraint is
-unknown; see the explicit [request comparison](managed-chat-provisioning.md#6-november-diagnostic-request-comparison)
-for the bounded diagnostic path. Synthetic 400 fixtures continue to test safe propagation and
+partly isolated by [42239012647](https://github.com/DanAakesen/jarvis/actions/runs/42239012647):
+plain string and simple user-message inputs passed, while both typed developer
+variants failed. Role and typed encoding differ between those cases, so neither
+is yet proven as the cause. See the follow-up [request comparison](managed-chat-provisioning.md#6-november-diagnostic-request-comparison)
+for the bounded role/encoding diagnostic path. The production request builder
+remains unchanged until an accepted trusted form is established. Synthetic 400 fixtures continue to test safe propagation and
 no replay. Additional fixtures reject top-level overrides, verify full-policy
 preservation in developer input, and prove that rejection of the developer input
 or message list fails the canary even when a plain-string probe would pass.
