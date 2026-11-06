@@ -8,16 +8,18 @@ widget layouts and real Body trend plots. Earlier candidates stopped before boot
 on compiler/fixture checks. Candidate 7acb5ec5 passed CI, 502 Core tests and CodeQL,
 but native 42243718420 finished 64/68. Actual recordings exposed blank Health
 measurement details, decimal rounding and test gesture/alignment assumptions.
-Corrected candidate e0d6821e is qualifying in native 42257412529, CI 42257412696 and
-CodeQL 42257412505. Inspect bilingual/large-text charts, widgets, surfaces and loading
+Corrected candidate df56bcaa is qualifying in native 42258268925, CI 42258269045 and
+CodeQL 42258268841. It retains e0d6821e’s app/test tree; the follow-up updates two
+workflow assertions for split evidence retention. The old Mac job was cancelled
+before simulator boot. Inspect bilingual/large-text charts, widgets, surfaces and loading
 motion before merge/upload. No duplicate simulator was used to retrieve evidence.
 
 Normal deployment 42248895975 and Current acceptance passed through #1623 / 11463376.
 Fixed stored-policy diagnostic 42252117950 failed both developer and system roles:
 the response did not satisfy policy precedence/update sentinels. Earlier matrices
 show ordinary user input succeeds but trusted-role response input is rejected.
-Copilot remains incompatible with the complete per-turn Jarvis policy. PR #1624
-adds an exact target/model/effort/transport compatibility receipt, fail-closed new
+Copilot remains incompatible with the complete per-turn Jarvis policy. PR #1624 merged as1fb0f908 after CI/CodeQL; normal deployment42258321357
+is active. It adds an exact target/model/effort/transport compatibility receipt, fail-closed new
 and existing test turns, and a specific web/iOS explanation. Only a full-policy,
 two-turn precedence/update canary can grant that receipt; never demote or omit
 Jarvis policy to enable the option. Normal runtime and UI release can proceed.
