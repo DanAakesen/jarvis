@@ -2273,10 +2273,14 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   handoffs. Combined native run 42185446322 at 7dba227a passed all 68 UI tests and
   retained captures. Visual inspection found blurred glass labels, inflated
   priority rows and truncated Danish Settings choices; shared corrections and a
-  row-height regression assertion need fresh native qualification. Current CI passed 7,361 backend tests (one
-  skipped), 497 Core tests and the other component jobs; its sole Python workflow
-  budget guard failure is corrected locally. CodeQL and its security gate passed.
-  Qualify the corrected tree and inspect its captures before merge. See
+  row-height regression assertion were qualified at eb333e62. General CI
+  42193478117 and CodeQL passed, including 7,361 backend tests (one skipped),
+  497 Core tests and the Python workflow guards. Native run 42193478110 passed
+  65/68 tests; fresh captures show compact priority rows and sharp selection labels.
+  Three test failures require a fresh run: sub-micropoint AX measurement error and
+  two completion taps behind the fixed header after scrolling. The test now reveals
+  the whole control before tapping and retains completion/detail assertions.
+  Complete the remaining native checks and visual review before merge. See
   `docs/ios/design/p15-device-feedback-2026-11-06.md`.
 
 - **P15 board delivery (#1598–#1602 and Settings): Complete.** All owning PRs merged

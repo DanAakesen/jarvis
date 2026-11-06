@@ -177,3 +177,25 @@ their 44-point targets at accessibility sizes. The existing board tests now also
 bound regular-size row height. Preserve the earlier results as evidence of these
 findings; this actual native source change requires a fresh run and screenshot
 inspection before release, not reuse of the 7dba227a app tree.
+
+## Corrected rendering candidate eb333e62
+
+General CI 42193478117 and CodeQL 42193477928 passed. Results include 7,361
+backend tests (one skipped), 497 Core tests and Python suites of 380, 1,236 and
+249 tests. Native run 42193478110 compiled and passed 65/68 UI tests. Retained
+scheme artifact 13494420611 and screenshots artifact 13494326334 remain available;
+the downloaded screenshots digest matches
+`431150a08456e4b0cb4659f74053cc1d361aa99cbd278ff8264528d7ecb275d9`.
+Fresh actual task captures show equal compact priority-row height, visible priority
+words and sharp selected labels. The owner's roadmap-row feedback refers to the
+earlier inflated-row capture; this fresh capture confirms that correction.
+
+Three failures are in test positioning/measurement. AX returned
+43.99999999999994 for a 44-point target. The comparison now allows at most one
+millionth of a point of arithmetic error. Both normal-size completion checks
+failed after the groups screenshot: the retained hierarchy places the control at
+y=52–96, behind the fixed header at y=70–118, despite reporting the row hittable.
+The test now re-resolves and reveals the full completion control between the
+header and dock before tapping. The actual completion, disappearance, next-row
+availability and full-title detail assertions remain. These test-only corrections
+do not change app rendering; their fresh native run is required before release.

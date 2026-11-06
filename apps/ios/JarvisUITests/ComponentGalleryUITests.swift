@@ -515,8 +515,10 @@ final class ComponentGalleryUITests: XCTestCase {
         let first = app.descendants(matching: .any).matching(identifier: firstID).firstMatch
         let completion = first.buttons["notes.task.complete"]
         XCTAssertTrue(completion.isHittable)
-        XCTAssertGreaterThanOrEqual(completion.frame.width, 44)
-        XCTAssertGreaterThanOrEqual(completion.frame.height, 44)
+        // AX frame subtraction can report 43.99999999999994 for an exact 44pt target.
+        // Allow only sub-micropoint arithmetic error, never a visibly smaller target.
+        XCTAssertLessThanOrEqual(max(0, 44 - completion.frame.width), 0.000_001)
+        XCTAssertLessThanOrEqual(max(0, 44 - completion.frame.height), 0.000_001)
         XCTAssertGreaterThan(first.frame.minX, 20, "Task groups must be inset from the screen edge")
         if !largeText {
             XCTAssertLessThan(first.frame.height, 100, "Priority metadata must not inflate a compact task row")
@@ -526,8 +528,9 @@ final class ComponentGalleryUITests: XCTestCase {
         if !largeText {
             app.swipeUp()
             attach(app.screenshot(), named: "P15-task-board-groups-\(language)-\(theme)")
-            notesReach(firstID, upward: false)
-            completion.tap()
+            revealTaskCompletion(firstID)
+            app.descendants(matching: .any).matching(identifier: firstID).firstMatch
+                .buttons["notes.task.complete"].tap()
             XCTAssertTrue(first.waitForNonExistence(timeout: 8), "A confirmed completion removes only that task")
             let title = "4. Review the sample agreement · synthetic deadline"
             let open = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "notes.task.open", title)).firstMatch
@@ -551,6 +554,26 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertLessThanOrEqual(lastOpen.frame.maxY, search.frame.minY, "The final task must scroll clear of the search dock")
             attach(app.screenshot(), named: "P15-task-board-bottom-accessibility")
         }
+    }
+
+    private func revealTaskCompletion(_ rowID: String) {
+        let title = app.staticTexts["page.title"]
+        let menu = app.buttons["navigation.openSidebar"]
+        let dock = app.buttons["notes.plus"]
+        for _ in 0..<5 {
+            // A native List can report a row as hittable beneath the fixed header.
+            // Resolve the control again after scrolling and require its whole target
+            // to clear both overlays before performing the real completion action.
+            let control = app.descendants(matching: .any).matching(identifier: rowID)
+                .firstMatch.buttons["notes.task.complete"]
+            if control.exists, control.isHittable,
+               control.frame.minY >= max(title.frame.maxY, menu.frame.maxY) + 16,
+               control.frame.maxY <= dock.frame.minY - 16 {
+                return
+            }
+            app.swipeDown()
+        }
+        XCTFail("Task completion must be fully visible between the header and search dock")
     }
 
     private func notesReach(_ identifier: String, upward: Bool = true) {
