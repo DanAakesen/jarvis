@@ -9,12 +9,14 @@ tool requests and cleans up its own native conversation. Activation requires its
 `requestShape: managed_policy` success marker. Bounded stage/provider metadata is
 independently filtered into deployment diagnostics; raw content remains private.
 
-Local validation: 446 hosted tests (shared model loop, runtime, policy transport,
+Initial local validation: 446 hosted tests (shared model loop, runtime, policy transport,
 provider diagnostics and chat entrypoint), 13 handoff tests, scoped Ruff and shell
-syntax. No iOS source changes. Next: deploy the hosted agent before the handoff,
-capture the actual cause if rejected, correct only a proven incompatibility, then
-verify a real isolated owner conversation. This closes a qualification gap; it
-does not establish that the historical live request now works.
+syntax. No iOS source changes. Deployment subsequently exposed and corrected the
+unsupported top-level instructions override; the complete-policy developer-input
+request still returns generic HTTP 400. See the current delivery record and active
+follow-up below. Keep the full-policy acceptance requirement while isolating that
+remaining constraint with fixed synthetic inputs; owner conversation parity remains
+unverified.
 
 ## Runtime testing on iOS and comparison activation — 6 November 2026
 
@@ -30,12 +32,13 @@ scoped ESLint and 39 provisioning/handoff/deploy-plan checks; synthetic Chromium
 themes covers disabled choices, availability retry, create failure/retry, scoped
 streaming and return. Native compilation and all 68 Simulator tests subsequently
 passed in run 42202162500, with inspected runtime-selector and shared-page captures.
-Actual managed inference remains unverified: comparison activation 42212979149
-failed in provisioning before its canary. The screenshot reason identifies an
+Actual managed inference remains unverified: the original comparison activation
+failed before its canary; a corrected version-creation route now provisions, but
+the current full-policy response fails with HTTP 400. The screenshot reason identifies an
 absent verifier at the time of the report, not the cause of missing production
 configuration. Normal backend/hosted-agent deployment and original conversation
-acceptance passed. Next: inspect comparison state without writes, fix the observed
-provisioning cause, activate and check its canary, then release TestFlight. Do not
+acceptance passed. Build 76 has uploaded with the verified native changes. Next:
+isolate the remaining response constraint and verify the comparison. Do not
 claim live Copilot success from local fixtures or a selectable option alone.
 
 ## P15-78 — retire Daily feeds, rename Daily to Health, iPhone Health sync (#1571)
