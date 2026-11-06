@@ -154,9 +154,14 @@ cd06bda0 passed 306 focused checks plus 12 final diagnostic checks, scoped lint,
 compilation, shell syntax and parsed workflow guards. Tests cover exact payloads,
 target changes, timeout/cancellation cleanup, total budgets, skipped setup failures,
 no configuration mutation, and malformed/private output. CodeQL 42231326544 passed;
-CI 42231326592 is running. Its app/test tree remains unchanged. After qualification,
-deploy hosted code before one explicit `diagnose_managed_chat=true` invocation;
-leave provisioning, inspection and definition refresh false.
+CI 42231326592 passed. It merged as 2b58f2f2999adc425ded22a31f5baf1b0d44e11a;
+the GitHub commit tree matches the qualified candidate's complete source tree,
+ad9a2e20da0b1212bde9e2b2c0ac38c27b308994. Its app/test tree remains unchanged.
+Normal Deploy 42232951549 is running. Deploy hosted code before one explicit
+`diagnose_managed_chat=true` invocation; leave provisioning, inspection and definition
+refresh false. The local GitHub CLI credential expired after merge; the connector
+still supports repository work and result inspection, but not workflow dispatch.
+A standard CLI device login is pending while UI fixes continue locally.
 
 ## Release authorization
 

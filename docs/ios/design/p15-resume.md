@@ -2,6 +2,13 @@
 
 ## Current device-feedback follow-up
 
+The owner is testing build 76 and reports that Voice/history, Home send/camera,
+task/reminder creation and Health pull refresh work. A new combined native
+correction is in progress for per-element shimmer, generic task-source labels,
+transparent headers and floating Notes/Health docks. These edits require one new
+simulator qualification with actual screenshots/motion review before another upload;
+do not reuse build 76's app-tree evidence for the changed rendering.
+
 The subsequent owner-approved fixes merged through #1614 as `ab464314`.
 CI, CodeQL and all 68 native UI tests passed; the corrected task rows and shared
 controls were visually inspected. The app/test tree is
@@ -16,8 +23,9 @@ then succeeded, but the actual response rejected the instructions override.
 PR #1619 qualified and merged the complete-policy developer-input correction;
 its live check reused the existing version with definition refresh false, then
 failed with HTTP 400 `invalid_request` without a field hint. A separate fixed-input
-diagnostic is being prepared; do not guess the remaining incompatibility or repeat
-provisioning. #1618 also
+diagnostic qualified through #1620 and merged as `2b58f2f2`; deploy the hosted agent,
+then explicitly run `diagnose_managed_chat=true` with all other comparison inputs
+false. Do not guess the remaining incompatibility or repeat provisioning. #1618 also
 qualified and merged a post-build OIDC refresh after a registry authentication
 failure. Copilot inference remains unverified. TestFlight build **76 uploaded at
 12:14:34 UTC / 13:14:34 Copenhagen** from verified main ab464314 (42215302636).
