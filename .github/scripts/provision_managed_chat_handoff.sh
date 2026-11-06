@@ -6,6 +6,11 @@ private_dir=$(mktemp -d "$RUNNER_TEMP/managed-chat.XXXXXX")
 trap 'rm -rf -- "$private_dir"' EXIT
 fail() { echo "::error::$1"; exit 1; }
 
+if [[ "${INSPECT_MANAGED_CHAT:-false}" == true &&
+      ( "${PROVISION_MANAGED_CHAT:-false}" == true || "${REFRESH_MANAGED_CHAT_DEFINITION:-false}" == true ) ]]; then
+  fail managed_chat_inspection_conflicts_with_apply
+fi
+
 if ! az deployment group show --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" \
   --subscription "$SUBSCRIPTION_ID" --query properties.outputs --output json --only-show-errors \
   >"$private_dir/infra.json" 2>"$private_dir/cli.err"; then
@@ -25,6 +30,12 @@ if ! timeout 210s az rest --method POST --url "$invocations" --resource https://
   fail managed_chat_manifest_unavailable
 fi
 # Existing hosted identity reads its normal tool registry; no tool executes here.
+if [[ "${INSPECT_MANAGED_CHAT:-false}" == true ]]; then
+  python .github/scripts/provision_managed_chat.py --project-id "$project_id" \
+    --project-endpoint "$project_endpoint" --manifest "$private_dir/manifest.json" \
+    --output "$private_dir/activation.json" --inspect
+  exit 0
+fi
 refresh_args=()
 if [[ "${REFRESH_MANAGED_CHAT_DEFINITION:-false}" == true ]]; then
   refresh_args+=(--refresh-definition)
