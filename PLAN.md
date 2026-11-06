@@ -3890,3 +3890,7 @@ release. Notes and Home/Factory own those changes, with Reduce Motion support.
 Remaining suggestions are proposals only: an actionable Needs you queue, consistent
 freshness language, remembered page selections, task Undo and evidence-backed Health
 comparisons. They do not expand this release's scope.
+
+Release infrastructure correction: ubuntu-latest moved to unsupported Ubuntu 26.04.
+The Linux Swift job now pins the previously passing ubuntu-24.04 image; checks and
+Mac/TestFlight steps are unchanged. Fresh CI is required before Notes/backend delivery.
