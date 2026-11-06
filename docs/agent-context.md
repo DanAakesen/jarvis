@@ -16,14 +16,14 @@
 ## CI merge gate and timings (P15-67 / #1543; 3 November 2026)
 
 - `CI result` (the check named in the branch rules) covers only quick jobs. `ci.yml` calls `ios-ci.yml` with `simulator: skip`, so the `iOS` check there is the Linux JarvisCore job (about 10 minutes at most; no Simulator).
-- The slow Simulator job (`iOS Simulator`, macos-26, 65-minute limit) runs in `.github/workflows/ios-simulator.yml` on every non-draft PR and push to `main` that touches `apps/ios/**` or the two iOS workflow files. It reports its own check and does not delay or block `CI result`. Docs-only and plan-only changes never match its path filter. The 6 November combined run 42202162500 passed 68 UI tests and retained captures in 62m49s; per-test limits remain 120/150 seconds.
+- The slow Simulator job (`iOS Simulator`, macos-26, 75-minute limit with #1621) runs in `.github/workflows/ios-simulator.yml` on every non-draft PR and push to `main` that touches `apps/ios/**` or the two iOS workflow files. It reports its own check and does not delay or block `CI result`. Docs-only and plan-only changes never match its path filter. The 6 November combined run 42202162500 passed 68 UI tests and retained captures in 62m49s. The build-76 feedback pass reuses those tests/launches and reserves more export headroom; per-test limits remain 120/150 seconds.
 - A failed Simulator run on `main` (push or nightly) opens or updates the single issue "Nightly iOS UI tests failing".
 - New pushes cancel older runs of the same PR (`ci.yml` and `ios-simulator.yml` concurrency groups).
 - `CI result` writes a "CI timing" table (job, duration, result) to the run summary through `.github/scripts/ci_timing.py`.
 - Workflow tests (`.github/scripts/tests`) clear `GITHUB_REF`, `GITHUB_REF_NAME`, `GITHUB_BASE_REF`, `GITHUB_HEAD_REF`, `GITHUB_EVENT_NAME` and `GITHUB_ACTIONS` (`hermetic.py`), so preview or integration branches do not change their result.
 - Baseline from the last 40 runs: median successful run 44 minutes; Simulator job 43 minutes (38 for boot, UI tests and screenshots, 3 for the build); Backend 9, Web 4, Vault mirror 3, Database 3, Python 2. Expected gate time is now the slowest non-Simulator job (Backend, about 9 minutes). The Simulator after-timing is not measured yet: read it from the first `iOS Simulator` run's timing table and record it here. Sharding the UI tests and a pull-request smoke subset are not done because the workflow tests require one Simulator boot and one `xcodebuild test`; decide with measured data.
 - Branch rules: if a rule requires the old check `iOS / iOS Simulator build and navigation tests`, the owner must remove it; `CI result` stays the only required check.
-- Existing UI tests already wait on state (`waitForExistence`, `XCTNSPredicateExpectation`); the only sleep is the intentional launch delay in `SidebarNavigationTests`. Failure names are in the run summaries, not in job logs; verify per-test causes there.
+- Existing UI tests wait on state (`waitForExistence`, `XCTNSPredicateExpectation`). Short intentional delays also separate loading-motion frames and the `SidebarNavigationTests` launch fixture. Failure names are in the run summaries, not in job logs; verify per-test causes there.
 
 ## Apple documentation before iOS implementation (owner requirement, 1 November 2026)
 

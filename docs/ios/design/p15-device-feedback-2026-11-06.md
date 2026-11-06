@@ -157,11 +157,37 @@ no configuration mutation, and malformed/private output. CodeQL 42231326544 pass
 CI 42231326592 passed. It merged as 2b58f2f2999adc425ded22a31f5baf1b0d44e11a;
 the GitHub commit tree matches the qualified candidate's complete source tree,
 ad9a2e20da0b1212bde9e2b2c0ac38c27b308994. Its app/test tree remains unchanged.
-Normal Deploy 42232951549 is running. Deploy hosted code before one explicit
+Normal Deploy 42232951549 passed all components, readiness and live normal-chat
+acceptance. The fixed diagnostic is deployed but has not been invoked. Run one explicit
 `diagnose_managed_chat=true` invocation; leave provisioning, inspection and definition
 refresh false. The local GitHub CLI credential expired after merge; the connector
 still supports repository work and result inspection, but not workflow dispatch.
-A standard CLI device login is pending while UI fixes continue locally.
+The CLI device login expired without completion; the owner was told that its code
+is no longer valid. Connected repository tools still allow the UI qualification.
+
+## Combined visual correction candidate
+
+PR #1621 publishes a559908925f4c88b743230cdbe6fe29c53954931 on main 2b58f2f2.
+Its complete tree e16cbd3c9fd1e8794cb1e6415af563871506182c matches the locally
+computed merge of the qualified runtime source and UI edits. Its app/test tree is
+8d63ef96c2637e3acc1ffaa8ed92d3f1cf5e819c. The connected Git data tools published
+the exact reviewed content while local CLI authentication was unavailable.
+
+The patch confines shimmer to individual text placeholders, restores transparent
+structural headers and floating Notes/Health docks, filters exact generic task
+source labels, and adds localized full source details. The previous detail view
+did not show that provenance; it is newly exposed here, not merely retained.
+Chat appearance and backend behavior remain unchanged. See
+[surface correction evidence](p15-build76-surfaces.md) for Apple references,
+scope and remaining visual hypotheses.
+
+CodeQL 42236610687 passed. CI 42236611082 and the single native run 42236610739
+are running; the iPhone app compiled and the native job is testing/capturing.
+The existing 68 tests and launches remain. Approximately 21 captures and one
+Health AX navigation were added within them. The overall job allowance is 75
+minutes after the previous 62m49s run; individual test limits remain 120/150
+seconds. Compilation does not establish visual acceptance; inspect the actual
+normal/scrolled/AX headers and docks plus light/dark motion before another upload.
 
 ## Release authorization
 
