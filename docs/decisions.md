@@ -11382,3 +11382,13 @@ section heading instead. AX XXXL captures show crowded Home tiles/activity value
 stack those groups and permit action-label wrapping. Keep the 69-pass failed run
 as evidence, rerun affected Home/widget paths, and prove other page/Chat source
 unchanged rather than repeating the entire suite/capture sweep.
+
+## 6 November 2026 — Release Home/chrome/widget corrections as build 78
+
+Merge qualified c4e14155 as ca5ca838 after CI/CodeQL, actual normal/AX screenshot
+review and 15 focused Home/widget passes. Retain 55 unchanged native cases with
+source proof; keep the prior failed geometry assertion in the record. Full/iOS
+trees match after merge, so cancel automatic main Simulator before boot. Normal
+Deploy 42306089293 passes readiness and all 15 Current checks, then unchanged
+TestFlight 42306553415 uploads build 78. Widget destinations retain sign-in/lock
+handling; loading motion, widget appearance and Chat appearance are preserved.

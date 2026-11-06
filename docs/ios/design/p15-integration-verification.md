@@ -1,5 +1,12 @@
 # P15 integrated board verification
 
+Latest owner-feedback outcome: build 78 uploaded in 42306553415 from ca5ca838.
+Home hierarchy/hero alignment, native task swipes, transparent page chrome and
+widget navigation are verified. Native coverage uses 55 unchanged cases plus the
+15-case exact-source focused pass, with actual screenshot review. See
+[the current scoped release record](p15-home-hierarchy-feedback.md). The build-75/77
+records below remain historical and do not replace this qualification.
+
 Historical pre-release checkpoint: **6 November 2026**.
 Final outcome: [released build and accepted evidence](p15-release-2026-11-06.md). This record supersedes earlier
 pending-state notes in page verification documents. Reference: approved board.html
@@ -9,7 +16,7 @@ a composition reference, not evidence of the native app or live backend data.
 For the later owner-approved device-feedback batch, use the
 [current delivery record](p15-device-feedback-2026-11-06.md). The original
 build-75 acceptance below does not qualify those subsequent changes. Build 76
-was uploaded and accepted for functional owner testing. The current graph/widget/
+was uploaded and accepted for functional owner testing. The build-77 graph/widget/
 surface correction is merged as 380782a0 from qualified 1766b727 in #1621.
 Native coverage is 67 passing cases in 42268563484 plus one focused gallery pass
 in 42280276801 on identical production source. CI/CodeQL and visual inspection

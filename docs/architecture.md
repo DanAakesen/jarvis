@@ -8812,3 +8812,9 @@ Home large-text layout uses AnyLayout to stack log actions and activity groups;
 JarvisTileButton permits wrapping only at accessibility sizes. This component has
 only the two Home call sites. Donut hit testing uses the displayed size. No state,
 backend, navigation, widget, loading or other shared control behavior changes.
+
+Build 78 packages the verified Home/chrome/widget changes from ca5ca838. Its full
+and iOS trees match the qualified source exactly. Normal Deploy 42306089293 reused
+accepted backend/web/agent/infra versions and passed all 15 Current checks before
+the unchanged TestFlight workflow ran. No new backend or runtime activation is
+part of this release.

@@ -7317,3 +7317,15 @@ assertion against accessibility content bounds. Native captures also expose Home
 AX XXXL crowding. The correction reruns all Today cases and both widget URL cases;
 retain the 55 unchanged cases only with reviewed source/call-site proof. The
 focused validation workflow is never merged; normal per-test limits stay 120/150 s.
+
+## Build 78 continuation checkpoint
+
+PR #1625 is merged as ca5ca838 and TestFlight 42306553415 uploaded build 78.
+CI/CodeQL passed. Native coverage is 55 unchanged cases from 42292434058 and all
+15 Home/widget cases in focused 42302707513; exact source proof and screenshot
+review are recorded in docs/ios/design/p15-home-hierarchy-feedback.md. Do not
+repeat Simulator work for iOS tree 169764ccd98da54bbe309ef0766cba9da65df004.
+Automatic main 42306089300 was stopped before boot, and normal Deploy 42306089293
+was accepted before upload. The validation-only branch must never merge. Any new
+app changes need affected-path verification. Apple processing/device availability
+is not independently confirmed.
