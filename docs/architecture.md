@@ -8702,7 +8702,9 @@ Microphone readiness requires a nonempty PCM frame; a five-second initial captur
 deadline, unexpected stream end or send failure enters existing recovery. Failed
 generation callbacks are ignored. This addresses confirmed missing readiness and
 error handling, but the owner's exact cold-start audio failure has not been
-reproduced on hardware in this Linux workspace. Native validation is held.
+reproduced on hardware in this Linux workspace. Native run 42202162500 compiled
+the final app and passed all 68 UI tests; this does not establish hardware audio
+startup or HealthKit permission behavior.
 
 ### Owner workflows, approval and exact task timing (6 November)
 

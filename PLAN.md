@@ -2257,31 +2257,21 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **Task-list board correction:** Owner-reported mismatch in Notes → Tasks is
-  implemented with inset groups, quiet completion controls, section counts,
-  trailing dates and readable Markdown titles. New synthetic long-title and
-  large-text captures plus completion/detail checks await the single PR native
-  run. The board correction preserves Chat's appearance.
-  The owner lifted the CI/release hold after the final loading request. PR #1614
-  is being completed for one combined native run, backend/agent deployment and
-  TestFlight upload after successful checks and visual review.
-  The held batch now also includes shared glass selection/press feedback, equal
-  selector padding, primary-color section headings, and Home/Health pull-to-refresh
-  that syncs Apple Health before reloading data. Later owner reports also authorize
-  shared tool discovery/validation guidance, reminder schema alignment, voice
-  capture startup recovery, unified voice/chat history and reliable Home send/camera
-  handoffs. Combined native run 42185446322 at 7dba227a passed all 68 UI tests and
-  retained captures. Visual inspection found blurred glass labels, inflated
-  priority rows and truncated Danish Settings choices; shared corrections and a
-  row-height regression assertion were qualified at eb333e62. General CI
-  42193478117 and CodeQL passed, including 7,361 backend tests (one skipped),
-  497 Core tests and the Python workflow guards. Native run 42193478110 passed
-  65/68 tests; fresh captures show compact priority rows and sharp selection labels.
-  Three test failures require a fresh run: sub-micropoint AX measurement error and
-  two completion taps behind the fixed header after scrolling. The test now reveals
-  the whole control before tapping and retains completion/detail assertions.
-  Complete the remaining native checks and visual review before merge. See
-  `docs/ios/design/p15-device-feedback-2026-11-06.md`.
+- **Device-feedback delivery (#1614): source merged and verified.** Compact task
+  groups, shared glass/padding/headings, Health pull refresh, animated loading,
+  tool/reminder guidance, high-priority task intent, approval-bound own-code changes,
+  voice/history/Home handoffs and web/iOS runtime testing are implemented.
+  Candidate 7e5ef535 passed CI 42202162550, CodeQL 42202162436 and all 68 native
+  tests in 42202162500. Corrected task groups/details/large-text bottom clearance
+  and shared selectors were visually inspected. #1614 merged as ab464314 with an
+  identical app/test tree. Redundant main/scheduled simulator runs were cancelled
+  only after proving source equality with retained passing runs.
+  Normal Deploy 42210649006 passed backend/agent readiness and live acceptance.
+  Comparison activation 42212979149 failed during provisioning with the generic
+  azure_request_failed result, before the canary. A read-only diagnostic follow-up
+  is being prepared; TestFlight waits for runtime qualification. The owner
+  explicitly authorized this delivery. See
+  `docs/ios/design/p15-device-feedback-2026-11-06.md` for evidence and device limits.
 
 - **P15 board delivery (#1598–#1602 and Settings): Complete.** All owning PRs merged
   in the recorded order. Notes backend deployment passed readiness and live
@@ -3994,20 +3984,20 @@ research, Health and milestone facilities are reused; no duplicate job system.
 
 ### Active follow-up qualification
 
-- Implemented: own-code bug/feature proposal gates; shared identity/task awareness;
-  high-priority vault task defaults, replay protection and exact-time reminder marker;
-  general validation/schema repair; unified transcript and Home handoff corrections;
-  shared glass/padding/headings, Health pull refresh and animated loading.
-- Qualification: general CI 42179796923 passed the full selected set, including
-  7,361 backend tests (one skipped) and 493 Core tests. The final runtime addition
-  passed 80 backend, 146 web and 39 provisioning/deployment tests, backend/web
-  builds, scoped lint and browser checks at phone/desktop widths in both themes.
-- Next: retain the current native results, push the combined candidate to #1614,
-  qualify its new runtime UI and inspect the captured changes. Then merge, wait
-  for backend/agent readiness and acceptance, explicitly activate/verify the
-  Copilot comparison, and upload the verified main app to TestFlight. Physical
-  voice startup, HealthKit permission and haptic feel still require the owner's
-  device. No live Copilot success or upload is claimed yet.
+- Implemented and merged through #1614: own-code bug/feature proposal gates;
+  shared identity/task awareness; high-priority vault task defaults, replay
+  protection and exact-time reminder marker; general validation/schema repair;
+  unified transcript and Home handoff corrections; shared glass/padding/headings,
+  Health pull refresh, animated loading, and web/iOS runtime testing.
+- Final qualification: CI 42202162550 and CodeQL 42202162436 passed. Native run
+  42202162500 passed 68/68 UI tests and retained inspected screenshots. Earlier
+  visual and test-positioning failures remain documented, with their corrections.
+- Delivery: normal Deploy 42210649006 passed for merged source ab464314, including
+  readiness/live acceptance. Explicit Copilot activation 42212979149 failed in
+  provisioning before the canary. Inspect its operation/inventory without writes,
+  correct the concrete cause, and qualify that separate check before upload. Physical voice startup,
+  HealthKit permissions and haptic feel still require the owner's device.
+  No live Copilot success or new TestFlight upload is claimed yet.
 
 ### UI/UX recommendations requested on 6 November
 

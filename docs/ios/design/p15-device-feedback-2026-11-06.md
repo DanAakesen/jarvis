@@ -1,5 +1,53 @@
 # 6 November device-feedback batch
 
+## Final qualification and delivery
+
+PR #1614 merged as `ab464314a25fd45f1f1fcccc44644f636607afca` after final
+candidate `7e5ef5355363bce675d2020ea2f369d7079f3973` passed CI 42202162550,
+CodeQL 42202162436 and native run 42202162500. All 68 native UI tests passed,
+including the three corrected task-board checks. The native job ran from
+10:22:27 to 11:25:16 UTC. CI passed 7,361 backend tests (one skipped), 497 Core
+tests and Python suites of 380, 1,236 and 249 tests, plus the other selected jobs.
+
+Scheme artifact 13497808767 and screenshots 13497624057 are retained. The
+downloaded screenshots SHA-256 matches GitHub's digest:
+`e726e36ef125eec4ac033905cb0bc4a8fb88c2fc42b1ef3ff126c7ac483c6bac`.
+The final English/dark and Danish/light task groups, confirmed completion/details,
+and large-text bottom boundary were inspected. Priority rows are compact, the
+full detail title is readable, and the final task clears the search dock.
+The corrected app source is identical to eb333e62, whose 16 shared-page captures
+were also inspected: Settings, Home, Health, Usage, Status, Proactive and runtime
+testing. Selected labels are sharp and normal Danish Settings choices are complete.
+Sampled native frames show the selection change and the moving Factory loading
+highlight. Hardware haptics and the exact cold-start voice scenario remain device
+checks. The runtime chat capture contains the OS first-use keyboard tutorial;
+large-text scrolling choices can be partially outside the horizontal viewport.
+
+The merged complete source tree matches the qualified candidate; its app/test tree
+is `b9bd418f6d41c1fb9cc35450d1da9711eaf1c81a`. Redundant automatic main Simulator
+run 42210648987 was cancelled after that comparison. Scheduled run 42205743865
+was also cancelled after proving it repeated the already verified build-75 tree
+`cbc38ea1979d6a7d5b82e3bec1482bd04676f1cc`. Neither cancellation replaces a test pass.
+
+Normal Deploy 42210649006 passed infrastructure, backend, hosted agent, web,
+deterministic readiness and live conversation acceptance. Release evidence
+13499252254 records `accepted: true` for ab464314 and qualification run
+42202162550; its downloaded SHA-256 is
+`ef6eda8267b7cf4320f74829a6c1f22ae1f9f9a45569de39693c14478a698aeb`.
+Acceptance artifact 13500381339 verifies the required chat, identity, capabilities,
+GitHub read, jobs, navigation and plain-approval checks. The optional PC bridge
+reported down; this is not a claim that every integration was healthy.
+
+Explicit comparison activation run 42212979149 used definition refresh. Its
+managed job 127876394689 failed at 11:50:31 UTC with `azure_request_failed`, after
+successful OIDC login and manifest retrieval but before `managed_chat_provisioned`
+or the response canary. The existing diagnostic does not establish the failing
+operation, a permission denial, or whether a write completed. Do not blindly
+repeat the mutation. Bounded operation/status/code diagnostics and a GET-only
+inspection path are being prepared before another apply. Normal live acceptance
+and its release-result job still passed; neither substitutes for the failed
+comparison job. TestFlight remains held for this runtime qualification.
+
 ## Release authorization
 
 The owner explicitly lifted the hold after his final loading-animation feedback:

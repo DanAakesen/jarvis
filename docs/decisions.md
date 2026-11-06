@@ -11233,3 +11233,9 @@ priority metadata and bounded completion glyphs address the accompanying task-ro
 layout defects. The retained images establish the defects; corrected Simulator
 inspection is still required. The Apple Markdown documentation was read directly
 after the connected web reader could not consume its Markdown content type.
+
+Final qualification: run 42202162500 passed all 68 UI tests, and corrected native
+task/selector captures were inspected. The verified candidate merged through
+#1614 as ab464314. Backend deployment, comparison activation and TestFlight
+outcomes are recorded separately in the device-feedback delivery record; this
+source qualification does not by itself establish those live outcomes.

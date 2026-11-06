@@ -16,7 +16,7 @@
 ## CI merge gate and timings (P15-67 / #1543; 3 November 2026)
 
 - `CI result` (the check named in the branch rules) covers only quick jobs. `ci.yml` calls `ios-ci.yml` with `simulator: skip`, so the `iOS` check there is the Linux JarvisCore job (about 10 minutes at most; no Simulator).
-- The slow Simulator job (`iOS Simulator`, macos-26, 45-minute limit) runs in `.github/workflows/ios-simulator.yml` on every non-draft PR and push to `main` that touches `apps/ios/**` or the two iOS workflow files. It reports its own check and does not delay or block `CI result`. Docs-only and plan-only changes never match its path filter.
+- The slow Simulator job (`iOS Simulator`, macos-26, 65-minute limit) runs in `.github/workflows/ios-simulator.yml` on every non-draft PR and push to `main` that touches `apps/ios/**` or the two iOS workflow files. It reports its own check and does not delay or block `CI result`. Docs-only and plan-only changes never match its path filter. The 6 November combined run 42202162500 passed 68 UI tests and retained captures in 62m49s; per-test limits remain 120/150 seconds.
 - A failed Simulator run on `main` (push or nightly) opens or updates the single issue "Nightly iOS UI tests failing".
 - New pushes cancel older runs of the same PR (`ci.yml` and `ios-simulator.yml` concurrency groups).
 - `CI result` writes a "CI timing" table (job, duration, result) to the run summary through `.github/scripts/ci_timing.py`.

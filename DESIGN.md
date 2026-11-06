@@ -3429,3 +3429,12 @@ width; segmented choices fall back to the shared scrolling layout when needed.
 Priority metadata uses explicit text with its flag and natural vertical sizing.
 Completion glyphs keep a bounded size inside accessible targets. Corrected native
 captures are required before accepting these changes.
+
+Final run 42202162500 passed all 68 UI tests. Its actual English/dark and
+Danish/light task groups, completion/details and accessibility-size bottom capture
+confirm compact priority rows and usable search-dock clearance. The identical app
+source in eb333e62 also has inspected Settings, Home, Health, Usage, Status,
+Proactive and runtime captures: selected labels are sharp, and normal Danish
+Settings labels are complete. Native selection and loading frames were inspected;
+tactile feel remains a device check. Retained artifacts and capture limitations
+are recorded in `docs/ios/design/p15-device-feedback-2026-11-06.md`.
