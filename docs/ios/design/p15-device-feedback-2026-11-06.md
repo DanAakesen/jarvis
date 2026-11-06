@@ -60,7 +60,20 @@ the connected mailbox at 12:15 UTC.
 
 Diagnostic PR #1615, candidate bbb60479, passed full CI 42214612550 and CodeQL
 42214612464 and merged as 8398f7a7. Its app/test tree is unchanged. Normal Deploy
-42215955386 and explicit read-only inspection 42215978680 are in progress.
+42215955386 passed infrastructure, backend, hosted agent, web, readiness and live
+conversation acceptance. Explicit read-only inspection 42215978680, job
+127894869624, printed `managed_chat_inspection_ok` at 12:34:40 UTC: one existing
+version, zero current-manifest matches, and the pin on the earlier version. No
+comparison mutation, backend activation or inference occurred in that job.
+
+Independent REST/SDK inspection then established a concrete refresh defect:
+creating an immutable version requires `POST /agents/{agent_name}/versions`,
+with the name in the path, whereas the old refresh used agent creation. PR #1617
+corrects only that request and its diagnostic label, retaining initial creation,
+ownership/readback checks and uncertain-write recovery. Candidate 43395466 passed
+25 focused tests and scoped lint/compilation; full CI is in progress. The API
+contract establishes the bug but does not retrospectively identify the operation
+behind the earlier opaque error. Live activation remains unverified.
 
 ## Release authorization
 

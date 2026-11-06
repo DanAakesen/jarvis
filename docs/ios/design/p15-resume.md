@@ -10,7 +10,9 @@ backend-only or documentation changes.
 
 Normal backend/agent/web deployment and live conversation acceptance passed.
 Explicit Copilot comparison activation failed before its response canary. A
-read-only diagnostic follow-up is in progress. TestFlight build **76 uploaded at
+read-only inspection found one older version and no current-manifest match.
+PR #1617 corrects the confirmed version-creation endpoint mismatch; final CI and
+live activation remain pending. TestFlight build **76 uploaded at
 12:14:34 UTC / 13:14:34 Copenhagen** from verified main ab464314 (42215302636).
 The normal backend dependency is accepted; Copilot activation continues separately.
 Apple processing is not independently confirmed. Read the

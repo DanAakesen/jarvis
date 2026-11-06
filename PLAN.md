@@ -2270,8 +2270,10 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   only after proving source equality with retained passing runs.
   Normal Deploy 42210649006 passed backend/agent readiness and live acceptance.
   Comparison activation 42212979149 failed during provisioning with the generic
-  azure_request_failed result, before the canary. A read-only diagnostic follow-up
-  passed CI/CodeQL and merged through #1615. Verified source ab464314 uploaded as
+  azure_request_failed result, before the canary. Read-only diagnostics merged
+  through #1615; inspection confirmed one older version and no current-manifest
+  match. The documented version-creation endpoint mismatch is corrected in #1617,
+  whose final CI is running. Verified source ab464314 uploaded as
   TestFlight build 76 at 12:14:34 UTC in run 42215302636 while separate Copilot
   activation continues. Apple processing is not independently confirmed. The owner
   explicitly authorized this delivery. See
@@ -3998,8 +4000,9 @@ research, Health and milestone facilities are reused; no duplicate job system.
   visual and test-positioning failures remain documented, with their corrections.
 - Delivery: normal Deploy 42210649006 passed for merged source ab464314, including
   readiness/live acceptance. Explicit Copilot activation 42212979149 failed in
-  provisioning before the canary. Inspect its operation/inventory without writes,
-  correct the concrete cause, and qualify that separate check. TestFlight build 76
+  provisioning before the canary. Read-only inspection confirmed one older version
+  and no current-manifest match. Qualify #1617's corrected version-creation route,
+  then activate and check the actual response canary. TestFlight build 76
   uploaded from verified source ab464314; activation needs no app rebuild.
   Physical voice startup,
   HealthKit permissions and haptic feel still require the owner's device.
