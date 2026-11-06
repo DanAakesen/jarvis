@@ -122,4 +122,4 @@
 
 "health.measurements" = "Målinger";
 "health.oneMeasurement" = "1 måling";
-"health.measurementCount" = "%d målinger";
+"health.measurementCount" = "%ld målinger";

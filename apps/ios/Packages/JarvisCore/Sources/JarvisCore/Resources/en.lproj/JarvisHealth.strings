@@ -122,4 +122,4 @@
 
 "health.measurements" = "Measurements";
 "health.oneMeasurement" = "1 measurement";
-"health.measurementCount" = "%d measurements";
+"health.measurementCount" = "%ld measurements";

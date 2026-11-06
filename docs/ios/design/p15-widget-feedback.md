@@ -81,3 +81,10 @@ refresh remain separate checks; the gallery makes no claim that they passed.
 
 The root integration workstream owns the related global design, product, plan,
 architecture, agent-context and decision updates, plus CI and release evidence.
+
+The first compile of the combined gallery found that widgetFamily is a read-only
+environment value. The gallery explicitly instantiates the medium view types and
+none reads widgetFamily, so the unnecessary override is removed. Its intentional
+WidgetKit host background now has a named ambient-test exception that asserts the
+entire file is one DEBUG-and-simulator conditional with no alternate branch.
+This does not relax production page backgrounds. Native rendering is still pending.

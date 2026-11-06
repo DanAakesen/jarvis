@@ -23,6 +23,7 @@ final class LocalizedFormatStringTests: XCTestCase {
         "health.totalTarget": ["@"],
         "health.syncComplete": ["@"],
         "health.syncPartial": ["@", "@"],
+        "health.measurementCount": ["ld"],
         "today.greeting.nextEvent": ["@", "@"],
         "today.greeting.tasks": ["ld"],
         "today.greeting.steps": ["@"],

@@ -51,3 +51,12 @@ JSON convenience accessors are app-local/file-private. The Core converter now
 matches JSONValue's public string/number cases directly. No accessor visibility
 was broadened. This build also stopped before simulator boot; fresh corrected
 qualification is required.
+
+On 5a923e70 all three new BodyTrend tests passed. The full Core run executed502
+but failed the new format registry entry and the widget fixture's ambient guard.
+The count now uses the established Int/%ld convention and has its required
+registry entry. The DEBUG simulator gallery has a tightly guarded host-background
+exception; production-page checks remain unchanged. Native build found only the
+read-only widgetFamily environment injection in that gallery. The explicit medium
+views need no environment override, so it is removed. Fresh whole-candidate
+qualification remains required.

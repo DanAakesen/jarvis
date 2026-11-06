@@ -39,7 +39,6 @@ struct JarvisWidgetLayoutGallery: View {
         }
         .preferredColorScheme(language == "da" ? .light : .dark)
         .environment(\.dynamicTypeSize, .large)
-        .environment(\.widgetFamily, .systemMedium)
         .presentationDetents([.large])
     }
 
