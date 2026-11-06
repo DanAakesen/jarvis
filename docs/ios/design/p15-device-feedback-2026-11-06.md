@@ -1,6 +1,35 @@
 # 6 November device-feedback batch
 
-## Owner testing of build 76 — current follow-up
+## Build 77 — verified correction release
+
+Build **77 uploaded successfully at 19:54:10 UTC / 20:54:10 Copenhagen** in unchanged TestFlight
+workflow [42282578034](https://github.com/DanAakesen/jarvis/actions/runs/42282578034),
+from main `380782a02712322090de54d577991420351f460e` (#1621). Apple processing and
+owner visibility of this build are not independently confirmed.
+
+CI 42280051912 passed, including 502 Core tests, and CodeQL 42280051874 passed.
+Native coverage is 67 passing cases in 42268563484 plus the focused gallery pass
+in 42280276801 on identical production source. Both widget languages, Health
+charts/detail/Back, accessibility, task scrolling and transparent controls were
+inspected; unchanged shimmer was reviewed in a complete 6.398-second recording.
+Earlier failed attempts remain in the delivery record and are not described as
+passes. Widget host tint/refresh, physical haptics and live HealthKit remain device
+checks.
+
+Merged full tree: `8c18563542ef60ac423d4397ba3a3bc7d1837989`; app/test tree:
+`70f5cefe1e153390376cfab48b50e099c1f7fde4`. Both exactly match the qualified candidate.
+Automatic main Simulator 42281871658 was stopped during partial compilation before
+boot, after proving identity. Normal Deploy 42281871580 was accepted with readiness
+and all 15 Current conversation checks passing before TestFlight dispatch.
+
+The release corrects the owner-reported shimmer, generic task-source text, opaque
+header/dock/selector backings, medium-widget spacing and Body trend rows. Chat
+appearance is preserved. Copilot's exact compatibility gate is deployed, but the
+provider still fails Jarvis trusted-policy requirements; comparison remains
+unavailable. Ordinary Current remains accepted. All subsequent pending-state
+sections below are chronological history, not new release blockers.
+
+## Owner testing of build 76 — historical feedback
 
 The owner confirmed build 76 is available in TestFlight and reported that checks
 1 (cold Voice/unified history), 2 (Home send/camera), 3 (task/reminder workflow) and
@@ -33,7 +62,7 @@ resting/scrolled/large-text captures and loading-motion inspection before anothe
 upload. Build 76's passing run does not qualify the new rendering changes. Copilot
 diagnostics continue separately; neither line of work replaces the other.
 
-## Final qualification and delivery
+## Build 76 qualification and delivery
 
 PR #1614 merged as `ab464314a25fd45f1f1fcccc44644f636607afca` after final
 candidate `7e5ef5355363bce675d2020ea2f369d7079f3973` passed CI 42202162550,
@@ -713,3 +742,26 @@ Normal Deploy 42281871580 is pending. Duplicate automatic main Simulator
 42281871658 was cancelled after source proof; it entered compilation before
 cancellation settled, so its boot status must be confirmed. No new TestFlight
 upload is claimed yet.
+
+## Final deployment and build 77 upload
+
+Deploy 42281871580 reused the accepted infra/backend/web/agent components, passed
+deterministic readiness and all 15 Current acceptance checks, and retained accepted
+release artifact 13536365514 (SHA256
+4f28e8bf4dabcabf13240059f199897910a8bc561f5c58d71dfdf7a53fbc49d8).
+Its receipt binds source/applied_head 380782a02712322090de54d577991420351f460e,
+full tree 8c18563542ef60ac423d4397ba3a3bc7d1837989, qualification CI 42280051912 and
+PR #1621, with accepted true and superseded false. No Copilot activation occurred.
+
+Unchanged TestFlight 42282578034 (build 77, job 128115084720) checked out the verified
+main source. Export/upload completed successfully at 19:54:10 UTC / 20:54:10 Copenhagen;
+the complete job and signing cleanup passed. Apple processing and owner visibility
+are not independently confirmed. No extra simulator was run for upload or artifact
+retrieval. Main native 42281871658 was force-cancelled after partial compilation;
+its Boot step has null start/end, so no duplicate simulator boot occurred.
+
+The companion evidence PR updates the affected product/design/architecture/plan/
+agent/decision documents and scoped records without changing qualified application
+source. The interactive chart exploration is a synthetic proposal, not part of
+build 77; broader drill-down, Open/Edit/Undo receipts and useful Factory milestones
+remain future UI/UX suggestions. Actual Body trend graphs are included in build 77.

@@ -1,4 +1,4 @@
-## Current owner feedback — 6 November 2026, build 76
+## Current release — 6 November 2026, build 77
 
 Owner-reported passes: cold Voice/unified transcript, Home send/camera, task/reminder
 workflow and Health pull refresh. Compact task rows are accepted. PR #1621 combines
@@ -6,18 +6,25 @@ per-element shimmer, useful task-source labels with full detail provenance,
 transparent protected headers/docks, shared clear-glass selectors, three medium
 widget layouts and real Body trend plots.
 
-The final UI source 1766b727 is qualified and merged as 380782a0. CI 42280051912
-passed, including 502 Core tests, and CodeQL 42280051874 passed. Native coverage
-is 67 passing cases in 42268563484 plus the focused gallery pass in 42280276801;
-production source and the other 67 tests are identical. Both widget languages,
-Health graphs/detail/Back, accessibility, task scrolling, transparent controls and
-local shimmer motion were inspected. Retained failures are recorded separately.
+Build **77 uploaded successfully at 19:54:10 UTC / 20:54:10 Copenhagen** in unchanged TestFlight
+workflow [42282578034](https://github.com/DanAakesen/jarvis/actions/runs/42282578034),
+from main `380782a02712322090de54d577991420351f460e` (#1621). Apple processing and
+owner visibility of this build are not independently confirmed.
 
-Merged full tree: 8c18563542ef60ac423d4397ba3a3bc7d1837989; app/test tree:
-70f5cefe1e153390376cfab48b50e099c1f7fde4. The automatic main simulator was cancelled
-before boot after this identity check; no duplicate simulator was run. Normal
-Deploy 42281871580 passed readiness and is checking live conversation acceptance.
-The authorised TestFlight upload follows acceptance; no new upload is claimed yet.
+CI 42280051912 passed, including 502 Core tests, and CodeQL 42280051874 passed.
+Native coverage is 67 passing cases in 42268563484 plus the focused gallery pass
+in 42280276801 on identical production source. Both widget languages, Health
+charts/detail/Back, accessibility, task scrolling and transparent controls were
+inspected; unchanged shimmer was reviewed in a complete 6.398-second recording.
+Earlier failed attempts remain in the delivery record and are not described as
+passes. Widget host tint/refresh, physical haptics and live HealthKit remain device
+checks.
+
+Merged full tree: `8c18563542ef60ac423d4397ba3a3bc7d1837989`; app/test tree:
+`70f5cefe1e153390376cfab48b50e099c1f7fde4`. Both exactly match the qualified candidate.
+Automatic main Simulator 42281871658 was stopped during partial compilation before
+boot, after proving identity. Normal Deploy 42281871580 was accepted with readiness
+and all 15 Current conversation checks passing before TestFlight dispatch.
 
 ## Backend and runtime comparison status
 
@@ -31,7 +38,7 @@ Copilot itself remains incompatible: fixed diagnostics accepted ordinary user in
 rejected trusted-role response input, and failed stored-policy precedence/replacement
 sentinels. No working comparison is claimed. The iOS Plus runtime-testing sheet and
 web availability/retry flow shipped in build 76; current user-only provider success
-does not qualify Jarvis operation. Normal Current and the UI release can proceed.
+does not qualify Jarvis operation. Normal Current is accepted and build 77 is uploaded.
 See [the delivery record](docs/ios/design/p15-device-feedback-2026-11-06.md) for exact
 runs, retained evidence, previous failures and acceptance boundaries.
 
@@ -41,13 +48,14 @@ Build 76 uploaded from ab464314 at 12:14:34 UTC / 13:14:34 Copenhagen and the ow
 confirmed it is available. It includes unified typed/voice history, cold Voice
 readiness, Home send/camera handoff, Health pull refresh, shared tool schema/error
 hints, high-priority vault task/reminder timing and approval-gated own-code bug or
-feature proposals. These remain implemented; new device feedback is the active work.
+feature proposals. These remain implemented. Build 77 delivers the subsequent
+visual corrections.
 
 ## P15-78 — retire Daily feeds, rename Daily to Health, iPhone Health sync (#1571)
 
 - Done: feeds removed, rename with temporary `/daily` alias, iOS `/health/*`, Sync button and ingest payload with Swift tests.
-- P15-86 (#1587): owner-only `POST /health/sync`, anchor, Sync button states and last-sync time done; app target compiled only by CI.
-- Open: background sync (HKObserverQuery/BGTask), alias removal once builds ≤67 are gone, macOS CI build of the app target.
+- P15-86 (#1587): owner-only `POST /health/sync`, anchors and native compilation verified. The owner subsequently confirmed build 76 pull-to-refresh; the explicit sync/status block was removed at their request.
+- Open: background sync (HKObserverQuery/BGTask) and alias removal once builds ≤67 are gone.
 
 ## P15-51 — approval flow polish (#1504)
 

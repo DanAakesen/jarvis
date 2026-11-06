@@ -131,3 +131,7 @@ and Health-detail headings were inspected. Main 380782a0 exactly matches full tr
 8c18563542ef60ac423d4397ba3a3bc7d1837989 and app/test tree
 70f5cefe1e153390376cfab48b50e099c1f7fde4. See the delivery record for hashes, retained
 failures and release status. This supersedes pending-native statements above.
+
+Build 77 uploaded successfully in TestFlight 42282578034 after normal deployment
+42281871580 passed readiness and all 15 Current checks. Exact source, upload time
+and remaining device/Apple-processing limits are in the delivery record.

@@ -13,7 +13,9 @@ was uploaded and accepted for functional owner testing. The current graph/widget
 surface correction is merged as 380782a0 from qualified 1766b727 in #1621.
 Native coverage is 67 passing cases in 42268563484 plus one focused gallery pass
 in 42280276801 on identical production source. CI/CodeQL and visual inspection
-passed. Earlier failures remain in the delivery record; deployment/upload is pending.
+passed. Normal Deploy 42281871580 was accepted and build 77 uploaded successfully
+in 42282578034. Earlier failures and processing limitations remain in the delivery
+record. No additional simulator run is required for this unchanged source.
 
 ## Scope and delivery
 

@@ -7290,5 +7290,7 @@ steps. Final CI 42280051912 and its receipt match 1766b727/full tree 8c185635;
 focused 42280276801 passed one case with zero failures. Main 380782a0 matches both
 trees exactly. Automatic main native 42281871658 was force-cancelled during partial
 compilation, with Boot iPhone Simulator still pending and no start time. Normal
-Deploy 42281871580 and authorised upload follow. Do not repeat an unchanged full
-simulator suite.
+Deploy 42281871580 passed readiness/all 15 Current acceptance checks, then TestFlight
+42282578034 uploaded build 77 from exact main 380782a0. This qualification/release
+is complete; Apple processing/owner visibility is not yet confirmed. Do not repeat
+an unchanged full simulator suite.

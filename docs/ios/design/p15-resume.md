@@ -1,25 +1,32 @@
 # P15 release checkpoints
 
-## Current device-feedback follow-up
+## Completed device-feedback release — build 77
 
 The owner is testing build 76 and accepts Voice/history, Home send/camera,
-task/reminder creation, Health pull refresh and compact task rows. The active UI
+task/reminder creation, Health pull refresh and compact task rows. The released UI
 follow-up is PR #1621: local shimmer, generic task-source suppression, transparent
 headers/floating docks, clear-glass selectors, consistent medium widgets and real
 Body trend graphs.
 
-The final UI source 1766b727 is qualified and merged as 380782a0. CI 42280051912
-passed, including 502 Core tests, and CodeQL 42280051874 passed. Native coverage
-is 67 passing cases in 42268563484 plus the focused gallery pass in 42280276801;
-production source and the other 67 tests are identical. Both widget languages,
-Health graphs/detail/Back, accessibility, task scrolling, transparent controls and
-local shimmer motion were inspected. Retained failures are recorded separately.
+Build **77 uploaded successfully at 19:54:10 UTC / 20:54:10 Copenhagen** in unchanged TestFlight
+workflow [42282578034](https://github.com/DanAakesen/jarvis/actions/runs/42282578034),
+from main `380782a02712322090de54d577991420351f460e` (#1621). Apple processing and
+owner visibility of this build are not independently confirmed.
 
-Merged full tree: 8c18563542ef60ac423d4397ba3a3bc7d1837989; app/test tree:
-70f5cefe1e153390376cfab48b50e099c1f7fde4. The automatic main simulator was cancelled
-before boot after this identity check; no duplicate simulator was run. Normal
-Deploy 42281871580 passed readiness and is checking live conversation acceptance.
-The authorised TestFlight upload follows acceptance; no new upload is claimed yet.
+CI 42280051912 passed, including 502 Core tests, and CodeQL 42280051874 passed.
+Native coverage is 67 passing cases in 42268563484 plus the focused gallery pass
+in 42280276801 on identical production source. Both widget languages, Health
+charts/detail/Back, accessibility, task scrolling and transparent controls were
+inspected; unchanged shimmer was reviewed in a complete 6.398-second recording.
+Earlier failed attempts remain in the delivery record and are not described as
+passes. Widget host tint/refresh, physical haptics and live HealthKit remain device
+checks.
+
+Merged full tree: `8c18563542ef60ac423d4397ba3a3bc7d1837989`; app/test tree:
+`70f5cefe1e153390376cfab48b50e099c1f7fde4`. Both exactly match the qualified candidate.
+Automatic main Simulator 42281871658 was stopped during partial compilation before
+boot, after proving identity. Normal Deploy 42281871580 was accepted with readiness
+and all 15 Current conversation checks passing before TestFlight dispatch.
 
 Backend PR #1624 / 1fb0f908 deployed successfully in 42258321357 with all 15 Current
 acceptance checks passing. Its exact compatibility gate is accepted. Copilot itself

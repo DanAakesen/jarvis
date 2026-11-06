@@ -11344,3 +11344,13 @@ The other 67 native cases passed and all production source is unchanged. Run onl
 the corrected gallery with the same limits, exact-source provenance and failure
 artifacts. Both language widget captures and corrected heading/scroll views were
 visually accepted; this does not establish SpringBoard or physical-device behavior.
+
+## 6 November 2026 — Release the verified UI corrections as build 77
+
+PR #1621 merged at 380782a0 with identical qualified full/app trees. Accept native
+coverage as 67 unchanged full-suite passes plus one corrected gallery-only pass,
+with explicit source proof and actual bilingual captures. Keep the failed full-run
+record. Normal Deploy 42281871580 passed readiness and all 15 Current checks before
+unchanged TestFlight 42282578034 uploaded build 77 at 19:54:10 UTC / 20:54:10 Copenhagen.
+Copilot remains unqualified because trusted-policy compatibility failed; this
+release does not activate it or treat plain provider responses as sufficient.
