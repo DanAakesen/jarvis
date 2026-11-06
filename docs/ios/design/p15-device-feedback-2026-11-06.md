@@ -91,7 +91,10 @@ the long build/queue is plausible, but the generic error does not prove expiry.
 A bounded workflow correction merged through #1618 as 5cf9eb5b after CI
 42223501315 and CodeQL 42223501346 passed: refresh the same pinned OIDC login
 after each backend/agent build and before digest lookup. It adds no role,
-password/admin fallback or write-retry loop. Normal Deploy 42225249865 is running.
+password/admin fallback or write-retry loop. Normal Deploy 42225249865 passed.
+Both new login/digest boundaries succeeded live: backend at 13:31:13–19 UTC and
+hosted agent at 13:34:01–06 UTC. Readiness and normal conversation acceptance
+also passed. This verifies the revised workflow, not the original failure's cause.
 
 The already queued activation 42219195236 passed backend, hosted agent, web,
 readiness and normal conversation acceptance. Comparison job 127913011998 printed
