@@ -7305,3 +7305,9 @@ Shared-page captures include scrolled headers and footer reachability. Native
 compilation/visual inspection is pending; Linux has no Swift/Xcode. Use one combined
 Simulator qualification and exact-tree reuse after merge, followed by accepted
 normal deployment before the unchanged TestFlight workflow.
+
+The owner subsequently accepted widget layouts and requested matching-page taps.
+The earlier native run 42291240849 compiled the Home/chrome candidate but was
+cancelled early as superseded before full verification. Final qualification also
+covers registered widget links through cold and warm system URL opens; preserve
+layouts and the existing gate. Two new navigation cases make 70 native cases.

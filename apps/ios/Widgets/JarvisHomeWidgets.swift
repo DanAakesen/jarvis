@@ -13,6 +13,7 @@ private func homeWidget<Content: View>(
 ) -> some WidgetConfiguration {
     StaticConfiguration(kind: kind.rawValue, provider: JarvisHomeWidgetProvider(topic: kind.topic)) { entry in
         view(entry)
+            .widgetURL(JarvisWidgetLink.url(for: kind.topic))
     }
     .configurationDisplayName(name.text(language: .default))
     .supportedFamilies([family])

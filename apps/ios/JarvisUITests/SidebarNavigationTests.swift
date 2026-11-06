@@ -7,6 +7,31 @@ final class SidebarNavigationTests: XCTestCase {
         continueAfterFailure = false
     }
 
+    func testWidgetLinksOpenTheirSectionsOnColdLaunch() {
+        app.launchArguments = ["--ui-test-navigation", "-jarvis.appLanguage", "en"]
+        for (topic, destination) in [("notes", "notes"), ("factory", "softwareFactory"), ("gym", "health")] {
+            app.terminate()
+            app.open(URL(string: "jarvis-widget://\(topic)")!)
+            let screen = app.descendants(matching: .any).matching(identifier: "screen.\(destination)").firstMatch
+            XCTAssertTrue(screen.waitForExistence(timeout: 10), "A cold widget tap opens \(destination)")
+            let capture = XCTAttachment(screenshot: app.screenshot())
+            capture.name = "widget-link-cold-\(topic)"
+            capture.lifetime = .keepAlways
+            add(capture)
+        }
+    }
+
+    func testWidgetLinksNavigateAnAlreadyRunningApp() {
+        app.launchArguments = ["--ui-test-navigation", "-jarvis.appLanguage", "en"]
+        app.launch()
+        XCTAssertTrue(app.buttons["navigation.openSidebar"].waitForExistence(timeout: 10))
+        for (topic, destination) in [("notes", "notes"), ("factory", "softwareFactory"), ("gym", "health"), ("home", "today")] {
+            app.open(URL(string: "jarvis-widget://\(topic)")!)
+            let screen = app.descendants(matching: .any).matching(identifier: "screen.\(destination)").firstMatch
+            XCTAssertTrue(screen.waitForExistence(timeout: 10), "A warm widget tap opens \(destination)")
+        }
+    }
+
     func testPhysicalMenuTapOpensSidebarWithinTwoSecondsInDanish() {
         assertPhysicalMenuTap(language: "da")
     }

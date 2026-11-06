@@ -11364,3 +11364,12 @@ all other pages and transparent Notes/Factory footer containers. The owner also
 accepts loading animations, which remain unchanged. Implement these through shared
 hero/header/background components and the existing native List and completion
 path. Source implementation is prepared; new rendered acceptance is pending.
+
+## 6 November 2026 — Route every widget tap to its topic
+
+The owner accepts widget layouts and requests matching-page navigation. Gym and
+Factory lacked widgetURL, and Info.plist did not register the scheme already used
+by Notes/Home. Apply one topic URL at the shared configuration root, remove the
+six child modifiers, and register the scheme alongside Microsoft authentication.
+Keep existing root navigation and the authentication gate. Verify actual cold/warm
+URL delivery; native rendering and physical WidgetKit-host taps remain distinct.

@@ -3508,3 +3508,7 @@ page scaffolds. Apply the ambient background after Notes/Factory footer insets s
 the page continues behind floating controls. Preserve Chat's existing explicit
 transparent setting and the owner-accepted loading animations. These source changes
 need fresh native visual/interaction evidence before acceptance.
+
+The owner accepts the rendered widget layout. Keep it unchanged while fixing taps:
+one topic link on the shared widget root opens the matching app section, including
+loading/error widget states. No new in-widget buttons are needed.

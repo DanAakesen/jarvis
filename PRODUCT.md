@@ -2471,3 +2471,7 @@ showing success. Period controls align right and hero titles align left with equ
 top/leading inset. All page headers and the Notes/Factory footer containers remain
 transparent while their individual glass controls remain visible. The owner accepts
 the current loading animations; this correction preserves them.
+
+The owner accepts the widget layouts. Every widget size must open its matching
+section: Notes → Notes, Factory → Software Factory, Workouts/Steps → Health,
+Home → Home. Taps retain the app's authentication/lock gate.

@@ -8801,3 +8801,9 @@ and backend-write path; no optimistic success or new persistence is introduced.
 JarvisHeroHeader is shared by Home and JarvisPageHeroCard. Ambient navigation bars
 now default to hidden; Notes/Factory apply ambient painting outside footer insets.
 Backend, Chat handoffs, Health refresh and loading motion are unchanged.
+
+Widget navigation correction: the shared WidgetConfiguration applies exactly one
+widgetURL for its topic. Info.plist registers jarvis-widget alongside the unchanged
+Microsoft callback. Existing ContentView.onOpenURL validates the topic and uses
+root-owned navigation; the authentication/lock overlay remains in force. Previous
+Notes/Home per-view links are removed to avoid multiple widgetURL modifiers.

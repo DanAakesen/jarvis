@@ -131,7 +131,6 @@ struct JarvisNotesSmallWidgetView: View {
             }
         }
         .jarvisWidgetSurface()
-        .widgetURL(JarvisWidgetLink.url(for: .notes))
     }
 
     private func layout<Content: View>(
@@ -180,7 +179,6 @@ struct JarvisNotesMediumWidgetView: View {
             .opacity(stale ? 0.55 : 1)
         }
         .jarvisWidgetSurface()
-        .widgetURL(JarvisWidgetLink.url(for: .notes))
     }
 }
 
@@ -226,6 +224,5 @@ struct JarvisNotesLargeWidgetView: View {
             .opacity(stale ? 0.55 : 1)
         }
         .jarvisWidgetSurface()
-        .widgetURL(JarvisWidgetLink.url(for: .notes))
     }
 }
