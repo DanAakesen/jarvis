@@ -541,7 +541,7 @@ struct JarvisNotesArea: View {
             } else if visibleSearchNotes.isEmpty && visibleSearchTasks.isEmpty {
                 stateView(icon: "magnifyingglass", title: copy.noResults, retry: nil)
             } else {
-                List {
+                JarvisList(customRowBackgrounds: true) {
                     if !visibleSearchNotes.isEmpty {
                         Section {
                             ForEach(visibleSearchNotes, id: \.nodeId) { hit in
@@ -651,11 +651,9 @@ struct JarvisNotesArea: View {
                     }
                 }
             } else {
-                List {
+                JarvisList(customRowBackgrounds: true) {
                     pageHead
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets())
+                } content: {
                     taskSection(groups.overdue, title: copy.overdue, today: list.today)
                     taskSection(groups.today, title: copy.today, today: list.today)
                     taskSection(groups.upcoming, title: copy.upcoming, today: list.today)

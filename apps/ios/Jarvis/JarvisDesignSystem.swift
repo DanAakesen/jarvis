@@ -424,11 +424,13 @@ struct JarvisForm<Content: View>: View {
 }
 
 struct JarvisList<Head: View, Content: View>: View {
+    private let customRowBackgrounds: Bool
     private let head: Head
     private let content: Content
 
     /// `head` is the page's headline and hero: the first row, with no glass behind it.
-    init(@ViewBuilder head: () -> Head, @ViewBuilder content: () -> Content) {
+    init(customRowBackgrounds: Bool = false, @ViewBuilder head: () -> Head, @ViewBuilder content: () -> Content) {
+        self.customRowBackgrounds = customRowBackgrounds
         self.head = head()
         self.content = content()
     }
@@ -439,15 +441,19 @@ struct JarvisList<Head: View, Content: View>: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets())
-            content.listRowBackground(JarvisGlassSurface())
+            if customRowBackgrounds {
+                content
+            } else {
+                content.listRowBackground(JarvisGlassSurface())
+            }
         }
         .scrollContentBackground(.hidden)
     }
 }
 
 extension JarvisList where Head == EmptyView {
-    init(@ViewBuilder content: () -> Content) {
-        self.init(head: { EmptyView() }, content: content)
+    init(customRowBackgrounds: Bool = false, @ViewBuilder content: () -> Content) {
+        self.init(customRowBackgrounds: customRowBackgrounds, head: { EmptyView() }, content: content)
     }
 }
 

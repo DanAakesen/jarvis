@@ -553,7 +553,7 @@ private struct JarvisSelectionLens: View {
     var body: some View {
         Group {
             if reduceTransparency {
-                Capsule().fill(Color(uiColor: .secondarySystemBackground))
+                Capsule().fill(JarvisDesignTokens.glassSolid)
             } else {
                 Capsule().fill(Color.clear)
                     .glassEffect(

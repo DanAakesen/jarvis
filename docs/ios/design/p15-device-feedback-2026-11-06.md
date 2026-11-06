@@ -98,3 +98,15 @@ vault/Azure discovery and delivery pipeline. Legacy reminders keep their lead ti
 Local workflow checks: eight suites / 247 tests passed; backend TypeScript and
 scoped ESLint passed. Final bypass-guard checks, CI, native review and deployment
 are pending and will be recorded with exact runs here before upload.
+
+## First candidate qualification
+
+Candidate 3ce5d6d9: CI 42178648577 passed backend (325 suites), agent image,
+Python, web, database, Foundry and other component checks. Core ran 493 tests with
+two ambient-source guard failures: a system background in the selector's Reduce
+Transparency fallback and raw Notes lists outside the shared layer. Both are
+corrected by using the existing glassSolid token and extending JarvisList for
+rows with their own grouped backgrounds; no guard was weakened. Native run
+42178648500 compiled successfully but was stopped as superseded before acceptance.
+Its duplicate queued run 42178649078 was cancelled without a second build.
+The corrected candidate needs fresh CI/native qualification.
