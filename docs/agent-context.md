@@ -7034,6 +7034,14 @@ XCUITest can go idle. Normal launches start on Home; fixture and screenshot runs
 `ios-ci.yml` lists `-only-testing:JarvisUITests/TodayUITests`. Not run on this Linux runner.
 
 
+## Notes native creation and graph corrections
+
+Notes retry 42100772453 passed 48/50 native tests. Keep the selected folder in the
+item-driven note-sheet destination; initialize creation drafts once per sheet.
+Do not reset them when a nested picker dismisses. The graph selection is an explicit
+accessibility container so its Open action retains its identifier. The existing
+native tests cover initial/confirmed nested paths and the real Open action.
+
 ## Native board evidence and follow-up checks (Refs #1600; 5 November 2026)
 
 Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.

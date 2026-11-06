@@ -2,10 +2,206 @@ import Foundation
 import JarvisCore
 import SwiftUI
 
+private struct JarvisNoteFolderPicker: View {
+    let client: JarvisNotesClient
+    let copy: JarvisNotesCopy
+    @Binding var folder: String
+    var persistsWithNote = true
+    @State private var presented = false
+    @State private var draft = ""
+    @State private var stagedFolders: [String] = []
+
+    var body: some View {
+        Section {
+            HStack {
+                Text(persistsWithNote ? copy.folderField : copy.parentFolder)
+                Spacer()
+                JarvisTextButton(title: folder.isEmpty ? copy.vaultRoot : folder.replacingOccurrences(of: "/", with: " / "),
+                                 identifier: "notes.create.folder") {
+                    draft = folder
+                    presented = true
+                }
+            }
+            if persistsWithNote, stagedFolders.contains(folder) {
+                Text(copy.folderSavedWithNote).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .sheet(isPresented: $presented) {
+            NavigationStack {
+                JarvisForm {
+                    JarvisNoteFolderPickerContent(client: client, copy: copy, folder: $draft,
+                                                 stagedFolders: $stagedFolders, persistsWithNote: persistsWithNote)
+                }
+                .navigationTitle(persistsWithNote ? copy.folderField : copy.parentFolder)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    JarvisSheetToolbar(confirmTitle: copy.useFolder, closeTitle: copy.cancel,
+                        onConfirm: { folder = draft; presented = false }, onClose: { presented = false })
+                }
+            }
+        }
+    }
+}
+
+private struct JarvisNoteFolderPickerContent: View {
+    let client: JarvisNotesClient
+    let copy: JarvisNotesCopy
+    @Binding var folder: String
+    @Binding var stagedFolders: [String]
+    var persistsWithNote = true
+    @State private var directories: [String] = []
+    @State private var newFolderName = ""
+    @State private var loadingFolders = false
+    @State private var folderLoadFailed = false
+
+    private var trimmedFolder: String { folder.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    private var newFolderPath: String? {
+        JarvisNotesPresentation.newFolderPath(named: newFolderName, in: trimmedFolder)
+    }
+
+    private var duplicateFolder: Bool {
+        guard let path = newFolderPath else { return false }
+        return (directories + stagedFolders).contains { $0 == path || $0.hasPrefix(path + "/") }
+    }
+
+    /// Staged paths are persisted only by the enclosing sheet's confirmed write.
+    var body: some View {
+        Section {
+            Text(trimmedFolder.isEmpty ? copy.vaultRoot : trimmedFolder.replacingOccurrences(of: "/", with: " / "))
+                .font(.subheadline)
+                .accessibilityIdentifier("notes.create.folder.path")
+            if let parent = JarvisNotesPresentation.parentFolder(of: trimmedFolder) {
+                JarvisTextButton(title: copy.back, identifier: "notes.create.folder.back") {
+                    folder = parent
+                    newFolderName = ""
+                }
+            }
+            ForEach(JarvisNotesPresentation.childFolders(in: trimmedFolder, paths: directories + stagedFolders)) { child in
+                JarvisRowButton(identifier: "notes.create.folder.\(child.path)",
+                                action: { folder = child.path; newFolderName = "" }) {
+                    HStack {
+                        Label(child.name, systemImage: "folder")
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption)
+                    }.foregroundStyle(.primary)
+                }
+            }
+            HStack {
+                TextField(copy.folderName, text: $newFolderName)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("notes.create.folder.name")
+                JarvisIconButton(title: copy.newFolderHere, systemImage: "folder.badge.plus",
+                                 identifier: "notes.create.folder.add", isDisabled: newFolderPath == nil || duplicateFolder || loadingFolders || folderLoadFailed) {
+                    guard let path = newFolderPath else { return }
+                    stagedFolders.append(path)
+                    folder = path
+                    newFolderName = ""
+                }
+            }
+            if !newFolderName.isEmpty, newFolderPath == nil || duplicateFolder {
+                Text(duplicateFolder ? copy.folderAlreadyExists : copy.folderInvalidName)
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if persistsWithNote && !stagedFolders.isEmpty {
+                Text(copy.folderSavedWithNote).font(.caption).foregroundStyle(.secondary)
+            }
+            if loadingFolders {
+                JarvisLoadingView(title: copy.loading, size: .inline)
+            } else if folderLoadFailed {
+                Text(copy.unavailable).font(.caption).foregroundStyle(.secondary)
+                JarvisTextButton(title: copy.retry) { Task { await loadFolders() } }
+            }
+        } header: {
+            Text(copy.folderField)
+        }
+        .task { await loadFolders() }
+    }
+
+    private func loadFolders() async {
+        loadingFolders = true
+        folderLoadFailed = false
+        defer { loadingFolders = false }
+        do {
+            directories = try await client.folderTree().directories
+        } catch {
+            guard !Task.isCancelled else { return }
+            folderLoadFailed = true
+        }
+    }
+
+}
+
+struct JarvisNewFolderSheet: View {
+    let client: JarvisNotesClient
+    let copy: JarvisNotesCopy
+    let onCreated: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var parent = ""
+    @State private var name = ""
+    @State private var saving = false
+    @State private var errorMessage: String?
+    @State private var retryUnavailable = false
+
+    init(client: JarvisNotesClient, copy: JarvisNotesCopy, initialFolder: String, onCreated: @escaping (String) -> Void) {
+        self.client = client
+        self.copy = copy
+        self.onCreated = onCreated
+        _parent = State(initialValue: initialFolder)
+    }
+
+    private var path: String? {
+        guard let value = JarvisNotesPresentation.newFolderPath(named: name, in: parent), value.utf16.count <= 171 else { return nil }
+        return value
+    }
+
+    var body: some View {
+        NavigationStack {
+            JarvisForm {
+                TextField(copy.folderName, text: $name)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("notes.create.folder.title")
+                JarvisNoteFolderPicker(client: client, copy: copy, folder: $parent, persistsWithNote: false)
+                if !name.isEmpty, path == nil { Text(copy.folderInvalidName).foregroundStyle(.secondary) }
+                if let errorMessage { Text(errorMessage).foregroundStyle(.secondary) }
+            }
+            .navigationTitle(copy.newFolderTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                JarvisSheetToolbar(confirmTitle: copy.create, closeTitle: copy.cancel,
+                    isWorking: saving, isConfirmDisabled: path == nil || saving || retryUnavailable,
+                    onConfirm: { Task { await create() } }, onClose: { dismiss() })
+            }
+        }
+    }
+
+    private func create() async {
+        guard let path, !saving else { return }
+        saving = true
+        errorMessage = nil
+        defer { saving = false }
+        do {
+            _ = try await client.createFolder(path: path)
+            await JarvisAppCache.invalidateAll(.notes)
+            dismiss()
+            onCreated(path)
+        } catch let error as JarvisNotesClientError {
+            retryUnavailable = error == .writeOutcomeUnknown
+            errorMessage = error == .folderAlreadyExists ? copy.folderAlreadyExists
+                : retryUnavailable ? copy.unknownWrite : copy.unavailable
+        } catch let error as JarvisClientError {
+            retryUnavailable = error == .signInRequired || error == .notOwner
+            errorMessage = error == .signInRequired ? copy.signIn : error == .notOwner ? copy.notOwner : copy.unavailable
+        } catch {
+            errorMessage = copy.unavailable
+        }
+    }
+}
+
 struct JarvisNewNoteSheet: View {
     let client: JarvisNotesClient
     let copy: JarvisNotesCopy
-    let initialFolder: String
     let onCreated: (String) async -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -16,44 +212,12 @@ struct JarvisNewNoteSheet: View {
     @State private var errorMessage: String?
     @State private var outcomeUnknown = false
     @State private var authorizationUnavailable = false
-    @State private var directories: [String] = []
 
-    private var trimmedFolder: String { folder.trimmingCharacters(in: .whitespacesAndNewlines) }
-
-    private var folderMatches: [String] {
-        Array(directories.filter {
-            $0 != trimmedFolder && (trimmedFolder.isEmpty || $0.localizedCaseInsensitiveContains(trimmedFolder))
-        }.prefix(5))
-    }
-
-    private var createsNewFolder: Bool {
-        !trimmedFolder.isEmpty && JarvisNotesLogic.validFolder(trimmedFolder) && !directories.contains(trimmedFolder)
-    }
-
-    /// A lookup into the vault folders as you type, with the option to start a new folder. The folder is created
-    /// when the note is saved, because a vault folder only exists once it holds a note.
-    @ViewBuilder
-    private var folderLookup: some View {
-        Section {
-            TextField(copy.folderField, text: $folder)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .accessibilityIdentifier("notes.create.folder")
-            ForEach(folderMatches, id: \.self) { directory in
-                Button {
-                    folder = directory
-                } label: {
-                    Label(directory, systemImage: "folder")
-                        .foregroundStyle(.primary)
-                }
-                .accessibilityIdentifier("notes.create.folder.\(directory)")
-            }
-            if createsNewFolder {
-                Label(copy.newFolder(trimmedFolder), systemImage: "folder.badge.plus")
-                    .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-                    .accessibilityIdentifier("notes.create.folder.new")
-            }
-        }
+    init(client: JarvisNotesClient, copy: JarvisNotesCopy, initialFolder: String, onCreated: @escaping (String) async -> Void) {
+        self.client = client
+        self.copy = copy
+        self.onCreated = onCreated
+        _folder = State(initialValue: initialFolder)
     }
 
     var body: some View {
@@ -61,7 +225,8 @@ struct JarvisNewNoteSheet: View {
             JarvisForm {
                 TextField(copy.titleField, text: $title)
                     .textInputAutocapitalization(.sentences)
-                folderLookup
+                    .accessibilityIdentifier("notes.create.title")
+                JarvisNoteFolderPicker(client: client, copy: copy, folder: $folder)
                 Section {
                     TextEditor(text: $content)
                         .frame(minHeight: JarvisDesignTokens.notesEditorMinimumHeight)
@@ -86,10 +251,7 @@ struct JarvisNewNoteSheet: View {
                 )
             }
         }
-        .onAppear { folder = initialFolder }
-        .task {
-            directories = (try? await client.folderTree().directories) ?? []
-        }
+
     }
 
     private var canCreate: Bool {
@@ -136,7 +298,8 @@ struct JarvisNewTaskSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
-    @State private var scope: VaultTaskScope = .personal
+    @State private var scope: VaultTaskScope = .work
+    @State private var priority: VaultTask.Priority = .normal
     @State private var dueDateEnabled = false
     @State private var dueTimeEnabled = false
     @State private var dueDate = Date()
@@ -151,15 +314,7 @@ struct JarvisNewTaskSheet: View {
             JarvisForm {
                 TextField(copy.titleField, text: $title, axis: .vertical)
                     .lineLimit(1...3)
-                JarvisTabStrip(
-                    title: copy.scope,
-                    identifierPrefix: "notes.create.scope",
-                    items: [
-                        JarvisTabItem(tag: VaultTaskScope.personal, title: copy.personal),
-                        JarvisTabItem(tag: VaultTaskScope.work, title: copy.work),
-                    ],
-                    selection: $scope
-                )
+                    .accessibilityIdentifier("notes.create.title")
                 Toggle(copy.dueDateEnabled, isOn: $dueDateEnabled)
                 if dueDateEnabled {
                     DatePicker(copy.dueDate, selection: $dueDate, displayedComponents: .date)
@@ -168,6 +323,29 @@ struct JarvisNewTaskSheet: View {
                 if dueTimeEnabled {
                     DatePicker(copy.dueTime, selection: $dueTime, displayedComponents: .hourAndMinute)
                 }
+                Section {
+                    JarvisSegmentedBar(
+                        title: copy.scope,
+                        identifierPrefix: "notes.create.scope",
+                        items: [
+                            JarvisTabItem(tag: VaultTaskScope.work, title: copy.work),
+                            JarvisTabItem(tag: VaultTaskScope.personal, title: copy.personal),
+                        ],
+                        selection: $scope
+                    )
+                } header: { Text(copy.scope) }
+                Section {
+                    JarvisSegmentedBar(
+                        title: copy.priority,
+                        identifierPrefix: "notes.create.priority",
+                        items: [
+                            JarvisTabItem(tag: VaultTask.Priority.normal, title: copy.priorityNormal),
+                            JarvisTabItem(tag: VaultTask.Priority.medium, title: copy.priorityMedium),
+                            JarvisTabItem(tag: VaultTask.Priority.high, title: copy.priorityHigh),
+                        ],
+                        selection: $priority
+                    )
+                } header: { Text(copy.priority) }
                 if let errorMessage {
                     Text(errorMessage)
                         .foregroundStyle(.secondary)
@@ -210,7 +388,8 @@ struct JarvisNewTaskSheet: View {
                 text: title,
                 scope: scope,
                 due: date,
-                time: time
+                time: time,
+                priority: priority
             )
             await JarvisAppCache.invalidateAll(.tasks)
             dismiss()

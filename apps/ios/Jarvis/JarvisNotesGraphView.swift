@@ -5,9 +5,9 @@ struct JarvisNotesGraphView: View {
     let graph: KnowledgeGraph
     let copy: JarvisNotesCopy
     let onOpen: (KnowledgeGraphNode) async -> Void
+    var searchMatches: Set<String> = []
 
     @State private var selectedNodeID: String?
-    @State private var showingList = false
     @State private var scale: CGFloat = 1
     @State private var startingScale: CGFloat = 1
     @State private var offset = CGSize.zero
@@ -20,19 +20,34 @@ struct JarvisNotesGraphView: View {
 
     var body: some View {
         VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-            HStack {
-                Spacer()
-                JarvisLabelledButton(
-                    title: showingList ? copy.showGraph : copy.showGraphList,
-                    systemImage: showingList ? "point.3.connected.trianglepath.dotted" : "list.bullet"
-                ) {
-                    showingList.toggle()
+            ScrollView(.horizontal) {
+                HStack(spacing: JarvisPageHeaderMetrics.spacing) {
+                    ForEach(JarvisNotesPresentation.folderShares(graph)) { share in
+                        HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
+                            Circle().fill(JarvisNotesFolderPalette.color(share.folder))
+                                .frame(width: JarvisDesignTokens.notesChipSpacing, height: JarvisDesignTokens.notesChipSpacing)
+                            Text(share.folder.isEmpty ? copy.vaultRoot : share.folder)
+                        }
+                        .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }
-            if showingList {
-                graphList
-            } else {
-                graphCanvas
+            .scrollIndicators(.hidden)
+            graphCanvas
+            if let selected = graph.nodes.first(where: { $0.id == selectedNodeID }) {
+                HStack {
+                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                        Text(selected.title).font(.subheadline.weight(.semibold))
+                        Text(selected.directory.isEmpty ? copy.vaultRoot : selected.directory)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    JarvisTextButton(title: copy.openNote, identifier: "notes.graph.open") { Task { await onOpen(selected) } }
+                }
+                .padding(JarvisPageHeaderMetrics.heroInset)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("notes.graph.selection")
             }
         }
     }
@@ -103,45 +118,11 @@ struct JarvisNotesGraphView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var graphList: some View {
-        JarvisList {
-            ForEach(graph.nodes) { node in
-                Button {
-                    selectedNodeID = node.id
-                    Task { await onOpen(node) }
-                } label: {
-                    HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-                        Circle()
-                            .fill(nodeColor(node))
-                            .frame(
-                                width: JarvisDesignTokens.notesGraphNodeRadius * 2,
-                                height: JarvisDesignTokens.notesGraphNodeRadius * 2
-                            )
-                        Text(node.title)
-                            .foregroundStyle(nodeTextColor(node))
-                        Spacer()
-                        Text(node.folder.isEmpty ? copy.vaultRoot : node.folder)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(minHeight: JarvisDesignTokens.notesRowMinimumHeight)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(node.title)
-                .accessibilityValue(node.folder)
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-    }
-
     private func graphNode(_ node: KnowledgeGraphNode) -> some View {
         Button {
-            selectedNodeID = node.id
-            Task { await onOpen(node) }
+            selectedNodeID = selectedNodeID == node.id ? nil : node.id
         } label: {
-            VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
+            ZStack {
                 Circle()
                     .fill(nodeColor(node))
                     .overlay {
@@ -155,28 +136,38 @@ struct JarvisNotesGraphView: View {
                         width: JarvisDesignTokens.notesGraphNodeRadius * 2,
                         height: JarvisDesignTokens.notesGraphNodeRadius * 2
                     )
-                Text(node.title)
-                    .font(.caption2)
-                    .foregroundStyle(nodeTextColor(node))
-                    .lineLimit(1)
-                    .frame(maxWidth: JarvisDesignTokens.notesGraphNodeLabelWidth)
             }
-            .padding(JarvisDesignTokens.notesEditorInset)
+            .frame(minWidth: JarvisDesignTokens.controlMinimumHeight, minHeight: JarvisDesignTokens.controlMinimumHeight)
+            .overlay(alignment: .center) {
+                if selectedNodeID == node.id || searchMatches.contains(node.id) {
+                    Text(node.title)
+                        .font(.caption2)
+                        .foregroundStyle(nodeTextColor(node))
+                        .lineLimit(1)
+                        .frame(width: JarvisDesignTokens.notesGraphNodeLabelWidth)
+                        .offset(y: JarvisDesignTokens.notesGraphLabelOffset)
+                        .allowsHitTesting(false)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(node.title)
         .accessibilityValue(node.folder.isEmpty ? copy.vaultRoot : node.folder)
-        .accessibilityHint(copy.openNote)
+        .accessibilityAction(named: copy.openNote) { Task { await onOpen(node) } }
+        .accessibilityAddTraits(selectedNodeID == node.id ? .isSelected : [])
+        .accessibilityIdentifier("notes.graph.node.\(node.id)")
     }
 
     private func nodeColor(_ node: KnowledgeGraphNode) -> Color {
-        guard let selectedNodeID else { return Color.secondary }
-        if node.id == selectedNodeID { return Color.accentColor }
+        let color = JarvisNotesFolderPalette.color(node.folder)
+        if !searchMatches.isEmpty { return color.opacity(searchMatches.contains(node.id) ? 1 : JarvisDesignTokens.notesGraphNodeOpacity) }
+        guard let selectedNodeID else { return color }
+        if node.id == selectedNodeID { return color }
         if selectedNeighbours.contains(node.id) {
-            return Color.accentColor.opacity(JarvisDesignTokens.notesGraphNeighbourOpacity)
+            return color.opacity(JarvisDesignTokens.notesGraphNeighbourOpacity)
         }
-        return Color.secondary.opacity(JarvisDesignTokens.notesGraphNodeOpacity)
+        return color.opacity(JarvisDesignTokens.notesGraphNodeOpacity)
     }
 
     private func nodeTextColor(_ node: KnowledgeGraphNode) -> Color {

@@ -15,27 +15,28 @@ final class NavigationReliabilityTests: XCTestCase {
         exerciseNavigation(language: "en")
     }
 
-    func testNotesFoldersStartCollapsedAndRecentStripShowsInDanishAndEnglish() {
-        for (language, label, collapsed) in [("da", "Seneste", "Lukket"), ("en", "Recent", "Collapsed")] {
+    func testNotesRootAndRecentOpeningInDanishAndEnglish() {
+        for (language, label) in [("da", "Seneste"), ("en", "Recent")] {
             launch(language: language)
             defer { app.terminate() }
             navigate(to: "notes")
-            waitFor(app.staticTexts["page.title"], key: "exists", value: true)
-            let folders = app.buttons.matching(identifier: "notes.folder.header")
-            if folders.count > 0 {
-                for index in 0..<folders.count {
-                    let header = folders.element(boundBy: index)
-                    XCTAssertEqual(header.value as? String, collapsed, "\(language): folder \(header.identifier) starts collapsed")
-                }
+            let rootNote = app.buttons["notes.note.welcome.md"]
+            for _ in 0..<5 {
+                if rootNote.isHittable { break }
+                app.swipeUp()
             }
-            let recent = app.descendants(matching: .any)["notes.recent"]
-            if recent.waitForExistence(timeout: 3) {
-                XCTAssertTrue(recent.staticTexts[label].exists, "\(language): Recent label")
-                let cards = app.buttons.matching(identifier: "notes.recent.item")
-                XCTAssertLessThanOrEqual(cards.count, 5)
-                XCTAssertGreaterThan(cards.count, 0)
+            tap(rootNote)
+            tap(app.buttons["note.back"])
+            let recent = app.buttons["notes.recent.welcome.md"]
+            for _ in 0..<5 {
+                if recent.isHittable { break }
+                app.swipeDown()
             }
-            attachScreenshot("Notes collapsed folders and Recent strip (\(language))")
+            XCTAssertTrue(recent.isHittable)
+            XCTAssertTrue(app.staticTexts[label].exists)
+            XCTAssertFalse(app.buttons["notes.tab.list"].exists)
+            XCTAssertLessThanOrEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "notes.recent.")).count, 5)
+            attachScreenshot("Notes root and recently opened (\(language))")
         }
     }
 
@@ -343,8 +344,9 @@ final class NavigationReliabilityTests: XCTestCase {
                 navigate(to: "notes")
                 assertDestinationMenuWorks()
                 exerciseSearch("notes.search")
-                tap(app.buttons["notes.tab.list"])
-                waitFor(app.buttons["notes.tab.list"], key: "isSelected", value: true)
+                XCTAssertFalse(app.buttons["notes.tab.list"].exists)
+                tap(app.buttons["notes.tab.tasks"])
+                waitFor(app.buttons["notes.tab.tasks"], key: "isSelected", value: true)
                 tap(app.buttons["notes.tab.notes"])
                 waitFor(app.buttons["notes.tab.notes"], key: "isSelected", value: true)
                 tap(app.buttons["notes.plus"])

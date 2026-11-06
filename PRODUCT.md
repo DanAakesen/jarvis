@@ -1272,24 +1272,30 @@ done unless it is consent, a destructive-action warning or recovery guidance.
 Freshness, stale, partial, failed-refresh and estimated states keep a short
 visible marker.
 
-#### Native iOS Notes area (P15-12; 30 October 2026)
+#### Native iOS Notes area (P15-93; 5 November 2026)
 
-The approved iPhone version presents the shared vault in four tabs: Notes, Tasks,
-List and Graph. Notes group Markdown files by folder; Tasks group open
-Personal/Work tasks by Overdue, Today, Upcoming and No date; List lazily browses
-the vault tree; Graph pans and zooms the knowledge graph and offers a list
-alternative. A persistent bottom search supports All, Notes and Tasks scopes.
+The approved iPhone version presents the shared vault in Notes, Tasks and Graph.
+Notes opens at the vault root, with direct child folders and root notes. Browsing
+a folder shows its direct children, a matching note count and one-level Back.
+Recent tiles show successfully opened notes, newest opening first. Tasks group
+open Personal/Work tasks by Overdue, Today, Upcoming and No date. Graph pans and
+zooms, labels searched or selected nodes and uses the same folder colors as its
+legend. A persistent bottom search supports All, Notes and Tasks scopes; searching
+the graph highlights its matching nodes.
 Creating and editing notes use the shared vault routes; editing saves only with
 the version returned by the note read. Tasks can be completed, and new tasks
-include title, scope and optional date/time. All interface and accessibility copy
+include title, scope, priority and optional date/time. All interface and accessibility copy
 is localized in Danish and English from the app-owned Settings preference,
 defaulting to Danish; it is independent of voice language and device locale.
 
 This iOS navigation is an approved native presentation of the existing web
-capabilities, not a new backend surface. Notes are path-sorted rather than
-recent-first. A folder appears only when a note is created beneath it; there is
-no standalone folder action. Note delete/rename/move, task delete, task priority
-on creation and offline caching are not available. The app has no native
+capabilities. The existing task-create route accepts optional priority. Folder
+rows list direct notes by title; Recent uses account-bound local opening history.
+The New note folder picker stages a child inside its current folder and explains
+that saving the note persists it. The separate New folder sheet saves an empty
+folder inside the selected parent; it does not add a synthetic note. Note delete/rename/move and task
+delete remain unavailable. Cached reads and recent-opening history do not queue
+offline writes. The app has no native
 Microsoft sign-in provider yet; an existing stored owner session can be used,
 but a new or expired session cannot be established from this screen.
 
@@ -2309,6 +2315,12 @@ available without repeating long paragraphs. Daily reads, including capabilities
 and nutrition targets, share a two-request concurrency bound and abort queued
 work when its view is left. Original Daily remains canonical; no source,
 permission, writer, coaching, recovery, recomp or TickTick behavior is added.
+
+### Native Notes success feedback (owner request, 6 November 2026)
+
+Confirmed note creation and task completion provide a subtle success haptic and a
+brief non-blocking confirmation. Failures and uncertain writes retain their existing
+recovery behavior and never produce success feedback. Chat remains unchanged.
 
 ### Home greeting and confirmed-action polish (owner request, 6 November 2026)
 

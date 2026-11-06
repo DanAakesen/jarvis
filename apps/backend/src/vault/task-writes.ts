@@ -11,6 +11,7 @@ export interface TaskCreateInput {
   scope: 'personal' | 'work';
   due?: string;
   time?: string;
+  priority?: 'high' | 'medium' | 'normal';
 }
 
 export interface TaskCompleteInput {
@@ -45,6 +46,7 @@ export const taskCreateSchema = {
     scope: { type: 'string', enum: ['personal', 'work'] },
     due: dateSchema,
     time: { type: 'string', pattern: timePattern },
+    priority: { type: 'string', enum: ['high', 'medium', 'normal'] },
   },
   required: ['text', 'scope'],
   additionalProperties: false,
@@ -103,9 +105,10 @@ function validIdentity(value: Record<string, unknown>): boolean {
 }
 
 export function validateTaskCreateInput(value: unknown): value is TaskCreateInput {
-  return record(value) && onlyKeys(value, ['text', 'scope', 'due', 'time']) &&
+  return record(value) && onlyKeys(value, ['text', 'scope', 'due', 'time', 'priority']) &&
     boundedText(value.text, 400) && (value.scope === 'personal' || value.scope === 'work') &&
-    (!('due' in value) || validDate(value.due)) && (!('time' in value) || validTime(value.time));
+    (!('due' in value) || validDate(value.due)) && (!('time' in value) || validTime(value.time)) &&
+    (!('priority' in value) || (typeof value.priority === 'string' && ['high', 'medium', 'normal'].includes(value.priority)));
 }
 
 export function validateTaskCompleteInput(value: unknown): value is TaskCompleteInput {
@@ -278,7 +281,8 @@ export function createTaskWriter(options: TaskWriterOptions) {
         const path = options.validateWritePath(`${folder}/Inbox.md`);
         if (!options.inTaskScope(path)) throw new TaskWriteError(400, 'That note does not hold vault tasks.');
         if (input.time && !input.due) throw new TaskWriteError(400, 'Pick a day for the time.');
-        const taskLine = `- [ ] ${text}${input.due ? ` 📅 ${input.due}${input.time ? ` ${input.time}` : ''}` : ''}`;
+        const priority = input.priority === 'high' ? ' ⏫' : input.priority === 'medium' ? ' 🔼' : '';
+        const taskLine = `- [ ] ${text}${priority}${input.due ? ` 📅 ${input.due}${input.time ? ` ${input.time}` : ''}` : ''}`;
         for (let attempt = 0; attempt < 2; attempt += 1) {
           signal.throwIfAborted();
           const current = await options.client.read(path, signal);
