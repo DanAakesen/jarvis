@@ -7132,3 +7132,8 @@ The injected GH_TOKEN is stale; never print it. The Linux Core job alone is pinn
 to ubuntu-24.04 for the existing Swift setup action; fresh CI passed. Local worktrees
 use /tmp/p15-workspace because the original volume is full. Do not build Docker
 locally. Cancel redundant native runs by exact head, preserving the Settings run.
+
+Latest native source 93a09531 passed 62/62 tests (42141442953); the later standalone
+capture sweep timed out, with screenshots and result bundle retained. General CI
+passed 493 tests. The chart and success captures are accepted, but a remaining
+shared-header overlap requires the next Settings run. See the updated resume file.

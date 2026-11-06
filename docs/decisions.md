@@ -11098,3 +11098,14 @@ rows behind the pinned title. Use native AxisValueLabel anchors/intrinsic width 
 restore the iOS soft scroll-edge effect, retaining the AX material. Apple API docs
 were read directly; no new dependency or custom blur is needed. Verify these actual
 findings in one combined Settings run before the final merge. Chat remains unchanged.
+
+## 6 November 2026 — Explicit native material behind scrolled custom headers
+
+Run 42141442953 passed all 62 UI tests; the later standalone capture sweep timed
+out with attachments retained. Monthly endpoints and task/lift feedback are
+accepted from actual images. The shared soft scroll-edge style did not prevent
+rows crossing the custom header. Observe the Boolean top-edge crossing using
+onScrollGeometryChange and add native regular material only while scrolled.
+Preserve the transparent resting board and existing AX material. Recheck the
+same native suite once for this observed finding; keep all assertions and avoid
+a duplicate integration run. Chat and signing remain unchanged.

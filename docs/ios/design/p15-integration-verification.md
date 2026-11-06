@@ -115,3 +115,25 @@ unchanged `ios-testflight.yml` on main with `branch=main` for the authorised
 6 November 06:00 Copenhagen target. No upload is yet claimed. Apple processing,
 physical haptic feel, live VoiceOver and real HealthKit permissions cannot be
 established by simulator fixture evidence.
+
+## 6 November 01:57 UTC — Complete tests; remaining header finding
+
+Settings `93a09531` passed **62/62 native UI tests** in run **42141442953**,
+including the corrected Home completion case (17.268 seconds). General CI
+**42141443249** passed 493 Core tests and CodeQL passed. The later standalone
+capture sweep exceeded the time limit; overall workflow conclusion is cancelled,
+not success. Artifact **13470356991** and result bundle **13470945889** were retained.
+
+Inspected Nutrition EN/dark and DA/light: all five dates, including endpoints,
+are readable. Task Completed feedback is visible while the second task remains
+usable; the dark lift capture shows Saved to vault and an available close action.
+Health lower-section image 26747869-4847-4936-BC38-3CEE06448303 still shows rows
+behind the title. The soft scroll-edge modifier alone did not correct that finding.
+
+The shared header now observes only the Boolean top-edge crossing and supplies
+native regular material when content scrolls beneath it. The board's transparent
+resting state and existing accessibility material are preserved. Apple's
+[onScrollGeometryChange](https://developer.apple.com/documentation/swiftui/view/onscrollgeometrychange(for:of:action:))
+Markdown was read directly; the Boolean transform avoids updating the page on each
+offset. One new native run must confirm resting and scrolled appearance. Existing
+tests and captures remain intact; no duplicate integration run is required.

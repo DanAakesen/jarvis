@@ -3341,3 +3341,9 @@ shared page headers; keep the stronger accessibility material. Monthly dates use
 intrinsic width and inward anchors at the first/last day. The approved transparent
 ambient composition and all bars/selection remain. These final corrections require
 new native screenshots; current evidence is in `p15-integration-verification.md`.
+
+The 93a09531 native images confirm the monthly date correction, but the soft
+scroll-edge setting alone did not protect the custom pinned title. The shared
+header now observes a Boolean top-edge crossing and adds native regular material
+only while scrolled. Its resting appearance stays transparent. Existing AX material
+is retained. Fresh resting/scrolled captures are required before release.

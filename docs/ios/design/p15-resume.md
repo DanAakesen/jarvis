@@ -1,6 +1,6 @@
 # P15 continuation and release checkpoint
 
-Updated 6 November 2026, 01:12 UTC. Read AGENTS.md and
+Updated 6 November 2026, 01:57 UTC. Read AGENTS.md and
 [p15-integration-verification.md](p15-integration-verification.md).
 Original checkpoint: `ab346d91` on `codex/p15-board-integration`.
 
@@ -31,23 +31,24 @@ acceptance (127630421938). No TestFlight workflow has been dispatched.
 
 ## Native evidence and next run
 
-Combined run **42134678739**, job **127619694894**, at `7aa08ec6` compiled and
-passed **61/62 native tests**. The new task test selected Tasks due while looking
-for today's fixture tasks. It now expands Today and retains both completion,
-removal and continued-usability assertions. Lift capture now explicitly selects
-dark appearance to match its attachment name.
+Settings source `93a09531` passed **62/62 native tests** in **42141442953**
+(job 127642448003), including both Home completions and continued usability.
+General CI **42141443249** passed **493 Core tests**; CodeQL and title checks passed.
+The later standalone screenshot sweep timed out, so the overall native workflow
+was cancelled. Both result bundle and screenshots were retained. This is a complete
+selected-test pass, not a green overall workflow.
 
-Artifact **13468046343** was inspected for the shorter Home greeting in EN/dark
-and DA/light, successful lift save, Health monthly/lower sections, Insights AX and
-Settings AX. Monthly edge labels still truncated and normal-size scrolled content
-crossed the pinned title. Final corrections anchor monthly end labels inwards,
-retain intrinsic date width and enable native soft scroll-edge treatment.
+Artifact **13470356991** was inspected: monthly Nutrition dates are now readable
+at both boundaries in EN/dark and DA/light; task Completed feedback and dark lift
+Saved state are visible and usable. The normal-size Health scrolled header still
+lets rows cross its title: native soft scroll-edge style alone was insufficient.
 
-Publish these corrections once through Settings #1610, preserving its automatic
-native run as the sole final combined verification. Do not run integration in
-parallel. Inspect corrected chart boundaries, scrolled headers and task-success
-results before merging Settings. The prior 4ea30d09 pass (61/61, 42129251285)
-establishes corrected Settings geometry, not the newer success feedback.
+The final correction observes whether content has scrolled past its top using
+onScrollGeometryChange and adds native regular material behind the shared header
+only then. At rest the board header remains transparent. Existing AX headers retain
+their material. No Chat caller changes. Publish this correction through Settings;
+its next automatic native run is the only necessary recheck. Inspect resting and
+scrolled headers before merging. Do not launch a duplicate integration run.
 
 ## Execution and release
 

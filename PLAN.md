@@ -2219,16 +2219,15 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **P15 board delivery (#1598–#1602 and Settings):** Shared #1604, Notes #1605,
-  Home/Factory #1606, Health #1607 and Insights #1608 merged in order; main is
-  `2b865706`. Notes backend deploy 42136945743 passed readiness and live acceptance.
-  Settings is reconciled last. Combined 7aa08ec6 compiled and passed 61/62 native
-  tests; the remaining test selected the wrong task tab. Its setup and two observed
-  visual findings (monthly boundary labels, scrolled header overlap) are corrected
-  for one final Settings native run. All prerequisite CI passed, latest 493 Core
-  tests. Merge Settings only after that verification, compare the released app tree,
-  then upload TestFlight for 6 November 06:00 Copenhagen. Never merge validation
-  PR #1609. See `docs/ios/design/p15-integration-verification.md`.
+- **P15 board delivery (#1598–#1602 and Settings):** Shared, Notes, Home/Factory,
+  Health and Insights merged in order; main is `2b865706`. Notes and latest main
+  backend deployments passed readiness and live acceptance. Settings source
+  `93a09531` passed 62/62 native tests, 493 Core tests and CodeQL; its later capture
+  sweep timed out with artifacts retained. Monthly labels and success feedback
+  are visually accepted. Scrolled header overlap persisted, so the shared header
+  now adds native material only past the top edge. One necessary native recheck
+  precedes Settings merge and TestFlight for 6 November 06:00 Copenhagen. Never
+  merge #1609. See `docs/ios/design/p15-integration-verification.md`.
 
 - **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window
   acknowledgement; iOS detaches observation on lock and refreshes persisted
