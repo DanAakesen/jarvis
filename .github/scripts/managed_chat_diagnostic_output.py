@@ -19,12 +19,14 @@ REASONS = frozenset({
     "managed_agent_builtin_tools_enabled", "managed_agent_function_tools_mismatch",
     "managed_probe_settings_mismatch", "managed_probe_conversation_missing", "managed_probe_incomplete",
     "managed_probe_requested_tool", "managed_probe_empty_or_unfinished", "managed_probe_timeout",
-    "managed_probe_failed", "managed_model_forbidden", "managed_model_unauthorized",
+    "managed_probe_failed", "managed_probe_policy_not_applied",
+    "managed_model_forbidden", "managed_model_unauthorized",
     "managed_probe_setup_failed", "managed_probe_budget_exhausted", "managed_probe_target_changed",
 })
 STAGES = frozenset({"settings", "target_setup", "definition_readback", "conversation_create",
-                    "response_start", "response_stream", "diagnostic_budget"})
-SHAPES = ("typed_user", "developer_string", "system_message", "system_string")
+                    "conversation_policy_write", "response_start", "response_stream",
+                    "diagnostic_budget"})
+SHAPES = ("conversation_developer_policy", "conversation_system_policy")
 
 
 def known(value, allowed, fallback="not_reported"):
