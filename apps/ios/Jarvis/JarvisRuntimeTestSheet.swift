@@ -149,10 +149,12 @@ struct JarvisRuntimeTestSheet: View {
     @FocusState private var inputFocused: Bool
     @State private var requestTask: Task<Void, Never>?
     private let appLanguage: JarvisAppLanguage
+    private let fixtureMode: Bool
 
-    init(client: JarvisChatClient?, language: ChatLanguage, appLanguage: JarvisAppLanguage) {
+    init(client: JarvisChatClient?, language: ChatLanguage, appLanguage: JarvisAppLanguage, fixtureMode: Bool = false) {
         _model = StateObject(wrappedValue: JarvisRuntimeTestModel(client: client, language: language))
         self.appLanguage = appLanguage
+        self.fixtureMode = fixtureMode
     }
 
     private func copy(_ key: JarvisChatLocalizationKey) -> String {
@@ -262,7 +264,7 @@ struct JarvisRuntimeTestSheet: View {
     private var composer: some View {
         JarvisComposerBar(placeholder: copy(.runtimeMessage), text: $model.draft, isFocused: $inputFocused,
                           inputIdentifier: "runtimeTest.input", isInputDisabled: model.loading || model.sending || model.recovery.requiresHistoryReview || model.recovery.sessionBlocked,
-                          rimState: model.sending ? .thinking : .idle, isRimAnimated: !reduceMotion,
+                          rimState: model.sending ? .thinking : .idle, isRimAnimated: !fixtureMode && !reduceMotion,
                           onSubmit: model.send, header: { EmptyView() }, leading: { EmptyView() }, actions: {
             if model.sending {
                 JarvisComposerIconButton(title: copy(.runtimeStop), systemImage: "stop.fill", identifier: "runtimeTest.stop",

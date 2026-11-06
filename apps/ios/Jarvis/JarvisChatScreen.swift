@@ -282,7 +282,7 @@ struct JarvisChatScreen: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
             case .runtimeTest:
-                JarvisRuntimeTestSheet(client: runtimeTestClient, language: model.voiceLanguage, appLanguage: appLanguage)
+                JarvisRuntimeTestSheet(client: runtimeTestClient, language: model.voiceLanguage, appLanguage: appLanguage, fixtureMode: model.fixtureMode)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
