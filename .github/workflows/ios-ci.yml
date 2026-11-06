@@ -21,23 +21,19 @@ jobs:
           from pathlib import Path
           import hashlib,json,shutil
           root=Path('retained'); out=Path('review'); out.mkdir()
-          index=[]
-          for p in root.rglob('*'):
-              if not p.is_file(): continue
-              index.append({'path':str(p.relative_to(root)),'bytes':p.stat().st_size,'sha256':hashlib.file_digest(p.open('rb'),'sha256').hexdigest()})
-              if p.suffix.lower() in {'.png','.json','.txt','.log','.html'}:
-                  dst=out/p.relative_to(root);dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(p,dst)
-          (out/'source-index.json').write_text(json.dumps(index))
+          manifest=next(root.rglob('ui-test-attachments/manifest.json'))
+          chosen=[]
+          for test in json.loads(manifest.read_text()):
+              if not any(key in test['testIdentifier'] for key in ['GalleryShowsEveryShared','HealthPeriods','SharedPagesAtAccessibility']):continue
+              chosen.append(test)
+              for item in test['attachments']:
+                  p=manifest.parent/item['exportedFileName'];dst=out/p.relative_to(root)
+                  dst.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(p,dst)
+          (out/'selected-manifest.json').write_text(json.dumps(chosen))
           print('Retained source run 42243718420; copied',sum(p.stat().st_size for p in out.rglob('*') if p.is_file()),'bytes')
           PYCODE
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: retained-7acb-images-and-index
+          name: retained-7acb-failed-test-evidence
           path: review
-          retention-days: 14
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: retained-7acb-loading-motion
-          path: retained/*loading*.mp4
-          if-no-files-found: warn
           retention-days: 14
