@@ -451,3 +451,25 @@ Corrected candidate `7acb5ec50fd7a054ebc6bb1469dc8a1ef9ff0ef5` has app/test tree
 passed. Native 42243718420 (job 127980347204) is still building; general CI and
 native tests/captures remain pending. This source fixes only the named gallery
 fixture/localized format checks after the three chart-data tests had already passed.
+
+## 15:44 UTC — Role rejection isolated
+
+Normal Deploy 42242252546 passed hosted-agent rollout, readiness and live Current
+acceptance. Explicit diagnostic 42245489142 used the same 806d49db target with
+inspect/provision/refresh false. The typed_user control passed with Terra/High;
+developer_string, system_message and system_string each failed with HTTP 400
+invalid_request at response_start. Together with the first matrix, this isolates
+the trusted message roles rather than typed-message encoding or policy length.
+No production policy has been demoted to user content or removed.
+
+The next bounded investigation is the documented native Conversation item channel:
+store trusted policy in a fresh owned conversation, then send a user-only response.
+Require a policy-only sentinel despite a conflicting lower-priority user request;
+a generic response cannot qualify it. This remains a planned diagnostic, not an
+accepted production transport or a claim that Copilot works. Static definition
+instructions alone would omit dynamic per-turn policy and are not an acceptable
+shortcut.
+
+General CI 42243718659 and CodeQL 42243718445 completed successfully for 7acb5ec5.
+Native 42243718420 compiled and entered its single simulator test/capture pass;
+actual test outcomes and visual inspection remain pending.
