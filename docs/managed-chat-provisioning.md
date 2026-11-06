@@ -18,10 +18,53 @@ canary below supersedes that earlier diagnostic-only change.
 Raw responses, instructions, schemas,
 CLI errors and identifiers remain private. No retry or new resource is included.
 
-Runtime availability currently depends on target metadata/settings verification,
-not this canary result. A selectable Copilot option therefore does not prove
-inference succeeded. Actual authenticated availability has not been observed;
-changing that guard remains separate from this diagnostic correction.
+Target metadata alone previously made Copilot selectable despite the failed
+full-policy canary. The compatibility gate below now requires explicit evidence
+before owner sessions or turns can use it. The current target has no successful
+complete-policy evidence; Copilot must stay unavailable. Actual authenticated
+owner availability after deployment still requires verification.
+
+## Complete-policy compatibility gate
+
+`FOUNDRY_COPILOT_POLICY_COMPATIBILITY` is an optional non-secret activation
+receipt, not a credential. It is SHA-256 over a canonical tuple of the policy
+transport revision, normalized project endpoint, native agent name, immutable
+version, reviewed definition fingerprint, selected chat model and reasoning
+effort. Reusing a definition fingerprint on another agent/version/project cannot
+reuse this evidence. A change to any field invalidates the receipt. The Python
+canary and backend verifier share a cross-language fixture for this contract.
+
+The fixed `managed_text_canary` emits its receipt and transport revision only
+after two actual complete-policy turns pass exact policy-only sentinel checks
+against conflicting user instructions. The second turn changes its sentinel on
+the same native conversation, verifying updated policy without deleting history.
+Both carry the full production policy plus a fixed qualification clause and use
+the production input cursor and request builder. Diagnostics, plain-text checks,
+old canary responses without a receipt, and a different target/settings/revision
+cannot activate the runtime. The manual handoff first clears the previous receipt,
+sets the reviewed target and waits for backend readiness. After the full-policy
+canary, an independent validator recomputes the expected receipt from that target
+and expected settings before stamping it. It waits for the new backend revision
+before reporting comparison acceptance. A failed canary leaves the receipt empty.
+The Bicep path preserves valid receipts on normal deploys and keeps malformed
+receipts empty; it does not manufacture evidence.
+
+Owner availability, session creation and existing Copilot sends require this
+receipt as well as target/settings readback. A missing or stale receipt produces
+`copilot_policy_not_verified`; the web guidance says Copilot has not passed the
+check for applying Jarvis's instructions and offers Current. Internal turn claims
+also require the verified receipt. Administrative target metadata, diagnostics and
+the full-policy canary remain reachable without owner claims, so qualification
+does not require first enabling an unqualified runtime. No automatic fallback,
+claim reset, native history deletion or policy demotion is introduced. Current
+availability, behavior and approval semantics remain unchanged.
+
+Implementation checks: 43 focused backend tests, 312 Python tests plus nine
+subtests, and three web tests passed locally; backend TypeScript build, scoped
+backend/web lint, Ruff, compilation and shell syntax passed. CI and deployment
+are separate gates. The localized iOS reason mapping is a separate source commit
+for the coordinated UI candidate; it changes copy only and does not qualify
+new layout behavior by itself.
 
 ## 6 November: diagnostic request comparison
 
@@ -46,6 +89,60 @@ documents nested `details`, `innererror.code` and `target`; the SDK retains that
 decoded body even when its top-level `param` is absent. The diagnostic helper now
 retains only closed-vocabulary code/target pairs, never messages or raw values.
 
+The first fixed matrix ran in [42239012647](https://github.com/DanAakesen/jarvis/actions/runs/42239012647)
+at 15:03 UTC: `plain_text` and `user_messages` completed with the expected
+Terra/High target; `developer_message` and `managed_policy` both failed at
+`response_start` with HTTP 400 `invalid_request` and no field hint. This establishes
+that a simple message list works. It does not isolate the role: the rejected
+message also used the typed `message` / `input_text` encoding, while the accepted
+user messages used string content.
+
+The role/encoding matrix [42245489142](https://github.com/DanAakesen/jarvis/actions/runs/42245489142)
+ran at 15:44:42 UTC after normal deployment 42242252546 passed. `typed_user`
+completed. `developer_string`, `system_message`, and `system_string` all failed
+at `response_start` with HTTP 400 `invalid_request`. Combined with the first
+matrix, this isolates rejection of both trusted roles in response inputs; the
+typed message encoding itself works. Neither workflow success means the complete
+Jarvis policy passed, and production still uses its existing trusted-policy path.
+
+The next bounded diagnostic tests the documented
+[conversation items API](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/aiproject#create-conversation-items),
+which stores message roles in an owned conversation. The Responses contract says
+stored conversation items are prepended to subsequent inputs. The general API
+contract does not establish Copilot-harness acceptance, so this requires a live
+check before a production change.
+
+`conversation_developer_policy` and `conversation_system_policy` each append one
+fixed trusted message, then send a conflicting user-only request. A pass requires
+the exact synthetic sentinel present only in that policy. Each then appends a
+replacement policy with a second sentinel and repeats the conflicting user input
+on the same owned conversation. Both responses must follow the current policy;
+ignored policy, a plain acknowledgment, the previous sentinel and oversized
+replies fail with `managed_probe_policy_not_applied`. No raw reply or sentinel is
+included in diagnostic output. This checks per-turn policy updates, not merely
+whether a storage write returns success. The production builder and full-policy
+canary stay unchanged; stored static definition instructions alone cannot replace
+Jarvis's dynamic mode, capability and receipt policy.
+
+The stored-policy check qualified in PR #1623 (`de6a5681`; CI 42247195691 and
+CodeQL 42247195606 passed) and merged as `11463376`. Normal deployment
+[42248895975](https://github.com/DanAakesen/jarvis/actions/runs/42248895975)
+passed hosted-agent rollout, readiness and Current live acceptance. Its explicit
+diagnostic [42252117950](https://github.com/DanAakesen/jarvis/actions/runs/42252117950)
+returned both `conversation_developer_policy` and `conversation_system_policy`
+as `unavailable` with `managed_probe_policy_not_applied` at `response_stream` at
+16:26:57 UTC. Storage and inference proceeded, but the required current-policy
+sentinel was not returned. The safe record does not distinguish first-turn failure
+from failure of the replacement policy; neither outcome qualifies the transport.
+No raw reply, owner context, history or claims were captured or changed.
+
+There is currently no verified channel for the complete dynamic Jarvis policy
+on this Copilot target. The general Responses/conversation contract is broader
+than this observed harness behavior. Do not label Copilot inference accepted,
+weaken the policy into user content, replace it with static definition text,
+retry an owner source, or refresh the definition to hide this incompatibility.
+The normal Current runtime remains accepted.
+
 After the updated hosted agent is deployed, explicitly dispatch Deploy on `main`
 with only `diagnose_managed_chat=true`. All comparison inspection, provisioning
 and definition-refresh inputs must remain false. The existing qualification,
@@ -58,19 +155,18 @@ workflow still follows the normal deployment plan; the comparison branch itself
 does not mutate target configuration.
 
 The fixed administrative operation accepts no extra fields or caller text. It
-compares `plain_text`, `user_messages`, `developer_message` (short trusted policy),
-and `managed_policy` (the shared production builder and complete dynamic policy).
-All four use the existing approved Terra/High definition and verify the same
-target identity. Each shape creates its own synthetic conversation, attempts one
-response, refuses tool output and deletes only that owned conversation. No user
-history, claims, function executor, grants, retries or fallback is involved.
-The two list-based controls retain the same synthetic reference/user messages
-as the full-policy request; the plain string contains only the fixed user request.
-Results isolate request-shape differences; they do not by themselves explain an
-unreported provider constraint.
+compares `conversation_developer_policy` and `conversation_system_policy`
+with fixed synthetic content.
+Both use the existing approved Terra/High definition and verify the same
+target identity. Each shape creates its own synthetic conversation, attempts at
+most two responses, refuses tool output and deletes only that owned conversation.
+No user history, claims, function executor, grants, retries or fallback is involved.
+The only stored instructions changed belong to these new synthetic conversations.
+No production fallback or comparison definition is selected or changed.
 
-Attempts have a 45-second ceiling, a 180-second matrix budget and five-second
-cleanup limits, within the existing 210-second administrative invocation bound.
+Each two-turn probe shares a 45-second ceiling. There are at most four response
+calls in total, a 180-second matrix budget and five-second cleanup limits, within
+the existing 210-second administrative invocation bound.
 Timeout/failure can continue to the next independent shape. Failed target setup
 or a changed target stops further inference; remaining entries are `skipped`.
 An exhausted budget also produces explicit skipped entries. Cleanup is best
@@ -81,7 +177,9 @@ The handoff independently revalidates output and prints one
 `managed_chat_request_diagnostics_complete`. That means the diagnostic returned,
 not that Copilot works. It never prints `managed_chat_comparison_canary_ok`.
 The unchanged full-policy `managed_text_canary` remains the only comparison
-acceptance check. No live diagnostic has run while preparing this patch.
+acceptance check. All three diagnostic results are recorded above. Further live
+checks need a concrete supported-channel hypothesis; repeating these rejected
+shapes or plain-text canaries does not qualify the actual Jarvis workflow.
 
 Manual Deploy [40877005757](https://github.com/DanAakesen/jarvis/actions/runs/40877005757)
 reached `agent_identity_unverified` on 29 October 2026. That check follows readback
@@ -360,12 +458,14 @@ file and updates only these existing-backend environment variables:
 It preserves other environment values and the normal agent/model defaults. It
 then follows the existing bounded `latestRevisionName == latestReadyRevisionName`
 readiness pattern and calls the fixed `managed_text_canary` hosted operation.
-The canary uses the actual bridge credential for one synthetic managed text turn,
+The canary uses the actual bridge credential for two synthetic managed text turns,
 executes no backend tool and cleans up only its own canary conversation. It shares
 the production policy request builder and full dynamic chat instructions while
 sending only synthetic reference/user inputs. Deploy the updated hosted agent
 first: the job requires `status: ok`, model `gpt-6.1-terra`, effort `high` and
-`requestShape: managed_policy`; an old plain-string success does not qualify.
+`requestShape: managed_policy`, the current policy transport revision and an exact
+target-bound receipt after both sentinel checks; an old plain-string success does
+not qualify.
 Failures log only revalidated stage, HTTP status, provider code/parameter and
 exception identifier, never returned text, instructions or raw provider error.
 Each invocation has the existing 210-second bound.

@@ -672,6 +672,7 @@ export async function loadRuntimeTestAvailability(getAccessToken: () => Promise<
     current_unavailable: 'Current chat is not configured.',
     copilot_not_configured: 'Copilot testing has not been activated on the server.',
     copilot_not_verified: 'The selected settings and Copilot runtime have not been verified.',
+    copilot_policy_not_verified: 'Copilot has not passed the check for applying Jarvis’s instructions. Use Current.',
     verification_unavailable: 'Could not verify the Copilot runtime. Try again later.',
   };
   for (const runtime of ['current', 'copilot'] as const) {

@@ -18,6 +18,7 @@ import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createRuntimeSessionStore } from './database/runtime-session-store.js';
 import { createManagedTargetReader } from './core/managed-target-reader.js';
+import { hasManagedPolicyCompatibility } from './core/managed-policy-compatibility.js';
 import { createConversationSummaryStore } from './database/conversation-summary-store.js';
 import { createPhoneSessionStore } from './database/phone-session-store.js';
 import { createPhoneStatusModule } from './phone/status.js';
@@ -512,7 +513,11 @@ try {
     }) : undefined;
   const managedRuntime = readManagedTarget && database
     ? { sessions: createRuntimeSessionStore(database.pool), readTargetMetadata: readManagedTarget,
-      readVerifiedTarget: async () => (await readManagedTarget())?.target ?? null }
+      readVerifiedTarget: async () => {
+        const metadata = await readManagedTarget();
+        return metadata && hasManagedPolicyCompatibility(metadata, config.foundryCopilotPolicyCompatibility)
+          ? metadata.target : null;
+      } }
     : undefined;
   const vaultClient = githubAppTokenIssuer
     ? createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer })
@@ -1169,10 +1174,15 @@ try {
   const app = buildApp(config, logger, {
     ...(managedRuntime && readManagedTarget ? {
       managedRuntime,
-      conversationRuntimeTests: async () => ({
-        current: { available: Boolean(conversationAgent) },
-        copilot: await readManagedTarget() ? { available: true } : { available: false, reason: 'copilot_not_verified' },
-      }),
+      conversationRuntimeTests: async () => {
+        const metadata = await readManagedTarget();
+        return {
+          current: { available: Boolean(conversationAgent) },
+          copilot: !metadata ? { available: false, reason: 'copilot_not_verified' } :
+            hasManagedPolicyCompatibility(metadata, config.foundryCopilotPolicyCompatibility)
+              ? { available: true } : { available: false, reason: 'copilot_policy_not_verified' },
+        };
+      },
     } : {}),
     ...(healthUpload && healthProcessor && healthCapabilities ? { healthUpload, healthProcessor, healthCapabilities } : {}),
     ...(ownerSessions ? { ownerSessions } : {}),

@@ -5,7 +5,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-
 REPOSITORY = Path(__file__).resolve().parents[3]
 DEPLOY_SCRIPT = REPOSITORY / ".github/scripts/deploy_bicep.sh"
 
@@ -44,7 +43,7 @@ if [[ "$1 $2 $3" == "deployment group show" ]]; then
   fi
 elif [[ "$1 $2" == "containerapp list" ]]; then
   if [[ "${FAKE_COPILOT_CONFIG:-}" == valid ]]; then
-    echo '[{"name":"ca-jarvis-backend-test","image":"backend:existing","copilot":[{"name":"FOUNDRY_COPILOT_AGENT_NAME","value":"jarvis-main-copilot-preview"},{"name":"FOUNDRY_COPILOT_AGENT_VERSION","value":"1"},{"name":"FOUNDRY_COPILOT_DEFINITION_SHA256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}]'
+    echo '[{"name":"ca-jarvis-backend-test","image":"backend:existing","copilot":[{"name":"FOUNDRY_COPILOT_AGENT_NAME","value":"jarvis-main-copilot-preview"},{"name":"FOUNDRY_COPILOT_AGENT_VERSION","value":"1"},{"name":"FOUNDRY_COPILOT_DEFINITION_SHA256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}]' | jq --arg receipt "${FAKE_COPILOT_POLICY_RECEIPT:-}" 'if $receipt == "" then . else .[0].copilot += [{"name":"FOUNDRY_COPILOT_POLICY_COMPATIBILITY","value":$receipt}] end'
   elif [[ "${FAKE_COPILOT_CONFIG:-}" == partial ]]; then
     echo '[{"name":"ca-jarvis-backend-test","image":"backend:existing","copilot":[{"name":"FOUNDRY_COPILOT_AGENT_NAME","value":"jarvis-main-copilot-preview"}]}]'
   elif [[ "${FAKE_COPILOT_CONFIG:-}" == invalid ]]; then
@@ -133,6 +132,15 @@ fi
         self.assertIn("foundryCopilotAgentName=jarvis-main-copilot-preview", log)
         self.assertIn("foundryCopilotAgentVersion=1", log)
         self.assertIn("foundryCopilotDefinitionSha256=" + "a" * 64, log)
+
+    def test_policy_receipt_survives_normal_deployment_and_malformed_evidence_stays_closed(self):
+        result, log = self.deploy(FAKE_COPILOT_CONFIG="valid", FAKE_COPILOT_POLICY_RECEIPT="b" * 64)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("foundryCopilotPolicyCompatibility=" + "b" * 64, log)
+        result, log = self.deploy(FAKE_COPILOT_CONFIG="valid", FAKE_COPILOT_POLICY_RECEIPT="unverified")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("foundryCopilotPolicyCompatibility=", log)
+        self.assertNotIn("foundryCopilotPolicyCompatibility=unverified", log)
 
     def test_incomplete_or_invalid_copilot_target_fails_before_deployment(self):
         for config in ("partial", "invalid"):

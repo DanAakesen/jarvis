@@ -24,6 +24,7 @@ export interface BackendConfig {
   codexImageModel: string;
   foundryChatAgentName?: string;
   foundryCopilot?: { agentName: string; version: string; fingerprint: string };
+  foundryCopilotPolicyCompatibility?: string;
   foundryProjectEndpoint?: string;
   foundryMemoryEmbeddingDeploymentName?: string;
   codexToolModel: string;
@@ -156,6 +157,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
       !/^[0-9a-f]{64}$/u.test(copilotFingerprint))) {
     throw new ConfigurationError('Copilot tests require a separate agent name, pinned version, definition SHA256 and existing Foundry project endpoint');
   }
+  const policyReceipt = env.FOUNDRY_COPILOT_POLICY_COMPATIBILITY;
+  const foundryCopilotPolicyCompatibility = typeof policyReceipt === 'string' && /^[0-9a-f]{64}$/u.test(policyReceipt)
+    ? policyReceipt : undefined;
   const foundryCopilot = copilotConfigured
     ? { agentName: copilotAgentName!, version: copilotVersion!, fingerprint: copilotFingerprint! }
     : undefined;
@@ -272,6 +276,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryRunnerAgentName === undefined ? {} : { foundryRunnerAgentName }),
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryCopilot === undefined ? {} : { foundryCopilot }),
+    ...(foundryCopilotPolicyCompatibility === undefined ? {} : { foundryCopilotPolicyCompatibility }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
     codexToolModel,

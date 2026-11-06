@@ -48,7 +48,7 @@ import { normalizeVisualContext, visualContextSchema, persistedVisualContextSche
 import type { FrameStore } from '../vision/frame-store.js';
 import { registerConversationSummaryRoutes } from './conversation-summary.js';
 import { approvalDeciderFor } from './approval-interpreter.js';
-import { readRuntimeTests } from './runtime-test-availability.js';
+import { readRuntimeTests, runtimeTestUnavailableMessage } from './runtime-test-availability.js';
 import { registerManagedRuntimeRoutes } from './managed-runtime-routes.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -648,8 +648,9 @@ return {
       const session = await store.getSession(sessionId);
       if (!session || session.endedAt !== null) return reply.code(404).send({ error: 'Active chat session not found' });
       if (session.channel !== 'chat') return reply.code(400).send({ error: 'Session is not a chat session' });
-      if (session.runtimeTest && !(await runtimeTests())[session.runtimeTest].available) {
-        return reply.code(503).send({ error: 'The selected test runtime is unavailable. No other runtime was used.' });
+      const runtimeOption = session.runtimeTest ? (await runtimeTests())[session.runtimeTest] : undefined;
+      if (runtimeOption && !runtimeOption.available) {
+        return reply.code(503).send({ error: runtimeTestUnavailableMessage(runtimeOption) });
       }
       let attachmentContext: ConversationAttachmentContext[] = [];
       if (attachmentIds.length > 0) {
@@ -1159,8 +1160,9 @@ return {
       if (runtimeTest && request.body.channel !== 'chat') {
         return reply.code(400).send({ error: 'Runtime tests require a new chat conversation.' });
       }
-      if (runtimeTest && !(await runtimeTests())[runtimeTest].available) {
-        return reply.code(503).send({ error: 'The selected test runtime is unavailable. No other runtime was used.' });
+      const runtimeOption = runtimeTest ? (await runtimeTests())[runtimeTest] : undefined;
+      if (runtimeOption && !runtimeOption.available) {
+        return reply.code(503).send({ error: runtimeTestUnavailableMessage(runtimeOption) });
       }
       const session = await app.conversationStore.createSession({
         ...request.body,

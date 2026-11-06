@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "managed_chat_diagnostic_output.py"
-SHAPES = ["plain_text", "user_messages", "developer_message", "managed_policy"]
+SHAPES = ["conversation_developer_policy", "conversation_system_policy"]
 
 
 class DiagnosticOutputTests(unittest.TestCase):
@@ -41,13 +41,13 @@ class DiagnosticOutputTests(unittest.TestCase):
         result = self.run_output("diagnostics", raw)
         self.assertEqual(result.returncode, 0)
         self.assertEqual(result.stderr, "")
-        self.assertEqual(len(result.stdout.splitlines()), 4)
+        self.assertEqual(len(result.stdout.splitlines()), 2)
         self.assertIn("provider_detail_0_code=UnsupportedParameter provider_detail_0_target=input.role", result.stdout)
         self.assertNotIn("private", result.stdout.lower())
 
     def test_matrix_requires_exact_order_count_and_statuses_before_printing_any_evidence(self):
         rows = [{"shape": shape, "status": "ok"} for shape in SHAPES]
-        for bad in [rows[::-1], rows[:-1], rows + rows, [None] * 4,
+        for bad in [rows[::-1], rows[:-1], rows + rows, [None] * 2,
                     [{**rows[0], "status": ["ok"]}, *rows[1:]],
                     [{**rows[0], "shape": {"private_identifier": "private"}}, *rows[1:]]]:
             result = self.run_output("diagnostics", json.dumps({"status": "diagnostic", "results": bad}).encode())
