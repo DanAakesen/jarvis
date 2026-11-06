@@ -32,6 +32,10 @@ sys.path.insert(0, str(ROOT / "agents" / "jarvis"))
 class Blocked(Exception):
     """A fixed content-free failure; never use provider details as its message."""
 
+    def __init__(self, code: str, diagnostic: str | None = None):
+        super().__init__(code)
+        self.diagnostic = diagnostic
+
 
 def require(condition: bool, code: str) -> None:
     if not condition:
@@ -72,14 +76,85 @@ def private_write(path: Path, value: object) -> None:
         stream.write(canonical(value) + "\n")
 
 
+def azure_error_metadata(stderr: bytes) -> dict:
+    """Keep known CLI status labels/error codes, never its free-text message."""
+    if len(stderr) > 64 * 1024:
+        return {}
+    try:
+        value = stderr.decode("utf-8").strip()
+    except UnicodeError:
+        return {}
+    if value.startswith("ERROR: "):
+        value = value.removeprefix("ERROR: ")
+    metadata = {}
+    for label, status in {"Bad Request": 400, "Unauthorized": 401, "Forbidden": 403,
+                          "Not Found": 404, "Conflict": 409, "Too Many Requests": 429,
+                          "Internal Server Error": 500, "Bad Gateway": 502,
+                          "Service Unavailable": 503, "Gateway Timeout": 504}.items():
+        if value == label or value.startswith(label + "("):
+            metadata["http_status"] = status
+            value = value[len(label):]
+            if value.startswith("(") and value.endswith(")"):
+                value = value[1:-1]
+            break
+    code = None
+    try:
+        parsed = json.loads(value)
+        error = parsed.get("error", parsed) if isinstance(parsed, dict) else None
+        if isinstance(error, dict):
+            code = error.get("code")
+    except (ValueError, TypeError):
+        # Some CLI versions use '(Code) message' instead of the REST JSON wrapper.
+        match = re.match(r"^\(([A-Za-z][A-Za-z0-9_]{0,63})\)(?: |$)", value)
+        if match:
+            code = match[1]
+    allowed = {"AuthorizationFailed", "AuthenticationFailed", "InvalidAuthenticationToken",
+               "Forbidden", "Unauthorized", "ResourceNotFound", "NotFound", "BadRequest",
+               "InvalidRequest", "InvalidArgument", "InvalidPayload", "InvalidApiVersionParameter",
+               "NoRegisteredProviderFound", "UnsupportedApiVersion", "Conflict", "TooManyRequests",
+               "QuotaExceeded", "InsufficientQuota", "OperationNotAllowed", "RequestDisallowedByPolicy",
+               "InternalServerError", "ServiceUnavailable", "invalid_request_error",
+               "invalid_request", "invalid_argument", "permission_denied", "not_found"}
+    if isinstance(code, str) and code in allowed:
+        metadata["azure_code"] = code
+    return metadata
+
+
 class Azure:
-    def __init__(self, endpoint: str, project_id: str):
+    def __init__(self, endpoint: str, project_id: str, *, read_only: bool = False):
         self.endpoint = endpoint
         self.project_id = project_id
         self.deadline = time.monotonic() + 300
+        self.read_only = read_only
+        self.mutation_attempted = False
+
+    def operation(self, method: str, url: str) -> str:
+        path = urlsplit(url).path
+        account = self.project_id.rsplit("/projects/", 1)[0]
+        if method == "GET":
+            arm = {account: "account_read", self.project_id: "project_read",
+                   account + "/deployments/" + MODEL: "model_deployment_read"}
+            if path in arm:
+                return arm[path]
+        base = urlsplit(self.endpoint).path + "/agents"
+        agent = base + "/" + AGENT_NAME
+        operation = {("GET", base): "agent_inventory", ("GET", agent): "agent_read",
+                     ("GET", agent + "/versions"): "version_inventory",
+                     ("POST", base): "agent_version_create", ("PATCH", agent): "endpoint_pin"}
+        if method == "GET" and path.startswith(agent + "/versions/"):
+            return "version_read"
+        return operation.get((method, path), "other")
+
+    def blocked_request(self, code: str, method: str, url: str, stderr: bytes = b"") -> Blocked:
+        fields = {"operation": self.operation(method, url), "method": method,
+                  "mutation_attempted": str(self.mutation_attempted).lower(), **azure_error_metadata(stderr)}
+        diagnostic = "managed_chat_azure_diagnostic " + " ".join(f"{key}={value}" for key, value in fields.items())
+        return Blocked(code, diagnostic)
 
     def request(self, method: str, url: str, body: dict | None = None) -> dict:
         require(time.monotonic() < self.deadline, "provision_budget_exhausted")
+        require(method in {"GET", "POST", "PATCH"}, "unexpected_request_method")
+        require(not self.read_only or method == "GET", "inspection_write_forbidden")
         data_api = url.startswith(self.endpoint + "/")
         arm_api = url.startswith("https://management.azure.com" + self.project_id.rsplit("/projects/", 1)[0])
         require(data_api or arm_api, "unexpected_request_target")
@@ -98,16 +173,20 @@ class Azure:
                 private_write(path, body)
                 command.extend(["--body", "@" + str(path)])
             try:
+                self.mutation_attempted = self.mutation_attempted or method != "GET"
                 result = subprocess.run(command, capture_output=True, check=False, timeout=30)
             except (OSError, subprocess.TimeoutExpired):
-                raise Blocked("azure_request_unavailable") from None
-        require(result.returncode == 0, "azure_request_failed")
-        require(len(result.stdout) <= MAX_BYTES, "azure_response_invalid")
+                raise self.blocked_request("azure_request_unavailable", method, url) from None
+        if result.returncode != 0:
+            raise self.blocked_request("azure_request_failed", method, url, result.stderr)
+        if len(result.stdout) > MAX_BYTES:
+            raise self.blocked_request("azure_response_invalid", method, url)
         try:
             parsed = json.loads(result.stdout)
         except (ValueError, UnicodeError):
-            raise Blocked("azure_response_invalid") from None
-        require(isinstance(parsed, dict), "azure_response_invalid")
+            raise self.blocked_request("azure_response_invalid", method, url) from None
+        if not isinstance(parsed, dict):
+            raise self.blocked_request("azure_response_invalid", method, url)
         return parsed
 
     def data(self, path: str, method: str = "GET", body: dict | None = None) -> dict:
@@ -200,7 +279,7 @@ def read_active_version(azure: Azure, version: str) -> dict:
     raise Blocked("agent_activation_incomplete")
 
 
-def comparison_version(azure: Azure, expected: dict, versions: list[dict], *, refresh: bool) -> tuple[str, dict]:
+def matching_versions(azure: Azure, expected: dict, versions: list[dict]) -> list[tuple[str, dict]]:
     # Unique exact matches make a later reviewed retry reusable, including an
     # accepted create whose response was lost. Never automatically retry a write.
     identifiers = [item.get("version") for item in versions]
@@ -218,9 +297,35 @@ def comparison_version(azure: Azure, expected: dict, versions: list[dict], *, re
             if str(error) != "agent_definition_mismatch":
                 raise
     require(len(matches) <= 1, "existing_agent_ambiguous")
+    return matches
+
+
+def inspect_comparison(azure: Azure, expected: dict) -> dict:
+    """Read existing state without creating, pinning or producing activation output."""
+    preflight(azure)
+    records = [item for item in azure.inventory("/agents") if item.get("name") == AGENT_NAME]
+    require(len(records) <= 1, "existing_agent_ambiguous")
+    if not records:
+        return {"state": "missing", "version_count": 0, "matching_version_count": 0, "pin": "absent"}
+    agent = azure.data("/agents/" + AGENT_NAME)
+    agent_principal(agent)
+    versions = azure.inventory("/agents/" + AGENT_NAME + "/versions?include_drafts=true")
+    matches = matching_versions(azure, expected, versions)
+    selector = (agent.get("agent_endpoint") or {}).get("version_selector")
+    rules = selector.get("version_selection_rules") if isinstance(selector, dict) else None
+    require(isinstance(rules, list) and len(rules) == 1 and isinstance(rules[0], dict)
+            and rules[0].get("type") == "FixedRatio" and rules[0].get("traffic_percentage") == 100
+            and rules[0].get("agent_version") in [item["version"] for item in versions], "agent_endpoint_unverified")
+    return {"state": "present", "version_count": len(versions), "matching_version_count": len(matches),
+            "pin": "matching" if matches and rules[0]["agent_version"] == matches[0][0] else "other_version"}
+
+
+def comparison_version(azure: Azure, expected: dict, versions: list[dict], *, refresh: bool) -> tuple[str, dict]:
+    matches = matching_versions(azure, expected, versions)
     if matches:
         return matches[0]
     require(refresh, "agent_definition_mismatch")
+    identifiers = [item["version"] for item in versions]
     agent = azure.data("/agents/" + AGENT_NAME)
     principal = agent_principal(agent)
     selector = (agent.get("agent_endpoint") or {}).get("version_selector")
@@ -273,7 +378,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project-endpoint", required=True)
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--apply", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--apply", action="store_true")
+    mode.add_argument("--inspect", action="store_true")
     parser.add_argument("--refresh-definition", action="store_true")
     args = parser.parse_args(argv)
     try:
@@ -281,6 +388,11 @@ def main(argv: list[str] | None = None) -> int:
         endpoint = validate_target(args.project_endpoint, args.project_id)
         require(args.manifest.stat().st_size <= MAX_BYTES, "manifest_invalid")
         expected = definition(json.loads(args.manifest.read_text(encoding="utf-8")))
+        require(not args.refresh_definition or args.apply, "refresh_requires_apply")
+        if args.inspect:
+            report = inspect_comparison(Azure(endpoint, args.project_id, read_only=True), expected)
+            print("managed_chat_inspection_ok " + canonical(report))
+            return 0
         if not args.apply:
             print("managed_chat_manifest_validated")
             return 0
@@ -289,6 +401,8 @@ def main(argv: list[str] | None = None) -> int:
         print("managed_chat_provisioned")
         return 0
     except Blocked as error:
+        if error.diagnostic:
+            print(error.diagnostic, file=sys.stderr)
         print(str(error), file=sys.stderr)
     except (OSError, ValueError, TypeError, KeyError, RuntimeError, ImportError, AttributeError, IndexError):
         print("managed_chat_provisioning_unavailable", file=sys.stderr)

@@ -68,6 +68,16 @@ specific action and target before requesting an expansion.
 
 ## Explicit definition refresh (6 November 2026)
 
+Normal Deploy [42210649006](https://github.com/DanAakesen/jarvis/actions/runs/42210649006)
+passed readiness and live acceptance for merged `ab464314`. The subsequent
+explicit comparison Deploy
+[42212979149](https://github.com/DanAakesen/jarvis/actions/runs/42212979149), job
+`127876394689`, completed OIDC login but stopped at 11:50:31 UTC with only
+`azure_request_failed`. No `managed_chat_provisioned` or canary marker appeared.
+That evidence does not identify the failed operation, prove a permission
+rejection, or establish whether a version was created. Inspect the existing
+inventory before any provisioning retry.
+
 After deploying the current Jarvis backend and hosted agent, dispatch the existing
 Deploy workflow with `provision_managed_chat=true` and the separate default-off
 `refresh_managed_chat_definition=true` when the approved tool/identity update needs
@@ -90,6 +100,44 @@ bound to an earlier fingerprint remain protected by the original target checks.
 Local checks exercise refresh refusal, one-version creation, old-version retention,
 ambiguous matches, unowned versions, uncertain creation and later exact reuse.
 Live target state and original-path inference still require coordinator acceptance.
+
+### Read existing inventory before retrying
+
+The separate default-off `inspect_managed_chat` Deploy input runs the same bounded
+preflight and version readback against the current hosted manifest. It cannot be
+combined with `provision_managed_chat` or `refresh_managed_chat_definition`; the
+handoff rejects either combination before its first Azure command. After this
+change has qualified and merged, the coordinator can request inspection with:
+
+```bash
+gh workflow run deploy.yml --repo DanAakesen/jarvis --ref main \
+  -f inspect_managed_chat=true
+```
+
+The handoff reads existing infrastructure outputs and invokes the fixed manifest
+read operation, which executes no tool or model. It then passes `--inspect` to
+the provisioner, whose Azure client permits only GET requests. Inspection exits
+before comparison creation, endpoint pinning, activation-file output, backend
+configuration, readiness polling or the managed canary. It adds no grants. The
+Deploy workflow's normal qualification, deployment selection and independent
+live acceptance remain unchanged; this switch restricts the comparison job.
+
+Success prints `managed_chat_inspection_ok` with only the agent's presence,
+version count, exact current-manifest match count and whether the existing pin
+matches. Unowned, inactive or ambiguous versions and an unverifiable pin still
+fail closed. A unique exact match left by an uncertain create can be reused by a
+later reviewed apply run without creating another version. Inspection is neither
+activation nor inference acceptance.
+
+Failed provisioner requests now print `managed_chat_azure_diagnostic` before the
+existing fixed failure code. Its fields are a fixed operation name, method,
+whether any write was attempted, and—only when recognized—an HTTP status and
+allowlisted Azure error code. Raw CLI stderr, provider messages, identifiers,
+URLs, request/response bodies and instructions are never printed. An unknown or
+malformed CLI error still identifies the operation without exposing its content.
+A write attempt followed by a failed response/readback is not retried. A confirmed
+authorization failure must be investigated for that operation, existing OIDC
+identity and exact known target before considering any permission change.
 
 ## Private manifest input
 
@@ -193,12 +241,12 @@ separate comparison option may be wired to it.
 ## Explicit manual deployment integration
 
 `deploy.yml` now exposes boolean `workflow_dispatch` input
-`provision_managed_chat`, default `false`. Its separate
-`managed-chat-comparison` job requires main, explicit true input, successful exact
+`provision_managed_chat` and `inspect_managed_chat`, both default `false`. Its separate
+`managed-chat-comparison` job requires main, either explicit true input, successful exact
 qualification through `plan`, successful deterministic `smoke` readiness and
 successful or compatible skipped infra/backend/agent jobs. It retains
 `jarvis-production-deploy` concurrency and the current OIDC login permissions.
-Normal pushes and dispatches with the default false input never run this job.
+Normal pushes and dispatches with both inputs false never run this job.
 
 The handoff script `.github/scripts/provision_managed_chat_handoff.sh` reads
 existing infrastructure outputs, fetches the manifest through the fixed existing
@@ -255,5 +303,7 @@ python -m compileall -q .github/scripts/provision_managed_chat.py
 ```
 
 Fixtures cover exact reuse, name/version ambiguity, private bodies/output,
-no mutation retry, complete function schemas, disabled built-ins and target
-preflight failures. They provide no live Azure authorization or inference proof.
+no mutation retry, complete function schemas, disabled built-ins, target
+preflight failures, GET-only inspection, conflicting-mode refusal, post-create
+inventory recovery and bounded error diagnostics. They provide no live Azure
+authorization or inference proof.

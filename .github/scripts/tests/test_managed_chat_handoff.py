@@ -18,6 +18,13 @@ with (state / 'calls.jsonl').open('a') as out:
 if name == 'sleep':
     sys.exit(0)
 if name == 'python':
+    if '--inspect' in args:
+        assert '--apply' not in args and '--refresh-definition' not in args
+        if os.environ.get('INSPECTION_FAILURE'):
+            print('azure_request_failed', file=sys.stderr)
+            sys.exit(1)
+        print('managed_chat_inspection_ok {"state":"present","matching_version_count":1}')
+        sys.exit(0)
     output = Path(args[args.index('--output') + 1])
     endpoint = args[args.index('--project-endpoint') + 1]
     value = {'projectEndpoint':endpoint,'agentName':'jarvis-main-copilot-preview','version':'1','fingerprint':'a'*64}
@@ -75,7 +82,8 @@ class ManagedHandoffTests(unittest.TestCase):
                    "SUBSCRIPTION_ID": "11111111-2222-4333-8444-555555555555", **extra}
             result = subprocess.run(["bash", str(HANDOFF)], cwd=ROOT, env=env,
                                     capture_output=True, text=True, timeout=15, check=False)
-            calls = [json.loads(line) for line in (base / "calls.jsonl").read_text().splitlines()]
+            call_file = base / "calls.jsonl"
+            calls = [json.loads(line) for line in call_file.read_text().splitlines()] if call_file.exists() else []
             self.assertEqual(list(base.glob("managed-chat.*")), [])
             return result, calls
 
@@ -86,6 +94,10 @@ class ManagedHandoffTests(unittest.TestCase):
         refresh = input_block.split("refresh_managed_chat_definition:", 1)[1]
         self.assertIn("default: false", refresh)
         self.assertIn("REFRESH_MANAGED_CHAT_DEFINITION: ${{ inputs.refresh_managed_chat_definition }}", workflow)
+        inspection = input_block.split("inspect_managed_chat:", 1)[1]
+        self.assertIn("default: false", inspection)
+        self.assertIn("INSPECT_MANAGED_CHAT: ${{ inputs.inspect_managed_chat }}", workflow)
+        self.assertIn("PROVISION_MANAGED_CHAT: ${{ inputs.provision_managed_chat }}", workflow)
         self.assertIn("type: boolean", input_block)
         self.assertIn("default: false", input_block)
         job = workflow.split("  managed-chat-comparison:", 1)[1].split("\n  acceptance:", 1)[0]
@@ -93,6 +105,7 @@ class ManagedHandoffTests(unittest.TestCase):
                       "github.ref == 'refs/heads/main'", "needs.plan.result == 'success'",
                       "needs.smoke.result == 'success'", "needs.plan.outputs.superseded != 'true'"]:
             self.assertIn(guard, job)
+        self.assertIn("(inputs.provision_managed_chat == true || inputs.inspect_managed_chat == true)", job)
         self.assertIn("needs: [plan, infra, backend, agent, smoke]", job)
         self.assertIn("timeout-minutes: 20", job)
         self.assertIn("contents: read\n      id-token: write", job)
@@ -120,6 +133,30 @@ class ManagedHandoffTests(unittest.TestCase):
         update = next(args for name, args in calls if args[:2] == ["containerapp", "update"])
         self.assertNotIn("--replace-env-vars", update)
         self.assertNotIn("--remove-env-vars", update)
+
+    def test_inspection_exits_before_backend_update_readiness_or_canary(self):
+        for failure in ["", "1"]:
+            result, calls = self.run_handoff(INSPECT_MANAGED_CHAT="true", INSPECTION_FAILURE=failure)
+            self.assertEqual(result.returncode, 1 if failure else 0, result.stderr)
+            self.assertEqual([(name, args[:2]) for name, args in calls], [
+                ("az", ["deployment", "group"]), ("az", ["rest", "--method"]),
+                ("python", [".github/scripts/provision_managed_chat.py", "--project-id"])])
+            args = calls[-1][1]
+            self.assertIn("--inspect", args)
+            self.assertNotIn("--apply", args)
+            self.assertNotIn("--refresh-definition", args)
+            self.assertNotIn("canary_ok", result.stdout)
+            self.assertNotIn("managed_chat_provisioned", result.stdout)
+            if not failure:
+                self.assertIn("managed_chat_inspection_ok", result.stdout)
+
+    def test_inspection_cannot_be_combined_with_provision_or_refresh(self):
+        for extra in [{"PROVISION_MANAGED_CHAT": "true"}, {"REFRESH_MANAGED_CHAT_DEFINITION": "true"},
+                      {"PROVISION_MANAGED_CHAT": "true", "REFRESH_MANAGED_CHAT_DEFINITION": "true"}]:
+            result, calls = self.run_handoff(INSPECT_MANAGED_CHAT="true", **extra)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("managed_chat_inspection_conflicts_with_apply", result.stdout)
+            self.assertEqual(calls, [])
 
     def test_refresh_definition_flag_is_forwarded_only_when_explicit(self):
         for value, expected in [("true", True), ("false", False), ("", False)]:

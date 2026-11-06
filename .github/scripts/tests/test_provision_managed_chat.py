@@ -89,6 +89,44 @@ class VersionedAzure(FakeAzure):
 
 
 class ProvisionTests(unittest.TestCase):
+    def test_inspection_reads_missing_drifted_and_exact_versions_without_writes(self):
+        expected = script.definition(MANIFEST)
+        missing = FakeAzure()
+        self.assertEqual(script.inspect_comparison(missing, expected), {
+            "state": "missing", "version_count": 0, "matching_version_count": 0, "pin": "absent"})
+        azure = VersionedAzure()
+        self.assertEqual(script.inspect_comparison(azure, expected), {
+            "state": "present", "version_count": 1, "matching_version_count": 0, "pin": "other_version"})
+        azure.versions[0]["definition"] = expected
+        self.assertEqual(script.inspect_comparison(azure, expected), {
+            "state": "present", "version_count": 1, "matching_version_count": 1, "pin": "matching"})
+        self.assertTrue(all(call[0] == "GET" for call in missing.calls + azure.calls))
+
+    def test_inspection_after_uncertain_create_identifies_match_without_repinning(self):
+        azure = VersionedAzure()
+        azure.fail_create = True
+        expected = script.definition(MANIFEST)
+        with self.assertRaises(script.Blocked):
+            script.provision(azure, expected, refresh_definition=True)
+        azure.calls.clear()
+        self.assertEqual(script.inspect_comparison(azure, expected), {
+            "state": "present", "version_count": 2, "matching_version_count": 1, "pin": "other_version"})
+        self.assertTrue(all(call[0] == "GET" for call in azure.calls))
+        self.assertEqual(azure.selector["version_selection_rules"][0]["agent_version"], "1")
+
+    def test_inspection_rejects_ambiguous_or_unowned_versions_without_writes(self):
+        for change in ["ambiguous", "unowned", "pin"]:
+            azure = VersionedAzure()
+            if change == "ambiguous":
+                azure.versions = [copy.deepcopy(azure.version), {**copy.deepcopy(azure.version), "version": "2"}]
+            elif change == "unowned":
+                azure.versions[0]["metadata"] = {}
+            else:
+                azure.selector["version_selection_rules"][0]["agent_version"] = "unknown"
+            with self.subTest(change=change), self.assertRaises(script.Blocked):
+                script.inspect_comparison(azure, script.definition(MANIFEST))
+            self.assertTrue(all(call[0] == "GET" for call in azure.calls))
+
     def test_refresh_is_explicit_preserves_old_version_and_reuses_exact_new_match(self):
         azure = VersionedAzure()
         expected = script.definition(MANIFEST)
@@ -255,6 +293,111 @@ class ProvisionTests(unittest.TestCase):
             return subprocess.CompletedProcess(command, 1, b"secret-provider-body", b"secret-token")
         with patch.object(script.subprocess, "run", side_effect=run), self.assertRaisesRegex(script.Blocked, "^azure_request_failed$"):
             azure.data("/agents", "POST", MANIFEST)
+
+    def test_failed_requests_identify_only_fixed_operation_method_and_known_cause(self):
+        account = "https://management.azure.com" + script.PROJECT_ID.rsplit("/projects/", 1)[0]
+        data = script.PROJECT_ENDPOINT + "/agents"
+        cases = [("GET", account, "account_read"),
+                 ("GET", "https://management.azure.com" + script.PROJECT_ID, "project_read"),
+                 ("GET", account + "/deployments/" + script.MODEL, "model_deployment_read"),
+                 ("GET", data + "?cursor=PRIVATE", "agent_inventory"),
+                 ("GET", data + "/" + script.AGENT_NAME, "agent_read"),
+                 ("GET", data + "/" + script.AGENT_NAME + "/versions", "version_inventory"),
+                 ("GET", data + "/" + script.AGENT_NAME + "/versions/PRIVATE", "version_read"),
+                 ("POST", data, "agent_version_create"),
+                 ("PATCH", data + "/" + script.AGENT_NAME, "endpoint_pin")]
+        error = b'ERROR: Forbidden({"error":{"code":"AuthorizationFailed","message":"PRIVATE token"}})'
+        for method, url, operation in cases:
+            azure = script.Azure(script.PROJECT_ENDPOINT, script.PROJECT_ID)
+            with self.subTest(operation=operation), patch.object(script.subprocess, "run", return_value=(
+                subprocess.CompletedProcess([], 1, b"PRIVATE response", error)
+            )) as run, self.assertRaises(script.Blocked) as caught:
+                azure.request(method, url, MANIFEST if method != "GET" else None)
+            run.assert_called_once()
+            self.assertEqual(str(caught.exception), "azure_request_failed")
+            self.assertEqual(caught.exception.diagnostic, f"managed_chat_azure_diagnostic operation={operation} method={method}"
+                             + f" mutation_attempted={str(method != 'GET').lower()} http_status=403 azure_code=AuthorizationFailed")
+            self.assertNotIn("PRIVATE", caught.exception.diagnostic)
+
+    def test_cli_error_metadata_ignores_messages_unknown_codes_and_malformed_values(self):
+        cases = [(b'ERROR: Bad Request({"error":{"code":"InvalidArgument","message":"PRIVATE"}})',
+                  {"http_status": 400, "azure_code": "InvalidArgument"}),
+                 (b'ERROR: (AuthorizationFailed) PRIVATE client/scope/token', {"azure_code": "AuthorizationFailed"}),
+                 (b'{"error":{"code":"Forbidden","message":"PRIVATE"}}', {"azure_code": "Forbidden"}),
+                 (b'ERROR: Forbidden({"error":{"code":"PRIVATE_SECRET","message":"secret"}})', {"http_status": 403}),
+                 (b'ERROR: Bad Request({"error":{"code":"Forbidden\\n::error::PRIVATE"}})', {"http_status": 400}),
+                 (b'ERROR: Bad Request({invalid PRIVATE)', {"http_status": 400}),
+                 (b'{"error":{"code":["Forbidden"],"message":"PRIVATE"}}', {}),
+                 (b'{"error":true}', {}), (b'PRIVATE AuthorizationFailed status:403', {}),
+                 (b'\xff', {}), (b'ERROR: Forbidden(' + b'X' * 65536 + b')', {})]
+        for raw, expected in cases:
+            with self.subTest(raw=raw[:60]):
+                self.assertEqual(script.azure_error_metadata(raw), expected)
+
+    def test_failed_readback_records_prior_mutation_and_never_retries(self):
+        azure = script.Azure(script.PROJECT_ENDPOINT, script.PROJECT_ID)
+        with patch.object(script.subprocess, "run", side_effect=[
+            subprocess.CompletedProcess([], 0, b'{}', b''),
+            subprocess.CompletedProcess([], 1, b'', b'ERROR: Not Found({"error":{"code":"NotFound"}})'),
+        ]) as run:
+            azure.data("/agents", "POST", MANIFEST)
+            with self.assertRaises(script.Blocked) as caught:
+                azure.data("/agents/" + script.AGENT_NAME)
+        self.assertEqual(run.call_count, 2)
+        self.assertIn("operation=agent_read method=GET mutation_attempted=true", caught.exception.diagnostic)
+
+    def test_timeout_metadata_is_content_free_and_inspection_rejects_any_write(self):
+        for method in ["GET", "POST"]:
+            azure = script.Azure(script.PROJECT_ENDPOINT, script.PROJECT_ID)
+            with patch.object(script.subprocess, "run", side_effect=subprocess.TimeoutExpired(
+                ["PRIVATE"], 30, output=b"PRIVATE", stderr=b"PRIVATE"
+            )) as run, self.assertRaises(script.Blocked) as caught:
+                azure.data("/agents", method, MANIFEST if method == "POST" else None)
+            run.assert_called_once()
+            self.assertEqual(str(caught.exception), "azure_request_unavailable")
+            self.assertNotIn("PRIVATE", caught.exception.diagnostic)
+            self.assertIn("mutation_attempted=" + str(method == "POST").lower(), caught.exception.diagnostic)
+        for method in ["POST", "PATCH"]:
+            azure = script.Azure(script.PROJECT_ENDPOINT, script.PROJECT_ID, read_only=True)
+            with patch.object(script.subprocess, "run") as run, self.assertRaisesRegex(
+                script.Blocked, "^inspection_write_forbidden$"
+            ):
+                azure.data("/agents", method, MANIFEST)
+            run.assert_not_called()
+
+    def test_inspection_entrypoint_creates_no_activation_and_rejects_refresh(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest, output = Path(directory) / "manifest.json", Path(directory) / "activation.json"
+            manifest.write_text(json.dumps(MANIFEST))
+            args = ["--project-id", script.PROJECT_ID, "--project-endpoint", script.PROJECT_ENDPOINT,
+                    "--manifest", str(manifest), "--output", str(output), "--inspect"]
+            stdout = io.StringIO()
+            with patch.object(script, "Azure", return_value=VersionedAzure()) as azure, \
+                 patch.object(script, "provision") as apply, redirect_stdout(stdout):
+                self.assertEqual(script.main(args), 0)
+                azure.assert_called_once_with(script.PROJECT_ENDPOINT, script.PROJECT_ID, read_only=True)
+                apply.assert_not_called()
+            self.assertIn('managed_chat_inspection_ok {"matching_version_count":0', stdout.getvalue())
+            self.assertFalse(output.exists())
+            with patch.object(script, "Azure") as azure, redirect_stderr(io.StringIO()):
+                self.assertEqual(script.main([*args, "--refresh-definition"]), 1)
+                azure.assert_not_called()
+
+    def test_failed_cli_entrypoint_prints_bounded_diagnostic_and_no_activation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest, output = Path(directory) / "manifest.json", Path(directory) / "activation.json"
+            manifest.write_text(json.dumps(MANIFEST))
+            args = ["--project-id", script.PROJECT_ID, "--project-endpoint", script.PROJECT_ENDPOINT,
+                    "--manifest", str(manifest), "--output", str(output), "--inspect"]
+            stderr = io.StringIO()
+            with patch.object(script.subprocess, "run", return_value=subprocess.CompletedProcess(
+                [], 1, b'PRIVATE', b'ERROR: Forbidden({"error":{"code":"AuthorizationFailed","message":"PRIVATE"}})'
+            )) as run, redirect_stderr(stderr):
+                self.assertEqual(script.main(args), 1)
+            run.assert_called_once()
+            self.assertEqual(stderr.getvalue(), "managed_chat_azure_diagnostic operation=account_read method=GET"
+                             " mutation_attempted=false http_status=403 azure_code=AuthorizationFailed\nazure_request_failed\n")
+            self.assertFalse(output.exists())
 
     def test_inventory_follows_only_same_project_pages_and_refuses_incomplete_results(self):
         azure = script.Azure(script.PROJECT_ENDPOINT, script.PROJECT_ID)
