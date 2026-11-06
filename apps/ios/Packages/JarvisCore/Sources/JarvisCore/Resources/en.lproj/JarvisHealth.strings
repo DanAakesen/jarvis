@@ -107,3 +107,12 @@
 "health.syncPartial" = "Partly synced %@. Missing: %@.";
 "health.syncFailed" = "Sync failed. Try again.";
 "health.syncRetry" = "Try again";
+
+"health.training" = "Training";
+"health.activeTime" = "Active time";
+"health.lastLifts" = "Last lifts";
+"health.totalTarget" = "of %@";
+
+"health.nightsRecorded" = "Nights recorded";
+"health.mealsLogged" = "Meals logged";
+"health.dailyAverage" = "Daily average";

@@ -6,6 +6,8 @@ public enum JarvisHealthPeriodPreset: String, CaseIterable, Identifiable, Sendab
     case sevenDays
     case thirtyDays
 
+    /// The published dashboard has exactly these three choices; yesterday remains a supported stored value.
+    public static let dashboardPresets: [Self] = [.today, .sevenDays, .thirtyDays]
     public var id: String { rawValue }
     public var dayCount: Int {
         switch self {
@@ -115,6 +117,14 @@ public enum JarvisHealthLogic {
     }
 
     public static func workoutKind(_ value: String?) -> WorkoutKind {
+        // Older sync versions encoded the Objective-C enum's debug description instead of its activity name.
+        let raw = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let numeric = raw.replacingOccurrences(of: #"^HKWorkoutActivityType\(rawValue: ([0-9]+)\)$"#,
+                                               with: "$1", options: .regularExpression)
+        if let code = UInt(numeric) {
+            if [20, 50, 11, 59, 63].contains(code) { return .gym }
+            if code == 37 { return .run }
+        }
         let normalized = (value ?? "")
             .replacingOccurrences(of: #"^HKWorkoutActivityType[._ -]*"#, with: "", options: .regularExpression)
             .filter { $0.isLetter || $0.isNumber }
@@ -125,6 +135,21 @@ public enum JarvisHealthLogic {
         }
         if ["run", "running"].contains(normalized) { return .run }
         return .other
+    }
+
+    /// Date-only API fields are already local days. Timestamp fallbacks use the backend's Copenhagen day.
+    public static func day(_ value: String?) -> String? {
+        guard let value else { return nil }
+        if value.count == 10, JarvisHealthPeriod(startDate: value, endDate: value) != nil { return value }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var instant = formatter.date(from: value)
+        if instant == nil {
+            formatter.formatOptions = [.withInternetDateTime]
+            instant = formatter.date(from: value)
+        }
+        guard let instant else { return nil }
+        return JarvisHealthPeriod.make(.today, now: instant).startDate
     }
 
     public static func bodyMetricName(_ value: String?, matching key: BodyMetric) -> Bool {
@@ -149,5 +174,23 @@ public enum JarvisHealthLogic {
         case weight
         case fatPercent
         case leanMass
+    }
+}
+
+/// Identifies the same HealthKit workout on the phone and in retained sync data.
+/// A legacy manual gym log has no HealthKit id; it follows Home's two-hour gym-session match.
+public struct JarvisHealthWorkoutIdentity: Sendable {
+    public let id: String?
+    public let start: Date
+    public let kind: JarvisHealthLogic.WorkoutKind
+
+    public init(id: String?, start: Date, kind: JarvisHealthLogic.WorkoutKind) {
+        self.id = id; self.start = start; self.kind = kind
+    }
+
+    public func matches(_ other: Self) -> Bool {
+        if let id, let otherID = other.id { return id.lowercased() == otherID.lowercased() }
+        guard kind == other.kind else { return false }
+        return abs(start.timeIntervalSince(other.start)) < (kind == .gym ? 7200 : 90)
     }
 }

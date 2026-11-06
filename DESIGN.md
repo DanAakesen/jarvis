@@ -3024,25 +3024,29 @@ Synthetic preview and screenshot mode allows one fixture text turn; attachment
 uploads and activity writes are disabled with accessibility explanations, never
 simulated as successful backend actions.
 
-## Native iOS Notes area (P15-12; 30 October 2026)
+## Native iOS Notes area (P15-93; 5 November 2026)
 
-The approved iPhone area has four text-only segments (Notes, Tasks, List and
-Graph), with content aligned beneath one title/refresh row. The bottom search
-and plus action stay fixed above the keyboard; Notes adds folder filters directly
-above them. Native SwiftUI Lists, DisclosureGroups, sheets, navigation, system
-materials, semantic colors and SF Symbols provide the interaction and appearance.
-Selection tints labels and icons, never row surfaces. The graph uses a native
-Canvas renderer with pan/zoom and an accessible list alternative.
+The approved board in PR #1603 has three segments: Notes, Tasks and Graph.
+Notes and Tasks use the shared phrase, hero, section headings and separated rows.
+Notes browses direct child folders and notes with a breadcrumb and Back control;
+its count comes from the same collection as its visible note rows. Recent is a
+horizontal strip of last-opened note tiles with folder color and opening time.
+Search and plus stay fixed at the bottom. Graph uses a native Canvas with pan/zoom,
+folder-color legend, labels only for search/selection, and an Open action for the
+selected node. Every node retains its spoken title, folder and Open accessibility
+action. Showing a label must not move its node or edge endpoints.
 
 Custom geometry lives in `JarvisDesignTokens` in
 `apps/ios/Jarvis/JarvisDesignSystem.swift`; cross-platform tree and deterministic
-graph-position logic lives in `JarvisCore`. The checked-in concept board still
-shows three tabs and two plus-menu actions, while this approved issue requires
-four tabs and creation of notes, folders and tasks. The implementation follows
-the four-tab issue and omits standalone New folder because the shared backend
-has no folder-create route; notes saved beneath a nested path create the folder.
-No note delete/rename/move, task delete, task-create priority, or offline cache
-is represented. Danish and English strings come from the JarvisCore localization
+graph-position logic lives in `JarvisCore`. The New note sheet has a hierarchical
+folder picker: New folder adds a child inside the open directory, then saving the
+note persists it. The New folder sheet uses the same drill-down picker to select
+its parent and persists an empty folder. The New task sheet puts title, date/time,
+scope and priority in board order, with shared segments. All creation sheets use
+confirm-left/cancel-right actions. Note delete/rename/move and task delete remain
+unavailable. Recent opening history
+is stored in the account-bound app cache and clears on sign-out.
+Danish and English strings come from the JarvisCore localization
 catalog; the app-owned Settings preference defaults to Danish and controls date
 formatting as well as visible and accessibility copy.
 
@@ -3067,11 +3071,11 @@ Settings frames. Chat and the shared orb are outside this alignment change.
 ## Native iOS Software Factory (P15-19; 31 October 2026)
 
 The approved Factory screen uses the existing Notes chrome: a Software Factory
-title and refresh control, a text-only Board / Needs Dan / Releases switcher,
-and a fixed glass search field plus round create button. The project menu and
-board filter sit above the grouped content. Board groups follow In progress,
-In review, Ready, Backlog and Done, with Done collapsed initially; Needs Dan
-shows only the selected project's Needs Dan / NeedsAttention work. Releases open
+title and refresh control, one glass Board / Releases switcher, and a fixed
+glass search field plus round create button. The narrowed switcher sits above
+search with the project/filter button on its right. Board groups follow Needs
+Dan, In progress, In review, Ready, Backlog and Done and start collapsed.
+An existing Needs Dan entry selects Board, expands that column and scrolls to it. Releases open
 a native detail list for status, commit, workflow runs, deployments, linked
 tasks and the existing compact commit records.
 
@@ -3092,7 +3096,7 @@ alone. Danish/English copy and date formatting come from `JarvisCore`,
 with the app language defaulting to Danish. System type sizes, appearance,
 VoiceOver labels, and native scrolling remain intact.
 
-Board and Needs Dan intentionally use one selected project per request. There is
+Board intentionally uses one selected project per request. There is
 no all-project aggregation. Existing APIs own project placement and live
 invalidation; task details use the resumable task event stream. No APNs,
 project administration, git graph, backfill, or sandbox UI is represented.
@@ -3146,8 +3150,7 @@ preference.
 The checked-in `docs/ios/design/board.html?screen=health&tab=track&lang=da`
 shows Exercises and History only. Plus opens **New lift** with name, kg, reps
 and sets and past-exercise quick-add chips; no form or save status sits on the
-tab. Native logging reuses the shared lift routes from #1423. Last lifts remains
-omitted from the Dashboard. The existing one-boot simulator screenshot job now
+tab. Native logging reuses the shared lift routes from #1423. Last lifts is restored to the Dashboard in P15-95, above Recent sessions and Body trend. The existing one-boot simulator screenshot job now
 includes Track workout, New lift and empty states in both languages and themes,
 with a board link beside the artifact in its PR comment. Linux Chromium review
 covers the board, not native rendering; simulator compilation/captures and owner
@@ -3221,5 +3224,111 @@ One look, taken from the Chat header: Apple glass, 44 pt target, secondary accen
 - **Gallery**: `JarvisComponentGallery` (debug builds only, launch argument `--component-gallery`, no user-facing entry) shows every button state, the orb at three sizes and the scaffold; `ComponentGalleryUITests` attaches a screenshot.
 - Apple documentation used: Human Interface Guidelines (Buttons, Toolbars, Materials); SwiftUI `Glass`, `glassEffect`, `ButtonStyle.glass` and `Button`.
 
+### Native confirmed-action feedback (6 November 2026)
+
+`JarvisSuccessFeedback.swift` owns the shared checkmark/text glass confirmation.
+It reuses existing spacing, radius and timing tokens; a new success replaces the
+current one and cancels its expiry. A short opacity/scale transition honors Reduce
+Motion and never consumes touches. Haptics and VoiceOver announcements follow a
+confirmed write. Notes displays this feedback before continuing its existing editor
+navigation; the successful navigation itself remains immediate.
+
+## Home and Factory board alignment (P15-94 / #1600; 5 November 2026)
+
+Home uses one full-width glass surface for equal-width Today / Tasks due
+segments, with the selected surface inside the same control. Calendar and task
+rows use the shared row insets, internal line spacing and structural dividers.
+The published `board.html` shows Today / Tasks due, without a Delegated or
+Yesterday group. Follow that grouping as required by the issue's board-wins
+rule; a clarification about the older Delegated feedback is still pending.
+
+The shared segmented component retains the native buttons' selected accessibility
+trait and 44 pt touch height. Custom composition preserves the approved glass
+surface; it does not introduce a new button style or per-screen glass effect.
+Native compilation, interaction and screenshot acceptance are still pending.
+
+### Home feedback refinement (6 November 2026)
+
+The shorter Home greeting omits health recaps. Task completion and note creation
+reuse Notes' shared brief glass confirmation. Lift/workout sheets keep their saved
+text, with one success haptic and a short opacity/scale transition. All new motion
+honors Reduce Motion; confirmation never blocks another action or sheet dismissal.
+Home's checkbox no longer displays a checkmark before a successful write.
+
+## Health board alignment (P15-95 / #1601; 5 November 2026)
+
+The Health carousel uses Training, Sleep and Nutrition with the same compact
+Today / 7 days / 30 days control in every hero header; 7 days is the initial
+selection. Training uses one workout donut, Gym/Run legend, steps and active-time
+figures, and a steps chart. All charts retain their average/day selection,
+Settings target and compact numbers. The shared chart summary and hero geometry
+are compacted after the first native comparison; fresh validation is required, including large
+Dynamic Type.
+Sleep now uses recorded stage proportions with matching text legends when all
+stages are available; missing stages stay unknown. Sleep and Nutrition summary
+values follow the selected period instead of retaining the latest day's values.
+The Sleep summary uses observed average hours and recorded-night count because
+the current source contract has no bedtime/wake-up fields. Nutrition shows daily
+mean calories (calories left for Today) and the actual logged-meal count; it does
+not invent a meal target. Both keep the board's divided two-column summary row.
+
+Below the hero: Last lifts with the shared Log text action, Recent sessions,
+then Body trend. Rows use shared spacing and separators. The duplicate summary
+block is removed. Body trend reads a labelled 30-day window and shows the reading
+date, so Today does not suppress an earlier measurement. The latest daily value
+precedes a daily average. Log and plus open the same Home lift/workout sheets.
+
+Local HealthKit steps/workouts supplement retained server data. Unsynced device
+workouts do not offer a backend-only detail link. Last lifts combines retained
+Health history with existing Home vault logs; incomplete vault reads remain
+visible as partial. No illustrative board number is used as live app data.
+
+The Health hero page indicator exposes a bounded VoiceOver adjustment for Training, Sleep and Nutrition. Its explicit page transition honors Reduce Motion, matching the charts and other non-Chat page transitions.
+
+Health screenshot review of run 42124896873 found overlapping 30-day chart labels.
+Long periods now show five evenly spaced date labels; all daily bars and selection
+remain available. Seven-day charts retain weekday labels. This correction joins the
+VoiceOver/Reduce Motion refinement for the next combined native pass.
+
+## Native insight board alignment (P15-96; 5 November 2026)
+
+Reuse P15-92 heroes, section headlines and grouped row geometry. Usage keeps its
+period inside Overview and grouping inside Breakdown, with the first three
+ranked tasks visible. Status rows show a title, concise real detail, state word
+and disclosure; Vault mirror and Smoke report form a separate group below.
+Proactive uses a compact two-column source group, falling back to one column
+for accessibility sizes, and an expandable three-item findings group.
+Notifications uses shared section headlines and row insets while preserving
+approval controls, grouping and dismiss gestures. Workspaces keeps its native
+list/swipe actions and bottom search with the shared line and row spacing.
+
+The published Status and Proactive reference images were inspected. These are
+board renders, not native evidence. All five audited pages still require actual
+Mac screenshot inspection; see `docs/ios/design/p15-96-verification.md`. The
+continuous shared page segments are supplied by P15-94 / #1606.
+
+
+## Native Status row and Usage chart refinement
+
+Native evidence exposed a clipped Status state label and a Notifications capture
+covered by sign-in. The row reserves readable state text, stacking it at large
+Dynamic Type; the test uses the existing Simulator navigation argument. Usage
+emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
+verification is pending; previous UI-test success is not visual acceptance.
+
+## Final Insights board details
+
+Board/native comparison adds the missing Overview title to Proactive and restores
+Usage's breakdown order: percentage then emphasized amount. Usage breakdown
+labels and values stack at accessibility sizes. The existing shared-page native
+checks now also capture Usage, Status and Proactive at the largest accessibility
+text size. Corrected native images remain pending.
+
+### Insights large-text screenshot correction (6 November 2026)
+
+At accessibility sizes, the shared pinned header uses native regular material so
+scrolling content does not collide with its title. Page and period choices scroll
+horizontally, and Usage totals become full-width rows with unrestricted wrapping.
+Normal text keeps the approved continuous shared segmented bar and grid.
 
 Settings native screenshot review keeps all four section names readable at default text size with the continuous shared glass segmented bar from P15-94 and full 44-point targets. Larger text uses the shared scrolling strip. Decorative row symbols retain the shared icon size as row text grows, preventing overlap.

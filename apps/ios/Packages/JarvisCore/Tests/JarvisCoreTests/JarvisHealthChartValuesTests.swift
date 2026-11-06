@@ -78,6 +78,49 @@ final class JarvisHealthChartValuesTests: XCTestCase {
 }
 
 final class JarvisHealthDayRowsTests: XCTestCase {
+    func testSleepSummaryUsesSelectedNightsAndKeepsMissingStagesUnknown() {
+        let rows: [[String: JSONValue]] = [
+            ["sleep_date": .string("2026-10-29"), "total_sleep_hours": .number(20)],
+            ["sleep_date": .string("2026-10-30"), "total_sleep_hours": .number(6), "deep_hours": .number(1)],
+            ["sleep_date": .string("2026-10-31"), "total_sleep_hours": .number(8)],
+            ["sleep_date": .string("2026-11-01"), "total_sleep_hours": .number(20)],
+        ]
+        let twoDays = JarvisHealthSleepSummary(items: rows,
+            period: JarvisHealthPeriod(startDate: "2026-10-30", endDate: "2026-10-31")!)
+        XCTAssertEqual(twoDays.total, 7)
+        XCTAssertEqual(twoDays.nightCount, 2)
+        XCTAssertEqual(twoDays.latestDate, "2026-10-31")
+        XCTAssertNil(twoDays.deep, "A missing stage must not become zero or a misleading partial average")
+        let today = JarvisHealthSleepSummary(items: rows,
+            period: JarvisHealthPeriod(startDate: "2026-10-31", endDate: "2026-10-31")!)
+        XCTAssertEqual(today.total, 8)
+        XCTAssertEqual(today.nightCount, 1)
+        let missing = JarvisHealthSleepSummary(items: rows,
+            period: JarvisHealthPeriod(startDate: "2026-11-02", endDate: "2026-11-02")!)
+        XCTAssertNil(missing.total)
+        XCTAssertEqual(missing.nightCount, 0)
+    }
+
+    func testNutritionSummaryAveragesLoggedDaysInsidePeriodAndDeduplicatesMeals() {
+        let rows: [[String: JSONValue]] = [
+            ["meal_date": .string("2026-10-29"), "meal_count": .number(10), "energy_kcal": .number(9000)],
+            ["meal_date": .string("2026-10-30"), "meal_count": .number(2), "energy_kcal": .number(2000), "protein_grams": .number(100)],
+            ["meal_date": .string("2026-10-30"), "meal_count": .number(2), "energy_kcal": .number(2000), "protein_grams": .number(100)],
+            ["meal_date": .string("2026-10-31"), "meal_count": .number(3), "energy_kcal": .number(2400)],
+            ["meal_date": .string("2026-11-01"), "meal_count": .number(0), "energy_kcal": .number(0)],
+        ]
+        let summary = JarvisHealthNutritionSummary(items: rows,
+            period: JarvisHealthPeriod(startDate: "2026-10-30", endDate: "2026-11-01")!)
+        XCTAssertEqual(summary.average(.kcal), 2200)
+        XCTAssertEqual(summary.dayCount, 2)
+        XCTAssertEqual(summary.mealCount, 5)
+        XCTAssertNil(summary.average(.protein))
+        let oneDay = JarvisHealthNutritionSummary(items: rows,
+            period: JarvisHealthPeriod(startDate: "2026-10-30", endDate: "2026-10-30")!)
+        XCTAssertEqual(oneDay.average(.kcal), 2000)
+        XCTAssertEqual(oneDay.average(.protein), 100)
+    }
+
     func testSleepNightsReadStagesAndNeverInventMissingOnes() {
         let nights = JarvisHealthSleepNight.nights(from: [
             [

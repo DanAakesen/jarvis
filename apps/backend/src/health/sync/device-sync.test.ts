@@ -43,6 +43,36 @@ describe('parseDeviceSync validation', () => {
   });
 });
 
+describe('merged HealthKit day totals and local workout dates', () => {
+  it('preserves the merged total instead of summing overlapping iPhone and Watch samples', () => {
+    const rawSources = normalizeHealth(deviceSyncPayload(parse({ samples: [
+      sample('phone', { value: 600, source: 'iPhone' }),
+      sample('watch', { value: 600, source: 'Apple Watch' }),
+    ] })));
+    expect(rawSources.metrics[0]?.value).toBe(1200); // Reproduces the former raw-sample upload bug.
+    const corrected = normalizeHealth(deviceSyncPayload(parse({ samples: [sample('steps-1793746800', {
+      start: '2026-11-03T23:00:00Z', end: '2026-11-04T23:00:00Z',
+      value: 600, source: 'Apple Health merged statistics',
+    })] })));
+    expect(corrected.metrics[0]).toMatchObject({ metric_date: '2026-11-04', value: 600, sample_count: 1 });
+  });
+
+  it('converts the HealthKit body-fat fraction into the stored percentage', () => {
+    const normalized = normalizeHealth(deviceSyncPayload(parse({ samples: [sample('body-fat', {
+      metric: 'body_fat_percentage', unit: 'fraction', value: 0.2,
+    })] })));
+    expect(normalized.metrics[0]).toMatchObject({ metric_name: 'body_fat_percentage', value: 20, unit: '%' });
+  });
+
+  it('keeps a workout near UTC midnight on its Copenhagen date through sync normalization', () => {
+    const normalized = normalizeHealth(deviceSyncPayload(parse({ workouts: [{
+      id: 'boundary', activity: 'traditional_strength_training',
+      start: '2026-11-01T23:30:00Z', end: '2026-11-02T00:15:00Z',
+    }] })));
+    expect(normalized.workouts[0]).toMatchObject({ workout_date: '2026-11-02', duration_seconds: 2700 });
+  });
+});
+
 describe('idempotency', () => {
   it('derives the same id for reordered and repeated samples', () => {
     const original = body();

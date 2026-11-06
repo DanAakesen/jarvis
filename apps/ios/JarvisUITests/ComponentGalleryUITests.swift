@@ -97,16 +97,156 @@ final class ComponentGalleryUITests: XCTestCase {
         attach(app.screenshot(), named: "Tab strip")
     }
 
+    func testFactoryBoardKeepsNeedsDanWithOnlyTwoTabs() {
+        captureFactory(state: "board", language: "en", theme: "dark")
+    }
+
+    func testLegacyNeedsDanEntryOpensAndRevealsTheBoardColumn() {
+        captureFactory(state: "needs", language: "da", theme: "light")
+    }
+
+    private func captureFactory(state: String, language: String, theme: String) {
+        app.launchArguments = [
+            "--ui-test-navigation",
+            "--screenshot-factory-fixture", "--screenshot-factory-state=\(state)",
+            "--screenshot-factory-language=\(language)",
+            "-jarvis.appLanguage", language, "-jarvis.appTheme", theme,
+            "-AppleLanguages", "(\(language))", "-AppleLocale", language == "da" ? "da_DK" : "en_US",
+        ]
+        app.launch()
+        defer { app.terminate() }
+        let board = app.buttons["factory.segment.board"]
+        let releases = app.buttons["factory.segment.releases"]
+        XCTAssertTrue(board.waitForExistence(timeout: 15))
+        XCTAssertTrue(board.isHittable, "The fixture must be visible above the authentication gate")
+        XCTAssertTrue(board.isSelected)
+        XCTAssertTrue(releases.exists)
+        XCTAssertFalse(app.buttons["factory.segment.needsDan"].exists)
+        XCTAssertEqual(board.frame.width, releases.frame.width, accuracy: 1)
+        XCTAssertEqual(board.frame.maxX, releases.frame.minX, accuracy: 1, "Segments touch within one control")
+        let needs = app.buttons["factory.column.needs_dan"]
+        XCTAssertTrue(needs.waitForExistence(timeout: 10))
+        // SwiftUI Link is exposed as a Button on the pinned iOS Simulator.
+        let taskLink = app.buttons["factory.row.github.10"]
+        if state == "board" {
+            XCTAssertFalse(taskLink.exists, "Board columns start collapsed")
+            needs.tap()
+        }
+        XCTAssertTrue(taskLink.waitForExistence(timeout: 5), "The Needs Dan task remains reachable on Board")
+        XCTAssertEqual(needs.value as? String, language == "da" ? "Udvidet" : "Expanded")
+        XCTAssertTrue(taskLink.isHittable, "The task action must be visible in the expanded column")
+        XCTAssertTrue(app.staticTexts["Synthetic decision"].exists)
+        XCTAssertTrue(needs.isHittable, "The old Needs Dan entry scrolls its column into view")
+        attach(app.screenshot(), named: "P15-94-factory-\(state)-\(theme)-\(language)")
+    }
+
+    func testHealthPeriodsDarkEnglish() { captureHealthHeroes(language: "en", theme: "dark") }
+    func testHealthPeriodsLightDanish() { captureHealthHeroes(language: "da", theme: "light") }
+
+    private func captureHealthHeroes(language: String, theme: String) {
+        openPage("health", language: language, theme: theme, launch: true)
+        let training = app.descendants(matching: .any)["health.hero.training"]
+        XCTAssertTrue(training.waitForExistence(timeout: 15))
+        let periodIDs = ["today", "sevenDays", "thirtyDays"].map { "health.period.\($0)" }
+        for id in periodIDs { XCTAssertTrue(app.buttons[id].exists, id) }
+        XCTAssertFalse(app.buttons["health.period.yesterday"].exists)
+        let initial = app.buttons["health.period.today"].frame
+        XCTAssertTrue(app.descendants(matching: .any)["health.training.donut"].exists)
+        attach(app.screenshot(), named: "P15-95-health-training-\(theme)-\(language)")
+        training.swipeLeft()
+        let sleep = app.descendants(matching: .any)["health.hero.sleep"]
+        XCTAssertTrue(sleep.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["health.period.today"].frame.minY, initial.minY, accuracy: 1)
+        attach(app.screenshot(), named: "P15-95-health-sleep-\(theme)-\(language)")
+        sleep.swipeLeft()
+        XCTAssertTrue(app.descendants(matching: .any)["health.hero.nutrition"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["health.period.today"].frame.minY, initial.minY, accuracy: 1)
+        app.buttons["health.period.thirtyDays"].tap()
+        XCTAssertTrue(app.buttons["health.period.thirtyDays"].isSelected)
+        attach(app.screenshot(), named: "P15-95-health-nutrition-\(theme)-\(language)")
+        let log = app.buttons["health.lifts.log"]
+        XCTAssertTrue(log.waitForExistence(timeout: 5), "The section must preserve its Log button's identity")
+        let scroll = app.scrollViews.firstMatch
+        for _ in 0..<4 {
+            if log.isHittable && log.frame.minY > app.staticTexts["page.title"].frame.maxY { break }
+            let start = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+            let end = scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(log.isHittable, "Last lifts must be reachable below the hero")
+        attach(app.screenshot(), named: "P15-95-health-sections-\(theme)-\(language)")
+        log.tap()
+        XCTAssertTrue(app.textFields["today.lift.name"].waitForExistence(timeout: 5), "Last lifts opens Home's shared sheet")
+        attach(app.screenshot(), named: "P15-95-health-log-lift-\(theme)-\(language)")
+        app.buttons["sheet.cancel"].tap()
+        XCTAssertTrue(log.waitForExistence(timeout: 5))
+        for position in 1...3 {
+            app.swipeUp()
+            attach(app.screenshot(), named: "P15-95-health-lower-\(position)-\(theme)-\(language)")
+        }
+        app.terminate()
+    }
+
+    func testUsageCurrentContractAndEveryPeriodAndBreakdownControl() {
+        openPage("usage")
+        defer { app.terminate() }
+        let total = app.descendants(matching: .any)["usage.total"]
+        XCTAssertTrue(total.waitForExistence(timeout: 10))
+        for period in ["7d", "30d", "90d", "all"] {
+            let before = total.label
+            app.buttons["usage.range.\(period)"].tap()
+            let updated = NSPredicate { _, _ in total.exists && total.label != before }
+            XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: updated, object: nil)], timeout: 8), .completed)
+            XCTAssertTrue(app.buttons["usage.range.\(period)"].isSelected)
+        }
+        attach(app.screenshot(), named: "P15-96-usage-all-dark-en")
+        for group in ["agent", "source", "project"] {
+            let control = app.buttons["usage.groupBy.\(group)"]
+            for _ in 0..<3 { if control.isHittable { break }; app.swipeUp() }
+            XCTAssertTrue(control.isHittable)
+            control.tap()
+            XCTAssertTrue(control.isSelected)
+            let expected = group == "project" ? "p-web" : group == "source" ? "sandbox" : "codex"
+            XCTAssertTrue(app.buttons["usage.slice.\(expected)"].waitForExistence(timeout: 3))
+        }
+        attach(app.screenshot(), named: "P15-96-usage-breakdown-dark-en")
+    }
+
+    func testNotificationsHasHeroAndKeepsApprovalActionsInBothLanguages() {
+        for (language, theme) in [("en", "dark"), ("da", "light")] {
+            app.launchArguments = ["--ui-test-navigation", "--screenshot-calendar-change-fixture", "--screenshot-notifications-open",
+                "-jarvis.appLanguage", language, "-jarvis.appTheme", theme]
+            app.launch()
+            let hero = app.descendants(matching: .any)["notifications.hero"]
+            XCTAssertTrue(hero.waitForExistence(timeout: 12))
+            let phrase = app.descendants(matching: .any).matching(identifier: "page.headline").firstMatch
+            XCTAssertTrue(phrase.exists)
+            XCTAssertGreaterThanOrEqual(hero.frame.minY, phrase.frame.maxY)
+            XCTAssertTrue(app.buttons["chat.notifications.done"].isHittable)
+            let approval = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "confirmation-approve-")).firstMatch
+            XCTAssertTrue(approval.exists)
+            XCTAssertFalse(approval.isEnabled, "Synthetic approval must never execute a calendar change")
+            attach(app.screenshot(), named: "P15-96-notifications-\(theme)-\(language)")
+            app.terminate()
+        }
+    }
+
     // Separate cases keep each three-page capture below the runner's per-test timeout.
     func testSharedPageOrderDarkEnglish() { captureSharedPages(language: "en", theme: "dark") }
     func testSharedPageOrderLightEnglish() { captureSharedPages(language: "en", theme: "light") }
     func testSharedPageOrderDarkDanish() { captureSharedPages(language: "da", theme: "dark") }
     func testSharedPageOrderLightDanish() { captureSharedPages(language: "da", theme: "light") }
 
-    private func captureSharedPages(language: String, theme: String) {
+    func testSharedPagesAtAccessibilityTextSize() {
+        captureSharedPages(language: "en", theme: "dark", largeText: true)
+    }
+
+    private func captureSharedPages(language: String, theme: String, largeText: Bool = false) {
         defer { app.terminate() }
         for destination in ["usage", "status", "proactive"] {
-            openPage(destination, language: language, theme: theme, launch: destination == "usage")
+            openPage(destination, language: language, theme: theme,
+                     extra: largeText ? ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] : [],
+                     launch: destination == "usage")
             let hero = app.descendants(matching: .any)["\(destination).hero"]
             XCTAssertTrue(hero.waitForExistence(timeout: 10), "\(destination) hero")
             attach(app.screenshot(), named: "P15-92-\(destination)-\(theme)-\(language)")
@@ -129,6 +269,10 @@ final class ComponentGalleryUITests: XCTestCase {
                 "phrase": ["x": phrase.frame.minX, "y": phrase.frame.minY, "width": phrase.frame.width, "height": phrase.frame.height],
                 "filter": ["x": filter.frame.minX, "y": filter.frame.minY, "width": filter.frame.width, "height": filter.frame.height],
             ]
+            if largeText {
+                app.swipeUp()
+                attach(app.screenshot(), named: "P15-\(destination)-accessibility-text")
+            }
             if let data = try? JSONSerialization.data(withJSONObject: geometry, options: [.sortedKeys, .prettyPrinted]),
                let json = String(data: data, encoding: .utf8) {
                 let bounds = XCTAttachment(string: json)
@@ -157,6 +301,17 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertTrue(app.textFields["workspaces.search"].isHittable)
             XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Weekly status")).firstMatch.exists)
         }
+    }
+
+    func testUsageErrorKeepsPeriodRecoveryAvailable() {
+        openPage("usage", extra: ["--ui-test-insights=error"])
+        defer { app.terminate() }
+        XCTAssertTrue(app.descendants(matching: .any)["usage.error"].waitForExistence(timeout: 8))
+        let week = app.buttons["usage.range.7d"]
+        XCTAssertTrue(week.isHittable)
+        week.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["usage.error"].waitForExistence(timeout: 8))
+        XCTAssertTrue(week.isHittable)
     }
 
     func testInitialLoadingHidesFiltersAndUsesOnePageSkeleton() {
@@ -210,6 +365,133 @@ final class ComponentGalleryUITests: XCTestCase {
         XCTAssertGreaterThan(detail.frame.minY, title.frame.maxY, "Lines have breathing room")
         XCTAssertGreaterThanOrEqual(next.frame.minY - detail.frame.maxY, 19.5, "Rows are separated by 20 pt (allowing half-point rounding)")
         attach(app.screenshot(), named: "P15-92-shared-section-and-rows")
+    }
+
+    func testNotesRootFoldersCountsBackAndRecentlyOpened() {
+        openPage("notes")
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["notes.tab.notes"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["notes.tab.list"].exists)
+        notesReach("notes.note.welcome.md")
+        XCTAssertEqual(app.staticTexts["notes.folder.count"].label, "1")
+        attach(app.screenshot(), named: "P15-93-notes-root-dark-en")
+        notesTap("notes.folder.Work", upward: false)
+        notesTap("notes.folder.Work/Projects")
+        notesReach("notes.note.Work/Projects/release.md")
+        XCTAssertEqual(app.staticTexts["notes.folder.count"].label, "1")
+        attach(app.screenshot(), named: "P15-93-notes-folder-dark-en")
+        notesTap("notes.note.Work/Projects/release.md")
+        XCTAssertTrue(app.buttons["note.back"].waitForExistence(timeout: 8))
+        app.buttons["note.back"].tap()
+        notesTap("notes.folder.back", upward: false)
+        XCTAssertEqual(app.staticTexts["notes.folder.breadcrumb"].label, "Work")
+        notesTap("notes.folder.back", upward: false)
+        notesReach("notes.recent.Work/Projects/release.md", upward: false)
+        attach(app.screenshot(), named: "P15-93-notes-recent-dark-en")
+    }
+
+    func testNewNoteCreatesFolderInsideTheOpenFolder() {
+        openPage("notes")
+        defer { app.terminate() }
+        notesTap("notes.folder.Work")
+        notesTap("notes.folder.Work/Projects")
+        notesTap("notes.plus")
+        notesTap("notes.newNote")
+        let title = app.descendants(matching: .any).matching(identifier: "notes.create.title").firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        title.typeText("Capture")
+        notesTap("notes.create.folder")
+        XCTAssertEqual(app.staticTexts["notes.create.folder.path"].label, "Work / Projects")
+        notesTap("notes.create.folder.name")
+        app.textFields["notes.create.folder.name"].typeText("Research")
+        notesTap("notes.create.folder.add")
+        XCTAssertEqual(app.staticTexts["notes.create.folder.path"].label, "Work / Projects / Research")
+        app.buttons["sheet.confirm"].tap()
+        XCTAssertTrue(app.buttons["notes.create.folder"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["notes.create.folder"].label, "Work / Projects / Research")
+        attach(app.screenshot(), named: "P15-93-notes-new-folder-dark-en")
+        app.buttons["sheet.confirm"].tap()
+        XCTAssertTrue(app.buttons["note.back"].waitForExistence(timeout: 8))
+        app.buttons["note.back"].tap()
+        notesTap("notes.folder.Work/Projects/Research")
+        notesReach("notes.note.Work/Projects/Research/capture.md")
+        XCTAssertEqual(app.staticTexts["notes.folder.count"].label, "1")
+        attach(app.screenshot(), named: "P15-93-notes-created-dark-en")
+    }
+
+    func testNewFolderPersistsAnEmptyChildOfTheSelectedParent() {
+        openPage("notes")
+        defer { app.terminate() }
+        notesTap("notes.plus")
+        notesTap("notes.newFolder")
+        let name = app.textFields["notes.create.folder.title"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap()
+        name.typeText("Research")
+        notesTap("notes.create.folder")
+        notesTap("notes.create.folder.Work")
+        notesTap("notes.create.folder.Work/Projects")
+        app.buttons["sheet.confirm"].tap()
+        XCTAssertTrue(app.buttons["notes.create.folder"].waitForExistence(timeout: 5))
+        attach(app.screenshot(), named: "P15-93-new-folder-sheet-dark-en")
+        app.buttons["sheet.confirm"].tap()
+        notesReach("notes.folder.breadcrumb")
+        XCTAssertEqual(app.staticTexts["notes.folder.breadcrumb"].label, "Work / Projects / Research")
+        XCTAssertEqual(app.staticTexts["notes.folder.count"].label, "0")
+        notesTap("notes.folder.back", upward: false)
+        notesReach("notes.folder.Work/Projects/Research")
+        attach(app.screenshot(), named: "P15-93-new-empty-folder-dark-en")
+    }
+
+    func testNotesGraphSelectionAndTaskPriority() {
+        openPage("notes")
+        defer { app.terminate() }
+        notesTap("notes.tab.graph")
+        let nodeID = "notes.graph.node." + String(repeating: "0", count: 63) + "1"
+        notesTap(nodeID)
+        XCTAssertTrue(app.buttons["notes.graph.open"].waitForExistence(timeout: 5))
+        attach(app.screenshot(), named: "P15-93-notes-graph-selected-dark-en")
+        let search = app.textFields["notes.search"]
+        XCTAssertTrue(search.isHittable)
+        search.tap()
+        search.typeText("Review")
+        notesTap("notes.tab.tasks", upward: false)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Review release")).firstMatch.waitForExistence(timeout: 8))
+        notesTap("notes.search.clear")
+        notesTap("notes.plus")
+        notesTap("notes.newTask")
+        let title = app.descendants(matching: .any).matching(identifier: "notes.create.title").firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        title.typeText("Priority capture")
+        notesTap("notes.create.scope.0")
+        notesTap("notes.create.priority.2")
+        attach(app.screenshot(), named: "P15-93-notes-new-task-dark-en")
+        app.buttons["sheet.confirm"].tap()
+        let created = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Priority capture")).firstMatch
+        for _ in 0..<5 {
+            if created.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(created.waitForExistence(timeout: 8))
+        created.tap()
+        XCTAssertTrue(app.staticTexts["High"].waitForExistence(timeout: 5))
+        attach(app.screenshot(), named: "P15-93-notes-task-priority-dark-en")
+    }
+
+    private func notesReach(_ identifier: String, upward: Bool = true) {
+        let target = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+        for _ in 0..<5 {
+            if target.waitForExistence(timeout: 1), target.isHittable { return }
+            if upward { app.swipeUp() } else { app.swipeDown() }
+        }
+        XCTAssertTrue(target.isHittable, "\(identifier) must be reachable")
+    }
+
+    private func notesTap(_ identifier: String, upward: Bool = true) {
+        notesReach(identifier, upward: upward)
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch.tap()
     }
 
     private func openPage(_ destination: String, language: String = "en", theme: String = "dark", extra: [String] = [], launch: Bool = true) {

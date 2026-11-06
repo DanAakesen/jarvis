@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "interactions": [
+    {
+      "method": "POST",
+      "path": "/api/notes/folders",
+      "requestBody": {
+        "path": "Work/Projects/Research"
+      },
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "path": "Work/Projects/Research",
+          "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/notes/folders",
+      "requestBody": {
+        "path": "Work/Projects/Research"
+      },
+      "response": {
+        "statusCode": 409,
+        "body": {
+          "error": "This folder already exists"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/notes/folders",
+      "requestBody": {
+        "path": "Work/Projects/Research"
+      },
+      "response": {
+        "statusCode": 200,
+        "body": {
+          "path": "Work/Wrong",
+          "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/notes/folders",
+      "requestBody": {
+        "path": "Work/Projects/Research"
+      },
+      "response": {
+        "statusCode": 503,
+        "body": {
+          "error": "Unavailable"
+        }
+      }
+    }
+  ]
+}

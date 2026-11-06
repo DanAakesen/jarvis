@@ -29,6 +29,7 @@ enum JarvisPageHeaderMetrics {
 /// Title bar: the title is left aligned, bold and about 32 pt (scaling with Dynamic Type and wrapping rather than
 /// truncating), level with the right-side glass buttons. The sidebar button always closes the row, as in Chat.
 struct JarvisPageHeader<Actions: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .largeTitle) private var titleSize = JarvisPageHeaderMetrics.titleSize
     let title: String
     let language: JarvisAppLanguage
@@ -57,6 +58,11 @@ struct JarvisPageHeader<Actions: View>: View {
         .padding(.horizontal, JarvisPageHeaderMetrics.inset)
         .padding(.top, JarvisPageHeaderMetrics.actionSpacing)
         .padding(.bottom, JarvisPageHeaderMetrics.actionSpacing)
+        .background {
+            if dynamicTypeSize.isAccessibilitySize {
+                Rectangle().fill(.regularMaterial).ignoresSafeArea(edges: .top)
+            }
+        }
     }
 }
 

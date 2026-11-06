@@ -35,7 +35,7 @@ struct JarvisActivitySheet: View {
                     } else if let feed = model.nowFeed {
                         let presentation = model.backgroundPresentation
                         let hasActivity = !feed.confirmations.isEmpty || !feed.running.isEmpty ||
-                            !feed.items.isEmpty || !model.backgroundTasks.isEmpty ||
+                            !feed.items.isEmpty || !presentation.running.isEmpty ||
                             !presentation.actionable.isEmpty || !presentation.quiet.isEmpty
                         if let error = model.activityError {
                             HStack {
@@ -69,7 +69,7 @@ struct JarvisActivitySheet: View {
                         if !presentation.actionable.isEmpty {
                             failedTaskSection(presentation.actionable)
                         }
-                        if !model.backgroundTasks.isEmpty { backgroundTaskSection }
+                        if !presentation.running.isEmpty { backgroundTaskSection }
                         ForEach(NowFeedActivityCategory.allCases, id: \.self) { category in
                             let items = feed.items.filter { $0.category == category }
                             if !items.isEmpty {
@@ -115,7 +115,7 @@ struct JarvisActivitySheet: View {
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("page.title")
             HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
-                if let items = model.nowFeed?.items, items.count > 1 {
+                if let items = model.nowFeed?.items, !items.isEmpty {
                     JarvisIconButton(
                         title: copy(.clearAll),
                         systemImage: "trash",
@@ -138,51 +138,47 @@ struct JarvisActivitySheet: View {
     private func pageHead(_ feed: JarvisNowFeed) -> some View {
         VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
             JarvisPageHeadline(phrase: JarvisNotificationsPagePhrase.make(
-                needsYou: feed.confirmations.count,
-                running: feed.running.count,
+                needsYou: feed.confirmations.count + model.backgroundPresentation.actionable.count,
+                running: feed.running.count + model.backgroundPresentation.running.count,
                 updates: feed.items.count,
                 language: appLanguage
             ))
             JarvisPageHeroCard(title: copy(.activityOverview)) {
                 JarvisPageStatGrid(
                     stats: [
-                        JarvisPageStat(id: "needs", value: feed.confirmations.count, label: copy(.activityNeedsYou), systemImage: "bell", tint: JarvisDesignTokens.primaryAccent),
-                        JarvisPageStat(id: "running", value: feed.running.count, label: copy(.activityRunning), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent),
+                        JarvisPageStat(id: "needs", value: feed.confirmations.count + model.backgroundPresentation.actionable.count, label: copy(.activityNeedsYou), systemImage: "bell", tint: JarvisDesignTokens.primaryAccent),
+                        JarvisPageStat(id: "running", value: feed.running.count + model.backgroundPresentation.running.count, label: copy(.activityRunning), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent),
                         JarvisPageStat(id: "updates", value: feed.items.count, label: copy(.activityUpdates), systemImage: "tray"),
                     ],
                     language: appLanguage
                 )
             }
+            .accessibilityIdentifier("notifications.hero")
         }
     }
 
     private var backgroundTaskSection: some View {
         let language = appLanguage
+        let tasks = model.backgroundPresentation.running
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text(JarvisFactoryLocalization.string(.backgroundTask, language: language))
-                .font(.headline)
-            ForEach(model.backgroundTasks) { task in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(task.title).font(.body)
-                    Text(JarvisFactoryLocalization.string(task.status.localizationKey, language: language))
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                    if let detail = task.detail {
-                        Text(detail).font(.callout).foregroundStyle(.secondary)
+            JarvisSectionHeadline(JarvisFactoryLocalization.string(.backgroundTask, language: language))
+            JarvisRowGroup {
+                ForEach(tasks) { task in
+                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                        Text(task.title).font(.body)
+                        if let detail = task.detail { Text(detail).font(.footnote).foregroundStyle(.secondary) }
                     }
+                    .jarvisListRow(separator: task.id != tasks.last?.id)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Divider()
             }
         }
     }
 
     private func failedTaskSection(_ tasks: [BackgroundTaskRecord]) -> some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text(copy(.needsFailedTitle))
-                .font(.headline)
-            ForEach(tasks) { task in
-                failedTaskRow(task)
+            JarvisSectionHeadline(copy(.needsFailedTitle))
+            JarvisRowGroup {
+                ForEach(tasks) { task in failedTaskRow(task).jarvisListRow(separator: task.id != tasks.last?.id) }
             }
         }
     }
@@ -196,7 +192,7 @@ struct JarvisActivitySheet: View {
             }
             .padding(.top, JarvisDesignTokens.chatMessageSpacing)
         } label: {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                 Text(copy(.failedChecksTitle)).font(.headline)
                 Text(String(format: copy(.failedChecksSummary), tasks.count))
                     .font(.footnote)
@@ -209,7 +205,7 @@ struct JarvisActivitySheet: View {
 
     private func failedTaskRow(_ task: BackgroundTaskRecord) -> some View {
         HStack(alignment: .center, spacing: JarvisDesignTokens.chatComposerSpacing) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                 Text(task.title).font(.body)
                 if let detail = task.detail {
                     Text(detail).font(.callout).foregroundStyle(.secondary)
@@ -233,8 +229,7 @@ struct JarvisActivitySheet: View {
 
     private func confirmationSection(_ confirmations: [PendingConfirmation]) -> some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text(copy(.activityPending))
-                .font(.headline)
+            JarvisSectionHeadline(copy(.activityPending))
                 .accessibilityIdentifier("confirmation-section-heading")
             ForEach(confirmations, id: \.id) { confirmation in
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
@@ -294,35 +289,27 @@ struct JarvisActivitySheet: View {
 
     private func runningSection(_ tasks: [NowFeedRunningTask]) -> some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text(copy(.activityRunning))
-                .font(.headline)
-            ForEach(tasks, id: \.id) { task in
-                VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    Text(task.title)
-                        .font(.body.weight(.medium))
-                    Text(task.activity)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Text("\(task.project) · \(task.agent.capitalized)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            JarvisSectionHeadline(copy(.activityRunning))
+            JarvisRowGroup {
+                ForEach(tasks, id: \.id) { task in
+                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                        Text(task.title).font(.body.weight(.medium))
+                        Text(task.activity).font(.subheadline).foregroundStyle(.secondary)
+                        Text("\(task.project) · \(task.agent.capitalized)").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .jarvisListRow(separator: task.id != tasks.last?.id)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(JarvisDesignTokens.chatGlassInset)
-                .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
             }
         }
     }
 
     private func awayModeSection(_ isAway: Bool) -> some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text(copy(.activityAwayMode))
-                .font(.headline)
-            Label(isAway ? copy(.activityOn) : copy(.activityOff), systemImage: isAway ? "moon.fill" : "sun.max")
-                .font(.body)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(JarvisDesignTokens.chatGlassInset)
-                .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
+            JarvisSectionHeadline(copy(.activityAwayMode))
+            JarvisRowGroup {
+                Label(isAway ? copy(.activityOn) : copy(.activityOff), systemImage: isAway ? "moon.fill" : "sun.max")
+                    .font(.body).jarvisListRow(separator: false)
+            }
         }
     }
 
@@ -334,11 +321,8 @@ struct JarvisActivitySheet: View {
     ) -> some View {
         let group = NowFeedActivityGrouping.groups(items).first
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Text(title(for: category))
-                .font(.headline)
-            if let group {
-                groupRow(group)
-            }
+            JarvisSectionHeadline(title(for: category))
+            if let group { JarvisRowGroup { groupRow(group) } }
         }
     }
 
@@ -346,7 +330,7 @@ struct JarvisActivitySheet: View {
         let busy = group.items.contains { model.dismissingActivityIDs.contains($0.id) }
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             HStack(alignment: .center, spacing: JarvisDesignTokens.chatComposerSpacing) {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                     Text(group.latest.title).font(.body)
                     HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
                         Text(timeString(group.latest.at))
@@ -379,7 +363,7 @@ struct JarvisActivitySheet: View {
                     LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
                         ForEach(group.items.dropFirst(), id: \.id) { item in
                             HStack(alignment: .center) {
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                                     Text(item.title).font(.callout)
                                     Text(timeString(item.at)).font(.caption).foregroundStyle(.secondary)
                                 }
@@ -399,9 +383,7 @@ struct JarvisActivitySheet: View {
                 }
             }
         }
-        .padding(JarvisDesignTokens.chatGlassInset)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
+        .jarvisListRow(separator: false)
         .jarvisSwipeToDismiss(
             label: String(format: copy(group.olderCount > 0 ? .clearGroupLabel : .dismissLabel),
                           group.olderCount > 0 ? title(for: group.category) : group.latest.title),

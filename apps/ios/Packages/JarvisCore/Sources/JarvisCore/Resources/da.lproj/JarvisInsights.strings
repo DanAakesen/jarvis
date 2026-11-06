@@ -247,3 +247,12 @@
 
 "insights.overview" = "Overblik";
 "insights.proactiveLastRun" = "Seneste tjek";
+
+"insights.usageToolCallsPeriod" = "Værktøjskald i perioden";
+
+"insights.usageNoToolCallsPeriod" = "Ingen værktøjskald i perioden";
+
+"insights.usageToolsUnavailable" = "Antal værktøjskald er ikke tilgængeligt";
+
+"insights.showMore" = "Vis %d mere";
+"insights.showLess" = "Vis mindre";

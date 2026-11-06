@@ -1,6 +1,8 @@
 import Foundation
 
 public enum JarvisInsightsLocalizationKey: String, CaseIterable, Sendable {
+    case showMore = "insights.showMore"
+    case showLess = "insights.showLess"
     case overview = "insights.overview"
     case proactiveLastRun = "insights.proactiveLastRun"
     case retry = "insights.retry"
@@ -50,6 +52,9 @@ public enum JarvisInsightsLocalizationKey: String, CaseIterable, Sendable {
     case usageAgentJarvis = "insights.usageAgentJarvis"
     case usageTopTasks = "insights.usageTopTasks"
     case usageToolCalls = "insights.usageToolCalls"
+    case usageToolCallsPeriod = "insights.usageToolCallsPeriod"
+    case usageNoToolCallsPeriod = "insights.usageNoToolCallsPeriod"
+    case usageToolsUnavailable = "insights.usageToolsUnavailable"
     case usageNoToolCalls = "insights.usageNoToolCalls"
     case usageNoUsage = "insights.usageNoUsage"
     case refreshFailedShowingSaved = "insights.refreshFailedShowingSaved"

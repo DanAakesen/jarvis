@@ -257,34 +257,26 @@ struct JarvisIconButton: View {
     }
 }
 
-/// The task checkbox: no border or glass. When checked it animates into a check mark, then runs `action` so the row
-/// clears after the check is seen.
+/// The task checkbox starts the write immediately and prevents repeated taps while it is pending.
+/// The owning screen confirms success only after the write returns.
 struct JarvisCheckButton: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     var identifier: String
+    var isWorking = false
     let action: () -> Void
-    @State private var isChecked = false
 
     var body: some View {
-        Button {
-            guard !isChecked else { return }
-            if reduceMotion { isChecked = true } else { withAnimation(.snappy(duration: 0.25)) { isChecked = true } }
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(reduceMotion ? 0 : 350))
-                action()
-            }
-        } label: {
-            Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+        Button(action: action) {
+            Image(systemName: "circle")
                 .font(.title2)
-                .foregroundStyle(isChecked ? JarvisDesignTokens.primaryAccent : Color.secondary)
-                .contentTransition(.symbolEffect(.replace))
+                .foregroundStyle(.secondary)
+                .opacity(isWorking ? 0.5 : 1)
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isWorking)
         .accessibilityLabel(title)
-        .accessibilityAddTraits(isChecked ? .isSelected : [])
         .accessibilityIdentifier(identifier)
     }
 }
@@ -440,6 +432,43 @@ struct JarvisLabelledButton: View {
     }
 }
 
+/// A shared navigation row with a full accessible touch target.
+struct JarvisRowButton<Content: View>: View {
+    let identifier: String
+    let action: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        Button(action: action) {
+            content()
+                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
+/// A horizontally browsable action tile. Surface and geometry belong to the control layer.
+struct JarvisContentTileButton<Content: View>: View {
+    let identifier: String
+    let width: CGFloat
+    let action: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        Button(action: action) {
+            content()
+                .frame(width: width, alignment: .leading)
+                .padding(JarvisDesignTokens.labelledHorizontalPadding)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+                .foregroundStyle(.primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
 /// A quick-action tile: a round accent icon chip, a title and a subtitle on one glass surface. Tiles side by side
 /// share the row equally.
 struct JarvisTileButton: View {
@@ -521,12 +550,23 @@ struct JarvisTabStrip<Tag: Hashable>: View {
 
 /// One full-width glass surface with equal-width segments. Individual segments have no separate glass chrome.
 struct JarvisSegmentedBar<Tag: Hashable>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let identifierPrefix: String
     let items: [JarvisTabItem<Tag>]
     @Binding var selection: Tag
 
+    @ViewBuilder
     var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            JarvisTabStrip(title: title, identifierPrefix: identifierPrefix,
+                           items: items, selection: $selection)
+        } else {
+            segments
+        }
+    }
+
+    private var segments: some View {
         HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Button { selection = item.tag } label: {
@@ -591,12 +631,27 @@ struct JarvisSearchField: View {
 
 /// A compact period control inside a hero, with one glass surface and accessible 44 pt targets.
 struct JarvisPeriodSelector<Tag: Hashable>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let identifierPrefix: String
     let items: [JarvisTabItem<Tag>]
     @Binding var selection: Tag
 
+    @ViewBuilder
     var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            ScrollView(.horizontal) {
+                segments.fixedSize(horizontal: true, vertical: false)
+                    .padding(.vertical, 2)
+            }
+            .scrollIndicators(.hidden)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            segments
+        }
+    }
+
+    private var segments: some View {
         HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                 Button { selection = item.tag } label: {

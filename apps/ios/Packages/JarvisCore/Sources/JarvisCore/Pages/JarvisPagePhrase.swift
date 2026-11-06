@@ -89,19 +89,6 @@ public enum JarvisFactoryPagePhrase {
         let needs = da
             ? count(counts.needs, one: "opgave", many: "opgaver")
             : count(counts.needs, one: "task", many: "tasks")
-        if segment == .needsDan {
-            if counts.needs == 0 {
-                return JarvisPagePhrase(markup: da
-                    ? "Dan, intet kræver dig i \(project) lige nu."
-                    : "Dan, nothing needs you in \(project) right now.")
-            }
-            if da {
-                return JarvisPagePhrase(markup: "Dan, {\(needs)} kræver dig"
-                    + (counts.failed > 0 ? ", og {\(counts.failed)} af dem er {fejlet}." : "."))
-            }
-            return JarvisPagePhrase(markup: "Dan, {\(needs)} \(counts.needs == 1 ? "needs" : "need") you"
-                + (counts.failed > 0 ? ", and {\(counts.failed)} of them \(counts.failed == 1 ? "has" : "have") {failed}." : "."))
-        }
         let lead: String
         if counts.needs > 0 {
             if da {
@@ -305,28 +292,32 @@ public enum JarvisHealthPagePhrase {
 
 /// Status header phrase, written from the check results.
 public enum JarvisStatusPagePhrase {
-    public static func make(_ snapshot: JarvisStatusSnapshot, language: JarvisAppLanguage) -> JarvisPagePhrase {
+    public static func make(_ snapshot: JarvisStatusSnapshot, language: JarvisAppLanguage, now: Date? = nil) -> JarvisPagePhrase {
         let da = language == .da
-        let down = snapshot.entries.filter { $0.status == .down }.count
-        let degraded = snapshot.entries.filter { $0.status == .degraded }.count
-        let total = snapshot.entries.count
-        if down > 0 {
-            let list = da ? count(down, one: "tjek", many: "tjek") : count(down, one: "check", many: "checks")
-            return JarvisPagePhrase(markup: da ? "Dan, {\(list)} er nede." : "Dan, {\(list)} \(down == 1 ? "is" : "are") down.")
-        }
-        if degraded > 0 {
-            let list = da ? count(degraded, one: "tjek", many: "tjek") : count(degraded, one: "check", many: "checks")
-            return JarvisPagePhrase(markup: da
-                ? "Dan, {\(list)} kører forringet."
-                : "Dan, {\(list)} \(degraded == 1 ? "is" : "are") degraded.")
-        }
         let healthy = snapshot.entries.filter { $0.status == .ok }.count
-        if healthy == total, total > 0 {
-            return JarvisPagePhrase(markup: da ? "Dan, {alle \(total) tjek} er i orden." : "Dan, {all \(total) checks} are healthy.")
+        let total = snapshot.entries.count
+        guard total > 0 else { return JarvisPagePhrase(markup: da ? "Dan, der er {ingen tjek endnu}." : "Dan, there are {no checks yet}.") }
+        if let now, JarvisStatusLogic.isStale(checkedAt: snapshot.checkedAt, now: now) {
+            return JarvisPagePhrase(markup: da ? "Dan, tallene er {forældede}. {\(healthy) af \(total) tjek} var i orden."
+                : "Dan, the numbers are {stale}. {\(healthy) of \(total) checks} were healthy.")
         }
-        return JarvisPagePhrase(markup: da
-            ? "Dan, {\(healthy) af \(total) tjek} er i orden."
-            : "Dan, {\(healthy) of \(total) checks} are healthy.")
+        let issues = JarvisStatusLogic.ordered(snapshot.entries).filter { $0.status != .ok }.prefix(3)
+        if !issues.isEmpty {
+            let clauses = issues.map { entry in
+                let name = entry.check.map { JarvisInsightsLocalization.string($0.localizationKey, language: language) }
+                    ?? JarvisStatusLogic.readable(entry.id)
+                let state: String = switch entry.status {
+                case .down: da ? "er nede" : "is down"
+                case .degraded: da ? "er forringet" : "is degraded"
+                case .unknown: da ? "er ikke bekræftet" : "is unconfirmed"
+                case .ok: da ? "er i orden" : "is healthy"
+                }
+                return "{\(name)} \(state)"
+            }.joined(separator: ", ")
+            return JarvisPagePhrase(markup: da ? "Dan, \(clauses). {\(healthy) af \(total) tjek} er i orden."
+                : "Dan, \(clauses). {\(healthy) of \(total) checks} are healthy.")
+        }
+        return JarvisPagePhrase(markup: da ? "Dan, {alle \(total) tjek} er i orden." : "Dan, {all \(total) checks} are healthy.")
     }
 }
 
@@ -346,10 +337,20 @@ public enum JarvisUsagePagePhrase {
 
 /// Proactive header phrase, written from the open suggestions and the next check.
 public enum JarvisProactivePagePhrase {
-    public static func make(status: JarvisProactiveStatus, openItems: Int, language: JarvisAppLanguage) -> JarvisPagePhrase {
+    public static func make(status: JarvisProactiveStatus, openItems: Int, language: JarvisAppLanguage, firstTitle: String? = nil) -> JarvisPagePhrase {
         let da = language == .da
         if status.paused {
             return JarvisPagePhrase(markup: da ? "Dan, proaktiv er {sat på pause}." : "Dan, proactive is {paused}.")
+        }
+        if let firstTitle, openItems > 0 {
+            let safeTitle = firstTitle.replacingOccurrences(of: "{", with: "(").replacingOccurrences(of: "}", with: ")")
+            let next = status.nextSlotAt.flatMap(JarvisInsightsDates.parse).map {
+                JarvisInsightsDates.format($0, language: language, dateStyle: .none, timeStyle: .short)
+            }
+            let tail = next.map { da ? " Næste tjek er kl. {\($0)}." : " The next check is at {\($0)}." } ?? ""
+            return JarvisPagePhrase(markup: da
+                ? "Dan, {\(openItems) forslag} er åbne, og {\(safeTitle)} står øverst.\(tail)"
+                : "Dan, {\(openItems) \(openItems == 1 ? "finding is" : "findings are")} open, and {\(safeTitle)} is first.\(tail)")
         }
         if openItems > 0 {
             let items = da

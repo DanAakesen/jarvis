@@ -376,7 +376,7 @@ enum JarvisHealthPreview {
             """.utf8
         )
         do {
-            let transport = try FixtureTransport(scenario: scenario)
+            let transport = try JarvisHealthPreviewTransport(scenario: scenario)
             let client = try JarvisClient(
                 configuration: JarvisClientConfiguration(
                     baseURL: URL(string: "https://preview.invalid/api")!,
@@ -405,4 +405,58 @@ private struct JarvisHealthPreviewTokenProvider: AccessTokenProvider {
     }
 
     func requestSignIn() async {}
+}
+
+/// Reusable synthetic reads allow period changes and concurrent lift/dashboard loads in simulator tests.
+private actor JarvisHealthPreviewTransport: HTTPTransport {
+    private let interactions: [[String: Any]]
+
+    init(scenario: Data) throws {
+        let root = try JSONSerialization.jsonObject(with: scenario) as? [String: Any]
+        guard let interactions = root?["interactions"] as? [[String: Any]] else { throw FixtureTransportError.invalidScenario }
+        self.interactions = interactions
+    }
+
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        try Task.checkCancellation()
+        let body = try request.body.map { try JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? nil
+        let source = body?["source"] as? String
+        if request.method == .post, request.url.path == "/api/health/query", source == "daily.health.lifts" {
+            let items: [[String: Any]] = ["Squat", "Deadlift", "Bench press"].enumerated().map { index, name in
+                ["id": "synthetic-lift-\(index)", "exerciseName": name, "weightKg": [80, 120, 60][index],
+                 "reps": 5, "sets": 3, "performedAt": "2026-10-30T09:00:00Z"]
+            }
+            return try response(["source": source!, "items": items, "status": "available",
+                                 "coverage": ["returned": items.count, "hasMore": false, "next": NSNull()]])
+        }
+        guard let interaction = interactions.first(where: { item in
+            guard item["method"] as? String == request.method.rawValue,
+                  item["path"] as? String == request.url.path else { return false }
+            let expected = item["requestBody"] as? [String: Any]
+            return expected?["source"] as? String == source && expected?["metric"] as? String == body?["metric"] as? String
+        }), let reply = interaction["response"] as? [String: Any], var payload = reply["body"] as? [String: Any] else {
+            throw FixtureTransportError.requestMismatch
+        }
+        if request.url.path == "/api/health/capabilities" {
+            payload["sources"] = (payload["sources"] as? [String] ?? []) + ["daily.health.lifts"]
+        }
+        if let start = body?["startDate"] as? String, let end = body?["endDate"] as? String,
+           let items = payload["items"] as? [[String: Any]] {
+            let filtered = items.filter { item in
+                let raw = item["metric_date"] ?? item["workout_date"] ?? item["meal_date"] ?? item["sleep_date"]
+                guard let date = raw as? String else { return true }
+                return date >= start && date <= end
+            }
+            payload["items"] = filtered
+            payload["status"] = filtered.isEmpty ? "empty" : "available"
+            payload["coverage"] = ["returned": filtered.count, "hasMore": false, "next": NSNull()]
+        }
+        return try response(payload)
+    }
+
+    func stream(_ request: HTTPRequest) async throws -> HTTPStreamResponse { throw FixtureTransportError.expectedStream }
+
+    private func response(_ body: [String: Any]) throws -> HTTPResponse {
+        HTTPResponse(statusCode: 200, headers: [:], body: try JSONSerialization.data(withJSONObject: body))
+    }
 }

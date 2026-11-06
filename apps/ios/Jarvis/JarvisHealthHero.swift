@@ -21,24 +21,29 @@ enum JarvisHealthHeroPage: Int, CaseIterable, Identifiable {
 }
 
 struct JarvisHealthHeroCarousel<Accessory: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let data: JarvisHealthDashboardData
     let period: JarvisHealthPeriod
     let goals: JarvisHealthGoals
     let language: JarvisAppLanguage
+    let client: JarvisHealthClient?
     let accessory: Accessory
 
+    @ScaledMetric(relativeTo: .body) private var heroHeight = JarvisDesignTokens.healthHeroHeight
     @State private var page: JarvisHealthHeroPage = .training
 
     init(
         data: JarvisHealthDashboardData,
         period: JarvisHealthPeriod,
         goals: JarvisHealthGoals,
+        client: JarvisHealthClient?,
         language: JarvisAppLanguage,
         @ViewBuilder accessory: () -> Accessory
     ) {
         self.data = data
         self.period = period
         self.goals = goals
+        self.client = client
         self.language = language
         self.accessory = accessory()
     }
@@ -52,15 +57,15 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
                     .fillingHeight()
                     .tag(JarvisHealthHeroPage.training)
                     .accessibilityIdentifier(JarvisHealthHeroPage.training.identifier)
-                JarvisHealthSleepHero(data: data, period: period, goals: goals, language: language)
+                JarvisHealthSleepHero(data: data, period: period, goals: goals, language: language, client: client, accessory: accessory)
                     .tag(JarvisHealthHeroPage.sleep)
                     .accessibilityIdentifier(JarvisHealthHeroPage.sleep.identifier)
-                JarvisHealthNutritionHero(data: data, period: period, goals: goals, language: language)
+                JarvisHealthNutritionHero(data: data, period: period, goals: goals, language: language, client: client, accessory: accessory)
                     .tag(JarvisHealthHeroPage.nutrition)
                     .accessibilityIdentifier(JarvisHealthHeroPage.nutrition.identifier)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: JarvisDesignTokens.healthHeroHeight)
+            .frame(height: heroHeight)
             HStack(spacing: JarvisDesignTokens.healthMenuSpacing) {
                 ForEach(JarvisHealthHeroPage.allCases) { item in
                     Circle()
@@ -71,17 +76,29 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(copy.text(.heroPages))
             .accessibilityValue("\(page.rawValue + 1) / \(JarvisHealthHeroPage.allCases.count)")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment:
+                    page = JarvisHealthHeroPage(rawValue: page.rawValue + 1) ?? page
+                case .decrement:
+                    page = JarvisHealthHeroPage(rawValue: page.rawValue - 1) ?? page
+                @unknown default: break
+                }
+            }
             .accessibilityIdentifier("health.hero.dots")
         }
-        .animation(.easeInOut(duration: 0.2), value: page)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: page)
     }
 }
 
-struct JarvisHealthSleepHero: View {
+struct JarvisHealthSleepHero<Accessory: View>: View {
     let data: JarvisHealthDashboardData
     let period: JarvisHealthPeriod
     let goals: JarvisHealthGoals
     let language: JarvisAppLanguage
+
+    let client: JarvisHealthClient?
+    let accessory: Accessory
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
 
@@ -89,23 +106,21 @@ struct JarvisHealthSleepHero: View {
         JarvisHealthSleepNight.nights(from: data.sleep.items)
     }
 
-    private var latest: JarvisHealthSleepNight? {
-        nights.values
-            .filter { $0.date <= period.endDate && $0.total != nil }
-            .max { $0.date < $1.date }
+    private var summary: JarvisHealthSleepSummary {
+        JarvisHealthSleepSummary(items: data.sleep.items, period: period)
     }
 
     private var chartValues: JarvisHealthChartValues {
         JarvisHealthChartValues(
             values: nights.compactMapValues(\.total),
             endingOn: period.endDate,
-            count: 7,
+            count: max(period.dayCount, 7),
             target: goals.sleepHours
         )
     }
 
     var body: some View {
-        JarvisPageHeroCard(title: copy.text(.sleep)) {
+        JarvisPageHeroCard(title: copy.text(.sleep), accessory: { accessory }) {
             if data.sleep.state == .loading || data.sleep.state == .notServed ||
                 data.sleep.state == .failed || data.sleep.state == .offline {
                 JarvisHealthStateLine(state: data.sleep.state, language: language)
@@ -119,19 +134,33 @@ struct JarvisHealthSleepHero: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
             HStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
-                JarvisHealthHeroRing(
-                    progress: JarvisHealthLogic.ringProgress(value: latest?.total, target: goals.sleepHours),
-                    text: latest?.total.map { formatHours($0, language: language) } ?? "—",
-                    unit: copy.text(.hourShort),
-                    tint: JarvisDesignTokens.healthAccent
-                )
+                NavigationLink {
+                    let day = summary.latestDate ?? period.endDate
+                    JarvisHealthDetailView(client: client, capabilities: data.capabilities,
+                        kind: .sleep(day, JarvisHealthPeriod(startDate: day, endDate: day)!), language: language)
+                } label: {
+                    sleepDonut
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(copy.text(.sleep))
+                .accessibilityIdentifier("health.sleep.details")
                 VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-                    stageRow(.deepSleep, latest?.deep)
-                    stageRow(.remSleep, latest?.rem)
-                    stageRow(.lightSleep, latest?.light)
-                    stageRow(.awake, latest?.awake)
+                    stageRow(.deepSleep, summary.deep, JarvisDesignTokens.healthAccent)
+                    stageRow(.remSleep, summary.rem, JarvisDesignTokens.healthAccentSecondary)
+                    stageRow(.lightSleep, summary.light, .secondary)
+                    stageRow(.awake, summary.awake, .secondary.opacity(0.4))
                 }
             }
+            Divider()
+            HStack(alignment: .top, spacing: JarvisDesignTokens.healthSectionSpacing) {
+                JarvisHealthHeroStat(value: summary.total.map { "\(formatHours($0, language: language)) \(copy.text(.hourShort))" } ?? "—",
+                    title: copy.text(.average))
+                Divider()
+                JarvisHealthHeroStat(value: formatNumber(Double(summary.nightCount), language: language),
+                    title: copy.text(.nightsRecorded))
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("health.sleep.summary")
             JarvisHealthBarChart(
                 values: chartValues,
                 unit: copy.text(.hourShort),
@@ -143,8 +172,46 @@ struct JarvisHealthSleepHero: View {
         }
     }
 
-    private func stageRow(_ key: JarvisHealthLocalizationKey, _ hours: Double?) -> some View {
+    @ViewBuilder private var sleepDonut: some View {
+        if let deep = summary.deep, let rem = summary.rem,
+           let light = summary.light, let awake = summary.awake,
+           deep + rem + light + awake > 0 {
+            Chart {
+                SectorMark(angle: .value(copy.text(.deepSleep), deep), innerRadius: .ratio(JarvisDesignTokens.healthDonutInnerRatio))
+                    .foregroundStyle(JarvisDesignTokens.healthAccent)
+                SectorMark(angle: .value(copy.text(.remSleep), rem), innerRadius: .ratio(JarvisDesignTokens.healthDonutInnerRatio))
+                    .foregroundStyle(JarvisDesignTokens.healthAccentSecondary)
+                SectorMark(angle: .value(copy.text(.lightSleep), light), innerRadius: .ratio(JarvisDesignTokens.healthDonutInnerRatio))
+                    .foregroundStyle(Color.secondary)
+                SectorMark(angle: .value(copy.text(.awake), awake), innerRadius: .ratio(JarvisDesignTokens.healthDonutInnerRatio))
+                    .foregroundStyle(Color.secondary.opacity(0.4))
+            }
+            .chartLegend(.hidden)
+            .frame(width: JarvisDesignTokens.healthHeroRingSize, height: JarvisDesignTokens.healthHeroRingSize)
+            .overlay {
+                VStack(spacing: 0) {
+                    Text(summary.total.map { formatHours($0, language: language) } ?? "—")
+                        .font(.title3.weight(.semibold))
+                    Text(copy.text(.hourShort)).font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(copy.text(.sleep))
+            .accessibilityValue(summary.total.map { "\(formatHours($0, language: language)) \(copy.text(.hourShort))" } ?? copy.text(.unavailable))
+        } else {
+            JarvisHealthHeroRing(
+                progress: JarvisHealthLogic.ringProgress(value: summary.total, target: goals.sleepHours),
+                text: summary.total.map { formatHours($0, language: language) } ?? "—",
+                unit: copy.text(.hourShort), tint: JarvisDesignTokens.healthAccent
+            )
+        }
+    }
+
+    private func stageRow(_ key: JarvisHealthLocalizationKey, _ hours: Double?, _ tint: Color) -> some View {
         HStack {
+            Circle().fill(tint)
+                .frame(width: JarvisDesignTokens.healthLegendDotSize, height: JarvisDesignTokens.healthLegendDotSize)
+                .accessibilityHidden(true)
             Text(copy.text(key))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -156,11 +223,14 @@ struct JarvisHealthSleepHero: View {
     }
 }
 
-struct JarvisHealthNutritionHero: View {
+struct JarvisHealthNutritionHero<Accessory: View>: View {
     let data: JarvisHealthDashboardData
     let period: JarvisHealthPeriod
     let goals: JarvisHealthGoals
     let language: JarvisAppLanguage
+
+    let client: JarvisHealthClient?
+    let accessory: Accessory
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
 
@@ -172,8 +242,12 @@ struct JarvisHealthNutritionHero: View {
         data.nutritionTargets?.targets.proteinGrams ?? goals.proteinGrams
     }
 
+    private var summary: JarvisHealthNutritionSummary {
+        JarvisHealthNutritionSummary(items: data.nutritionDays.items, period: period)
+    }
+
     var body: some View {
-        JarvisPageHeroCard(title: copy.text(.nutrition)) {
+        JarvisPageHeroCard(title: copy.text(.nutrition), accessory: { accessory }) {
             if data.nutritionDays.state == .loading || data.nutritionDays.state == .notServed ||
                 data.nutritionDays.state == .failed || data.nutritionDays.state == .offline {
                 JarvisHealthStateLine(state: data.nutritionDays.state, language: language)
@@ -185,34 +259,42 @@ struct JarvisHealthNutritionHero: View {
     }
 
     private var content: some View {
-        let day = period.endDate
-        let kcal = values(.kcal)[day]
+        let kcal = summary.average(.kcal)
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
             HStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
-                JarvisHealthHeroRing(
-                    progress: JarvisHealthLogic.ringProgress(value: kcal, target: goals.kcal),
-                    text: kcal.map { formatNumber($0, language: language) } ?? "—",
-                    unit: "kcal",
-                    tint: JarvisDesignTokens.healthAccent
-                )
+                NavigationLink {
+                    JarvisHealthDetailView(client: client, capabilities: data.capabilities,
+                        kind: .meals(period), language: language)
+                } label: {
+                    JarvisHealthHeroRing(
+                        progress: JarvisHealthLogic.ringProgress(value: kcal, target: goals.kcal),
+                        text: kcal.map { formatNumber($0, language: language) } ?? "—",
+                        unit: "kcal",
+                        tint: JarvisDesignTokens.healthAccent
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(copy.text(.nutrition))
+                .accessibilityIdentifier("health.nutrition.details")
                 VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-                    macroRow(.protein, values(.protein)[day], proteinTarget)
-                    macroRow(.carbs, values(.carbs)[day], goals.carbsGrams)
-                    macroRow(.fat, values(.fat)[day], goals.fatGrams)
-                    HStack {
-                        Text(copy.text(.kcalEaten))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer(minLength: 0)
-                        Text("\(kcal.map { formatNumber($0, language: language) } ?? "—") / \(formatNumber(goals.kcal, language: language)) kcal")
-                            .font(.subheadline.weight(.medium))
-                    }
-                    .accessibilityElement(children: .combine)
+                    macroRow(.protein, summary.average(.protein), proteinTarget, JarvisDesignTokens.healthAccent)
+                    macroRow(.carbs, summary.average(.carbs), goals.carbsGrams, JarvisDesignTokens.healthAccentSecondary)
+                    macroRow(.fat, summary.average(.fat), goals.fatGrams, .secondary)
                 }
             }
+            Divider()
+            HStack(alignment: .top, spacing: JarvisDesignTokens.healthSectionSpacing) {
+                JarvisHealthHeroStat(value: kcal.map { "\(formatNumber(period.dayCount == 1 ? max(0, goals.kcal - $0) : $0, language: language)) kcal" } ?? "—",
+                    title: copy.text(period.dayCount == 1 ? .caloriesLeft : .dailyAverage))
+                Divider()
+                JarvisHealthHeroStat(value: formatNumber(Double(summary.mealCount), language: language),
+                    title: copy.text(.mealsLogged))
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("health.nutrition.summary")
             JarvisHealthBarChart(
                 values: JarvisHealthChartValues(
-                    values: values(.protein), endingOn: period.endDate, count: 7, target: proteinTarget
+                    values: values(.protein), endingOn: period.endDate, count: max(period.dayCount, 7), target: proteinTarget
                 ),
                 unit: "g",
                 title: copy.text(.proteinChart),
@@ -223,8 +305,11 @@ struct JarvisHealthNutritionHero: View {
         }
     }
 
-    private func macroRow(_ key: JarvisHealthLocalizationKey, _ value: Double?, _ target: Double) -> some View {
+    private func macroRow(_ key: JarvisHealthLocalizationKey, _ value: Double?, _ target: Double, _ tint: Color) -> some View {
         HStack {
+            Circle().fill(tint)
+                .frame(width: JarvisDesignTokens.healthLegendDotSize, height: JarvisDesignTokens.healthLegendDotSize)
+                .accessibilityHidden(true)
             Text(copy.text(key))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -232,6 +317,20 @@ struct JarvisHealthNutritionHero: View {
             Text("\(value.map { formatNumber($0, language: language) } ?? "—") / \(formatNumber(target, language: language)) g")
                 .font(.subheadline.weight(.medium))
         }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct JarvisHealthHeroStat: View {
+    let value: String
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+            Text(value).font(.title2.weight(.semibold))
+            Text(title).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
     }
 }
@@ -297,27 +396,24 @@ struct JarvisHealthBarChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.notesInlineSpacing) {
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(values.headline(selected: selected).map(format) ?? "—")
-                            .font(.title2.weight(.semibold))
-                            .contentTransition(.numericText())
-                        Text(unit)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(caption)
+                (
+                    Text(values.headline(selected: selected).map(format) ?? "—")
+                        .font(.headline)
+                    + Text(" \(unit) · \(caption)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                        .foregroundColor(.secondary)
+                )
+                .fixedSize(horizontal: false, vertical: true)
+                .contentTransition(.numericText())
                 Spacer(minLength: 0)
                 if let target = values.target {
-                    Text("\(copy.text(.targetLabel)) \(format(target)) \(unit)")
+                    Text("\(copy.text(.targetLabel)) \(format(target))")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(JarvisDesignTokens.healthAccent)
                         .padding(.horizontal, JarvisDesignTokens.healthMenuSpacing + 2)
                         .padding(.vertical, 4)
                         .background(JarvisDesignTokens.healthAccent.opacity(0.15), in: Capsule())
+                        .accessibilityLabel("\(copy.text(.targetLabel)) \(format(target)) \(unit)")
                         .accessibilityIdentifier("\(identifier).target")
                 }
             }
@@ -344,6 +440,12 @@ struct JarvisHealthBarChart: View {
         return copy.text(.average)
     }
 
+    private var axisDates: [String] {
+        let dates = values.days.map(\.date)
+        guard dates.count > 7 else { return dates }
+        return (0...4).map { dates[Int((Double(dates.count - 1) * Double($0) / 4).rounded())] }
+    }
+
     private var chart: some View {
         Chart {
             ForEach(values.days) { day in
@@ -354,9 +456,7 @@ struct JarvisHealthBarChart: View {
                     )
                     .cornerRadius(JarvisDesignTokens.healthBarRadius)
                     .foregroundStyle(
-                        JarvisDesignTokens.healthAccent.opacity(
-                            selected == nil || selected == day.date ? 1 : 0.35
-                        )
+                        selected == day.date ? JarvisDesignTokens.healthAccent : Color.secondary
                     )
                 }
             }
@@ -366,14 +466,14 @@ struct JarvisHealthBarChart: View {
                         lineWidth: JarvisDesignTokens.healthTargetLineWidth,
                         dash: JarvisDesignTokens.healthTargetLineDash
                     ))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(JarvisDesignTokens.healthAccent)
             }
         }
         .chartYScale(domain: 0...yMax)
         .chartXScale(domain: values.days.map(\.date))
         .chartYAxis(.hidden)
         .chartXAxis {
-            AxisMarks(values: values.days.map(\.date)) { value in
+            AxisMarks(values: axisDates) { value in
                 AxisValueLabel {
                     if let date = value.as(String.self) {
                         Text(weekday(date))
@@ -413,7 +513,7 @@ struct JarvisHealthBarChart: View {
         output.locale = language.locale
         output.calendar = Calendar(identifier: .gregorian)
         output.timeZone = TimeZone(secondsFromGMT: 0)
-        output.dateFormat = "EEE"
+        output.dateFormat = values.days.count > 7 ? "d MMM" : "EEE"
         return output.string(from: parsed)
     }
 

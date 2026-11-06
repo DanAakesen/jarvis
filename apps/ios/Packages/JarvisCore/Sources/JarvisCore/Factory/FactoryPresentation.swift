@@ -26,7 +26,6 @@ public enum JarvisFactoryLocalizationKey: String, CaseIterable, Sendable {
     case loadingReleases = "factory.loadingReleases"
     case emptyProjects = "factory.emptyProjects"
     case emptyBoard = "factory.emptyBoard"
-    case emptyNeedsDan = "factory.emptyNeedsDan"
     case emptyReleases = "factory.emptyReleases"
     case noSearchResults = "factory.noSearchResults"
     case issueNumber = "factory.issueNumber"
@@ -182,10 +181,20 @@ public enum JarvisFactoryLocalization {
 
 public enum FactorySegment: String, CaseIterable, Identifiable, Sendable {
     case board
-    case needsDan
     case releases
 
     public var id: String { rawValue }
+}
+
+/// Preserve old Needs Dan links while showing those tasks in the Board's column.
+public struct FactoryNavigationTarget: Equatable, Sendable {
+    public let segment: FactorySegment
+    public let column: FactoryBoardColumnID?
+
+    public init(legacySegment: String) {
+        segment = legacySegment == "releases" ? .releases : .board
+        column = ["needs", "needsDan", "needs_dan"].contains(legacySegment) ? .needsDan : nil
+    }
 }
 
 public enum FactoryTaskControl: String, CaseIterable, Codable, Sendable {
@@ -259,7 +268,7 @@ public struct FactoryTaskControlRequest: Equatable, Sendable {
 
 public enum JarvisFactoryPresentation {
     public static let boardColumnOrder: [FactoryBoardColumnID] = [
-        .inProgress, .inReview, .ready, .backlog, .done,
+        .needsDan, .inProgress, .inReview, .ready, .backlog, .done,
     ]
 
     public static func cards(
@@ -269,16 +278,7 @@ public enum JarvisFactoryPresentation {
         agent: FactoryAgent? = nil,
         state: FactoryTaskState? = nil
     ) -> [(column: FactoryBoardColumnID, card: FactoryBoardCard)] {
-        let columns = board.columns.filter { column in
-            switch segment {
-            case .board:
-                column.id != .needsDan
-            case .needsDan:
-                column.id == .needsDan
-            case .releases:
-                false
-            }
-        }
+        let columns = segment == .board ? board.columns : []
         let normalizedSearch = search.trimmingCharacters(in: .whitespacesAndNewlines)
         let issueNumber = normalizedSearch.hasPrefix("#")
             ? Int(normalizedSearch.dropFirst())
@@ -287,7 +287,6 @@ public enum JarvisFactoryPresentation {
             .sorted { order(of: $0.id) < order(of: $1.id) }
             .flatMap { column in
                 column.cards.compactMap { card -> (FactoryBoardColumnID, FactoryBoardCard)? in
-                    if segment == .needsDan && card.task?.state != .needsAttention { return nil }
                     if let agent {
                         let taskAgent = card.task?.agent
                         let workerAgent = FactoryAgent(rawValue: card.issue.worker?.lowercased() ?? "")
