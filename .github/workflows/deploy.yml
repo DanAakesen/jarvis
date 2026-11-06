@@ -34,6 +34,12 @@ on:
         default: false
         required: false
 
+      diagnose_managed_chat:
+        description: Compare fixed synthetic request shapes on the existing target without activation
+        type: boolean
+        default: false
+        required: false
+
 permissions:
   contents: read
 
@@ -500,7 +506,7 @@ jobs:
   managed-chat-comparison:
     name: Manual managed chat comparison
     needs: [plan, infra, backend, agent, smoke]
-    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && (inputs.provision_managed_chat == true || inputs.inspect_managed_chat == true) && needs.plan.result == 'success' && needs.plan.outputs.superseded != 'true' && needs.smoke.result == 'success' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.agent.result == 'success' || needs.agent.result == 'skipped') }}
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && (inputs.provision_managed_chat == true || inputs.inspect_managed_chat == true || inputs.diagnose_managed_chat == true) && needs.plan.result == 'success' && needs.plan.outputs.superseded != 'true' && needs.smoke.result == 'success' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.agent.result == 'success' || needs.agent.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -516,8 +522,9 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      - name: Inspect or provision the explicitly requested comparison
+      - name: Inspect, diagnose or provision the explicitly requested comparison
         env:
+          DIAGNOSE_MANAGED_CHAT: ${{ inputs.diagnose_managed_chat }}
           INSPECT_MANAGED_CHAT: ${{ inputs.inspect_managed_chat }}
           PROVISION_MANAGED_CHAT: ${{ inputs.provision_managed_chat }}
           REFRESH_MANAGED_CHAT_DEFINITION: ${{ inputs.refresh_managed_chat_definition }}

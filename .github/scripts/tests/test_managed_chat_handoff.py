@@ -47,6 +47,14 @@ elif args[:2] == ['rest','--method']:
     assert set(operation) == {'operation'}
     if operation['operation'] == 'managed_definition_manifest':
         print(json.dumps({'instructions':'private synthetic instruction','tools':[]}))
+    elif operation['operation'] == 'managed_request_diagnostics':
+        if os.environ.get('CANARY_HTTP_FAILURE'):
+            print('private provider content',file=sys.stderr)
+            sys.exit(1)
+        print(os.environ.get('DIAGNOSTIC_BODY', json.dumps({'status':'diagnostic','results':[
+            {'shape':shape,'status':'unavailable','reason':'managed_probe_failed','stage':'response_start',
+             'providerCause':{'code':'invalid_request','details':[{'code':'UnsupportedParameter','target':'input.role'}]}}
+            for shape in ['plain_text','user_messages','developer_message','managed_policy']]})))
     else:
         assert operation == {'operation':'managed_text_canary'}
         if os.environ.get('CANARY_HTTP_FAILURE'):
@@ -105,7 +113,10 @@ class ManagedHandoffTests(unittest.TestCase):
                       "github.ref == 'refs/heads/main'", "needs.plan.result == 'success'",
                       "needs.smoke.result == 'success'", "needs.plan.outputs.superseded != 'true'"]:
             self.assertIn(guard, job)
-        self.assertIn("(inputs.provision_managed_chat == true || inputs.inspect_managed_chat == true)", job)
+        self.assertIn("(inputs.provision_managed_chat == true || inputs.inspect_managed_chat == true || inputs.diagnose_managed_chat == true)", job)
+        diagnosis = input_block.split("diagnose_managed_chat:", 1)[1]
+        self.assertIn("default: false", diagnosis)
+        self.assertIn("DIAGNOSE_MANAGED_CHAT: ${{ inputs.diagnose_managed_chat }}", job)
         self.assertIn("needs: [plan, infra, backend, agent, smoke]", job)
         self.assertIn("timeout-minutes: 20", job)
         self.assertIn("contents: read\n      id-token: write", job)
@@ -119,6 +130,49 @@ class ManagedHandoffTests(unittest.TestCase):
         self.assertIn("group: jarvis-production-deploy", workflow)
         self.assertEqual(workflow.count("provision_managed_chat_handoff.sh"), 1)
         self.assertIn("needs: [plan, infra, backend, web, agent, smoke, acceptance]", workflow)
+
+    def test_diagnostics_are_exactly_one_fixed_probe_without_manifest_apply_pin_or_canary(self):
+        result, calls = self.run_handoff(DIAGNOSE_MANAGED_CHAT="true")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual([(name, args[:3]) for name, args in calls], [
+            ("az", ["deployment", "group", "show"]), ("az", ["rest", "--method", "POST"])])
+        self.assertEqual(result.stdout.count("managed_chat_request_diagnostic shape="), 4)
+        self.assertIn("provider_detail_0_code=UnsupportedParameter provider_detail_0_target=input.role", result.stdout)
+        self.assertIn("managed_chat_request_diagnostics_complete", result.stdout)
+        self.assertNotIn("managed_chat_comparison_canary_ok", result.stdout)
+        self.assertNotIn("managed_chat_provisioned", result.stdout)
+        self.assertNotIn("private", result.stdout + result.stderr)
+
+    def test_diagnostic_conflicts_fail_before_any_azure_call(self):
+        for flag in ["INSPECT_MANAGED_CHAT", "PROVISION_MANAGED_CHAT", "REFRESH_MANAGED_CHAT_DEFINITION"]:
+            result, calls = self.run_handoff(DIAGNOSE_MANAGED_CHAT="true", **{flag: "true"})
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("managed_chat_diagnostics_conflict_with_other_operation", result.stdout)
+            self.assertEqual(calls, [])
+
+    def test_diagnostic_invalid_http_or_payload_never_claims_completion_or_acceptance(self):
+        for extra in [{"CANARY_HTTP_FAILURE": "1"}, {"DIAGNOSTIC_BODY": "private raw body"},
+                      {"DIAGNOSTIC_BODY": json.dumps({"status": "ok", "model": "gpt-6.1-terra",
+                        "reasoningEffort": "high", "requestShape": "managed_policy"})}]:
+            result, calls = self.run_handoff(DIAGNOSE_MANAGED_CHAT="true", **extra)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn("diagnostics_complete", result.stdout)
+            self.assertNotIn("comparison_canary_ok", result.stdout)
+            self.assertNotIn("private", result.stdout + result.stderr)
+            self.assertEqual(len(calls), 2)
+
+    def test_diagnostic_raw_strings_and_regex_safe_private_fields_are_omitted(self):
+        body = {"status": "diagnostic", "results": [{"shape": shape, "status": "unavailable",
+            "reason": "private_identifier", "stage": "private_identifier", "providerBody": "private",
+            "providerCause": {"code": "private_identifier", "param": "private_identifier",
+                "exceptionType": "PrivateIdentifier", "details": [{"code": "private_identifier",
+                    "target": "private_identifier", "message": "private"}]}}
+            for shape in ["plain_text", "user_messages", "developer_message", "managed_policy"]]}
+        result, _ = self.run_handoff(DIAGNOSE_MANAGED_CHAT="true", DIAGNOSTIC_BODY=json.dumps(body))
+        self.assertEqual(result.returncode, 0)
+        self.assertNotIn("private", result.stdout + result.stderr)
+        self.assertNotIn("Private", result.stdout + result.stderr)
+        self.assertNotIn("provider_", result.stdout)
 
     def test_private_manifest_provision_exact_three_env_and_canary_order(self):
         result, calls = self.run_handoff()

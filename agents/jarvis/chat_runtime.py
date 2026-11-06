@@ -592,13 +592,15 @@ def register_chat_invocation(
         # invocation endpoint. They never accept user text, delegated context or tools.
         operation = payload.get("operation") if isinstance(payload, dict) else None
         if isinstance(operation, str) and operation in {
-            "managed_definition_manifest", "managed_text_canary",
+            "managed_definition_manifest", "managed_text_canary", "managed_request_diagnostics",
         } and payload == {
             "operation": operation,
         }:
             manifest = operation == "managed_definition_manifest"
             owner = model_client if manifest else copilot_model_client
-            method = "managed_definition_manifest" if manifest else "probe_target"
+            method = {"managed_definition_manifest": "managed_definition_manifest",
+                      "managed_text_canary": "probe_target",
+                      "managed_request_diagnostics": "diagnose_requests"}[operation]
             action = getattr(owner, method, None)
             if not callable(action):
                 return JSONResponse(

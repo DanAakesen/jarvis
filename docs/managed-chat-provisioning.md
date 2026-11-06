@@ -23,6 +23,66 @@ not this canary result. A selectable Copilot option therefore does not prove
 inference succeeded. Actual authenticated availability has not been observed;
 changing that guard remains separate from this diagnostic correction.
 
+## 6 November: diagnostic request comparison
+
+After the trusted developer-message correction, normal Deploy
+[42227486613](https://github.com/DanAakesen/jarvis/actions/runs/42227486613)
+succeeded. Explicit reuse
+[42227506332](https://github.com/DanAakesen/jarvis/actions/runs/42227506332)
+printed `managed_chat_provisioned` at 13:48:33 UTC with definition refresh off.
+At 13:49:08, its full-policy canary failed at `response_start` with HTTP 400,
+`invalid_request`, no parameter and `BadRequestError`. The prior `instructions`
+rejection changed; this new error does not establish a role, model or policy-size
+restriction. The configured comparison may now be selectable, but owner-authenticated
+availability has not been observed and inference is not accepted as working.
+
+Microsoft's current [Copilot limits](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions)
+include Sweden Central and region-available models with reasoning and tool
+calling. The current definition/request omit its listed unsupported fields.
+The [Terra capability reference](https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure#capabilities)
+lists reasoning, Responses and function tools. These references do not prove this
+particular deployed request succeeds. The [Foundry error schema](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/aiproject#azurecorefoundationserror)
+documents nested `details`, `innererror.code` and `target`; the SDK retains that
+decoded body even when its top-level `param` is absent. The diagnostic helper now
+retains only closed-vocabulary code/target pairs, never messages or raw values.
+
+After the updated hosted agent is deployed, explicitly dispatch Deploy on `main`
+with only `diagnose_managed_chat=true`. All comparison inspection, provisioning
+and definition-refresh inputs must remain false. The existing qualification,
+readiness, deployment concurrency and OIDC guards still apply. The diagnostic
+branch reads infrastructure outputs and invokes exactly
+`{"operation":"managed_request_diagnostics"}` through the existing authenticated
+hosted invocation endpoint. It exits before manifest fetching, comparison
+creation, version pinning, backend configuration or acceptance canary. This
+workflow still follows the normal deployment plan; the comparison branch itself
+does not mutate target configuration.
+
+The fixed administrative operation accepts no extra fields or caller text. It
+compares `plain_text`, `user_messages`, `developer_message` (short trusted policy),
+and `managed_policy` (the shared production builder and complete dynamic policy).
+All four use the existing approved Terra/High definition and verify the same
+target identity. Each shape creates its own synthetic conversation, attempts one
+response, refuses tool output and deletes only that owned conversation. No user
+history, claims, function executor, grants, retries or fallback is involved.
+The two list-based controls retain the same synthetic reference/user messages
+as the full-policy request; the plain string contains only the fixed user request.
+Results isolate request-shape differences; they do not by themselves explain an
+unreported provider constraint.
+
+Attempts have a 45-second ceiling, a 180-second matrix budget and five-second
+cleanup limits, within the existing 210-second administrative invocation bound.
+Timeout/failure can continue to the next independent shape. Failed target setup
+or a changed target stops further inference; remaining entries are `skipped`.
+An exhausted budget also produces explicit skipped entries. Cleanup is best
+effort; an uncertain conversation-create result is never guessed or retried.
+
+The handoff independently revalidates output and prints one
+`managed_chat_request_diagnostic` line per shape, followed by
+`managed_chat_request_diagnostics_complete`. That means the diagnostic returned,
+not that Copilot works. It never prints `managed_chat_comparison_canary_ok`.
+The unchanged full-policy `managed_text_canary` remains the only comparison
+acceptance check. No live diagnostic has run while preparing this patch.
+
 Manual Deploy [40877005757](https://github.com/DanAakesen/jarvis/actions/runs/40877005757)
 reached `agent_identity_unverified` on 29 October 2026. That check follows readback
 of one active, exact comparison-agent version and precedes endpoint pinning,
@@ -279,15 +339,16 @@ separate comparison option may be wired to it.
 
 ## Explicit manual deployment integration
 
-`deploy.yml` now exposes boolean `workflow_dispatch` input
-`provision_managed_chat` and `inspect_managed_chat`, both default `false`. Its separate
-`managed-chat-comparison` job requires main, either explicit true input, successful exact
+`deploy.yml` exposes boolean `workflow_dispatch` inputs `provision_managed_chat`,
+`inspect_managed_chat` and `diagnose_managed_chat`, all default `false`. Definition
+refresh is a separate default-off modifier for provisioning. The
+`managed-chat-comparison` job requires main, an explicit operation input, successful exact
 qualification through `plan`, successful deterministic `smoke` readiness and
 successful or compatible skipped infra/backend/agent jobs. It retains
 `jarvis-production-deploy` concurrency and the current OIDC login permissions.
-Normal pushes and dispatches with both inputs false never run this job.
+Normal pushes and dispatches with all comparison inputs false never run this job.
 
-The handoff script `.github/scripts/provision_managed_chat_handoff.sh` reads
+On the provisioning path, `.github/scripts/provision_managed_chat_handoff.sh` reads
 existing infrastructure outputs, fetches the manifest through the fixed existing
 hosted operation, provisions the comparison, validates its private activation
 file and updates only these existing-backend environment variables:
