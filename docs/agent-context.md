@@ -7253,3 +7253,18 @@ Review actual artifacts, test counts and frame captures: workflow success alone
 can hide the intentionally nonblocking UI-test result. Gallery widget evidence is
 actual SwiftUI content, not SpringBoard/tint acceptance. Default gh auth works;
 the expired private config/device code must not be reused.
+
+Native 7acb finished 64/68; its actual recordings distinguish blank measurement
+detail from test-only widget optical offset and fast-drag overshoot. Corrected
+e0d6821e qualifies in native 42257412529/CI 42257412696/CodeQL 42257412505. The original
+archive exceeded the 512 MiB connector limit. Artifact-only extraction reused its
+captures without a build/simulator; future native evidence uploads separately from
+the broad screenshot sweep. Keep raw failure records and their hashes. Do not
+rerun unchanged suites merely to download artifacts.
+
+Copilot receipt qualification requires exact full-policy output on two changing
+sentinel turns, including conflicting user input. Never stamp receipt configuration
+from a diagnostic matrix, metadata-only read or unqualified plain text response.
+The receipt is private deployment configuration, not a client override or owner
+approval replacement. Preserve valid evidence on normal deploy and invalidate it
+when target/settings/transport no longer match.

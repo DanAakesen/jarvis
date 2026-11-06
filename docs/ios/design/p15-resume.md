@@ -6,9 +6,11 @@ The owner is testing build 76 and reports that Voice/history, Home send/camera,
 task/reminder creation and Health pull refresh work. A new combined native
 correction is in progress for per-element shimmer, generic task-source labels,
 transparent headers and floating Notes/Health docks, plus shared top-left widget
-headings/compact layouts and real Body trend charts. Candidate 7acb5ec5 passes
-CI, 502 Core tests and CodeQL, and has compiled. Its single native run 42243718420
-is active; actual test results/screenshots/motion review are required before upload.
+headings/compact layouts and real Body trend charts. Candidate 7acb5ec5 passed CI, 502 Core tests and CodeQL; native 42243718420
+finished 64/68. Actual recordings guided the detail-loading/decimal corrections
+and precise widget/scroll-test fixes. Candidate e0d6821e now qualifies in native
+42257412529, CI 42257412696 and CodeQL 42257412505. Actual bilingual/AX captures
+and complete loading-motion review remain required before upload.
 Do not reuse build 76's app-tree evidence for the changed rendering.
 
 The subsequent owner-approved fixes merged through #1614 as `ab464314`.
@@ -30,11 +32,13 @@ diagnostic qualified through #1620 and merged as `2b58f2f2`. Normal deployment
 messages passed with the configured Terra/High; typed developer messages and the
 full-policy request failed with 400. After qualified #1622 / 806d49db deployed,
 matrix 42245489142 proved typed-user input succeeds and system/developer roles fail
-in both tested representations. Qualified #1623 / 11463376 now deploys a fixed native
-Conversation-item policy probe with two-turn precedence/replacement sentinels.
+in both tested representations. Qualified #1623 / 11463376 deployed successfully in 42248895975. Its stored-policy
+probe 42252117950 failed both trusted roles at the precedence/replacement check.
+#1624 qualifies a fail-closed compatibility receipt and specific unavailable copy.
 No production policy conversion has occurred. Do not guess or repeat provisioning. #1618 also
 qualified and merged a post-build OIDC refresh after a registry authentication
-failure. Copilot inference remains unverified. TestFlight build **76 uploaded at
+failure. Copilot policy compatibility remains unqualified; ordinary user-only responses
+work, but that does not qualify Jarvis operation. TestFlight build **76 uploaded at
 12:14:34 UTC / 13:14:34 Copenhagen** from verified main ab464314 (42215302636).
 The normal backend dependency is accepted; Copilot activation continues separately.
 The owner confirmed build 76 is visible in TestFlight; device testing is underway. Read the

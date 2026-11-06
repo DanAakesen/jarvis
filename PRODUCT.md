@@ -2449,3 +2449,12 @@ dashboard, including single readings, with accessible point inspection and recor
 details. Weight/body fat/lean mass keep separate units/scales and no synthetic
 missing-day values. Workouts, Factory and Notes medium widgets share a top-left
 icon/title, readable content spacing and unclipped counters/details.
+
+Measurement details must visibly load, offer recovery when needed, and return to
+the selected dashboard reading and scroll position. Displayed body values retain
+decimal precision; compact activity-count rounding must not alter a measurement.
+
+Copilot comparison availability requires demonstrated compatibility with Jarvis's
+complete trusted policy, including changing per-turn instructions. Configuration
+or a plain response alone is insufficient. If compatibility is absent or stale,
+explain why the test runtime is unavailable and keep Current usable.

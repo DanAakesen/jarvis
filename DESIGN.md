@@ -3472,3 +3472,11 @@ text. Every medium Workouts/Factory/Notes widget has the same top-left icon/titl
 Workouts balances a 2×2 metric grid beside its ring; Factory compacts counters and
 rows within existing 16 pt insets. Native content captures do not establish WidgetKit
 Home Screen tint/host rendering.
+
+Rendered follow-up: English/dark widget content fits with the shared top-left
+headings and balanced grid; Danish/light still requires its next capture. Sparse
+body charts and transparent Health header/dock were inspected. Decimal readings
+now retain up to two fraction digits, and detail has a concrete initial loading
+state. Loading highlights clip to each bar's opaque geometry at a restrained 14%
+peak instead of being attenuated by the translucent placeholder twice. Corrected
+rendering and motion remain pending native e0d6821e qualification.

@@ -11304,3 +11304,20 @@ The first Copilot request matrix succeeds for plain/simple-user messages but fai
 for typed developer/full-policy requests. Keep both role and encoding as hypotheses;
 qualify fixed controls before changing the trusted policy transport. Diagnostic
 completion is not comparison acceptance.
+
+## 6 November 2026 — Correct rendered detail loading and require policy compatibility
+
+Native 7acb inspection confirms blank measurement detail due to its initial empty
+Group; mount a concrete loading container before data. Preserve decimal readings
+in graph/records and selected reading/scroll on Back. AX charts fit; use slow held
+test drags to avoid coast, keeping full visibility assertions. Widget headers fit
+with a 1.17 pt optical symbol/text offset; allow up to 2 pt within unchanged 16 pt bounds.
+Fresh native e0d6821e qualification remains required.
+
+The stored trusted-role diagnostic also failed policy application after user-only
+requests succeeded. Do not discard or demote Jarvis policy to enable Copilot. The
+compatibility gate requires exact target/model/effort/transport evidence from two
+full-policy precedence/replacement turns; discovery and execution both enforce it.
+Give web/iOS a specific explanation while Current remains usable. This is a
+reviewed correction direction; deployment and live verification are recorded
+separately and must not be inferred from local tests.

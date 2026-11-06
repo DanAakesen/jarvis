@@ -8771,3 +8771,21 @@ The app's DEBUG simulator gallery compiles the existing widget view/sample sourc
 to inspect actual SwiftUI medium layouts at 329 × 155 pt with the same 16 pt inset.
 It disables sample actions and creates no new network/data path. WidgetKit previews
 and device checks remain the source for host margins/tinting.
+
+Measurement details now mount a concrete initial loading container so their task
+and navigation preferences exist before data arrives. Local chart selection and
+scroll state survive the records push/pop; body-specific decimal formatting is
+shared by plot labels, accessible summaries and records.
+
+### Copilot policy compatibility receipt (6 November)
+
+The proposed gate binds SHA256 evidence to policy transport revision, normalized
+project URL, native agent name/version, definition fingerprint, model and effort.
+Backend discovery, new runtime-test sessions, existing sends and internal claims
+require matching evidence. Read-only admin metadata and synthetic diagnostics stay
+available for recovery. Activation clears an old receipt before changing target
+and grants a new one only after full production-policy canary turns demonstrate
+precedence and replacement. Provisioning and backend independently compute the
+same receipt. Ordinary Current conversations and owner approval rules are unchanged.
+Native stored-policy diagnostics failed; no working Copilot policy channel is
+claimed. See PR #1624 and the device-feedback record for actual qualification.

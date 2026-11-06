@@ -20,7 +20,7 @@ smaller Factory counters and rows, and a balanced Workouts metric grid. Body tre
 must show real graphs directly on the dashboard. The new plots preserve the actual
 30-day dates, separate units, single-point state, point inspection and records
 navigation. The visible Health selector rail also moves to the shared clear glass
-surface. Scoped implementation/verification records are in `p15-build 76-surfaces.md`,
+surface. Scoped implementation/verification records are in `p15-build76-surfaces.md`,
 `p15-widget-feedback.md` and `p15-body-trend-feedback.md`.
 
 Initial surface candidate a5599089 passed CI 42236611082 and CodeQL 42236610687.
@@ -191,7 +191,7 @@ structural headers and floating Notes/Health docks, filters exact generic task
 source labels, and adds localized full source details. The previous detail view
 did not show that provenance; it is newly exposed here, not merely retained.
 Chat appearance and backend behavior remain unchanged. See
-[surface correction evidence](p15-build 76-surfaces.md) for Apple references,
+[surface correction evidence](p15-build76-surfaces.md) for Apple references,
 scope and remaining visual hypotheses.
 
 CodeQL 42236610687 passed. CI 42236611082 and the single native run 42236610739
@@ -485,3 +485,49 @@ A read-only merge-tree check against 11463376 confirms PR #1621 / 7acb5ec5 merge
 without conflict and retains the qualified app/test tree cf9c686a58fdeb409a0575f528297108a5dfa11c.
 Expected full merge tree at that base is 031bb1e9f233ce4326e8641059f84b7dda29cce1.
 Recheck against actual main before merging; this is not a merge or native pass.
+
+## 16:59 UTC — Retained UI failures corrected; policy channel remains incompatible
+
+Native 7acb run 42243718420 completed 64/68 tests. Core 502/CI 42243718659 and
+CodeQL 42243718445 passed. Both language tests selected historical chart points
+successfully, but opening records produced a blank destination with only Back.
+The initial empty Group prevented detail loading/navigation modifiers mounting.
+The correction provides a concrete loading state/ZStack, retains localized decimal
+readings (72.4 kg was incorrectly shown as 72 kg), and verifies loaded measurements
+plus selection/scroll preservation on Back.
+
+The AX recording shows the complete plot fits: fast test drags coasted past it.
+Slow drags now hold before release with the same full-plot bounds. The actual
+English/dark widget recording shows all three revised medium layouts fit. Its
+header text has an optical 1.17 pt symbol-centering offset; the test allows up to 2 pt
+while retaining full 16 pt content insets at 0.5 pt precision. Danish/light still needs
+the next capture. Widget captures now precede assertions.
+
+Health header/dock/plots and task Source details were visually inspected. Loading
+highlights stay inside bars, but their translucent mask attenuated the effect twice;
+it now clips to opaque rounded geometry at 14% peak. The motion sample was only 1.78 s
+and included launch. The existing capture now settles 2 s and records 7 s. Native test
+evidence and broad screenshots upload separately to keep each archive downloadable.
+
+The 642 MB original screenshot archive exceeded the connector's 512 MiB limit and the
+workspace could not download its blob redirect. Evidence-only runs 42255492646 and
+42256149686 repackaged existing captures, with no build or simulator. Image/index
+artifact 13521619175 SHA256 38b37b862831f8fe058e2e6878cb21ca8c9e74b9ce4044310cc2a01ad929a9be;
+failed-test artifact 13522028042 SHA256 e4dc1fea90bf8102e12095d996b7ba56de700e2c9ab7cfad54ed028ec055594e.
+
+Corrected candidate e0d6821e3fa9700de9ec07510ce7b03e41260d58 has app/test tree
+`d3f0f3c1c7e71bd0ed0d97b0b7c11520255ad12a`. It includes the four-line localized
+Copilot compatibility explanation. One fresh native run 42257412529, general
+CI 42257412696 and CodeQL 42257412505 are active. Local YAML/diff checks and the two
+existing iOS workflow guards passed using the installed Node YAML parser; no local
+Swift compiler is available. Earlier 64/68 is not release qualification.
+
+PR #1623 normal deployment 42248895975 succeeded, including Current acceptance.
+Stored-policy probe 42252117950 completed 16:26:57 UTC; both developer and system items
+failed `managed_probe_policy_not_applied` at response_stream. Logs do not identify
+which of the two turns failed. No successful policy compatibility is claimed.
+PR #1624 final bc49960e qualifies an exact target/model/effort/transport receipt,
+checked by discovery, new sessions, existing sends and internal claims. Activation
+clears stale evidence and grants a receipt only after two full-policy canary turns
+satisfy changing policy-only sentinels against conflicting user input. The normal
+runtime remains unaffected. Do not weaken policy or owner approval to enable Copilot.

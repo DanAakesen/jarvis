@@ -5,18 +5,22 @@ workflow and Health pull refresh. Compact task rows accepted. PR #1621 now combi
 per-element shimmer, generic-source suppression with full detail provenance,
 transparent protected headers/docks, shared clear-glass selectors, three medium
 widget layouts and real Body trend plots. Earlier candidates stopped before boot
-on compiler/fixture checks; corrected 7acb5ec5 passes general CI, all 502 Core tests
-and CodeQL. It compiled and entered native run 42243718420. Complete that single
-run and inspect actual bilingual/large-text charts/widgets/surfaces and motion
-before merge/upload. Do not reuse build 76's earlier source qualification.
+on compiler/fixture checks. Candidate 7acb5ec5 passed CI, 502 Core tests and CodeQL,
+but native 42243718420 finished 64/68. Actual recordings exposed blank Health
+measurement details, decimal rounding and test gesture/alignment assumptions.
+Corrected candidate e0d6821e is qualifying in native 42257412529, CI 42257412696 and
+CodeQL 42257412505. Inspect bilingual/large-text charts, widgets, surfaces and loading
+motion before merge/upload. No duplicate simulator was used to retrieve evidence.
 
-Normal deployments and Current acceptance passed through #1622. The two request
-matrices isolate rejection of trusted system/developer roles, while ordinary typed
-user messages succeed. PR #1623 / 11463376 qualified a fixed native-conversation
-policy diagnostic and is deploying in 42248895975; its two-turn precedence/update
-check follows rollout. Production policy is unchanged. Preserve the complete
-per-turn policy and owner approvals; diagnostic completion alone never establishes
-Copilot acceptance.
+Normal deployment 42248895975 and Current acceptance passed through #1623 / 11463376.
+Fixed stored-policy diagnostic 42252117950 failed both developer and system roles:
+the response did not satisfy policy precedence/update sentinels. Earlier matrices
+show ordinary user input succeeds but trusted-role response input is rejected.
+Copilot remains incompatible with the complete per-turn Jarvis policy. PR #1624
+adds an exact target/model/effort/transport compatibility receipt, fail-closed new
+and existing test turns, and a specific web/iOS explanation. Only a full-policy,
+two-turn precedence/update canary can grant that receipt; never demote or omit
+Jarvis policy to enable the option. Normal runtime and UI release can proceed.
 
 ## Managed policy request qualification — 6 November 2026
 
