@@ -4,7 +4,7 @@
 - The legacy Daily calendar/Gmail feeds are removed; Calendar and Gmail use only `apps/backend/src/google`.
 - iPhone data flow: HealthKit → `JarvisHealthKitReader` (since the anchor) → `JarvisHealthSyncRequest` → owner-only `POST /health/sync` (`health/routes/sync.ts`, `health/sync/`) → same normaliser and `daily.*` tables as the automations app (P15-86). Source ids, schema and table names keep the `daily` name.
 
-### Native refresh orchestration (6 November 2026; local, unverified)
+### Native refresh orchestration (6 November 2026)
 
 ContentView owns one JarvisHealthSyncModel for Home and Health. Pull-to-refresh
 awaits its coalesced HealthKit read/upload, invalidates Health cache after complete
@@ -12,6 +12,8 @@ or partial success, then refreshes the screen's server and device sources. Healt
 also rereads vault lifts and device workouts/steps. Fixture mode never queries or
 uploads the real HealthKit store. Existing complete-day uploads and durable-anchor
 rules stay in JarvisHealthSyncRunner; the old manual sync view is removed.
+The combined source passed CI and 68 native tests in run 42202162500. Real
+HealthKit permissions, ingestion and physical-device refresh remain device checks.
 
 ## Suggestion-to-approval binding (P15-46 / #1494)
 

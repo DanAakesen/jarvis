@@ -28,12 +28,14 @@ and identity; existing exact matches are reused and old versions preserved.
 Verified locally: 80 backend runtime tests, 146 web tests, backend/web builds,
 scoped ESLint and 39 provisioning/handoff/deploy-plan checks; synthetic Chromium inspection at desktop/phone in both
 themes covers disabled choices, availability retry, create failure/retry, scoped
-streaming and return. Native compilation/Simulator and actual managed inference
-remain pending. The screenshot reason identifies an absent verifier at the time of
-the report, not the cause of missing production configuration. Next: coordinator
-integrates this with the current batch, runs one combined native qualification,
-deploys backend/hosted agent first, explicitly refreshes/activates the comparison,
-checks canary and original conversation path, then releases TestFlight. Do not
+streaming and return. Native compilation and all 68 Simulator tests subsequently
+passed in run 42202162500, with inspected runtime-selector and shared-page captures.
+Actual managed inference remains unverified: comparison activation 42212979149
+failed in provisioning before its canary. The screenshot reason identifies an
+absent verifier at the time of the report, not the cause of missing production
+configuration. Normal backend/hosted-agent deployment and original conversation
+acceptance passed. Next: inspect comparison state without writes, fix the observed
+provisioning cause, activate and check its canary, then release TestFlight. Do not
 claim live Copilot success from local fixtures or a selectable option alone.
 
 ## P15-78 — retire Daily feeds, rename Daily to Health, iPhone Health sync (#1571)

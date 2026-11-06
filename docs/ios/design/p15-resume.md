@@ -1,4 +1,23 @@
-# P15 completed release checkpoint
+# P15 release checkpoints
+
+## Current device-feedback follow-up
+
+The subsequent owner-approved fixes merged through #1614 as `ab464314`.
+CI, CodeQL and all 68 native UI tests passed; the corrected task rows and shared
+controls were visually inspected. The app/test tree is
+`b9bd418f6d41c1fb9cc35450d1da9711eaf1c81a`; do not repeat its simulator run for
+backend-only or documentation changes.
+
+Normal backend/agent/web deployment and live conversation acceptance passed.
+Explicit Copilot comparison activation failed before its response canary. A
+read-only diagnostic follow-up is in progress; the next TestFlight upload waits
+for that qualification. Read the
+[device-feedback delivery record](p15-device-feedback-2026-11-06.md) for exact
+runs, retained evidence and current delivery status. Later owner instructions
+authorize functional Chat/voice fixes and its runtime-testing Plus option while
+preserving the existing Chat appearance. The previous CI hold was lifted.
+
+## Original board release — build 75
 
 The non-Chat board alignment and owner-selected Home/success polish were uploaded
 to TestFlight as **build 75**. Read the [release record](p15-release-2026-11-06.md)

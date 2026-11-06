@@ -6,6 +6,10 @@ pending-state notes in page verification documents. Reference: approved board.ht
 from #1603, rendered unchanged at 402 × 874 logical points / scale 3. The board is
 a composition reference, not evidence of the native app or live backend data.
 
+For the later owner-approved device-feedback batch, use the
+[current delivery record](p15-device-feedback-2026-11-06.md). The original
+build-75 acceptance below does not qualify those subsequent changes.
+
 ## Scope and delivery
 
 All non-Chat pages share consistent headings, spacing, grouped rows, controls and
