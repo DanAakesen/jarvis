@@ -39,3 +39,9 @@ values. Synthetic preview data provides sparse Weight/Body fat histories and
 single-point Lean mass. Existing native launches will verify chart selection,
 detail navigation and bilingual captures alongside the widget/surface changes.
 No new simulator has been started for this candidate yet.
+
+The first combined candidate b7e22951 failed Core and native compilation before
+simulator boot: Swift could not type-check the chained conversion expression in
+`JarvisBodyTrend`. It is now an explicit typed loop with separate date/value/unit
+validation and sorting. No test or visual pass is claimed for that failed source;
+the corrected candidate requires fresh qualification with unchanged assertions.
