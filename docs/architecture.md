@@ -112,6 +112,15 @@ metadata blocks the infrastructure apply. This persistence does not change the
 production runtime default. SQL personal memory, blob artifacts, the
 Voice Live relay and subscription-backed Factory are unchanged.
 
+After the live endpoint rejected a top-level instructions override, managed
+requests carry the complete composed policy in a typed developer input message.
+User/reference messages and tool outputs retain their original roles and native
+input cursor. A turn-local cache suppresses identical policy on tool continuations;
+new application turns and exact policy changes send the full policy again. The
+cache updates only after response creation returns and does not change claim or
+uncertain-outcome handling. Policy input persists in the native conversation once
+per turn/change; this repair adds no history deletion or database field.
+
 The UI keeps normal chat mounted and opens a new labelled test conversation from
 the chat menu. Default active-turn discovery excludes test sessions. Availability
 fails closed for unverified Copilot; it is not a substitute for live model access

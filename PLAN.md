@@ -2274,8 +2274,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   through #1615; inspection confirmed one older version and no current-manifest
   match. The documented version-creation endpoint mismatch is corrected in #1617,
   qualified and merged as 67f02a58. Provisioning succeeded, but the live response
-  rejected the instructions override; #1619 now qualifies the full-policy
-  developer-input correction. #1618's post-build OIDC refresh also qualified and
+  rejected the instructions override; #1619 qualified and merged the full-policy
+  developer-input correction, whose live check is running. #1618's post-build OIDC refresh also qualified and
   merged after a separate registry authentication failure. Verified source ab464314 uploaded as
   TestFlight build 76 at 12:14:34 UTC in run 42215302636 while separate Copilot
   activation continues. Apple processing is not independently confirmed. The owner
@@ -4006,7 +4006,7 @@ research, Health and milestone facilities are reused; no duplicate job system.
   provisioning before the canary. Read-only inspection confirmed one older version
   and no current-manifest match. #1617's corrected version-creation route passed
   CI/CodeQL and merged. Provisioning succeeded; the live canary rejected the
-  instructions override. Qualify/deploy #1619 and repeat that canary using the
+  instructions override. #1619 passed CI/CodeQL and merged; repeat its canary using the
   existing version. TestFlight build 76
   uploaded from verified source ab464314; activation needs no app rebuild.
   Physical voice startup,

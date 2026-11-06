@@ -74,6 +74,14 @@ canary success. It retains only validated stage/status/code/parameter/exception
 metadata; never print the private response or provider message. No new owner-auth
 bypass, tools, claim reset or automatic mutation retry is added.
 
+The live response rejected the top-level instructions override. The corrected
+shared builder sends the full policy as typed developer input on each new turn
+or policy change, without promoting user/reference/tool data. Its turn-local cache
+avoids identical continuation repeats. Deploy this hosted-agent change before
+checking the already configured comparison with `provision_managed_chat=true`;
+leave definition refresh false so the existing exact version must be reused.
+Inspect current inventory first if an earlier provisioning write was uncertain.
+
 Run hosted pytest for `test_managed_runtime_factory.py`,
 `test_managed_policy_client.py`, `test_managed_provider_cause.py`,
 `test_model_client.py` and `test_chat_runtime.py`, plus scoped Ruff. Run

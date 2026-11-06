@@ -11255,3 +11255,20 @@ PR #1615 preserves ownership/identity checks and exact-version reuse after an
 uncertain write. It adds no grant, default runtime change or automatic write retry.
 Its CI/CodeQL passed; live inspection and activation outcomes belong in the
 device-feedback delivery record.
+
+## 6 November 2026 — Preserve per-turn policy in supported managed input
+
+The live Copilot canary reached the provisioned target but rejected top-level
+instructions with HTTP 400, invalid_payload, parameter instructions. Send the
+complete composed policy as typed developer input, which the documented Foundry
+message contract gives precedence over user input. Preserve the original roles
+of references and tool outputs. Both actual turns and the canary use the same
+request builder; do not replace the canary with a simpler request that bypasses
+the failed policy path.
+
+Send full policy at each application turn and exact policy change. A turn-local
+cache avoids identical tool-continuation repeats and updates only after response
+creation returns. Native policy input persists once per turn/change; no history
+deletion or new database state is introduced. Existing claims and uncertain-write
+handling remain unchanged. PR #1619 passed CI/CodeQL and merged as cac5d05d;
+live provider acceptance is recorded separately in the delivery record.

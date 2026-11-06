@@ -109,8 +109,11 @@ PR #1619, candidate 0043c403, moves the full trusted per-turn policy to supporte
 developer input instead of the rejected top-level override. It preserves original
 user/tool roles, sends fresh policy on each application turn/change and avoids
 identical repeats within that turn. Claims, history cursors and the strong canary
-remain intact. All 78 focused tests and scoped lint/compilation passed; CI is
-running. Deployment must reuse the current comparison version without definition
+remain intact. All 78 focused tests, scoped lint/compilation, CI 42225996401 and
+CodeQL 42225996097 passed. The candidate merged as cac5d05d with an identical
+source tree and unchanged app/test tree. Normal Deploy 42227486613 and explicit
+comparison check 42227506332 are running; definition refresh is false.
+Deployment must reuse the current comparison version without definition
 refresh, then pass the actual policy-shaped response canary before claiming
 Copilot inference works.
 
