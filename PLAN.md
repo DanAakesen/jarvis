@@ -2278,10 +2278,12 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   match. The documented version-creation endpoint mismatch is corrected in #1617,
   qualified and merged as 67f02a58. Provisioning succeeded, but the live response
   rejected the instructions override; #1619 qualified and merged the full-policy
-  developer-input correction, whose live check is running. #1618's post-build OIDC refresh also qualified and
+  developer-input correction. Its live check reused the version but failed with
+  generic HTTP 400; a separate fixed-input diagnostic is being prepared.
+  #1618's post-build OIDC refresh also qualified and
   merged after a separate registry authentication failure. Verified source ab464314 uploaded as
   TestFlight build 76 at 12:14:34 UTC in run 42215302636 while separate Copilot
-  activation continues. Apple processing is not independently confirmed. The owner
+  activation continues. The owner confirmed build 76 is visible in TestFlight. The owner
   explicitly authorized this delivery. See
   `docs/ios/design/p15-device-feedback-2026-11-06.md` for evidence and device limits.
 
@@ -4017,7 +4019,8 @@ research, Health and milestone facilities are reused; no duplicate job system.
   uploaded from verified source ab464314; activation needs no app rebuild.
   Physical voice startup,
   HealthKit permissions and haptic feel still require the owner's device.
-  Apple processing and live Copilot success are not yet independently confirmed.
+  The owner confirmed build 76 is visible in TestFlight and began device testing.
+  Live Copilot success remains unverified.
 
 ### UI/UX recommendations requested on 6 November
 

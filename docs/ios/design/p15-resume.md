@@ -22,7 +22,7 @@ qualified and merged a post-build OIDC refresh after a registry authentication
 failure. Copilot inference remains unverified. TestFlight build **76 uploaded at
 12:14:34 UTC / 13:14:34 Copenhagen** from verified main ab464314 (42215302636).
 The normal backend dependency is accepted; Copilot activation continues separately.
-Apple processing is not independently confirmed. Read the
+The owner confirmed build 76 is visible in TestFlight; device testing is underway. Read the
 [device-feedback delivery record](p15-device-feedback-2026-11-06.md) for exact
 runs, retained evidence and current delivery status. Later owner instructions
 authorize functional Chat/voice fixes and its runtime-testing Plus option while

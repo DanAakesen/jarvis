@@ -54,9 +54,10 @@ verified source ab464314; the complete job and signing cleanup passed. UI
 acceptance and the required normal backend dependency passed before dispatch.
 Copilot activation continues separately without an app rebuild. Target metadata
 verification controls selection; it does not establish successful inference. This follows the
-owner's release authorization and existing partial-delivery cadence. Apple
-processing is not independently confirmed: no matching email was available in
-the connected mailbox at 12:15 UTC or in the later 13:55 UTC check.
+owner's release authorization and existing partial-delivery cadence. The owner
+subsequently confirmed build 76 is visible in TestFlight and began device testing.
+Earlier mailbox searches had no processing confirmation; the owner report is the
+current availability evidence. Device acceptance is still pending.
 
 Diagnostic PR #1615, candidate bbb60479, passed full CI 42214612550 and CodeQL
 42214612464 and merged as 8398f7a7. Its app/test tree is unchanged. Normal Deploy
