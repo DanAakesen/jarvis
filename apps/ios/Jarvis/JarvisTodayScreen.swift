@@ -37,6 +37,7 @@ struct JarvisTodayScreen: View {
     @State private var successConfirmation: JarvisSuccessConfirmation?
     @State private var pendingTaskIDs = Set<String>()
     @State private var taskCompletionFailed = false
+    @State private var taskCompletionError = ""
     @ScaledMetric(relativeTo: .largeTitle) private var greetingSize: CGFloat = 25
     @FocusState private var composerFocused: Bool
 
@@ -76,7 +77,7 @@ struct JarvisTodayScreen: View {
         .alert(JarvisNotesCopy(language: language).tasks, isPresented: $taskCompletionFailed) {
             Button(JarvisNotesCopy(language: language).ok, role: .cancel) {}
         } message: {
-            Text(JarvisNotesCopy(language: language).unavailable)
+            Text(taskCompletionError)
         }
         .onDisappear { dictation.stop() }
         .task {
@@ -350,6 +351,14 @@ struct JarvisTodayScreen: View {
             successConfirmation = JarvisSuccessConfirmation(message: JarvisNotesCopy(language: language).completed)
         } catch {
             guard !Task.isCancelled else { return }
+            let notesCopy = JarvisNotesCopy(language: language)
+            switch error {
+            case JarvisNotesClientError.writeOutcomeUnknown: taskCompletionError = notesCopy.unknownWrite
+            case JarvisNotesClientError.taskConflict: taskCompletionError = notesCopy.taskChanged
+            case JarvisClientError.signInRequired: taskCompletionError = notesCopy.signIn
+            case JarvisClientError.notOwner: taskCompletionError = notesCopy.notOwner
+            default: taskCompletionError = copy(.saveFailed)
+            }
             taskCompletionFailed = true
         }
     }
