@@ -46,7 +46,14 @@ operation, a permission denial, or whether a write completed. Do not blindly
 repeat the mutation. Bounded operation/status/code diagnostics and a GET-only
 inspection path are being prepared before another apply. Normal live acceptance
 and its release-result job still passed; neither substitutes for the failed
-comparison job. TestFlight remains held for this runtime qualification.
+comparison job.
+
+At 12:07 UTC, the unchanged TestFlight workflow was dispatched as build 76,
+run 42215302636, on verified main ab464314. UI acceptance and the required normal
+backend dependency already passed. Copilot's separate activation can continue
+without changing the app; its unavailable state remains visible until target
+verification succeeds. Upload is in progress, not yet claimed successful. This
+follows the owner's release authorization and existing partial-delivery cadence.
 
 ## Release authorization
 

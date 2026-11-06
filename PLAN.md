@@ -2271,7 +2271,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   Normal Deploy 42210649006 passed backend/agent readiness and live acceptance.
   Comparison activation 42212979149 failed during provisioning with the generic
   azure_request_failed result, before the canary. A read-only diagnostic follow-up
-  is being prepared; TestFlight waits for runtime qualification. The owner
+  is being qualified. Verified source ab464314 is uploading as TestFlight build
+  76 in run 42215302636 while separate Copilot activation continues. The owner
   explicitly authorized this delivery. See
   `docs/ios/design/p15-device-feedback-2026-11-06.md` for evidence and device limits.
 
@@ -3997,9 +3998,11 @@ research, Health and milestone facilities are reused; no duplicate job system.
 - Delivery: normal Deploy 42210649006 passed for merged source ab464314, including
   readiness/live acceptance. Explicit Copilot activation 42212979149 failed in
   provisioning before the canary. Inspect its operation/inventory without writes,
-  correct the concrete cause, and qualify that separate check before upload. Physical voice startup,
+  correct the concrete cause, and qualify that separate check. TestFlight build 76
+  is running on already verified source ab464314; activation needs no app rebuild.
+  Physical voice startup,
   HealthKit permissions and haptic feel still require the owner's device.
-  No live Copilot success or new TestFlight upload is claimed yet.
+  No live Copilot success or completed TestFlight upload is claimed yet.
 
 ### UI/UX recommendations requested on 6 November
 
