@@ -71,7 +71,9 @@ creating an immutable version requires `POST /agents/{agent_name}/versions`,
 with the name in the path, whereas the old refresh used agent creation. PR #1617
 corrects only that request and its diagnostic label, retaining initial creation,
 ownership/readback checks and uncertain-write recovery. Candidate 43395466 passed
-25 focused tests and scoped lint/compilation; full CI is in progress. The API
+25 focused tests, scoped lint/compilation, CI 42217710063 and CodeQL 42217709998.
+It merged as 67f02a58 with an identical source tree and unchanged app/test tree.
+Normal Deploy 42219180536 and explicit activation 42219195236 are in progress. The API
 contract establishes the bug but does not retrospectively identify the operation
 behind the earlier opaque error. Live activation remains unverified.
 
