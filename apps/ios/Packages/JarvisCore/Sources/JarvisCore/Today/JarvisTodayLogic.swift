@@ -17,7 +17,7 @@ public enum JarvisTimeOfDay: String, CaseIterable, Sendable {
     }
 }
 
-/// The two-sentence greeting: key words (set in the accent colour) are marked with braces in the localized text.
+/// A brief greeting with the next event and today’s tasks: key words (set in the accent colour) are marked with braces in the localized text.
 public struct JarvisTodayGreeting: Equatable, Sendable {
     public struct Segment: Equatable, Sendable {
         public let text: String
@@ -58,17 +58,6 @@ public struct JarvisTodayGreeting: Equatable, Sendable {
             sentences.append(JarvisTodayLocalization.string(.greetingTasks, count: tasksDueToday, language: language))
         } else if nextEvent == nil {
             sentences.append(JarvisTodayLocalization.string(.greetingClear, language: language))
-        }
-        // Only values that were actually read: steps and logged workouts are left out until they are known.
-        if let stepsToday, stepsToday > 0 {
-            sentences.append(JarvisTodayLocalization.string(
-                .greetingSteps, text: JarvisNumberFormat.compact(stepsToday, language: language), language: language
-            ))
-        }
-        if workoutsThisWeek == 1 {
-            sentences.append(JarvisTodayLocalization.string(.greetingWorkoutOne, language: language))
-        } else if let workoutsThisWeek, workoutsThisWeek > 1 {
-            sentences.append(JarvisTodayLocalization.string(.greetingWorkouts, count: workoutsThisWeek, language: language))
         }
         return JarvisTodayGreeting(segments: parse(sentences.joined(separator: " ")))
     }

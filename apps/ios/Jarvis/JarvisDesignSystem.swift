@@ -202,6 +202,11 @@ enum JarvisDesignTokens {
     static let notesRowMinimumHeight: CGFloat = 52
     static let notesIconSize: CGFloat = 18
     static let notesChipSpacing: CGFloat = 8
+    static let notesRecentTileWidth: CGFloat = 168
+    static let notesFolderPersonal = adaptiveColor(
+        light: UIColor(red: 45.0 / 255, green: 179.0 / 255, blue: 93.0 / 255, alpha: 1),
+        dark: UIColor(red: 61.0 / 255, green: 220.0 / 255, blue: 132.0 / 255, alpha: 1)
+    )
     /// Tighter rows in forms and sheets, which open at half height.
     static let sheetRowMinimumHeight: CGFloat = 40
     static let labelledHorizontalPadding: CGFloat = 16
@@ -210,6 +215,8 @@ enum JarvisDesignTokens {
     static let notesGraphEdgeWidth: CGFloat = 1
     static let notesInlineSpacing: CGFloat = 4
     static let segmentedBarSpacing: CGFloat = 12
+    static let segmentedSelectionInset: CGFloat = 3
+    static let segmentedSelectionOpacity: Double = 0.08
     static let notesMetadataSpacing: CGFloat = 8
     static let notesChevronSize: CGFloat = 12
     static let notesTaskActionSize: CGFloat = 22
@@ -221,6 +228,7 @@ enum JarvisDesignTokens {
     static let notesConflictPanelRadius: CGFloat = 16
     static let notesGraphSelectionStroke: CGFloat = 2
     static let notesGraphNodeLabelWidth: CGFloat = 96
+    static let notesGraphLabelOffset: CGFloat = 18
     static let notesGraphMinimumZoom: CGFloat = 0.65
     static let notesGraphMaximumZoom: CGFloat = 4
     static let notesGraphEmphasizedOpacity: Double = 0.38

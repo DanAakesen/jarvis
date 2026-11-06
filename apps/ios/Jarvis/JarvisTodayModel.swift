@@ -57,19 +57,9 @@ final class JarvisTodayModel: ObservableObject {
             timeOfDay: JarvisTimeOfDay(date: now, calendar: timeCalendar),
             nextEvent: JarvisTodayAgenda.nextEntry(calendar.value ?? [], now: now, calendar: timeCalendar),
             tasksDueToday: taskData.value?.lists.today.count ?? 0,
-            stepsToday: steps.value.map { JarvisTodayActivity.todaySteps($0, now: now, calendar: timeCalendar) },
-            workoutsThisWeek: workoutsThisWeek,
             language: language,
             calendar: timeCalendar
         )
-    }
-
-    /// Logged workouts in the last seven days, or nil until the log has loaded.
-    private var workoutsThisWeek: Int? {
-        guard let entries = workouts.value else { return nil }
-        let today = timeCalendar.startOfDay(for: now)
-        guard let from = timeCalendar.date(byAdding: .day, value: -6, to: today) else { return nil }
-        return entries.filter { $0.performedAt >= from }.count
     }
 
     func display(language: JarvisAppLanguage) -> JarvisTodayActivityDisplay {
@@ -154,14 +144,24 @@ final class JarvisTodayModel: ObservableObject {
         await loadTasks(force: false)
     }
 
-    func complete(_ task: VaultTask) async {
+    func complete(_ task: VaultTask) async throws {
         if isFixture {
-            guard let data = taskData.value else { return }
+            guard let data = taskData.value else { throw JarvisTodayFailure.unavailable }
             taskData.value = JarvisTodayTaskData(tasks: data.tasks.filter { $0.id != task.id }, today: data.today)
             return
         }
-        guard let client = dependencies.notes else { return }
-        _ = try? await client.setTaskDone(task, done: true)
+        guard let client = dependencies.notes else { throw JarvisTodayFailure.unavailable }
+        do {
+            _ = try await client.setTaskDone(task, done: true)
+        } catch {
+            // A conflict or uncertain write needs fresh versions before another attempt.
+            await JarvisAppCache.invalidateAll(.tasks)
+            await loadTasks(force: true)
+            throw error
+        }
+        if let data = taskData.value {
+            taskData.value = JarvisTodayTaskData(tasks: data.tasks.filter { $0.id != task.id }, today: data.today)
+        }
         await JarvisAppCache.invalidateAll(.tasks)
         await loadTasks(force: true)
     }

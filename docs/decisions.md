@@ -10920,6 +10920,44 @@ had captured images but skipped their upload when it reached the job timeout.
 Keep the existing runner, test selection and timeout; this change preserves
 available evidence and does not turn failing tests into successful tests.
 
+## 5 November 2026 — P15-93 Notes follows the published three-tab board
+
+Issue #1599 and board PR #1603 supersede P15-12's separate List tab. Notes owns
+root/direct-folder browsing with Back and a count derived from the displayed
+notes. Root notes use the backend's empty folder string; the client must not
+reject them as malformed summaries. Recent tracks successful openings in the
+account-bound cache, survives note refresh, and clears on sign-out.
+
+The New note picker stages a child of the open folder and explains that the note
+save persists it. The separate New folder sheet uses owner-only `POST /notes/folders`;
+the backend writes an empty `.gitkeep` marker so Git can retain a folder without
+inventing a note. The folder inventory already includes paths from non-Markdown
+files, while the marker never enters note counts or the graph. The existing
+task-create route gains optional normal/medium/high priority, encoded with the
+same Markdown markers used by task editing; old callers may omit it. The backend
+and folder-creation changes must be deployed before releasing the new client.
+No deployment is included.
+
+Graph nodes share folder colors with the legend. Labels appear for search or
+selection, with an explicit Open action; accessible titles/folders remain on all
+nodes. Native visual acceptance is pending in `ios/design/p15-93-verification.md`.
+
+## 5 November 2026 — Home and Factory follow the merged board (P15-94 / #1600)
+
+Keep Factory's Needs Dan tasks in Board while removing its separate tab. Board
+and Releases share one glass segmented surface. Preserve default collapsed
+columns, indented outlined rows, filter placement and search/create placement;
+legacy Needs Dan screenshot entry expands and reveals that column.
+
+Home uses the shared row spacing and separators and keeps Today / Tasks due,
+as shown by the merged board. Issue #1600 explicitly gives the board precedence
+over conflicting grouping feedback. The Delegated wording remains an open
+clarification, not a new task-data contract. Native visual acceptance is pending.
+
+## Native board corrections supported by screenshots (Refs #1600; 5 November 2026)
+
+Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
+
 ## 5 November 2026 — Health source parity and dashboard (P15-95 / #1601)
 
 Use merged HealthKit statistics for step counts; raw overlapping source samples
@@ -10966,6 +11004,33 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+## 6 November 2026 — Confirm successful native actions
+
+The owner explicitly requested subtle haptics and interruptible completion feedback
+for lift saves, tasks and note creation. Notes introduces the reusable confirmation
+and applies it after successful client writes. No API or persistence contract changes.
+Physical haptic feel remains a device check; simulator verification is pending.
+
+## 6 November 2026 — Restore the working Linux Swift runner for release
+
+GitHub changed ubuntu-latest to Ubuntu 26.04 during this authorised release.
+Both Notes job 127618762897 and integration job 127619905299 failed before tests:
+the pinned setup-swift action does not support 26.04. The earlier combined Core
+job 127601636763 used Ubuntu 24.04 and passed 493 tests. Pin only the Linux job in
+`ios-ci.yml` to ubuntu-24.04, restoring that known working environment. This is a
+necessary compatibility exception to the board issues' no-workflow-edit scope,
+within the owner's subsequent instruction to finish verification and release
+directly. It does not change checks, Mac execution, signing or TestFlight. Recheck
+CI rather than treating the infrastructure failure as a successful test result.
+
+## 6 November 2026 — Shorter Home and successful-action polish
+
+The owner selected these two previous suggestions for this release. Home keeps
+event/task priorities while health stays in the cards. Confirmations follow successful
+writes, and Home completion errors are surfaced rather than swallowed. The existing
+lift/workout saved state remains persistent and dismissible. No Chat change, backend
+contract change or new dependency is required. Native verification is pending.
 
 ## Health page accessibility (5 November 2026)
 

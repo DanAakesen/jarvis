@@ -97,6 +97,49 @@ final class ComponentGalleryUITests: XCTestCase {
         attach(app.screenshot(), named: "Tab strip")
     }
 
+    func testFactoryBoardKeepsNeedsDanWithOnlyTwoTabs() {
+        captureFactory(state: "board", language: "en", theme: "dark")
+    }
+
+    func testLegacyNeedsDanEntryOpensAndRevealsTheBoardColumn() {
+        captureFactory(state: "needs", language: "da", theme: "light")
+    }
+
+    private func captureFactory(state: String, language: String, theme: String) {
+        app.launchArguments = [
+            "--ui-test-navigation",
+            "--screenshot-factory-fixture", "--screenshot-factory-state=\(state)",
+            "--screenshot-factory-language=\(language)",
+            "-jarvis.appLanguage", language, "-jarvis.appTheme", theme,
+            "-AppleLanguages", "(\(language))", "-AppleLocale", language == "da" ? "da_DK" : "en_US",
+        ]
+        app.launch()
+        defer { app.terminate() }
+        let board = app.buttons["factory.segment.board"]
+        let releases = app.buttons["factory.segment.releases"]
+        XCTAssertTrue(board.waitForExistence(timeout: 15))
+        XCTAssertTrue(board.isHittable, "The fixture must be visible above the authentication gate")
+        XCTAssertTrue(board.isSelected)
+        XCTAssertTrue(releases.exists)
+        XCTAssertFalse(app.buttons["factory.segment.needsDan"].exists)
+        XCTAssertEqual(board.frame.width, releases.frame.width, accuracy: 1)
+        XCTAssertEqual(board.frame.maxX, releases.frame.minX, accuracy: 1, "Segments touch within one control")
+        let needs = app.buttons["factory.column.needs_dan"]
+        XCTAssertTrue(needs.waitForExistence(timeout: 10))
+        // SwiftUI Link is exposed as a Button on the pinned iOS Simulator.
+        let taskLink = app.buttons["factory.row.github.10"]
+        if state == "board" {
+            XCTAssertFalse(taskLink.exists, "Board columns start collapsed")
+            needs.tap()
+        }
+        XCTAssertTrue(taskLink.waitForExistence(timeout: 5), "The Needs Dan task remains reachable on Board")
+        XCTAssertEqual(needs.value as? String, language == "da" ? "Udvidet" : "Expanded")
+        XCTAssertTrue(taskLink.isHittable, "The task action must be visible in the expanded column")
+        XCTAssertTrue(app.staticTexts["Synthetic decision"].exists)
+        XCTAssertTrue(needs.isHittable, "The old Needs Dan entry scrolls its column into view")
+        attach(app.screenshot(), named: "P15-94-factory-\(state)-\(theme)-\(language)")
+    }
+
     func testHealthPeriodsDarkEnglish() { captureHealthHeroes(language: "en", theme: "dark") }
     func testHealthPeriodsLightDanish() { captureHealthHeroes(language: "da", theme: "light") }
 
@@ -257,6 +300,133 @@ final class ComponentGalleryUITests: XCTestCase {
         XCTAssertGreaterThan(detail.frame.minY, title.frame.maxY, "Lines have breathing room")
         XCTAssertGreaterThanOrEqual(next.frame.minY - detail.frame.maxY, 19.5, "Rows are separated by 20 pt (allowing half-point rounding)")
         attach(app.screenshot(), named: "P15-92-shared-section-and-rows")
+    }
+
+    func testNotesRootFoldersCountsBackAndRecentlyOpened() {
+        openPage("notes")
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["notes.tab.notes"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["notes.tab.list"].exists)
+        notesReach("notes.note.welcome.md")
+        XCTAssertEqual(app.staticTexts["notes.folder.count"].label, "1")
+        attach(app.screenshot(), named: "P15-93-notes-root-dark-en")
+        notesTap("notes.folder.Work", upward: false)
+        notesTap("notes.folder.Work/Projects")
+        notesReach("notes.note.Work/Projects/release.md")
+        XCTAssertEqual(app.staticTexts["notes.folder.count"].label, "1")
+        attach(app.screenshot(), named: "P15-93-notes-folder-dark-en")
+        notesTap("notes.note.Work/Projects/release.md")
+        XCTAssertTrue(app.buttons["note.back"].waitForExistence(timeout: 8))
+        app.buttons["note.back"].tap()
+        notesTap("notes.folder.back", upward: false)
+        XCTAssertEqual(app.staticTexts["notes.folder.breadcrumb"].label, "Work")
+        notesTap("notes.folder.back", upward: false)
+        notesReach("notes.recent.Work/Projects/release.md", upward: false)
+        attach(app.screenshot(), named: "P15-93-notes-recent-dark-en")
+    }
+
+    func testNewNoteCreatesFolderInsideTheOpenFolder() {
+        openPage("notes")
+        defer { app.terminate() }
+        notesTap("notes.folder.Work")
+        notesTap("notes.folder.Work/Projects")
+        notesTap("notes.plus")
+        notesTap("notes.newNote")
+        let title = app.descendants(matching: .any).matching(identifier: "notes.create.title").firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        title.typeText("Capture")
+        notesTap("notes.create.folder")
+        XCTAssertEqual(app.staticTexts["notes.create.folder.path"].label, "Work / Projects")
+        notesTap("notes.create.folder.name")
+        app.textFields["notes.create.folder.name"].typeText("Research")
+        notesTap("notes.create.folder.add")
+        XCTAssertEqual(app.staticTexts["notes.create.folder.path"].label, "Work / Projects / Research")
+        app.buttons["sheet.confirm"].tap()
+        XCTAssertTrue(app.buttons["notes.create.folder"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["notes.create.folder"].label, "Work / Projects / Research")
+        attach(app.screenshot(), named: "P15-93-notes-new-folder-dark-en")
+        app.buttons["sheet.confirm"].tap()
+        XCTAssertTrue(app.buttons["note.back"].waitForExistence(timeout: 8))
+        app.buttons["note.back"].tap()
+        notesTap("notes.folder.Work/Projects/Research")
+        notesReach("notes.note.Work/Projects/Research/capture.md")
+        XCTAssertEqual(app.staticTexts["notes.folder.count"].label, "1")
+        attach(app.screenshot(), named: "P15-93-notes-created-dark-en")
+    }
+
+    func testNewFolderPersistsAnEmptyChildOfTheSelectedParent() {
+        openPage("notes")
+        defer { app.terminate() }
+        notesTap("notes.plus")
+        notesTap("notes.newFolder")
+        let name = app.textFields["notes.create.folder.title"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap()
+        name.typeText("Research")
+        notesTap("notes.create.folder")
+        notesTap("notes.create.folder.Work")
+        notesTap("notes.create.folder.Work/Projects")
+        app.buttons["sheet.confirm"].tap()
+        XCTAssertTrue(app.buttons["notes.create.folder"].waitForExistence(timeout: 5))
+        attach(app.screenshot(), named: "P15-93-new-folder-sheet-dark-en")
+        app.buttons["sheet.confirm"].tap()
+        notesReach("notes.folder.breadcrumb")
+        XCTAssertEqual(app.staticTexts["notes.folder.breadcrumb"].label, "Work / Projects / Research")
+        XCTAssertEqual(app.staticTexts["notes.folder.count"].label, "0")
+        notesTap("notes.folder.back", upward: false)
+        notesReach("notes.folder.Work/Projects/Research")
+        attach(app.screenshot(), named: "P15-93-new-empty-folder-dark-en")
+    }
+
+    func testNotesGraphSelectionAndTaskPriority() {
+        openPage("notes")
+        defer { app.terminate() }
+        notesTap("notes.tab.graph")
+        let nodeID = "notes.graph.node." + String(repeating: "0", count: 63) + "1"
+        notesTap(nodeID)
+        XCTAssertTrue(app.buttons["notes.graph.open"].waitForExistence(timeout: 5))
+        attach(app.screenshot(), named: "P15-93-notes-graph-selected-dark-en")
+        let search = app.textFields["notes.search"]
+        XCTAssertTrue(search.isHittable)
+        search.tap()
+        search.typeText("Review")
+        notesTap("notes.tab.tasks", upward: false)
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Review release")).firstMatch.waitForExistence(timeout: 8))
+        notesTap("notes.search.clear")
+        notesTap("notes.plus")
+        notesTap("notes.newTask")
+        let title = app.descendants(matching: .any).matching(identifier: "notes.create.title").firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        title.typeText("Priority capture")
+        notesTap("notes.create.scope.0")
+        notesTap("notes.create.priority.2")
+        attach(app.screenshot(), named: "P15-93-notes-new-task-dark-en")
+        app.buttons["sheet.confirm"].tap()
+        let created = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Priority capture")).firstMatch
+        for _ in 0..<5 {
+            if created.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(created.waitForExistence(timeout: 8))
+        created.tap()
+        XCTAssertTrue(app.staticTexts["High"].waitForExistence(timeout: 5))
+        attach(app.screenshot(), named: "P15-93-notes-task-priority-dark-en")
+    }
+
+    private func notesReach(_ identifier: String, upward: Bool = true) {
+        let target = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+        for _ in 0..<5 {
+            if target.waitForExistence(timeout: 1), target.isHittable { return }
+            if upward { app.swipeUp() } else { app.swipeDown() }
+        }
+        XCTAssertTrue(target.isHittable, "\(identifier) must be reachable")
+    }
+
+    private func notesTap(_ identifier: String, upward: Bool = true) {
+        notesReach(identifier, upward: upward)
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch.tap()
     }
 
     private func openPage(_ destination: String, language: String = "en", theme: String = "dark", extra: [String] = [], launch: Bool = true) {

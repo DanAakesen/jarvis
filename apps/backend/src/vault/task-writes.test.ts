@@ -85,6 +85,22 @@ describe('task write input validation', () => {
 });
 
 describe('shared task writer', () => {
+  it.each(['high', 'medium', 'normal'] as const)('persists the selected %s priority when creating a task', async (priority) => {
+    const state = fixture(null);
+    const result = await state.writer.create({ text: 'Prepare next release', scope: 'personal', priority });
+    expect(result.priority).toBe(priority);
+    expect(parseTodosWithContext(state.file()!.content, path)[0]!.priorityLevel).toBe(priority);
+    expect(state.client.write).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an unknown creation priority before writing', async () => {
+    const state = fixture(null);
+    const invalid = { text: 'Prepare next release', scope: 'personal', priority: 'urgent' };
+    expect(validateTaskCreateInput(invalid)).toBe(false);
+    await expect(state.writer.create(invalid as never)).rejects.toMatchObject({ statusCode: 400 });
+    expect(state.client.write).not.toHaveBeenCalled();
+  });
+
   it('returns the committed parsed task, not the raw requested wording', async () => {
     const state = fixture(null);
     const result = await state.writer.create({

@@ -39,6 +39,11 @@ public struct VaultNoteWrite: Codable, Equatable, Sendable {
     public let url: String
 }
 
+public struct VaultFolderWrite: Codable, Equatable, Sendable {
+    public let path: String
+    public let commit: String
+}
+
 public enum VaultTaskState: String, Sendable {
     case open
     case done
@@ -142,6 +147,7 @@ public enum JarvisNotesClientError: Error, Equatable, Sendable {
     case noteNotFound
     case noteConflict(currentSha: String?, content: String?)
     case taskConflict
+    case folderAlreadyExists
     case writeOutcomeUnknown
 }
 
@@ -360,6 +366,31 @@ public final class JarvisNotesClient: Sendable {
         return try await writeNote(path: path, content: content, sha: sha)
     }
 
+    public func createFolder(path: String) async throws -> VaultFolderWrite {
+        guard !path.isEmpty, path.utf16.count <= 171, JarvisNotesLogic.validFolder(path) else {
+            throw JarvisNotesClientError.invalidRequest
+        }
+        do {
+            let response = try await request(method: .post, path: ["notes", "folders"],
+                body: try JSONEncoder().encode(["path": path]), idempotent: false, additionalSuccessStatuses: [409])
+            if response.statusCode == 409 { throw JarvisNotesClientError.folderAlreadyExists }
+            guard response.body.count <= 4096,
+                  let write = try? JSONDecoder().decode(VaultFolderWrite.self, from: response.body),
+                  write.path == path, Self.validGitSHA(write.commit) else {
+                throw JarvisNotesClientError.writeOutcomeUnknown
+            }
+            return write
+        } catch JarvisClientError.serviceUnavailable {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.networkFailure {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.timedOut {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.responseDecodingFailure {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        }
+    }
+
     public func tasks(query: String? = nil, state: VaultTaskState = .open) async throws -> VaultTaskList {
         guard (query?.utf16.count ?? 0) <= 200 else { throw JarvisNotesClientError.invalidRequest }
         var items = [URLQueryItem(name: "state", value: state.rawValue)]
@@ -420,7 +451,8 @@ public final class JarvisNotesClient: Sendable {
         text: String,
         scope: VaultTaskScope,
         due: String? = nil,
-        time: String? = nil
+        time: String? = nil,
+        priority: VaultTask.Priority? = nil
     ) async throws -> VaultTaskWrite {
         let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (2...400).contains(cleanText.unicodeScalars.count),
@@ -429,7 +461,7 @@ public final class JarvisNotesClient: Sendable {
               time == nil || due != nil else {
             throw JarvisNotesClientError.invalidRequest
         }
-        let body = TaskCreateRequest(text: cleanText, scope: scope, due: due, time: time)
+        let body = TaskCreateRequest(text: cleanText, scope: scope, due: due, time: time, priority: priority)
         do {
             let response = try await request(
                 method: .post,
@@ -621,7 +653,7 @@ public final class JarvisNotesClient: Sendable {
     }
 
     private static func topFolder(_ path: String) -> String {
-        path.split(separator: "/").first.map(String.init) ?? ""
+        path.contains("/") ? path.split(separator: "/").first.map(String.init) ?? "" : ""
     }
 
     private static func directory(_ path: String) -> String {
@@ -655,6 +687,7 @@ private struct TaskCreateRequest: Encodable {
     let scope: VaultTaskScope
     let due: String?
     let time: String?
+    let priority: VaultTask.Priority?
 }
 
 private struct KnowledgeSearchResponse: Decodable {
