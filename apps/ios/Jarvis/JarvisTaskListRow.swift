@@ -157,6 +157,7 @@ struct JarvisTaskListRow: View {
                 priorityLabel
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
         .font(.footnote)
         .foregroundStyle(.secondary)
     }
@@ -173,9 +174,14 @@ struct JarvisTaskListRow: View {
 
     @ViewBuilder private var priorityLabel: some View {
         if task.priority != .normal {
-            Label(priority, systemImage: "flag")
-                .foregroundStyle(priorityColor)
-                .fixedSize()
+            // List's automatic Label style can hide the word and give the symbol
+            // an expanded row proposal. Keep this compact metadata explicit.
+            HStack(spacing: 3) {
+                Image(systemName: "flag").accessibilityHidden(true)
+                Text(priority)
+            }
+            .foregroundStyle(priorityColor)
+            .fixedSize()
         }
     }
 

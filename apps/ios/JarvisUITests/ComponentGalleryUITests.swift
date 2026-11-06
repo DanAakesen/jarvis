@@ -518,6 +518,9 @@ final class ComponentGalleryUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(completion.frame.width, 44)
         XCTAssertGreaterThanOrEqual(completion.frame.height, 44)
         XCTAssertGreaterThan(first.frame.minX, 20, "Task groups must be inset from the screen edge")
+        if !largeText {
+            XCTAssertLessThan(first.frame.height, 100, "Priority metadata must not inflate a compact task row")
+        }
         attach(app.screenshot(), named: "P15-task-board-\(language)-\(theme)-large-\(largeText)")
 
         if !largeText {

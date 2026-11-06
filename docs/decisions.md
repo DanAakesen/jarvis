@@ -11221,3 +11221,15 @@ approved building and releasing after checks and UI inspection. This supersedes
 the earlier no-CI hold. Shared shimmer and active-scene dot animation are included.
 Native qualification, backend/agent readiness and TestFlight upload are still
 pending; do not interpret authorization as evidence that those steps passed.
+## 2026-11-06 — Keep selector text in the native glass content layer
+
+Actual captures from native run 42185446322 exposed label refraction despite all
+68 UI tests passing. Apply the effect directly to the padded label-bearing view,
+as described in Apple's [custom Liquid Glass guidance](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views),
+instead of a detached clear background inside GlassEffectContainer. Keep a quiet
+material rail, native selected-lens interaction and shared press timing. Complete
+labels fall back to scrolling when a segmented row cannot fit. Explicit compact
+priority metadata and bounded completion glyphs address the accompanying task-row
+layout defects. The retained images establish the defects; corrected Simulator
+inspection is still required. The Apple Markdown documentation was read directly
+after the connected web reader could not consume its Markdown content type.

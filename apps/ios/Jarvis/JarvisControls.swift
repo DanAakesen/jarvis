@@ -270,7 +270,7 @@ struct JarvisCheckButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                .font(.title2)
+                .font(.system(size: JarvisDesignTokens.iconButtonGlyphSize))
                 .foregroundStyle(tint)
                 .opacity(isWorking ? 0.5 : 1)
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
@@ -545,17 +545,21 @@ private struct JarvisSelectionPressStyle: ButtonStyle {
 }
 
 /// The selected lens uses native Liquid Glass; its identity lets the system morph between choices.
-private struct JarvisSelectionLens: View {
+private struct JarvisSelectionLens: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let namespace: Namespace.ID
+    let isSelected: Bool
+    let isSeparate: Bool
 
-    var body: some View {
-        Group {
+    func body(content: Content) -> some View {
+        if isSelected {
             if reduceTransparency {
-                Capsule().fill(JarvisDesignTokens.glassSolid)
+                content.background(JarvisDesignTokens.glassSolid, in: Capsule())
             } else {
-                Capsule().fill(Color.clear)
+                // GlassEffectContainer captures this content above its material.
+                // A separate transparent background lets the lens refract the label itself.
+                content
                     .glassEffect(
                         .regular.tint(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
                             .interactive(!reduceMotion),
@@ -563,10 +567,11 @@ private struct JarvisSelectionLens: View {
                     )
                     .glassEffectID("selected", in: namespace)
             }
+        } else if isSeparate {
+            content.jarvisGlassCapsule()
+        } else {
+            content
         }
-        .padding(JarvisDesignTokens.segmentedSelectionInset)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 
@@ -574,6 +579,7 @@ private struct JarvisSelectionLens: View {
 private struct JarvisSelectionRow<Tag: Hashable>: View {
     enum Layout { case segments, period, scrolling }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Namespace private var namespace
     let title: String
     let identifierPrefix: String
@@ -598,7 +604,7 @@ private struct JarvisSelectionRow<Tag: Hashable>: View {
                             .font(font.weight(selection == item.tag ? .semibold : .regular))
                             .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
                             .lineLimit(1)
-                            .fixedSize(horizontal: layout != .segments, vertical: false)
+                            .fixedSize(horizontal: true, vertical: false)
                             .padding(.horizontal, JarvisDesignTokens.labelledHorizontalPadding)
                             .padding(.vertical, JarvisDesignTokens.labelledVerticalPadding)
                             .frame(
@@ -607,23 +613,27 @@ private struct JarvisSelectionRow<Tag: Hashable>: View {
                                 minHeight: JarvisDesignTokens.controlMinimumHeight
                             )
                             .contentShape(Rectangle())
-                            .background {
-                                if selection == item.tag {
-                                    JarvisSelectionLens(namespace: namespace)
-                                } else if layout == .scrolling {
-                                    Color.clear.jarvisGlassCapsule()
-                                        .padding(JarvisDesignTokens.segmentedSelectionInset)
-                                }
-                            }
+                            .modifier(JarvisSelectionLens(namespace: namespace,
+                                                          isSelected: selection == item.tag,
+                                                          isSeparate: layout == .scrolling))
                     }
                     .buttonStyle(JarvisSelectionPressStyle())
                     .accessibilityAddTraits(selection == item.tag ? .isSelected : [])
                     .accessibilityIdentifier(item.identifier ?? "\(identifierPrefix).\(index)")
                 }
             }
+            .padding(layout == .scrolling ? 0 : JarvisDesignTokens.segmentedSelectionInset)
         }
         .background {
-            if layout != .scrolling { Color.clear.jarvisGlassCapsule() }
+            // The rail is a quiet backing; only the content-bearing choice owns
+            // an optical lens, so nested glass cannot sample its foreground text.
+            if layout != .scrolling {
+                if reduceTransparency {
+                    Capsule().fill(JarvisDesignTokens.glassSolid)
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                }
+            }
         }
         .animation(reduceMotion ? nil : .spring(
             duration: JarvisDesignTokens.selectionResponseDuration,
@@ -666,8 +676,12 @@ struct JarvisSegmentedBar<Tag: Hashable>: View {
             JarvisTabStrip(title: title, identifierPrefix: identifierPrefix,
                            items: items, selection: $selection)
         } else {
-            JarvisSelectionRow(title: title, identifierPrefix: identifierPrefix,
-                               items: items, selection: $selection, layout: .segments)
+            ViewThatFits(in: .horizontal) {
+                JarvisSelectionRow(title: title, identifierPrefix: identifierPrefix,
+                                   items: items, selection: $selection, layout: .segments)
+                JarvisTabStrip(title: title, identifierPrefix: identifierPrefix,
+                               items: items, selection: $selection)
+            }
         }
     }
 }

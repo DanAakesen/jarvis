@@ -138,8 +138,9 @@ correction itself did not require a second simulator.
 
 ## Combined runtime candidate
 
-Candidate 7dba227a compiled in native run 42185446322; its complete UI suite and
-capture export are in progress. General CI 42185446432 passed backend (7,361 tests,
+Candidate 7dba227a passed all 68 UI tests in native run 42185446322, including
+runtime isolation, mixed voice/chat history, Home send/camera and Usage recovery.
+General CI 42185446432 passed backend (7,361 tests,
 one skipped), Core (497 tests), web, agent, database and contract jobs. Its Python
 job found the workflow guard still requiring the former literal 45-minute native
 budget. The correction asserts the parsed 65-minute job cap and explicitly retains
@@ -154,3 +155,25 @@ evidence before pushing the final candidate, then cancel only redundant native
 runs after proving app/test-tree equality. A green general deployment receipt
 does not include the separately dispatched comparison job: that job and its
 `managed_chat_comparison_canary_ok` result must also pass before claiming activation.
+
+## Visual acceptance corrections after the 68-test pass
+
+Retained artifacts: scheme 13489694193 and screenshots 13489594776. Downloaded
+screenshots SHA-256 `a34a750b8f9766fc2c098c7f0541a64bafb8414993b3bf1aa70e0170d92f513b`
+matches GitHub's digest. Actual task, Home, Usage and component captures plus 21
+runtime/Settings/Health captures were inspected, including English dark, Danish
+light and accessibility text. Sampled frames of the 3.4-second Factory recording
+show the loading highlight travelling across the placeholder; tactile feel is
+not established. The runtime transcript capture contains Apple's first-use
+keyboard tutorial, so it does not establish the normal keyboard appearance.
+
+The passing functional tests did not establish visual acceptance. Selected labels
+were refracted by the detached glass background; priority task rows were much too
+tall and hid their priority words; Danish Settings tabs truncated at normal text
+size. The correction applies glass to the label-bearing view, uses a quiet material
+rail, and falls back to scrolling when complete labels do not fit. Task metadata
+uses explicit icon/text and natural vertical sizing; completion glyphs stay inside
+their 44-point targets at accessibility sizes. The existing board tests now also
+bound regular-size row height. Preserve the earlier results as evidence of these
+findings; this actual native source change requires a fresh run and screenshot
+inspection before release, not reuse of the 7dba227a app tree.

@@ -3416,3 +3416,16 @@ labelled loading state. Skeletons remain noninteractive and expose one localized
 loading label instead of decorative shapes. Content is never delayed for an exit
 animation. The existing native capture run retains two shimmer frames and a brief
 Factory loading video; visual acceptance is pending that run.
+
+### Correction from retained native captures
+
+Run 42185446322 passed 68 functional UI tests, but actual screenshots exposed
+blurred selected labels, inflated priority rows and truncated Danish Settings
+choices. A selection's native glass effect must wrap its label-bearing view;
+never put a detached optical lens behind text inside GlassEffectContainer. The
+rail uses quiet material while the selected choice retains native interactive
+glass and the shared interruptible press spring. Full labels take their natural
+width; segmented choices fall back to the shared scrolling layout when needed.
+Priority metadata uses explicit text with its flag and natural vertical sizing.
+Completion glyphs keep a bounded size inside accessible targets. Corrected native
+captures are required before accepting these changes.
