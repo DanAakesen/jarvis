@@ -7294,3 +7294,14 @@ Deploy 42281871580 passed readiness/all 15 Current acceptance checks, then TestF
 42282578034 uploaded build 77 from exact main 380782a0. This qualification/release
 is complete; Apple processing/owner visibility is not yet confirmed. Do not repeat
 an unchanged full simulator suite.
+
+## Home hierarchy follow-up qualification (6 November 2026)
+
+The owner accepts current loading motion. Preserve it while qualifying Home section
+headings, shared hero alignment, native swipe completion, transparent page headers
+and Notes/Factory footer containers. Existing Today cases retain the same launch
+coverage while adding bilingual AX captures and native partial/full swipe checks.
+Shared-page captures include scrolled headers and footer reachability. Native
+compilation/visual inspection is pending; Linux has no Swift/Xcode. Use one combined
+Simulator qualification and exact-tree reuse after merge, followed by accepted
+normal deployment before the unchanged TestFlight workflow.

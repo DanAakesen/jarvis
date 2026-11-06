@@ -458,7 +458,7 @@ extension JarvisList where Head == EmptyView {
 }
 
 extension View {
-    func jarvisAmbientBackground(transparentNavigationBar: Bool = false) -> some View {
+    func jarvisAmbientBackground(transparentNavigationBar: Bool = true) -> some View {
         frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollContentBackground(.hidden)
             .background { JarvisScreenBackground() }

@@ -25,12 +25,42 @@ final class TodayUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: "screen.\(name)").firstMatch
     }
 
+
+    /// Native List rows scroll naturally above the pinned composer, including at large text sizes.
+    private func reveal(_ element: XCUIElement) {
+        let list = app.descendants(matching: .any).matching(identifier: "today.list").firstMatch
+        for _ in 0..<10 {
+            let bottom = app.textFields["today.input"].frame.minY - 20
+            let top = list.frame.minY + 8
+            if element.exists && element.isHittable && element.frame.minY >= top && element.frame.maxY < bottom { return }
+            let above = element.exists && !element.frame.isEmpty && element.frame.minY < top
+            list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: above ? 0.35 : 0.7))
+                .press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: above ? 0.7 : 0.35)),
+                       withVelocity: .slow, thenHoldForDuration: 0.2)
+        }
+        XCTAssertTrue(element.isHittable, "Home content must remain reachable")
+    }
+
+    private func capture(_ name: String) {
+        let image = XCTAttachment(screenshot: app.screenshot())
+        image.name = name
+        image.lifetime = .keepAlways
+        add(image)
+    }
+
     func testTodayIsTheLaunchPageInDanishAndEnglish() {
         for language in ["da", "en"] {
-            launch(language: language)
+            launch(language: language, extraArguments: [
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+            ])
             XCTAssertTrue(screen("today").waitForExistence(timeout: 10), "Home must be the first screen (\(language))")
             XCTAssertTrue(app.descendants(matching: .any)["today.greeting"].waitForExistence(timeout: 5))
             XCTAssertFalse(screen("chat").exists)
+            capture("home-large-text-top-\(language)")
+            let upcoming = app.descendants(matching: .any)["today.section.upcoming"]
+            reveal(upcoming)
+            XCTAssertTrue(app.buttons["today.plus"].isEnabled)
+            capture("home-large-text-upcoming-\(language)")
             app.terminate()
         }
     }
@@ -51,11 +81,27 @@ final class TodayUITests: XCTestCase {
                 XCTAssertFalse(app.buttons["today.legend.chest"].exists, "No workout types list on Home")
                 XCTAssertTrue(app.descendants(matching: .any)["today.steps.ring"].exists)
                 XCTAssertTrue(app.descendants(matching: .any)["today.steps.chart"].exists)
+                let card = app.descendants(matching: .any)["today.activity"]
+                let title = card.staticTexts["hero.title"]
+                let cardFrame = card.frame
+                let titleFrame = title.frame
+                XCTAssertEqual(titleFrame.minX - cardFrame.minX, titleFrame.minY - cardFrame.minY,
+                               accuracy: 2, "Hero title has equal top and leading padding")
+                let periods = app.scrollViews["today.range.scroll"]
+                XCTAssertEqual(periods.frame.maxX, cardFrame.maxX - 16, accuracy: 1)
+                XCTAssertEqual(app.buttons["today.range.30"].frame.maxX, periods.frame.maxX - 3, accuracy: 2,
+                               "Period buttons finish at the hero's trailing inset")
+                for id in ["home", "quickActions", "upcoming"] {
+                    XCTAssertTrue(app.descendants(matching: .any)["today.section.\(id)"].exists)
+                }
+                capture("home-top-\(language)-\(appearance)")
                 let workout = app.buttons["today.logWorkout"]
                 let lift = app.buttons["today.logLift"]
+                reveal(workout)
                 XCTAssertTrue(workout.exists && lift.exists)
                 XCTAssertEqual(workout.frame.width, lift.frame.width, accuracy: 1, "Quick actions are equal tiles")
                 let todayTab = app.buttons["today.tab.today"]
+                reveal(todayTab)
                 let dueTab = app.buttons["today.tab.due"]
                 XCTAssertTrue(todayTab.exists && dueTab.exists)
                 XCTAssertEqual(todayTab.frame.width, dueTab.frame.width, accuracy: 1)
@@ -92,6 +138,7 @@ final class TodayUITests: XCTestCase {
         let plus = app.buttons["today.plus"]
         XCTAssertTrue(plus.waitForExistence(timeout: 10))
         for item in ["today.plus.task", "today.plus.note"] {
+            reveal(plus)
             plus.tap()
             let entry = app.buttons[item]
             XCTAssertTrue(entry.waitForExistence(timeout: 3), item)
@@ -152,12 +199,14 @@ final class TodayUITests: XCTestCase {
         launch()
         let workout = app.buttons["today.logWorkout"]
         XCTAssertTrue(workout.waitForExistence(timeout: 10))
+        reveal(workout)
         workout.tap()
         XCTAssertTrue(app.buttons["today.workout.session.chest"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.textFields["today.lift.name"].exists, "Log workout shows workout types, not lifts")
         app.buttons["sheet.cancel"].tap()
         let lift = app.buttons["today.logLift"]
         XCTAssertTrue(lift.waitForExistence(timeout: 5))
+        reveal(lift)
         lift.tap()
         XCTAssertTrue(app.textFields["today.lift.name"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["today.workout.session.chest"].exists, "Log lift shows lifts, not workout types")
@@ -173,23 +222,28 @@ final class TodayUITests: XCTestCase {
         for _ in 0..<4 where !expand.isHittable { app.swipeUp() }
         XCTAssertTrue(expand.isHittable)
         expand.tap()
-        let first = app.buttons["today.task.done.t1"]
-        for _ in 0..<4 where !first.isHittable { app.swipeUp() }
-        XCTAssertTrue(first.isHittable)
-        first.tap()
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
-        screenshot.name = "P15-success-task-dark-en"
-        screenshot.lifetime = .keepAlways
-        add(screenshot)
+        let first = app.descendants(matching: .any)["today.task.t1"]
+        reveal(first)
+        XCTAssertTrue(first.label.hasPrefix("Task:"), "Rows announce their type as well as their title")
+        XCTAssertFalse(app.buttons["today.task.done.t1"].exists, "No inline completion circle")
+        capture("home-mixed-agenda-before-swipe")
+        first.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.5)))
+        let complete = app.buttons["today.task.done.t1"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5), "A partial native swipe reveals completion")
+        capture("home-task-completion-swipe")
+        complete.tap()
         let removed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: first)
         XCTAssertEqual(XCTWaiter.wait(for: [removed], timeout: 5), .completed)
-        let second = app.buttons["today.task.done.t2"]
-        for _ in 0..<4 where !second.isHittable { app.swipeUp() }
-        XCTAssertTrue(second.isHittable)
+        capture("P15-success-task-dark-en")
+        let second = app.descendants(matching: .any)["today.task.t2"]
+        reveal(second)
         XCTAssertTrue(second.isEnabled, "Confirmation must not block another completion")
-        second.tap()
+        second.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.5))
+            .press(forDuration: 0.05, thenDragTo: second.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5)))
         let secondRemoved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: second)
-        XCTAssertEqual(XCTWaiter.wait(for: [secondRemoved], timeout: 5), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [secondRemoved], timeout: 5), .completed,
+                       "A full native swipe completes the second task")
         XCTAssertTrue(app.textFields["today.input"].isEnabled)
     }
 
@@ -197,6 +251,7 @@ final class TodayUITests: XCTestCase {
         launch()
         let log = app.buttons["today.logWorkout"]
         XCTAssertTrue(log.waitForExistence(timeout: 10))
+        reveal(log)
         log.tap()
         let chest = app.buttons["today.workout.session.chest"]
         XCTAssertTrue(chest.waitForExistence(timeout: 5))
@@ -216,6 +271,7 @@ final class TodayUITests: XCTestCase {
         launch(appearance: "dark")
         let log = app.buttons["today.logLift"]
         XCTAssertTrue(log.waitForExistence(timeout: 10))
+        reveal(log)
         log.tap()
         let name = app.textFields["today.lift.name"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))

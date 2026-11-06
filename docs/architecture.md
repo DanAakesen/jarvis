@@ -8792,3 +8792,12 @@ precedence and replacement. Provisioning and backend independently compute the
 same receipt. Ordinary Current conversations and owner approval rules are unchanged.
 Native stored-policy diagnostics failed; no working Copilot policy channel is
 claimed. See PR #1624 and the device-feedback record for actual qualification.
+
+### Home agenda and page chrome follow-up (6 November 2026)
+
+Home uses the shared JarvisList with direct native agenda rows so SwiftUI owns
+swipe recognition and accessibility. Completion still uses the existing pending-ID
+and backend-write path; no optimistic success or new persistence is introduced.
+JarvisHeroHeader is shared by Home and JarvisPageHeroCard. Ambient navigation bars
+now default to hidden; Notes/Factory apply ambient painting outside footer insets.
+Backend, Chat handoffs, Health refresh and loading motion are unchanged.

@@ -38,7 +38,7 @@ struct JarvisTodayActivityCard: View {
                 .accessibilityAddTraits(.isHeader)
             stepsBlock(display)
         }
-        .padding(10)
+        .padding(JarvisPageHeaderMetrics.heroInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
         .accessibilityElement(children: .contain)
@@ -48,11 +48,7 @@ struct JarvisTodayActivityCard: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Text(copy(.workouts)).font(.subheadline.weight(.semibold)).accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 8)
-            rangeToggle
-        }
+        JarvisHeroHeader(copy(.workouts)) { rangeToggle }
     }
 
     private var rangeToggle: some View {

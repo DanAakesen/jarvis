@@ -1,3 +1,17 @@
+## Active follow-up — Home hierarchy and transparent chrome
+
+The owner accepts the loading animations. Preserve them. The next correction adds
+Home / Quick actions / Upcoming section headings, equal hero title insets with
+trailing period controls, distinct orange calendar/task icons and native task
+swipe completion. Shared page navigation bars default to transparent; Notes and
+Factory paint their ambient background behind the entire footer inset.
+
+Implementation and existing native test updates are prepared on
+`codex/p15-home-hierarchy`. Native rendering and interactions are not yet verified.
+Run one combined qualification, inspect bilingual/large-text Home and shared page
+captures, then release under the existing authorization. Do not rerun unchanged
+Simulator coverage after merge when exact tree identity has been established.
+
 ## Current release — 6 November 2026, build 77
 
 Owner-reported passes: cold Voice/unified transcript, Home send/camera, task/reminder

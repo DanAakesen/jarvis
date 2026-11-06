@@ -76,7 +76,7 @@ private struct JarvisPageHeaderModifier<Header: View>: ViewModifier {
             // Rows stop at this boundary instead of needing a material bar to cover them.
             content.clipped()
         }
-        .scrollEdgeEffectHidden(for: .top)
+        .scrollEdgeEffectHidden()
     }
 }
 
@@ -175,9 +175,44 @@ struct JarvisRowGroup<Content: View>: View {
     }
 }
 
+/// Titles share the card's top/leading inset. Period controls align to its trailing
+/// edge, moving below the title at accessibility sizes without shrinking labels.
+struct JarvisHeroHeader<Accessory: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let title: String
+    let accessory: Accessory
+
+    init(_ title: String, @ViewBuilder accessory: () -> Accessory) {
+        self.title = title
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.actionSpacing) {
+                heading
+                accessory.frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        } else {
+            HStack(alignment: .top, spacing: JarvisPageHeaderMetrics.actionSpacing) {
+                heading.layoutPriority(1)
+                Spacer(minLength: 0)
+                accessory
+            }
+        }
+    }
+
+    private var heading: some View {
+        Text(title)
+            .font(.title3.weight(.semibold))
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("hero.title")
+    }
+}
+
 /// The one hero component under the headline.
 struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let accessory: Accessory
     let content: Content
@@ -198,17 +233,8 @@ struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-            if !title.isEmpty, dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.actionSpacing) {
-                    heading
-                    accessory
-                }
-            } else if !title.isEmpty {
-                HStack(alignment: .firstTextBaseline) {
-                    heading
-                    Spacer(minLength: JarvisPageHeaderMetrics.actionSpacing)
-                    accessory
-                }
+            if !title.isEmpty {
+                JarvisHeroHeader(title) { accessory }
             }
             content
         }
@@ -221,9 +247,6 @@ struct JarvisPageHeroCard<Accessory: View, Content: View>: View {
         .accessibilityElement(children: .contain)
     }
 
-    private var heading: some View {
-        Text(title).font(.headline).accessibilityAddTraits(.isHeader)
-    }
 }
 
 extension JarvisPageHeroCard where Accessory == EmptyView {

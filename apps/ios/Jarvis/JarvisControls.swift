@@ -739,8 +739,11 @@ struct JarvisPeriodSelector<Tag: Hashable>: View {
                 .padding(.vertical, 2)
         }
         .scrollIndicators(.hidden)
+        // Short controls sit against the trailing inset; overflowing labels still
+        // start at the first period and remain horizontally scrollable.
+        .defaultScrollAnchor(.trailing, for: .alignment)
         .accessibilityIdentifier("\(identifierPrefix).scroll")
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     private var segments: some View {

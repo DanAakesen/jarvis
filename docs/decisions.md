@@ -11354,3 +11354,13 @@ record. Normal Deploy 42281871580 passed readiness and all 15 Current checks bef
 unchanged TestFlight 42282578034 uploaded build 77 at 19:54:10 UTC / 20:54:10 Copenhagen.
 Copilot remains unqualified because trusted-policy compatibility failed; this
 release does not activate it or treat plain provider responses as sufficient.
+
+## 6 November 2026 — Home hierarchy and transparent chrome follow-up
+
+The owner requests Home, Quick actions and Upcoming section headings; larger
+left-aligned hero titles with equal top/leading inset; right-aligned periods;
+orange calendar/task icons; native task swipe completion; transparent headers on
+all other pages and transparent Notes/Factory footer containers. The owner also
+accepts loading animations, which remain unchanged. Implement these through shared
+hero/header/background components and the existing native List and completion
+path. Source implementation is prepared; new rendered acceptance is pending.

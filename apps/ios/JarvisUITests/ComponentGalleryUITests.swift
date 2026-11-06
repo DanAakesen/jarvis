@@ -238,10 +238,21 @@ final class ComponentGalleryUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Synthetic decision"].exists)
         XCTAssertTrue(needs.isHittable, "The old Needs Dan entry scrolls its column into view")
         attach(app.screenshot(), named: "P15-94-factory-\(state)-\(theme)-\(language)")
+        captureReservedHeaderAfterScroll(named: "Home-refinement-factory-footer-\(theme)-\(language)")
+        XCTAssertTrue(app.buttons["factory.plus"].isHittable, "The floating footer stays reachable after scrolling")
     }
 
     func testHealthPeriodsDarkEnglish() { captureHealthHeroes(language: "en", theme: "dark") }
     func testHealthPeriodsLightDanish() { captureHealthHeroes(language: "da", theme: "light") }
+
+    private func assertHeroHeader(_ card: XCUIElement, lastPeriod: String) {
+        let bounds = card.frame
+        let title = card.staticTexts["hero.title"].frame
+        XCTAssertEqual(title.minX - bounds.minX, title.minY - bounds.minY, accuracy: 2,
+                       "Hero title keeps equal top and leading padding")
+        XCTAssertEqual(app.buttons[lastPeriod].frame.maxX, bounds.maxX - 19, accuracy: 2,
+                       "Periods align to the card's trailing inset, including the control's own inset")
+    }
 
     private func captureHealthHeroes(language: String, theme: String) {
         openPage("health", language: language, theme: theme, launch: true)
@@ -251,16 +262,19 @@ final class ComponentGalleryUITests: XCTestCase {
         for id in periodIDs { XCTAssertTrue(app.buttons[id].exists, id) }
         XCTAssertFalse(app.buttons["health.period.yesterday"].exists)
         let initial = app.buttons["health.period.today"].frame
+        assertHeroHeader(training, lastPeriod: "health.period.thirtyDays")
         XCTAssertTrue(app.descendants(matching: .any)["health.training.donut"].exists)
         attach(app.screenshot(), named: "P15-95-health-training-\(theme)-\(language)")
         training.swipeLeft()
         let sleep = app.descendants(matching: .any)["health.hero.sleep"]
         XCTAssertTrue(sleep.waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons["health.period.today"].frame.minY, initial.minY, accuracy: 1)
+        assertHeroHeader(sleep, lastPeriod: "health.period.thirtyDays")
         attach(app.screenshot(), named: "P15-95-health-sleep-\(theme)-\(language)")
         sleep.swipeLeft()
         XCTAssertTrue(app.descendants(matching: .any)["health.hero.nutrition"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.buttons["health.period.today"].frame.minY, initial.minY, accuracy: 1)
+        assertHeroHeader(app.descendants(matching: .any)["health.hero.nutrition"], lastPeriod: "health.period.thirtyDays")
         app.buttons["health.period.thirtyDays"].tap()
         XCTAssertTrue(app.buttons["health.period.thirtyDays"].isSelected)
         attach(app.screenshot(), named: "P15-95-health-nutrition-\(theme)-\(language)")

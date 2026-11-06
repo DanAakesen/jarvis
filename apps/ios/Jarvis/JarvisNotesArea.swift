@@ -198,7 +198,6 @@ struct JarvisNotesArea: View {
             }
         }
         .jarvisPageHeader { header }
-        .jarvisAmbientBackground()
         .jarvisSuccessFeedback($successConfirmation)
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -211,7 +210,9 @@ struct JarvisNotesArea: View {
                 .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
             }
         }
-        .scrollEdgeEffectHidden(for: .bottom)
+        .jarvisAmbientBackground()
+        .toolbarBackground(.hidden, for: .bottomBar)
+        .scrollEdgeEffectHidden()
         .task(id: "\(selectedTab.rawValue)-\(refreshVersion)") {
             await loadSelectedTab(force: refreshVersion > 0)
         }

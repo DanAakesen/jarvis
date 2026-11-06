@@ -3492,3 +3492,19 @@ has aligned columns, Factory retains two rows and Danish Notes fits its summary.
 The corrected gallery passed in 42280276801 on unchanged production views and its
 final bilingual captures were inspected. Build 77 includes this composition. These
 are native content captures, not SpringBoard/tint or live-refresh evidence.
+
+### Home hierarchy and chrome correction (6 November 2026)
+
+Use the shared 16 pt hero inset and title3 semibold heading for Home and all page
+heroes. Align short period controls to the trailing edge; retain horizontal
+scrolling when labels overflow and stack below the heading at accessibility sizes.
+Home adds the requested Home, Quick actions and Upcoming headings. Its native
+agenda rows align bare orange calendar/checklist symbols to the same leading
+column, with title and timing in the content column. Remove the inline task circle;
+a trailing native swipe exposes Mark done and full swipe completes.
+
+Hide system navigation-bar backings by default and scroll-edge effects on shared
+page scaffolds. Apply the ambient background after Notes/Factory footer insets so
+the page continues behind floating controls. Preserve Chat's existing explicit
+transparent setting and the owner-accepted loading animations. These source changes
+need fresh native visual/interaction evidence before acceptance.
