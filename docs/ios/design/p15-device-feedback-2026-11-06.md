@@ -437,3 +437,9 @@ The failed source has no UI-test pass or visual acceptance.
 Diagnostic PR #1622 / c1999570 passed CI 42240555035 and CodeQL 42240554834 and
 merged as 806d49db at 15:21 UTC. Normal Deploy 42242252546 is queued; its fixed
 role/encoding matrix follows deployment. Production policy remains unchanged.
+
+The 0f93aa09 build exposed the underlying Core boundary: JSON string/number
+convenience accessors are app-local/file-private. Corrected 5a923e70 uses public
+JSONValue case matching, with no visibility change. Native 42242719701,
+CI 42242719791 and CodeQL 42242719674 now qualify this head. The preceding
+builds stopped before simulator boot; neither is visual/test acceptance.
