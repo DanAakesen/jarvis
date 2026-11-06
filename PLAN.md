@@ -17,7 +17,8 @@ before assertions and synchronizes the single camera-menu test tap.
 
 The candidate includes accepted main before qualification. Its app/test tree is
 c45cc6b07fa0754bd100ca9b1db25e069b7daeff. One fresh native 42268563484, CI 42268563357
-and CodeQL 42268563412 qualify this combined correction. Inspect final bilingual
+and CodeQL 42268563412 qualify this combined correction. CI, all 502 Core tests
+and CodeQL have passed; native remains active. Inspect final bilingual
 widgets, task-group scrolling and Health-detail headings before merge/upload.
 Retain failed evidence; do not repeat an unchanged simulator to retrieve artifacts.
 

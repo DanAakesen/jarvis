@@ -632,3 +632,15 @@ Correction 7bb5fba2 and current accepted main merged into candidate
 `c45cc6b07fa0754bd100ca9b1db25e069b7daeff`. Exactly one new native 42268563484
 (job 128066843487), CI 42268563357 and CodeQL 42268563412 qualify these changed
 views/tests. The df56 failure is retained and is not reused as a release pass.
+
+## 18:21 UTC — Exact corrected candidate CI qualified
+
+CI 42268563357 and CodeQL 42268563412 passed for dce71639. All 502 Core tests
+passed. CI artifact 13527859087 (SHA256
+b3e3eb56407c1a0e08684984755d97e95000a765f12ecb9f7537cafd78957e64) records
+qualified PR #1621 head dce71639, tested merge source
+c6e68a5f6ee7d8073343f0fe4eda58d37d56cd55 and full tree
+60493e67e0176d4dcd41eb6d533d031413bc5f70, identical to the candidate tree.
+All selected component checks succeeded. Receipt retained at
+/tmp/p15-dce-ci-evidence.json. Native compilation also passed; its single combined
+test/capture step started at 18:16:14 UTC and remains active.

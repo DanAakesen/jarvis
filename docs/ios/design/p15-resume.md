@@ -15,7 +15,8 @@ groups also exposed sticky-heading overlap. Candidate dce71639 corrects the grou
 flow, uses shared primary Health-detail headings, refines the geometry assertion,
 retains both widget languages before checks and synchronizes one camera-menu tap.
 It includes accepted main; app/test tree c45cc6b07fa0754bd100ca9b1db25e069b7daeff.
-Native 42268563484, CI 42268563357 and CodeQL 42268563412 are the active qualification.
+CI 42268563357, all 502 Core tests and CodeQL 42268563412 passed. Native
+42268563484 compiled and is the single active qualification.
 Review corrected captures before release; no new upload is claimed.
 
 Backend PR #1624 / 1fb0f908 deployed successfully in 42258321357 with all 15 Current
