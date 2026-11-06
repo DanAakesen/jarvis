@@ -18,7 +18,7 @@ Normal deployment 42248895975 and Current acceptance passed through #1623 / 1146
 Fixed stored-policy diagnostic 42252117950 failed both developer and system roles:
 the response did not satisfy policy precedence/update sentinels. Earlier matrices
 show ordinary user input succeeds but trusted-role response input is rejected.
-Copilot remains incompatible with the complete per-turn Jarvis policy. PR #1624 merged as1fb0f908 after CI/CodeQL; normal deployment42258321357
+Copilot remains incompatible with the complete per-turn Jarvis policy. PR #1624 merged as 1fb0f908 after CI/CodeQL; normal deployment 42258321357
 is active. It adds an exact target/model/effort/transport compatibility receipt, fail-closed new
 and existing test turns, and a specific web/iOS explanation. Only a full-policy,
 two-turn precedence/update canary can grant that receipt; never demote or omit

@@ -534,23 +534,23 @@ runtime remains unaffected. Do not weaken policy or owner approval to enable Cop
 
 ## 17:08 UTC — Qualified gate merged; UI archive assertions aligned
 
-PR #1624 headbc49960e passed CI42256565855 and CodeQL42256565841. Guarded squash
-merge1fb0f908ab6c5460420a471a867482b56bb766b2 has the same qualified full tree
-`dff0e6df665a5fef3852e3bb5116f57e201d7d0a`. Normal automatic Deploy42258321357 is
+PR #1624 head bc49960e passed CI 42256565855 and CodeQL 42256565841. Guarded squash
+merge 1fb0f908ab6c5460420a471a867482b56bb766b2 has the same qualified full tree
+`dff0e6df665a5fef3852e3bb5116f57e201d7d0a`. Normal automatic Deploy 42258321357 is
 active. No activation, new policy probe or definition refresh was dispatched.
-Local gate checks:312 Python tests plus9 subtests,43 backend and3 web tests,
+Local gate checks: 312 Python tests plus 9 subtests, 43 backend and 3 web tests,
 backend build, scoped lint/compilation and shell syntax. Live receipt-gated
 availability and normal runtime acceptance are not inferred from these tests.
 
-UI e0d6821e passed502 Core and CodeQL but failed two pipeline assertions expecting
+UI e0d6821e passed 502 Core and CodeQL but failed two pipeline assertions expecting
 one screenshot archive. They now require both archive paths, retention and links;
-all24 existing iOS workflow tests pass locally using Node YAML parsing. The old
+all 24 existing iOS workflow tests pass locally using Node YAML parsing. The old
 native job was queued when cancellation was requested, acquired a runner during
-cancellation and entered compilation. Force cancellation completed17:04:56UTC;
-job128028185630 confirms Boot iPhone Simulator remained pending with no start/end.
+cancellation and entered compilation. Force cancellation completed 17:04:56 UTC;
+job 128028185630 confirms Boot iPhone Simulator remained pending with no start/end.
 No simulator boot or native test pass is claimed for e0d6821e.
 
-Replacementdf56bcaa47057bd18958ae151984747a505fe603 retains identical app/test tree
-`d3f0f3c1c7e71bd0ed0d97b0b7c11520255ad12a`. Fresh CI42258269045, CodeQL42258268841
-and single native42258268925 qualify this candidate. Core job128031762072 passed
-502 tests with0 failures at17:07:18UTC. Native is waiting for a Mac runner.
+Replacement df56bcaa47057bd18958ae151984747a505fe603 retains identical app/test tree
+`d3f0f3c1c7e71bd0ed0d97b0b7c11520255ad12a`. Fresh CI 42258269045, CodeQL 42258268841
+and single native 42258268925 qualify this candidate. Core job 128031762072 passed
+502 tests with 0 failures at 17:07:18 UTC. Native is waiting for a Mac runner.
