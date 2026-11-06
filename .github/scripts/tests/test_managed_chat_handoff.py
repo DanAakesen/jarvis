@@ -63,11 +63,14 @@ elif args[:2] == ['rest','--method']:
         if 'CANARY_BODY' in os.environ:
             print(os.environ['CANARY_BODY'])
             sys.exit(0)
-        print(json.dumps({'status':'ok','model':'other' if os.environ.get('BAD_CANARY') else 'gpt-6.1-terra','reasoningEffort':'high','requestShape':'managed_policy'}))
+        sys.path.insert(0, str(Path.cwd() / 'agents/jarvis'))
+        from managed_policy_compatibility import POLICY_TRANSPORT_REVISION, policy_compatibility_receipt
+        receipt = policy_compatibility_receipt('https://synthetic.services.ai.azure.com/api/projects/synthetic', 'jarvis-main-copilot-preview', '1', 'a'*64, 'gpt-6.1-terra', 'high')
+        print(json.dumps({'status':'ok','model':'other' if os.environ.get('BAD_CANARY') else 'gpt-6.1-terra','reasoningEffort':'high','requestShape':'managed_policy', 'policyTransportRevision':POLICY_TRANSPORT_REVISION, 'policyCompatibility':receipt}))
 elif args[:2] == ['containerapp','update']:
     assert '--set-env-vars' in args
     names = [arg.split('=',1)[0] for arg in args if arg.startswith('FOUNDRY_')]
-    assert names == ['FOUNDRY_COPILOT_AGENT_NAME','FOUNDRY_COPILOT_AGENT_VERSION','FOUNDRY_COPILOT_DEFINITION_SHA256']
+    assert names in [['FOUNDRY_COPILOT_AGENT_NAME','FOUNDRY_COPILOT_AGENT_VERSION','FOUNDRY_COPILOT_DEFINITION_SHA256','FOUNDRY_COPILOT_POLICY_COMPATIBILITY'], ['FOUNDRY_COPILOT_POLICY_COMPATIBILITY']]
 elif args[:2] == ['containerapp','show']:
     print(json.dumps({'latest':'synthetic-new','ready':'synthetic-old' if os.environ.get('NOT_READY') else 'synthetic-new'}))
 else:
@@ -182,11 +185,35 @@ class ManagedHandoffTests(unittest.TestCase):
         self.assertEqual(names, [("az", ["deployment", "group"]), ("az", ["rest", "--method"]),
                                  ("python", [".github/scripts/provision_managed_chat.py", "--project-id"]),
                                  ("az", ["containerapp", "update"]), ("az", ["containerapp", "show"]),
-                                 ("az", ["rest", "--method"])])
+                                 ("az", ["rest", "--method"]),
+                                 ("az", ["containerapp", "update"]), ("az", ["containerapp", "show"])])
         self.assertNotIn("private", result.stdout + result.stderr)
+        updates = [args for name, args in calls if args[:2] == ["containerapp", "update"]]
+        self.assertIn("FOUNDRY_COPILOT_POLICY_COMPATIBILITY=", updates[0])
+        receipt = next(value.split("=", 1)[1] for value in updates[1] if value.startswith("FOUNDRY_COPILOT_POLICY_COMPATIBILITY="))
+        self.assertRegex(receipt, "^[0-9a-f]{64}$")
+        self.assertNotIn(receipt, result.stdout + result.stderr)
         update = next(args for name, args in calls if args[:2] == ["containerapp", "update"])
         self.assertNotIn("--replace-env-vars", update)
         self.assertNotIn("--remove-env-vars", update)
+
+    def test_missing_stale_or_nonpolicy_evidence_cannot_stamp_compatibility(self):
+        fixture = json.loads((ROOT / ".github/scripts/tests/fixtures/managed-policy-compatibility.json").read_text())
+        valid = {"status": "ok", "requestShape": "managed_policy", "model": "gpt-6.1-terra",
+                 "reasoningEffort": "high", "policyTransportRevision": fixture["policyTransportRevision"],
+                 "policyCompatibility": fixture["receipt"]}
+        invalid = [{key: value for key, value in valid.items() if key != "policyCompatibility"},
+                   {**valid, "status": "diagnostic"}, {**valid, "requestShape": "plain_text"},
+                   {**valid, "policyTransportRevision": "old-revision"},
+                   {**valid, "policyCompatibility": "b" * 64}, {**valid, "reasoningEffort": "low"}]
+        for body in invalid:
+            result, calls = self.run_handoff(CANARY_BODY=json.dumps(body))
+            self.assertNotEqual(result.returncode, 0)
+            updates = [args for name, args in calls if args[:2] == ["containerapp", "update"]]
+            self.assertEqual(len(updates), 1)
+            self.assertIn("FOUNDRY_COPILOT_POLICY_COMPATIBILITY=", updates[0])
+            self.assertNotIn("managed_chat_comparison_canary_ok", result.stdout)
+            self.assertNotIn(fixture["receipt"], result.stdout + result.stderr)
 
     def test_inspection_exits_before_backend_update_readiness_or_canary(self):
         for failure in ["", "1"]:

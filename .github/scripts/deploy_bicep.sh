@@ -28,7 +28,7 @@ jq -n --argjson emails "$budget_emails" \
   '{parameters: {budgetContactEmails: {value: $emails}}}' >"$budget_parameters"
 
 backend_apps=$(az containerapp list --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
-  --query "[?starts_with(name, 'ca-jarvis-backend-')].{name:name,image:properties.template.containers[0].image,copilot:properties.template.containers[0].env[?name=='FOUNDRY_COPILOT_AGENT_NAME' || name=='FOUNDRY_COPILOT_AGENT_VERSION' || name=='FOUNDRY_COPILOT_DEFINITION_SHA256']}" \
+  --query "[?starts_with(name, 'ca-jarvis-backend-')].{name:name,image:properties.template.containers[0].image,copilot:properties.template.containers[0].env[?name=='FOUNDRY_COPILOT_AGENT_NAME' || name=='FOUNDRY_COPILOT_AGENT_VERSION' || name=='FOUNDRY_COPILOT_DEFINITION_SHA256' || name=='FOUNDRY_COPILOT_POLICY_COMPATIBILITY']}" \
   --output json --only-show-errors)
 if ! jq -e 'type == "array" and length <= 1 and all(.[]; type == "object")' <<<"$backend_apps" >/dev/null; then
   echo "::error::Unable to identify one existing backend configuration."
@@ -42,7 +42,8 @@ if ! copilot_values=$(jq -cer '
   if type != "array" or any(.[]; type != "object" or
       (.name != "FOUNDRY_COPILOT_AGENT_NAME" and
        .name != "FOUNDRY_COPILOT_AGENT_VERSION" and
-       .name != "FOUNDRY_COPILOT_DEFINITION_SHA256") or
+       .name != "FOUNDRY_COPILOT_DEFINITION_SHA256" and
+       .name != "FOUNDRY_COPILOT_POLICY_COMPATIBILITY") or
       (.value | type != "string")) or
       (map(.name) | unique | length) != length then error
   else reduce .[] as $item ({}; .[$item.name] = $item.value)
@@ -54,6 +55,9 @@ fi
 copilot_agent_name=$(jq -r '.FOUNDRY_COPILOT_AGENT_NAME // ""' <<<"$copilot_values")
 copilot_agent_version=$(jq -r '.FOUNDRY_COPILOT_AGENT_VERSION // ""' <<<"$copilot_values")
 copilot_definition_sha256=$(jq -r '.FOUNDRY_COPILOT_DEFINITION_SHA256 // ""' <<<"$copilot_values")
+copilot_policy_receipt=$(jq -r '.FOUNDRY_COPILOT_POLICY_COMPATIBILITY // ""' <<<"$copilot_values")
+# An absent/malformed policy receipt stays unavailable without blocking Current.
+if [[ ! "$copilot_policy_receipt" =~ ^[0-9a-f]{64}$ ]]; then copilot_policy_receipt=""; fi
 copilot_value_count=$(jq 'length' <<<"$copilot_env")
 if (( copilot_value_count != 0 )); then
   if [[ ! "$copilot_agent_name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ||
@@ -111,7 +115,8 @@ fi
 if [[ -n "$copilot_agent_name" ]]; then
   parameters+=(foundryCopilotAgentName="$copilot_agent_name"
     foundryCopilotAgentVersion="$copilot_agent_version"
-    foundryCopilotDefinitionSha256="$copilot_definition_sha256")
+    foundryCopilotDefinitionSha256="$copilot_definition_sha256"
+    foundryCopilotPolicyCompatibility="$copilot_policy_receipt")
 fi
 
 vault_mirror_enabled="$vault_mirror_requested"

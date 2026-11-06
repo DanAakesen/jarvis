@@ -13,6 +13,12 @@ describe('runtime test availability', () => {
       current: { available: true }, copilot: { available: false, reason: 'copilot_not_configured' },
     });
   });
+  it('preserves the policy compatibility reason while leaving Current available', async () => {
+    const result = await readRuntimeTests({ storageAvailable: true, currentAvailable: true,
+      readVerified: async () => ({ current: { available: false }, copilot: { available: false, reason: 'copilot_policy_not_verified' } }) });
+    expect(result.current.available).toBe(true);
+    expect(result.copilot).toEqual({ available: false, reason: 'copilot_policy_not_verified' });
+  });
   it('keeps a verifier failure content-free and fails closed', async () => {
     const result = await readRuntimeTests({ storageAvailable: true, currentAvailable: false,
       readVerified: async () => { throw new Error('Private provider payload'); } });

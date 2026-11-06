@@ -16,6 +16,8 @@ describe('runtime test client boundaries', () => {
     expect((await loadRuntimeTestAvailability(token, config)).copilot).toEqual({ available: false, reason: 'The selected settings and Copilot runtime have not been verified.' });
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ current: { available: true }, copilot: { available: false, reason: 'copilot_not_configured' } }))));
     expect((await loadRuntimeTestAvailability(token, config)).copilot).toEqual({ available: false, reason: 'Copilot testing has not been activated on the server.' });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ current: { available: true }, copilot: { available: false, reason: 'copilot_policy_not_verified' } }))));
+    expect((await loadRuntimeTestAvailability(token, config)).copilot).toEqual({ available: false, reason: 'Copilot has not passed the check for applying Jarvis’s instructions. Use Current.' });
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ current: { available: true }, copilot: { available: false, reason: 'Private provider response.' } }))));
     expect((await loadRuntimeTestAvailability(token, config)).copilot).toEqual({ available: false, reason: 'This runtime is unavailable.' });
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ current: { available: true } }))));

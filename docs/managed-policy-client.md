@@ -105,12 +105,19 @@ request for `_create_response` and the fixed administrative canary. Shared
 `runtime_instructions` extracts the existing format/channel/food/capability clauses
 without changing their content; both paths then use `personalize_instructions`
 with selected identity, mode, preferences and backend capability settings. A local
-HTTP fixture compares the complete canary developer-policy message to an actual policy turn.
+HTTP fixture compares the unchanged complete policy prefix to an actual policy turn.
+The canary appends a fixed qualification clause containing a policy-only sentinel,
+then sends a conflicting user instruction. It requires that exact sentinel and
+repeats the check with an updated policy and sentinel on the same conversation.
+Both turns use the production input cursor and request builder; provider history
+stays intact. Ignored or stale policy, a plain acknowledgment, tool output and
+oversized replies cannot produce compatibility evidence.
 The probe sends synthetic reference/user messages, executes no tools and bypasses
 owner context and claims. It therefore validates provider compatibility without
 claiming full owner-session acceptance. It cannot consume or release an owner source.
 
-Success adds `requestShape: managed_policy`, required by activation. Failure adds
+Success after both turns adds `requestShape: managed_policy` and the target-bound
+compatibility receipt, required by activation. Failure adds
 one bounded stage plus the existing safe provider-cause contract below. Handoff
 logs independently validate these fields; no provider message, request, schema or
 instruction content is printed. The 210-second invocation bound, no retries and
@@ -150,8 +157,15 @@ Both trusted roles are therefore rejected in response inputs on this target.
 The next [request comparison](managed-chat-provisioning.md#6-november-diagnostic-request-comparison)
 checks the documented conversation-items channel, with exact policy-only sentinels,
 conflicting user input and a second policy update on each owned conversation.
-The production request builder remains unchanged until an accepted trusted,
-dynamic policy form is established. Synthetic 400 fixtures continue to test safe propagation and
+The stored-policy diagnostic [42252117950](https://github.com/DanAakesen/jarvis/actions/runs/42252117950)
+also failed both roles with `managed_probe_policy_not_applied` at `response_stream`
+at 16:26:57 UTC. A successful storage/inference call did not satisfy the required
+policy sentinel. The safe result does not identify whether the first or replacement
+turn failed; both must pass before this channel can be used. No accepted trusted,
+dynamic policy form is established, and the production request builder remains
+unchanged. Any future stored-policy implementation must preserve uncertain-write
+ownership, advance its turn-local cache only after acknowledged writes, retain
+native history and keep trusted policy out of visible runtime conversation history. Synthetic 400 fixtures continue to test safe propagation and
 no replay. Additional fixtures reject top-level overrides, verify full-policy
 preservation in developer input, and prove that rejection of the developer input
 or message list fails the canary even when a plain-string probe would pass.
@@ -165,6 +179,19 @@ resource lifetimes; `close()` does not dispose shared transports. Existing calle
 turn cancellation/deadlines and backend tool deadlines remain in force. Stream
 close and ledger completion use the existing settings' backend HTTP timeout;
 there are no additional tunable limits or retry policies.
+
+## Compatibility evidence before owner turns
+
+Pinned metadata/settings alone is insufficient. The backend now requires the
+explicit [complete-policy activation receipt](managed-chat-provisioning.md#complete-policy-compatibility-gate)
+for availability, new and existing owner-session sends, and durable turn claims.
+The receipt binds project, native agent/version, definition fingerprint, selected
+chat model/effort and policy transport revision. `managed_text_canary` can produce
+it only after complete-policy inference succeeds. The current failed target has
+no qualifying receipt. Internal administrative metadata/probes remain independent
+of this gate and cannot claim owner sources. Future transport changes must bump
+the revision and qualify again; cached evidence from a previous transport is not
+accepted. This repair does not claim that the provider incompatibility is fixed.
 
 ## Native ledger and interruption
 

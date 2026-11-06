@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
-import type { RuntimeSessionStore } from './runtime-session.js';
+import type { ManagedSessionTarget, RuntimeSessionStore } from './runtime-session.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -15,18 +15,31 @@ function setup() {
     bindNativeConversation: vi.fn(async () => true),
     completeTurn: vi.fn(async () => true), attachSource: vi.fn(async () => true),
   };
-  const readVerifiedTarget = vi.fn(async () => target);
+  const readVerifiedTarget = vi.fn(async (): Promise<ManagedSessionTarget | null> => target);
   const app = buildApp(config, undefined, {
     auth: async token => token === 'e30.agent.sig'
       ? { kind: 'jarvis-agent', objectId: '11111111-1111-4111-8111-111111111111', tenantId: config.auth.tenantId }
       : { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Synthetic owner' },
-    managedRuntime: { sessions, readVerifiedTarget },
+    managedRuntime: { sessions, readVerifiedTarget, readTargetMetadata: async () => ({
+      projectEndpoint: 'https://synthetic.services.ai.azure.com/api/projects/synthetic', target, definition: {},
+    }) },
   });
   apps.push(app);
   return { app, sessions, readVerifiedTarget };
 }
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
 describe('internal managed runtime persistence', () => {
+  it('keeps diagnostic metadata readable while unqualified owner claims stay closed', async () => {
+    const { app, sessions, readVerifiedTarget } = setup();
+    readVerifiedTarget.mockResolvedValue(null);
+    const metadata = await app.inject({ url: '/agent/runtime-tests/target', headers });
+    expect(metadata.statusCode).toBe(200);
+    const claim = await app.inject({ method: 'POST', url: '/agent/runtime-tests/41/claim', headers, payload: { target } });
+    expect(claim.statusCode).toBe(503);
+    expect(claim.json().code).toBe('managed_not_verified');
+    expect(sessions.claimTurn).not.toHaveBeenCalled();
+  });
+
   it('refuses a browser owner token before reading or changing bindings', async () => {
     const { app, sessions, readVerifiedTarget } = setup();
     const response = await app.inject({ method: 'POST', url: '/agent/runtime-tests/41/claim',
