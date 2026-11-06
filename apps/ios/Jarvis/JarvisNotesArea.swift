@@ -671,13 +671,18 @@ struct JarvisNotesArea: View {
     private func taskSection(_ tasks: [VaultTask], title: String, today: String) -> some View {
         if !tasks.isEmpty {
             Section {
-                ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
-                    taskRow(task, today: today, isFirst: index == 0, isLast: index == tasks.count - 1)
-                }
-            } header: {
+                // A plain List pins section headers above scrolling rows. Keep the
+                // board heading in the flow so transparent chrome never overlays tasks.
                 JarvisSectionHeadline(title, count: tasks.count)
                     .textCase(nil)
                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("notes.task.group.\(title)")
+                ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
+                    taskRow(task, today: today, isFirst: index == 0, isLast: index == tasks.count - 1)
+                }
             }
             .listSectionSeparator(.hidden)
         }

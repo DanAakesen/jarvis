@@ -49,13 +49,18 @@ final class ComponentGalleryUITests: XCTestCase {
     /// Reuses this gallery launch and the extension's actual views. Host tinting remains a WidgetKit preview/device check.
     private func captureMediumWidgetLayouts() {
         app.buttons["gallery.widgets"].tap()
+        // Retain both renderings before language-specific geometry checks can stop the test.
         for language in ["en", "da"] {
             let choice = app.buttons["gallery.widgetLanguage.\(language == "en" ? 0 : 1)"]
             XCTAssertTrue(choice.waitForExistence(timeout: 5))
             choice.tap()
             XCTAssertTrue(choice.isSelected)
-            // Retain the actual layouts even when a bounds assertion below fails.
             attach(app.screenshot(), named: "P15-widgets-medium-\(language == "en" ? "dark" : "light")-\(language)")
+        }
+        for language in ["en", "da"] {
+            let choice = app.buttons["gallery.widgetLanguage.\(language == "en" ? 0 : 1)"]
+            choice.tap()
+            XCTAssertTrue(choice.isSelected)
             for (kind, title) in [
                 ("workouts", language == "en" ? "Workouts" : "Træning"),
                 ("factory", "Factory"), ("notes", language == "en" ? "Notes" : "Noter"),
@@ -79,7 +84,20 @@ final class ComponentGalleryUITests: XCTestCase {
                         card.descendants(matching: .any)["widget.workouts.\($0)"]
                     }
                     for metric in metrics { assertWidgetElement(metric, within: inset) }
-                    XCTAssertEqual(metrics[0].frame.width, metrics[1].frame.width, accuracy: 1)
+                    // Combined AX frames bound the text, not the equal-width layout slots.
+                    // Verify each column's origin and containment in its allocated half.
+                    let columnGap: CGFloat = 12
+                    let gridLeft = metrics[0].frame.minX
+                    let columnWidth = (inset.maxX - gridLeft - columnGap) / 2
+                    XCTAssertGreaterThan(columnWidth, 0)
+                    let rightColumn = gridLeft + columnWidth + columnGap
+                    XCTAssertEqual(metrics[1].frame.minX, rightColumn, accuracy: 1)
+                    for index in [0, 2] {
+                        XCTAssertLessThanOrEqual(metrics[index].frame.maxX, gridLeft + columnWidth + 0.5)
+                    }
+                    for index in [1, 3] {
+                        XCTAssertGreaterThanOrEqual(metrics[index].frame.minX, rightColumn - 0.5)
+                    }
                     XCTAssertEqual(metrics[0].frame.minX, metrics[2].frame.minX, accuracy: 1)
                     XCTAssertEqual(metrics[1].frame.minX, metrics[3].frame.minX, accuracy: 1)
                     XCTAssertEqual(metrics[0].frame.minY, metrics[1].frame.minY, accuracy: 1)
@@ -693,6 +711,7 @@ final class ComponentGalleryUITests: XCTestCase {
         if !largeText {
             app.swipeUp()
             attach(app.screenshot(), named: "P15-task-board-groups-\(language)-\(theme)")
+            assertTaskGroupHeadingsDoNotOverlapRows()
             revealTaskCompletion(firstID)
             app.descendants(matching: .any).matching(identifier: firstID).firstMatch
                 .buttons["notes.task.complete"].tap()
@@ -723,6 +742,26 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertTrue(search.isHittable)
             XCTAssertLessThanOrEqual(lastOpen.frame.maxY, search.frame.minY, "The final task must scroll clear of the search dock")
             attach(app.screenshot(), named: "P15-task-board-bottom-accessibility")
+        }
+    }
+
+    private func assertTaskGroupHeadingsDoNotOverlapRows() {
+        let list = app.descendants(matching: .any)["notes.tasks.list"]
+        XCTAssertTrue(list.exists)
+        let headers = list.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "notes.task.group."))
+            .allElementsBoundByIndex.filter { !$0.frame.isEmpty && $0.frame.intersects(list.frame) }
+        let rows = list.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "notes.task.row."))
+            .allElementsBoundByIndex.filter { !$0.frame.isEmpty && $0.frame.intersects(list.frame) }
+        XCTAssertFalse(headers.isEmpty, "The scrolled task group heading remains visible")
+        XCTAssertFalse(rows.isEmpty, "The scrolled task rows remain visible")
+        for header in headers {
+            for row in rows {
+                let overlap = header.frame.intersection(row.frame).intersection(list.frame)
+                XCTAssertTrue(overlap.isNull || overlap.width <= 0.5 || overlap.height <= 0.5,
+                              "A task heading must scroll with its group, never cover a task row")
+            }
         }
     }
 

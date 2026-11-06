@@ -1,6 +1,6 @@
 # Build 76 Home Screen widget feedback
 
-6 November 2026 — implementation candidate; native capture review pending.
+6 November 2026 — English native content reviewed; corrected full qualification pending.
 
 The owner reported three medium-widget defects: Workouts placed its heading in
 the right column beside the ring, Factory clipped its heading above oversized
@@ -105,3 +105,14 @@ left alignment, card dimensions and all metric/count/action bounds. Captures occ
 before assertions so failures retain the visible layout. Danish/light was not
 reached and remains required in the corrected native run. This is content-gallery
 inspection, not SpringBoard/tint/device acceptance.
+
+## df56bcaa rendered follow-up
+
+Native 42258268925 finished 66/68. The gallery failure compared combined AX text
+widths for Lifts and Runs (24 versus 26.33 pt), not their allocated column widths.
+The actual English/dark image shows aligned columns, shared top-left headings and
+compact Factory content. The test now checks column origins, equal allocated
+spans and containment while retaining every card/header/metric/action bound.
+It captures both widget languages before language-specific geometry assertions;
+Danish was absent from this failed attempt and is not claimed as reviewed.
+No production widget geometry changed for this assertion correction.

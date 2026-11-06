@@ -33,12 +33,12 @@ Apple references read directly:
 and [chartXSelection](https://developer.apple.com/documentation/swiftui/view/chartxselection(value:)).
 The chart uses the existing tap-overlay pattern to preserve page scrolling.
 
-Verification is pending for this source. Core regressions cover sparse dates,
+Initial preflight (superseded by the native records below): Core regressions cover sparse dates,
 latest-versus-average precedence, single/empty series, mixed units and invalid
 values. Synthetic preview data provides sparse Weight/Body fat histories and
 single-point Lean mass. Existing native launches will verify chart selection,
 detail navigation and bilingual captures alongside the widget/surface changes.
-No new simulator has been started for this candidate yet.
+No simulator had been started at that initial checkpoint.
 
 The first combined candidate b7e22951 failed Core and native compilation before
 simulator boot: Swift could not type-check the chained conversion expression in
@@ -93,3 +93,27 @@ Artifact-only extraction 42255492646 retained images/index 13521619175
 and motion 13522686301; extraction 42256149686 retained failed-test recordings
 13522028042 (SHA256 e4dc1fea90bf8102e12095d996b7ba56de700e2c9ab7cfad54ed028ec055594e).
 These jobs read existing evidence only and did not build or run a simulator.
+
+## Corrected native inspection — df56bcaa
+
+Native 42258268925 checked out f924537b132f4c2f729a2cf034bfb777bc189ab5 with
+app/test tree d3f0f3c1c7e71bd0ed0d97b0b7c11520255ad12a. It ran 68 tests: 66 passed
+and two failed, in the camera-menu case and a widget AX-width assertion. Both
+Health period cases and the accessibility Health case passed. Actual English/dark
+and Danish/light captures show 72.4 kg / 72,4 kg, selection of the 8 October
+73 kg reading, populated records, sparse Body fat dates and single-point Lean mass.
+Back preserves the selected reading and chart position. The complete plot and
+its endpoint labels fit above the dock at accessibility text size.
+
+Rendered review also found native measurement-detail section headings remained
+secondary gray. All titled Health-detail sections now reuse JarvisSectionHeadline
+for the requested primary-color headings and common typography. This composition
+change requires fresh native qualification; the passing df56 Health checks are
+retained evidence for that source, not acceptance of the new source.
+
+Retained UI artifact 13526639272 has SHA256
+713f7c91721629f022b0e3f45e2e0262b24a4a9953c7c1b79d3def26d0e84eff.
+The separate screenshot/motion artifact 13527575489 has SHA256
+5ec689af0d4465868e4ca2f908ee3edfe0655d94c3f2568a4f36ee34b2363bdf.
+Both archives were downloaded and hash-verified; selected evidence remains locally
+under /tmp/p15-native-df56 and /tmp/p15-native-df56-motion.

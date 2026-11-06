@@ -131,5 +131,39 @@ existing assertions still expecting the former single-archive upload path.
 They now verify the intentional exclusion, separate always-retained UI archive,
 retention/failure policy and both PR links. All24 existing iOS workflow tests
 passed locally with the installed Node YAML parser. Its Mac job42257412529 was
-still queued and was cancelled before any simulator build/boot; the app/test tree
-is unchanged by this workflow-test correction.
+queued when cancellation was requested, acquired a runner and began compilation
+before cancellation completed. The simulator boot step never started; the app/test
+tree is unchanged by this workflow-test correction.
+
+## df56bcaa inspection and final corrections
+
+CI 42258269045 passed all 502 Core tests; CodeQL 42258268841 passed. Native
+42258268925 ran 68 tests, with 66 passes and two failures. The camera case retained
+an enabled native Plus menu after its one correctly targeted tap; no camera action
+or app error was observed. Camera production code is unchanged from the accepted
+build 76. The test now waits for the menu item to be enabled and hittable, performs
+one tap, and requires menu dismissal before the existing camera checks. It adds
+no retry or arbitrary application delay. The other failure was the widget's
+intrinsic AX text-width comparison, documented in the widget record.
+
+English/dark and Danish/light task captures exposed pinned plain-List group
+headings overlapping scrolling tasks. Headings now remain ordinary clear first
+rows in their native sections, retaining task-row swipe completion and board
+insets. Existing scrolled task cases assert heading/row separation. Health detail
+uses the shared primary-color section headings. These visible corrections require
+one fresh combined native run; df56 is not a release-qualified pass.
+
+The new loading movie contains 193 frames over 6.398 seconds, covering more than
+two 2.4-second cycles. Sequential frame inspection shows highlights confined to
+individual text bars and unchanged surrounding card surfaces. The reduced-motion
+fixture pair has identical content-region pixels. English/Danish transparent
+shared headers, floating docks and task provenance were also inspected. Widget
+Danish rendering remains pending because the English assertion stopped that test.
+
+Evidence: UI archive 13526639272, SHA256
+713f7c91721629f022b0e3f45e2e0262b24a4a9953c7c1b79d3def26d0e84eff;
+screenshot/motion archive 13527575489, SHA256
+5ec689af0d4465868e4ca2f908ee3edfe0655d94c3f2568a4f36ee34b2363bdf.
+All 25 camera/gallery failure attachments are retained with the selected PNGs and
+manifest. Downloaded ZIP copies were removed after verified extraction to conserve
+workspace disk; immutable remote artifacts retain the complete archives.
