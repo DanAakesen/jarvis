@@ -72,12 +72,35 @@ extension JarvisPageHeader where Actions == EmptyView {
     }
 }
 
-extension View {
-    /// Pins the page header over the content. The native soft scroll edge fades moving content beneath
-    /// the title and buttons while preserving the ambient background. HIG: Navigation bars, Scroll views.
-    func jarvisPageHeader<Header: View>(@ViewBuilder _ header: () -> Header) -> some View {
-        safeAreaInset(edge: .top, spacing: 0) { header() }
+private struct JarvisPageHeaderModifier<Header: View>: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var isScrolled = false
+    let header: Header
+
+    func body(content: Content) -> some View {
+        content
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top > 1
+            } action: { _, scrolled in
+                isScrolled = scrolled
+            }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                header.background {
+                    // Accessibility headers already provide this material at every offset.
+                    if isScrolled && !dynamicTypeSize.isAccessibilitySize {
+                        Rectangle().fill(.regularMaterial).ignoresSafeArea(edges: .top)
+                    }
+                }
+            }
             .scrollEdgeEffectStyle(.soft, for: .top)
+    }
+}
+
+extension View {
+    /// The header is transparent at rest; native material protects its title once rows scroll beneath it.
+    /// Observe only crossing the top edge, rather than rebuilding the page for every scroll offset.
+    func jarvisPageHeader<Header: View>(@ViewBuilder _ header: () -> Header) -> some View {
+        modifier(JarvisPageHeaderModifier(header: header()))
     }
 }
 
