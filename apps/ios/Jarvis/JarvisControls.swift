@@ -263,19 +263,21 @@ struct JarvisCheckButton: View {
     let title: String
     var identifier: String
     var isWorking = false
+    var isChecked = false
+    var tint: Color = .secondary
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "circle")
+            Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
                 .font(.title2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(tint)
                 .opacity(isWorking ? 0.5 : 1)
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isWorking)
+        .disabled(isWorking || isChecked)
         .accessibilityLabel(title)
         .accessibilityIdentifier(identifier)
     }

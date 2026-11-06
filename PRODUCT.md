@@ -2375,3 +2375,11 @@ inspected for the 6 November release; see the integration verification file.
 Settings uses General, Models, Health and Account views. Search reaches settings
 across all views; clearing it returns to the selected view. Existing detail
 editors, explicit save/approval behavior and sign-out confirmation are preserved.
+
+### Native task-list readability correction (6 November 2026)
+
+Notes task groups must follow the approved board with compact completion controls,
+counts, concise metadata and separately aligned due dates. Long titles remain
+fully available in details and accessibility text; inline Markdown is presented
+as formatted text, including on Home, while persisted task source and completion
+identity stay unchanged. Completion, swipe completion and search remain available.

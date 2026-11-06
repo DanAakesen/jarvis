@@ -7145,3 +7145,13 @@ All owning PRs merged in order, Notes backend readiness passed, and the final
 app/test tree matched the accepted native source. The authoritative checkpoint
 is `ios/design/p15-release-2026-11-06.md`; earlier pending-state notes are historical.
 Do not dispatch another simulator run for the same source.
+
+## 6 November 2026 — Task-list board follow-up
+
+`--ui-test-task-list-board` selects nine synthetic Notes tasks with long/Markdown
+titles, mixed priorities, all four date groups and source labels. The existing
+ComponentGalleryUITests capture English/dark, Danish/light and accessibility XXXL,
+check successful completion and full detail titles, and verify final-row clearance
+above search. Reuse the normal PR simulator job; do not dispatch a duplicate.
+Native evidence is pending for this follow-up. Build 75's evidence does not verify
+these new changes. Chat and release/project configuration remain untouched.

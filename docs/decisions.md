@@ -11118,3 +11118,14 @@ app/test tree, and upload through the existing TestFlight workflow after the Not
 backend dependency passed readiness and live acceptance. Build 75 uploaded
 successfully at 02:54:03 UTC. Chat and the shared orb remain unchanged.
 See `ios/design/p15-release-2026-11-06.md` for exact evidence and device limits.
+
+## 6 November 2026 — Match task rows to the owner's board
+
+Correct Notes → Tasks from the owner's supplied device and board screenshots.
+Use the shared quiet checkbox, explicit rounded group boundaries and one compact
+metadata line with a trailing due date. Keep native List swipe behavior and existing
+confirmed-write feedback. Render Markdown titles for display only; preserve stored
+source. Expand the synthetic fixture because a single short task failed to expose
+this discrepancy. Native screenshot acceptance remains pending. Apple's Lists and
+tables guidance supports succinct rows with full detail disclosure; the exact
+composition and geometry come from the approved board.

@@ -132,10 +132,14 @@ struct JarvisPageHeadline: View {
 /// The accessory stays a real control and the heading remains a VoiceOver heading at every text size.
 struct JarvisSectionHeadline<Accessory: View>: View {
     let title: String
+    let count: Int?
+    let tint: Color
     let accessory: Accessory
 
-    init(_ title: String, @ViewBuilder accessory: () -> Accessory) {
+    init(_ title: String, count: Int? = nil, tint: Color = .secondary, @ViewBuilder accessory: () -> Accessory) {
         self.title = title
+        self.count = count
+        self.tint = tint
         self.accessory = accessory()
     }
 
@@ -145,9 +149,14 @@ struct JarvisSectionHeadline<Accessory: View>: View {
                 .font(.title3.weight(.bold))
                 // A List header already supplies a secondary foreground style.
                 // Use the semantic color directly to avoid dimming it a second time.
-                .foregroundStyle(Color.secondary)
+                .foregroundStyle(tint)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
+            if let count {
+                Text(count, format: .number)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
             Spacer(minLength: 0)
             accessory
         }
@@ -157,7 +166,9 @@ struct JarvisSectionHeadline<Accessory: View>: View {
 }
 
 extension JarvisSectionHeadline where Accessory == EmptyView {
-    init(_ title: String) { self.init(title) { EmptyView() } }
+    init(_ title: String, count: Int? = nil, tint: Color = .secondary) {
+        self.init(title, count: count, tint: tint) { EmptyView() }
+    }
 }
 
 /// Shared spacing and structural separation for rows inside a grouped surface.

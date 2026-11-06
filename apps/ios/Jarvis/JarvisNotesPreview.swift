@@ -30,7 +30,7 @@ enum JarvisNotesPreview {
     static func makeClient() -> JarvisNotesClient? {
         guard let client = try? JarvisClient(
             configuration: JarvisClientConfiguration(baseURL: URL(string: "https://preview.invalid/api")!, retryPolicy: RetryPolicy(maximumRetries: 0)),
-            transport: JarvisNotesPreviewTransport(),
+            transport: JarvisNotesPreviewTransport(boardTasks: ProcessInfo.processInfo.arguments.contains("--ui-test-task-list-board")),
             tokenStore: JarvisNotesPreviewTokenStore(),
             accessTokenProvider: JarvisNotesPreviewTokenProvider()
         ) else { return nil }
@@ -60,6 +60,29 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
         "dueDate": "2026-11-05", "dueTime": NSNull(), "dueAt": NSNull(), "priority": "medium",
         "path": "Work/Projects/release.md", "line": 3, "heading": NSNull(), "version": String(repeating: "a", count: 64),
     ]]
+
+    init(boardTasks: Bool = false) {
+        guard boardTasks else { return }
+        // Synthetic long titles and mixed metadata exercise the owner's task-list finding.
+        let samples: [(String, String?, String?, String, String, String?)] = [
+            ("Investigate the sample service catalog and prepare a recommendation for the project review", "2026-10-27", nil, "medium", "Personal", nil),
+            ("**4. Review the sample agreement** · synthetic deadline", "2026-10-28", "10:00", "high", "Work", "Project kickoff"),
+            ("Review roadmap draft", "2026-11-05", "14:30", "medium", "Work", "Roadmap draft"),
+            ("Call the sample supplier", "2026-11-05", "16:00", "normal", "Work", "Supplier"),
+            ("Water the plants", "2026-11-05", nil, "normal", "Personal", "Garden plan"),
+            ("Draft budget sketch", "2026-11-06", "09:00", "normal", "Work", "Budget sketch"),
+            ("Plan trip outline", "2026-11-09", nil, "normal", "Personal", "Trip outline"),
+            ("Sort reference links", nil, nil, "normal", "Personal", nil),
+            ("Finish the synthetic checklist", nil, nil, "high", "Work", nil),
+        ]
+        tasks = samples.enumerated().map { index, sample in
+            ["id": String(repeating: "0", count: 63) + String(index + 1, radix: 16),
+             "text": sample.0, "done": false,
+             "dueDate": sample.1 as Any? ?? NSNull(), "dueTime": sample.2 as Any? ?? NSNull(),
+             "dueAt": NSNull(), "priority": sample.3, "path": "\(sample.4)/Synthetic.md",
+             "line": index + 1, "heading": sample.5 as Any? ?? NSNull(), "version": String(repeating: "a", count: 64)]
+        }
+    }
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         let query = Dictionary((URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems ?? []).map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { _, last in last })

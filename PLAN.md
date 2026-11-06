@@ -2219,6 +2219,12 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **Task-list board correction:** Owner-reported mismatch in Notes → Tasks is
+  implemented with inset groups, quiet completion controls, section counts,
+  trailing dates and readable Markdown titles. New synthetic long-title and
+  large-text captures plus completion/detail checks await the single PR native
+  run. Home shares only the title-display correction; Chat remains unchanged.
+
 - **P15 board delivery (#1598–#1602 and Settings): Complete.** All owning PRs merged
   in the recorded order. Notes backend deployment passed readiness and live
   acceptance. Final native verification passed 62/62 tests; 493 Core tests and

@@ -323,12 +323,12 @@ struct JarvisTodayScreen: View {
     private func taskRow(_ task: VaultTask) -> some View {
         HStack(spacing: 4) {
             JarvisCheckButton(
-                title: "\(copy(.markDone)): \(task.text)",
+                title: "\(copy(.markDone)): \(JarvisTaskTitle.plain(task.text))",
                 identifier: "today.task.done.\(task.id)",
                 isWorking: pendingTaskIDs.contains(task.id)
             ) { Task { await completeTask(task) } }
             VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                Text(task.text).font(.body).lineLimit(2)
+                Text(JarvisTaskTitle.formatted(task.text)).font(.body).lineLimit(2)
                 if let due = dueText(task) {
                     Text(due)
                         .font(.footnote)

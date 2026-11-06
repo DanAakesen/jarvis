@@ -480,6 +480,64 @@ final class ComponentGalleryUITests: XCTestCase {
         attach(app.screenshot(), named: "P15-93-notes-task-priority-dark-en")
     }
 
+    func testTaskBoardRowsDarkEnglish() {
+        exerciseTaskBoard(language: "en", theme: "dark")
+    }
+
+    func testTaskBoardRowsLightDanish() {
+        exerciseTaskBoard(language: "da", theme: "light")
+    }
+
+    func testTaskBoardRowsAtAccessibilityTextSize() {
+        exerciseTaskBoard(language: "en", theme: "dark", largeText: true)
+    }
+
+    private func exerciseTaskBoard(language: String, theme: String, largeText: Bool = false) {
+        let extra = ["--ui-test-task-list-board"] + (largeText
+            ? ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] : [])
+        openPage("notes", language: language, theme: theme, extra: extra)
+        defer { app.terminate() }
+        notesTap("notes.tab.tasks")
+        let firstID = "notes.task.row." + String(repeating: "0", count: 63) + "1"
+        notesReach(firstID)
+        let first = app.descendants(matching: .any).matching(identifier: firstID).firstMatch
+        let completion = first.buttons["notes.task.complete"]
+        XCTAssertTrue(completion.isHittable)
+        XCTAssertGreaterThanOrEqual(completion.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(completion.frame.height, 44)
+        XCTAssertGreaterThan(first.frame.minX, 20, "Task groups must be inset from the screen edge")
+        attach(app.screenshot(), named: "P15-task-board-\(language)-\(theme)-large-\(largeText)")
+
+        if !largeText {
+            app.swipeUp()
+            attach(app.screenshot(), named: "P15-task-board-groups-\(language)-\(theme)")
+            notesReach(firstID, upward: false)
+            completion.tap()
+            XCTAssertTrue(first.waitForNonExistence(timeout: 8), "A confirmed completion removes only that task")
+            let title = "4. Review the sample agreement · synthetic deadline"
+            let open = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "notes.task.open", title)).firstMatch
+            XCTAssertTrue(open.waitForExistence(timeout: 8), "Markdown emphasis must be rendered without raw markers")
+            XCTAssertTrue(open.isHittable, "The next task remains available after completion")
+            open.tap()
+            let fullTitle = app.staticTexts[title]
+            XCTAssertTrue(fullTitle.waitForExistence(timeout: 5), "Details retain the full task title")
+            attach(app.screenshot(), named: "P15-task-board-detail-\(language)-\(theme)")
+        } else {
+            let lastID = "notes.task.row." + String(repeating: "0", count: 63) + "9"
+            let last = app.descendants(matching: .any).matching(identifier: lastID).firstMatch
+            let lastOpen = last.buttons["notes.task.open"]
+            let search = app.textFields["notes.search"]
+            for _ in 0..<12 {
+                if lastOpen.exists, lastOpen.isHittable, lastOpen.frame.maxY <= search.frame.minY { break }
+                app.swipeUp()
+            }
+            XCTAssertTrue(lastOpen.isHittable)
+            XCTAssertTrue(search.isHittable)
+            XCTAssertLessThanOrEqual(lastOpen.frame.maxY, search.frame.minY, "The final task must scroll clear of the search dock")
+            attach(app.screenshot(), named: "P15-task-board-bottom-accessibility")
+        }
+    }
+
     private func notesReach(_ identifier: String, upward: Bool = true) {
         let target = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
         for _ in 0..<5 {

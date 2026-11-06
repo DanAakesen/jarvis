@@ -3355,3 +3355,20 @@ protected scrolling headers and successful-action feedback. The accepted board
 composition includes Settings and the shorter Home greeting. Full provenance and
 physical-device limits are in `docs/ios/design/p15-release-2026-11-06.md`. This
 acceptance supersedes the earlier pending capture notes for this delivery.
+
+## 6 November 2026 — Task-list board correction
+
+The owner's device screenshot showed that Notes → Tasks still used full-width
+rows and glass action buttons instead of the approved board. Task groups now use
+inset rounded surfaces, adjacent heading counts and a compact unfilled completion
+control. A single-line title sits above scope/source and non-normal priority; due
+date/time sits on the right. Overdue headings/dates and labelled priority controls
+retain semantic colors. Accessibility text stacks metadata and due dates and
+allows the full title to wrap. Details retain the full title at every size.
+
+Inline Markdown emphasis is rendered in Notes task rows/details and Home task
+titles without rewriting the vault. The Tasks search dock has a native material
+backing so scrolling text cannot compete with its controls. Native compilation
+and actual bilingual/large-type screenshots are pending; no new visual acceptance
+is claimed yet. Reference: the owner's 6 November board screenshot and unchanged
+`docs/ios/design/board.html` Tasks view.
