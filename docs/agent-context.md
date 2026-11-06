@@ -7137,3 +7137,11 @@ Latest native source 93a09531 passed 62/62 tests (42141442953); the later standa
 capture sweep timed out, with screenshots and result bundle retained. General CI
 passed 493 tests. The chart and success captures are accepted, but a remaining
 shared-header overlap requires the next Settings run. See the updated resume file.
+
+## 6 November 2026 — P15 completed delivery
+
+TestFlight build 75 uploaded successfully through the unchanged workflow.
+All owning PRs merged in order, Notes backend readiness passed, and the final
+app/test tree matched the accepted native source. The authoritative checkpoint
+is `ios/design/p15-release-2026-11-06.md`; earlier pending-state notes are historical.
+Do not dispatch another simulator run for the same source.
