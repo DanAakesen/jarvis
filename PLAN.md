@@ -4068,3 +4068,11 @@ stable under moving glass controls, and retain known data during refresh. Compar
 equal periods and keep missing/partial health data distinct from zero. Final
 recommendations will distinguish current screenshots from source-only findings;
 these proposals are not additional implementation authorization.
+
+Native 42292434058 compiled and passed 69/70 cases, including both cold/warm
+widget routes, Health hero alignment and native Home task swipes. Home's normal
+layout check used the glass accessibility content union as its visual boundary;
+correct the measurement to page/section anchors. Rendered AX XXXL also exposed
+cramped Home quick actions and activity summaries. Stack those at accessibility
+sizes and preserve normal geometry. Rerun Home and widget-link coverage on the
+new candidate; retain the unchanged page/Chat evidence with explicit source proof.

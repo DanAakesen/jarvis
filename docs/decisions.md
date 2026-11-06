@@ -11373,3 +11373,12 @@ by Notes/Home. Apply one topic URL at the shared configuration root, remove the
 six child modifiers, and register the scheme alongside Microsoft authentication.
 Keep existing root navigation and the authentication gate. Verify actual cold/warm
 URL delivery; native rendering and physical WidgetKit-host taps remain distinct.
+
+## 6 November 2026 — Correct Home geometry measurement and largest-text layout
+
+Native 42292434058 passed 69/70 cases. Actual normal Home padding is correct;
+the glass accessibility frame excludes painted insets. Measure from the page and
+section heading instead. AX XXXL captures show crowded Home tiles/activity values:
+stack those groups and permit action-label wrapping. Keep the 69-pass failed run
+as evidence, rerun affected Home/widget paths, and prove other page/Chat source
+unchanged rather than repeating the entire suite/capture sweep.

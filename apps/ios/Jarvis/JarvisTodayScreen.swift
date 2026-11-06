@@ -20,6 +20,7 @@ struct JarvisTodayScreen: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject var model: JarvisTodayModel
     let language: JarvisAppLanguage
     let fixtureMode: Bool
@@ -515,7 +516,10 @@ struct JarvisTodayScreen: View {
     // MARK: Quick actions
 
     private var quickActions: some View {
-        HStack(spacing: 10) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: JarvisPageHeaderMetrics.spacing))
+            : AnyLayout(HStackLayout(spacing: 10))
+        return layout {
             JarvisTileButton(
                 title: copy(.logWorkout),
                 subtitle: model.lastWorkoutText(language: language),

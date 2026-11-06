@@ -3512,3 +3512,9 @@ need fresh native visual/interaction evidence before acceptance.
 The owner accepts the rendered widget layout. Keep it unchanged while fixing taps:
 one topic link on the shared widget root opens the matching app section, including
 loading/error widget states. No new in-widget buttons are needed.
+
+The native Home review confirms normal-size hero alignment and transparent page
+chrome. At accessibility sizes, Home's quick log actions and activity/chart groups
+stack vertically; action labels can wrap and the donut stays within 200 pt.
+The Home glass accessibility container reports content bounds, so layout tests
+measure visual inset contracts from the page and preceding section instead.

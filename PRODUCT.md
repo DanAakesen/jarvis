@@ -2475,3 +2475,6 @@ the current loading animations; this correction preserves them.
 The owner accepts the widget layouts. Every widget size must open its matching
 section: Notes → Notes, Factory → Software Factory, Workouts/Steps → Health,
 Home → Home. Taps retain the app's authentication/lock gate.
+
+Home's quick actions and activity values must remain readable at accessibility
+text sizes, using stacked groups and wrapping labels instead of compressed tiles.

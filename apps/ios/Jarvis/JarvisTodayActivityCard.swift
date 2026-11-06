@@ -4,12 +4,17 @@ import SwiftUI
 /// Workouts (donut by session type) and steps (ring and bars) with one range toggle.
 struct JarvisTodayActivityCard: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject var model: JarvisTodayModel
     let language: JarvisAppLanguage
     let fixtureMode: Bool
 
     @ScaledMetric(relativeTo: .body) private var ringSize: CGFloat = 56
     @ScaledMetric(relativeTo: .body) private var donutSize: CGFloat = 100
+    @ScaledMetric(relativeTo: .title) private var summaryValueSize: CGFloat = 34
+
+    private var isLargeText: Bool { dynamicTypeSize.isAccessibilitySize }
+    private var displayedDonutSize: CGFloat { isLargeText ? min(donutSize, 200) : donutSize }
 
     private func copy(_ key: JarvisTodayLocalizationKey) -> String {
         JarvisTodayLocalization.string(key, language: language)
@@ -88,7 +93,10 @@ struct JarvisTodayActivityCard: View {
                 )
             }
         } else {
-            HStack(alignment: .center, spacing: 14) {
+            let layout = isLargeText
+                ? AnyLayout(VStackLayout(spacing: JarvisPageHeaderMetrics.spacing))
+                : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+            layout {
                 donut(display)
                 summary(display)
             }
@@ -131,7 +139,7 @@ struct JarvisTodayActivityCard: View {
             .padding(12)
         }
         .padding(4)
-        .frame(width: donutSize, height: donutSize)
+        .frame(width: displayedDonutSize, height: displayedDonutSize)
         .contentShape(Circle())
         .gesture(
             SpatialTapGesture().onEnded { value in
@@ -166,7 +174,7 @@ struct JarvisTodayActivityCard: View {
     }
 
     private func handleDonutTap(at point: CGPoint, display: JarvisTodayActivityDisplay) {
-        let center = donutSize / 2
+        let center = displayedDonutSize / 2
         let dx = point.x - center
         let dy = point.y - center
         var turn = atan2(dx, -dy) / (2 * .pi)
@@ -197,22 +205,24 @@ struct JarvisTodayActivityCard: View {
             )
         }
         .frame(maxWidth: .infinity)
-        .frame(height: donutSize)
+        .frame(height: isLargeText ? nil : donutSize)
     }
 
     private func summaryValue(_ value: String, label: String, identifier: String) -> some View {
         VStack(spacing: 0) {
             Text(value)
-                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .font(.system(size: isLargeText ? summaryValueSize : 34, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .minimumScaleFactor(0.5)
                 .lineLimit(1)
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .lineLimit(isLargeText ? nil : 1)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.vertical, isLargeText ? JarvisPageHeaderMetrics.actionSpacing : 0)
+        .frame(maxWidth: .infinity, maxHeight: isLargeText ? nil : .infinity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .accessibilityValue(value)
@@ -235,10 +245,14 @@ struct JarvisTodayActivityCard: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .center, spacing: 12) {
+                let layout = isLargeText
+                    ? AnyLayout(VStackLayout(spacing: JarvisPageHeaderMetrics.spacing))
+                    : AnyLayout(HStackLayout(alignment: .center, spacing: 12))
+                layout {
                     ring(display)
                     bars(display)
-                        .frame(height: 48)
+                        .frame(height: isLargeText ? 96 : 48)
+                        .padding(.top, isLargeText ? JarvisPageHeaderMetrics.spacing : 0)
                 }
                 Text(display.caption)
                     .font(.caption)

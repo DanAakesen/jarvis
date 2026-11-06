@@ -7311,3 +7311,9 @@ The earlier native run 42291240849 compiled the Home/chrome candidate but was
 cancelled early as superseded before full verification. Final qualification also
 covers registered widget links through cold and warm system URL opens; preserve
 layouts and the existing gate. Two new navigation cases make 70 native cases.
+
+Follow-up native 42292434058 passed 69/70 cases. The one failure is a Home geometry
+assertion against accessibility content bounds. Native captures also expose Home
+AX XXXL crowding. The correction reruns all Today cases and both widget URL cases;
+retain the 55 unchanged cases only with reviewed source/call-site proof. The
+focused validation workflow is never merged; normal per-test limits stay 120/150 s.

@@ -8807,3 +8807,8 @@ widgetURL for its topic. Info.plist registers jarvis-widget alongside the unchan
 Microsoft callback. Existing ContentView.onOpenURL validates the topic and uses
 root-owned navigation; the authentication/lock overlay remains in force. Previous
 Notes/Home per-view links are removed to avoid multiple widgetURL modifiers.
+
+Home large-text layout uses AnyLayout to stack log actions and activity groups;
+JarvisTileButton permits wrapping only at accessibility sizes. This component has
+only the two Home call sites. Donut hit testing uses the displayed size. No state,
+backend, navigation, widget, loading or other shared control behavior changes.

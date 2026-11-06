@@ -475,6 +475,7 @@ struct JarvisContentTileButton<Content: View>: View {
 /// A quick-action tile: a round accent icon chip, a title and a subtitle on one glass surface. Tiles side by side
 /// share the row equally.
 struct JarvisTileButton: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     var subtitle: String?
     let systemImage: String
@@ -494,12 +495,14 @@ struct JarvisTileButton: View {
                     Text(title)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(Color.primary)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        .fixedSize(horizontal: false, vertical: true)
                     if let subtitle {
                         Text(subtitle)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 0)

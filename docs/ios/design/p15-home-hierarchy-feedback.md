@@ -39,3 +39,25 @@ The app-owned topic scheme is retained; it exposes only allowlisted destinations
 Earlier candidate f2ad1819 passed CI 42291240856 (502 Core tests) and CodeQL
 42291240721. Native 42291240849 compiled but was cancelled early as superseded by
 the widget routing request. No completed native pass is claimed for that run.
+
+## Combined native result and review
+
+223f966a: CI 42292433828 and CodeQL 42292433724 passed, including 502 Core tests.
+Native 42292434058 passed 69/70 cases: all 30 shared-page/gallery cases, all 21
+navigation cases (including cold/warm widget links), all six Chat cases and 12/13
+Home cases. Native partial/full task swipes passed. The Home board assertion
+expected a second 16 pt inset from a glass accessibility content-union frame
+(370 vs 354); screenshots show the actual intended 32 pt page-plus-card inset.
+
+Native EN/DA normal Home, shared headers, Notes/Factory docks, Health heroes,
+scrolled Usage/Status/Proactive, task swipes and widget destinations were inspected.
+Transparent backgrounds and normal hero alignment are correct. AX XXXL Home has
+cramped log labels and activity summaries; stack those and wrap action copy before
+release. This is a new Home-only correction requiring affected-path verification.
+
+Retained UI evidence 13543438584 SHA256
+24ace5d7b218248e3670619c930dec15893157b7d8f9534b19b33031f4c7542a;
+stills 13543817999 SHA256
+fff9aa5a1fde8802a34d07c6c2c85a18dc2498a08a2402f50e44b01479dfd393.
+Both downloads match GitHub digests. A cold Factory capture includes the explicit
+Simulator Live Activity failure notice; it does not indicate a navigation failure.

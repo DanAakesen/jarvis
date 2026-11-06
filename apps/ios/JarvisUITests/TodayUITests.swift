@@ -57,6 +57,13 @@ final class TodayUITests: XCTestCase {
             XCTAssertTrue(app.descendants(matching: .any)["today.greeting"].waitForExistence(timeout: 5))
             XCTAssertFalse(screen("chat").exists)
             capture("home-large-text-top-\(language)")
+            reveal(app.descendants(matching: .any)["today.summary.kcal"])
+            capture("home-large-text-activity-\(language)")
+            let workout = app.buttons["today.logWorkout"]
+            let lift = app.buttons["today.logLift"]
+            reveal(lift)
+            XCTAssertGreaterThan(lift.frame.minY, workout.frame.maxY, "Large-text log actions stack without clipping labels")
+            capture("home-large-text-quick-actions-\(language)")
             let upcoming = app.descendants(matching: .any)["today.section.upcoming"]
             reveal(upcoming)
             XCTAssertTrue(app.buttons["today.plus"].isEnabled)
@@ -83,18 +90,23 @@ final class TodayUITests: XCTestCase {
                 XCTAssertTrue(app.descendants(matching: .any)["today.steps.chart"].exists)
                 let card = app.descendants(matching: .any)["today.activity"]
                 let title = card.staticTexts["hero.title"]
-                let cardFrame = card.frame
                 let titleFrame = title.frame
-                XCTAssertEqual(titleFrame.minX - cardFrame.minX, titleFrame.minY - cardFrame.minY,
-                               accuracy: 2, "Hero title has equal top and leading padding")
+                // Glass accessibility containers report their children's union, not
+                // the painted card bounds. Measure against the page and section label.
+                let sectionFrame = app.descendants(matching: .any)["today.section.home"].frame
+                let pageFrame = app.frame
+                capture("home-top-\(language)-\(appearance)")
+                XCTAssertEqual(titleFrame.minX, pageFrame.minX + 32, accuracy: 2,
+                               "Title follows the 16 pt page inset and 16 pt card inset")
+                XCTAssertEqual(titleFrame.minY - sectionFrame.maxY, 28, accuracy: 2,
+                               "Title follows the 12 pt section gap and 16 pt card inset")
                 let periods = app.scrollViews["today.range.scroll"]
-                XCTAssertEqual(periods.frame.maxX, cardFrame.maxX - 16, accuracy: 1)
+                XCTAssertEqual(periods.frame.maxX, pageFrame.maxX - 32, accuracy: 1)
                 XCTAssertEqual(app.buttons["today.range.30"].frame.maxX, periods.frame.maxX - 3, accuracy: 2,
                                "Period buttons finish at the hero's trailing inset")
                 for id in ["home", "quickActions", "upcoming"] {
                     XCTAssertTrue(app.descendants(matching: .any)["today.section.\(id)"].exists)
                 }
-                capture("home-top-\(language)-\(appearance)")
                 let workout = app.buttons["today.logWorkout"]
                 let lift = app.buttons["today.logLift"]
                 reveal(workout)
