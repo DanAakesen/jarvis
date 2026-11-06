@@ -1,7 +1,7 @@
 /** A configured adapter is usable only after its definition and policy checks pass. */
 export interface RuntimeTestAvailability {
   readonly available: boolean;
-  readonly reason?: 'storage_unavailable' | 'current_unavailable' | 'copilot_not_configured' | 'copilot_not_verified' | 'verification_unavailable';
+  readonly reason?: 'storage_unavailable' | 'current_unavailable' | 'copilot_not_configured' | 'copilot_not_verified' | 'copilot_policy_not_verified' | 'verification_unavailable';
 }
 
 export interface ConversationRuntimeTests {
@@ -30,8 +30,14 @@ export async function readRuntimeTests(input: {
     if (copilot?.available === true) return { current, copilot: { available: true } };
     const reason = copilot?.reason;
     return { current, copilot: { available: false, reason: reason === 'copilot_not_verified' ||
-      reason === 'verification_unavailable' ? reason : 'verification_unavailable' } };
+      reason === 'copilot_policy_not_verified' || reason === 'verification_unavailable' ? reason : 'verification_unavailable' } };
   } catch {
     return { current, copilot: { available: false, reason: 'verification_unavailable' } };
   }
+}
+
+export function runtimeTestUnavailableMessage(option: RuntimeTestAvailability): string {
+  return option.reason === 'copilot_policy_not_verified'
+    ? 'Copilot has not passed the check for applying Jarvis’s instructions. Use Current.'
+    : 'The selected test runtime is unavailable. No other runtime was used.';
 }

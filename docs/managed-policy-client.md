@@ -173,6 +173,19 @@ turn cancellation/deadlines and backend tool deadlines remain in force. Stream
 close and ledger completion use the existing settings' backend HTTP timeout;
 there are no additional tunable limits or retry policies.
 
+## Compatibility evidence before owner turns
+
+Pinned metadata/settings alone is insufficient. The backend now requires the
+explicit [complete-policy activation receipt](managed-chat-provisioning.md#complete-policy-compatibility-gate)
+for availability, new and existing owner-session sends, and durable turn claims.
+The receipt binds project, native agent/version, definition fingerprint, selected
+chat model/effort and policy transport revision. `managed_text_canary` can produce
+it only after complete-policy inference succeeds. The current failed target has
+no qualifying receipt. Internal administrative metadata/probes remain independent
+of this gate and cannot claim owner sources. Future transport changes must bump
+the revision and qualify again; cached evidence from a previous transport is not
+accepted. This repair does not claim that the provider incompatibility is fixed.
+
 ## Native ledger and interruption
 
 An exclusive durable session/target lease claims the initial verified source

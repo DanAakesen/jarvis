@@ -261,8 +261,19 @@ async def test_canary_uses_bridge_credential_without_user_context_claim_or_tool_
     async with f.runtime() as (runtime, current):
         selected = await runtime.session_settings()
         result = await runtime.probe_target()
-        assert result == {"status": "ok", "model": "gpt-6.1-terra", "reasoningEffort": "high",
-                          "requestShape": "managed_policy"}
+        assert result["status"] == "ok" and result["requestShape"] == "managed_policy"
+        assert result["model"] == "gpt-6.1-terra" and result["reasoningEffort"] == "high"
+        from managed_definition_fingerprint import managed_definition_fingerprint
+        from managed_policy_compatibility import (
+            POLICY_TRANSPORT_REVISION,
+            policy_compatibility_receipt,
+        )
+        assert result["policyTransportRevision"] == POLICY_TRANSPORT_REVISION
+        assert result["policyCompatibility"] == policy_compatibility_receipt(
+            ENDPOINT, TARGET.agent_name, "1",
+            managed_definition_fingerprint(ENDPOINT, TARGET.agent_name, "1", f.definition),
+            SETTINGS.model, SETTINGS.reasoning_effort,
+        )
         assert not current._tools._http.is_closed
     response_request = next(r for r in f.requests if r.url.path.endswith("/responses"))
     assert json.loads(response_request.content) == {

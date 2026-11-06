@@ -18,10 +18,49 @@ canary below supersedes that earlier diagnostic-only change.
 Raw responses, instructions, schemas,
 CLI errors and identifiers remain private. No retry or new resource is included.
 
-Runtime availability currently depends on target metadata/settings verification,
-not this canary result. A selectable Copilot option therefore does not prove
-inference succeeded. Actual authenticated availability has not been observed;
-changing that guard remains separate from this diagnostic correction.
+Target metadata alone previously made Copilot selectable despite the failed
+full-policy canary. The compatibility gate below now requires explicit evidence
+before owner sessions or turns can use it. The current target has no successful
+complete-policy evidence; Copilot must stay unavailable. Actual authenticated
+owner availability after deployment still requires verification.
+
+## Complete-policy compatibility gate
+
+`FOUNDRY_COPILOT_POLICY_COMPATIBILITY` is an optional non-secret activation
+receipt, not a credential. It is SHA-256 over a canonical tuple of the policy
+transport revision, normalized project endpoint, native agent name, immutable
+version, reviewed definition fingerprint, selected chat model and reasoning
+effort. Reusing a definition fingerprint on another agent/version/project cannot
+reuse this evidence. A change to any field invalidates the receipt. The Python
+canary and backend verifier share a cross-language fixture for this contract.
+
+The fixed `managed_text_canary` emits its receipt and transport revision only
+after the actual complete-policy request succeeds. Diagnostics, plain-text checks,
+old canary responses without a receipt, and a different target/settings/revision
+cannot activate the runtime. The manual handoff first clears the previous receipt,
+sets the reviewed target and waits for backend readiness. After the full-policy
+canary, an independent validator recomputes the expected receipt from that target
+and expected settings before stamping it. It waits for the new backend revision
+before reporting comparison acceptance. A failed canary leaves the receipt empty.
+The Bicep path preserves valid receipts on normal deploys and keeps malformed
+receipts empty; it does not manufacture evidence.
+
+Owner availability, session creation and existing Copilot sends require this
+receipt as well as target/settings readback. A missing or stale receipt produces
+`copilot_policy_not_verified`; the web guidance says Copilot has not passed the
+check for applying Jarvis's instructions and offers Current. Internal turn claims
+also require the verified receipt. Administrative target metadata, diagnostics and
+the full-policy canary remain reachable without owner claims, so qualification
+does not require first enabling an unqualified runtime. No automatic fallback,
+claim reset, native history deletion or policy demotion is introduced. Current
+availability, behavior and approval semantics remain unchanged.
+
+Implementation checks: 43 focused backend tests, 309 Python tests plus nine
+subtests, and three web tests passed locally; backend TypeScript build, scoped
+backend/web lint, Ruff, compilation and shell syntax passed. CI and deployment
+are separate gates. The localized iOS reason mapping is a separate source commit
+for the coordinated UI candidate; it changes copy only and does not qualify
+new layout behavior by itself.
 
 ## 6 November: diagnostic request comparison
 

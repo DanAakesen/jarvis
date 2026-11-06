@@ -78,26 +78,30 @@ fingerprint=$(jq -er .fingerprint "$private_dir/activation.json")
 if ! az containerapp update --name "$backend_app" --resource-group "$RESOURCE_GROUP" \
   --subscription "$SUBSCRIPTION_ID" --set-env-vars \
   "FOUNDRY_COPILOT_AGENT_NAME=$agent_name" "FOUNDRY_COPILOT_AGENT_VERSION=$version" \
-  "FOUNDRY_COPILOT_DEFINITION_SHA256=$fingerprint" --output none --only-show-errors \
+  "FOUNDRY_COPILOT_DEFINITION_SHA256=$fingerprint" "FOUNDRY_COPILOT_POLICY_COMPATIBILITY=" \
+  --output none --only-show-errors \
   >"$private_dir/update.json" 2>"$private_dir/cli.err"; then
   fail managed_chat_backend_configuration_failed
 fi
-ready=false
-# Same bounded revision readiness pattern as the normal backend deploy; job timeout is the outer bound.
-for _ in $(seq 1 30); do
-  if ! az containerapp show --name "$backend_app" --resource-group "$RESOURCE_GROUP" \
-    --subscription "$SUBSCRIPTION_ID" --query '{latest:properties.latestRevisionName,ready:properties.latestReadyRevisionName}' \
-    --output json --only-show-errors >"$private_dir/backend.json" 2>"$private_dir/cli.err"; then
-    fail managed_chat_backend_readiness_unavailable
-  fi
-  if jq -e '.latest as $latest | ($latest | type == "string" and length > 0) and .ready == $latest' \
-    "$private_dir/backend.json" >/dev/null 2>"$private_dir/cli.err"; then
-    ready=true
-    break
-  fi
-  sleep 30
-done
-[[ "$ready" == true ]] || fail managed_chat_backend_not_ready
+wait_backend_ready() {
+  local ready=false
+  # Same bounded revision readiness pattern as the normal backend deploy; job timeout is the outer bound.
+  for _ in $(seq 1 30); do
+    if ! az containerapp show --name "$backend_app" --resource-group "$RESOURCE_GROUP" \
+      --subscription "$SUBSCRIPTION_ID" --query '{latest:properties.latestRevisionName,ready:properties.latestReadyRevisionName}' \
+      --output json --only-show-errors >"$private_dir/backend.json" 2>"$private_dir/cli.err"; then
+      fail managed_chat_backend_readiness_unavailable
+    fi
+    if jq -e '.latest as $latest | ($latest | type == "string" and length > 0) and .ready == $latest' \
+      "$private_dir/backend.json" >/dev/null 2>"$private_dir/cli.err"; then
+      ready=true
+      break
+    fi
+    sleep 30
+  done
+  [[ "$ready" == true ]] || fail managed_chat_backend_not_ready
+}
+wait_backend_ready
 
 printf '%s\n' '{"operation":"managed_text_canary"}' >"$private_dir/canary-operation.json"
 if ! timeout 210s az rest --method POST --url "$invocations" --resource https://ai.azure.com/ \
@@ -105,10 +109,18 @@ if ! timeout 210s az rest --method POST --url "$invocations" --resource https://
   --only-show-errors >"$private_dir/canary.json" 2>"$private_dir/cli.err"; then
   fail managed_chat_canary_unavailable
 fi
-if ! jq -e 'type == "object" and .status == "ok" and .model == "gpt-6.1-terra" and .reasoningEffort == "high" and .requestShape == "managed_policy"' \
-  "$private_dir/canary.json" >/dev/null 2>"$private_dir/cli.err"; then
+if ! python3 .github/scripts/managed_policy_canary.py "$private_dir/activation.json" \
+  "$private_dir/canary.json" >"$private_dir/policy-receipt"; then
   python3 .github/scripts/managed_chat_diagnostic_output.py canary "$private_dir/canary.json"
   fail managed_chat_canary_failed
 fi
+policy_receipt=$(cat "$private_dir/policy-receipt")
+if ! az containerapp update --name "$backend_app" --resource-group "$RESOURCE_GROUP" \
+  --subscription "$SUBSCRIPTION_ID" --set-env-vars \
+  "FOUNDRY_COPILOT_POLICY_COMPATIBILITY=$policy_receipt" --output none --only-show-errors \
+  >"$private_dir/policy-update.json" 2>"$private_dir/cli.err"; then
+  fail managed_chat_policy_activation_failed
+fi
+wait_backend_ready
 echo managed_chat_comparison_canary_ok
 # This is comparison evidence only; normal release acceptance retains its own required checks.

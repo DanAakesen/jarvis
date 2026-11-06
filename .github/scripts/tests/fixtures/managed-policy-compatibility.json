@@ -1,0 +1,12 @@
+{
+  "projectEndpoint": "https://synthetic.services.ai.azure.com/api/projects/synthetic",
+  "target": {
+    "agentName": "jarvis-main-copilot-preview",
+    "version": "1",
+    "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "model": "gpt-6.1-terra",
+    "effort": "high"
+  },
+  "policyTransportRevision": "jarvis-developer-input-v1",
+  "receipt": "ca69a1939dc1b89d237a21576a9b827ccda27e906898ebf2edaf63b0dd4d0273"
+}

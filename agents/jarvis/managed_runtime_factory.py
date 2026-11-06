@@ -38,6 +38,7 @@ from managed_policy_client import (
     NativeInputCursor,
     managed_response_request,
 )
+from managed_policy_compatibility import POLICY_TRANSPORT_REVISION, policy_compatibility_receipt
 from managed_provider_cause import provider_cause, sanitize_provider_cause
 from model_client import (
     CHAT_INSTRUCTIONS,
@@ -416,9 +417,18 @@ class LazyManagedRuntime:
                             raise ManagedChatError("managed_probe_empty_or_unfinished")
                         if expected is not None and (overflow or observed.strip() != expected):
                             raise ManagedChatError("managed_probe_policy_not_applied")
-                    return {"status": "ok", "model": target.model,
-                            "reasoningEffort": target.reasoning_effort,
-                            "requestShape": shape}
+                    result = {"status": "ok", "model": target.model,
+                              "reasoningEffort": target.reasoning_effort, "requestShape": shape}
+                    if shape == "managed_policy":
+                        # _prepared verified this exact project URL against target metadata.
+                        endpoint = str(self._current._client.base_url).rstrip("/").removesuffix(
+                            "/openai/v1")
+                        result.update(policyTransportRevision=POLICY_TRANSPORT_REVISION,
+                                      policyCompatibility=policy_compatibility_receipt(
+                                          endpoint, target.agent_name, target.agent_version,
+                                          target.fingerprint, target.model, target.reasoning_effort,
+                                      ))
+                    return result
                 finally:
                     if native_id is not None:
                         try:

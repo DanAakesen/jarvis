@@ -21,6 +21,8 @@ param foundryCopilotAgentName string = ''
 param foundryCopilotAgentVersion string = ''
 @description('The SHA256 fingerprint of the managed Copilot comparison definition.')
 param foundryCopilotDefinitionSha256 string = ''
+@description('Receipt from an exact-target complete-policy canary. Empty keeps Copilot unavailable.')
+param foundryCopilotPolicyCompatibility string = ''
 
 @description('The non-secret GitHub App ID used by the backend to mint installation tokens.')
 param githubAppId string = ''
@@ -1014,6 +1016,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'FOUNDRY_COPILOT_DEFINITION_SHA256'
               value: foundryCopilotDefinitionSha256
+            }
+            {
+              name: 'FOUNDRY_COPILOT_POLICY_COMPATIBILITY'
+              value: foundryCopilotPolicyCompatibility
             }
           ], empty(jarvisAgentObjectId) ? [] : [
             {
