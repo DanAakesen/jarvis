@@ -10956,3 +10956,15 @@ The owner explicitly requested subtle haptics and interruptible completion feedb
 for lift saves, tasks and note creation. Notes introduces the reusable confirmation
 and applies it after successful client writes. No API or persistence contract changes.
 Physical haptic feel remains a device check; simulator verification is pending.
+
+## 6 November 2026 — Restore the working Linux Swift runner for release
+
+GitHub changed ubuntu-latest to Ubuntu 26.04 during this authorised release.
+Both Notes job 127618762897 and integration job 127619905299 failed before tests:
+the pinned setup-swift action does not support 26.04. The earlier combined Core
+job 127601636763 used Ubuntu 24.04 and passed 493 tests. Pin only the Linux job in
+`ios-ci.yml` to ubuntu-24.04, restoring that known working environment. This is a
+necessary compatibility exception to the board issues' no-workflow-edit scope,
+within the owner's subsequent instruction to finish verification and release
+directly. It does not change checks, Mac execution, signing or TestFlight. Recheck
+CI rather than treating the infrastructure failure as a successful test result.

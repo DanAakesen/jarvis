@@ -3803,3 +3803,7 @@ Notes 1d8e663f passed 50/50 native UI tests in run 42125346515; the later screen
 sweep timed out. New owner-approved success feedback follows confirmed note/task
 writes and awaits combined native verification. Backend deployment remains required
 before TestFlight.
+
+Release infrastructure correction: ubuntu-latest moved to unsupported Ubuntu 26.04.
+The Linux Swift job now pins the previously passing ubuntu-24.04 image; checks and
+Mac/TestFlight steps are unchanged. Fresh CI is required before Notes/backend delivery.
