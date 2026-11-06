@@ -116,3 +116,20 @@ spans and containment while retaining every card/header/metric/action bound.
 It captures both widget languages before language-specific geometry assertions;
 Danish was absent from this failed attempt and is not claimed as reviewed.
 No production widget geometry changed for this assertion correction.
+
+## Bounded gallery qualification
+
+Native dce71639 / 42268563484 passed 67 of the 68 cases, including camera, both
+Health language/detail/Back cases, AX Health and both task-board scrolling cases.
+The gallery reached its unchanged 120-second deadline while repeatedly retrieving
+AX geometry; the log continues through the final Notes bounds without an assertion
+failure before runner restart. Both widget-language captures were retained.
+
+The test now takes one native layout snapshot per widget element and reuses its
+frame for all identical bounds checks. Card/header/column values are also cached
+within each settled language. All original dimensions, containment, alignment and
+disabled-action assertions remain; the 120/150-second limits are unchanged.
+Production app, Core and widget sources are unchanged from dce71639. Qualify this
+one corrected case on that identical application and retain the other 67 passing
+cases, rather than repeating the complete simulator suite. The focused workflow
+is validation-only and must never merge into production.

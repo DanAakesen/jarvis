@@ -70,44 +70,44 @@ final class ComponentGalleryUITests: XCTestCase {
                 let header = card.staticTexts["widget.header.title"]
                 XCTAssertTrue(header.exists, "\(kind) must have its shared title")
                 XCTAssertEqual(header.label, title)
-                XCTAssertEqual(card.frame.width, 329, accuracy: 0.5)
-                XCTAssertEqual(card.frame.height, 155, accuracy: 0.5)
-                let inset = card.frame.insetBy(dx: 16, dy: 16)
+                let cardFrame = card.frame
+                XCTAssertEqual(cardFrame.width, 329, accuracy: 0.5)
+                XCTAssertEqual(cardFrame.height, 155, accuracy: 0.5)
+                let inset = cardFrame.insetBy(dx: 16, dy: 16)
+                let headerFrame = assertWidgetElement(header, within: inset)
                 // The native Workouts symbol centers its text 1.17 pt below the header top.
                 // Allow that optical offset; assertWidgetElement still rejects content outside the inset.
-                XCTAssertLessThanOrEqual(header.frame.minY - inset.minY, 2,
+                XCTAssertLessThanOrEqual(headerFrame.minY - inset.minY, 2,
                                          "The title must remain within 2 pt of the top inset")
-                XCTAssertLessThan(header.frame.minX, inset.minX + 30, "The title follows its top-left symbol")
-                assertWidgetElement(header, within: inset)
+                XCTAssertLessThan(headerFrame.minX, inset.minX + 30, "The title follows its top-left symbol")
                 if kind == "workouts" {
                     let metrics = ["lift", "run", "kilometers", "calories"].map {
-                        card.descendants(matching: .any)["widget.workouts.\($0)"]
+                        assertWidgetElement(card.descendants(matching: .any)["widget.workouts.\($0)"], within: inset)
                     }
-                    for metric in metrics { assertWidgetElement(metric, within: inset) }
                     // Combined AX frames bound the text, not the equal-width layout slots.
                     // Verify each column's origin and containment in its allocated half.
                     let columnGap: CGFloat = 12
-                    let gridLeft = metrics[0].frame.minX
+                    let gridLeft = metrics[0].minX
                     let columnWidth = (inset.maxX - gridLeft - columnGap) / 2
                     XCTAssertGreaterThan(columnWidth, 0)
                     let rightColumn = gridLeft + columnWidth + columnGap
-                    XCTAssertEqual(metrics[1].frame.minX, rightColumn, accuracy: 1)
+                    XCTAssertEqual(metrics[1].minX, rightColumn, accuracy: 1)
                     for index in [0, 2] {
-                        XCTAssertLessThanOrEqual(metrics[index].frame.maxX, gridLeft + columnWidth + 0.5)
+                        XCTAssertLessThanOrEqual(metrics[index].maxX, gridLeft + columnWidth + 0.5)
                     }
                     for index in [1, 3] {
-                        XCTAssertGreaterThanOrEqual(metrics[index].frame.minX, rightColumn - 0.5)
+                        XCTAssertGreaterThanOrEqual(metrics[index].minX, rightColumn - 0.5)
                     }
-                    XCTAssertEqual(metrics[0].frame.minX, metrics[2].frame.minX, accuracy: 1)
-                    XCTAssertEqual(metrics[1].frame.minX, metrics[3].frame.minX, accuracy: 1)
-                    XCTAssertEqual(metrics[0].frame.minY, metrics[1].frame.minY, accuracy: 1)
-                    XCTAssertEqual(metrics[2].frame.minY, metrics[3].frame.minY, accuracy: 1)
-                    XCTAssertGreaterThanOrEqual(metrics[2].frame.minY - metrics[0].frame.maxY, 5)
+                    XCTAssertEqual(metrics[0].minX, metrics[2].minX, accuracy: 1)
+                    XCTAssertEqual(metrics[1].minX, metrics[3].minX, accuracy: 1)
+                    XCTAssertEqual(metrics[0].minY, metrics[1].minY, accuracy: 1)
+                    XCTAssertEqual(metrics[2].minY, metrics[3].minY, accuracy: 1)
+                    XCTAssertGreaterThanOrEqual(metrics[2].minY - metrics[0].maxY, 5)
                 } else if kind == "factory" {
                     for status in ["running", "awaiting", "review", "failed"] {
                         let count = card.descendants(matching: .any)["widget.factory.count.\(status)"]
-                        assertWidgetElement(count, within: inset)
-                        XCTAssertLessThanOrEqual(count.frame.height, 29, "Medium count cells must leave room for both task rows")
+                        let countFrame = assertWidgetElement(count, within: inset)
+                        XCTAssertLessThanOrEqual(countFrame.height, 29, "Medium count cells must leave room for both task rows")
                     }
                     for id in ["c1", "t1"] {
                         assertWidgetElement(card.descendants(matching: .any)["widget.factory.task.\(id)"], within: inset)
@@ -125,13 +125,24 @@ final class ComponentGalleryUITests: XCTestCase {
         }
     }
 
-    private func assertWidgetElement(_ element: XCUIElement, within bounds: CGRect) {
-        XCTAssertTrue(element.exists, element.identifier)
-        XCTAssertFalse(element.frame.isEmpty, element.identifier)
-        XCTAssertGreaterThanOrEqual(element.frame.minX, bounds.minX - 0.5, element.identifier)
-        XCTAssertGreaterThanOrEqual(element.frame.minY, bounds.minY - 0.5, element.identifier)
-        XCTAssertLessThanOrEqual(element.frame.maxX, bounds.maxX + 0.5, element.identifier)
-        XCTAssertLessThanOrEqual(element.frame.maxY, bounds.maxY + 0.5, element.identifier)
+    @discardableResult
+    private func assertWidgetElement(_ element: XCUIElement, within bounds: CGRect) -> CGRect {
+        // Each XCUI property query crosses into the app. Read the settled geometry
+        // once and reuse it so identical bounds checks do not exhaust the test deadline.
+        do {
+            let snapshot = try element.snapshot()
+            let frame = snapshot.frame
+            let identifier = snapshot.identifier
+            XCTAssertFalse(frame.isEmpty, identifier)
+            XCTAssertGreaterThanOrEqual(frame.minX, bounds.minX - 0.5, identifier)
+            XCTAssertGreaterThanOrEqual(frame.minY, bounds.minY - 0.5, identifier)
+            XCTAssertLessThanOrEqual(frame.maxX, bounds.maxX + 0.5, identifier)
+            XCTAssertLessThanOrEqual(frame.maxY, bounds.maxY + 0.5, identifier)
+            return frame
+        } catch {
+            XCTFail("The widget element must exist and provide a layout snapshot: \(error)")
+            return .zero
+        }
     }
 
     /// Two screenshots of the live orb taken apart in time must differ: the orb flows, it is not a still image.
