@@ -1,3 +1,20 @@
+## 6 November 2026 — Diagnose request shapes without changing the managed target
+
+After the confirmed instructions-override repair, the live provider still returned
+HTTP 400 `invalid_request` without a parameter. Published limits do not establish
+a further model or input-role incompatibility. Compare four fixed synthetic inputs
+on the same verified target through the existing authenticated administrative
+boundary. Use separate owned conversations, bounded attempts/cleanup, no tools,
+owner history or claim changes, and no retries. A separately selected diagnostic
+path must exit before provisioning, pinning or backend configuration.
+
+Retain only known nested provider codes/targets and independently filter output
+before logging. A regex-safe string is not sufficient proof that it contains no
+private data. Diagnostic completion is evidence for investigation, never runtime
+readiness; the production-policy canary and actual isolated owner conversation
+remain separate acceptance checks. Do not reduce the trusted policy, change the
+approved model profile or create another version merely to make a simpler probe pass.
+
 ## 6 November 2026 — Qualify the managed policy provider request
 
 The old fixed canary omitted the message list and per-turn instructions present

@@ -126,7 +126,7 @@ the chat menu. Default active-turn discovery excludes test sessions. Availabilit
 fails closed for unverified Copilot; it is not a substitute for live model access
 or authorization. See [adapter boundaries](managed-chat-adapter.md).
 
-The existing AAD-protected hosted Invocations endpoint also accepts two exact
+The existing AAD-protected hosted Invocations endpoint also accepts three exact
 administrative operations. The manifest operation reads static Jarvis instructions
 and authoritative function schemas without user context, inference or function
 execution. The fixed text canary uses the actual bridge credential and an owned
@@ -140,6 +140,17 @@ request contract, not owner authorization, durable claims or tool execution. Nor
 chat still requires delegated authorization and verified stored source messages.
 The default-off manual Deploy job uses these operations with existing OIDC and
 never assigns roles or changes the normal runtime default.
+
+The fixed `managed_request_diagnostics` operation compares plain text, user
+messages, a short trusted developer message and the full production policy. Each
+attempt verifies the same configured target and owns a new synthetic conversation;
+there are no owner claims, history reads, tool execution or automatic inference
+retries. Attempts, total work and cleanup have explicit bounds. The diagnostic
+result cannot satisfy full-policy canary acceptance. Its default-off manual workflow
+path is incompatible with inspect/provision/refresh and exits before agent creation,
+pin changes or backend configuration. Nested provider codes and targets survive
+only through closed vocabularies, independently filtered again before log output;
+raw error prose and private identifiers remain excluded.
 
 ## Whole-Jarvis logging source boundaries (#1341; 29 October 2026)
 

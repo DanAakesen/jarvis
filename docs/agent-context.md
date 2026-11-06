@@ -91,6 +91,15 @@ synthetic 400 that the old request misses. Live success remains unverified;
 follow the canary with the ordinary authenticated isolated owner conversation,
 never `/status/smoke` as a substitute for Copilot acceptance.
 
+For the remaining generic request failure, qualify and deploy the hosted diagnostic
+before explicitly dispatching `diagnose_managed_chat=true` on main. Leave all
+inspect/provision/refresh inputs false. This path compares four fixed synthetic
+request shapes on the existing target without configuration writes. Its completion
+marker reports diagnostic execution, never readiness; inspect each shape's actual
+status and the separate full-policy canary. Run the factory/provider/chat tests,
+handoff and diagnostic-output tests, and existing deployment workflow checks.
+Keep raw diagnostic response files private and delete them after filtering.
+
 ## Managed policy cause diagnostics (#1373; 30 October 2026)
 
 Use the existing hosted pytest/Ruff environment. Focused checks:
