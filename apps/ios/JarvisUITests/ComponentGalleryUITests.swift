@@ -135,6 +135,12 @@ final class ComponentGalleryUITests: XCTestCase {
         log.tap()
         XCTAssertTrue(app.textFields["today.lift.name"].waitForExistence(timeout: 5), "Last lifts opens Home's shared sheet")
         attach(app.screenshot(), named: "P15-95-health-log-lift-\(theme)-\(language)")
+        app.buttons["sheet.cancel"].tap()
+        XCTAssertTrue(log.waitForExistence(timeout: 5))
+        for position in 1...3 {
+            app.swipeUp()
+            attach(app.screenshot(), named: "P15-95-health-lower-\(position)-\(theme)-\(language)")
+        }
         app.terminate()
     }
 
