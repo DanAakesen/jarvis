@@ -3297,3 +3297,44 @@ Health screenshot review of run 42124896873 found overlapping 30-day chart label
 Long periods now show five evenly spaced date labels; all daily bars and selection
 remain available. Seven-day charts retain weekday labels. This correction joins the
 VoiceOver/Reduce Motion refinement for the next combined native pass.
+
+## Native insight board alignment (P15-96; 5 November 2026)
+
+Reuse P15-92 heroes, section headlines and grouped row geometry. Usage keeps its
+period inside Overview and grouping inside Breakdown, with the first three
+ranked tasks visible. Status rows show a title, concise real detail, state word
+and disclosure; Vault mirror and Smoke report form a separate group below.
+Proactive uses a compact two-column source group, falling back to one column
+for accessibility sizes, and an expandable three-item findings group.
+Notifications uses shared section headlines and row insets while preserving
+approval controls, grouping and dismiss gestures. Workspaces keeps its native
+list/swipe actions and bottom search with the shared line and row spacing.
+
+The published Status and Proactive reference images were inspected. These are
+board renders, not native evidence. All five audited pages still require actual
+Mac screenshot inspection; see `docs/ios/design/p15-96-verification.md`. The
+continuous shared page segments are supplied by P15-94 / #1606.
+
+
+## Native Status row and Usage chart refinement
+
+Native evidence exposed a clipped Status state label and a Notifications capture
+covered by sign-in. The row reserves readable state text, stacking it at large
+Dynamic Type; the test uses the existing Simulator navigation argument. Usage
+emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
+verification is pending; previous UI-test success is not visual acceptance.
+
+## Final Insights board details
+
+Board/native comparison adds the missing Overview title to Proactive and restores
+Usage's breakdown order: percentage then emphasized amount. Usage breakdown
+labels and values stack at accessibility sizes. The existing shared-page native
+checks now also capture Usage, Status and Proactive at the largest accessibility
+text size. Corrected native images remain pending.
+
+### Insights large-text screenshot correction (6 November 2026)
+
+At accessibility sizes, the shared pinned header uses native regular material so
+scrolling content does not collide with its title. Page and period choices scroll
+horizontally, and Usage totals become full-width rows with unrestricted wrapping.
+Normal text keeps the approved continuous shared segmented bar and grid.

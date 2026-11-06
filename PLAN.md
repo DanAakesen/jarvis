@@ -2223,6 +2223,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 - **P15-95 / #1601:** Health now has the board's three periods, training donut/chart and Last lifts/Recent sessions/Body trend order. Merged HealthKit step totals replace raw overlapping-source sums; local workouts and saved Home lift notes join the dashboard without changing the write path. Core regressions and backend sync tests pass locally. Native visual acceptance and device-source parity are pending; see `docs/ios/design/p15-95-verification.md`.
 
+- **P15-96 / #1602:** Current Usage contract decoding, range/cache handling, reconciled charts and all five page audits are implemented locally. All 474 Core and 23 backend Usage/Now-feed checks pass. Native build, board/build comparison and owner acceptance remain pending; see `docs/ios/design/p15-96-verification.md`. Reuses #1604 and the shared segmented-bar change in #1606.
 - **P15-92 / #1598:** PR #1604 implements the shared native page pattern from the board merged in #1603. All 468 Core tests pass locally. Native compilation, CI and CodeQL passed on edc8ec36; 45/46 UI tests passed, including all four bilingual/light-dark page-order cases. The remaining Workspaces case used a nonexistent sidebar entry; its fixture entry is corrected. The Mac job again timed out during later captures. Dan approved preserving available images with `if: always()` on the existing upload step; all 74 workflow checks pass. Fresh native checks and board/build visual acceptance remain pending; see `docs/ios/design/p15-92-verification.md`. #1599–#1602 follow this shared change.
 - **P15-93 / #1599:** Notes follow-up is implemented on a separate branch based on #1598, which must merge first. Root/direct-folder browsing, matching counts, Back, nested note and empty-folder creation, last-opened tiles, graph labels/colors and task-create priority are covered by 476 passing Core tests and 89 backend tests. Native interaction checks and captures are prepared; Mac compilation and board/build visual acceptance are pending. See `docs/ios/design/p15-93-verification.md`.
 
@@ -3816,6 +3817,14 @@ proportions and real average/night-count summaries; bedtime/wake-up are absent
 from the current contract. Nutrition shows actual logged meals without a target.
 See `p15-95-verification.md` for screenshot provenance and pending native checks.
 
+## P15-96 visual follow-up
+
+Native evidence exposed a clipped Status state label and a Notifications capture
+covered by sign-in. The row reserves readable state text, stacking it at large
+Dynamic Type; the test uses the existing Simulator navigation argument. Usage
+emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
+verification is pending; previous UI-test success is not visual acceptance.
+
 ## P15-92 native heading correction
 
 Native Workspaces screenshots show List section headings dimmed twice by the
@@ -3846,3 +3855,8 @@ Health 297d94ba passed 48/48 native UI tests in run 42124896873. Training EN/dar
 Sleep DA/light and Nutrition EN/dark were inspected; the 30-day Nutrition capture
 exposed crowded labels, now corrected with sparse date ticks. Updated screenshot
 acceptance remains pending.
+
+Insights 084dcfc1 passed 50/50 native UI tests in run 42124893661. Normal EN/dark
+Usage, Status, Proactive and Notifications captures were inspected. Accessibility-size
+overlap and clipped totals prompted shared header/control and Usage layout fixes;
+combined native re-verification is pending.

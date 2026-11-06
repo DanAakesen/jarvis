@@ -43,6 +43,8 @@ struct WorkspacesView: View {
             do {
                 let filterKey = "\(query)|\(selectedKind?.rawValue ?? "")"
                 if loadedFilterKey != filterKey {
+                    items = []
+                    notice = nil
                     hasMore = false
                     loadState = .loading
                 }
@@ -149,6 +151,7 @@ struct WorkspacesView: View {
     @ViewBuilder private var pageHead: some View {
         if hasLoadedPage || !items.isEmpty {
             VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                if loadState == .ready || loadState == .stale {
                 JarvisPageHeadline(phrase: JarvisPagePhrase(markup: formatted(.pageSummary, items.count)))
                 JarvisPageHeroCard(title: jarvisInsightsText(.overview, language)) {
                     JarvisPageStatGrid(
@@ -160,6 +163,7 @@ struct WorkspacesView: View {
                     )
                 }
                 .accessibilityIdentifier("workspaces.hero")
+                }
                 connectionStatus
                 kindFilters
                 if loadState == .loading {
@@ -267,7 +271,7 @@ struct WorkspacesView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: JarvisDesignTokens.iconSize, height: JarvisDesignTokens.iconSize)
                         .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 5) {
+                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(item.title)
                                 .font(.body.weight(.semibold))
@@ -324,12 +328,12 @@ struct WorkspacesView: View {
                 }
             }
         }
-        .padding(.vertical, JarvisDesignTokens.listRowVerticalInset)
+        .padding(.vertical, JarvisPageHeaderMetrics.rowVerticalInset)
         .listRowInsets(EdgeInsets(
             top: 0,
-            leading: JarvisDesignTokens.contentInset,
+            leading: JarvisPageHeaderMetrics.rowInset,
             bottom: 0,
-            trailing: JarvisDesignTokens.contentInset / 2
+            trailing: JarvisPageHeaderMetrics.rowInset
         ))
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button(text(item.pinned ? .unpin : .pin), systemImage: item.pinned ? "pin.slash" : "pin") {
@@ -391,9 +395,11 @@ struct WorkspacesView: View {
             return
         }
         loadingOlder = true
+        let requestedFilter = "\(query)|\(selectedKind?.rawValue ?? "")"
         defer { loadingOlder = false }
         do {
             let page = try await client.search(query: normalizedQuery(query), kind: selectedKind, before: oldest.createdAt)
+            guard !Task.isCancelled, requestedFilter == "\(query)|\(selectedKind?.rawValue ?? "")" else { return }
             let knownIDs = Set(items.map(\.id))
             items.append(contentsOf: page.filter { !knownIDs.contains($0.id) })
             hasMore = page.count >= JarvisWorkspacesClient.pageSize

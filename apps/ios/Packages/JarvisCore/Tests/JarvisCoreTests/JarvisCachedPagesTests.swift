@@ -59,6 +59,19 @@ final class JarvisCachedPagesTests: XCTestCase {
         } catch {}
     }
 
+    func testUsageCurrentContractReadsConditionallyForEveryPeriod() async throws {
+        for period in JarvisUsagePeriod.allCases {
+            let report = JarvisUsageReport(period: period.rawValue, from: nil, to: "2026-11-04T10:00:00Z",
+                entries: [], totalEntries: "0", toolCalls: [])
+            try await assertConditional(path: "/api/usage", body: String(decoding: JSONEncoder().encode(report), as: UTF8.self)) {
+                try await JarvisUsageClient(client: $0).fetchReport(period: period, validator: $1)
+            }
+        }
+        try await assertRejectsInvalidBody(path: "/api/usage") {
+            try await JarvisUsageClient(client: $0).fetchReport(period: .thirtyDays, validator: $1)
+        }
+    }
+
     func testStatusRepositoryReadsConditionally() async throws {
         let json = try statusJSON()
         try await assertConditional(path: "/api/status", body: json) {

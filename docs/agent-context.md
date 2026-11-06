@@ -7074,6 +7074,29 @@ proportions and real average/night-count summaries; bedtime/wake-up are absent
 from the current contract. Nutrition shows actual logged meals without a target.
 See `p15-95-verification.md` for screenshot provenance and pending native checks.
 
+## Native insight validation (P15-96; 5 November 2026)
+
+Verified locally with Swift 6.2: `swift test --package-path
+apps/ios/Packages/JarvisCore` (474 tests). Backend Node 22 validation:
+`npm test --workspace @jarvis/backend -- --run src/core/usage.test.ts
+src/database/now-feed-store.test.ts` (23 tests). The selected native component
+suite captures the five audited pages and exercises every Usage period and
+breakdown selection against the current API-shaped fixture. Native compilation
+and screenshot inspection remain separate from these Linux checks.
+
+Do not restore a mandatory `dailyToolUsage` field: inspect the current
+`UsageReport` TypeScript contract and `/usage` response before changing decoding.
+A browser-rendered reference is not evidence of native visual correctness.
+
+
+## Native Insights image evidence
+
+Native evidence exposed a clipped Status state label and a Notifications capture
+covered by sign-in. The row reserves readable state text, stacking it at large
+Dynamic Type; the test uses the existing Simulator navigation argument. Usage
+emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
+verification is pending; previous UI-test success is not visual acceptance.
+
 ## Native shared-heading verification
 
 Native Workspaces screenshots show List section headings dimmed twice by the

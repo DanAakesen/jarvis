@@ -128,7 +128,10 @@ public struct JarvisUsageReport: Codable, Equatable, Sendable {
     public let entries: [JarvisUsageEntry]
     public let totalEntries: String
     public let truncated: Bool
-    public let dailyToolUsage: JarvisUsageDailyTools
+    /// Legacy cache field. Current GET /usage sends period toolCalls and healthToolUsage separately.
+    public let dailyToolUsage: JarvisUsageDailyTools?
+    public let healthToolUsage: JarvisUsageDailyTools?
+    public let toolCalls: [JarvisUsageToolCount]?
 
     public init(
         period: String,
@@ -138,7 +141,9 @@ public struct JarvisUsageReport: Codable, Equatable, Sendable {
         entries: [JarvisUsageEntry],
         totalEntries: String,
         truncated: Bool = false,
-        dailyToolUsage: JarvisUsageDailyTools = JarvisUsageDailyTools(date: "1970-01-01", tools: [])
+        dailyToolUsage: JarvisUsageDailyTools? = nil,
+        healthToolUsage: JarvisUsageDailyTools? = nil,
+        toolCalls: [JarvisUsageToolCount]? = nil
     ) {
         self.period = period
         self.from = from
@@ -148,6 +153,8 @@ public struct JarvisUsageReport: Codable, Equatable, Sendable {
         self.totalEntries = totalEntries
         self.truncated = truncated
         self.dailyToolUsage = dailyToolUsage
+        self.healthToolUsage = healthToolUsage
+        self.toolCalls = toolCalls
     }
 
     static let agents: Set<String> = ["codex", "copilot", "jarvis"]
@@ -171,12 +178,18 @@ public struct JarvisUsageReport: Codable, Equatable, Sendable {
                     && JarvisInsightsDates.parse(entry.at) != nil
             }
             && totalEntries.range(of: "^[0-9]{1,19}$", options: .regularExpression) != nil
-            && dailyToolUsage.date.range(of: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", options: .regularExpression) != nil
-            && dailyToolUsage.tools.count <= 100
-            && dailyToolUsage.tools.allSatisfy {
-                !$0.tool.isEmpty && $0.tool.count <= 64 && Int($0.count) != nil
+            && [dailyToolUsage, healthToolUsage].compactMap { $0 }.allSatisfy {
+                JarvisInsightsDates.date(fromDayKey: $0.date) != nil && Self.validCounts($0.tools)
             }
-            && (codexToolCallsToday?.allSatisfy { Int($0.count) != nil } ?? true)
+            && (toolCalls.map(Self.validCounts) ?? true)
+            && (codexToolCallsToday.map(Self.validCounts) ?? true)
+    }
+
+    private static func validCounts(_ counts: [JarvisUsageToolCount]) -> Bool {
+        counts.count <= 100 && counts.allSatisfy {
+            !$0.tool.isEmpty && $0.tool.count <= 64 &&
+                $0.count.range(of: "^[0-9]{1,12}$", options: .regularExpression) != nil
+        }
     }
 }
 
@@ -229,6 +242,8 @@ public struct JarvisUsageSummary: Equatable, Sendable {
     public let buckets: [JarvisUsageBucket]
     public let toolCalls: [JarvisUsageToolCount]
     public let codexResearchCalls: Int?
+    public let toolCallsAreDaily: Bool
+    public let toolCallsAvailable: Bool
 
     public init(report: JarvisUsageReport, period: JarvisUsagePeriod) {
         self.period = period
@@ -240,7 +255,9 @@ public struct JarvisUsageSummary: Equatable, Sendable {
         hasEstimates = report.entries.contains { $0.costDkk != nil && $0.estimated }
         totalValue = report.entries.reduce(0) { $0 + Self.measure($1, usesCost: usesCost) }
         buckets = Self.makeBuckets(report: report, period: period, usesCost: usesCost)
-        toolCalls = report.dailyToolUsage.tools
+        toolCallsAreDaily = report.toolCalls == nil && report.dailyToolUsage != nil
+        toolCallsAvailable = report.toolCalls != nil || report.dailyToolUsage != nil
+        toolCalls = (report.toolCalls ?? report.dailyToolUsage?.tools ?? [])
             .filter { (Int($0.count) ?? 0) > 0 }
             .sorted { (Int($0.count) ?? 0, $1.tool) > (Int($1.count) ?? 0, $0.tool) }
         codexResearchCalls = report.codexToolCallsToday.map { $0.reduce(0) { $0 + (Int($1.count) ?? 0) } }
@@ -366,28 +383,31 @@ public struct JarvisUsageSummary: Equatable, Sendable {
         let end = JarvisInsightsDates.parse(report.to) ?? Date()
         var ranges: [(String, String)] = []
         switch period.bucketKind {
-        case .day:
-            let count = period.days ?? 30
-            for offset in stride(from: count - 1, through: 0, by: -1) {
-                guard let day = calendar.date(byAdding: .day, value: -offset, to: end) else { continue }
-                let key = JarvisInsightsDates.dayKey(day)
-                ranges.append((key, key))
-            }
-        case .week:
-            guard let currentWeek = calendar.dateInterval(of: .weekOfYear, for: end)?.start else { return [] }
-            for offset in stride(from: 12, through: 0, by: -1) {
-                guard let start = calendar.date(byAdding: .day, value: -7 * offset, to: currentWeek),
-                      let last = calendar.date(byAdding: .day, value: 6, to: start) else { continue }
-                ranges.append((JarvisInsightsDates.dayKey(start), JarvisInsightsDates.dayKey(last)))
+        case .day, .week:
+            let fallback = calendar.date(byAdding: .day, value: -((period.days ?? 30) - 1), to: end) ?? end
+            // The backend uses a rolling interval; its first partial day/week still contributes to the total.
+            let first = report.from.flatMap(JarvisInsightsDates.parse) ?? fallback
+            let unit: Calendar.Component = period.bucketKind == .day ? .day : .weekOfYear
+            guard var cursor = calendar.dateInterval(of: unit, for: first)?.start,
+                  let lastStart = calendar.dateInterval(of: unit, for: end)?.start else { return [] }
+            while cursor <= lastStart, ranges.count < maximumBuckets {
+                guard let interval = calendar.dateInterval(of: unit, for: cursor),
+                      let last = calendar.date(byAdding: .day, value: -1, to: interval.end) else { break }
+                ranges.append((JarvisInsightsDates.dayKey(interval.start), JarvisInsightsDates.dayKey(last)))
+                cursor = interval.end
             }
         case .month:
             let earliest = report.entries.compactMap { JarvisInsightsDates.parse($0.at) }.min() ?? end
-            guard var cursor = calendar.dateInterval(of: .month, for: earliest)?.start,
+            guard let firstMonth = calendar.dateInterval(of: .month, for: earliest)?.start,
                   let lastMonth = calendar.dateInterval(of: .month, for: end)?.start else { return [] }
+            let boundedStart = calendar.date(byAdding: .month, value: -(maximumBuckets - 1), to: lastMonth) ?? firstMonth
+            var cursor = max(firstMonth, boundedStart)
             while cursor <= lastMonth, ranges.count < maximumBuckets {
                 guard let interval = calendar.dateInterval(of: .month, for: cursor),
                       let last = calendar.date(byAdding: .day, value: -1, to: interval.end) else { break }
-                ranges.append((JarvisInsightsDates.dayKey(interval.start), JarvisInsightsDates.dayKey(last)))
+                // Coalesce older history into the first labelled range, preserving the chart/hero total.
+                let start = ranges.isEmpty ? firstMonth : interval.start
+                ranges.append((JarvisInsightsDates.dayKey(start), JarvisInsightsDates.dayKey(last)))
                 cursor = interval.end
             }
         }

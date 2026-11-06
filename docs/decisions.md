@@ -10997,6 +10997,36 @@ See `p15-95-verification.md` for screenshot provenance and pending native checks
 
 Use anchored HealthKit query pagination and complete-day upload requests rather than discarding a quantity at the whole-window cap. Keep the existing owner-only API and 20,000-item request bound; reject an oversized single day honestly, before any upload. A partial local step snapshot replaces only matching Copenhagen days and cannot mark retained history fresh. Regression tests cover multi-day backlogs, rejection, local midnight and explicit zero readings.
 
+## 5 November 2026 — P15-96 current Usage response and remaining board pages
+
+The Usage decoder required `dailyToolUsage`, whereas the current backend emits
+`healthToolUsage` and period `toolCalls`. Accept both current responses and old
+cache entries, keep the scopes separate, and report missing counts as unknown.
+Retain the existing conditional-read and account/period cache boundary. New
+regressions cover the actual backend shape, legacy data, every period's ETag
+read, invalid counts, rolling range edges and the all-time chart cap.
+
+Audit Usage, Status, Proactive, Notifications and Workspaces against the
+published reference and shared page pattern. Workspaces has a separate older
+reference; do not call the main board's Home fallback a Workspaces reference.
+Keep native interactions and Dynamic Type. Shared grouped rows replace the
+remaining inconsistent notification/source layouts. Status exposes stale
+evidence and real check details. Successful background jobs stay out of the
+notification sheet through its existing presentation model.
+
+Local validation: 474 Core tests and 23 backend Usage/Now-feed tests pass.
+Native screenshots and owner acceptance remain pending; the cloud network
+policy still blocks the artifact download host. No pixel-match claim is made.
+
+
+## 5 November 2026 — Preserve Status state text and truthful screenshot fixtures
+
+Native evidence exposed a clipped Status state label and a Notifications capture
+covered by sign-in. The row reserves readable state text, stacking it at large
+Dynamic Type; the test uses the existing Simulator navigation argument. Usage
+emphasizes the selected/latest bar. See `p15-96-verification.md`. Corrected native
+verification is pending; previous UI-test success is not visual acceptance.
+
 ## 5 November 2026 — Preserve shared heading contrast inside List
 
 Native Workspaces screenshots show List section headings dimmed twice by the
@@ -11035,3 +11065,11 @@ contract change or new dependency is required. Native verification is pending.
 ## Health page accessibility (5 November 2026)
 
 The Health hero indicator previously announced page position but offered no adjustment, and the explicit page transition ignored Reduce Motion. Keep the native pager and existing visual geometry, expose bounded increment/decrement actions on its indicator, and disable the explicit animation under Reduce Motion.
+
+## 6 November 2026 — Correct native accessibility-size overlap
+
+Insights run 42124893661 passed 50/50 native UI tests, but screenshots at accessibility
+XXXL exposed transparent-header overlap, clipped totals and crowded period labels.
+The shared header/controls and Usage layout now adapt at accessibility sizes. Chat
+has no callers of these components and is unchanged. Fresh native captures remain
+required; the previous test pass is not visual acceptance.

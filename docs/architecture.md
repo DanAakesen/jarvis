@@ -8618,3 +8618,22 @@ Body catalogue/metric queries use a 30-day window and retain measurement dates.
 
 P15-95 also labels HealthKit body-fat values as fractions (0–1), allowing the
 existing normalizer to retain the correct percentage (0.20 becomes 20%).
+
+## Native Usage contract and page data (P15-96)
+
+`JarvisUsageReport` decodes current `toolCalls` and `healthToolUsage` plus optional
+legacy `dailyToolUsage`. The backend does not emit the previously mandatory
+legacy field; requiring it caused valid `/usage` responses to fail decoding.
+The existing account/period-scoped repository and ETag contract remain in use.
+Tool-call scope is explicit in the summary; Health-only counters are never
+relabeled as general tool counts. Bounded count validation rejects malformed
+values. Rolling chart buckets include the first partial day/week; all-time
+charts coalesce old history into a labelled first range within the 60-bucket
+cap, so all plotted values reconcile with the returned report.
+
+Status/Proactive phrases use their loaded evidence. Proactive distinguishes
+unloaded findings from an observed zero and exposes retained-read failures.
+Notifications uses `BackgroundTaskPresentation` for running/actionable/quiet
+jobs; completed jobs no longer appear in its background section. Chat's Now bar
+behavior is unchanged.
+The existing server expiry and success exclusion remain the feed authority.
