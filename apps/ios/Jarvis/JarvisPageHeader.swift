@@ -29,7 +29,6 @@ enum JarvisPageHeaderMetrics {
 /// Title bar: the title is left aligned, bold and about 32 pt (scaling with Dynamic Type and wrapping rather than
 /// truncating), level with the right-side glass buttons. The sidebar button always closes the row, as in Chat.
 struct JarvisPageHeader<Actions: View>: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .largeTitle) private var titleSize = JarvisPageHeaderMetrics.titleSize
     let title: String
     let language: JarvisAppLanguage
@@ -58,11 +57,6 @@ struct JarvisPageHeader<Actions: View>: View {
         .padding(.horizontal, JarvisPageHeaderMetrics.inset)
         .padding(.top, JarvisPageHeaderMetrics.actionSpacing)
         .padding(.bottom, JarvisPageHeaderMetrics.actionSpacing)
-        .background {
-            if dynamicTypeSize.isAccessibilitySize {
-                Rectangle().fill(.regularMaterial).ignoresSafeArea(edges: .top)
-            }
-        }
     }
 }
 
@@ -73,32 +67,21 @@ extension JarvisPageHeader where Actions == EmptyView {
 }
 
 private struct JarvisPageHeaderModifier<Header: View>: ViewModifier {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var isScrolled = false
     let header: Header
 
     func body(content: Content) -> some View {
-        content
-            .onScrollGeometryChange(for: Bool.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top > 1
-            } action: { _, scrolled in
-                isScrolled = scrolled
-            }
-            .safeAreaInset(edge: .top, spacing: 0) {
-                header.background {
-                    // Accessibility headers already provide this material at every offset.
-                    if isScrolled && !dynamicTypeSize.isAccessibilitySize {
-                        Rectangle().fill(.regularMaterial).ignoresSafeArea(edges: .top)
-                    }
-                }
-            }
-            .scrollEdgeEffectStyle(.soft, for: .top)
+        VStack(spacing: 0) {
+            header
+            // Reserve the header's real height, including Dynamic Type wrapping.
+            // Rows stop at this boundary instead of needing a material bar to cover them.
+            content.clipped()
+        }
+        .scrollEdgeEffectHidden(for: .top)
     }
 }
 
 extension View {
-    /// The header is transparent at rest; native material protects its title once rows scroll beneath it.
-    /// Observe only crossing the top edge, rather than rebuilding the page for every scroll offset.
+    /// A transparent, structurally reserved header. Scrolling content cannot overlap its title or actions.
     func jarvisPageHeader<Header: View>(@ViewBuilder _ header: () -> Header) -> some View {
         modifier(JarvisPageHeaderModifier(header: header()))
     }
@@ -355,6 +338,16 @@ struct JarvisPageLoadingView: View {
     var identifier = "page.loading"
     @ScaledMetric(relativeTo: .body) private var lineHeight = JarvisPageHeaderMetrics.skeletonLineHeight
 
+    private var forceReducedMotionForFixture: Bool {
+        #if DEBUG && targetEnvironment(simulator)
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--ui-test-navigation"), arguments.contains("--ui-test-loading-reduced-motion") {
+            return true
+        }
+        #endif
+        return false
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
             line()
@@ -374,7 +367,6 @@ struct JarvisPageLoadingView: View {
                 }
             }
         }
-        .modifier(JarvisLoadingShimmer())
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
@@ -385,11 +377,13 @@ struct JarvisPageLoadingView: View {
         RoundedRectangle(cornerRadius: JarvisPageHeaderMetrics.rowLineSpacing)
             .fill(.secondary.opacity(0.16))
             .frame(height: lineHeight)
+            .modifier(JarvisLoadingShimmer(forceReducedMotion: forceReducedMotionForFixture))
     }
 }
 
-/// A quiet travelling highlight makes pending data distinguishable from an empty page.
+/// A quiet travelling highlight confined to each text placeholder. Never apply to a card or page surface.
 private struct JarvisLoadingShimmer: ViewModifier {
+    var forceReducedMotion = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.layoutDirection) private var layoutDirection
@@ -397,23 +391,24 @@ private struct JarvisLoadingShimmer: ViewModifier {
 
     func body(content: Content) -> some View {
         content.overlay {
-            if visible && scenePhase == .active && !reduceMotion {
+            if visible && scenePhase == .active && !reduceMotion && !forceReducedMotion {
                 TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
                     GeometryReader { geometry in
                         let phase = timeline.date.timeIntervalSinceReferenceDate
-                            .truncatingRemainder(dividingBy: 1.8) / 1.8
+                            .truncatingRemainder(dividingBy: 2.4) / 2.4
                         let travel = layoutDirection == .rightToLeft ? 1 - phase : phase
-                        LinearGradient(colors: [.clear, .primary.opacity(0.65), .clear],
+                        LinearGradient(colors: [.clear, .primary.opacity(0.14), .clear],
                                        startPoint: .leading, endPoint: .trailing)
-                            .frame(width: geometry.size.width * 0.5)
-                            .offset(x: geometry.size.width * (travel * 1.5 - 0.5))
+                            .frame(width: geometry.size.width * 0.35)
+                            .offset(x: geometry.size.width * (travel * 1.35 - 0.35))
                     }
                 }
-                .mask(content)
+                .clipShape(RoundedRectangle(cornerRadius: JarvisPageHeaderMetrics.rowLineSpacing))
                 .accessibilityHidden(true)
             }
         }
         .onAppear { visible = true }
         .onDisappear { visible = false }
+        .onScrollVisibilityChange(threshold: 0.01) { visible = $0 }
     }
 }

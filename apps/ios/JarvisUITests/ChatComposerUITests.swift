@@ -126,13 +126,24 @@ final class ChatComposerUITests: XCTestCase {
             XCTAssertTrue(plus.waitForExistence(timeout: 10))
             plus.tap()
             let camera = cameraMenuItem(in: app, language: language)
-            XCTAssertTrue(camera.waitForExistence(timeout: 10))
-            XCTAssertTrue(camera.isEnabled)
+            let cameraReady = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "exists == true AND enabled == true AND hittable == true"),
+                object: camera
+            )
+            let isCameraReady = XCTWaiter.wait(for: [cameraReady], timeout: 10) == .completed
+            if !isCameraReady { attachCameraFailure(in: app, stage: "menu-not-ready") }
+            XCTAssertTrue(isCameraReady, "The Camera menu item must be enabled and hittable before selection.")
             camera.tap()
 
+            let menuDismissed = camera.waitForNonExistence(timeout: 5)
+            if !menuDismissed { attachCameraFailure(in: app, stage: "menu-not-dismissed") }
+            XCTAssertTrue(menuDismissed, "Selecting Camera once must dismiss the Plus menu.")
+
             let shutter = app.descendants(matching: .any)["camera.shutter"]
+            let sheetOpened = shutter.waitForExistence(timeout: 10)
+            if !sheetOpened { attachCameraFailure(in: app, stage: "sheet-not-presented") }
             XCTAssertTrue(
-                shutter.waitForExistence(timeout: 10),
+                sheetOpened,
                 "The camera sheet must open. Hierarchy: \(app.debugDescription)"
             )
             XCTAssertTrue(
@@ -146,6 +157,17 @@ final class ChatComposerUITests: XCTestCase {
             XCTAssertTrue(shutter.waitForNonExistence(timeout: 5))
             app.terminate()
         }
+    }
+
+    private func attachCameraFailure(in app: XCUIApplication, stage: String) {
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "camera-\(stage)"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        let hierarchy = XCTAttachment(string: app.debugDescription)
+        hierarchy.name = "camera-\(stage)-hierarchy"
+        hierarchy.lifetime = .keepAlways
+        add(hierarchy)
     }
 
     /// Native menu items may not keep the SwiftUI identifier once enabled, so match the localized title too.

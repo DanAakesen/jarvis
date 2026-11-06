@@ -129,6 +129,7 @@
 "chat.runtime.runtimeUnavailable" = "Denne runtime er ikke tilgængelig.";
 "chat.runtime.runtimeNotConfigured" = "Copilot-test er ikke aktiveret på serveren.";
 "chat.runtime.runtimeNotVerified" = "De valgte indstillinger og Copilot-runtime er ikke verificeret.";
+"chat.runtime.runtimePolicyNotVerified" = "Copilot har ikke bestået testen af Jarvis’ instruktioner. Brug Nuværende.";
 "chat.runtime.runtimeVerificationFailed" = "Kunne ikke verificere Copilot. Prøv at tjekke igen.";
 "chat.runtime.runtimeStorageUnavailable" = "Samtalelageret er ikke tilgængeligt.";
 "chat.runtime.runtimeSettingsMismatch" = "Copilot kræver en konfigurationsopdatering til de valgte chatindstillinger.";

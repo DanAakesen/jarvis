@@ -25,6 +25,7 @@
 "notes.all" = "All";
 "notes.notes" = "Notes";
 "notes.tasks" = "Tasks";
+"notes.source" = "Source";
 "notes.graph" = "Graph";
 "notes.newNote" = "New note";
 "notes.newTask" = "New task";

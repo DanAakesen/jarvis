@@ -119,3 +119,7 @@
 
 "health.syncPullFailed" = "Apple Sundhed kunne ikke opdateres. Træk ned for at prøve igen.";
 "health.syncPullPartial" = "Nogle data fra Apple Sundhed kunne ikke opdateres. Tjek adgangen i Indstillinger, og træk ned for at prøve igen.";
+
+"health.measurements" = "Målinger";
+"health.oneMeasurement" = "1 måling";
+"health.measurementCount" = "%ld målinger";

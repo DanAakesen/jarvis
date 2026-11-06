@@ -38,12 +38,15 @@ struct JarvisHealthDetailView: View {
     @State private var unavailable = false
     @State private var retryVersion = 0
     @State private var loading = false
+    @State private var selectedMetricReading: Int?
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
 
     var body: some View {
-        Group {
-            if loading && data == nil {
+        ZStack {
+            // A concrete initial state owns the load task and navigation preferences.
+            // An empty Group never mounted them when a measurement was first opened.
+            if data == nil && failure == nil && !unavailable {
                 JarvisLoadingView(title: copy.text(.loading))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if let failure {
@@ -89,8 +92,8 @@ struct JarvisHealthDetailView: View {
             sleepList(data.items)
         case .meals:
             mealsList(data.items)
-        case .metric:
-            metricList(data.items)
+        case .metric(_, let title, let period):
+            metricList(data.items, title: title, period: period)
         }
     }
 
@@ -102,7 +105,7 @@ struct JarvisHealthDetailView: View {
         heartRateFailure: JarvisHealthFailure?
     ) -> some View {
         JarvisList {
-            Section(copy.text(.workout)) {
+            Section(header: JarvisSectionHeadline(copy.text(.workout)).textCase(nil)) {
                 let workoutDate = date(row["workout_date"]) ?? date(row["start_at"])
                 healthValue(
                     copy.text(.date),
@@ -125,7 +128,7 @@ struct JarvisHealthDetailView: View {
                 }
             }
             if let metrics = detail["additionalMetrics"]?.arrayValue, !metrics.isEmpty {
-                Section(copy.text(.metricTrend)) {
+                Section(header: JarvisSectionHeadline(copy.text(.metricTrend)).textCase(nil)) {
                     ForEach(Array(metrics.enumerated()), id: \.offset) { _, metric in
                         let fields = metric.objectValue ?? [:]
                         let name = fields["metric_name"]?.stringValue ?? copy.text(.metricTrend)
@@ -142,7 +145,7 @@ struct JarvisHealthDetailView: View {
                 Section { Text(copy.text(.unavailable)).foregroundStyle(.secondary) }
             }
             if let heartRateFailure {
-                Section(copy.text(.heartRate)) {
+                Section(header: JarvisSectionHeadline(copy.text(.heartRate)).textCase(nil)) {
                     Label(
                         heartRateFailure.title(language: language),
                         systemImage: heartRateFailure == .offline ? "wifi.slash" : "exclamationmark.triangle"
@@ -150,12 +153,12 @@ struct JarvisHealthDetailView: View {
                     JarvisLabelledButton(title: copy.text(.retry), isDisabled: loading) { retryVersion += 1 }
                 }
             } else if heartRateUnavailable || heartRate.isEmpty {
-                Section(copy.text(.heartRate)) {
+                Section(header: JarvisSectionHeadline(copy.text(.heartRate)).textCase(nil)) {
                     Text(copy.text(heartRateUnavailable ? .unavailable : .empty))
                         .foregroundStyle(.secondary)
                 }
             } else {
-                Section(copy.text(.heartRate)) {
+                Section(header: JarvisSectionHeadline(copy.text(.heartRate)).textCase(nil)) {
                     Chart(heartRatePoints(heartRate)) { point in
                         LineMark(
                             x: .value(copy.text(.date), point.date),
@@ -175,7 +178,7 @@ struct JarvisHealthDetailView: View {
     private func sleepList(_ rows: [[String: JSONValue]]) -> some View {
         JarvisList {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                Section(JarvisHealthLocalization.formattedDate(date(row["sleep_date"]) ?? "", language: language)) {
+                Section(header: JarvisSectionHeadline(JarvisHealthLocalization.formattedDate(date(row["sleep_date"]) ?? "", language: language)).textCase(nil)) {
                     if let hours = row["total_sleep_hours"]?.numberValue ?? row["asleep_hours"]?.numberValue {
                         healthValue(
                             copy.text(.sleep),
@@ -197,7 +200,7 @@ struct JarvisHealthDetailView: View {
     private func mealsList(_ rows: [[String: JSONValue]]) -> some View {
         JarvisList {
             ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                Section(row["meal_name"]?.stringValue ?? "\(copy.text(.meals)) \(index + 1)") {
+                Section(header: JarvisSectionHeadline(row["meal_name"]?.stringValue ?? "\(copy.text(.meals)) \(index + 1)").textCase(nil)) {
                     if let time = row["occurred_at"]?.stringValue {
                         healthValue(copy.text(.date), JarvisHealthLocalization.formattedDateTime(time, language: language))
                     }
@@ -213,33 +216,29 @@ struct JarvisHealthDetailView: View {
         .listStyle(.insetGrouped)
     }
 
-    private func metricList(_ rows: [[String: JSONValue]]) -> some View {
-        let points = metricPoints(rows)
-        return List {
-            Section(copy.text(.metricTrend)) {
-                if !points.isEmpty {
-                    Chart(points) { point in
-                        LineMark(
-                            x: .value(copy.text(.date), point.date),
-                            y: .value(copy.text(.metricTrend), point.value)
-                        )
-                        .foregroundStyle(JarvisDesignTokens.healthAccent)
-                        PointMark(
-                            x: .value(copy.text(.date), point.date),
-                            y: .value(copy.text(.metricTrend), point.value)
-                        )
-                        .foregroundStyle(JarvisDesignTokens.healthAccent)
+    private func metricList(_ rows: [[String: JSONValue]], title: JarvisHealthLocalizationKey,
+                            period: JarvisHealthPeriod) -> some View {
+        let trend = JarvisBodyTrend(rows: rows, period: period)
+        let selected = trend.readings.first { $0.id == selectedMetricReading } ?? trend.latest
+        return JarvisList {
+            Section(header: JarvisSectionHeadline(copy.text(.metricTrend)).textCase(nil)) {
+                if let selected {
+                    healthValue(JarvisHealthLocalization.formattedDate(selected.day, language: language),
+                                "\(formatBodyMeasurement(selected.value, language: language)) \(selected.unit)")
+                    JarvisBodyTrendPlot(trend: trend, period: period, title: copy.text(title),
+                                        language: language, selectedID: $selectedMetricReading)
+                    if trend.excludesOtherUnits {
+                        Text(copy.text(.partial)).foregroundStyle(.secondary)
                     }
-                    .frame(height: JarvisDesignTokens.healthChartHeight)
-                    .accessibilityLabel(copy.text(.metricTrend))
-                    .accessibilityValue(points.map { formatNumber($0.value, language: language) }.joined(separator: ", "))
                 }
+            }
+            Section(header: JarvisSectionHeadline(copy.text(.measurements)).textCase(nil)) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     if let date = date(row["metric_date"]),
-                       let value = row["avg_value"]?.numberValue ?? row["value"]?.numberValue {
+                       let value = row["value"]?.numberValue ?? row["avg_value"]?.numberValue {
                         healthValue(
                             JarvisHealthLocalization.formattedDate(date, language: language),
-                            "\(formatNumber(value, language: language)) \(row["unit"]?.stringValue ?? "")"
+                            "\(formatBodyMeasurement(value, language: language)) \(row["unit"]?.stringValue ?? "")"
                         )
                     }
                 }
@@ -250,18 +249,6 @@ struct JarvisHealthDetailView: View {
 
     private func healthValue(_ label: String, _ value: String) -> some View {
         LabeledContent(label, value: value)
-    }
-
-    private func metricPoints(_ rows: [[String: JSONValue]]) -> [JarvisHealthChartPoint] {
-        rows.compactMap { row in
-            guard let date = date(row["metric_date"]),
-                  let parsed = parseDate(date),
-                  let value = row["avg_value"]?.numberValue ?? row["value"]?.numberValue else {
-                return nil
-            }
-            return JarvisHealthChartPoint(date: parsed, value: value)
-        }
-        .sorted { $0.date < $1.date }
     }
 
     private func heartRatePoints(_ rows: [[String: JSONValue]]) -> [JarvisHealthChartPoint] {

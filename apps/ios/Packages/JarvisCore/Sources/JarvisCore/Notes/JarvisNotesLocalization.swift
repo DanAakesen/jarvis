@@ -43,6 +43,7 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case all = "notes.all"
     case notes = "notes.notes"
     case tasks = "notes.tasks"
+    case source = "notes.source"
     case graph = "notes.graph"
     case newNote = "notes.newNote"
     case newTask = "notes.newTask"

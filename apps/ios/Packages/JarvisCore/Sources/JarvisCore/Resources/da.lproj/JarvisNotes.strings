@@ -25,6 +25,7 @@
 "notes.all" = "Alle";
 "notes.notes" = "Noter";
 "notes.tasks" = "Opgaver";
+"notes.source" = "Kilde";
 "notes.graph" = "Graf";
 "notes.newNote" = "Ny note";
 "notes.newTask" = "Ny opgave";

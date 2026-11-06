@@ -129,6 +129,7 @@
 "chat.runtime.runtimeUnavailable" = "This runtime is unavailable.";
 "chat.runtime.runtimeNotConfigured" = "Copilot testing has not been activated on the server.";
 "chat.runtime.runtimeNotVerified" = "The selected settings and Copilot runtime have not been verified.";
+"chat.runtime.runtimePolicyNotVerified" = "Copilot has not passed the check for applying Jarvis’s instructions. Use Current.";
 "chat.runtime.runtimeVerificationFailed" = "Could not verify Copilot. Try checking again.";
 "chat.runtime.runtimeStorageUnavailable" = "Conversation storage is unavailable.";
 "chat.runtime.runtimeSettingsMismatch" = "Copilot needs a configuration update for the selected chat settings.";

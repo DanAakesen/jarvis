@@ -61,6 +61,7 @@ struct JarvisNotesCopy {
     var titleField: String { text(.titleField) }
     var folderField: String { text(.folderField) }
     var priority: String { text(.priority) }
+    var source: String { text(.source) }
     var folderName: String { text(.folderName) }
     var newFolderHere: String { text(.newFolderHere) }
     var useFolder: String { text(.useFolder) }
@@ -208,13 +209,9 @@ struct JarvisNotesArea: View {
                 .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
                 .padding(.top, JarvisDesignTokens.notesSectionSpacing)
                 .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
-                .background {
-                    if selectedTab == .tasks {
-                        Rectangle().fill(.regularMaterial).ignoresSafeArea(edges: .bottom)
-                    }
-                }
             }
         }
+        .scrollEdgeEffectHidden(for: .bottom)
         .task(id: "\(selectedTab.rawValue)-\(refreshVersion)") {
             await loadSelectedTab(force: refreshVersion > 0)
         }
@@ -674,13 +671,18 @@ struct JarvisNotesArea: View {
     private func taskSection(_ tasks: [VaultTask], title: String, today: String) -> some View {
         if !tasks.isEmpty {
             Section {
-                ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
-                    taskRow(task, today: today, isFirst: index == 0, isLast: index == tasks.count - 1)
-                }
-            } header: {
+                // A plain List pins section headers above scrolling rows. Keep the
+                // board heading in the flow so transparent chrome never overlays tasks.
                 JarvisSectionHeadline(title, count: tasks.count)
                     .textCase(nil)
                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("notes.task.group.\(title)")
+                ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
+                    taskRow(task, today: today, isFirst: index == 0, isLast: index == tasks.count - 1)
+                }
             }
             .listSectionSeparator(.hidden)
         }
@@ -733,6 +735,18 @@ struct JarvisNotesArea: View {
                     )
                 }
                 Text(priorityText(task.priority))
+            }
+            Section {
+                Text(task.path)
+                    .font(.footnote)
+                    .accessibilityIdentifier("notes.task.source.path")
+                if let heading = task.heading, !heading.isEmpty {
+                    Text(heading)
+                        .font(.footnote)
+                        .accessibilityIdentifier("notes.task.source.heading")
+                }
+            } header: {
+                Text(copy.source).foregroundStyle(.primary)
             }
             if !task.done {
                 Section {

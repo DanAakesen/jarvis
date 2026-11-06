@@ -43,6 +43,106 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertTrue(element(id, label: label).waitForExistence(timeout: 10), id)
         }
         attach(app.screenshot(), named: "Component gallery")
+        captureMediumWidgetLayouts()
+    }
+
+    /// Reuses this gallery launch and the extension's actual views. Host tinting remains a WidgetKit preview/device check.
+    private func captureMediumWidgetLayouts() {
+        app.buttons["gallery.widgets"].tap()
+        // Retain both renderings before language-specific geometry checks can stop the test.
+        for language in ["en", "da"] {
+            let choice = app.buttons["gallery.widgetLanguage.\(language == "en" ? 0 : 1)"]
+            XCTAssertTrue(choice.waitForExistence(timeout: 5))
+            choice.tap()
+            XCTAssertTrue(choice.isSelected)
+            attach(app.screenshot(), named: "P15-widgets-medium-\(language == "en" ? "dark" : "light")-\(language)")
+        }
+        for language in ["en", "da"] {
+            let choice = app.buttons["gallery.widgetLanguage.\(language == "en" ? 0 : 1)"]
+            choice.tap()
+            XCTAssertTrue(choice.isSelected)
+            for (kind, title) in [
+                ("workouts", language == "en" ? "Workouts" : "Træning"),
+                ("factory", "Factory"), ("notes", language == "en" ? "Notes" : "Noter"),
+            ] {
+                let card = app.descendants(matching: .any)["widget.preview.\(kind)"]
+                XCTAssertTrue(card.waitForExistence(timeout: 5))
+                let header = card.staticTexts["widget.header.title"]
+                XCTAssertTrue(header.exists, "\(kind) must have its shared title")
+                XCTAssertEqual(header.label, title)
+                let cardFrame = card.frame
+                XCTAssertEqual(cardFrame.width, 329, accuracy: 0.5)
+                XCTAssertEqual(cardFrame.height, 155, accuracy: 0.5)
+                let inset = cardFrame.insetBy(dx: 16, dy: 16)
+                let headerFrame = assertWidgetElement(header, within: inset)
+                // The native Workouts symbol centers its text 1.17 pt below the header top.
+                // Allow that optical offset; assertWidgetElement still rejects content outside the inset.
+                XCTAssertLessThanOrEqual(headerFrame.minY - inset.minY, 2,
+                                         "The title must remain within 2 pt of the top inset")
+                XCTAssertLessThan(headerFrame.minX, inset.minX + 30, "The title follows its top-left symbol")
+                if kind == "workouts" {
+                    let metrics = ["lift", "run", "kilometers", "calories"].map {
+                        assertWidgetElement(card.descendants(matching: .any)["widget.workouts.\($0)"], within: inset)
+                    }
+                    // Combined AX frames bound the text, not the equal-width layout slots.
+                    // Verify each column's origin and containment in its allocated half.
+                    let columnGap: CGFloat = 12
+                    let gridLeft = metrics[0].minX
+                    let columnWidth = (inset.maxX - gridLeft - columnGap) / 2
+                    XCTAssertGreaterThan(columnWidth, 0)
+                    let rightColumn = gridLeft + columnWidth + columnGap
+                    XCTAssertEqual(metrics[1].minX, rightColumn, accuracy: 1)
+                    for index in [0, 2] {
+                        XCTAssertLessThanOrEqual(metrics[index].maxX, gridLeft + columnWidth + 0.5)
+                    }
+                    for index in [1, 3] {
+                        XCTAssertGreaterThanOrEqual(metrics[index].minX, rightColumn - 0.5)
+                    }
+                    XCTAssertEqual(metrics[0].minX, metrics[2].minX, accuracy: 1)
+                    XCTAssertEqual(metrics[1].minX, metrics[3].minX, accuracy: 1)
+                    XCTAssertEqual(metrics[0].minY, metrics[1].minY, accuracy: 1)
+                    XCTAssertEqual(metrics[2].minY, metrics[3].minY, accuracy: 1)
+                    XCTAssertGreaterThanOrEqual(metrics[2].minY - metrics[0].maxY, 5)
+                } else if kind == "factory" {
+                    for status in ["running", "awaiting", "review", "failed"] {
+                        let count = card.descendants(matching: .any)["widget.factory.count.\(status)"]
+                        let countFrame = assertWidgetElement(count, within: inset)
+                        XCTAssertLessThanOrEqual(countFrame.height, 29, "Medium count cells must leave room for both task rows")
+                    }
+                    for id in ["c1", "t1"] {
+                        assertWidgetElement(card.descendants(matching: .any)["widget.factory.task.\(id)"], within: inset)
+                    }
+                    XCTAssertEqual(card.buttons.count, 2, "Both task actions retain their place")
+                    for button in card.buttons.allElementsBoundByIndex {
+                        assertWidgetElement(button, within: inset)
+                        XCTAssertFalse(button.isEnabled, "Synthetic actions must never write")
+                    }
+                } else {
+                    assertWidgetElement(card.staticTexts["widget.notes.summary"], within: inset)
+                    assertWidgetElement(card.descendants(matching: .any)["widget.notes.next"], within: inset)
+                }
+            }
+        }
+    }
+
+    @discardableResult
+    private func assertWidgetElement(_ element: XCUIElement, within bounds: CGRect) -> CGRect {
+        // Each XCUI property query crosses into the app. Read the settled geometry
+        // once and reuse it so identical bounds checks do not exhaust the test deadline.
+        do {
+            let snapshot = try element.snapshot()
+            let frame = snapshot.frame
+            let identifier = snapshot.identifier
+            XCTAssertFalse(frame.isEmpty, identifier)
+            XCTAssertGreaterThanOrEqual(frame.minX, bounds.minX - 0.5, identifier)
+            XCTAssertGreaterThanOrEqual(frame.minY, bounds.minY - 0.5, identifier)
+            XCTAssertLessThanOrEqual(frame.maxX, bounds.maxX + 0.5, identifier)
+            XCTAssertLessThanOrEqual(frame.maxY, bounds.maxY + 0.5, identifier)
+            return frame
+        } catch {
+            XCTFail("The widget element must exist and provide a layout snapshot: \(error)")
+            return .zero
+        }
     }
 
     /// Two screenshots of the live orb taken apart in time must differ: the orb flows, it is not a still image.
@@ -184,7 +284,81 @@ final class ComponentGalleryUITests: XCTestCase {
             app.swipeUp()
             attach(app.screenshot(), named: "P15-95-health-lower-\(position)-\(theme)-\(language)")
         }
+        captureBodyTrends(language: language, theme: theme)
         app.terminate()
+    }
+
+    private func captureBodyTrends(language: String, theme: String) {
+        let weight = revealBodyChart("body_mass")
+        let details = app.descendants(matching: .any)["health.body.body_mass.details"]
+        let latest = details.label
+        let latestChartValue = weight.value as? String
+        XCTAssertTrue(latest.contains(language == "da" ? "72,4 kg" : "72.4 kg"),
+                      "The selected reading retains the measurement's decimal precision")
+        attach(app.screenshot(), named: "Build76-body-weight-latest-\(theme)-\(language)")
+        // The fixture contains four unevenly spaced records. A point in the left quarter
+        // of the full-width chart selects an earlier record, not the initial latest value.
+        weight.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).tap()
+        let changed = NSPredicate { _, _ in
+            details.exists && details.label != latest && (weight.value as? String) != latestChartValue
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: changed, object: nil)], timeout: 5), .completed,
+                       "Tapping a historical point must update both the visible reading and accessible chart value")
+        let selectedSummary = details.label
+        attach(app.screenshot(), named: "Build76-body-weight-selected-\(theme)-\(language)")
+        details.tap()
+        let title = language == "da" ? "Vægt" : "Weight"
+        let navigation = app.navigationBars[title]
+        XCTAssertTrue(navigation.waitForExistence(timeout: 5), "The chart's header must open existing measurement details")
+        XCTAssertTrue(app.staticTexts[language == "da" ? "Målinger" : "Measurements"].waitForExistence(timeout: 5),
+                      "Details must finish loading the measurement records")
+        attach(app.screenshot(), named: "Build76-body-weight-detail-\(theme)-\(language)")
+        navigation.buttons.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+        XCTAssertEqual(details.label, selectedSummary, "Back must retain the selected dashboard measurement")
+        XCTAssertTrue(weight.isHittable, "Back must retain the dashboard's chart position")
+
+        for metric in ["body_fat_percentage", "lean_body_mass"] {
+            let chart = revealBodyChart(metric)
+            XCTAssertFalse((chart.value as? String ?? "").isEmpty, "The chart must expose its recorded value and date")
+            if metric == "lean_body_mass" {
+                XCTAssertTrue(app.staticTexts[language == "da" ? "1 måling" : "1 measurement"].exists,
+                              "A single reading must remain a single measurement")
+            }
+            attach(app.screenshot(), named: "Build76-body-\(metric)-\(theme)-\(language)")
+        }
+    }
+
+    /// Keep the complete chart and its detail link between the reserved header and floating dock.
+    /// Bidirectional, bounded drags also recover when an earlier full-screen swipe passed the target.
+    @discardableResult
+    private func revealBodyChart(_ metric: String, includeHeader: Bool = true) -> XCUIElement {
+        let chart = app.descendants(matching: .any)["health.body.\(metric).chart"]
+        let details = app.descendants(matching: .any)["health.body.\(metric).details"]
+        let first = includeHeader ? details : chart
+        for _ in 0..<9 {
+            let top = max(app.staticTexts["page.title"].frame.maxY,
+                          app.buttons["navigation.openSidebar"].frame.maxY) + 8
+            let bottom = min(app.buttons["health.mode.0"].frame.minY,
+                             app.textFields["health.search"].frame.minY) - 8
+            if chart.exists, first.exists, chart.isHittable, first.isHittable,
+               first.frame.minY >= top, chart.frame.maxY <= bottom { return chart }
+            let passed = first.exists && first.frame.minY < top
+            let upper = top + (bottom - top) * 0.15
+            let lower = top + (bottom - top) * 0.85
+            let needed = passed ? top - first.frame.minY + 12
+                : chart.exists ? chart.frame.maxY - bottom + 12 : lower - upper
+            let distance = min(max(needed, 24), lower - upper)
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: app.frame.width * 0.8, dy: passed ? upper : lower))
+            let end = origin.withOffset(CGVector(dx: app.frame.width * 0.8, dy: passed ? upper + distance : lower - distance))
+            // Release at rest: fast drags coast past sparse charts and oscillate around
+            // the valid position at AX sizes even though the complete plot fits.
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.5)
+        }
+        attach(app.screenshot(), named: "Body-chart-reachability-failure-\(metric)")
+        XCTFail("The complete \(metric) chart and detail action must remain reachable above the dock")
+        return chart
     }
 
     func testUsageCurrentContractAndEveryPeriodAndBreakdownControl() {
@@ -269,10 +443,7 @@ final class ComponentGalleryUITests: XCTestCase {
                 "phrase": ["x": phrase.frame.minX, "y": phrase.frame.minY, "width": phrase.frame.width, "height": phrase.frame.height],
                 "filter": ["x": filter.frame.minX, "y": filter.frame.minY, "width": filter.frame.width, "height": filter.frame.height],
             ]
-            if largeText {
-                app.swipeUp()
-                attach(app.screenshot(), named: "P15-\(destination)-accessibility-text")
-            }
+            captureReservedHeaderAfterScroll(named: "Build76-\(destination)-scrolled-\(theme)-\(language)-large-\(largeText)")
             if let data = try? JSONSerialization.data(withJSONObject: geometry, options: [.sortedKeys, .prettyPrinted]),
                let json = String(data: data, encoding: .utf8) {
                 let bounds = XCTAttachment(string: json)
@@ -280,6 +451,20 @@ final class ComponentGalleryUITests: XCTestCase {
                 bounds.lifetime = .keepAlways
                 add(bounds)
             }
+        }
+        if largeText {
+            // Reuse this AX launch for the Health dock/header instead of another simulator/app run.
+            openPage("health", language: language, theme: theme, launch: false)
+            XCTAssertTrue(app.descendants(matching: .any)["health.hero.training"].waitForExistence(timeout: 15))
+            XCTAssertTrue(app.buttons["health.mode.0"].isHittable)
+            XCTAssertTrue(app.textFields["health.search"].isHittable)
+            attach(app.screenshot(), named: "Build76-health-header-dock-\(language)-\(theme)-accessibility")
+            captureReservedHeaderAfterScroll(named: "Build76-health-scrolled-\(language)-\(theme)-accessibility")
+            XCTAssertTrue(app.buttons["health.mode.0"].isHittable)
+            XCTAssertTrue(app.textFields["health.search"].isHittable)
+            let chart = revealBodyChart("body_mass", includeHeader: false)
+            XCTAssertFalse((chart.value as? String ?? "").isEmpty)
+            attach(app.screenshot(), named: "Build76-body-weight-\(language)-\(theme)-accessibility")
         }
     }
 
@@ -319,7 +504,10 @@ final class ComponentGalleryUITests: XCTestCase {
 
     func testInitialLoadingHidesFiltersAndUsesOnePageSkeleton() {
         for destination in ["usage", "status", "proactive"] {
-            openPage(destination, extra: ["--ui-test-insights=loading"])
+            let theme = destination == "status" ? "light" : "dark"
+            let reduced = destination == "proactive"
+            openPage(destination, theme: theme, extra: ["--ui-test-insights=loading"]
+                     + (reduced ? ["--ui-test-loading-reduced-motion"] : []))
             defer { app.terminate() }
             let loading = app.descendants(matching: .any)["\(destination).loading"]
             XCTAssertTrue(loading.waitForExistence(timeout: 8))
@@ -329,14 +517,17 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).count, 0)
             XCTAssertTrue(app.buttons["navigation.openSidebar"].isHittable, "Navigation stays available")
             attach(app.screenshot(), named: "P15-92-\(destination)-loading")
-            if destination == "usage" {
-                let first = loading.screenshot()
-                Thread.sleep(forTimeInterval: 0.6)
-                let second = loading.screenshot()
-                attach(first, named: "Loading shimmer frame 1")
-                attach(second, named: "Loading shimmer frame 2")
+            let first = loading.screenshot()
+            Thread.sleep(forTimeInterval: 0.6)
+            let second = loading.screenshot()
+            attach(first, named: "Build76-loading-\(theme)-reduced-\(reduced)-frame-1")
+            attach(second, named: "Build76-loading-\(theme)-reduced-\(reduced)-frame-2")
+            if reduced {
+                XCTAssertEqual(first.pngRepresentation, second.pngRepresentation,
+                               "Reduce Motion must keep placeholders still")
+            } else {
                 XCTAssertNotEqual(first.pngRepresentation, second.pngRepresentation,
-                                  "Pending data must have visible loading motion")
+                                  "Both appearances must retain quiet placeholder motion")
             }
         }
     }
@@ -515,6 +706,9 @@ final class ComponentGalleryUITests: XCTestCase {
         let first = app.descendants(matching: .any).matching(identifier: firstID).firstMatch
         let completion = first.buttons["notes.task.complete"]
         XCTAssertTrue(completion.isHittable)
+        let firstMetadata = first.buttons["notes.task.open"].value as? String ?? ""
+        XCTAssertFalse(firstMetadata.isEmpty, "Task context remains accessible")
+        XCTAssertFalse(firstMetadata.contains("Tasks"), "Generic collection names are not useful task context")
         // AX frame subtraction can report 43.99999999999994 for an exact 44pt target.
         // Allow only sub-micropoint arithmetic error, never a visibly smaller target.
         XCTAssertLessThanOrEqual(max(0, 44 - completion.frame.width), 0.000_001)
@@ -528,6 +722,7 @@ final class ComponentGalleryUITests: XCTestCase {
         if !largeText {
             app.swipeUp()
             attach(app.screenshot(), named: "P15-task-board-groups-\(language)-\(theme)")
+            assertTaskGroupHeadingsDoNotOverlapRows()
             revealTaskCompletion(firstID)
             app.descendants(matching: .any).matching(identifier: firstID).firstMatch
                 .buttons["notes.task.complete"].tap()
@@ -539,6 +734,11 @@ final class ComponentGalleryUITests: XCTestCase {
             open.tap()
             let fullTitle = app.staticTexts[title]
             XCTAssertTrue(fullTitle.waitForExistence(timeout: 5), "Details retain the full task title")
+            let sourcePath = app.staticTexts["notes.task.source.path"]
+            for _ in 0..<3 { if sourcePath.isHittable { break }; app.swipeUp() }
+            XCTAssertTrue(sourcePath.isHittable, "Source provenance remains reachable in the scrolling detail")
+            XCTAssertEqual(sourcePath.label, "Work/Synthetic.md")
+            XCTAssertEqual(app.staticTexts["notes.task.source.heading"].label, "Project kickoff")
             attach(app.screenshot(), named: "P15-task-board-detail-\(language)-\(theme)")
         } else {
             let lastID = "notes.task.row." + String(repeating: "0", count: 63) + "9"
@@ -553,6 +753,26 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertTrue(search.isHittable)
             XCTAssertLessThanOrEqual(lastOpen.frame.maxY, search.frame.minY, "The final task must scroll clear of the search dock")
             attach(app.screenshot(), named: "P15-task-board-bottom-accessibility")
+        }
+    }
+
+    private func assertTaskGroupHeadingsDoNotOverlapRows() {
+        let list = app.descendants(matching: .any)["notes.tasks.list"]
+        XCTAssertTrue(list.exists)
+        let headers = list.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "notes.task.group."))
+            .allElementsBoundByIndex.filter { !$0.frame.isEmpty && $0.frame.intersects(list.frame) }
+        let rows = list.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "notes.task.row."))
+            .allElementsBoundByIndex.filter { !$0.frame.isEmpty && $0.frame.intersects(list.frame) }
+        XCTAssertFalse(headers.isEmpty, "The scrolled task group heading remains visible")
+        XCTAssertFalse(rows.isEmpty, "The scrolled task rows remain visible")
+        for header in headers {
+            for row in rows {
+                let overlap = header.frame.intersection(row.frame).intersection(list.frame)
+                XCTAssertTrue(overlap.isNull || overlap.width <= 0.5 || overlap.height <= 0.5,
+                              "A task heading must scroll with its group, never cover a task row")
+            }
         }
     }
 
@@ -574,6 +794,16 @@ final class ComponentGalleryUITests: XCTestCase {
             app.swipeDown()
         }
         XCTFail("Task completion must be fully visible between the header and search dock")
+    }
+
+    private func captureReservedHeaderAfterScroll(named name: String) {
+        let title = app.staticTexts["page.title"]
+        let frame = title.frame
+        app.swipeUp()
+        XCTAssertTrue(title.isHittable)
+        XCTAssertEqual(title.frame.minY, frame.minY, accuracy: 1, "The header has reserved space above scrolling content")
+        XCTAssertTrue(app.buttons["navigation.openSidebar"].isHittable)
+        attach(app.screenshot(), named: name)
     }
 
     private func notesReach(_ identifier: String, upward: Bool = true) {
@@ -644,6 +874,7 @@ final class ComponentGalleryUITests: XCTestCase {
         XCTAssertTrue(languageRow.isHittable)
         XCTAssertGreaterThanOrEqual(languageRow.frame.height, 44)
         attach(app.screenshot(), named: "P15-settings-general-\(language)-\(theme)-large-\(largeText)")
+        captureReservedHeaderAfterScroll(named: "Build76-settings-scrolled-\(language)-\(theme)-large-\(largeText)")
         for section in ["models", "health", "account"] {
             let segment = app.buttons["settings.section.\(section)"]
             if !segment.isHittable {

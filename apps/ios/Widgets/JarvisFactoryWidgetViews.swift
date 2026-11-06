@@ -83,30 +83,51 @@ struct JarvisFactoryDoneWidgetView: View {
 private struct JarvisFactoryCountCells: View {
     let data: JarvisFactoryWidgetData
     let language: JarvisAppLanguage
+    var compact = false
 
     var body: some View {
         HStack(spacing: 6) {
             ForEach(statusOrder, id: \.self) { status in
                 let failed = status == .failed
-                VStack(spacing: 1) {
-                    Text("\(data.count(status))")
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(failed ? JarvisWidgetPalette.status(.failed) : .primary)
-                    Text(title(status).text(language: language))
-                        .font(.system(size: 9))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                Group {
+                    if compact {
+                        HStack(spacing: 4) {
+                            count(status, failed: failed).font(.subheadline.weight(.bold))
+                            label(status).lineLimit(2)
+                        }
+                    } else {
+                        VStack(spacing: 1) {
+                            count(status, failed: failed).font(.title3.weight(.bold))
+                            label(status).lineLimit(1)
+                        }
+                    }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .frame(height: compact ? 22 : nil)
+                .padding(.horizontal, compact ? 4 : 0)
+                .padding(.vertical, compact ? 3 : 6)
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
                         .strokeBorder(failed ? JarvisWidgetPalette.status(.failed) : Color.secondary.opacity(0.35), lineWidth: 1)
                 }
                 .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("widget.factory.count.\(status.rawValue)")
             }
         }
+    }
+
+    private func count(_ status: JarvisFactoryWidgetData.Status, failed: Bool) -> some View {
+        Text("\(data.count(status))")
+            .foregroundStyle(failed ? JarvisWidgetPalette.status(.failed) : .primary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+
+    private func label(_ status: JarvisFactoryWidgetData.Status) -> some View {
+        Text(title(status).text(language: language))
+            .font(.system(size: 9))
+            .foregroundStyle(.secondary)
+            .minimumScaleFactor(0.8)
     }
 }
 
@@ -114,16 +135,18 @@ private struct JarvisFactoryCountCells: View {
 private struct JarvisFactoryTaskRow: View {
     let task: JarvisFactoryWidgetData.Task
     let language: JarvisAppLanguage
+    var compact = false
 
     var body: some View {
         HStack(spacing: 8) {
             Circle().fill(JarvisWidgetPalette.status(task.status)).frame(width: 7, height: 7)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
-                Text(task.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                Text(task.detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(task.title).font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold)).lineLimit(1)
+                Text(task.detail).font(compact ? .caption2 : .caption).foregroundStyle(.secondary).lineLimit(1)
             }
             .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("widget.factory.task.\(task.id)")
             Spacer(minLength: 4)
             if let action = task.action { actionButton(action) }
         }
@@ -164,18 +187,18 @@ struct JarvisFactoryMediumWidgetView: View {
     var body: some View {
         let language = entry.language
         JarvisWidgetStateView(state: entry.factory, language: language, emptyCopy: .emptyFactory) { data, stale in
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
                 JarvisWidgetHeader(
                     symbol: factorySymbol, title: JarvisWidgetCopy.factory.text(language: language),
                     staleText: staleText(data, stale: stale, language: language)
                 )
-                JarvisFactoryCountCells(data: data, language: language)
-                ForEach(data.tasks.prefix(2)) { JarvisFactoryTaskRow(task: $0, language: language) }
+                JarvisFactoryCountCells(data: data, language: language, compact: true)
+                ForEach(data.tasks.prefix(2)) { JarvisFactoryTaskRow(task: $0, language: language, compact: true) }
                 if data.tasks.isEmpty {
                     Text(JarvisWidgetCopy.noTasks.text(language: language)).font(.caption).foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .jarvisWidgetSurface()
     }

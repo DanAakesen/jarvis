@@ -127,7 +127,14 @@ final class JarvisAmbientBackgroundTests: XCTestCase {
             let text = try String(contentsOf: file, encoding: .utf8)
             definitions += text.components(separatedBy: "struct JarvisScreenBackground: View").count - 1
             XCTAssertFalse(text.contains("struct JarvisAmbientBackground: View"), file.lastPathComponent)
-            if file.lastPathComponent != "JarvisLockScreenTasksPreview.swift" {
+            if file.lastPathComponent == "JarvisWidgetLayoutGallery.swift" {
+                // This fixture represents the WidgetKit host, not a production app page.
+                // Its only conditional must enclose the entire source and exclude device/release builds.
+                XCTAssertTrue(text.hasPrefix("#if DEBUG && targetEnvironment(simulator)\n"))
+                XCTAssertTrue(text.trimmingCharacters(in: .whitespacesAndNewlines).hasSuffix("#endif"))
+                XCTAssertEqual(text.components(separatedBy: "#endif").count - 1, 1)
+                XCTAssertFalse(text.contains("#else"))
+            } else if file.lastPathComponent != "JarvisLockScreenTasksPreview.swift" {
                 XCTAssertFalse(text.contains(".systemBackground"), file.lastPathComponent)
             }
             XCTAssertFalse(text.contains(".secondarySystemBackground"), file.lastPathComponent)

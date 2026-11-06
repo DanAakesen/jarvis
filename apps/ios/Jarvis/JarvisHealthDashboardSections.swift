@@ -339,61 +339,9 @@ struct JarvisHealthBodySection: View {
         }
     }
 
-    @ViewBuilder
     private func metricRow(_ metric: JarvisHealthMetricSeries) -> some View {
-        let trend = metricTrend(metric.read, period: period)
-        NavigationLink {
-            JarvisHealthDetailView(
-                client: client,
-                capabilities: dashboard.capabilities,
-                kind: .metric(metric.metricName, metric.title, period),
-                language: language
-            )
-        } label: {
-            HStack(spacing: JarvisDesignTokens.healthRowSpacing) {
-                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                    Text(copy.text(metric.title))
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
-                    Text(metricValue(trend, read: metric.read))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if let day = trend.date {
-                        Text(JarvisHealthLocalization.formattedDate(day, language: language))
-                            .font(.caption2).foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 0)
-                if trend.values.count > 1 {
-                    JarvisHealthSparkline(values: trend.values)
-                        .frame(
-                            width: JarvisDesignTokens.healthSparklineWidth,
-                            height: JarvisDesignTokens.healthSparklineHeight
-                        )
-                        .accessibilityHidden(true)
-                }
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
-                    .accessibilityHidden(true)
-            }
-            .frame(minHeight: JarvisDesignTokens.healthControlHeight)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func metricValue(_ trend: JarvisHealthMetricTrend, read: JarvisHealthRead) -> String {
-        if let latest = trend.latest {
-            return "\(formatNumber(latest, language: language)) \(trend.unit ?? "")"
-        }
-        switch read.state {
-        case .loading: return copy.text(.loading)
-        case .notServed, .failed: return copy.text(.unavailable)
-        case .offline: return copy.text(.offline)
-        case .available, .empty: return copy.text(.notRecorded)
-        }
+        JarvisHealthBodyChart(metric: metric, period: period, client: client,
+                              capabilities: dashboard.capabilities, language: language)
     }
 }
 
@@ -459,55 +407,11 @@ struct JarvisHealthStateLine: View {
     }
 }
 
-struct JarvisHealthSparkline: View {
-    let values: [Double]
-
-    var body: some View {
-        Chart(Array(values.enumerated()), id: \.offset) { index, value in
-            LineMark(
-                x: .value("Reading", index),
-                y: .value("Value", value)
-            )
-            .foregroundStyle(JarvisDesignTokens.healthAccentSecondary)
-            .lineStyle(StrokeStyle(
-                lineWidth: JarvisDesignTokens.healthChartLineWidth,
-                lineCap: .round,
-                lineJoin: .round
-            ))
-        }
-        .chartXAxis(.hidden)
-        .chartYAxis(.hidden)
-    }
-}
-
 struct JarvisHealthChartPoint: Identifiable {
     let date: Date
     let value: Double
     var isPartial = false
     var id: Date { date }
-}
-
-struct JarvisHealthMetricTrend {
-    let date: String?
-    let latest: Double?
-    let unit: String?
-    let values: [Double]
-}
-
-func metricTrend(_ read: JarvisHealthRead, period: JarvisHealthPeriod) -> JarvisHealthMetricTrend {
-    let rows = read.items.compactMap { row -> (date: String, value: Double, unit: String?)? in
-        guard let date = date(row["metric_date"]),
-              date >= period.startDate, date <= period.endDate,
-              let value = row["value"]?.numberValue ?? row["avg_value"]?.numberValue else {
-            return nil
-        }
-        return (date, value, row["unit"]?.stringValue)
-    }
-    guard let last = rows.max(by: { $0.date < $1.date }) else {
-        return JarvisHealthMetricTrend(date: nil, latest: nil, unit: nil, values: [])
-    }
-    let sameUnit = rows.filter { $0.unit == last.unit }.sorted { $0.date < $1.date }
-    return JarvisHealthMetricTrend(date: last.date, latest: last.value, unit: last.unit, values: sameUnit.map(\.value))
 }
 
 func formatNumber(_ value: Double, language: JarvisAppLanguage = .default) -> String {
