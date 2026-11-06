@@ -74,7 +74,7 @@ ownership/readback checks and uncertain-write recovery. Candidate 43395466 passe
 25 focused tests, scoped lint/compilation, CI 42217710063 and CodeQL 42217709998.
 It merged as 67f02a58 with an identical source tree and unchanged app/test tree.
 Normal Deploy 42219180536 later failed during registry authentication; explicit
-activation 42219195236 is still in progress. The API
+activation 42219195236 provisioned successfully but failed its response canary. The API
 contract establishes the bug but does not retrospectively identify the operation
 behind the earlier opaque error. Live activation remains unverified.
 
@@ -88,9 +88,28 @@ image build/read stage; no separate retry was dispatched.
 Azure CLI's registry helper requests a separate audience token and hides its
 underlying warning under `--only-show-errors`. A stale federated assertion after
 the long build/queue is plausible, but the generic error does not prove expiry.
-A bounded workflow correction is being prepared: refresh the same pinned OIDC
-login after each backend/agent build and before digest lookup. It adds no role,
-password/admin fallback or write-retry loop.
+A bounded workflow correction merged through #1618 as 5cf9eb5b after CI
+42223501315 and CodeQL 42223501346 passed: refresh the same pinned OIDC login
+after each backend/agent build and before digest lookup. It adds no role,
+password/admin fallback or write-retry loop. Normal Deploy 42225249865 is running.
+
+The already queued activation 42219195236 passed backend, hosted agent, web,
+readiness and normal conversation acceptance. Comparison job 127913011998 printed
+`managed_chat_provisioned` at 13:17:00 UTC, confirming the corrected version route
+and verified target configuration. Its live canary then failed at 13:17:58 with
+HTTP 400, `invalid_payload`, parameter `instructions`, at `response_start`.
+The target remains configured: metadata/settings availability can be selectable
+while actual inference fails. The successful release-result job does not override
+this failed comparison check.
+
+PR #1619, candidate 0043c403, moves the full trusted per-turn policy to supported
+developer input instead of the rejected top-level override. It preserves original
+user/tool roles, sends fresh policy on each application turn/change and avoids
+identical repeats within that turn. Claims, history cursors and the strong canary
+remain intact. All 78 focused tests and scoped lint/compilation passed; CI is
+running. Deployment must reuse the current comparison version without definition
+refresh, then pass the actual policy-shaped response canary before claiming
+Copilot inference works.
 
 ## Release authorization
 

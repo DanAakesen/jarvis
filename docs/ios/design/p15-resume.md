@@ -11,8 +11,11 @@ backend-only or documentation changes.
 Normal backend/agent/web deployment and live conversation acceptance passed.
 Explicit Copilot comparison activation failed before its response canary. A
 read-only inspection found one older version and no current-manifest match.
-PR #1617 corrected the confirmed version-creation endpoint mismatch and passed
-CI/CodeQL before merging as 67f02a58. Live activation is running. TestFlight build **76 uploaded at
+PR #1617 corrected the confirmed version-creation endpoint mismatch; provisioning
+then succeeded, but the actual response rejected the instructions override.
+PR #1619 qualifies the complete-policy developer-input correction. #1618 also
+qualified and merged a post-build OIDC refresh after a registry authentication
+failure. Copilot inference remains unverified. TestFlight build **76 uploaded at
 12:14:34 UTC / 13:14:34 Copenhagen** from verified main ab464314 (42215302636).
 The normal backend dependency is accepted; Copilot activation continues separately.
 Apple processing is not independently confirmed. Read the
