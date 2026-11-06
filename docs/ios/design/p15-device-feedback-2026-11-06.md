@@ -129,6 +129,15 @@ up its new conversation, executes no tools and never counts as runtime acceptanc
 The full production-policy canary remains required before claiming Copilot inference
 works. Owner-authenticated conversation parity remains a separate check.
 
+PR #1620 adds that diagnostic operation and a default-off workflow path. Candidate
+cd06bda0 passed 306 focused checks plus 12 final diagnostic checks, scoped lint,
+compilation, shell syntax and parsed workflow guards. Tests cover exact payloads,
+target changes, timeout/cancellation cleanup, total budgets, skipped setup failures,
+no configuration mutation, and malformed/private output. CodeQL 42231326544 passed;
+CI 42231326592 is running. Its app/test tree remains unchanged. After qualification,
+deploy hosted code before one explicit `diagnose_managed_chat=true` invocation;
+leave provisioning, inspection and definition refresh false.
+
 ## Release authorization
 
 The owner explicitly lifted the hold after his final loading-animation feedback:
