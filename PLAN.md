@@ -2219,6 +2219,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P15-94 / #1600:** Home now shares one glass segmented surface and separated calendar/task rows. Factory has Board/Releases only, includes Needs Dan in Board, and reveals the column for its old entry. All 469 Core tests and changed Swift parser checks pass; native screenshot/interaction cases are added, but native visual acceptance is pending. Home follows the published Today/Tasks due grouping under the issue's board-wins rule; Delegated wording remains a clarification.
+
 - **P15-92 / #1598:** PR #1604 implements the shared native page pattern from the board merged in #1603. All 468 Core tests pass locally. Native compilation, CI and CodeQL passed on edc8ec36; 45/46 UI tests passed, including all four bilingual/light-dark page-order cases. The remaining Workspaces case used a nonexistent sidebar entry; its fixture entry is corrected. The Mac job again timed out during later captures. Dan approved preserving available images with `if: always()` on the existing upload step; all 74 workflow checks pass. Fresh native checks and board/build visual acceptance remain pending; see `docs/ios/design/p15-92-verification.md`. #1599–#1602 follow this shared change.
 - **P15-93 / #1599:** Notes follow-up is implemented on a separate branch based on #1598, which must merge first. Root/direct-folder browsing, matching counts, Back, nested note and empty-folder creation, last-opened tiles, graph labels/colors and task-create priority are covered by 476 passing Core tests and 89 backend tests. Native interaction checks and captures are prepared; Mac compilation and board/build visual acceptance are pending. See `docs/ios/design/p15-93-verification.md`.
 
@@ -3791,6 +3793,14 @@ The Notes retry compiled and passed 48/50 UI tests. Corrected the selected-folde
 sheet snapshot and graph Open accessibility containment, preserving the failing
 assertions and adding path readback. Fresh native verification remains pending.
 
+## Native board verification follow-up (Refs #1600; 5 November 2026)
+
+Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
+
+Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
+the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
+from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
+
 ## P15-92 native heading correction
 
 Native Workspaces screenshots show List section headings dimmed twice by the
@@ -3807,3 +3817,10 @@ before TestFlight.
 Release infrastructure correction: ubuntu-latest moved to unsupported Ubuntu 26.04.
 The Linux Swift job now pins the previously passing ubuntu-24.04 image; checks and
 Mac/TestFlight steps are unchanged. Fresh CI is required before Notes/backend delivery.
+
+Home/Factory native verification: 48/48 tests pass on 67e83344 (run 42124893512); final EN/dark and DA/light screenshots accepted in artifact 13463371218. The later standalone sweep timed out. App source is unchanged by shared-main reconciliation; merge remains after Notes.
+
+Owner-approved additions: shorter Home greeting and success haptics/transitions for
+lift/workout saves, task completion and note creation. Core greeting assertions and
+the existing native suite cover the new behavior; combined native results are pending.
+The earlier 48-test pass precedes this addition.

@@ -1307,6 +1307,11 @@ partial; the graph carries counts and completeness only, never task text.
 
 #### Software Factory — task view
 
+Native Factory has Board and Releases tabs. Needs Dan remains a column on Board;
+opening the older Needs Dan entry reveals that column. Home follows the published
+board's Today / Tasks due grouping, with no Yesterday group. The older request
+for a Delegated section is unresolved; no new data source is inferred from it.
+
 | Data points | Actions |
 | --- | --- |
 | GitHub Project columns: Backlog, Needs Dan, Ready, In progress, In review, Done | Create a linked GitHub issue and task (project, agent, text, optional model/reasoning override) |
@@ -2316,3 +2321,10 @@ permission, writer, coaching, recovery, recomp or TickTick behavior is added.
 Confirmed note creation and task completion provide a subtle success haptic and a
 brief non-blocking confirmation. Failures and uncertain writes retain their existing
 recovery behavior and never produce success feedback. Chat remains unchanged.
+
+### Home greeting and confirmed-action polish (owner request, 6 November 2026)
+
+Home's greeting keeps the next event and today's due-task count; steps and workouts
+remain in their cards. Confirmed lift/workout saves, task completions and note
+creation give subtle haptics and short interruptible feedback. Pending tasks cannot
+be submitted twice; failed completion remains visible and retryable. Chat is unchanged.

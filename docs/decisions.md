@@ -10942,6 +10942,26 @@ Graph nodes share folder colors with the legend. Labels appear for search or
 selection, with an explicit Open action; accessible titles/folders remain on all
 nodes. Native visual acceptance is pending in `ios/design/p15-93-verification.md`.
 
+## 5 November 2026 — Home and Factory follow the merged board (P15-94 / #1600)
+
+Keep Factory's Needs Dan tasks in Board while removing its separate tab. Board
+and Releases share one glass segmented surface. Preserve default collapsed
+columns, indented outlined rows, filter placement and search/create placement;
+legacy Needs Dan screenshot entry expands and reveals that column.
+
+Home uses the shared row spacing and separators and keeps Today / Tasks due,
+as shown by the merged board. Issue #1600 explicitly gives the board precedence
+over conflicting grouping feedback. The Delegated wording remains an open
+clarification, not a new task-data contract. Native visual acceptance is pending.
+
+## Native board corrections supported by screenshots (Refs #1600; 5 November 2026)
+
+Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
+
+Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
+the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
+from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
+
 ## 5 November 2026 — Preserve shared heading contrast inside List
 
 Native Workspaces screenshots show List section headings dimmed twice by the
@@ -10968,3 +10988,11 @@ necessary compatibility exception to the board issues' no-workflow-edit scope,
 within the owner's subsequent instruction to finish verification and release
 directly. It does not change checks, Mac execution, signing or TestFlight. Recheck
 CI rather than treating the infrastructure failure as a successful test result.
+
+## 6 November 2026 — Shorter Home and successful-action polish
+
+The owner selected these two previous suggestions for this release. Home keeps
+event/task priorities while health stays in the cards. Confirmations follow successful
+writes, and Home completion errors are surfaced rather than swallowed. The existing
+lift/workout saved state remains persistent and dismissible. No Chat change, backend
+contract change or new dependency is required. Native verification is pending.

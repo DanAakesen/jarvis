@@ -34,6 +34,10 @@ struct JarvisTodayScreen: View {
     @State private var dictationFailed = false
     @State private var flyingText: String?
     @State private var flightRisen = false
+    @State private var successConfirmation: JarvisSuccessConfirmation?
+    @State private var pendingTaskIDs = Set<String>()
+    @State private var taskCompletionFailed = false
+    @State private var taskCompletionError = ""
     @ScaledMetric(relativeTo: .largeTitle) private var greetingSize: CGFloat = 25
     @FocusState private var composerFocused: Bool
 
@@ -69,6 +73,12 @@ struct JarvisTodayScreen: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
         .toolbar(.hidden, for: .navigationBar)
         .jarvisAmbientBackground()
+        .jarvisSuccessFeedback($successConfirmation)
+        .alert(JarvisNotesCopy(language: language).tasks, isPresented: $taskCompletionFailed) {
+            Button(JarvisNotesCopy(language: language).ok, role: .cancel) {}
+        } message: {
+            Text(taskCompletionError)
+        }
         .onDisappear { dictation.stop() }
         .task {
             await model.refresh()
@@ -178,7 +188,7 @@ struct JarvisTodayScreen: View {
     private var dayCard: some View {
         let visibleRows = rows(for: tab)
         let expansion = JarvisTodayExpansion(total: visibleRows.count, isExpanded: listExpanded)
-        return VStack(alignment: .leading, spacing: 6) {
+        return JarvisRowGroup {
             if tab == .today { calendarIssue }
             taskIssue
             if visibleRows.isEmpty {
@@ -187,14 +197,18 @@ struct JarvisTodayScreen: View {
                         copy(tab == .today ? .nothingToday : .nothingDue),
                         systemImage: tab == .today ? "calendar" : "checklist"
                     )
+                    .jarvisListRow(separator: false)
                 }
             } else {
                 VStack(spacing: 0) {
-                    ForEach(Array(visibleRows.prefix(expansion.visible))) { row in
-                        switch row {
-                        case .entry(let entry): calendarRow(entry)
-                        case .task(let task): taskRow(task)
+                    ForEach(Array(visibleRows.prefix(expansion.visible).enumerated()), id: \.element.id) { index, row in
+                        Group {
+                            switch row {
+                            case .entry(let entry): calendarRow(entry)
+                            case .task(let task): taskRow(task)
+                            }
                         }
+                        .jarvisListRow(separator: index < expansion.visible - 1)
                     }
                 }
                 expandButton(
@@ -204,10 +218,7 @@ struct JarvisTodayScreen: View {
                 ) { listExpanded.toggle() }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.surfaceRadius)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("today.nextUp")
     }
@@ -226,13 +237,13 @@ struct JarvisTodayScreen: View {
     private var calendarIssue: some View {
         if calendarSection.value == nil {
             if calendarSection.isLoading {
-                loadingRow
+                loadingRow.jarvisListRow(separator: false)
             } else {
                 statusRow(
                     copy(calendarSection.failure == .unavailable ? .calendarUnavailable : .loadFailed),
                     systemImage: "calendar.badge.exclamationmark",
                     retry: calendarSection.failure != .unavailable
-                )
+                ).jarvisListRow(separator: false)
             }
         }
     }
@@ -241,27 +252,27 @@ struct JarvisTodayScreen: View {
     private var taskIssue: some View {
         if model.taskData.value == nil, !(tab == .today && calendarSection.value == nil && calendarSection.isLoading) {
             if model.taskData.isLoading {
-                loadingRow
+                loadingRow.jarvisListRow(separator: false)
             } else {
                 statusRow(
                     copy(model.taskData.failure == .unavailable ? .tasksUnavailable : .loadFailed),
                     systemImage: "exclamationmark.triangle",
                     retry: model.taskData.failure != .unavailable
-                )
+                ).jarvisListRow(separator: false)
             }
         }
     }
 
     private func calendarRow(_ entry: JarvisTodayCalendarEntry) -> some View {
         let notes = model.correlatedNotes(for: entry)
-        return VStack(alignment: .leading, spacing: 2) {
+        return VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(JarvisTodayGreeting.timeText(entry.start, language: language))
                     .font(.subheadline.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(JarvisDesignTokens.primaryAccent)
                     .frame(minWidth: 48, alignment: .leading)
-                VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                     Text(entry.title).font(.body).lineLimit(2)
                     if let location = entry.location {
                         Text(location).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
@@ -281,8 +292,7 @@ struct JarvisTodayScreen: View {
                     .padding(.leading, 58)
             }
         }
-        .frame(minHeight: 36, alignment: .leading)
-        .padding(.vertical, 2)
+        .frame(minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("today.entry.\(entry.id)")
     }
@@ -314,9 +324,10 @@ struct JarvisTodayScreen: View {
         HStack(spacing: 4) {
             JarvisCheckButton(
                 title: "\(copy(.markDone)): \(task.text)",
-                identifier: "today.task.done.\(task.id)"
-            ) { Task { await model.complete(task) } }
-            VStack(alignment: .leading, spacing: 0) {
+                identifier: "today.task.done.\(task.id)",
+                isWorking: pendingTaskIDs.contains(task.id)
+            ) { Task { await completeTask(task) } }
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                 Text(task.text).font(.body).lineLimit(2)
                 if let due = dueText(task) {
                     Text(due)
@@ -329,6 +340,27 @@ struct JarvisTodayScreen: View {
         .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("today.task.\(task.id)")
+    }
+
+    private func completeTask(_ task: VaultTask) async {
+        guard !pendingTaskIDs.contains(task.id) else { return }
+        pendingTaskIDs.insert(task.id)
+        defer { pendingTaskIDs.remove(task.id) }
+        do {
+            try await model.complete(task)
+            successConfirmation = JarvisSuccessConfirmation(message: JarvisNotesCopy(language: language).completed)
+        } catch {
+            guard !Task.isCancelled else { return }
+            let notesCopy = JarvisNotesCopy(language: language)
+            switch error {
+            case JarvisNotesClientError.writeOutcomeUnknown: taskCompletionError = notesCopy.unknownWrite
+            case JarvisNotesClientError.taskConflict: taskCompletionError = notesCopy.taskChanged
+            case JarvisClientError.signInRequired: taskCompletionError = notesCopy.signIn
+            case JarvisClientError.notOwner: taskCompletionError = notesCopy.notOwner
+            default: taskCompletionError = copy(.saveFailed)
+            }
+            taskCompletionFailed = true
+        }
     }
 
     private func isOverdue(_ task: VaultTask) -> Bool {
@@ -365,6 +397,7 @@ struct JarvisTodayScreen: View {
                         withAnimation(.snappy(duration: 0.3), action)
                     }
                 }
+                .padding(JarvisPageHeaderMetrics.rowInset)
             }
         }
     }
@@ -591,7 +624,10 @@ struct JarvisTodayScreen: View {
                     client: client,
                     copy: JarvisNotesCopy(language: language),
                     initialFolder: "",
-                    onCreated: { _ in sheet = nil }
+                    onCreated: { _ in
+                        sheet = nil
+                        successConfirmation = JarvisSuccessConfirmation(message: JarvisNotesCopy(language: language).saved)
+                    }
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)

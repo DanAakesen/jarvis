@@ -29,7 +29,6 @@
 "factory.loadingReleases" = "Indlæser udgivelser";
 "factory.emptyProjects" = "Ingen aktive projekter";
 "factory.emptyBoard" = "Ingen opgaver";
-"factory.emptyNeedsDan" = "Intet afventer Dan";
 "factory.emptyReleases" = "Ingen udgivelser";
 "factory.noSearchResults" = "Ingen søgeresultater";
 "factory.issueNumber" = "Sag #%ld";

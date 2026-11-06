@@ -38,7 +38,7 @@ final class JarvisTodayTests: XCTestCase {
         XCTAssertEqual(JarvisTimeOfDay(date: now, calendar: calendar), .afternoon)
     }
 
-    func testGreetingIsTwoSentencesWithKeyWordsInBothLanguages() {
+    func testGreetingKeepsEventAndTaskPrioritiesInBothLanguages() {
         let entry = JarvisTodayCalendarEntry(
             id: "1", title: "Design review", start: date(2026, 11, 2, 15), end: date(2026, 11, 2, 16)
         )
@@ -55,14 +55,14 @@ final class JarvisTodayTests: XCTestCase {
         XCTAssertEqual(danish.segments.filter(\.isKey).map(\.text), ["3 opgaver"])
     }
 
-    func testGreetingAddsStepsAndWorkoutsOnlyWhenKnown() {
+    func testGreetingLeavesHealthNumbersInTheirCards() {
         let known = JarvisTodayGreeting.make(
             timeOfDay: .morning, nextEvent: nil, tasksDueToday: 0, stepsToday: 4200, workoutsThisWeek: 3,
             language: .en
         )
         XCTAssertEqual(
             known.plainText,
-            "Morning Dan. Your day is clear. You have taken 4.2k steps today. You logged 3 workouts this week."
+            "Morning Dan. Your day is clear."
         )
         let unknown = JarvisTodayGreeting.make(
             timeOfDay: .morning, nextEvent: nil, tasksDueToday: 0, stepsToday: 0, workoutsThisWeek: 0,

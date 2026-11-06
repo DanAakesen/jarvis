@@ -257,34 +257,26 @@ struct JarvisIconButton: View {
     }
 }
 
-/// The task checkbox: no border or glass. When checked it animates into a check mark, then runs `action` so the row
-/// clears after the check is seen.
+/// The task checkbox starts the write immediately and prevents repeated taps while it is pending.
+/// The owning screen confirms success only after the write returns.
 struct JarvisCheckButton: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     var identifier: String
+    var isWorking = false
     let action: () -> Void
-    @State private var isChecked = false
 
     var body: some View {
-        Button {
-            guard !isChecked else { return }
-            if reduceMotion { isChecked = true } else { withAnimation(.snappy(duration: 0.25)) { isChecked = true } }
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(reduceMotion ? 0 : 350))
-                action()
-            }
-        } label: {
-            Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+        Button(action: action) {
+            Image(systemName: "circle")
                 .font(.title2)
-                .foregroundStyle(isChecked ? JarvisDesignTokens.primaryAccent : Color.secondary)
-                .contentTransition(.symbolEffect(.replace))
+                .foregroundStyle(.secondary)
+                .opacity(isWorking ? 0.5 : 1)
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isWorking)
         .accessibilityLabel(title)
-        .accessibilityAddTraits(isChecked ? .isSelected : [])
         .accessibilityIdentifier(identifier)
     }
 }
@@ -556,8 +548,7 @@ struct JarvisTabStrip<Tag: Hashable>: View {
     }
 }
 
-/// The long full-width segmented bar for a page's second row of tabs (Board / Needs Dan / Releases): every tab shares
-/// the row equally. Carousels of pills, such as the Notes folders, keep `JarvisTabStrip`.
+/// One full-width glass surface with equal-width segments. Individual segments have no separate glass chrome.
 struct JarvisSegmentedBar<Tag: Hashable>: View {
     let title: String
     let identifierPrefix: String
@@ -565,16 +556,28 @@ struct JarvisSegmentedBar<Tag: Hashable>: View {
     @Binding var selection: Tag
 
     var body: some View {
-        HStack(spacing: JarvisDesignTokens.segmentedBarSpacing) {
+        HStack(spacing: 0) {
             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                JarvisLabelledButton(
-                    title: item.title,
-                    identifier: item.identifier ?? "\(identifierPrefix).\(index)",
-                    isFullWidth: true,
-                    isSelected: selection == item.tag
-                ) { selection = item.tag }
+                Button { selection = item.tag } label: {
+                    Text(item.title)
+                        .font(.subheadline.weight(selection == item.tag ? .semibold : .regular))
+                        .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
+                        .contentShape(Rectangle())
+                        .background {
+                            if selection == item.tag {
+                                Capsule().fill(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
+                                    .padding(JarvisDesignTokens.segmentedSelectionInset)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selection == item.tag ? .isSelected : [])
+                .accessibilityIdentifier(item.identifier ?? "\(identifierPrefix).\(index)")
             }
         }
+        .jarvisGlassCapsule()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
     }

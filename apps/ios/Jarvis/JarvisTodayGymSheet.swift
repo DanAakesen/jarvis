@@ -14,6 +14,7 @@ struct JarvisTodayGymSheet: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var model: JarvisTodayModel
     let language: JarvisAppLanguage
     let kind: Kind
@@ -155,6 +156,8 @@ struct JarvisTodayGymSheet: View {
                         .accessibilityElement(children: .combine)
                         .accessibilityAddTraits(.updatesFrequently)
                         .accessibilityIdentifier("today.log.status")
+                        .id(status == .saved)
+                        .transition(reduceMotion ? .identity : .opacity.combined(with: .scale(scale: 0.96)))
                 }
             }
             .navigationTitle(copy(kind == .workout ? .logWorkout : .logLift))
@@ -171,6 +174,8 @@ struct JarvisTodayGymSheet: View {
             }
         }
         .accessibilityIdentifier("\(prefix).sheet")
+        .animation(reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.filterAnimationDuration), value: status)
+        .sensoryFeedback(.success, trigger: status == .saved) { _, saved in saved }
     }
 
     private func choiceRow(
