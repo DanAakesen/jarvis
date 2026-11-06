@@ -22,13 +22,20 @@ public struct JarvisBodyTrend: Equatable, Sendable {
         formatter.dateFormat = "yyyy-MM-dd"
         var valid: [Reading] = []
         for (index, row) in rows.enumerated() {
-            guard let day = JarvisHealthLogic.day(row["metric_date"]?.stringValue) else { continue }
+            guard case .string(let rawDay) = row["metric_date"],
+                  let day = JarvisHealthLogic.day(rawDay) else { continue }
             guard day >= period.startDate, day <= period.endDate,
                   JarvisHealthPeriod(startDate: day, endDate: day) != nil,
                   let date = formatter.date(from: day) else { continue }
-            let recordedValue: Double? = row["value"]?.numberValue ?? row["avg_value"]?.numberValue
-            guard let value = recordedValue, value.isFinite else { continue }
-            guard let unit = row["unit"]?.stringValue, !unit.isEmpty else { continue }
+            let value: Double
+            if case .number(let recorded) = row["value"] {
+                value = recorded
+            } else if case .number(let average) = row["avg_value"] {
+                value = average
+            } else {
+                continue
+            }
+            guard value.isFinite, case .string(let unit) = row["unit"], !unit.isEmpty else { continue }
             valid.append(Reading(id: index, day: day, date: date, value: value, unit: unit))
         }
         valid.sort { lhs, rhs in

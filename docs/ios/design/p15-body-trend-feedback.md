@@ -45,3 +45,9 @@ simulator boot: Swift could not type-check the chained conversion expression in
 `JarvisBodyTrend`. It is now an explicit typed loop with separate date/value/unit
 validation and sorting. No test or visual pass is claimed for that failed source;
 the corrected candidate requires fresh qualification with unchanged assertions.
+
+The simplified 0f93aa09 build then exposed the underlying module-boundary error:
+JSON convenience accessors are app-local/file-private. The Core converter now
+matches JSONValue's public string/number cases directly. No accessor visibility
+was broadened. This build also stopped before simulator boot; fresh corrected
+qualification is required.
