@@ -473,3 +473,15 @@ shortcut.
 General CI 42243718659 and CodeQL 42243718445 completed successfully for 7acb5ec5.
 Native 42243718420 compiled and entered its single simulator test/capture pass;
 actual test outcomes and visual inspection remain pending.
+
+PR #1623 at de6a5681 passed CI 42247195691 and CodeQL 42247195606 and merged
+as 114633765b44ec3f1cda849570fd361513086b72 at 16:04 UTC. Normal deployment
+42248895975 is active. Its fixed stored-policy diagnostic uses two owned
+conversations (developer/system), each with two policy updates and conflicting
+user reply instructions; maximum four response calls. Both policy precedence and
+replacement must pass. Production request construction remains unchanged.
+
+A read-only merge-tree check against 11463376 confirms PR #1621 / 7acb5ec5 merges
+without conflict and retains the qualified app/test tree cf9c686a58fdeb409a0575f528297108a5dfa11c.
+Expected full merge tree at that base is 031bb1e9f233ce4326e8641059f84b7dda29cce1.
+Recheck against actual main before merging; this is not a merge or native pass.

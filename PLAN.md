@@ -4,17 +4,19 @@ Owner-reported passes: cold Voice/unified transcript, Home send/camera, task/rem
 workflow and Health pull refresh. Compact task rows accepted. PR #1621 now combines
 per-element shimmer, generic-source suppression with full detail provenance,
 transparent protected headers/docks, shared clear-glass selectors, three medium
-widget layouts and real Body trend plots. Initial a559 CI/CodeQL passed; its native
-run was superseded/cancelled. b7e22951 then failed Swift type checking before boot;
-Subsequent module/fixture/format corrections are in 7acb5ec5, whose 502 Core tests
-and CodeQL pass; native compilation and visual qualification are pending. Complete fresh native qualification and inspect
-actual bilingual/large-text charts/widgets/surfaces and motion before upload.
+widget layouts and real Body trend plots. Earlier candidates stopped before boot
+on compiler/fixture checks; corrected 7acb5ec5 passes general CI, all 502 Core tests
+and CodeQL. It compiled and entered native run 42243718420. Complete that single
+run and inspect actual bilingual/large-text charts/widgets/surfaces and motion
+before merge/upload. Do not reuse build 76's earlier source qualification.
 
-Normal #1620 deployment passed. Diagnostic 42239012647 proved plain/simple-user
-requests succeed and typed policy requests fail; role versus encoding remains
-unresolved. Fixed format controls qualified through #1622 / 806d49db; deployment and the next
-matrix are pending. Preserve full policy and
-owner approvals; do not claim Copilot inference from diagnostic completion.
+Normal deployments and Current acceptance passed through #1622. The two request
+matrices isolate rejection of trusted system/developer roles, while ordinary typed
+user messages succeed. PR #1623 / 11463376 qualified a fixed native-conversation
+policy diagnostic and is deploying in 42248895975; its two-turn precedence/update
+check follows rollout. Production policy is unchanged. Preserve the complete
+per-turn policy and owner approvals; diagnostic completion alone never establishes
+Copilot acceptance.
 
 ## Managed policy request qualification — 6 November 2026
 

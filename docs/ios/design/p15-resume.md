@@ -6,9 +6,10 @@ The owner is testing build 76 and reports that Voice/history, Home send/camera,
 task/reminder creation and Health pull refresh work. A new combined native
 correction is in progress for per-element shimmer, generic task-source labels,
 transparent headers and floating Notes/Health docks, plus shared top-left widget
-headings/compact layouts and real Body trend charts. These edits require one new
-simulator qualification with actual screenshots/motion review before another upload;
-do not reuse build 76's app-tree evidence for the changed rendering.
+headings/compact layouts and real Body trend charts. Candidate 7acb5ec5 passes
+CI, 502 Core tests and CodeQL, and has compiled. Its single native run 42243718420
+is active; actual test results/screenshots/motion review are required before upload.
+Do not reuse build 76's app-tree evidence for the changed rendering.
 
 The subsequent owner-approved fixes merged through #1614 as `ab464314`.
 CI, CodeQL and all 68 native UI tests passed; the corrected task rows and shared
@@ -27,9 +28,11 @@ failed with HTTP 400 `invalid_request` without a field hint. A separate fixed-in
 diagnostic qualified through #1620 and merged as `2b58f2f2`. Normal deployment
 42232951549 passed. Diagnostic 42239012647 completed: plain text and simple user
 messages passed with the configured Terra/High; typed developer messages and the
-full-policy request failed with 400. Role and message encoding are still confounded.
-PR #1622 adds fixed typed-user/simple-developer/typed-system/simple-system controls
-before any production conversion. Do not guess or repeat provisioning. #1618 also
+full-policy request failed with 400. After qualified #1622 / 806d49db deployed,
+matrix 42245489142 proved typed-user input succeeds and system/developer roles fail
+in both tested representations. Qualified #1623 / 11463376 now deploys a fixed native
+Conversation-item policy probe with two-turn precedence/replacement sentinels.
+No production policy conversion has occurred. Do not guess or repeat provisioning. #1618 also
 qualified and merged a post-build OIDC refresh after a registry authentication
 failure. Copilot inference remains unverified. TestFlight build **76 uploaded at
 12:14:34 UTC / 13:14:34 Copenhagen** from verified main ab464314 (42215302636).
