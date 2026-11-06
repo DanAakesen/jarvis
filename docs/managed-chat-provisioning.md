@@ -54,14 +54,32 @@ that a simple message list works. It does not isolate the role: the rejected
 message also used the typed `message` / `input_text` encoding, while the accepted
 user messages used string content.
 
-The next fixed comparison separates those variables: `typed_user` uses the typed
-form with a user role; `developer_string` uses a developer role with simple string
-content; `system_message` and `system_string` compare the two encodings with the
-system role. Every first message contains the same short synthetic instruction,
-followed by identical synthetic reference/user messages. The production policy
-builder and full-policy canary remain unchanged. A successful diagnostic is not
-permission to demote policy into user content; any accepted production form must
-retain its trusted role and pass the complete-policy canary.
+The role/encoding matrix [42245489142](https://github.com/DanAakesen/jarvis/actions/runs/42245489142)
+ran at 15:44:42 UTC after normal deployment 42242252546 passed. `typed_user`
+completed. `developer_string`, `system_message`, and `system_string` all failed
+at `response_start` with HTTP 400 `invalid_request`. Combined with the first
+matrix, this isolates rejection of both trusted roles in response inputs; the
+typed message encoding itself works. Neither workflow success means the complete
+Jarvis policy passed, and production still uses its existing trusted-policy path.
+
+The next bounded diagnostic tests the documented
+[conversation items API](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/aiproject#create-conversation-items),
+which stores message roles in an owned conversation. The Responses contract says
+stored conversation items are prepended to subsequent inputs. The general API
+contract does not establish Copilot-harness acceptance, so this requires a live
+check before a production change.
+
+`conversation_developer_policy` and `conversation_system_policy` each append one
+fixed trusted message, then send a conflicting user-only request. A pass requires
+the exact synthetic sentinel present only in that policy. Each then appends a
+replacement policy with a second sentinel and repeats the conflicting user input
+on the same owned conversation. Both responses must follow the current policy;
+ignored policy, a plain acknowledgment, the previous sentinel and oversized
+replies fail with `managed_probe_policy_not_applied`. No raw reply or sentinel is
+included in diagnostic output. This checks per-turn policy updates, not merely
+whether a storage write returns success. The production builder and full-policy
+canary stay unchanged; stored static definition instructions alone cannot replace
+Jarvis's dynamic mode, capability and receipt policy.
 
 After the updated hosted agent is deployed, explicitly dispatch Deploy on `main`
 with only `diagnose_managed_chat=true`. All comparison inspection, provisioning
@@ -75,18 +93,18 @@ workflow still follows the normal deployment plan; the comparison branch itself
 does not mutate target configuration.
 
 The fixed administrative operation accepts no extra fields or caller text. It
-compares `typed_user`, `developer_string`, `system_message`, and `system_string`
+compares `conversation_developer_policy` and `conversation_system_policy`
 with fixed synthetic content.
-All four use the existing approved Terra/High definition and verify the same
-target identity. Each shape creates its own synthetic conversation, attempts one
-response, refuses tool output and deletes only that owned conversation. No user
-history, claims, function executor, grants, retries or fallback is involved.
-All controls retain the same synthetic reference/user messages as the full-policy
-request. Results isolate role and encoding differences without selecting a
-production fallback or changing any stored instruction.
+Both use the existing approved Terra/High definition and verify the same
+target identity. Each shape creates its own synthetic conversation, attempts at
+most two responses, refuses tool output and deletes only that owned conversation.
+No user history, claims, function executor, grants, retries or fallback is involved.
+The only stored instructions changed belong to these new synthetic conversations.
+No production fallback or comparison definition is selected or changed.
 
-Attempts have a 45-second ceiling, a 180-second matrix budget and five-second
-cleanup limits, within the existing 210-second administrative invocation bound.
+Each two-turn probe shares a 45-second ceiling. There are at most four response
+calls in total, a 180-second matrix budget and five-second cleanup limits, within
+the existing 210-second administrative invocation bound.
 Timeout/failure can continue to the next independent shape. Failed target setup
 or a changed target stops further inference; remaining entries are `skipped`.
 An exhausted budget also produces explicit skipped entries. Cleanup is best
@@ -97,8 +115,8 @@ The handoff independently revalidates output and prints one
 `managed_chat_request_diagnostics_complete`. That means the diagnostic returned,
 not that Copilot works. It never prints `managed_chat_comparison_canary_ok`.
 The unchanged full-policy `managed_text_canary` remains the only comparison
-acceptance check. The first matrix result is recorded above; the follow-up role
-and encoding comparison still requires its own explicit live run.
+acceptance check. Both earlier matrix results are recorded above; the conversation
+policy comparison still requires its own explicit live run.
 
 Manual Deploy [40877005757](https://github.com/DanAakesen/jarvis/actions/runs/40877005757)
 reached `agent_identity_unverified` on 29 October 2026. That check follows readback

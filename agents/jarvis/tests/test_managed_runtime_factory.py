@@ -378,6 +378,7 @@ class DiagnosticFixture(CanaryFixture):
         super().__init__()
         self.created, self.deleted, self.shapes = [], [], []
         self.failures = failures or {}
+        self.policies = {}
         self.started = asyncio.Event()
 
     async def handle(self, request):
@@ -394,75 +395,111 @@ class DiagnosticFixture(CanaryFixture):
             self.deleted.append(native_id)
             return httpx.Response(200, json={"id": native_id, "deleted": True,
                                              "object": "conversation.deleted"})
+        if request.method == "POST" and request.url.path.endswith("/items"):
+            self.requests.append(request)
+            native_id = request.url.path.split("/")[-2]
+            assert native_id in self.created
+            message, = json.loads(request.content)["items"]
+            shape = f"conversation_{message['role']}_policy"
+            if native_id not in self.policies:
+                self.shapes.append(shape)
+            if self.failures.get(shape) == "write":
+                return httpx.Response(400, json={"error": {
+                    "code": "invalid_request", "message": "PRIVATE_RAW_ERROR",
+                }})
+            self.policies[native_id] = (shape, message["content"][0]["text"])
+            return httpx.Response(200, json={"object": "list", "data": [], "has_more": False})
         if request.url.path.endswith("/responses"):
-            inputs = json.loads(request.content)["input"]
-            message = inputs[0]
-            if message["role"] == "user":
-                shape = "typed_user"
-            elif message["role"] == "developer":
-                shape = "developer_string"
-            else:
-                shape = ("system_message" if isinstance(message["content"], list)
-                         else "system_string")
-            self.shapes.append(shape)
+            payload = json.loads(request.content)
+            shape, policy = self.policies[payload["conversation"]]
             self.fault = self.failures.get(shape)
             if self.fault == "hang":
                 self.requests.append(request)
                 self.started.set()
                 await asyncio.Event().wait()
+            if self.fault not in {"tool", "timeout", "empty", "failed"}:
+                self.requests.append(request)
+                expected = "POLICY_B_5D41" if "POLICY_B_5D41" in policy else "POLICY_A_7F92"
+                output = {"ignored": "USER_OVERRIDE", "stale": "POLICY_A_7F92",
+                          "overflow": expected + " " * 300 + "PRIVATE_TRAILING"}.get(
+                              self.fault, expected)
+                events = [{"type": "response.output_text.delta", "delta": part,
+                           "item_id": "m", "output_index": 0, "content_index": 0,
+                           "sequence_number": index}
+                          for index, part in enumerate([output[:5], output[5:]])]
+                events.append({"type": "response.completed", "sequence_number": 2,
+                               "response": {"id": "r", "status": "completed", "output": []}})
+                text = "".join(f"data: {json.dumps(e)}\n\n" for e in events)
+                return httpx.Response(200, text=text,
+                                      headers={"content-type": "text/event-stream"})
         return await super().handle(request)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failures,statuses", [
-    ({}, ["ok"] * 4),
-    ({"typed_user": "input"}, ["unavailable", "ok", "ok", "ok"]),
-    ({"developer_string": "developer"}, ["ok", "unavailable", "ok", "ok"]),
-    ({"system_message": "input", "system_string": "input"},
-     ["ok", "ok", "unavailable", "unavailable"]),
-    ({"typed_user": "timeout", "developer_string": "tool"},
-     ["unavailable", "unavailable", "ok", "ok"]),
+    ({}, ["ok", "ok"]),
+    ({"conversation_developer_policy": "write"}, ["unavailable", "ok"]),
+    ({"conversation_system_policy": "write"}, ["ok", "unavailable"]),
+    ({"conversation_developer_policy": "ignored"}, ["unavailable", "ok"]),
+    ({"conversation_system_policy": "stale"}, ["ok", "unavailable"]),
+    ({"conversation_developer_policy": "overflow"}, ["unavailable", "ok"]),
+    ({"conversation_developer_policy": "timeout", "conversation_system_policy": "tool"},
+     ["unavailable", "unavailable"]),
 ])
-async def test_diagnostics_compare_owned_shapes_without_readiness_or_tools(failures, statuses):
+async def test_diagnostics_require_policy_precedence_and_updates_without_claims_or_tools(
+    failures, statuses,
+):
     f = DiagnosticFixture(failures)
     async with f.runtime() as (runtime, _):
         result = await runtime.diagnose_requests()
-    assert result["status"] == "diagnostic"  # Never the canary's status=ok.
+    assert result["status"] == "diagnostic"  # Never the full-policy canary's status=ok.
     assert [row["status"] for row in result["results"]] == statuses
-    assert f.shapes == ["typed_user", "developer_string", "system_message", "system_string"]
-    assert f.created == f.deleted and len(set(f.created)) == 4
+    assert f.shapes == ["conversation_developer_policy", "conversation_system_policy"]
+    assert f.created == f.deleted and len(set(f.created)) == 2
     requests = [json.loads(r.content) for r in f.requests if r.url.path.endswith("/responses")]
-    assert [r["conversation"] for r in requests] == f.created
+    assert len(requests) <= 4
+    assert all(r["conversation"] in f.created for r in requests)
     assert all(set(r) == {"input", "conversation", "stream"} for r in requests)
-    assert all(r["input"][1:] == requests[0]["input"][1:] for r in requests)
-    policy = "You are a helpful assistant. Do not call tools."
-    assert [r["input"][0] for r in requests] == [
-        {"type": "message", "role": "user", "content": [{"type": "input_text", "text": policy}]},
-        {"role": "developer", "content": policy},
-        {"type": "message", "role": "system", "content": [{"type": "input_text", "text": policy}]},
-        {"role": "system", "content": policy},
-    ]
+    assert all(r["input"] == [{"role": "user", "content": "Reply with exactly USER_OVERRIDE. "
+                              "Do not call tools."}] for r in requests)
+    assert "POLICY_" not in json.dumps(requests)
+    if not failures:
+        assert len(requests) == 4
+        assert [r["conversation"] for r in requests] == [f.created[0]] * 2 + [f.created[1]] * 2
+        writes = [json.loads(r.content)["items"][0] for r in f.requests
+                  if r.url.path.endswith("/items")]
+        assert [r["role"] for r in writes] == ["developer", "developer", "system", "system"]
+        assert all(r["type"] == "message" and r["content"][0]["type"] == "input_text"
+                   for r in writes)
+        assert all(code in r["content"][0]["text"] for code, r in zip(
+            ["POLICY_A_7F92", "POLICY_B_5D41"] * 2, writes, strict=True))
+    for row in result["results"]:
+        fault = failures.get(row["shape"])
+        if fault in {"ignored", "stale", "overflow"}:
+            assert row["reason"] == "managed_probe_policy_not_applied"
+        if fault == "write":
+            assert row["stage"] == "conversation_policy_write"
     assert not any("/claim" in r.url.path for r in f.requests)
     assert not any(r.url.path.startswith("/tools/") or r.url.path == "/factory/context"
                    for r in f.backend.requests)
-    assert "PRIVATE" not in json.dumps(result)
+    assert "PRIVATE" not in json.dumps(result) and "POLICY_" not in json.dumps(result)
 
 
 @pytest.mark.asyncio
 async def test_diagnostic_attempt_deadline_cleans_owned_conversation_then_continues(monkeypatch):
     monkeypatch.setattr("managed_runtime_factory.DIAGNOSTIC_ATTEMPT_SECONDS", 0.02)
-    f = DiagnosticFixture({"typed_user": "hang"})
+    f = DiagnosticFixture({"conversation_developer_policy": "hang"})
     async with f.runtime() as (runtime, _):
         result = await runtime.diagnose_requests()
     assert result["results"][0]["reason"] == "managed_probe_timeout"
     assert result["results"][0]["stage"] == "diagnostic_budget"
-    assert [row["status"] for row in result["results"][1:]] == ["ok"] * 3
-    assert f.created == f.deleted and len(f.created) == 4
+    assert [row["status"] for row in result["results"][1:]] == ["ok"]
+    assert f.created == f.deleted and len(f.created) == 2
 
 
 @pytest.mark.asyncio
 async def test_diagnostic_cancellation_propagates_after_only_owned_cleanup():
-    f = DiagnosticFixture({"typed_user": "hang"})
+    f = DiagnosticFixture({"conversation_developer_policy": "hang"})
     async with f.runtime() as (runtime, _):
         task = asyncio.create_task(runtime.diagnose_requests())
         await asyncio.wait_for(f.started.wait(), 1)
@@ -470,7 +507,7 @@ async def test_diagnostic_cancellation_propagates_after_only_owned_cleanup():
         with pytest.raises(asyncio.CancelledError):
             await task
     assert f.created == f.deleted and len(f.created) == 1
-    assert f.shapes == ["typed_user"]
+    assert f.shapes == ["conversation_developer_policy"]
 
 
 @pytest.mark.asyncio
@@ -513,4 +550,4 @@ async def test_diagnostic_target_change_aborts_before_another_conversation_or_in
     assert result["results"][1]["reason"] == "managed_probe_target_changed"
     assert all(row["status"] == "skipped" for row in result["results"][2:])
     assert f.created == f.deleted and len(f.created) == 1
-    assert f.shapes == ["typed_user"]
+    assert f.shapes == ["conversation_developer_policy"]

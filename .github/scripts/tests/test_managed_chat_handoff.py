@@ -54,7 +54,7 @@ elif args[:2] == ['rest','--method']:
         print(os.environ.get('DIAGNOSTIC_BODY', json.dumps({'status':'diagnostic','results':[
             {'shape':shape,'status':'unavailable','reason':'managed_probe_failed','stage':'response_start',
              'providerCause':{'code':'invalid_request','details':[{'code':'UnsupportedParameter','target':'input.role'}]}}
-            for shape in ['typed_user','developer_string','system_message','system_string']]})))
+            for shape in ['conversation_developer_policy','conversation_system_policy']]})))
     else:
         assert operation == {'operation':'managed_text_canary'}
         if os.environ.get('CANARY_HTTP_FAILURE'):
@@ -136,7 +136,7 @@ class ManagedHandoffTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual([(name, args[:3]) for name, args in calls], [
             ("az", ["deployment", "group", "show"]), ("az", ["rest", "--method", "POST"])])
-        self.assertEqual(result.stdout.count("managed_chat_request_diagnostic shape="), 4)
+        self.assertEqual(result.stdout.count("managed_chat_request_diagnostic shape="), 2)
         self.assertIn("provider_detail_0_code=UnsupportedParameter provider_detail_0_target=input.role", result.stdout)
         self.assertIn("managed_chat_request_diagnostics_complete", result.stdout)
         self.assertNotIn("managed_chat_comparison_canary_ok", result.stdout)
@@ -167,7 +167,7 @@ class ManagedHandoffTests(unittest.TestCase):
             "providerCause": {"code": "private_identifier", "param": "private_identifier",
                 "exceptionType": "PrivateIdentifier", "details": [{"code": "private_identifier",
                     "target": "private_identifier", "message": "private"}]}}
-            for shape in ["typed_user", "developer_string", "system_message", "system_string"]]}
+            for shape in ["conversation_developer_policy", "conversation_system_policy"]]}
         result, _ = self.run_handoff(DIAGNOSE_MANAGED_CHAT="true", DIAGNOSTIC_BODY=json.dumps(body))
         self.assertEqual(result.returncode, 0)
         self.assertNotIn("private", result.stdout + result.stderr)
