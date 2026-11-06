@@ -105,12 +105,19 @@ request for `_create_response` and the fixed administrative canary. Shared
 `runtime_instructions` extracts the existing format/channel/food/capability clauses
 without changing their content; both paths then use `personalize_instructions`
 with selected identity, mode, preferences and backend capability settings. A local
-HTTP fixture compares the complete canary developer-policy message to an actual policy turn.
+HTTP fixture compares the unchanged complete policy prefix to an actual policy turn.
+The canary appends a fixed qualification clause containing a policy-only sentinel,
+then sends a conflicting user instruction. It requires that exact sentinel and
+repeats the check with an updated policy and sentinel on the same conversation.
+Both turns use the production input cursor and request builder; provider history
+stays intact. Ignored or stale policy, a plain acknowledgment, tool output and
+oversized replies cannot produce compatibility evidence.
 The probe sends synthetic reference/user messages, executes no tools and bypasses
 owner context and claims. It therefore validates provider compatibility without
 claiming full owner-session acceptance. It cannot consume or release an owner source.
 
-Success adds `requestShape: managed_policy`, required by activation. Failure adds
+Success after both turns adds `requestShape: managed_policy` and the target-bound
+compatibility receipt, required by activation. Failure adds
 one bounded stage plus the existing safe provider-cause contract below. Handoff
 logs independently validate these fields; no provider message, request, schema or
 instruction content is printed. The 210-second invocation bound, no retries and

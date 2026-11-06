@@ -35,7 +35,11 @@ reuse this evidence. A change to any field invalidates the receipt. The Python
 canary and backend verifier share a cross-language fixture for this contract.
 
 The fixed `managed_text_canary` emits its receipt and transport revision only
-after the actual complete-policy request succeeds. Diagnostics, plain-text checks,
+after two actual complete-policy turns pass exact policy-only sentinel checks
+against conflicting user instructions. The second turn changes its sentinel on
+the same native conversation, verifying updated policy without deleting history.
+Both carry the full production policy plus a fixed qualification clause and use
+the production input cursor and request builder. Diagnostics, plain-text checks,
 old canary responses without a receipt, and a different target/settings/revision
 cannot activate the runtime. The manual handoff first clears the previous receipt,
 sets the reviewed target and waits for backend readiness. After the full-policy
@@ -55,7 +59,7 @@ does not require first enabling an unqualified runtime. No automatic fallback,
 claim reset, native history deletion or policy demotion is introduced. Current
 availability, behavior and approval semantics remain unchanged.
 
-Implementation checks: 43 focused backend tests, 309 Python tests plus nine
+Implementation checks: 43 focused backend tests, 312 Python tests plus nine
 subtests, and three web tests passed locally; backend TypeScript build, scoped
 backend/web lint, Ruff, compilation and shell syntax passed. CI and deployment
 are separate gates. The localized iOS reason mapping is a separate source commit
@@ -454,12 +458,14 @@ file and updates only these existing-backend environment variables:
 It preserves other environment values and the normal agent/model defaults. It
 then follows the existing bounded `latestRevisionName == latestReadyRevisionName`
 readiness pattern and calls the fixed `managed_text_canary` hosted operation.
-The canary uses the actual bridge credential for one synthetic managed text turn,
+The canary uses the actual bridge credential for two synthetic managed text turns,
 executes no backend tool and cleans up only its own canary conversation. It shares
 the production policy request builder and full dynamic chat instructions while
 sending only synthetic reference/user inputs. Deploy the updated hosted agent
 first: the job requires `status: ok`, model `gpt-6.1-terra`, effort `high` and
-`requestShape: managed_policy`; an old plain-string success does not qualify.
+`requestShape: managed_policy`, the current policy transport revision and an exact
+target-bound receipt after both sentinel checks; an old plain-string success does
+not qualify.
 Failures log only revalidated stage, HTTP status, provider code/parameter and
 exception identifier, never returned text, instructions or raw provider error.
 Each invocation has the existing 210-second bound.
