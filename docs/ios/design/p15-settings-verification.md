@@ -29,3 +29,14 @@ Apple documentation read: [Segmented controls](https://developer.apple.com/desig
 and [DynamicTypeSize](https://developer.apple.com/documentation/swiftui/dynamictypesize).
 The shared segmented bar retains equal choices and selected accessibility traits;
 large text uses the existing shared horizontal tab strip to keep labels readable.
+
+## Corrected combined native acceptance — 6 November 2026
+
+Combined 4ea30d09 passed all 61 native UI tests in run 42129251285, including all
+three Settings cases. Screenshot artifact 13465195628 was inspected for General in
+English/dark, Danish/light and accessibility XXXL; Models, Health and Account in
+English/dark were also inspected. All four normal-size tabs are readable; larger
+text uses the scrolling strip. Row symbols stay at the shared size while labels and
+values stack and wrap. Search-to-detail and all section navigation assertions pass.
+The new shared accessibility header refinement is included in the subsequent full
+run; existing Settings screen source is unchanged.

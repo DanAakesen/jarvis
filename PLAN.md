@@ -3894,3 +3894,8 @@ comparisons. They do not expand this release's scope.
 Release infrastructure correction: ubuntu-latest moved to unsupported Ubuntu 26.04.
 The Linux Swift job now pins the previously passing ubuntu-24.04 image; checks and
 Mac/TestFlight steps are unchanged. Fresh CI is required before Notes/backend delivery.
+
+Settings corrected source is accepted in combined native run 42129251285 (61/61 UI
+tests), artifact 13465195628. General EN/dark, DA/light and AX XXXL plus Models,
+Health and Account EN/dark were inspected; tabs and symbols are corrected. Final
+combined verification of the owner-selected polish is running separately.
