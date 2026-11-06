@@ -35,7 +35,9 @@ large text uses the existing shared horizontal tab strip to keep labels readable
 Combined 4ea30d09 passed all 61 native UI tests in run 42129251285, including all
 three Settings cases. Screenshot artifact 13465195628 was inspected for General in
 English/dark, Danish/light and accessibility XXXL; Models, Health and Account in
-English/dark were also inspected. All four normal-size tabs are readable; larger
+English/dark were also inspected. Follow-up inspection covered Models, Health and
+Account in Danish/light and accessibility XXXL, plus the large-text search detail.
+All four normal-size tabs are readable; larger
 text uses the scrolling strip. Row symbols stay at the shared size while labels and
 values stack and wrap. Search-to-detail and all section navigation assertions pass.
 The new shared accessibility header refinement is included in the subsequent full

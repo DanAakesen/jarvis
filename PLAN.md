@@ -3812,7 +3812,8 @@ release. Notes and Home/Factory own those changes, with Reduce Motion support.
 
 Remaining suggestions are proposals only: an actionable Needs you queue, consistent
 freshness language, remembered page selections, task Undo and evidence-backed Health
-comparisons. They do not expand this release's scope.
+comparisons, actionable empty states and draft preservation. They do not expand
+this release's scope.
 
 Settings corrected source is accepted in combined native run 42129251285 (61/61 UI
 tests), artifact 13465195628. General EN/dark, DA/light and AX XXXL plus Models,
