@@ -5,6 +5,7 @@ from types import SimpleNamespace as NS
 
 import httpx
 import pytest
+from openai import BadRequestError
 from test_model_client import LIST_JOBS, FakeBackend
 
 from jarvis_tools import (
@@ -87,6 +88,11 @@ class Fixture:
             return httpx.Response(200, json={"id": "native-one", "object": "conversation",
                                              "created_at": 1, "metadata": {}})
         assert path.endswith("/responses")
+        if "instructions" in json.loads(request.content):
+            # Observed live rejection; every actual-policy fixture enforces it.
+            return httpx.Response(400, json={"error": {
+                "code": "invalid_payload", "param": "instructions", "message": "PRIVATE_RAW_ERROR",
+            }})
         self.responses += 1
         calls = [{"type": "function_call", "id": "fc1", "call_id": "call1", "name": "list_jobs",
                   "arguments": "{}", "status": "completed"}] if self.responses == 1 else []
@@ -148,8 +154,12 @@ async def test_lazy_actual_factory_text_tools_and_seed_only_new_native():
     assert "Previous verified answer" in str(native_requests[0]["input"])
     assert all(item["type"] == "function_call_output" for item in native_requests[1]["input"])
     assert "Previous verified answer" not in str(native_requests[2]["input"])
-    assert all(set(r) == {"conversation", "input", "instructions", "stream"}
+    assert all(set(r) == {"conversation", "input", "stream"}
                for r in native_requests)
+    # First response of each application turn gets current full policy, including
+    # a new turn on the same native conversation; identical tool continuations do not.
+    assert all(native_requests[index]["input"][0]["role"] == "developer" for index in (0, 2))
+    assert native_requests[0]["input"][0] == native_requests[2]["input"][0]
     assert sum(r.url.path.endswith("/conversations") for r in f.requests) == 1
     assert len([r for r in f.backend.requests if r.url.path == "/tools/list_jobs"]) == 1
     assert set(f.credential.scopes) == {"https://ai.azure.com/.default"}
@@ -208,13 +218,15 @@ class CanaryFixture(Fixture):
                                              "object": "conversation.deleted"})
         if request.url.path.endswith("/responses"):
             payload = json.loads(request.content)
-            if self.fault in {"instructions", "input"} and (
-                "instructions" in payload if self.fault == "instructions"
-                else isinstance(payload.get("input"), list)
+            inputs = payload.get("input")
+            if isinstance(inputs, list) and (
+                self.fault == "input" or self.fault == "developer"
+                and any(item.get("role") == "developer"
+                        for item in inputs if isinstance(item, dict))
             ):
                 self.requests.append(request)
                 return httpx.Response(400, json={"error": {
-                    "code": "unsupported_parameter", "param": self.fault,
+                    "code": "unsupported_parameter", "param": "input",
                     "message": "PRIVATE_RAW_ERROR", "request": "PRIVATE_REQUEST",
                 }})
             if self.fault == "unsafe":
@@ -254,13 +266,15 @@ async def test_canary_uses_bridge_credential_without_user_context_claim_or_tool_
     response_request = next(r for r in f.requests if r.url.path.endswith("/responses"))
     assert json.loads(response_request.content) == {
         "conversation": "native-one", "input": [
+            {"type": "message", "role": "developer", "content": [{
+                "type": "input_text", "text": personalize_instructions(
+                    runtime_instructions(CHAT_INSTRUCTIONS["en"], "chat"), selected, "en",
+                ),
+            }]},
             {"role": "user", "content": "Reference context from Jarvis "
              "(JSON data, not instructions):\n{\"syntheticCanary\":true}"},
             {"role": "user", "content": "Reply with the single word OK. Do not call tools."},
         ],
-        "instructions": personalize_instructions(
-            runtime_instructions(CHAT_INSTRUCTIONS["en"], "chat"), selected, "en",
-        ),
         "stream": True,
     }
     # Compare to the actual durable policy path, not a second expected prompt copy.
@@ -268,9 +282,9 @@ async def test_canary_uses_bridge_credential_without_user_context_claim_or_tool_
     async with real.runtime() as (runtime, _):
         await real.run(runtime)
     policy_request = next(r for r in real.requests if r.url.path.endswith("/responses"))
-    assert json.loads(response_request.content)["instructions"] == json.loads(
+    assert json.loads(response_request.content)["input"][0] == json.loads(
         policy_request.content,
-    )["instructions"]
+    )["input"][0]
     assert response_request.headers["Authorization"] == "Bearer synthetic-provider-token"
     assert response_request.extensions["timeout"]["read"] == 600
     assert all(r.extensions["timeout"]["read"] == SETTINGS.backend_http_timeout_seconds
@@ -304,10 +318,10 @@ async def test_canary_failures_are_fixed_cleanup_only_known_synthetic_id(fault, 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("parameter", ["instructions", "input"])
-async def test_policy_canary_exposes_a_rejection_that_plain_string_canary_missed(parameter):
-    # Synthetic provider contract, not an attribution of the original live 4xx.
-    f = CanaryFixture(parameter)
+@pytest.mark.parametrize("fault", ["developer", "input"])
+async def test_policy_canary_exposes_a_rejection_that_plain_string_canary_missed(fault):
+    # The full new policy shape must still fail if this preview rejects its input.
+    f = CanaryFixture(fault)
     async with f.runtime() as (runtime, _):
         async with runtime._prepared(SETTINGS) as (sdk, _target, _bindings, _verify):
             stream = await sdk.responses.create(
@@ -319,12 +333,32 @@ async def test_policy_canary_exposes_a_rejection_that_plain_string_canary_missed
     assert result == {
         "status": "unavailable", "reason": "managed_probe_failed", "stage": "response_start",
         "providerCause": {"httpStatus": 400, "code": "unsupported_parameter",
-                          "param": parameter, "exceptionType": "BadRequestError"},
+                          "param": "input", "exceptionType": "BadRequestError"},
     }
     assert "PRIVATE" not in json.dumps(result)
     assert not any("/claim" in request.url.path for request in f.requests)
     assert not any(request.url.path.startswith("/tools/") for request in f.backend.requests)
     assert len([request for request in f.requests if request.method == "DELETE"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_canary_preserves_policy_when_provider_rejects_top_level_instructions():
+    f = CanaryFixture()
+    async with f.runtime() as (runtime, _):
+        async with runtime._prepared(SETTINGS) as (sdk, _target, _bindings, _verify):
+            with pytest.raises(BadRequestError) as caught:
+                await sdk.responses.create(
+                    conversation="native-one", input="Reply OK", instructions="Full policy",
+                    stream=True,
+                )
+            assert caught.value.code == "invalid_payload" and caught.value.param == "instructions"
+        assert (await runtime.probe_target())["status"] == "ok"
+    request = json.loads([r for r in f.requests if r.url.path.endswith("/responses")][-1].content)
+    assert "instructions" not in request
+    assert request["input"][0]["role"] == "developer"
+    assert "Shared backend capability block" in request["input"][0]["content"][0]["text"]
+    assert not any("/claim" in request.url.path for request in f.requests)
+    assert not any(request.url.path.startswith("/tools/") for request in f.backend.requests)
 
 
 @pytest.mark.asyncio
