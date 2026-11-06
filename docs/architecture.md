@@ -8634,5 +8634,6 @@ cap, so all plotted values reconcile with the returned report.
 Status/Proactive phrases use their loaded evidence. Proactive distinguishes
 unloaded findings from an observed zero and exposes retained-read failures.
 Notifications uses `BackgroundTaskPresentation` for running/actionable/quiet
-jobs; completed jobs no longer keep its background section or Now bar visible.
+jobs; completed jobs no longer appear in its background section. Chat's Now bar
+behavior is unchanged.
 The existing server expiry and success exclusion remain the feed authority.
