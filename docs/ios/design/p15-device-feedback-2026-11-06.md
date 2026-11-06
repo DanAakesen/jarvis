@@ -443,3 +443,11 @@ convenience accessors are app-local/file-private. Corrected 5a923e70 uses public
 JSONValue case matching, with no visibility change. Native 42242719701,
 CI 42242719791 and CodeQL 42242719674 now qualify this head. The preceding
 builds stopped before simulator boot; neither is visual/test acceptance.
+
+Corrected candidate `7acb5ec50fd7a054ebc6bb1469dc8a1ef9ff0ef5` has app/test tree
+`cf9c686a58fdeb409a0575f528297108a5dfa11c` and full tree
+`8cf23c1eeec054c261b3bfada019803646a242ad`. CI 42243718659's Core job
+127981299831 passed all 502 tests with zero failures at 15:34 UTC. CodeQL 42243718445
+passed. Native 42243718420 (job 127980347204) is still building; general CI and
+native tests/captures remain pending. This source fixes only the named gallery
+fixture/localized format checks after the three chart-data tests had already passed.

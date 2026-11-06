@@ -6,7 +6,8 @@ per-element shimmer, generic-source suppression with full detail provenance,
 transparent protected headers/docks, shared clear-glass selectors, three medium
 widget layouts and real Body trend plots. Initial a559 CI/CodeQL passed; its native
 run was superseded/cancelled. b7e22951 then failed Swift type checking before boot;
-0f93aa09 simplifies the conversion and is qualifying. Complete fresh native qualification and inspect
+Subsequent module/fixture/format corrections are in 7acb5ec5, whose 502 Core tests
+and CodeQL pass; native compilation and visual qualification are pending. Complete fresh native qualification and inspect
 actual bilingual/large-text charts/widgets/surfaces and motion before upload.
 
 Normal #1620 deployment passed. Diagnostic 42239012647 proved plain/simple-user
