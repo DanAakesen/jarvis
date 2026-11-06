@@ -73,11 +73,11 @@ extension JarvisPageHeader where Actions == EmptyView {
 }
 
 extension View {
-    /// Pins the page header over the content with no bar background and no line: the content scrolls behind the
-    /// title and the header buttons. HIG: Navigation bars, Toolbars, Scroll views.
+    /// Pins the page header over the content. The native soft scroll edge fades moving content beneath
+    /// the title and buttons while preserving the ambient background. HIG: Navigation bars, Scroll views.
     func jarvisPageHeader<Header: View>(@ViewBuilder _ header: () -> Header) -> some View {
         safeAreaInset(edge: .top, spacing: 0) { header() }
-            .scrollEdgeEffectHidden(true, for: .top)
+            .scrollEdgeEffectStyle(.soft, for: .top)
     }
 }
 

@@ -3332,3 +3332,12 @@ horizontally, and Usage totals become full-width rows with unrestricted wrapping
 Normal text keeps the approved continuous shared segmented bar and grid.
 
 Settings native screenshot review keeps all four section names readable at default text size with the continuous shared glass segmented bar from P15-94 and full 44-point targets. Larger text uses the shared scrolling strip. Decorative row symbols retain the shared icon size as row text grows, preventing overlap.
+
+## Final native scroll and chart boundaries (6 November 2026)
+
+Combined screenshots exposed normal-size content passing through pinned titles and
+monthly chart endpoints truncating. Enable the native soft scroll-edge effect for
+shared page headers; keep the stronger accessibility material. Monthly dates use
+intrinsic width and inward anchors at the first/last day. The approved transparent
+ambient composition and all bars/selection remain. These final corrections require
+new native screenshots; current evidence is in `p15-integration-verification.md`.

@@ -11085,3 +11085,16 @@ strip and stacked row values. Chat and the shared orb remain unchanged.
 ## Settings native geometry correction (5 November 2026)
 
 Native artifact 13461059102 exposed truncated four-way section labels and decorative symbols expanding beyond their reserved row width at accessibility XXXL. Use the existing continuous glass segmented bar from P15-94, with its full hit target, switch Settings to the shared scrolling strip above default text size, and retain fixed semantic symbol geometry. Existing callers keep their defaults; Chat is unchanged.
+
+## 6 November 2026 — Final combined native findings
+
+Run 42134678739 compiled and passed 61/62 UI tests. The new completion test opened
+Tasks due for fixture tasks due today; the recording confirms the production
+split is correct. Select and expand Today while retaining both removal and
+continued-usability assertions. Explicitly select dark for the lift success capture.
+
+Actual Health images still showed truncated monthly endpoint dates and normal-size
+rows behind the pinned title. Use native AxisValueLabel anchors/intrinsic width and
+restore the iOS soft scroll-edge effect, retaining the AX material. Apple API docs
+were read directly; no new dependency or custom blur is needed. Verify these actual
+findings in one combined Settings run before the final merge. Chat remains unchanged.

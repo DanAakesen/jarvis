@@ -7116,3 +7116,19 @@ guards pass 53 tests in the pinned Swift container; syntax parsing passes. Nativ
 compilation, interaction results and screenshot comparison remain pending.
 
 Settings run 42121264726 compiled and passed 49/49 selected native tests. Review screenshots as well as assertions: its captures exposed normal-size tab truncation and large-text symbol overlap. The follow-up retains 44-point segment targets and uses scrolling above default text size. Artifact 13461059102 preserves the evidence; corrected captures remain required.
+
+## P15 release continuation — 6 November 2026, 01:12 UTC
+
+Use `docs/ios/design/p15-resume.md` and `p15-integration-verification.md` for the
+current state; they supersede the historical pending/native/setup notes above.
+Shared, Notes, Home/Factory, Health and Insights are merged in order. The required
+Notes backend deploy passed readiness and live acceptance. Settings is the final
+owner PR; its next automatic native run is the only intended combined run. Never
+merge #1609. Final task-test setup, chart labels and native header treatment require
+that run before Settings merge and the already authorised TestFlight upload.
+
+Refreshed GitHub access works with `env -u GH_TOKEN GH_CONFIG_DIR=/tmp/p15-gh-auth`.
+The injected GH_TOKEN is stale; never print it. The Linux Core job alone is pinned
+to ubuntu-24.04 for the existing Swift setup action; fresh CI passed. Local worktrees
+use /tmp/p15-workspace because the original volume is full. Do not build Docker
+locally. Cancel redundant native runs by exact head, preserving the Settings run.
