@@ -140,7 +140,8 @@ class Azure:
         agent = base + "/" + AGENT_NAME
         operation = {("GET", base): "agent_inventory", ("GET", agent): "agent_read",
                      ("GET", agent + "/versions"): "version_inventory",
-                     ("POST", base): "agent_version_create", ("PATCH", agent): "endpoint_pin"}
+                     ("POST", base): "agent_create", ("POST", agent + "/versions"): "agent_version_create",
+                     ("PATCH", agent): "endpoint_pin"}
         if method == "GET" and path.startswith(agent + "/versions/"):
             return "version_read"
         return operation.get((method, path), "other")
@@ -333,7 +334,7 @@ def comparison_version(azure: Azure, expected: dict, versions: list[dict], *, re
     require(isinstance(rules, list) and len(rules) == 1 and isinstance(rules[0], dict)
             and rules[0].get("type") == "FixedRatio" and rules[0].get("traffic_percentage") == 100
             and rules[0].get("agent_version") in identifiers, "agent_endpoint_unverified")
-    azure.data("/agents", "POST", {"name": AGENT_NAME, "metadata": MARKER, "definition": expected})
+    azure.data("/agents/" + AGENT_NAME + "/versions", "POST", {"metadata": MARKER, "definition": expected})
     after = azure.inventory("/agents/" + AGENT_NAME + "/versions?include_drafts=true")
     after_ids = [item.get("version") for item in after]
     require(all(isinstance(value, str) for value in after_ids)
