@@ -36,6 +36,8 @@ struct JarvisWidgetHeader: View {
             Text(title)
                 .font(.footnote.weight(.semibold))
                 .lineLimit(1)
+                .layoutPriority(1)
+                .accessibilityIdentifier("widget.header.title")
             if let staleText {
                 Spacer(minLength: 4)
                 Text(staleText)
@@ -45,6 +47,7 @@ struct JarvisWidgetHeader: View {
                     .minimumScaleFactor(0.7)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

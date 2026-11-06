@@ -43,6 +43,73 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertTrue(element(id, label: label).waitForExistence(timeout: 10), id)
         }
         attach(app.screenshot(), named: "Component gallery")
+        captureMediumWidgetLayouts()
+    }
+
+    /// Reuses this gallery launch and the extension's actual views. Host tinting remains a WidgetKit preview/device check.
+    private func captureMediumWidgetLayouts() {
+        app.buttons["gallery.widgets"].tap()
+        for language in ["en", "da"] {
+            let choice = app.buttons["gallery.widgetLanguage.\(language == "en" ? 0 : 1)"]
+            XCTAssertTrue(choice.waitForExistence(timeout: 5))
+            choice.tap()
+            XCTAssertTrue(choice.isSelected)
+            for (kind, title) in [
+                ("workouts", language == "en" ? "Workouts" : "Træning"),
+                ("factory", "Factory"), ("notes", language == "en" ? "Notes" : "Noter"),
+            ] {
+                let card = app.descendants(matching: .any)["widget.preview.\(kind)"]
+                XCTAssertTrue(card.waitForExistence(timeout: 5))
+                let header = card.staticTexts["widget.header.title"]
+                XCTAssertTrue(header.exists, "\(kind) must have its shared title")
+                XCTAssertEqual(header.label, title)
+                XCTAssertEqual(card.frame.width, 329, accuracy: 0.5)
+                XCTAssertEqual(card.frame.height, 155, accuracy: 0.5)
+                let inset = card.frame.insetBy(dx: 16, dy: 16)
+                XCTAssertEqual(header.frame.minY, inset.minY, accuracy: 1, "The title must remain at the top inset")
+                XCTAssertLessThan(header.frame.minX, inset.minX + 30, "The title follows its top-left symbol")
+                assertWidgetElement(header, within: inset)
+                if kind == "workouts" {
+                    let metrics = ["lift", "run", "kilometers", "calories"].map {
+                        card.descendants(matching: .any)["widget.workouts.\($0)"]
+                    }
+                    for metric in metrics { assertWidgetElement(metric, within: inset) }
+                    XCTAssertEqual(metrics[0].frame.width, metrics[1].frame.width, accuracy: 1)
+                    XCTAssertEqual(metrics[0].frame.minX, metrics[2].frame.minX, accuracy: 1)
+                    XCTAssertEqual(metrics[1].frame.minX, metrics[3].frame.minX, accuracy: 1)
+                    XCTAssertEqual(metrics[0].frame.minY, metrics[1].frame.minY, accuracy: 1)
+                    XCTAssertEqual(metrics[2].frame.minY, metrics[3].frame.minY, accuracy: 1)
+                    XCTAssertGreaterThanOrEqual(metrics[2].frame.minY - metrics[0].frame.maxY, 5)
+                } else if kind == "factory" {
+                    for status in ["running", "awaiting", "review", "failed"] {
+                        let count = card.descendants(matching: .any)["widget.factory.count.\(status)"]
+                        assertWidgetElement(count, within: inset)
+                        XCTAssertLessThanOrEqual(count.frame.height, 29, "Medium count cells must leave room for both task rows")
+                    }
+                    for id in ["c1", "t1"] {
+                        assertWidgetElement(card.descendants(matching: .any)["widget.factory.task.\(id)"], within: inset)
+                    }
+                    XCTAssertEqual(card.buttons.count, 2, "Both task actions retain their place")
+                    for button in card.buttons.allElementsBoundByIndex {
+                        assertWidgetElement(button, within: inset)
+                        XCTAssertFalse(button.isEnabled, "Synthetic actions must never write")
+                    }
+                } else {
+                    assertWidgetElement(card.staticTexts["widget.notes.summary"], within: inset)
+                    assertWidgetElement(card.descendants(matching: .any)["widget.notes.next"], within: inset)
+                }
+            }
+            attach(app.screenshot(), named: "P15-widgets-medium-\(language == "en" ? "dark" : "light")-\(language)")
+        }
+    }
+
+    private func assertWidgetElement(_ element: XCUIElement, within bounds: CGRect) {
+        XCTAssertTrue(element.exists, element.identifier)
+        XCTAssertFalse(element.frame.isEmpty, element.identifier)
+        XCTAssertGreaterThanOrEqual(element.frame.minX, bounds.minX - 0.5, element.identifier)
+        XCTAssertGreaterThanOrEqual(element.frame.minY, bounds.minY - 0.5, element.identifier)
+        XCTAssertLessThanOrEqual(element.frame.maxX, bounds.maxX + 0.5, element.identifier)
+        XCTAssertLessThanOrEqual(element.frame.maxY, bounds.maxY + 0.5, element.identifier)
     }
 
     /// Two screenshots of the live orb taken apart in time must differ: the orb flows, it is not a still image.

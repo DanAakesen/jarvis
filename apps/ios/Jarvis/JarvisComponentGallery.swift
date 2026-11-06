@@ -8,6 +8,9 @@ import SwiftUI
 struct JarvisComponentGallery: View {
     @State private var galleryTab = "Notes"
     @State private var sectionActionCount = 0
+    #if targetEnvironment(simulator)
+    @State private var showingWidgets = false
+    #endif
 
     var body: some View {
         NavigationStack {
@@ -16,6 +19,11 @@ struct JarvisComponentGallery: View {
                 language: .en,
                 actions: {
                     JarvisIconButton(title: "Refresh", systemImage: "arrow.clockwise", identifier: "gallery.header.refresh") {}
+                    #if targetEnvironment(simulator)
+                    JarvisIconButton(title: "Widgets", systemImage: "rectangle.grid.1x2", identifier: "gallery.widgets") {
+                        showingWidgets = true
+                    }
+                    #endif
                 },
                 headline: {
                     JarvisPageHeadline(phrase: JarvisPagePhrase(markup: "Dan, {3 components} share {one look}."))
@@ -37,6 +45,9 @@ struct JarvisComponentGallery: View {
             )
         }
         .environmentObject(JarvisNavigationModel())
+        #if targetEnvironment(simulator)
+        .sheet(isPresented: $showingWidgets) { JarvisWidgetLayoutGallery() }
+        #endif
         .overlay(alignment: .topLeading) {
             Color.clear
                 .frame(width: 1, height: 1)

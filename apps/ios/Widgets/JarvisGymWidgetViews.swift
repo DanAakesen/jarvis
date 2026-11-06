@@ -83,49 +83,55 @@ struct JarvisGymWorkoutsWidgetView: View {
     }
 }
 
-/// Medium: steps ring, heading, a 2 by 2 grid and the week dots. No streak, no active minutes.
+/// Medium: a full-width heading above the steps ring, balanced metric columns and week dots.
 struct JarvisGymMediumWidgetView: View {
     let entry: JarvisWidgetEntry
 
     var body: some View {
         let language = entry.language
         JarvisWidgetStateView(state: entry.gym, language: language, emptyCopy: .emptyGym) { data, stale in
-            HStack(spacing: 14) {
-                JarvisWidgetStepsRing(steps: data.stepsToday, goal: data.stepGoal, language: language)
-                    .frame(maxWidth: 104, maxHeight: 104)
-                VStack(alignment: .leading, spacing: 8) {
-                    JarvisWidgetHeader(
-                        symbol: "figure.strengthtraining.traditional",
-                        title: JarvisWidgetCopy.workouts.text(language: language),
-                        staleText: staleText(data, stale: stale, language: language)
-                    )
-                    Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
-                        GridRow {
-                            cell(.lift, lifts(data))
-                            cell(.run, runs(data))
+            VStack(alignment: .leading, spacing: 6) {
+                JarvisWidgetHeader(
+                    symbol: "figure.strengthtraining.traditional",
+                    title: JarvisWidgetCopy.workouts.text(language: language),
+                    staleText: staleText(data, stale: stale, language: language)
+                )
+                HStack(spacing: 16) {
+                    JarvisWidgetStepsRing(steps: data.stepsToday, goal: data.stepGoal, language: language)
+                        .frame(width: 88, height: 88)
+                        .padding(4) // Keep the stroked ring inside the content inset.
+                    VStack(alignment: .leading, spacing: 6) {
+                        VStack(spacing: 6) {
+                            HStack(spacing: 12) {
+                                cell(.lift, lifts(data))
+                                cell(.run, runs(data))
+                            }
+                            HStack(spacing: 12) {
+                                cell(.kilometers, JarvisWidgetFormat.kilometers(data.kilometers, language: language))
+                                cell(.calories, JarvisWidgetFormat.count(data.calories, language: language))
+                            }
                         }
-                        GridRow {
-                            cell(.kilometers, JarvisWidgetFormat.kilometers(data.kilometers, language: language))
-                            cell(.calories, JarvisWidgetFormat.count(data.calories, language: language))
-                        }
+                        JarvisWidgetWeekDots(
+                            trained: data.trainedDays,
+                            labels: JarvisWidgetFormat.dayLetters(endingOn: data.lastDay, language: language),
+                            accessibilityText: "\(JarvisWidgetCopy.workouts.text(language: language)) \(data.workoutsDone)/\(data.workoutsTarget)"
+                        )
                     }
-                    JarvisWidgetWeekDots(
-                        trained: data.trainedDays,
-                        labels: JarvisWidgetFormat.dayLetters(endingOn: data.lastDay, language: language),
-                        accessibilityText: "\(JarvisWidgetCopy.workouts.text(language: language)) \(data.workoutsDone)/\(data.workoutsTarget)"
-                    )
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .jarvisWidgetSurface()
     }
 
     private func cell(_ copy: JarvisWidgetCopy, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(value).font(.headline).lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
             Text(copy.text(language: entry.language)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("widget.workouts.\(copy.rawValue)")
     }
 }
 

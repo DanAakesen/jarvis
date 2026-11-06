@@ -151,7 +151,7 @@ struct JarvisNotesSmallWidgetView: View {
     }
 }
 
-/// Medium: the data phrase on top and one row: the next task, or the latest note when there are no tasks.
+/// Medium: the shared heading, a data phrase and the next task or latest note.
 struct JarvisNotesMediumWidgetView: View {
     let entry: JarvisWidgetEntry
 
@@ -159,16 +159,22 @@ struct JarvisNotesMediumWidgetView: View {
         let language = entry.language
         JarvisWidgetStateView(state: entry.notes, language: language, emptyCopy: .emptyNotes, skeletonRows: 2) { data, stale in
             VStack(alignment: .leading, spacing: 10) {
+                JarvisWidgetHeader(
+                    symbol: tasksSymbol, title: JarvisWidgetCopy.notes.text(language: language),
+                    staleText: freshness(data.generatedAt, stale: stale, language: language)
+                )
                 Text(JarvisWidgetPhrase.notes(data, language: language))
-                    .font(.footnote.weight(.semibold))
+                    .font(.footnote)
                     .lineLimit(2)
+                    .accessibilityIdentifier("widget.notes.summary")
                 if let task = data.tasks.first {
                     data.taskRow(task, language: language)
+                        .accessibilityIdentifier("widget.notes.next")
                 } else if let note = data.notes.first {
                     data.noteRow(note, now: entry.date, language: language)
+                        .accessibilityIdentifier("widget.notes.next")
                 }
                 Spacer(minLength: 0)
-                JarvisWidgetFreshnessLine(text: freshness(data.generatedAt, stale: stale, language: language))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .opacity(stale ? 0.55 : 1)

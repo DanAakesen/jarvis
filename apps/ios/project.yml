@@ -28,6 +28,12 @@ targets:
         excludes:
           - "Broadcast/**"
       - path: Shared
+      # The simulator gallery renders the extension's actual layouts, not copies.
+      - path: Widgets/JarvisWidgetComponents.swift
+      - path: Widgets/JarvisGymWidgetViews.swift
+      - path: Widgets/JarvisFactoryWidgetViews.swift
+      - path: Widgets/JarvisNotesWidgetViews.swift
+      - path: Widgets/JarvisWidgetSamples.swift
     dependencies:
       - package: JarvisCore
         product: JarvisCore
