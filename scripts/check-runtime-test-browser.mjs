@@ -7,7 +7,7 @@ const root = resolve(import.meta.dirname, '..');
 const module = process.env.PLAYWRIGHT_CORE_MODULE ?? 'playwright-core';
 const { chromium } = await import(module.startsWith('/') ? pathToFileURL(module).href : module);
 const vite = await createServer({ root: resolve(root, 'apps/web'), configFile: resolve(root, 'apps/web/vite.config.ts'), logLevel: 'error', server: { host: '127.0.0.1', port: 0, strictPort: false } });
-const evidence = resolve(root, 'docs/ui/screenshots/runtime-test-1350');
+const evidence = resolve(process.env.RUNTIME_TEST_EVIDENCE_DIR ?? resolve(root, 'docs/ui/screenshots/runtime-test-1350'));
 await mkdir(evidence, { recursive: true });
 let browser;
 try {
@@ -23,10 +23,15 @@ try {
       if (message.location().url === 'https://runtime-test.invalid/conversation/sessions' && message.text().includes('status of 503')) expectedConsole.push(message.text());
       else errors.push(message.text());
     });
+    let checks = 0;
     let creates = 0;
     let turns = 0;
     await page.route('https://runtime-test.invalid/**', async route => {
       const url = new URL(route.request().url());
+      if (url.pathname === '/conversation/runtime-tests') {
+        checks++;
+        return route.fulfill({ json: { current: { available: true }, copilot: { available: false, reason: 'copilot_not_configured' } } });
+      }
       if (url.pathname === '/conversation/sessions') {
         creates++;
         const body = route.request().postDataJSON();
@@ -55,7 +60,19 @@ try {
     await page.getByRole('dialog').waitFor();
     assert.equal(creates, 0);
     assert.equal(await page.getByRole('radio', { name: /Copilot/ }).isDisabled(), true);
+    await page.getByRole('button', { name: 'Check again' }).click();
+    await page.getByText('Copilot testing has not been activated on the server.').waitFor();
+    assert.equal(checks, 2);
     await page.getByRole('radio', { name: 'Current', exact: true }).check();
+    const primaryStyle = await page.getByRole('button', { name: 'Open test conversation' }).evaluate(async element => {
+      // The selection enables this button. Capture its settled colors, not the
+      // disabled-to-enabled color transition that begins at the same instant.
+      getComputedStyle(element).color;
+      await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {})));
+      const style = getComputedStyle(element);
+      return { color: style.color, background: style.backgroundImage };
+    });
+    assert.equal(primaryStyle.color, theme === 'dark' ? 'rgb(29, 18, 0)' : 'rgb(255, 255, 255)');
     await page.screenshot({ path: resolve(evidence, `selector-${width}-${theme}.png`) });
     await page.keyboard.press('Escape');
     await page.getByRole('dialog').waitFor({ state: 'detached' });
@@ -81,7 +98,7 @@ try {
     assert.equal(creates, 2);
     assert.deepEqual(errors, []);
     assert.equal(expectedConsole.length, 1);
-    results.push({ width, theme, creates, turns, overflow, errors, expectedConsole, checked: ['menu', 'unavailable', 'radio', 'escape', 'focus return', 'create failure', 'explicit retry', 'labelled separate conversation', 'scoped history', 'streamed test reply', 'return'] });
+    results.push({ width, theme, creates, turns, overflow, errors, expectedConsole, checked: ['menu', 'unavailable', 'availability retry', 'radio', 'escape', 'focus return', 'create failure', 'explicit retry', 'labelled separate conversation', 'scoped history', 'streamed test reply', 'return'] });
     await page.close();
   }
   await writeFile(resolve(evidence, 'browser.json'), JSON.stringify({ synthetic: true, browser: await browser.version(), results }, null, 2));

@@ -64,6 +64,25 @@ src/AttentionPopover.test.tsx`, plus web lint/build. Native checks from
 `apps/ios/Packages/JarvisCore`: `swift test --filter
 'JarvisApprovalsClientTests|JarvisNowFeedClientTests'` and `swift build`.
 
+## Managed policy canary qualification (6 November 2026)
+
+The fixed `managed_text_canary` now uses the full shared chat instruction
+composition and the same provider request builder as real managed policy turns.
+Deploy the updated hosted agent before running the comparison handoff: the
+handoff requires `requestShape: managed_policy` and rejects an older plain-string
+canary success. It retains only validated stage/status/code/parameter/exception
+metadata; never print the private response or provider message. No new owner-auth
+bypass, tools, claim reset or automatic mutation retry is added.
+
+Run hosted pytest for `test_managed_runtime_factory.py`,
+`test_managed_policy_client.py`, `test_managed_provider_cause.py`,
+`test_model_client.py` and `test_chat_runtime.py`, plus scoped Ruff. Run
+`.github/scripts/tests/test_managed_chat_handoff.py` and `bash -n` on the handoff.
+The synthetic request must match actual policy instructions and must expose a
+synthetic 400 that the old request misses. Live success remains unverified;
+follow the canary with the ordinary authenticated isolated owner conversation,
+never `/status/smoke` as a substitute for Copilot acceptance.
+
 ## Managed policy cause diagnostics (#1373; 30 October 2026)
 
 Use the existing hosted pytest/Ruff environment. Focused checks:
@@ -136,6 +155,22 @@ create another resource/version or add grants. Run provisioning/handoff tests,
 scoped Ruff/compilation and exact-head CI before reviewed release and handoff.
 
 ## Runtime comparison preparation (#1350; 29 October 2026)
+
+6 November follow-up: once the combined backend/hosted agent revision is deployed
+and qualified, the release coordinator can use the existing manual Deploy with
+`provision_managed_chat=true` and, for the explicitly approved tool/identity update,
+`refresh_managed_chat_definition=true`. Ordinary deployments and default false
+inputs do not create comparison versions. Inspect fixed provisioning/canary reason
+codes on failure; do not replay an uncertain mutation automatically. A later
+reviewed run can reuse a unique exact matching version. No Azure grants, normal
+runtime cutover, claim reset or manual secret changes are part of this repair.
+
+Focused checks include provisioning/handoff/deploy-plan Python tests, runtime
+availability/routes and web selector/client/conversation tests, JarvisCore chat
+client/recovery/localization tests, and the existing ChatComposer XCUITest for
+explicit test isolation. Coordinate one combined native run with the release
+owner. `RUNTIME_TEST_EVIDENCE_DIR` can direct the existing synthetic browser check
+to a scratch directory without rewriting retained screenshots.
 
 Use the existing pinned dependencies; the protocol adapter adds no production
 package. Hosted checks cover managed protocol/definition, source routing and
@@ -7145,3 +7180,47 @@ All owning PRs merged in order, Notes backend readiness passed, and the final
 app/test tree matched the accepted native source. The authoritative checkpoint
 is `ios/design/p15-release-2026-11-06.md`; earlier pending-state notes are historical.
 Do not dispatch another simulator run for the same source.
+
+## 6 November 2026 — Task-list board follow-up
+
+`--ui-test-task-list-board` selects nine synthetic Notes tasks with long/Markdown
+titles, mixed priorities, all four date groups and source labels. The existing
+ComponentGalleryUITests capture English/dark, Danish/light and accessibility XXXL,
+check successful completion and full detail titles, and verify final-row clearance
+above search. Reuse the normal PR simulator job; do not dispatch a duplicate.
+Native evidence is pending for this follow-up. Build 75's evidence does not verify
+these new changes. Chat and release/project configuration remain untouched.
+
+Owner hold, 6 November: collect further device findings locally. PR #1614 is draft;
+its automatic CI/native runs were cancelled when the owner asked to wait. No new
+CI, push, merge or TestFlight dispatch until the owner explicitly says OK.
+
+The same held batch also changes all shared selector variants (including Home and
+Health periods), section-heading contrast, and Apple Health pull-to-refresh on
+Home/Health. See `ios/design/p15-device-feedback-2026-11-06.md`. No build verifies
+these local changes yet; the cancelled run is not a pass.
+
+Later 6 November feedback explicitly authorizes functional Chat/voice corrections:
+show voice in the one Chat timeline, carry Home send/camera actions through
+navigation, and investigate/fix first-launch voice. Chat styling and signing remain
+outside that correction. The held backend changes align reminder schemas and
+shared validation/discovery; deploy and check backend readiness before qualifying
+the dependent app after the hold is released. No migration is required.
+
+Local backend verification: six relevant Vitest suites passed 373 tests with
+`--no-cache`; build and scoped ESLint passed. A final shared-schema regression then
+passed the affected tool-arguments/realtime suites (101 tests) plus build/lint.
+The Linux workspace has no Swift compiler. Native tests were added to the existing
+Today/ChatComposer suites; do not start a separate simulator run. Detailed checks
+and remaining device acceptance are in the device-feedback record. This workspace
+uses a local ignored node_modules symlink to the pre-existing dependency install;
+it must not be committed.
+
+
+Hold lifted by the owner on 6 November after the loading-animation request:
+build, CI, merge and release are authorized once checks and UI review pass. Keep
+one combined native run for this changed tree; cancel a redundant post-merge
+simulator run only after confirming the app/test tree is identical. Deploy the
+backend and shared identity agent first, verify readiness/live acceptance, then
+use unchanged TestFlight signing/upload on main. The previous build 75 checkpoint
+is historical and does not verify these new changes.

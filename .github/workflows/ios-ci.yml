@@ -107,7 +107,9 @@ jobs:
     needs: linux
     if: always() && inputs.simulator != 'skip' && (needs.linux.result == 'success' || needs.linux.result == 'skipped') && ((github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'schedule' && github.ref == 'refs/heads/main'))
     runs-on: macos-26
-    timeout-minutes: 45
+    # The full device suite takes about 35 minutes after build/boot. Leave time
+    # for result finalization and screenshot export; retain every assertion.
+    timeout-minutes: 65
     permissions:
       contents: read
       issues: write
@@ -199,6 +201,16 @@ jobs:
           else
             mkdir -p "$SCREENSHOT_DIR/ui-test-attachments"
           fi
+          # Retain a short motion sample before the broad still-capture sweep.
+          xcrun simctl ui "$DEVICE_ID" appearance dark
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+            --screenshot-chat-fixture --screenshot-factory-fixture \
+            --screenshot-factory-state=loading --screenshot-factory-language=en
+          xcrun simctl io "$DEVICE_ID" recordVideo --codec=h264 --force "$SCREENSHOT_DIR/loading-shimmer.mp4" &
+          LOADING_CAPTURE_PID=$!
+          sleep 4
+          kill -INT "$LOADING_CAPTURE_PID"
+          wait "$LOADING_CAPTURE_PID"
           xcrun simctl ui "$DEVICE_ID" appearance light
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2

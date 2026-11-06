@@ -41,6 +41,18 @@ no automatic resend, claim reset, new runtime controls or default change.
 
 ## Approved main chat harness replacement (#1350; 29 October 2026)
 
+The 6 November follow-up exposes the same explicit runtime test through the
+shared iOS Home/Chat Plus menu. Test messages remain scoped to their test session;
+normal typed and voice messages retain their single combined history. Both clients
+show unavailable reasons and let the owner check availability again. Missing
+server activation is distinguished from failed configuration verification. A
+changed Jarvis tool/identity definition can be refreshed only through the explicit
+comparison deployment input; this does not select Copilot for normal chat.
+Activation must pass a synthetic request with the same dynamic policy instructions
+and message-list format as real managed turns. Metadata-only availability or a
+plain-text canary does not establish a working conversation; a real isolated owner
+turn still requires verification before declaring Copilot usable.
+
 Replace the custom main chat loop through a controlled, switchable Foundry
 Copilot-harness migration after fixing the live baseline. Preserve native audio,
 Jarvis identity, existing tools/approvals, SQL memory, blob artifacts and separate
@@ -2375,3 +2387,57 @@ inspected for the 6 November release; see the integration verification file.
 Settings uses General, Models, Health and Account views. Search reaches settings
 across all views; clearing it returns to the selected view. Existing detail
 editors, explicit save/approval behavior and sign-out confirmation are preserved.
+
+### Native task-list readability correction (6 November 2026)
+
+Notes task groups must follow the approved board with compact completion controls,
+counts, concise metadata and separately aligned due dates. Long titles remain
+fully available in details and accessibility text; inline Markdown is presented
+as formatted text, including on Home, while persisted task source and completion
+identity stay unchanged. Completion, swipe completion and search remain available.
+
+### Owner device-feedback batch (6 November 2026)
+
+Equivalent segmented, period and scrolling selectors share padding and native
+glass selection/press feedback across non-Chat pages and sheets. Section headings
+use strong semantic foreground contrast. Pull-to-refresh on Home and Health must
+read/upload permitted Apple Health data before fetching updated page data. Remove
+the persistent Health sync button and duplicate last-sync copy; keep errors,
+partial refresh and stale-data warnings visible. No data permissions, stored task
+source or HealthKit anchor/completeness rules change.
+
+Voice and typed messages belong in one visible Chat timeline, including both owner
+transcripts and Jarvis replies. Returning to Chat and live transcript persistence
+must refresh that timeline; backend transport session IDs must not become separate
+user-facing conversations. A Home send must submit the pending text once Chat is
+ready, and Home's Camera action must open capture after navigation.
+
+Tool discovery must expose the registered backend schema on request, including
+operation-specific fields. Validation refusals should identify the relevant
+constraints or tool-specific correction so Jarvis can retry correctly. Preserve
+authorization, semantic refusals, private error handling and write idempotency.
+Owner reminders accept explicit once cadence and equivalent zoned ISO timestamps.
+Voice must not claim microphone readiness before audio frames arrive or silently
+remain listening when capture/send startup fails.
+
+### 6 November follow-up: owner workflows and loading
+
+The owner approved implementing the workflow assessment, then explicitly lifted
+the build/CI/release hold after adding loading feedback. Jarvis's shared English
+and Danish identity includes improving its own implementation for bugs and new
+features, with a concrete proposal and the owner's later approval before issue
+creation or execution. Personal/Work tasks remain central to conversation context.
+Natural task/reminder intent creates or updates a high-priority vault task by
+default, making it discoverable by the existing Azure job. Explicit reminder time
+must not silently become the automatic one-hour warning. Existing independent or
+recurring reminder schedules retain their separate tool and deadline semantics.
+Successful actions give concise title/scope/time receipts; coding reviews reference
+files and accepted findings, and background work reports meaningful milestones.
+Existing managed project creation, saved research reports and source-aware Health
+queries remain the workflow foundations, with no new parallel job system.
+
+Pending page data uses a shared animated skeleton, including Software Factory;
+inline loading uses the shared dots. Both stop when inactive/offscreen and respect
+Reduce Motion. Navigation stays available and real content replaces loading as
+soon as it arrives. Release follows successful checks and native visual review,
+with backend/agent readiness before the dependent TestFlight upload.

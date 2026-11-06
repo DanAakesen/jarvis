@@ -202,7 +202,7 @@ export function createReminderTicker(options: {
       const todos = await readTodos(options.vault, signal);
       verifiedKeys = new Map(todos.filter((todo) => !todo.done && todo.highPriority && todo.dueHasTime &&
         typeof todo.dueAt === 'string' && Number.isFinite(Date.parse(todo.dueAt)))
-        .map((todo) => [reminderKey(todo.text, new Date(todo.dueAt!).toISOString()), {
+        .map((todo) => [reminderKey(todo.text, new Date(todo.dueAt!).toISOString(), todo.remindAtDue), {
           scope: todo.path.startsWith('Personal/') ? 'personal' : todo.path.startsWith('Work/') ? 'work' : 'unknown',
           taskIdentity: todo.taskIdentity,
         }]));

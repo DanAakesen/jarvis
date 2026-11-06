@@ -132,10 +132,12 @@ struct JarvisPageHeadline: View {
 /// The accessory stays a real control and the heading remains a VoiceOver heading at every text size.
 struct JarvisSectionHeadline<Accessory: View>: View {
     let title: String
+    let count: Int?
     let accessory: Accessory
 
-    init(_ title: String, @ViewBuilder accessory: () -> Accessory) {
+    init(_ title: String, count: Int? = nil, @ViewBuilder accessory: () -> Accessory) {
         self.title = title
+        self.count = count
         self.accessory = accessory()
     }
 
@@ -143,11 +145,15 @@ struct JarvisSectionHeadline<Accessory: View>: View {
         HStack(alignment: .firstTextBaseline, spacing: JarvisPageHeaderMetrics.spacing) {
             Text(title)
                 .font(.title3.weight(.bold))
-                // A List header already supplies a secondary foreground style.
-                // Use the semantic color directly to avoid dimming it a second time.
-                .foregroundStyle(Color.secondary)
+                // Keep section headings strong, including inside native List headers.
+                .foregroundStyle(Color.primary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
+            if let count {
+                Text(count, format: .number)
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+            }
             Spacer(minLength: 0)
             accessory
         }
@@ -157,7 +163,9 @@ struct JarvisSectionHeadline<Accessory: View>: View {
 }
 
 extension JarvisSectionHeadline where Accessory == EmptyView {
-    init(_ title: String) { self.init(title) { EmptyView() } }
+    init(_ title: String, count: Int? = nil) {
+        self.init(title, count: count) { EmptyView() }
+    }
 }
 
 /// Shared spacing and structural separation for rows inside a grouped surface.
@@ -340,8 +348,8 @@ struct JarvisPageScaffold<Actions: View, Headline: View, Hero: View, Sections: V
 }
 
 /// Initial page loading has one stable, noninteractive layout. No filters or invented values are exposed.
-/// A single localized announcement replaces the decorative shapes for VoiceOver. Static shapes also honor
-/// Reduce Motion without keeping an animation alive while a request is pending (HIG: Loading, Accessibility).
+/// One localized announcement replaces decorative shapes for VoiceOver. The shared shimmer stops
+/// offscreen, in the background and with Reduce Motion; loading never delays real content.
 struct JarvisPageLoadingView: View {
     let title: String
     var identifier = "page.loading"
@@ -366,6 +374,7 @@ struct JarvisPageLoadingView: View {
                 }
             }
         }
+        .modifier(JarvisLoadingShimmer())
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
@@ -376,5 +385,35 @@ struct JarvisPageLoadingView: View {
         RoundedRectangle(cornerRadius: JarvisPageHeaderMetrics.rowLineSpacing)
             .fill(.secondary.opacity(0.16))
             .frame(height: lineHeight)
+    }
+}
+
+/// A quiet travelling highlight makes pending data distinguishable from an empty page.
+private struct JarvisLoadingShimmer: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.layoutDirection) private var layoutDirection
+    @State private var visible = false
+
+    func body(content: Content) -> some View {
+        content.overlay {
+            if visible && scenePhase == .active && !reduceMotion {
+                TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+                    GeometryReader { geometry in
+                        let phase = timeline.date.timeIntervalSinceReferenceDate
+                            .truncatingRemainder(dividingBy: 1.8) / 1.8
+                        let travel = layoutDirection == .rightToLeft ? 1 - phase : phase
+                        LinearGradient(colors: [.clear, .primary.opacity(0.65), .clear],
+                                       startPoint: .leading, endPoint: .trailing)
+                            .frame(width: geometry.size.width * 0.5)
+                            .offset(x: geometry.size.width * (travel * 1.5 - 0.5))
+                    }
+                }
+                .mask(content)
+                .accessibilityHidden(true)
+            }
+        }
+        .onAppear { visible = true }
+        .onDisappear { visible = false }
     }
 }

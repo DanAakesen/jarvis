@@ -31,6 +31,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private(set) var liveActivitySessionID: UUID?
     private let screenShareBridge = VoiceScreenShareBridge()
     private var captureTask: Task<Void, Never>?
+    private var captureReadinessTask: Task<Void, Never>?
     private var screenShareMonitorTask: Task<Void, Never>?
     private var sessionClient: VoiceSessionClient?
     private var httpClient: JarvisClient?
@@ -611,7 +612,14 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         guard screenshotState == nil, captureTask == nil else { return }
         do {
             let stream = try audio.startCapture()
-            isAudioReady = true
+            isAudioReady = false
+            let generation = sessionGeneration
+            captureReadinessTask?.cancel()
+            captureReadinessTask = Task { @MainActor [weak self] in
+                do { try await Task.sleep(for: .seconds(5)) } catch { return }
+                guard let self, self.sessionGeneration == generation, !self.isAudioReady else { return }
+                self.failAudioCapture()
+            }
             if let sessionID = liveActivitySessionID {
                 let language = JarvisAppLanguage(
                     rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
@@ -625,23 +633,48 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             }
             captureTask = Task { @MainActor [weak self] in
                 for await pcm16 in stream {
-                    guard let self, !Task.isCancelled else { return }
+                    guard let self, !Task.isCancelled, self.sessionGeneration == generation else { return }
+                    guard !pcm16.isEmpty else { continue }
+                    // Silence still produces PCM frames. A running engine alone
+                    // does not prove the microphone tap actually started.
+                    if !self.isAudioReady {
+                        self.isAudioReady = true
+                        self.captureReadinessTask?.cancel()
+                        self.captureReadinessTask = nil
+                    }
                     if self.voiceState != .speaking {
                         self.liveActivity.update(state: self.voiceState, isMuted: self.isMuted, pcm16: pcm16)
                     }
                     guard !self.isMuted, self.canSendAudio else { continue }
                     guard let client = self.sessionClient else { continue }
-                    try? await client.sendAudio(pcm16)
+                    do {
+                        try await client.sendAudio(pcm16)
+                    } catch {
+                        guard !Task.isCancelled, self.sessionGeneration == generation else { return }
+                        // A reconnect can overlap this send; its existing recovery owns that case.
+                        if case .reconnecting = await client.state() { continue }
+                        self.failAudioCapture()
+                        return
+                    }
                 }
+                guard let self, !Task.isCancelled, self.sessionGeneration == generation else { return }
+                self.failAudioCapture()
             }
         } catch {
-            errorMessage = JarvisVoiceLocalization.string(.microphoneUnavailable)
-            voiceState = .failed
-            let generation = sessionGeneration
-            Task {
-                guard sessionGeneration == generation else { return }
-                await end()
-            }
+            failAudioCapture()
+        }
+    }
+
+    private func failAudioCapture() {
+        // Ignore already-queued ready/listening callbacks from this failed client.
+        sessionGeneration += 1
+        errorMessage = JarvisVoiceLocalization.string(.microphoneUnavailable)
+        connectionPresentationState = connectionPresentationMachine.apply(.connectionDropped)
+        voiceState = .failed
+        let generation = sessionGeneration
+        Task {
+            guard sessionGeneration == generation else { return }
+            await resetFailedSession()
         }
     }
 
@@ -655,6 +688,8 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     private func stopAudio() {
+        captureReadinessTask?.cancel()
+        captureReadinessTask = nil
         captureTask?.cancel()
         captureTask = nil
         audio.stop()

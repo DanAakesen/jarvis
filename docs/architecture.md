@@ -4,6 +4,15 @@
 - The legacy Daily calendar/Gmail feeds are removed; Calendar and Gmail use only `apps/backend/src/google`.
 - iPhone data flow: HealthKit → `JarvisHealthKitReader` (since the anchor) → `JarvisHealthSyncRequest` → owner-only `POST /health/sync` (`health/routes/sync.ts`, `health/sync/`) → same normaliser and `daily.*` tables as the automations app (P15-86). Source ids, schema and table names keep the `daily` name.
 
+### Native refresh orchestration (6 November 2026; local, unverified)
+
+ContentView owns one JarvisHealthSyncModel for Home and Health. Pull-to-refresh
+awaits its coalesced HealthKit read/upload, invalidates Health cache after complete
+or partial success, then refreshes the screen's server and device sources. Health
+also rereads vault lifts and device workouts/steps. Fixture mode never queries or
+uploads the real HealthKit store. Existing complete-day uploads and durable-anchor
+rules stay in JarvisHealthSyncRunner; the old manual sync view is removed.
+
 ## Suggestion-to-approval binding (P15-46 / #1494)
 
 Shared chat/realtime instructions require staging before a state-changing offer.
@@ -51,6 +60,23 @@ closed reasons. See [the field contract](managed-policy-client.md#safe-policy-fa
 
 ## Runtime test candidate (#1350; 29 October 2026)
 
+The native client now reads `/conversation/runtime-tests` and includes an optional
+immutable `runtimeTest` when explicitly creating a test session. It validates the
+returned runtime and rejects history rows from a different requested session. A
+separate sheet owns its session, draft, streamed reply, cancellation and recovery;
+it never updates `JarvisChatModel`. Normal global history and active-turn discovery
+already exclude runtime tests. `copilot_not_configured` means no managed verifier
+is wired; `copilot_not_verified` means configured metadata does not verify. No raw
+provider body is returned by availability.
+
+An explicit `refresh_managed_chat_definition` deployment input may create one new
+immutable version of the existing comparison agent when no current-manifest match
+exists. Unique exact matches are reused, including on a later operator-reviewed
+retry after uncertain creation. Ambiguous matches, unowned versions, unknown pins
+and unverified identities stop the handoff. Old versions remain; only the separate
+comparison selector and its three backend activation values change. The existing
+readback/fingerprint/canary checks still follow activation.
+
 Migration 0069 adds owner-bound immutable test-runtime metadata and an opaque
 server-only native conversation reference to existing SQL sessions. The normal UI
 feed explicitly excludes test sessions; internal context/source reads retain
@@ -86,7 +112,13 @@ The existing AAD-protected hosted Invocations endpoint also accepts two exact
 administrative operations. The manifest operation reads static Jarvis instructions
 and authoritative function schemas without user context, inference or function
 execution. The fixed text canary uses the actual bridge credential and an owned
-synthetic native conversation; it reads no history and executes no tools. Normal
+synthetic native conversation; it reads no history and executes no tools. It now
+shares `managed_response_request` and `runtime_instructions` with normal policy
+turns, including selected identity/preferences and dynamic capability instructions.
+Its reference/user message list is synthetic. Successful reports identify
+`requestShape: managed_policy`; failures preserve only bounded stage and sanitized
+provider metadata, revalidated by the deployment handoff. This checks the provider
+request contract, not owner authorization, durable claims or tool execution. Normal
 chat still requires delegated authorization and verified stored source messages.
 The default-off manual Deploy job uses these operations with existing OIDC and
 never assigns roles or changes the normal runtime default.
@@ -8637,3 +8669,60 @@ Notifications uses `BackgroundTaskPresentation` for running/actionable/quiet
 jobs; completed jobs no longer appear in its background section. Chat's Now bar
 behavior is unchanged.
 The existing server expiry and success exclusion remain the feed authority.
+
+## Tool contracts and native conversation corrections (6 November 2026; local)
+
+`list_capabilities` accepts an optional registered `tool` name and returns that
+tool's exact `inputSchema` and execution metadata. The unparameterized grouped
+catalogue remains compatible. Voice fallback discovery returns the canonical
+schema as tool-result data; only provider function declarations use the flattened
+schema adapter. HTTP and voice strict-input failures use the shared explanation
+hook. Generic AJV refusals derive expected types, enum choices, formats, bounds
+and nested paths from trusted schemas, selecting the relevant discriminator
+branch. Refusals stay bounded; raw argument values, provider errors and stack
+traces remain excluded. Authentication and runtime refusal/failure boundaries
+are unchanged.
+
+`owner_reminders` advertises operation-specific required/forbidden fields, accepts
+`once` on creation and normalizes zoned ISO instants (seconds with optional
+millisecond precision) to UTC. Impossible dates and zone-less timestamps fail.
+Owner-intent matching, task existence, quiet hours, recurrence and idempotency
+still govern writes. No persistence migration is needed.
+
+Native Chat retains chat and voice rows in global history reads, while choosing
+only chat-channel messages for a typed turn's transport session. Voice persistence
+publishes an existing refresh event after each completed transcript is stored;
+Chat also reloads history on that event. Home hands a binding to its pending
+composer action to Chat; automatic sending waits for initialization and active
+turn recovery, while camera presentation can start immediately. No 10-second
+polling deadline or second visible conversation is introduced.
+
+Native voice activates AVAudioSession before wiring its playback/capture graph.
+Microphone readiness requires a nonempty PCM frame; a five-second initial capture
+deadline, unexpected stream end or send failure enters existing recovery. Failed
+generation callbacks are ignored. This addresses confirmed missing readiness and
+error handling, but the owner's exact cold-start audio failure has not been
+reproduced on hardware in this Linux workspace. Native validation is held.
+
+### Owner workflows, approval and exact task timing (6 November)
+
+Identity contract revision 2 (wire format v1) is consumed by typed Chat and voice.
+The revision participates in the session composition hash; retaining wire format
+v1 keeps old/new backend and agent instances compatible during rollout. Own-repository
+`create_issue` and `start_issue` now stage immutable PendingAction proposals;
+`confirm_create_issue` requires a later stored owner message, checks permissions
+and project identity again, and consumes approval once. Starting an existing issue
+also rejects changed title/body. The non-code `create_task` route refuses the own
+repository and points to this proposal path, preventing it bypassing the gate.
+Other registered repositories keep their existing execution behavior.
+
+Owner task tools default to high priority. Task creation binds a stable Obsidian
+ID to the stored owner message and normalized creation fields, rereading it before
+an identical retry; independent requests remain distinct. `[reminder:: at_due_time]`
+is optional vault metadata, stripped from displayed task text and preserved by
+version-checked edits. It flows through discovery, source facts and the existing
+Azure reminder planner/ticker. Explicit timing has a separate dedupe key, fires at
+the task time, and suppresses the generic early deadline alert. Legacy tasks retain
+the one-hour lead. Delivery revalidates the open high-priority task and its timing;
+completion/rescheduling cancels obsolete reminders. Quiet hours, preference gates,
+delivery caps and provider-acceptance semantics remain. No SQL migration is needed.

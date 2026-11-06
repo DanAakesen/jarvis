@@ -1,7 +1,7 @@
 /** A configured adapter is usable only after its definition and policy checks pass. */
 export interface RuntimeTestAvailability {
   readonly available: boolean;
-  readonly reason?: 'storage_unavailable' | 'current_unavailable' | 'copilot_not_verified' | 'verification_unavailable';
+  readonly reason?: 'storage_unavailable' | 'current_unavailable' | 'copilot_not_configured' | 'copilot_not_verified' | 'verification_unavailable';
 }
 
 export interface ConversationRuntimeTests {
@@ -23,7 +23,7 @@ export async function readRuntimeTests(input: {
   const current = input.currentAvailable
     ? { available: true }
     : { available: false, reason: 'current_unavailable' as const };
-  if (!input.readVerified) return { current, copilot: { available: false, reason: 'copilot_not_verified' } };
+  if (!input.readVerified) return { current, copilot: { available: false, reason: 'copilot_not_configured' } };
   try {
     const verified = await input.readVerified();
     const copilot = verified?.copilot;

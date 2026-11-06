@@ -187,7 +187,61 @@ def agent_principal(agent: dict) -> str:
     return principal
 
 
-def provision(azure: Azure, expected: dict) -> dict:
+def read_active_version(azure: Azure, version: str) -> dict:
+    require(isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None,
+            "agent_version_unverified")
+    for attempt in range(12):
+        readback = azure.data("/agents/" + AGENT_NAME + "/versions/" + version)
+        if readback.get("status") == "active":
+            return readback
+        require(readback.get("status") == "creating", "agent_version_unverified")
+        require(attempt < 11, "agent_activation_incomplete")
+        time.sleep(2)
+    raise Blocked("agent_activation_incomplete")
+
+
+def comparison_version(azure: Azure, expected: dict, versions: list[dict], *, refresh: bool) -> tuple[str, dict]:
+    # Unique exact matches make a later reviewed retry reusable, including an
+    # accepted create whose response was lost. Never automatically retry a write.
+    identifiers = [item.get("version") for item in versions]
+    require(all(isinstance(value, str) for value in identifiers)
+            and len(set(identifiers)) == len(identifiers) and bool(identifiers), "existing_agent_ambiguous")
+    matches = []
+    for version in identifiers:
+        readback = read_active_version(azure, version)
+        try:
+            actual = validate_version(readback, expected, version)
+            matches.append((version, actual))
+        except Blocked as error:
+            # Only a definition change is refreshable. Unowned, draft or inactive
+            # versions are not evidence that this is our comparison resource.
+            if str(error) != "agent_definition_mismatch":
+                raise
+    require(len(matches) <= 1, "existing_agent_ambiguous")
+    if matches:
+        return matches[0]
+    require(refresh, "agent_definition_mismatch")
+    agent = azure.data("/agents/" + AGENT_NAME)
+    principal = agent_principal(agent)
+    selector = (agent.get("agent_endpoint") or {}).get("version_selector")
+    rules = selector.get("version_selection_rules") if isinstance(selector, dict) else None
+    require(isinstance(rules, list) and len(rules) == 1 and isinstance(rules[0], dict)
+            and rules[0].get("type") == "FixedRatio" and rules[0].get("traffic_percentage") == 100
+            and rules[0].get("agent_version") in identifiers, "agent_endpoint_unverified")
+    azure.data("/agents", "POST", {"name": AGENT_NAME, "metadata": MARKER, "definition": expected})
+    after = azure.inventory("/agents/" + AGENT_NAME + "/versions?include_drafts=true")
+    after_ids = [item.get("version") for item in after]
+    require(all(isinstance(value, str) for value in after_ids)
+            and len(set(after_ids)) == len(after_ids)
+            and set(identifiers) < set(after_ids) and len(after_ids) == len(identifiers) + 1,
+            "existing_agent_ambiguous")
+    version = next(iter(set(after_ids) - set(identifiers)))
+    actual = validate_version(read_active_version(azure, version), expected, version)
+    require(agent_principal(azure.data("/agents/" + AGENT_NAME)) == principal, "agent_endpoint_unverified")
+    return version, actual
+
+
+def provision(azure: Azure, expected: dict, *, refresh_definition: bool = False) -> dict:
     preflight(azure)
     records = azure.inventory("/agents")
     matches = [item for item in records if item.get("name") == AGENT_NAME]
@@ -198,18 +252,7 @@ def provision(azure: Azure, expected: dict) -> dict:
     agent = azure.data("/agents/" + AGENT_NAME)
     require(agent.get("name") == AGENT_NAME, "existing_agent_ambiguous")
     versions = azure.inventory("/agents/" + AGENT_NAME + "/versions?include_drafts=true")
-    require(len(versions) == 1, "existing_agent_ambiguous")
-    version = versions[0].get("version")
-    require(isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None,
-            "agent_version_unverified")
-    for attempt in range(12):
-        readback = azure.data("/agents/" + AGENT_NAME + "/versions/" + version)
-        if readback.get("status") == "active":
-            break
-        require(readback.get("status") == "creating", "agent_version_unverified")
-        require(attempt < 11, "agent_activation_incomplete")
-        time.sleep(2)
-    actual = validate_version(readback, expected, version)
+    version, actual = comparison_version(azure, expected, versions, refresh=refresh_definition)
     agent = azure.data("/agents/" + AGENT_NAME)
     principal = agent_principal(agent)
     selector = {"version_selection_rules": [{"type": "FixedRatio", "agent_version": version, "traffic_percentage": 100}]}
@@ -231,6 +274,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--refresh-definition", action="store_true")
     args = parser.parse_args(argv)
     try:
         require(not args.output.exists() and not args.output.is_symlink(), "activation_output_exists")
@@ -240,7 +284,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.apply:
             print("managed_chat_manifest_validated")
             return 0
-        activation = provision(Azure(endpoint, args.project_id), expected)
+        activation = provision(Azure(endpoint, args.project_id), expected, refresh_definition=args.refresh_definition)
         private_write(args.output, activation)
         print("managed_chat_provisioned")
         return 0

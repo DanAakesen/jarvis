@@ -318,11 +318,20 @@ const warnedDescription = (description: string) => `${description} ${untrustedWa
 export const repositoryTools: readonly JarvisTool[] = [
   {
     name: 'list_capabilities',
-    description: warnedDescription('List registered Jarvis tools grouped by area and feature statuses from docs/features.md.'),
-    inputSchema: objectSchema({}),
+    description: warnedDescription('List registered Jarvis tools and feature statuses. Supply tool to inspect its exact backend input schema, including operation-specific required fields, before calling or correcting it.'),
+    inputSchema: objectSchema({ tool: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,64}$', description: 'Registered tool name; omit to list capabilities.' } }),
     sensitive: true,
     reflexSafe: true,
-    execute: async (_input, request) => {
+    execute: async (input, request) => {
+      const name = object(input)?.tool;
+      if (name !== undefined) {
+        const tool = typeof name === 'string' ? request.server.jarvisTools.get(name) : undefined;
+        if (!tool) throw new ToolRefusal('Tool not found. Call list_capabilities without arguments and use a registered name.');
+        return {
+          name: tool.name, description: tool.description, inputSchema: tool.inputSchema,
+          ...(tool.execution ? { execution: tool.execution } : {}),
+        };
+      }
       const tools = request.server.jarvisTools.list()
         .map(({ moduleId, name, description }) => ({ area: moduleId, name, description }))
         .reduce((groups, tool) => {
@@ -333,6 +342,7 @@ export const repositoryTools: readonly JarvisTool[] = [
         }, [] as { area: string; tools: { name: string; description: string }[] }[]);
       return {
         warning: untrustedWarning,
+        schemaLookup: 'Call list_capabilities with tool set to a registered name for its exact backend input schema and requirements.',
         tools,
         features: parseFeatureList(await featuresDocument()),
       };

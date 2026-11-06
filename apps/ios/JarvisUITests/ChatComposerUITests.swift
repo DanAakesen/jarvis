@@ -5,6 +5,66 @@ final class ChatComposerUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    func testRuntimeTestKeepsNormalDraftAndHistorySeparate() {
+        let app = launch(language: "en")
+        defer { app.terminate() }
+        let input = app.descendants(matching: .any)["chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("Keep my normal draft")
+        app.buttons["chat.plus"].tap()
+        let entry = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier == %@ OR label == %@", "chat.plus.testRuntime", "Test agent runtime"
+        )).firstMatch
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        entry.tap()
+        let current = app.buttons["runtimeTest.current"]
+        XCTAssertTrue(current.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["runtimeTest.copilot"].isEnabled)
+        XCTAssertTrue(app.staticTexts["Copilot testing has not been activated on the server."].waitForExistence(timeout: 10))
+        app.buttons["runtimeTest.retry"].tap()
+        let available = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: current)
+        XCTAssertEqual(XCTWaiter.wait(for: [available], timeout: 10), .completed)
+        current.tap()
+        let selectorCapture = XCTAttachment(screenshot: app.screenshot())
+        selectorCapture.name = "runtime-test-selector"
+        selectorCapture.lifetime = .keepAlways
+        add(selectorCapture)
+        app.buttons["runtimeTest.open"].tap()
+        let testInput = app.descendants(matching: .any)["runtimeTest.input"]
+        XCTAssertTrue(testInput.waitForExistence(timeout: 10))
+        testInput.tap()
+        testInput.typeText("Synthetic test message")
+        app.buttons["runtimeTest.send"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["runtimeTest.message.991"].waitForExistence(timeout: 10))
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "runtime-test-isolated-chat"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.buttons["sheet.cancel"].tap()
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        XCTAssertEqual(input.value as? String, "Keep my normal draft")
+        XCTAssertFalse(app.staticTexts["Synthetic isolated runtime reply"].exists)
+    }
+
+    func testVoiceAndChatShareHistoryAndTheNextTypedTurnUsesTheChatSession() {
+        let app = launch(language: "en", extraArguments: ["--ui-test-voice-history"])
+        let spokenReply = app.descendants(matching: .any)["chat-markdown-block-421-0"]
+        XCTAssertTrue(spokenReply.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any).matching(
+            NSPredicate(format: "label == %@", "You: Synthetic spoken question")
+        ).firstMatch.exists)
+        let input = app.descendants(matching: .any)["chat.input"]
+        input.tap()
+        input.typeText("The fixture turn")
+        app.buttons["chat.send"].tap()
+        // The fixture accepts turns only on chat session 12, never voice session 13.
+        let typedReply = app.descendants(matching: .any)["chat-markdown-block-431-0"]
+        XCTAssertTrue(typedReply.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "chat-markdown-block-431-0").count, 1)
+        app.terminate()
+    }
+
     func testSentMessageBubbleIsVisibleAboveComposer() {
         for language in ["en", "da"] {
             let app = launch(language: language)

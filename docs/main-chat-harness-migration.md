@@ -10,6 +10,18 @@ to the initial work. Track the approved stages in
 
 ## Baseline investigation
 
+### Policy-shaped canary (6 November 2026)
+
+The administrative canary now uses the same provider request builder and full
+normal chat policy composition as the original-path managed transport. Its
+reference/user messages remain synthetic, and it executes no tools or durable
+owner claim. The handoff requires `requestShape: managed_policy`; old plain-string
+success no longer qualifies. Rejections expose only bounded stage and sanitized
+provider status/code/parameter/exception metadata. Historical #1373 evidence below
+still does not identify the rejected field. The enhanced probe must run on the
+new hosted agent, followed by an authenticated isolated owner conversation;
+ordinary Current smoke and local fixtures cannot replace that acceptance.
+
 ### Managed policy cause visibility (30 October 2026; #1373)
 
 Managed policy failures now retain the closed reason plus sanitized
@@ -23,7 +35,7 @@ The 30 October live 4xx's exact parameter is not recoverable from the previous
 fixed reason. No live endpoint credentials or readable container telemetry were
 available for this repair. The earlier `model_bad_request_reasoning` result below
 belongs to a different request path; it does not identify this rejection.
-`_create_response` is deliberately unchanged pending a new safe cause. Remaining
+The provider request fields remain unchanged pending a new safe cause. Remaining
 acceptance: capture that cause, reproduce/correct the rejected request, and
 complete an original-path Copilot test-chat turn. The synthetic `instructions`
 rejection is not live evidence. Do not reset claims or switch defaults.

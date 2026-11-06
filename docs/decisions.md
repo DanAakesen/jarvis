@@ -1,3 +1,41 @@
+## 6 November 2026 — Qualify the managed policy provider request
+
+The old fixed canary omitted the message list and per-turn instructions present
+in the failing real Copilot request. Share its request builder and full normal
+chat instruction composition with the production policy path, retaining the
+fixed synthetic input, existing bridge credential, no tool execution and owned
+conversation cleanup. Require an explicit policy-request success marker during
+activation, and independently revalidate content-free provider diagnostics before
+printing them. This does not create an owner authorization bypass or alter claims.
+
+#1373 retained only a live 4xx, not its exact rejected parameter. Current Microsoft
+[harness documentation](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness)
+and [limits](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#microsoft-copilot-harness-preview)
+were reviewed on 6 November; neither establishes that per-turn instructions or
+message-list input must be removed. Preserve the actual request until a new safe
+provider cause identifies a concrete incompatibility. Local regressions prove the
+old false-positive canary gap; a real owner turn remains required live acceptance.
+
+## 6 November 2026 — Explicit native runtime tests and comparison refresh
+
+The owner requested repair of the disabled web Copilot choice and equivalent
+runtime testing in iOS, while keeping normal voice/chat unified. Keep experiments
+in an explicitly labelled sheet with immutable runtime binding and scoped history.
+Expose a specific missing-activation reason and a read-only availability retry;
+never enable Copilot from UI configuration alone. Native client tests cover exact
+binding, scoped history and recovery that cannot clear an uncertain managed claim.
+
+Tool and identity revisions make the earlier exact single-version provisioner
+insufficient. Add a default-off, explicitly requested comparison-definition refresh:
+reuse one exact manifest match or create one immutable version, preserve earlier
+versions, verify identity/pin/readback/fingerprint, then run the existing canary.
+No automatic retry follows an uncertain write; a subsequent reviewed invocation
+can discover and reuse its unique exact match. Reject ambiguous/unowned inventory.
+No new credential, grant, default-runtime change or claim reset is authorized by
+this implementation. The user has authorized this scoped release; the coordinator
+owns backend/agent-before-TestFlight deployment and live acceptance. Local fixture
+evidence does not establish live managed inference or native device behavior.
+
 ## 5 November 2026 — Notes and Home widgets (P15-89 / #1593)
 
 - Six more widgets (small, medium, large for Notes and for Home) join the Gym and Factory ones in the `JarvisWidgets` extension. No buttons, no control items; a tap opens the matching app page through `widgetURL` (`jarvis-widget://notes` or `home`, handled by `onOpenURL` in `ContentView` via `JarvisWidgetLink`).
@@ -11118,3 +11156,80 @@ app/test tree, and upload through the existing TestFlight workflow after the Not
 backend dependency passed readiness and live acceptance. Build 75 uploaded
 successfully at 02:54:03 UTC. Chat and the shared orb remain unchanged.
 See `ios/design/p15-release-2026-11-06.md` for exact evidence and device limits.
+
+## 6 November 2026 — Match task rows to the owner's board
+
+Correct Notes → Tasks from the owner's supplied device and board screenshots.
+Use the shared quiet checkbox, explicit rounded group boundaries and one compact
+metadata line with a trailing due date. Keep native List swipe behavior and existing
+confirmed-write feedback. Render Markdown titles for display only; preserve stored
+source. Expand the synthetic fixture because a single short task failed to expose
+this discrepancy. Native screenshot acceptance remains pending. Apple's Lists and
+tables guidance supports succinct rows with full detail disclosure; the exact
+composition and geometry come from the approved board.
+
+## 6 November 2026 — Collect owner feedback before qualification
+
+The owner is testing build 75 and explicitly paused CI until saying OK. PR #1614
+was opened immediately before that instruction; all triggered CI/native/CodeQL
+runs were cancelled and the PR was converted to draft. Do not push this local
+batch, restart checks, merge or upload until the owner releases the hold.
+
+Apply shared selector geometry and press feedback at the component layer, including
+periods and scrolling alternatives. Use primary foreground for section headings.
+Replace the manual Health sync block with pull-to-refresh on Health and Home,
+awaiting Apple Health ingestion before fresh reads. Coalesce overlapping sync
+requests and retain honest failure/partial feedback. No new native acceptance is
+claimed. Apple's glassEffectID guidance was read for matching glass shapes within
+a GlassEffectContainer; exact response/padding remains an app design choice.
+
+## 6 November 2026 — Tool diagnostics and one native conversation
+
+The owner expanded the held batch to cover reminder failures, general backend
+schema/error visibility, first-launch voice, missing voice transcripts and Home
+send/camera handoffs. This authorizes functional changes to Chat; it does not
+change the agreed Chat appearance or release hold.
+
+Expose exact tool schemas through named capability lookup and voice discovery,
+retaining provider-specific flattening only where function registration requires
+it. Route strict voice validation through the same bounded explanation path as
+HTTP, and derive generic constraints from registered schemas. Accept one-shot
+reminders and normalize equivalent zoned times without relaxing owner intent,
+quiet hours or duplicate-write protection.
+
+Keep one visible chat/voice history, with transport IDs internal. Notify history
+readers after transcript persistence, bind pending Home actions directly, and wait
+for initialization before automatic send. Activate the audio session before
+building its graph and make capture startup/readiness failures recoverable.
+373 backend tests passed; the final shared-schema follow-up passed 101 affected
+tests, build and lint. Native compile, actual cold-start reproduction and device
+verification remain pending under the owner's hold.
+
+
+## 6 November 2026 — Approved workflows and resumed release
+
+The owner accepted the everyday-workflow assessment and clarified that self-change
+covers features as well as bugs and always needs his approval. Implemented shared
+identity revision 2 and server-side own-repository proposal gates, retaining the existing
+Factory execution and confirmation machinery. Ordinary task/reminder requests use
+high-priority vault tasks so the existing Azure job discovers them. An explicit
+at-time marker avoids silently sending the legacy one-hour warning. Independent
+and recurring schedules retain owner_reminders, without changing task deadlines.
+
+The owner then requested animated loading throughout the app and explicitly
+approved building and releasing after checks and UI inspection. This supersedes
+the earlier no-CI hold. Shared shimmer and active-scene dot animation are included.
+Native qualification, backend/agent readiness and TestFlight upload are still
+pending; do not interpret authorization as evidence that those steps passed.
+## 2026-11-06 — Keep selector text in the native glass content layer
+
+Actual captures from native run 42185446322 exposed label refraction despite all
+68 UI tests passing. Apply the effect directly to the padded label-bearing view,
+as described in Apple's [custom Liquid Glass guidance](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views),
+instead of a detached clear background inside GlassEffectContainer. Keep a quiet
+material rail, native selected-lens interaction and shared press timing. Complete
+labels fall back to scrolling when a segmented row cannot fit. Explicit compact
+priority metadata and bounded completion glyphs address the accompanying task-row
+layout defects. The retained images establish the defects; corrected Simulator
+inspection is still required. The Apple Markdown documentation was read directly
+after the connected web reader could not consume its Markdown content type.

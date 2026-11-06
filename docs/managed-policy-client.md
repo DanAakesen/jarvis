@@ -6,7 +6,7 @@ to the same `complete_chat` / `_complete` application loop rather than duplicati
 its guards. No production selection, environment factory, agent, role, credential,
 deployment or cutover is added here. Current remains the default.
 
-The only shared model-client changes are a default `_create_response(request)`
+The transport integration uses a default `_create_response(request)`
 method forwarding the original request unchanged, one call site using that seam,
 and `chat_model_tools` extracting the existing normal-chat `get_system_health`
 operation-property filter. Current request construction and function-loop behavior
@@ -65,6 +65,24 @@ functions using unsupported `tool_choice`. When the shared request omits tools,
 the native stream enforces a final-text-only boundary: any function item, including
 a new action with different arguments, fails before dispatch. Text-only synthesis
 can complete. No extra provider suppression parameter is sent.
+
+### Policy-shaped activation canary (6 November 2026)
+
+`managed_response_request` builds the same conversation/input/instructions/stream
+request for `_create_response` and the fixed administrative canary. Shared
+`runtime_instructions` extracts the existing format/channel/food/capability clauses
+without changing their content; both paths then use `personalize_instructions`
+with selected identity, mode, preferences and backend capability settings. A local
+HTTP fixture compares the complete canary instructions to an actual policy turn.
+The probe sends synthetic reference/user messages, executes no tools and bypasses
+owner context and claims. It therefore validates provider compatibility without
+claiming full owner-session acceptance. It cannot consume or release an owner source.
+
+Success adds `requestShape: managed_policy`, required by activation. Failure adds
+one bounded stage plus the existing safe provider-cause contract below. Handoff
+logs independently validate these fields; no provider message, request, schema or
+instruction content is printed. The 210-second invocation bound, no retries and
+cleanup of only the freshly created synthetic conversation remain unchanged.
 
 ### Safe policy failure diagnostics (#1373)
 

@@ -473,8 +473,8 @@ describe('English realtime session', () => {
     const english = createEnglishSessionUpdate(registry).session.instructions;
     const danish = createRealtimeSessionUpdate(registry, undefined, false, 'da').session.instructions;
 
-    expect(english).toContain('use the research tool');
-    expect(english).toContain('say research has started');
+    expect(english).toContain('Use research for the topic');
+    expect(english).toContain('Report started, then source-backed findings and the saved report');
     expect(english).toContain('untrusted evidence');
     expect(danish).toContain(capabilityInstructions(defaultSettings.memory));
     expect(english).toContain(capabilityInstructions(defaultSettings.memory));
@@ -583,7 +583,7 @@ describe('English realtime session', () => {
 
   it.each([
     ['invalid JSON', call({ arguments: '{' }), true, 'Invalid arguments: expected a JSON object. Allowed: text. Retry with arguments matching the tool schema.'],
-    ['invalid schema', call({ arguments: '{"text":"hello"}' }), false, 'Invalid arguments: input does not match the tool schema. Allowed: text. Retry with arguments matching the tool schema.'],
+    ['invalid schema', call({ arguments: '{"text":"hello"}' }), false, 'Invalid arguments: input does not match the tool schema. Required: text. Allowed: text. Retry with arguments matching the tool schema.'],
     ['unregistered tool', call({ name: 'missing' }), true, undefined],
   ])('does not execute a tool with %s', async (_label, functionCall, valid, refused) => {
     const request = {

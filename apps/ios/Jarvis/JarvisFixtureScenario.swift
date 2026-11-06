@@ -10,9 +10,9 @@ enum JarvisFixtureScenario {
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!
             ),
-            transport: WorkspaceFixtureTransport(base: FixtureTransport(scenario: try fixtureScenarioData(
+            transport: JarvisRuntimeTestFixtureTransport(base: WorkspaceFixtureTransport(base: FixtureTransport(scenario: try fixtureScenarioData(
                 emptyActivity: emptyActivity, calendarChangeLanguage: calendarChangeLanguage
-            ))),
+            )))),
             tokenStore: FixtureTokenStore(),
             accessTokenProvider: FixtureTokenProvider()
         )
@@ -22,7 +22,13 @@ enum JarvisFixtureScenario {
         emptyActivity: Bool, calendarChangeLanguage: JarvisAppLanguage?
     ) throws -> Data {
         let data = Data(scenario.utf8)
-        guard emptyActivity || calendarChangeLanguage != nil else { return data }
+        let voiceHistory: Bool
+#if targetEnvironment(simulator)
+        voiceHistory = ProcessInfo.processInfo.arguments.contains("--ui-test-voice-history")
+#else
+        voiceHistory = false
+#endif
+        guard emptyActivity || calendarChangeLanguage != nil || voiceHistory else { return data }
         guard var root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               var interactions = root["interactions"] as? [[String: Any]],
               let index = interactions.firstIndex(where: { $0["path"] as? String == "/api/now" }),
@@ -30,13 +36,15 @@ enum JarvisFixtureScenario {
             throw FixtureTransportError.invalidScenario
         }
 
-        response["body"] = [
-            "running": [],
-            "items": [],
-            "updatedAt": "2026-10-30T09:34:00Z",
-            "awayMode": false,
-            "confirmations": [],
-        ]
+        if emptyActivity || calendarChangeLanguage != nil {
+            response["body"] = [
+                "running": [],
+                "items": [],
+                "updatedAt": "2026-10-30T09:34:00Z",
+                "awayMode": false,
+                "confirmations": [],
+            ]
+        }
 #if targetEnvironment(simulator)
         if let calendarChangeLanguage {
             let summary = calendarChangeLanguage == .da
@@ -57,6 +65,25 @@ enum JarvisFixtureScenario {
         var interaction = interactions[index]
         interaction["response"] = response
         interactions[index] = interaction
+        if voiceHistory,
+           let historyIndex = interactions.firstIndex(where: { $0["path"] as? String == "/api/conversation/history" }),
+           var historyResponse = interactions[historyIndex]["response"] as? [String: Any],
+           var body = historyResponse["body"] as? [String: Any],
+           var messages = body["messages"] as? [[String: Any]] {
+            for (id, role, text) in [
+                ("420", "dan", "Synthetic spoken question"),
+                ("421", "jarvis", "Synthetic spoken answer"),
+            ] {
+                messages.append([
+                    "id": id, "sessionId": "13", "channel": "voice", "language": "en", "role": role,
+                    "text": text, "interrupted": false, "at": "2026-10-30T09:34:30Z",
+                    "toolCalls": [], "attachments": [],
+                ])
+            }
+            body["messages"] = messages
+            historyResponse["body"] = body
+            interactions[historyIndex]["response"] = historyResponse
+        }
         root["interactions"] = interactions
         return try JSONSerialization.data(withJSONObject: root, options: [.sortedKeys])
     }
@@ -225,7 +252,7 @@ enum JarvisFixtureScenario {
           ]}
         },
         {
-          "method":"GET","path":"/api/conversation/history","query":{"limit":"50","sessionId":"12"},
+          "method":"GET","path":"/api/conversation/history","query":{"limit":"50"},
           "response":{"statusCode":200,"body":{"messages":[
             {"id":"430","sessionId":"12","channel":"chat","language":"en","role":"dan","text":"The fixture turn","model":null,"interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:35:00Z","toolCalls":[],"attachments":[]},
             {"id":"431","sessionId":"12","channel":"chat","language":"en","role":"jarvis","text":"This response is synthetic.","model":"fixture","interrupted":false,"voiceMinutes":null,"at":"2026-10-30T09:35:01Z","toolCalls":[],"attachments":[]}

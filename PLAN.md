@@ -1,3 +1,41 @@
+## Managed policy request qualification — 6 November 2026
+
+The 30 October #1373 evidence records a real Responses 4xx after native binding,
+but its discarded exception cannot identify the rejected field. The old canary
+sent a plain string without per-turn instructions and could miss that failure.
+The fixed canary now shares the real managed request builder and complete normal
+chat instruction composition, sends only synthetic reference/user input, refuses
+tool requests and cleans up its own native conversation. Activation requires its
+`requestShape: managed_policy` success marker. Bounded stage/provider metadata is
+independently filtered into deployment diagnostics; raw content remains private.
+
+Local validation: 446 hosted tests (shared model loop, runtime, policy transport,
+provider diagnostics and chat entrypoint), 13 handoff tests, scoped Ruff and shell
+syntax. No iOS source changes. Next: deploy the hosted agent before the handoff,
+capture the actual cause if rejected, correct only a proven incompatibility, then
+verify a real isolated owner conversation. This closes a qualification gap; it
+does not establish that the historical live request now works.
+
+## Runtime testing on iOS and comparison activation — 6 November 2026
+
+Implemented locally: the shared native Plus menu opens an explicit isolated
+runtime-test sheet with typed availability/session binding, streaming, Stop reply,
+history review and durable blocked-session recovery. Web has in-place availability
+retry; missing server activation now has a specific reason. The manual comparison
+handoff has a default-off immutable definition refresh for changed Jarvis tools
+and identity; existing exact matches are reused and old versions preserved.
+
+Verified locally: 80 backend runtime tests, 146 web tests, backend/web builds,
+scoped ESLint and 39 provisioning/handoff/deploy-plan checks; synthetic Chromium inspection at desktop/phone in both
+themes covers disabled choices, availability retry, create failure/retry, scoped
+streaming and return. Native compilation/Simulator and actual managed inference
+remain pending. The screenshot reason identifies an absent verifier at the time of
+the report, not the cause of missing production configuration. Next: coordinator
+integrates this with the current batch, runs one combined native qualification,
+deploys backend/hosted agent first, explicitly refreshes/activates the comparison,
+checks canary and original conversation path, then releases TestFlight. Do not
+claim live Copilot success from local fixtures or a selectable option alone.
+
 ## P15-78 — retire Daily feeds, rename Daily to Health, iPhone Health sync (#1571)
 
 - Done: feeds removed, rename with temporary `/daily` alias, iOS `/health/*`, Sync button and ingest payload with Swift tests.
@@ -2219,6 +2257,32 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **Task-list board correction:** Owner-reported mismatch in Notes → Tasks is
+  implemented with inset groups, quiet completion controls, section counts,
+  trailing dates and readable Markdown titles. New synthetic long-title and
+  large-text captures plus completion/detail checks await the single PR native
+  run. The board correction preserves Chat's appearance.
+  The owner lifted the CI/release hold after the final loading request. PR #1614
+  is being completed for one combined native run, backend/agent deployment and
+  TestFlight upload after successful checks and visual review.
+  The held batch now also includes shared glass selection/press feedback, equal
+  selector padding, primary-color section headings, and Home/Health pull-to-refresh
+  that syncs Apple Health before reloading data. Later owner reports also authorize
+  shared tool discovery/validation guidance, reminder schema alignment, voice
+  capture startup recovery, unified voice/chat history and reliable Home send/camera
+  handoffs. Combined native run 42185446322 at 7dba227a passed all 68 UI tests and
+  retained captures. Visual inspection found blurred glass labels, inflated
+  priority rows and truncated Danish Settings choices; shared corrections and a
+  row-height regression assertion were qualified at eb333e62. General CI
+  42193478117 and CodeQL passed, including 7,361 backend tests (one skipped),
+  497 Core tests and the Python workflow guards. Native run 42193478110 passed
+  65/68 tests; fresh captures show compact priority rows and sharp selection labels.
+  Three test failures require a fresh run: sub-micropoint AX measurement error and
+  two completion taps behind the fixed header after scrolling. The test now reveals
+  the whole control before tapping and retains completion/detail assertions.
+  Complete the remaining native checks and visual review before merge. See
+  `docs/ios/design/p15-device-feedback-2026-11-06.md`.
+
 - **P15 board delivery (#1598–#1602 and Settings): Complete.** All owning PRs merged
   in the recorded order. Notes backend deployment passed readiness and live
   acceptance. Final native verification passed 62/62 tests; 493 Core tests and
@@ -3888,3 +3952,71 @@ Settings corrected source is accepted in combined native run 42129251285 (61/61 
 tests), artifact 13465195628. General EN/dark, DA/light and AX XXXL plus Models,
 Health and Account EN/dark were inspected; tabs and symbols are corrected. Final
 combined verification of the owner-selected polish is running separately.
+
+## Owner's everyday workflows — assessment (6 November 2026)
+
+The owner approved this assessment, extended self-repair to new features with
+mandatory approval, and subsequently authorized build/release after verification.
+The implementation status below supersedes the earlier CI hold. Existing project,
+research, Health and milestone facilities are reused; no duplicate job system.
+
+1. Unify personal/work task and reminder intent. A dated task and “remind me to”
+   should share one workflow, creating the task if missing and linking an optional
+   timed notification without duplicates. Keep deadline and alert time distinct
+   internally. Current owner_reminders still requires an existing exact open-task
+   match and narrowly parsed owner intent; the schema fix does not remove that
+   limitation. Exercise ordinary English/Danish paraphrases and Copenhagen DST.
+2. Make self-repair an explicit approved workflow. After correcting arguments,
+   investigate evidence of a code defect; distinguish permissions, missing data
+   and temporary service failures. Offer a concrete repair with a sanitized
+   reproduction and acceptance criteria. After the owner accepts, reuse an open
+   issue/task or create one for DanAakesen/jarvis and start its Codex Factory task.
+   Preserve the agreed CI/release policy, report milestone evidence and do not
+   equate a PR with a deployed fix. Existing repo/issue/Factory tools supply the
+   building blocks; an approval-bound proposal and regression coverage are the
+   missing integration, not a new autonomous deployment permission.
+3. Finish everyday actions with useful receipts in the shared conversation:
+   saved note title/scope, task date and reminder time, repository/project links,
+   review findings, issue/task/PR links and verified final status. Prefer concise
+   visible results with open/edit actions over repeated spoken summaries.
+4. Follow coding/research work through meaningful milestones: started, blocked,
+   decision needed, ready for review and delivered. Retain the chosen task and
+   update preference across voice/chat without duplicate jobs or noisy polling.
+5. Give Health answers from comparable periods, actual goals and source coverage;
+   distinguish missing/unsynced data from zero. Research should finish with a
+   source-backed answer and reusable report, not only a job-start acknowledgement.
+6. Qualify the owner's actual workflows end to end: Work/Personal note creation,
+   due tasks and reminders, managed GitHub project creation, code review and issue
+   execution, updates, research, Health questions and accepted self-repair. Include
+   voice/chat/Home entry, cold startup, paraphrases, corrected retries, duplicate
+   prevention and explicit refusal/recovery—not only isolated tool unit tests.
+
+
+### Active follow-up qualification
+
+- Implemented: own-code bug/feature proposal gates; shared identity/task awareness;
+  high-priority vault task defaults, replay protection and exact-time reminder marker;
+  general validation/schema repair; unified transcript and Home handoff corrections;
+  shared glass/padding/headings, Health pull refresh and animated loading.
+- Qualification: general CI 42179796923 passed the full selected set, including
+  7,361 backend tests (one skipped) and 493 Core tests. The final runtime addition
+  passed 80 backend, 146 web and 39 provisioning/deployment tests, backend/web
+  builds, scoped lint and browser checks at phone/desktop widths in both themes.
+- Next: retain the current native results, push the combined candidate to #1614,
+  qualify its new runtime UI and inspect the captured changes. Then merge, wait
+  for backend/agent readiness and acceptance, explicitly activate/verify the
+  Copilot comparison, and upload the verified main app to TestFlight. Physical
+  voice startup, HealthKit permission and haptic feel still require the owner's
+  device. No live Copilot success or upload is claimed yet.
+
+### UI/UX recommendations requested on 6 November
+
+Proposals for the next pass, separate from the approved fixes: connect existing
+chart selection to the selected day's actual records, preserve period/scroll
+state on return, add useful Open/Edit/Undo receipts after confirmed writes, and
+bring Factory's meaningful milestones and required decisions into its summaries.
+Use shared interruptible transitions to preserve context, keep readable content
+stable under moving glass controls, and retain known data during refresh. Compare
+equal periods and keep missing/partial health data distinct from zero. Final
+recommendations will distinguish current screenshots from source-only findings;
+these proposals are not additional implementation authorization.

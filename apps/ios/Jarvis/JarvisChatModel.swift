@@ -4,6 +4,7 @@ import SwiftUI
 
 struct JarvisChatRow: Identifiable, Equatable {
     let id: String
+    let channel: ConversationChannel
     let role: ConversationRole
     var text: String
     let at: String
@@ -13,6 +14,7 @@ struct JarvisChatRow: Identifiable, Equatable {
 
     init(_ message: ChatHistoryMessage) {
         id = message.id
+        channel = message.channel
         role = message.role
         text = message.text
         at = message.at
@@ -28,6 +30,7 @@ struct JarvisChatRow: Identifiable, Equatable {
 
     init(id: String, role: ConversationRole, text: String, at: String) {
         self.id = id
+        channel = .chat
         self.role = role
         self.text = text
         self.at = at
@@ -38,6 +41,7 @@ struct JarvisChatRow: Identifiable, Equatable {
 
     init(_ message: ChatMessage) {
         id = message.id
+        channel = .chat
         role = message.role
         text = message.text
         at = message.at
@@ -77,6 +81,7 @@ final class JarvisChatModel: ObservableObject {
     @Published var draft = ""
     @Published var pendingAttachments: [PendingChatAttachment] = []
     @Published var isLoading = true
+    @Published private(set) var isReadyForHandoff = false
     @Published var isLoadingOlder = false
     @Published var isSending = false
     private var optimisticMessageID: String?
@@ -189,6 +194,7 @@ final class JarvisChatModel: ObservableObject {
     func load() async {
         guard !didLoad else { return }
         didLoad = true
+        defer { isReadyForHandoff = true }
         guard let client else {
             historyError = startupError ?? "Chat is unavailable."
             isLoading = false
@@ -458,6 +464,7 @@ final class JarvisChatModel: ObservableObject {
                 switch event {
                 case .pendingConfirmationsChanged:
                     await refreshActivity()
+                    if !isSending { await refreshHistory() }
                 case .activityChanged:
                     await refreshActivity()
                     // Replies that finish while the user is in voice or screen sharing must show up without a message.
@@ -770,7 +777,7 @@ final class JarvisChatModel: ObservableObject {
     private func refreshHistory() async {
         guard let client else { return }
         do {
-            let page = try await client.history(sessionId: sessionID)
+            let page = try await client.history()
             apply(page, replacing: false)
             historyPaging.refreshLatestPage(nextCursor: page.nextCursor)
         } catch {
@@ -780,10 +787,12 @@ final class JarvisChatModel: ObservableObject {
 
     private func apply(_ page: ChatHistoryPage, replacing: Bool) {
         let incoming = page.messages
-            .filter { $0.channel == .chat }
+            .filter { $0.channel == .chat || $0.channel == .voice }
             .map(JarvisChatRow.init)
         messages = sorted(replacing ? incoming : messages + incoming)
-        if let latest = messages.last {
+        // One visible conversation, with transport-specific session IDs kept
+        // separate so a typed reply never targets an ended voice session.
+        if let latest = messages.last(where: { $0.channel == .chat }) {
             let latestMessage = page.messages.first { $0.id == latest.id }
             sessionID = latestMessage?.sessionId ?? sessionID
             language = latestMessage?.language ?? language

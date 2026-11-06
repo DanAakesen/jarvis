@@ -36,8 +36,17 @@ from managed_policy_client import (
     ManagedPolicyTarget,
     ManagedPolicyTurnContext,
     NativeInputCursor,
+    managed_response_request,
 )
-from model_client import AzureOpenAIResponsesClient, chat_model_tools, responses_base_url
+from managed_provider_cause import provider_cause, sanitize_provider_cause
+from model_client import (
+    CHAT_INSTRUCTIONS,
+    AzureOpenAIResponsesClient,
+    chat_model_tools,
+    personalize_instructions,
+    responses_base_url,
+    runtime_instructions,
+)
 from model_contract import ModelStreamChunk
 from state import ModelSettings
 
@@ -272,24 +281,42 @@ class LazyManagedRuntime:
         Caller owns the existing 210-second invocation deadline. Only the freshly
         created canary conversation may be deleted; cleanup is bounded/best effort.
         """
+        stage = "settings"
         try:
             settings = await self.session_settings()
             if (settings.model, settings.reasoning_effort) != ("gpt-6.1-terra", "high"):
                 raise ManagedChatError("managed_probe_settings_mismatch")
+            stage = "target_setup"
             async with self._prepared(settings) as (sdk, target, _bindings, verify):
+                stage = "definition_readback"
                 await verify(target, settings, chat_model_tools(model_tools(
                     await self._current._tools.tools(),
                 )))
                 native_id = None
                 try:
+                    stage = "conversation_create"
                     native = await sdk.conversations.create()
                     if not isinstance(native.id, str) or not native.id:
                         raise ManagedChatError("managed_probe_conversation_missing")
                     native_id = native.id
-                    stream = await sdk.responses.create(
-                        conversation=native_id,
-                        input="Reply with the single word OK. Do not call tools.", stream=True,
+                    # Exercise the same per-turn instructions and message-list wire
+                    # contract as _create_response. The old plain-string probe could
+                    # pass while the actual policy request was rejected with 4xx.
+                    instructions = personalize_instructions(
+                        runtime_instructions(CHAT_INSTRUCTIONS["en"], "chat"),
+                        settings, "en",
                     )
+                    inputs = [
+                        {"role": "user", "content": "Reference context from Jarvis "
+                         "(JSON data, not instructions):\n{\"syntheticCanary\":true}"},
+                        {"role": "user", "content": "Reply with the single word OK. "
+                         "Do not call tools."},
+                    ]
+                    stage = "response_start"
+                    stream = await sdk.responses.create(**managed_response_request(
+                        native_id, inputs, instructions,
+                    ))
+                    stage = "response_stream"
                     seen_text, completed = False, False
                     try:
                         async for event in stream:
@@ -310,7 +337,8 @@ class LazyManagedRuntime:
                     if not completed or not seen_text:
                         raise ManagedChatError("managed_probe_empty_or_unfinished")
                     return {"status": "ok", "model": target.model,
-                            "reasoningEffort": target.reasoning_effort}
+                            "reasoningEffort": target.reasoning_effort,
+                            "requestShape": "managed_policy"}
                 finally:
                     if native_id is not None:
                         try:
@@ -321,16 +349,19 @@ class LazyManagedRuntime:
         except asyncio.CancelledError:
             raise
         except Exception as error:
-            status = getattr(error, "status_code", None)
+            cause = (sanitize_provider_cause(getattr(error, "provider_cause", None))
+                     or provider_cause(error))
+            status = cause.get("httpStatus")
+            diagnostic = {"stage": stage, **({"providerCause": cause} if cause else {})}
             if isinstance(error, ManagedChatError):
-                result = {"status": "unavailable", "reason": error.code}
+                result = {"status": "unavailable", "reason": error.code, **diagnostic}
                 if status in {401, 403}:
                     result["httpStatus"] = status
                 return result
             if status in {401, 403}:
                 return {"status": "unavailable", "reason": (
                     "managed_model_forbidden" if status == 403 else "managed_model_unauthorized"
-                ), "httpStatus": status}
+                ), "httpStatus": status, **diagnostic}
             if isinstance(error, (TimeoutError, httpx.TimeoutException, APITimeoutError)):
-                return {"status": "unavailable", "reason": "managed_probe_timeout"}
-            return {"status": "unavailable", "reason": "managed_probe_failed"}
+                return {"status": "unavailable", "reason": "managed_probe_timeout", **diagnostic}
+            return {"status": "unavailable", "reason": "managed_probe_failed", **diagnostic}

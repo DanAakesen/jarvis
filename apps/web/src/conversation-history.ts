@@ -670,6 +670,7 @@ export async function loadRuntimeTestAvailability(getAccessToken: () => Promise<
   const reasons: Record<string, string> = {
     storage_unavailable: 'Conversation storage is unavailable.',
     current_unavailable: 'Current chat is not configured.',
+    copilot_not_configured: 'Copilot testing has not been activated on the server.',
     copilot_not_verified: 'The selected settings and Copilot runtime have not been verified.',
     verification_unavailable: 'Could not verify the Copilot runtime. Try again later.',
   };

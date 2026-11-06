@@ -25,6 +25,14 @@ public struct ChatSession: Codable, Equatable, Sendable {
     public let id: String
     public let channel: ConversationChannel
     public let language: ChatLanguage
+    public let runtimeTest: ChatRuntimeTest?
+
+    public init(id: String, channel: ConversationChannel, language: ChatLanguage, runtimeTest: ChatRuntimeTest? = nil) {
+        self.id = id
+        self.channel = channel
+        self.language = language
+        self.runtimeTest = runtimeTest
+    }
 }
 
 public struct ChatMessage: Codable, Equatable, Sendable {

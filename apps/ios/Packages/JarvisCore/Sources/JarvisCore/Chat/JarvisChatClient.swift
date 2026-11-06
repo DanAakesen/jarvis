@@ -33,8 +33,19 @@ public final class JarvisChatClient: Sendable {
         self.clock = clock
     }
 
-    public func createSession(language: ChatLanguage) async throws -> ChatSession {
-        let body = try encode(SessionRequest(channel: "chat", language: language))
+    public func runtimeTestAvailability() async throws -> ChatRuntimeAvailability {
+        let response = try await client.performAuthenticatedRequest(
+            method: .get, path: ["conversation", "runtime-tests"], idempotent: true
+        )
+        guard response.statusCode == 200,
+              let availability = try? JSONDecoder().decode(ChatRuntimeAvailability.self, from: response.body) else {
+            throw JarvisChatClientError.invalidResponse
+        }
+        return availability
+    }
+
+    public func createSession(language: ChatLanguage, runtimeTest: ChatRuntimeTest? = nil) async throws -> ChatSession {
+        let body = try encode(SessionRequest(channel: "chat", language: language, runtimeTest: runtimeTest))
         let response = try await client.performAuthenticatedRequest(
             method: .post,
             path: ["conversation", "sessions"],
@@ -45,6 +56,7 @@ public final class JarvisChatClient: Sendable {
               let session = try? JSONDecoder().decode(ChatSession.self, from: response.body),
               session.channel == .chat,
               session.language == language,
+              session.runtimeTest == runtimeTest,
               Self.validID(session.id) else {
             throw JarvisChatClientError.invalidResponse
         }
@@ -197,7 +209,7 @@ public final class JarvisChatClient: Sendable {
         )
         guard response.statusCode == 200,
               let page = try? JSONDecoder().decode(ChatHistoryPage.self, from: response.body),
-              page.messages.allSatisfy({ Self.validID($0.id) && Self.validID($0.sessionId) }) else {
+              page.messages.allSatisfy({ Self.validID($0.id) && Self.validID($0.sessionId) && (sessionId == nil || $0.sessionId == sessionId) }) else {
             throw JarvisChatClientError.invalidResponse
         }
         return page
@@ -515,6 +527,7 @@ public final class JarvisChatClient: Sendable {
 private struct SessionRequest: Encodable {
     let channel: String
     let language: ChatLanguage
+    let runtimeTest: ChatRuntimeTest?
 }
 
 private struct SendTurnRequest: Encodable {

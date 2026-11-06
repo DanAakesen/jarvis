@@ -17,6 +17,22 @@ describe('RuntimeTestSelector', () => {
     await waitFor(() => expect(onStart).toHaveBeenCalledExactlyOnceWith('copilot'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+  it('refreshes unavailable runtimes without enabling selection during the check', async () => {
+    const user = userEvent.setup();
+    const refresh = vi.fn();
+    const start = vi.fn();
+    const view = render(<RuntimeTestSelector availability={{ current: { available: true }, copilot: { available: false, reason: 'Server activation is missing.' } }} onRefresh={refresh} onStart={start} onClose={vi.fn()} />);
+    expect(screen.getByRole('radio', { name: /Copilot/ }).matches(':disabled')).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Check again' }));
+    expect(refresh).toHaveBeenCalledOnce();
+    view.rerender(<RuntimeTestSelector availability={{}} checking onRefresh={refresh} onStart={start} onClose={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Check again' }).matches(':disabled')).toBe(true);
+    expect(screen.getByRole('radio', { name: /Current/ }).matches(':disabled')).toBe(true);
+    view.rerender(<RuntimeTestSelector availability={{ copilot: { available: true } }} onRefresh={refresh} onStart={start} onClose={vi.fn()} />);
+    await user.click(screen.getByRole('radio', { name: /Copilot/ }));
+    await user.click(screen.getByRole('button', { name: 'Open test conversation' }));
+    expect(start).toHaveBeenCalledWith('copilot');
+  });
   it('keeps missing and unsupported runtimes disabled with explanations', async () => {
     const user = userEvent.setup();
     const onStart = vi.fn();

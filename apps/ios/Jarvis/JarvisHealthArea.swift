@@ -200,11 +200,14 @@ struct JarvisHealthArea: View {
     let language: JarvisAppLanguage
     let observeRefreshEvents: Bool
     let onRetryConfiguration: () -> Void
-    private let now: Date
+    @State private var now: Date
+    private let onSyncAppleHealth: (() async -> JarvisHealthSyncState?)?
     private let presentNewLiftAfterLoading: Bool
     /// The Home model, so the plus menu opens the very same log sheets as the Home tiles.
     private let gymModel: JarvisTodayModel?
 
+    @State private var healthSyncState: JarvisHealthSyncState?
+    @State private var isRefreshingFromPull = false
     @State private var periodPreset: JarvisHealthPeriodPreset = .sevenDays
     @State private var goals = JarvisHealthGoals.load()
     @State private var searchText = ""
@@ -238,13 +241,15 @@ struct JarvisHealthArea: View {
         now: Date = Date(),
         workoutInitiallySelected: Bool = false,
         presentNewLiftAfterLoading: Bool = false,
-        gymModel: JarvisTodayModel? = nil
+        gymModel: JarvisTodayModel? = nil,
+        onSyncAppleHealth: (() async -> JarvisHealthSyncState?)? = nil
     ) {
         self.client = client
         self.language = language
         self.observeRefreshEvents = observeRefreshEvents
         self.onRetryConfiguration = onRetryConfiguration
-        self.now = now
+        _now = State(initialValue: now)
+        self.onSyncAppleHealth = onSyncAppleHealth
         self.presentNewLiftAfterLoading = presentNewLiftAfterLoading
         self.gymModel = gymModel
         _trackWorkout = State(initialValue: workoutInitiallySelected)
@@ -266,6 +271,7 @@ struct JarvisHealthArea: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
+                    JarvisHealthSyncIssue(state: healthSyncState, language: language)
                     if trackWorkout {
                         if let liftFailure { failureRow(liftFailure) }
                         JarvisHealthLiftLog(
@@ -319,9 +325,8 @@ struct JarvisHealthArea: View {
                                     language: language,
                                     hasSearch: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                 )
-                                freshnessLine(dashboard)
-                                if let client {
-                                    JarvisHealthSyncSection(client: client, language: language)
+                                if dashboard.isStale || dashboard.isPartial {
+                                    freshnessLine(dashboard)
                                 }
                             }
                         } else {
@@ -335,8 +340,7 @@ struct JarvisHealthArea: View {
             }
             .scrollIndicators(.hidden)
             .refreshable {
-                await loadDashboard(force: true)
-                await loadLifts()
+                await refreshFromPull()
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 if dashboard != nil || trackWorkout {
@@ -386,7 +390,7 @@ struct JarvisHealthArea: View {
             guard observeRefreshEvents, let client else { return }
             do {
                 for try await _ in client.refreshEvents() {
-                    guard !Task.isCancelled, !isLoading else { continue }
+                    guard !Task.isCancelled, !isLoading, !isRefreshingFromPull else { continue }
                     refreshVersion += 1
                 }
             } catch is CancellationError {
@@ -394,6 +398,24 @@ struct JarvisHealthArea: View {
             }
         }
         .toolbar(.hidden, for: .navigationBar)
+    }
+
+    @MainActor
+    private func refreshFromPull() async {
+        guard !isRefreshingFromPull else { return }
+        isRefreshingFromPull = true
+        defer { isRefreshingFromPull = false }
+        if observeRefreshEvents { now = Date() }
+        healthSyncState = await onSyncAppleHealth?()
+        guard !Task.isCancelled else { return }
+        // Read all affected sources after the upload, not just the previously cached dashboard.
+        await loadDashboard(force: true)
+        guard !Task.isCancelled else { return }
+        async let lifts: Void = loadLifts()
+        async let vault: Void = loadVaultLifts()
+        async let workouts: Void = loadDeviceWorkouts()
+        async let steps: Void = loadDeviceSteps()
+        _ = await (lifts, vault, workouts, steps)
     }
 
     private var header: some View {
@@ -708,10 +730,7 @@ struct JarvisHealthArea: View {
         }
         if data.isStale { return copy.text(.stale) }
         if data.isPartial { return copy.text(.partial) }
-        if let updatedAt = latestSyncTimestamp(data.sync) {
-            return "\(copy.text(.lastSync)) · \(JarvisNotesLocalization.formattedUpdatedDate(updatedAt, language: language))"
-        }
-        return copy.text(.noSync)
+        return ""
     }
 
     private func visibleMetrics(in data: JarvisHealthDashboardData) -> [JarvisHealthMetricSeries] {
@@ -937,21 +956,6 @@ struct JarvisHealthArea: View {
         return JarvisHealthPeriod(startDate: yesterday, endDate: period.endDate) ?? period
     }
 
-    private func latestSyncTimestamp(_ read: JarvisHealthRead) -> String? {
-        let keys: Set<String> = [
-            "accepted_evidence_at", "last_received_at", "last_accepted_at",
-            "last_processed_upload_at", "processed_committed_at",
-            "latest_updated_at", "updated_at",
-        ]
-        func collect(_ value: JSONValue, key: String? = nil) -> [String] {
-            if let key, keys.contains(key), let timestamp = value.stringValue { return [timestamp] }
-            if let object = value.objectValue {
-                return object.flatMap { collect($0.value, key: $0.key) }
-            }
-            if let array = value.arrayValue { return array.flatMap { collect($0) } }
-            return []
-        }
-        return read.items.flatMap { collect(.object($0)) }.max()
-    }
+
 
 }

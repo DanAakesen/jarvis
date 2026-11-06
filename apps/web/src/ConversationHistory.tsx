@@ -236,17 +236,25 @@ export function ConversationHistory({
   const [runtimeSelectorOpen, setRuntimeSelectorOpen] = useState(false);
   const [runtimeAvailability, setRuntimeAvailability] = useState<RuntimeTestAvailability>({});
   const [runtimeAvailabilityError, setRuntimeAvailabilityError] = useState('');
+  const [runtimeChecking, setRuntimeChecking] = useState(false);
+  const [runtimeCheck, setRuntimeCheck] = useState(0);
   const [testSession, setTestSession] = useState<RuntimeTestSession | null>(null);
+  const refreshRuntimeAvailability = () => {
+    setRuntimeChecking(true);
+    setRuntimeAvailability({});
+    setRuntimeAvailabilityError('');
+    setRuntimeCheck(value => value + 1);
+  };
   useEffect(() => {
     if (!runtimeSelectorOpen) return;
     const controller = new AbortController();
     void loadRuntimeTestAvailability(tokenProvider, config, controller.signal).then(value => {
       if (!controller.signal.aborted) setRuntimeAvailability(value);
     }).catch(() => {
-      if (!controller.signal.aborted) setRuntimeAvailabilityError('Could not check runtime availability. Close this dialog and try again.');
-    });
+      if (!controller.signal.aborted) setRuntimeAvailabilityError('Could not check runtime availability. Try checking again.');
+    }).finally(() => { if (!controller.signal.aborted) setRuntimeChecking(false); });
     return () => controller.abort();
-  }, [config, runtimeSelectorOpen, tokenProvider]);
+  }, [config, runtimeSelectorOpen, runtimeCheck, tokenProvider]);
   const sessionSetup = useRef<{ language: 'da' | 'en'; controller: AbortController; promise: Promise<ChatSession> } | null>(null);
   const ensureChatSession = useCallback((requestedLanguage: 'da' | 'en'): Promise<ChatSession> => {
     if (session?.language === requestedLanguage) return Promise.resolve(session);
@@ -1343,6 +1351,7 @@ export function ConversationHistory({
     <section className="conversation-history" data-turn-active={sending || undefined} aria-label="Conversation"
       data-history-hosted={hosted || undefined} data-file-drag={fileDrag || undefined} {...fileDragHandlers}>
       {runtimeSelectorOpen && <RuntimeTestSelector availability={runtimeAvailability}
+        checking={runtimeChecking} onRefresh={refreshRuntimeAvailability}
         disabledReason={runtimeAvailabilityError || (sending || voiceActive ? 'Finish the current reply or voice conversation before opening a test.' : undefined)}
         onClose={() => setRuntimeSelectorOpen(false)} onStart={async runtime => {
           const created = await createChatSession(tokenProvider, config, language, undefined, runtime);
@@ -1464,7 +1473,7 @@ export function ConversationHistory({
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
         <ConversationMoreMenu topLayer className="composer-more" language={language} onLanguageChange={setLanguage}
           actions={[...captureActions, ...primaryActions]} align="start" icon="plus"
-          onTestRuntime={() => { setRuntimeAvailability({}); setRuntimeAvailabilityError(''); setRuntimeSelectorOpen(true); }} />
+          onTestRuntime={() => { refreshRuntimeAvailability(); setRuntimeSelectorOpen(true); }} />
         {screenShare?.sharing && <>
           <span className="visually-hidden" role="status">Screen shared with Jarvis</span>
           <button className="composer-screen-stop" data-preserve-typing-focus type="button"

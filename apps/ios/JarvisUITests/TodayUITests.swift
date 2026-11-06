@@ -8,7 +8,7 @@ final class TodayUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    private func launch(language: String = "en", appearance: String? = nil) {
+    private func launch(language: String = "en", appearance: String? = nil, extraArguments: [String] = []) {
         app.launchArguments = [
             "--ui-test-navigation",
             "--ui-test-today",
@@ -17,6 +17,7 @@ final class TodayUITests: XCTestCase {
             "-AppleLocale", language == "da" ? "da_DK" : "en_US",
         ]
         if let appearance { app.launchArguments += ["-jarvis.appTheme", appearance] }
+        app.launchArguments += extraArguments
         app.launch()
     }
 
@@ -252,10 +253,30 @@ final class TodayUITests: XCTestCase {
         XCTAssertTrue(send.waitForExistence(timeout: 5), "Voice becomes send while typing")
         send.tap()
         XCTAssertTrue(screen("chat").waitForExistence(timeout: 10), "Send continues in Chat")
+        let reply = app.descendants(matching: .any)["chat-markdown-block-431-0"]
+        XCTAssertTrue(reply.waitForExistence(timeout: 10),
+                      "Home must send the turn and receive a reply, not only navigate")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "chat-markdown-block-431-0").count, 1)
         let home = app.buttons["chat.backToToday"].firstMatch
         XCTAssertTrue(home.waitForExistence(timeout: 10))
         home.tap()
         XCTAssertTrue(screen("today").waitForExistence(timeout: 10), "Reversing returns to Home")
+    }
+
+    func testHomeCameraChoiceOpensCaptureAfterNavigation() {
+        launch(extraArguments: ["--ui-test-camera-sheet"])
+        let plus = app.buttons["today.composer.plus"]
+        XCTAssertTrue(plus.waitForExistence(timeout: 10))
+        plus.tap()
+        let camera = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier == %@ OR label == %@", "today.composer.plus.camera", "Camera"
+        )).firstMatch
+        XCTAssertTrue(camera.waitForExistence(timeout: 5))
+        camera.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["camera.shutter"].waitForExistence(timeout: 10),
+                      "The pending camera action must survive the Home to Chat transition")
+        app.descendants(matching: .any)["camera.close"].tap()
+        XCTAssertTrue(screen("chat").waitForExistence(timeout: 5))
     }
 
     func testVoiceButtonOpensVoiceAndMinimizingReturnsHome() {

@@ -13,7 +13,8 @@ The private canary response was deleted and never uploaded. No exact model,
 permission or protocol cause is established. The local diagnostic correction
 preserves existing safe reason codes and logs only allowlisted stage, bounded
 HTTP status and model/effort constants. Missing internal stage is reported as the
-known `managed_text_canary` handoff operation; Python runtime code is unchanged.
+known `managed_text_canary` handoff operation. The 6 November policy-shaped
+canary below supersedes that earlier diagnostic-only change.
 Raw responses, instructions, schemas,
 CLI errors and identifiers remain private. No retry or new resource is included.
 
@@ -65,6 +66,31 @@ project Foundry User/Project Manager through the normal deployment path. This
 script adds no grants. Any real permission rejection must be assessed for the
 specific action and target before requesting an expansion.
 
+## Explicit definition refresh (6 November 2026)
+
+After deploying the current Jarvis backend and hosted agent, dispatch the existing
+Deploy workflow with `provision_managed_chat=true` and the separate default-off
+`refresh_managed_chat_definition=true` when the approved tool/identity update needs
+a new comparison definition. The shell handoff passes `--refresh-definition` to
+the provisioner only for that explicit input. Model/effort remain the existing
+`gpt-6.1-terra` / `high`; mismatching selected chat settings still fail verification
+rather than being silently changed.
+
+The provisioner now reads the bounded version inventory and reuses one exact
+current-manifest match. With multiple versions, every version must still be active,
+non-draft and carry the comparison ownership marker. Duplicate exact matches stop
+as ambiguous. When no match exists, default behavior remains refusal. Explicit
+refresh verifies the existing identity and a single concrete 100% endpoint pin,
+creates one new immutable version, verifies exactly one new inventory entry and
+unchanged identity, then pins and reads it back. Earlier versions remain intact.
+Any uncertain create stops with no retry or pin write. A later reviewed run can
+reuse its unique exact match without creating another version. Existing sessions
+bound to an earlier fingerprint remain protected by the original target checks.
+
+Local checks exercise refresh refusal, one-version creation, old-version retention,
+ambiguous matches, unowned versions, uncertain creation and later exact reuse.
+Live target state and original-path inference still require coordinator acceptance.
+
 ## Private manifest input
 
 `--manifest` must be a private UTF-8 JSON file assembled from the authorized
@@ -114,11 +140,11 @@ The apply path performs:
 2. Read all bounded agent inventory pages. If the comparison name is absent,
    `POST {projectEndpoint}/agents?api-version=v1` once, with its new definition and
    the version metadata marker `jarvis_migration=managed-chat-1350`.
-3. Read the agent and all its versions, including drafts. Require exactly one
+3. Read the agent and all its versions, including drafts. Require one unique exact matching
    version, the marker, exact normalized definition, active status and active
    instance identity principal and effective enabled state, accepting documented
    unset identity status. Pending version `creating` status has bounded read-only polling.
-   Existing-name ambiguity stops without writing a new version.
+   Existing-name ambiguity stops without writing a new version; the explicit refresh path above handles a changed approved definition.
 4. Pin only this agent's endpoint by `PATCH /agents/jarvis-main-copilot-preview`
    with `agent_endpoint.version_selector.version_selection_rules` containing one
    `FixedRatio` rule for the concrete version at `traffic_percentage: 100`.
@@ -129,9 +155,8 @@ The apply path performs:
 
 The endpoint selector shape follows Microsoft's
 [configuration guide](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/configure-agent).
-An exact existing single-version match can be reused without creating a version.
-Definition changes and multiple versions require review; they never silently
-produce a replacement version. Mutations are not retried after errors or uncertain
+One exact existing match can be reused without creating a version, including after a reviewed refresh.
+Definition changes require the explicit refresh input; they never silently produce a replacement version. Mutations are not retried after errors or uncertain
 outcomes. Inspect the existing candidate before rerunning.
 
 `POST /agents` can create a version for an existing name; the documented API does
@@ -188,9 +213,14 @@ It preserves other environment values and the normal agent/model defaults. It
 then follows the existing bounded `latestRevisionName == latestReadyRevisionName`
 readiness pattern and calls the fixed `managed_text_canary` hosted operation.
 The canary uses the actual bridge credential for one synthetic managed text turn,
-executes no backend tool and cleans up only its own canary conversation. The job
-requires `status: ok`, model `gpt-6.1-terra` and effort `high`; it prints no returned
-text or raw provider error. Each invocation has the existing 210-second bound.
+executes no backend tool and cleans up only its own canary conversation. It shares
+the production policy request builder and full dynamic chat instructions while
+sending only synthetic reference/user inputs. Deploy the updated hosted agent
+first: the job requires `status: ok`, model `gpt-6.1-terra`, effort `high` and
+`requestShape: managed_policy`; an old plain-string success does not qualify.
+Failures log only revalidated stage, HTTP status, provider code/parameter and
+exception identifier, never returned text, instructions or raw provider error.
+Each invocation has the existing 210-second bound.
 The job's 20-minute timeout accommodates the existing readiness loop. There is no
 new grant, credential, connection or automatic mutation retry.
 

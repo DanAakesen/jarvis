@@ -14,7 +14,7 @@ const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].joi
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function fixture(inputSchema?: JarvisTool['inputSchema'], explainInvalidInput?: JarvisTool['explainInvalidInput']) {
+function fixture(inputSchema?: JarvisTool['inputSchema'], explainInvalidInput?: JarvisTool['explainInvalidInput'], validateInput?: JarvisTool['validateInput']) {
   const execute = vi.fn(async () => ({ completed: true }));
   const beforeExecute = vi.fn(async () => {});
   const record = vi.fn(async () => {});
@@ -31,6 +31,7 @@ function fixture(inputSchema?: JarvisTool['inputSchema'], explainInvalidInput?: 
     },
     execute,
     ...(explainInvalidInput ? { explainInvalidInput } : {}),
+    ...(validateInput ? { validateInput } : {}),
   };
   const app = buildApp(config, logger, {
     modules: [coreModule, {
@@ -55,8 +56,8 @@ describe('safe tool argument feedback', () => {
     [{ query: 'private-query', extra: 'private-value' }, 'additionalProperties', 'extra', "unexpected property 'extra'"],
     [{}, 'required', 'query', "missing property 'query'"],
     [{ query: {} }, 'type', 'query', "property 'query' has the wrong type"],
-    [{ query: '' }, 'minLength', 'query', "property 'query' does not match"],
-    [{ query: 'private-query', action: 'private-action' }, 'enum', 'action', "property 'action' does not match"],
+    [{ query: '' }, 'minLength', 'query', "property 'query' use at least 1 characters"],
+    [{ query: 'private-query', action: 'private-action' }, 'enum', 'action', 'property \'action\' use one of ["read"]'],
     [[], 'type', undefined, 'input has the wrong type'],
   ])('returns the same safe refusal in voice and chat for %s', async (payload, keyword, property, hint) => {
     const { app, execute, beforeExecute, record, trackTrace, logs } = fixture();
@@ -191,7 +192,62 @@ describe('safe tool argument feedback', () => {
 describe('tool-specific argument explanations', () => {
   type Explain = NonNullable<JarvisTool['explainInvalidInput']>;
   const retry = 'Retry with arguments matching the tool schema.';
-  const generic = `Invalid arguments: property 'query' does not match the tool schema. Allowed: query, action. ${retry}`;
+  const generic = `Invalid arguments: property 'query' use at least 1 characters. Allowed: query, action. ${retry}`;
+
+  it('explains strict validation failures before execution in both transports and allows a corrected retry', async () => {
+    const explain = vi.fn<Explain>(() => 'query must be a nonempty string; action must be read.');
+    const validate = (input: unknown) => typeof (input as { query?: unknown })?.query === 'string';
+    const { app, execute, beforeExecute, record } = fixture(undefined, explain, validate);
+    const payload = { query: 123 };
+    const chat = await app.inject({ method: 'POST', url: '/tools/argument_test', headers, payload });
+    const voice = await app.inject({ method: 'POST', url: '/test/voice', headers, payload });
+    expect(voice.json()).toEqual(chat.json());
+    expect(chat.json().result.refused).toContain('query must be a nonempty string');
+    expect(explain).toHaveBeenCalledTimes(2);
+    expect(execute).not.toHaveBeenCalled();
+    expect(beforeExecute).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+    const corrected = await app.inject({ method: 'POST', url: '/test/voice', headers, payload: { query: 'valid' } });
+    expect(corrected.json().outcome).toBe('ok');
+    expect(execute).toHaveBeenCalledOnce();
+    expect(beforeExecute).toHaveBeenCalledOnce();
+  });
+
+  it('selects the requested operation’s missing field instead of another union branch', async () => {
+    const { app, execute } = fixture({
+      type: 'object',
+      properties: { operation: { type: 'string' }, id: { type: 'string' }, count: { type: 'integer' } },
+      additionalProperties: false,
+      oneOf: [
+        { type: 'object', properties: { operation: { const: 'read' } }, required: ['operation'] },
+        { type: 'object', properties: { operation: { const: 'update' }, id: { type: 'string' }, count: { type: 'integer', minimum: 1 } }, required: ['operation', 'id', 'count'] },
+      ],
+    });
+    for (const url of ['/tools/argument_test', '/test/voice']) {
+      const missing = await app.inject({ method: 'POST', url, headers, payload: { operation: 'update', count: 2 } });
+      expect(missing.json().result.refused).toContain("missing property 'id'");
+      const invalid = await app.inject({ method: 'POST', url, headers, payload: { operation: 'update', id: 'private-id', count: 0 } });
+      expect(invalid.json().result.refused).toContain("property 'count' must be at least 1");
+      expect(invalid.body).not.toContain('private-id');
+    }
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('retains common root fields when selecting a union branch', async () => {
+    const { app, execute } = fixture({
+      type: 'object', properties: { operation: { type: 'string' }, commandId: { type: 'string' } },
+      required: ['commandId'], additionalProperties: false,
+      oneOf: [
+        { type: 'object', properties: { operation: { const: 'read' } }, required: ['operation'] },
+        { type: 'object', properties: { operation: { const: 'cancel' } }, required: ['operation'] },
+      ],
+    });
+    for (const url of ['/tools/argument_test', '/test/voice']) {
+      const result = await app.inject({ method: 'POST', url, headers, payload: { operation: 'read', commandId: 'valid' } });
+      expect(result.json().outcome).toBe('ok');
+    }
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
 
   it('puts the tool’s own explanation in the refusal, identically in voice and chat', async () => {
     const explain = vi.fn<Explain>(() => 'query: give a short phrase to search for. Nothing was changed.');

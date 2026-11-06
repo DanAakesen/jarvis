@@ -263,19 +263,21 @@ struct JarvisCheckButton: View {
     let title: String
     var identifier: String
     var isWorking = false
+    var isChecked = false
+    var tint: Color = .secondary
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "circle")
-                .font(.title2)
-                .foregroundStyle(.secondary)
+            Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: JarvisDesignTokens.iconButtonGlyphSize))
+                .foregroundStyle(tint)
                 .opacity(isWorking ? 0.5 : 1)
                 .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isWorking)
+        .disabled(isWorking || isChecked)
         .accessibilityLabel(title)
         .accessibilityIdentifier(identifier)
     }
@@ -405,6 +407,7 @@ struct JarvisLabelledButton: View {
     var isLeading = false
     var isEmphasised = false
     var isSelected = false
+    var usesSelectionFeedback = false
     var isDestructive = false
     var isCompact = false
     var hint = ""
@@ -421,7 +424,7 @@ struct JarvisLabelledButton: View {
                 isDestructive: isDestructive, isCompact: isCompact
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(JarvisSelectionPressStyle(isEnabled: usesSelectionFeedback))
         .jarvisGlassCapsule()
         .disabled(isDisabled || isBusy)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -521,8 +524,127 @@ struct JarvisTabItem<Tag: Hashable> {
     var identifier: String?
 }
 
-/// The one tab strip and segmented control: a row of the shared labelled capsules, each on a single line with
-/// comfortable padding and a 44 pt minimum height. It scrolls horizontally when the tabs do not fit, and never wraps.
+/// One interruptible press response for every tab, range and segmented choice.
+/// Button activation remains immediate; Reduce Motion keeps a static pressed highlight.
+private struct JarvisSelectionPressStyle: ButtonStyle {
+    var isEnabled = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(
+                x: isEnabled && configuration.isPressed && !reduceMotion ? JarvisDesignTokens.selectionPressScaleX : 1,
+                y: isEnabled && configuration.isPressed && !reduceMotion ? JarvisDesignTokens.selectionPressScaleY : 1
+            )
+            .brightness(isEnabled && configuration.isPressed ? 0.03 : 0)
+            .animation(reduceMotion || !isEnabled ? nil : .spring(
+                duration: JarvisDesignTokens.selectionResponseDuration,
+                bounce: JarvisDesignTokens.selectionBounce
+            ), value: configuration.isPressed)
+    }
+}
+
+/// The selected lens uses native Liquid Glass; its identity lets the system morph between choices.
+private struct JarvisSelectionLens: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let namespace: Namespace.ID
+    let isSelected: Bool
+    let isSeparate: Bool
+
+    func body(content: Content) -> some View {
+        if isSelected {
+            if reduceTransparency {
+                content.background(JarvisDesignTokens.glassSolid, in: Capsule())
+            } else {
+                // GlassEffectContainer captures this content above its material.
+                // A separate transparent background lets the lens refract the label itself.
+                content
+                    .glassEffect(
+                        .regular.tint(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
+                            .interactive(!reduceMotion),
+                        in: .capsule
+                    )
+                    .glassEffectID("selected", in: namespace)
+            }
+        } else if isSeparate {
+            content.jarvisGlassCapsule()
+        } else {
+            content
+        }
+    }
+}
+
+/// Shared anatomy and motion for equal-width segments, compact ranges and scrolling tabs.
+private struct JarvisSelectionRow<Tag: Hashable>: View {
+    enum Layout { case segments, period, scrolling }
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Namespace private var namespace
+    let title: String
+    let identifierPrefix: String
+    let items: [JarvisTabItem<Tag>]
+    @Binding var selection: Tag
+    let layout: Layout
+
+    private var font: Font {
+        switch layout {
+        case .segments: .subheadline
+        case .period: .caption
+        case .scrolling: .body
+        }
+    }
+
+    var body: some View {
+        GlassEffectContainer(spacing: layout == .scrolling ? 8 : 0) {
+            HStack(spacing: layout == .scrolling ? 8 : 0) {
+                ForEach(Array(items.enumerated()), id: \.element.tag) { index, item in
+                    Button { selection = item.tag } label: {
+                        Text(item.title)
+                            .font(font.weight(selection == item.tag ? .semibold : .regular))
+                            .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, JarvisDesignTokens.labelledHorizontalPadding)
+                            .padding(.vertical, JarvisDesignTokens.labelledVerticalPadding)
+                            .frame(
+                                minWidth: JarvisDesignTokens.controlMinimumHeight,
+                                maxWidth: layout == .segments ? .infinity : nil,
+                                minHeight: JarvisDesignTokens.controlMinimumHeight
+                            )
+                            .contentShape(Rectangle())
+                            .modifier(JarvisSelectionLens(namespace: namespace,
+                                                          isSelected: selection == item.tag,
+                                                          isSeparate: layout == .scrolling))
+                    }
+                    .buttonStyle(JarvisSelectionPressStyle())
+                    .accessibilityAddTraits(selection == item.tag ? .isSelected : [])
+                    .accessibilityIdentifier(item.identifier ?? "\(identifierPrefix).\(index)")
+                }
+            }
+            .padding(layout == .scrolling ? 0 : JarvisDesignTokens.segmentedSelectionInset)
+        }
+        .background {
+            // The rail is a quiet backing; only the content-bearing choice owns
+            // an optical lens, so nested glass cannot sample its foreground text.
+            if layout != .scrolling {
+                if reduceTransparency {
+                    Capsule().fill(JarvisDesignTokens.glassSolid)
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                }
+            }
+        }
+        .animation(reduceMotion ? nil : .spring(
+            duration: JarvisDesignTokens.selectionResponseDuration,
+            bounce: JarvisDesignTokens.selectionBounce
+        ), value: selection)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(title)
+    }
+}
+
+/// Scrolling alternatives use the same glass lens and press behavior as equal-width segments.
 struct JarvisTabStrip<Tag: Hashable>: View {
     let title: String
     let identifierPrefix: String
@@ -531,24 +653,16 @@ struct JarvisTabStrip<Tag: Hashable>: View {
 
     var body: some View {
         ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                    JarvisLabelledButton(
-                        title: item.title,
-                        identifier: item.identifier ?? "\(identifierPrefix).\(index)",
-                        isSelected: selection == item.tag
-                    ) { selection = item.tag }
-                }
-            }
-            .padding(.vertical, 2)
+            JarvisSelectionRow(title: title, identifierPrefix: identifierPrefix,
+                               items: items, selection: $selection, layout: .scrolling)
+                .padding(.vertical, 2)
         }
         .scrollIndicators(.hidden)
         .scrollClipDisabled()
-        .accessibilityLabel(title)
     }
 }
 
-/// One full-width glass surface with equal-width segments. Individual segments have no separate glass chrome.
+/// One full-width glass surface with equal-width segments and a moving native selected lens.
 struct JarvisSegmentedBar<Tag: Hashable>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
@@ -562,35 +676,13 @@ struct JarvisSegmentedBar<Tag: Hashable>: View {
             JarvisTabStrip(title: title, identifierPrefix: identifierPrefix,
                            items: items, selection: $selection)
         } else {
-            segments
-        }
-    }
-
-    private var segments: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                Button { selection = item.tag } label: {
-                    Text(item.title)
-                        .font(.subheadline.weight(selection == item.tag ? .semibold : .regular))
-                        .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight)
-                        .contentShape(Rectangle())
-                        .background {
-                            if selection == item.tag {
-                                Capsule().fill(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
-                                    .padding(JarvisDesignTokens.segmentedSelectionInset)
-                            }
-                        }
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selection == item.tag ? .isSelected : [])
-                .accessibilityIdentifier(item.identifier ?? "\(identifierPrefix).\(index)")
+            ViewThatFits(in: .horizontal) {
+                JarvisSelectionRow(title: title, identifierPrefix: identifierPrefix,
+                                   items: items, selection: $selection, layout: .segments)
+                JarvisTabStrip(title: title, identifierPrefix: identifierPrefix,
+                               items: items, selection: $selection)
             }
         }
-        .jarvisGlassCapsule()
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(title)
     }
 }
 
@@ -631,52 +723,24 @@ struct JarvisSearchField: View {
 
 /// A compact period control inside a hero, with one glass surface and accessible 44 pt targets.
 struct JarvisPeriodSelector<Tag: Hashable>: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let identifierPrefix: String
     let items: [JarvisTabItem<Tag>]
     @Binding var selection: Tag
 
-    @ViewBuilder
     var body: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            ScrollView(.horizontal) {
-                segments.fixedSize(horizontal: true, vertical: false)
-                    .padding(.vertical, 2)
-            }
-            .scrollIndicators(.hidden)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            segments
+        ScrollView(.horizontal) {
+            segments.fixedSize(horizontal: true, vertical: false)
+                .padding(.vertical, 2)
         }
+        .scrollIndicators(.hidden)
+        .accessibilityIdentifier("\(identifierPrefix).scroll")
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var segments: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
-                Button { selection = item.tag } label: {
-                    Text(item.title)
-                        .font(.caption.weight(selection == item.tag ? .bold : .regular))
-                        .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, JarvisDesignTokens.compactSpacing)
-                        .frame(minWidth: JarvisDesignTokens.controlMinimumHeight, minHeight: JarvisDesignTokens.controlMinimumHeight)
-                        .background {
-                            if selection == item.tag {
-                                Capsule().fill(Color.primary.opacity(0.08))
-                                    .padding(.vertical, JarvisDesignTokens.compactSpacing)
-                            }
-                        }
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(selection == item.tag ? .isSelected : [])
-                .accessibilityIdentifier(item.identifier ?? "\(identifierPrefix).\(index)")
-            }
-        }
-        .jarvisGlassCapsule()
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(title)
+        JarvisSelectionRow(title: title, identifierPrefix: identifierPrefix,
+                           items: items, selection: $selection, layout: .period)
     }
 }
 

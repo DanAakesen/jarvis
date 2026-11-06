@@ -309,9 +309,12 @@ final class ComponentGalleryUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["usage.error"].waitForExistence(timeout: 8))
         let week = app.buttons["usage.range.7d"]
         XCTAssertTrue(week.isHittable)
+        attach(app.screenshot(), named: "P15-usage-error-period-recovery-before")
         week.tap()
         XCTAssertTrue(app.descendants(matching: .any)["usage.error"].waitForExistence(timeout: 8))
         XCTAssertTrue(week.isHittable)
+        XCTAssertTrue(week.isSelected)
+        attach(app.screenshot(), named: "P15-usage-error-period-recovery-after")
     }
 
     func testInitialLoadingHidesFiltersAndUsesOnePageSkeleton() {
@@ -326,6 +329,15 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).count, 0)
             XCTAssertTrue(app.buttons["navigation.openSidebar"].isHittable, "Navigation stays available")
             attach(app.screenshot(), named: "P15-92-\(destination)-loading")
+            if destination == "usage" {
+                let first = loading.screenshot()
+                Thread.sleep(forTimeInterval: 0.6)
+                let second = loading.screenshot()
+                attach(first, named: "Loading shimmer frame 1")
+                attach(second, named: "Loading shimmer frame 2")
+                XCTAssertNotEqual(first.pngRepresentation, second.pngRepresentation,
+                                  "Pending data must have visible loading motion")
+            }
         }
     }
 
@@ -478,6 +490,90 @@ final class ComponentGalleryUITests: XCTestCase {
         created.tap()
         XCTAssertTrue(app.staticTexts["High"].waitForExistence(timeout: 5))
         attach(app.screenshot(), named: "P15-93-notes-task-priority-dark-en")
+    }
+
+    func testTaskBoardRowsDarkEnglish() {
+        exerciseTaskBoard(language: "en", theme: "dark")
+    }
+
+    func testTaskBoardRowsLightDanish() {
+        exerciseTaskBoard(language: "da", theme: "light")
+    }
+
+    func testTaskBoardRowsAtAccessibilityTextSize() {
+        exerciseTaskBoard(language: "en", theme: "dark", largeText: true)
+    }
+
+    private func exerciseTaskBoard(language: String, theme: String, largeText: Bool = false) {
+        let extra = ["--ui-test-task-list-board"] + (largeText
+            ? ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] : [])
+        openPage("notes", language: language, theme: theme, extra: extra)
+        defer { app.terminate() }
+        notesTap("notes.tab.tasks")
+        let firstID = "notes.task.row." + String(repeating: "0", count: 63) + "1"
+        notesReach(firstID)
+        let first = app.descendants(matching: .any).matching(identifier: firstID).firstMatch
+        let completion = first.buttons["notes.task.complete"]
+        XCTAssertTrue(completion.isHittable)
+        // AX frame subtraction can report 43.99999999999994 for an exact 44pt target.
+        // Allow only sub-micropoint arithmetic error, never a visibly smaller target.
+        XCTAssertLessThanOrEqual(max(0, 44 - completion.frame.width), 0.000_001)
+        XCTAssertLessThanOrEqual(max(0, 44 - completion.frame.height), 0.000_001)
+        XCTAssertGreaterThan(first.frame.minX, 20, "Task groups must be inset from the screen edge")
+        if !largeText {
+            XCTAssertLessThan(first.frame.height, 100, "Priority metadata must not inflate a compact task row")
+        }
+        attach(app.screenshot(), named: "P15-task-board-\(language)-\(theme)-large-\(largeText)")
+
+        if !largeText {
+            app.swipeUp()
+            attach(app.screenshot(), named: "P15-task-board-groups-\(language)-\(theme)")
+            revealTaskCompletion(firstID)
+            app.descendants(matching: .any).matching(identifier: firstID).firstMatch
+                .buttons["notes.task.complete"].tap()
+            XCTAssertTrue(first.waitForNonExistence(timeout: 8), "A confirmed completion removes only that task")
+            let title = "4. Review the sample agreement · synthetic deadline"
+            let open = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label == %@", "notes.task.open", title)).firstMatch
+            XCTAssertTrue(open.waitForExistence(timeout: 8), "Markdown emphasis must be rendered without raw markers")
+            XCTAssertTrue(open.isHittable, "The next task remains available after completion")
+            open.tap()
+            let fullTitle = app.staticTexts[title]
+            XCTAssertTrue(fullTitle.waitForExistence(timeout: 5), "Details retain the full task title")
+            attach(app.screenshot(), named: "P15-task-board-detail-\(language)-\(theme)")
+        } else {
+            let lastID = "notes.task.row." + String(repeating: "0", count: 63) + "9"
+            let last = app.descendants(matching: .any).matching(identifier: lastID).firstMatch
+            let lastOpen = last.buttons["notes.task.open"]
+            let search = app.textFields["notes.search"]
+            for _ in 0..<12 {
+                if lastOpen.exists, lastOpen.isHittable, lastOpen.frame.maxY <= search.frame.minY { break }
+                app.swipeUp()
+            }
+            XCTAssertTrue(lastOpen.isHittable)
+            XCTAssertTrue(search.isHittable)
+            XCTAssertLessThanOrEqual(lastOpen.frame.maxY, search.frame.minY, "The final task must scroll clear of the search dock")
+            attach(app.screenshot(), named: "P15-task-board-bottom-accessibility")
+        }
+    }
+
+    private func revealTaskCompletion(_ rowID: String) {
+        let title = app.staticTexts["page.title"]
+        let menu = app.buttons["navigation.openSidebar"]
+        let dock = app.buttons["notes.plus"]
+        for _ in 0..<5 {
+            // A native List can report a row as hittable beneath the fixed header.
+            // Resolve the control again after scrolling and require its whole target
+            // to clear both overlays before performing the real completion action.
+            let control = app.descendants(matching: .any).matching(identifier: rowID)
+                .firstMatch.buttons["notes.task.complete"]
+            if control.exists, control.isHittable,
+               control.frame.minY >= max(title.frame.maxY, menu.frame.maxY) + 16,
+               control.frame.maxY <= dock.frame.minY - 16 {
+                return
+            }
+            app.swipeDown()
+        }
+        XCTFail("Task completion must be fully visible between the header and search dock")
     }
 
     private func notesReach(_ identifier: String, upward: Bool = true) {

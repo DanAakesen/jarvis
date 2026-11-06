@@ -208,6 +208,11 @@ struct JarvisNotesArea: View {
                 .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
                 .padding(.top, JarvisDesignTokens.notesSectionSpacing)
                 .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
+                .background {
+                    if selectedTab == .tasks {
+                        Rectangle().fill(.regularMaterial).ignoresSafeArea(edges: .bottom)
+                    }
+                }
             }
         }
         .task(id: "\(selectedTab.rawValue)-\(refreshVersion)") {
@@ -536,7 +541,7 @@ struct JarvisNotesArea: View {
             } else if visibleSearchNotes.isEmpty && visibleSearchTasks.isEmpty {
                 stateView(icon: "magnifyingglass", title: copy.noResults, retry: nil)
             } else {
-                JarvisList {
+                JarvisList(customRowBackgrounds: true) {
                     if !visibleSearchNotes.isEmpty {
                         Section {
                             ForEach(visibleSearchNotes, id: \.nodeId) { hit in
@@ -558,20 +563,15 @@ struct JarvisNotesArea: View {
                                     }
                                     .buttonStyle(.plain)
                                     .disabled(openingNotePaths.contains(node.path))
+                                    .listRowBackground(JarvisGlassSurface())
                                 }
                             }
                         } header: {
-                            Text(copy.notes)
+                            JarvisSectionHeadline(copy.notes)
                         }
                     }
                     if !visibleSearchTasks.isEmpty {
-                        Section {
-                            ForEach(visibleSearchTasks) { task in
-                                taskRow(task, today: taskSearch?.today ?? taskList?.today ?? "")
-                            }
-                        } header: {
-                            Text(copy.tasks)
-                        }
+                        taskSection(visibleSearchTasks, title: copy.tasks, today: taskSearch?.today ?? taskList?.today ?? "")
                     }
                 }
                 .listStyle(.plain)
@@ -651,81 +651,55 @@ struct JarvisNotesArea: View {
                     }
                 }
             } else {
-                JarvisList(head: { pageHead }) {
-                    if !groups.overdue.isEmpty {
-                        Section {
-                            ForEach(groups.overdue) { task in taskRow(task, today: list.today) }
-                        } header: {
-                            JarvisSectionHeadline(copy.overdue)
-                        }
-                    }
-                    if !groups.today.isEmpty {
-                        Section {
-                            ForEach(groups.today) { task in taskRow(task, today: list.today) }
-                        } header: {
-                            JarvisSectionHeadline(copy.today)
-                        }
-                    }
-                    if !groups.upcoming.isEmpty {
-                        Section {
-                            ForEach(groups.upcoming) { task in taskRow(task, today: list.today) }
-                        } header: {
-                            JarvisSectionHeadline(copy.upcoming)
-                        }
-                    }
-                    if !groups.noDate.isEmpty {
-                        Section {
-                            ForEach(groups.noDate) { task in taskRow(task, today: list.today) }
-                        } header: {
-                            JarvisSectionHeadline(copy.noDate)
-                        }
-                    }
+                JarvisList(customRowBackgrounds: true) {
+                    pageHead
+                } content: {
+                    taskSection(groups.overdue, title: copy.overdue, today: list.today)
+                    taskSection(groups.today, title: copy.today, today: list.today)
+                    taskSection(groups.upcoming, title: copy.upcoming, today: list.today)
+                    taskSection(groups.noDate, title: copy.noDate, today: list.today)
                 }
                 .listStyle(.plain)
-                .contentMargins(.bottom, JarvisNotesOverviewMetrics.bottomClearance, for: .scrollContent)
+                .listRowSpacing(0)
+                .listSectionSpacing(JarvisPageHeaderMetrics.spacing)
+                .contentMargins(.top, 0, for: .scrollContent)
+                .contentMargins(.bottom, JarvisDesignTokens.notesHorizontalInset, for: .scrollContent)
                 .scrollContentBackground(.hidden)
+                .accessibilityIdentifier("notes.tasks.list")
             }
         }
     }
 
-    private func taskRow(_ task: VaultTask, today: String) -> some View {
-        HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-            JarvisIconButton(
-                title: task.done ? copy.completed : copy.complete,
-                systemImage: task.done ? "checkmark.circle.fill" : "circle",
-                identifier: "notes.task.complete",
-                isBusy: pendingTaskIDs.contains(task.id),
-                isDisabled: task.done,
-                isSelected: task.done
-            ) { Task { await completeTask(task) } }
-            .accessibilityValue(task.text)
-            Button {
-                openedTask = task
-            } label: {
-            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                Text(task.text).foregroundStyle(.primary)
-                HStack(spacing: JarvisDesignTokens.notesMetadataSpacing) {
-                    Text(task.scope == .work ? copy.work : copy.personal)
-                    if let due = task.dueDate {
-                        Text(due == today ? copy.today : JarvisNotesLocalization.formattedDueDate(due, language: copy.language))
-                    }
-                    if let time = task.dueTime {
-                        Text(JarvisNotesLocalization.formattedDueTime(time, language: copy.language))
-                    }
-                    Text(priorityText(task.priority))
+    @ViewBuilder
+    private func taskSection(_ tasks: [VaultTask], title: String, today: String) -> some View {
+        if !tasks.isEmpty {
+            Section {
+                ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
+                    taskRow(task, today: today, isFirst: index == 0, isLast: index == tasks.count - 1)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            } header: {
+                JarvisSectionHeadline(title, count: tasks.count)
+                    .textCase(nil)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("notes.task.open")
+            .listSectionSeparator(.hidden)
         }
-        .frame(minHeight: JarvisDesignTokens.notesRowMinimumHeight)
-        .jarvisListRow(separator: false)
-        .listRowInsets(EdgeInsets())
+    }
+
+    private func taskRow(_ task: VaultTask, today: String, isFirst: Bool, isLast: Bool) -> some View {
+        JarvisTaskListRow(
+            task: task,
+            copy: copy,
+            today: today,
+            isWorking: pendingTaskIDs.contains(task.id),
+            isFirst: isFirst,
+            isLast: isLast,
+            onComplete: { Task { await completeTask(task) } },
+            onOpen: { openedTask = task }
+        )
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 16))
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !task.done {
                 Button {
@@ -742,7 +716,7 @@ struct JarvisNotesArea: View {
     private func taskDetail(_ task: VaultTask, today: String) -> some View {
         JarvisForm {
             Section {
-                Text(task.text).font(.headline)
+                Text(JarvisTaskTitle.formatted(task.text)).font(.headline)
             }
             Section {
                 LabeledContent(copy.scope, value: task.scope == .work ? copy.work : copy.personal)

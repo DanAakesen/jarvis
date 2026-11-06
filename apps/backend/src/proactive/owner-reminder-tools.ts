@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
+import { explainedArgumentsMessage } from '../core/tool-arguments.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { readVaultTasks } from './todo-discovery.js';
 import { dayKey, isQuietHour, localDateTimeInstant, localTimeLabel } from './time.js';
@@ -14,18 +15,48 @@ import type {
 type VaultReader = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read'>;
 
 const uuidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
+const instantPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u;
+const fields = {
+  operation: { type: 'string', enum: ['create', 'read', 'update', 'snooze', 'cancel'] },
+  id: { type: 'string', format: 'uuid', description: 'Existing reminder ID returned by read.' },
+  task: { type: 'string', minLength: 1, maxLength: 300, pattern: '\\S', description: 'Exact title of an existing open vault task, matching the owner request.' },
+  fireAt: {
+    type: 'string', format: 'date-time', pattern: instantPattern.source,
+    description: 'ISO timestamp with seconds and Z or numeric offset (up to millisecond precision). Convert the requested Copenhagen date/time to this instant; do not treat local time as UTC.',
+  },
+  cadence: { type: 'string', enum: ['daily', 'weekly', 'once'], description: 'Create defaults to once; update preserves the existing cadence if omitted.' },
+  untilTaskDone: { type: 'boolean', description: 'Repeat until completed only with daily or weekly cadence. Create defaults to false; update preserves the existing value if omitted.' },
+} as const;
+type ReminderField = keyof typeof fields;
+function operationSchema(operation: string, required: ReminderField[], optional: ReminderField[] = []) {
+  const allowed = ['operation', ...required, ...optional];
+  return {
+    type: 'object',
+    properties: {
+      ...Object.fromEntries([...required, ...optional].map((key) => [key, fields[key]])),
+      operation: { type: 'string', const: operation },
+    },
+    required: ['operation', ...required],
+    // Keep additionalProperties at the root: Fastify must not remove fields
+    // while trying a different oneOf branch.
+    not: { anyOf: [
+      ...Object.keys(fields).filter((key) => !allowed.includes(key)).map((key) => ({ required: [key] })),
+      { required: ['cadence', 'untilTaskDone'], properties: { cadence: { const: 'once' }, untilTaskDone: { const: true } } },
+    ] },
+  };
+}
 const inputSchema = {
   type: 'object',
-  properties: {
-    operation: { type: 'string', enum: ['create', 'read', 'update', 'snooze', 'cancel'] },
-    id: { type: 'string', format: 'uuid' },
-    task: { type: 'string', minLength: 1, maxLength: 300 },
-    fireAt: { type: 'string', format: 'date-time' },
-    cadence: { type: 'string', enum: ['daily', 'weekly', 'once'] },
-    untilTaskDone: { type: 'boolean' },
-  },
+  properties: fields,
   required: ['operation'],
   additionalProperties: false,
+  oneOf: [
+    operationSchema('read', []),
+    operationSchema('create', ['task', 'fireAt'], ['cadence', 'untilTaskDone']),
+    operationSchema('update', ['id', 'task', 'fireAt'], ['cadence', 'untilTaskDone']),
+    operationSchema('snooze', ['id', 'task', 'fireAt']),
+    operationSchema('cancel', ['id', 'task']),
+  ],
 } as const;
 
 type ReminderIntent = {
@@ -60,6 +91,29 @@ function normalize(value: string): string {
   return value.normalize('NFC').toLocaleLowerCase('en').replace(/\s+/gu, ' ').trim();
 }
 
+function normalizedInstant(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !instantPattern.test(value)) return undefined;
+  const wallTime = value.slice(0, 19);
+  const local = new Date(`${wallTime}Z`);
+  const instant = new Date(value);
+  // Date.parse normalizes impossible dates such as February 30; refuse those.
+  if (!Number.isFinite(local.getTime()) || local.toISOString().slice(0, 19) !== wallTime ||
+      !Number.isFinite(instant.getTime())) return undefined;
+  return instant.toISOString();
+}
+
+function inputHint(value: unknown): string {
+  const operation = isObject(value) ? value.operation : undefined;
+  if (operation === 'read') return 'read accepts only operation; omit all other fields.';
+  if (operation === 'cancel') return 'cancel requires id (UUID from read) and task (exact title); omit fireAt, cadence and untilTaskDone.';
+  if (operation === 'create' || operation === 'update' || operation === 'snooze') {
+    return `${operation} requires ${operation === 'create' ? 'task; omit id' : 'id (UUID from read) and task'}. ` +
+      'fireAt requires a valid ISO date/time with seconds and Z or an offset, matching the requested Copenhagen time. ' +
+      (operation === 'snooze' ? 'Omit cadence and untilTaskDone.' : 'cadence: once, daily or weekly; untilTaskDone: boolean, never true with once.');
+  }
+  return 'operation must be read, create, update, snooze or cancel. Use the operation-specific required fields in the schema.';
+}
+
 function parseInput(value: unknown): ReminderInput | undefined {
   if (!isObject(value) || Object.keys(value).some((key) =>
     !['operation', 'id', 'task', 'fireAt', 'cadence', 'untilTaskDone'].includes(key))) return undefined;
@@ -73,23 +127,23 @@ function parseInput(value: unknown): ReminderInput | undefined {
     return Object.keys(value).every((key) => ['operation', 'id', 'task'].includes(key))
       ? { operation, id: value.id as string, task } : undefined;
   }
-  if (typeof value.fireAt !== 'string' || !Number.isFinite(Date.parse(value.fireAt)) ||
-      new Date(value.fireAt).toISOString() !== value.fireAt) return undefined;
+  const fireAt = normalizedInstant(value.fireAt);
+  if (!fireAt) return undefined;
   if (operation === 'snooze') {
     return Object.keys(value).every((key) => ['operation', 'id', 'task', 'fireAt'].includes(key))
-      ? { operation, id: value.id as string, task, fireAt: value.fireAt } : undefined;
+      ? { operation, id: value.id as string, task, fireAt } : undefined;
   }
   if (Object.hasOwn(value, 'cadence') &&
       value.cadence !== 'daily' && value.cadence !== 'weekly' && value.cadence !== 'once') return undefined;
-  if (operation === 'create' && value.cadence === 'once') return undefined;
   if (value.cadence === 'once' && value.untilTaskDone === true) return undefined;
   if (Object.hasOwn(value, 'untilTaskDone') && typeof value.untilTaskDone !== 'boolean') return undefined;
   const result = {
     operation,
     task,
-    fireAt: value.fireAt,
+    fireAt,
     ...(operation === 'update' ? { id: value.id as string } : {}),
-    ...(value.cadence === undefined ? {} : { cadence: value.cadence as OwnerReminderCadence | 'once' }),
+    ...(value.cadence === undefined || operation === 'create' && value.cadence === 'once'
+      ? {} : { cadence: value.cadence as OwnerReminderCadence | 'once' }),
     ...(value.untilTaskDone === undefined ? {} : { untilTaskDone: value.untilTaskDone as boolean }),
   };
   if (operation === 'create' && Object.hasOwn(value, 'id')) return undefined;
@@ -127,8 +181,8 @@ function resolveLocalDateTime(dateToken: string | undefined, timeToken: string, 
 }
 
 function parseCreateIntent(text: string, now: Date): ReminderIntent | undefined {
-  const en = /^(?:please\s+)?remind me (?:to|about) (?<task>.+?)\s+(?:(?:on\s+)?(?<date>today|tomorrow|\d{4}-\d{2}-\d{2})\s+)?at (?<time>\d{1,2}:\d{2})(?:\s+(?<cadence>daily|every day|weekly|every week)(?:\s+(?<until>until (?:it's )?done|until complete))?)?[.!?]?$/iu.exec(text.trim());
-  const da = /^mind mig om (?<task>.+?)\s+(?:(?:den\s+)?(?<date>i dag|i morgen|\d{4}-\d{2}-\d{2})\s+)?kl\.? (?<time>\d{1,2}:\d{2})(?:\s+(?<cadence>dagligt|hver dag|ugentligt|hver uge)(?:\s+(?<until>indtil (?:opgaven er )?færdig))?)?[.!?]?$/iu.exec(text.trim());
+  const en = /^(?:please\s+)?remind me (?:to|about) (?<task>.+?)\s+(?:(?:on\s+)?(?<date>today|tomorrow|\d{4}-\d{2}-\d{2})\s+)?at (?<time>\d{1,2}:\d{2})(?:\s+(?<cadence>daily|every day|weekly|every week|once|one time)(?:\s+(?<until>until (?:it's )?done|until complete))?)?[.!?]?$/iu.exec(text.trim());
+  const da = /^mind mig om (?<task>.+?)\s+(?:(?:den\s+)?(?<date>i dag|i morgen|\d{4}-\d{2}-\d{2})\s+)?kl\.? (?<time>\d{1,2}:\d{2})(?:\s+(?<cadence>dagligt|hver dag|ugentligt|hver uge|én gang|en gang)(?:\s+(?<until>indtil (?:opgaven er )?færdig))?)?[.!?]?$/iu.exec(text.trim());
   const match = en ?? da;
   if (!match?.groups?.task || !match.groups.time) return undefined;
   const fireAt = resolveLocalDateTime(match.groups.date, match.groups.time, now);
@@ -136,7 +190,8 @@ function parseCreateIntent(text: string, now: Date): ReminderIntent | undefined 
   const cadenceText = match.groups.cadence?.toLocaleLowerCase('en');
   const cadence: OwnerReminderCadence | null = cadenceText === 'daily' || cadenceText === 'every day' ||
     cadenceText === 'dagligt' || cadenceText === 'hver dag' ? 'daily'
-    : cadenceText ? 'weekly' : null;
+    : cadenceText === 'weekly' || cadenceText === 'every week' || cadenceText === 'ugentligt' ||
+      cadenceText === 'hver uge' ? 'weekly' : null;
   return {
     action: 'create',
     task: match.groups.task.trim(),
@@ -231,17 +286,17 @@ export function createOwnerReminderTool(options: {
 }): JarvisTool {
   return {
     name: 'owner_reminders',
-    description: 'Create, list, reschedule, snooze or cancel owner-requested task reminders. Writes require a matching direct owner message; reminder times never change task deadlines.',
+    description: 'Create, list, reschedule, snooze or cancel owner-requested reminders for existing open vault tasks. Writes require a matching direct owner message with the exact task, action, explicit Copenhagen date/time and recurrence. Choose a future time within a year, outside 22:00–07:00 Copenhagen. Read first to obtain IDs for changes. Reminder times never change task deadlines.',
     inputSchema,
     sensitive: true,
     validateInput: (input) => parseInput(input) !== undefined,
-    explainInvalidInput: () => 'Use read, or create/update/snooze/cancel with the required task, reminder ID and Copenhagen time.',
+    explainInvalidInput: inputHint,
     async execute(raw, request, signal) {
       const authorized = request.agentPrincipal !== null && request.agentPrincipal !== undefined ||
         request.principal?.objectId.toLowerCase() === options.ownerObjectId.toLowerCase();
       if (!authorized) throw new ToolRefusal('Owner reminders are not authorized.');
       const input = parseInput(raw);
-      if (!input) throw new ToolRefusal('Choose a valid owner reminder operation.');
+      if (!input) throw new ToolRefusal(explainedArgumentsMessage(inputHint(raw)));
       if (input.operation === 'read') {
         try {
           const schedules = await options.store.list(20);

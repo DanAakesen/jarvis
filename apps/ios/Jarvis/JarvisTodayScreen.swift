@@ -25,7 +25,9 @@ struct JarvisTodayScreen: View {
     let fixtureMode: Bool
     let onChat: (JarvisChatHandoff) -> Void
     let onVoice: () -> Void
+    var onSyncAppleHealth: (() async -> JarvisHealthSyncState?)? = nil
 
+    @State private var healthSyncState: JarvisHealthSyncState?
     @State private var tab: Tab = .today
     @State private var listExpanded = false
     @State private var sheet: Sheet?
@@ -49,6 +51,7 @@ struct JarvisTodayScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 greeting
+                JarvisHealthSyncIssue(state: healthSyncState, language: language)
                 JarvisTodayActivityCard(model: model, language: language, fixtureMode: fixtureMode)
                 if model.isShowingOfflineCopy {
                     Label(copy(.offline), systemImage: "wifi.slash")
@@ -68,6 +71,11 @@ struct JarvisTodayScreen: View {
                     .onTapGesture { model.activity.clearSelection() }
                     .accessibilityHidden(true)
             }
+        }
+        .refreshable {
+            healthSyncState = await onSyncAppleHealth?()
+            guard !Task.isCancelled else { return }
+            await model.refresh(force: true)
         }
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
@@ -323,12 +331,12 @@ struct JarvisTodayScreen: View {
     private func taskRow(_ task: VaultTask) -> some View {
         HStack(spacing: 4) {
             JarvisCheckButton(
-                title: "\(copy(.markDone)): \(task.text)",
+                title: "\(copy(.markDone)): \(JarvisTaskTitle.plain(task.text))",
                 identifier: "today.task.done.\(task.id)",
                 isWorking: pendingTaskIDs.contains(task.id)
             ) { Task { await completeTask(task) } }
             VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                Text(task.text).font(.body).lineLimit(2)
+                Text(JarvisTaskTitle.formatted(task.text)).font(.body).lineLimit(2)
                 if let due = dueText(task) {
                     Text(due)
                         .font(.footnote)
@@ -503,6 +511,14 @@ struct JarvisTodayScreen: View {
         onChat(JarvisChatHandoff(text: text, action: action))
     }
 
+    private var usesCameraStub: Bool {
+#if targetEnvironment(simulator)
+        fixtureMode && ProcessInfo.processInfo.arguments.contains("--ui-test-camera-sheet")
+#else
+        false
+#endif
+    }
+
     private func chatCopy(_ key: JarvisChatLocalizationKey) -> String {
         JarvisChatLocalization.string(key, language: language)
     }
@@ -561,7 +577,7 @@ struct JarvisTodayScreen: View {
                         screenShareDisabled: fixtureMode,
                         videoDisabled: fixtureMode,
                         attachDisabled: fixtureMode,
-                        cameraDisabled: fixtureMode,
+                        cameraDisabled: fixtureMode && !usesCameraStub,
                         onAction: handOffPlusAction
                     )
                 },

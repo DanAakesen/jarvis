@@ -217,6 +217,10 @@ enum JarvisDesignTokens {
     static let segmentedBarSpacing: CGFloat = 12
     static let segmentedSelectionInset: CGFloat = 3
     static let segmentedSelectionOpacity: Double = 0.08
+    static let selectionPressScaleX: CGFloat = 0.97
+    static let selectionPressScaleY: CGFloat = 0.94
+    static let selectionResponseDuration: TimeInterval = 0.28
+    static let selectionBounce: Double = 0.18
     static let notesMetadataSpacing: CGFloat = 8
     static let notesChevronSize: CGFloat = 12
     static let notesTaskActionSize: CGFloat = 22
@@ -420,11 +424,13 @@ struct JarvisForm<Content: View>: View {
 }
 
 struct JarvisList<Head: View, Content: View>: View {
+    private let customRowBackgrounds: Bool
     private let head: Head
     private let content: Content
 
     /// `head` is the page's headline and hero: the first row, with no glass behind it.
-    init(@ViewBuilder head: () -> Head, @ViewBuilder content: () -> Content) {
+    init(customRowBackgrounds: Bool = false, @ViewBuilder head: () -> Head, @ViewBuilder content: () -> Content) {
+        self.customRowBackgrounds = customRowBackgrounds
         self.head = head()
         self.content = content()
     }
@@ -435,15 +441,19 @@ struct JarvisList<Head: View, Content: View>: View {
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .listRowInsets(EdgeInsets())
-            content.listRowBackground(JarvisGlassSurface())
+            if customRowBackgrounds {
+                content
+            } else {
+                content.listRowBackground(JarvisGlassSurface())
+            }
         }
         .scrollContentBackground(.hidden)
     }
 }
 
 extension JarvisList where Head == EmptyView {
-    init(@ViewBuilder content: () -> Content) {
-        self.init(head: { EmptyView() }, content: content)
+    init(customRowBackgrounds: Bool = false, @ViewBuilder content: () -> Content) {
+        self.init(customRowBackgrounds: customRowBackgrounds, head: { EmptyView() }, content: content)
     }
 }
 

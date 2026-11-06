@@ -357,17 +357,22 @@ describe('Software Factory Jarvis tools', () => {
     expect(advertisedIssue.inputSchema.properties.project.description).toContain('active project ID');
   });
 
-  it('creates a code-change issue directly when Dan asks', async () => {
-    const { app, githubIssueClient } = fixture();
-    const created = await app.inject({
+  it.each(['[Bug] Fix retries', 'Add a new feature'])('stages my own %s until Dan approves', async (title) => {
+    const test = fixture();
+    const { app, githubIssueClient } = test;
+    const staged = await app.inject({
       method: 'POST',
       url: '/tools/create_issue',
       headers,
       payload: {
-        title: 'Fix retries',
+        title,
         body: 'Problem: retries fail.\nAcceptance: retry succeeds.',
       },
     });
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+    const created = await confirm(test, staged.json().result);
     expect(created.json()).toMatchObject({
       outcome: 'ok',
       result: {
@@ -378,9 +383,9 @@ describe('Software Factory Jarvis tools', () => {
     });
     expect(githubIssueClient.createIssue).toHaveBeenCalledWith(
       project.repo,
-      'P11-01: Fix retries',
+      `P11-01: ${title}`,
       'Problem: retries fail.\nAcceptance: retry succeeds.',
-      { labels: ['P11', 'enhancement'] },
+      { labels: ['P11', title.startsWith('[Bug]') ? 'bug' : 'enhancement'] },
     );
     expect(githubIssueClient.addLabels).toHaveBeenCalledWith(project.repo, 9, ['Jarvis']);
   });
@@ -835,7 +840,7 @@ describe('Software Factory Jarvis tools', () => {
   );
 
   it('executes all tools through their stores and records message-linked calls', async () => {
-    const { app, projectStore, taskStore, taskController, record } = fixture();
+    const { app, projectStore, taskStore, taskController, record } = fixture([{ ...project, repo: 'DanAakesen/other-project' }]);
     const calls: [string, Record<string, unknown>][] = [
       ['list_projects', {}],
       ['update_project', { projectId: '7', name: 'Jarvis updated', description: 'The project description', default_agent: 'copilot' }],
@@ -866,7 +871,7 @@ describe('Software Factory Jarvis tools', () => {
       });
     }
 
-    expect(projectStore.list).toHaveBeenCalledTimes(6);
+    expect(projectStore.list).toHaveBeenCalledTimes(7);
     expect(projectStore.update).toHaveBeenCalledWith('7', {
       name: 'Jarvis updated', description: 'The project description', default_agent: 'copilot',
     });
@@ -1170,7 +1175,7 @@ describe('Software Factory Jarvis tools', () => {
   });
 
   it('accepts supported Copilot model and reasoning on task creation', async () => {
-    const { app, taskStore } = fixture();
+    const { app, taskStore } = fixture([{ ...project, repo: 'DanAakesen/other-project' }]);
     const response = await app.inject({
       method: 'POST', url: '/tools/create_task', headers,
       payload: {
@@ -1186,10 +1191,13 @@ describe('Software Factory Jarvis tools', () => {
   });
 
   it('starts open issues as Codex tasks and refuses closed issues', async () => {
-    const { app, taskStore, githubIssueClient } = fixture();
-    const started = await app.inject({
+    const test = fixture();
+    const { app, taskStore, githubIssueClient } = test;
+    const staged = await app.inject({
       method: 'POST', url: '/tools/start_issue', headers, payload: { issue: 8 },
     });
+    expect(taskStore.create).not.toHaveBeenCalled();
+    const started = await confirm(test, staged.json().result);
     expect(started.json()).toMatchObject({
       outcome: 'ok',
       result: {
@@ -1206,16 +1214,25 @@ describe('Software Factory Jarvis tools', () => {
       url: 'https://github.com/DanAakesen/jarvis/issues/8', labels: [], isPullRequest: false,
     });
     const refused = await app.inject({
-      method: 'POST', url: '/tools/start_issue', headers, payload: { issue: 8 },
+      method: 'POST', url: '/tools/start_issue', headers: { ...headers, 'x-jarvis-message-id': '43' }, payload: { issue: 8 },
     });
     expect(refused.json()).toMatchObject({
       outcome: 'refused',
-      result: { refused: 'Only open GitHub issues can be started.' },
+      result: { refused: 'Only an open GitHub issue can be started.' },
     });
   });
 
+  it('refuses own-code task creation through the non-code shortcut', async () => {
+    const test = fixture();
+    const response = await test.app.inject({ method: 'POST', url: '/tools/create_task', headers,
+      payload: { projectId: '7', prompt: 'Add a new feature', agent: 'codex' } });
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('requires a reviewed proposal') } });
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    expect(test.taskStore.create).not.toHaveBeenCalled();
+  });
+
   it('associates a chat-created task with its originating message', async () => {
-    const { app, taskStore } = fixture();
+    const { app, taskStore } = fixture([{ ...project, repo: 'DanAakesen/other-project' }]);
 
     const response = await app.inject({
       method: 'POST', url: '/tools/create_task', headers,

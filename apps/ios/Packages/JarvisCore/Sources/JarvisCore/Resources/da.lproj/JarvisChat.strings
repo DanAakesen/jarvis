@@ -118,3 +118,33 @@
 "chat.activity.release" = "Udgivelser og udrulninger";
 "chat.activity.credential" = "Advarsler om legitimationsoplysninger";
 "chat.activity.alert" = "Advarsler";
+
+// Explicit isolated runtime tests.
+"chat.runtime.runtimeTest" = "Test agent-runtime";
+"chat.runtime.runtimeTestIntro" = "Vælg en runtime til en separat testsamtale. Din normale tale- og chathistorik forbliver samlet. Runtime kan ikke ændres under en test.";
+"chat.runtime.runtimeCurrent" = "Nuværende";
+"chat.runtime.runtimeOpen" = "Åbn testsamtale";
+"chat.runtime.runtimeChecking" = "Tjekker runtimes";
+"chat.runtime.runtimeRetry" = "Tjek igen";
+"chat.runtime.runtimeUnavailable" = "Denne runtime er ikke tilgængelig.";
+"chat.runtime.runtimeNotConfigured" = "Copilot-test er ikke aktiveret på serveren.";
+"chat.runtime.runtimeNotVerified" = "De valgte indstillinger og Copilot-runtime er ikke verificeret.";
+"chat.runtime.runtimeVerificationFailed" = "Kunne ikke verificere Copilot. Prøv at tjekke igen.";
+"chat.runtime.runtimeStorageUnavailable" = "Samtalelageret er ikke tilgængeligt.";
+"chat.runtime.runtimeSettingsMismatch" = "Copilot kræver en konfigurationsopdatering til de valgte chatindstillinger.";
+"chat.runtime.runtimeDefinitionMismatch" = "Copilot kræver en konfigurationsopdatering før test.";
+"chat.runtime.runtimeTitle" = "Testsamtale";
+"chat.runtime.runtimeHistoryNotice" = "Testbeskeder vises ikke i din normale samtale.";
+"chat.runtime.runtimeEmpty" = "Send en besked for at prøve denne runtime.";
+"chat.runtime.runtimeReturn" = "Tilbage til normal samtale";
+"chat.runtime.runtimeMessage" = "Testbesked";
+"chat.runtime.runtimeSending" = "Venter på testsvar";
+"chat.runtime.runtimeStop" = "Stop svar";
+"chat.runtime.runtimeRefreshHistory" = "Opdater testhistorik";
+"chat.runtime.runtimeHistoryFailed" = "Kunne ikke hente testhistorikken. Opdater den, før du sender igen.";
+"chat.runtime.runtimeCreateFailed" = "Kunne ikke åbne testen. Tjek tilgængeligheden, og prøv igen.";
+"chat.runtime.runtimeUncertain" = "Svaret kan være afsluttet eller have udført en handling. Opdater historikken, og tjek handlingens status, før du sender en ny besked. Intet sendes igen automatisk.";
+"chat.runtime.runtimeBlocked" = "Denne test har et uafsluttet svar og kan ikke fortsætte sikkert. Tjek historikken og handlingens status, og vend tilbage til din normale samtale. Opdatering fjerner ikke det uafsluttede svar.";
+"chat.runtime.runtimeStopFailed" = "Kunne ikke bekræfte, at svaret blev stoppet. Vent på svaret, og tjek handlingens status.";
+"chat.runtime.runtimeYou" = "Dig";
+"chat.runtime.older" = "Hent ældre beskeder";

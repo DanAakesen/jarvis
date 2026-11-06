@@ -31,7 +31,7 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
         const seen = new Map<string, { dueHasTime: boolean }>();
         const open = todos.flatMap((todo, index) => {
           if (todo.done || !todo.highPriority) return [];
-          const key = JSON.stringify([normaliseFactText(todo.text), todo.dueAt]);
+          const key = JSON.stringify([normaliseFactText(todo.text), todo.dueAt, todo.remindAtDue === true]);
           const existing = seen.get(key);
           if (existing) {
             existing.dueHasTime ||= todo.dueHasTime;
@@ -71,6 +71,7 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
             observedAt: now.toISOString(),
             dueAt: todo.dueAt,
             dueHasTime: todo.dueHasTime,
+            ...(todo.remindAtDue ? { remindAtDue: true } : {}),
             highPriority: todo.highPriority,
           })),
         };

@@ -113,8 +113,8 @@ export function readVaultTasks(vault: VaultReader, signal: AbortSignal): Promise
 }
 
 export async function readVaultTodos(vault: VaultReader, signal: AbortSignal): Promise<ParsedTodo[]> {
-  return (await readVaultTasks(vault, signal)).map(({ text, dueAt, dueHasTime, done, highPriority }) =>
-    ({ text, dueAt, dueHasTime, done, highPriority }));
+  return (await readVaultTasks(vault, signal)).map(({ text, dueAt, dueHasTime, done, highPriority, remindAtDue }) =>
+    ({ text, dueAt, dueHasTime, done, highPriority, ...(remindAtDue ? { remindAtDue } : {}) }));
 }
 
 export type VaultTaskState = 'open' | 'done' | 'all';

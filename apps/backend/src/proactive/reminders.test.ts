@@ -4,7 +4,7 @@ import type { FindingsStoredContext } from './engine.js';
 import { createMemoryAlertLedgerStore } from './alert-ledger.js';
 import { createMemoryProactiveReminderStore, type PlannedReminder } from './reminder-store.js';
 import { createMemoryProactiveStore } from './store.js';
-import { createTodoReminderPlanner, reminderDedupeKey, reminderKey, reminderTitle } from './reminders.js';
+import { createTodoReminderPlanner, planTodoReminders, reminderDedupeKey, reminderKey, reminderTitle } from './reminders.js';
 import { createReminderTicker } from './reminder-ticker.js';
 import { dayKey, localDateTimeInstant, localTimeLabel } from './time.js';
 import { detectFindings, deterministicDedupeKey } from './detect.js';
@@ -691,5 +691,34 @@ describe('todo reminder ticker', () => {
     expect(JSON.stringify(vi.mocked(current.reminders.updatePending).mock.calls)).not.toContain(canary);
     expect(current.reminders.snapshot()[0]?.title).toBe(canary);
     expect((await current.store.items.list('all', 10, NOW))[0]?.title).toBe(canary);
+  });
+});
+
+
+describe('explicit vault reminder timing', () => {
+  it('discovers the high-priority vault task, sends at its requested time and cancels a completed task', async () => {
+    const dueAt = new Date(NOW.getTime() + 2 * 60 * 60_000);
+    const content = `${todoText('Call dentist', dueAt)} [reminder:: at_due_time]`;
+    const test = fixture({ content });
+    const source = await createTodosSource(test.vault).read({ now: NOW, signal: AbortSignal.timeout(5_000) });
+    expect(source.facts[0]).toMatchObject({ text: 'Call dentist', remindAtDue: true });
+    await planTodoReminders({ reminders: test.reminders, facts: source.facts, now: NOW, plannedRunId: RUN });
+    expect(test.reminders.snapshot()[0]).toMatchObject({ fireAt: dueAt, deadlineAlertKey: null });
+    await test.ticker.start();
+    test.setNow(new Date(dueAt.getTime() - 60 * 60_000));
+    await test.ticker.tick();
+    expect(test.send).not.toHaveBeenCalled();
+    test.setNow(dueAt);
+    await test.ticker.tick();
+    expect(test.send).toHaveBeenCalledOnce();
+    await test.ticker.tick();
+    expect(test.send).toHaveBeenCalledOnce();
+
+    const cancelled = fixture({ content: content.replace('[ ]', '[x]'), at: dueAt });
+    await planTodoReminders({ reminders: cancelled.reminders, facts: source.facts, now: NOW, plannedRunId: RUN });
+    await cancelled.ticker.start();
+    await cancelled.ticker.tick();
+    expect(cancelled.send).not.toHaveBeenCalled();
+    expect(cancelled.reminders.snapshot()[0]).toMatchObject({ state: 'cancelled', reason: 'todo_changed' });
   });
 });
