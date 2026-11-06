@@ -8779,7 +8779,7 @@ shared by plot labels, accessible summaries and records.
 
 ### Copilot policy compatibility receipt (6 November)
 
-The proposed gate binds SHA256 evidence to policy transport revision, normalized
+The deployed gate binds SHA256 evidence to policy transport revision, normalized
 project URL, native agent name/version, definition fingerprint, model and effort.
 Backend discovery, new runtime-test sessions, existing sends and internal claims
 require matching evidence. Read-only admin metadata and synthetic diagnostics stay

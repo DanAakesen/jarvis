@@ -554,3 +554,28 @@ Replacement df56bcaa47057bd18958ae151984747a505fe603 retains identical app/test 
 `d3f0f3c1c7e71bd0ed0d97b0b7c11520255ad12a`. Fresh CI 42258269045, CodeQL 42258268841
 and single native 42258268925 qualify this candidate. Core job 128031762072 passed
 502 tests with 0 failures at 17:07:18 UTC. Native is waiting for a Mac runner.
+
+## 17:36 UTC — Compatibility gate deployed; native review remains
+
+Normal Deploy 42258321357 succeeded. Immutable release evidence records
+`accepted: true`, `superseded: false`, source/applied_head
+`1fb0f908ab6c5460420a471a867482b56bb766b2`, tree
+`dff0e6df665a5fef3852e3bb5116f57e201d7d0a`, and qualification CI 42256565855 / PR #1624.
+Infra, backend, web and agent were applied, deterministic readiness passed, and
+all 15 Current acceptance checks are ok (including chat, identity, capabilities,
+GitHub read, jobs, navigation and ordinary approval). Backend image digest
+`sha256:084b7c6a06f3fdfda2306a3231ae85007986f27648360e1c98c9181f1137ad64`
+reached ready at 17:29:59 UTC. Local retained receipt:
+`/tmp/p15-policy-gate-release-evidence.json`. Manual comparison was skipped;
+no Copilot activation or extra probe occurred. The deployed compatibility gate
+is accepted; the provider's trusted-policy incompatibility remains unresolved.
+
+UI df56 CI 42258269045 and CodeQL 42258268841 passed. Its immutable CI receipt
+artifact 13524466720 (SHA256 979c7830431aa9ecab1c32daf487591003180e2a00357624d3d962f02f5e16e7)
+records tested merge source `f924537b132f4c2f729a2cf034bfb777bc189ab5`, full tree
+`ee0bf4e0bbcd408ff4322c62e17975f345a7edd1`, app/test tree
+`d3f0f3c1c7e71bd0ed0d97b0b7c11520255ad12a`. Prospective merge onto current main
+has full tree `3627eaeaec04207a27e3f82f338e1eb04e92d1c1`, differing only by the
+independently qualified backend gate. Full main CI must qualify that merge;
+matching app/test scope permits reuse only after native 42258268925 actually passes
+and its visuals are accepted. That single native run compiled and is still active.
