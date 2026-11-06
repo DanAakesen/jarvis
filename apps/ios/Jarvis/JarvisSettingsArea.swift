@@ -54,7 +54,14 @@ private struct JarvisSettingsRow: Identifiable {
     var disabledHint: JarvisSettingsLocalizationKey? = nil
 }
 
+private struct JarvisSettingsGroup: Identifiable {
+    let id: String
+    let title: String
+    let rowIDs: [String]
+}
+
 struct JarvisSettingsArea: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Binding var storedLanguage: String
     @Binding var storedTheme: String
 
@@ -62,6 +69,7 @@ struct JarvisSettingsArea: View {
     let onSignedOut: () -> Void
 
     @State private var search = ""
+    @State private var selectedSection: JarvisSettingsSection = .general
     @State private var path: [JarvisSettingsDetail] = []
     @State private var response: JarvisSettingsResponse?
     @State private var loading = true
@@ -134,6 +142,60 @@ struct JarvisSettingsArea: View {
         JarvisPageHeader(title: copy(.title), language: language)
     }
 
+    private var sectionItems: [JarvisTabItem<JarvisSettingsSection>] {
+        JarvisSettingsSection.allCases.map {
+            JarvisTabItem(tag: $0, title: $0.title(language: language), identifier: "settings.section.\($0.rawValue)")
+        }
+    }
+
+    @ViewBuilder
+    private var sectionPicker: some View {
+        Group {
+            if dynamicTypeSize > .large {
+                JarvisTabStrip(title: copy(.title), identifierPrefix: "settings.section",
+                               items: sectionItems, selection: $selectedSection)
+            } else {
+                JarvisSegmentedBar(title: copy(.title), identifierPrefix: "settings.section",
+                                   items: sectionItems, selection: $selectedSection)
+            }
+        }
+        .padding(.horizontal, JarvisPageHeaderMetrics.inset)
+        .padding(.bottom, JarvisPageHeaderMetrics.actionSpacing)
+    }
+
+    private var visibleSections: [JarvisSettingsSection] {
+        search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? [selectedSection] : JarvisSettingsSection.allCases
+    }
+
+    private func groups(for section: JarvisSettingsSection) -> [JarvisSettingsGroup] {
+        switch section {
+        case .general:
+            [
+                .init(id: "appearance", title: copy(.appearanceRow), rowIDs: ["language", "appearance"]),
+                .init(id: "jarvis", title: "Jarvis", rowIDs: ["personality", "identity", "voice", "research"]),
+                .init(id: "behaviour", title: copy(.behaviour), rowIDs: ["proactive", "notifications", "routines"]),
+                .init(id: "memory", title: copy(.memoryRow), rowIDs: ["memory"]),
+            ]
+        case .models:
+            [
+                .init(id: "model", title: "Jarvis", rowIDs: ["jarvis", "decisions", "roles"]),
+                .init(id: "deployments", title: copy(.deploymentsRow), rowIDs: ["deployments", "projectDefaults"]),
+                .init(id: "agents", title: copy(.codingAgentsRow), rowIDs: ["codingAgents", "limits"]),
+            ]
+        case .health:
+            [
+                .init(id: "targets", title: copy(.goals), rowIDs: ["training", "nutrition", "healthGoals"]),
+                .init(id: "upload", title: copy(.upload), rowIDs: ["healthCredential"]),
+            ]
+        case .account:
+            [
+                .init(id: "owner", title: copy(.ownerRow), rowIDs: ["owner"]),
+                .init(id: "credentials", title: copy(.credentialsRow), rowIDs: ["credentials"]),
+            ]
+        }
+    }
+
     private var settingsList: some View {
         JarvisList {
             if let error = loadError, response != nil {
@@ -141,38 +203,46 @@ struct JarvisSettingsArea: View {
                     .foregroundStyle(error == .offline ? Color.secondary : Color.red)
                     .listRowBackground(Color.clear)
             }
-            ForEach(JarvisSettingsSection.allCases) { section in
-                let rows = visibleRows(in: section)
-                if !rows.isEmpty || (section == .account && !visibleAccountActions.isEmpty) {
-                    Section {
-                        ForEach(rows) { row in
-                            if let detail = row.detail {
-                                NavigationLink(value: detail) {
-                                    rowContent(row)
+            ForEach(visibleSections) { section in
+                ForEach(groups(for: section)) { group in
+                    let rows = visibleRows(in: section).filter { group.rowIDs.contains($0.id) }
+                    if !rows.isEmpty {
+                        Section {
+                            ForEach(rows) { row in
+                                Group {
+                                    if let detail = row.detail {
+                                        NavigationLink(value: detail) { rowContent(row) }
+                                    } else {
+                                        rowContent(row)
+                                            .accessibilityHint(row.disabledHint.map(copy) ?? "")
+                                            .disabled(true)
+                                    }
                                 }
-                                .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
-                            } else {
-                                Button {} label: {
-                                    rowContent(row)
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(true)
-                                .accessibilityHint(row.disabledHint.map(copy) ?? "")
-                                .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
+                                .accessibilityIdentifier("settings.row.\(row.id)")
+                                .listRowInsets(EdgeInsets(
+                                    top: JarvisPageHeaderMetrics.rowVerticalInset,
+                                    leading: JarvisPageHeaderMetrics.rowInset,
+                                    bottom: JarvisPageHeaderMetrics.rowVerticalInset,
+                                    trailing: JarvisPageHeaderMetrics.rowInset
+                                ))
                             }
+                        } header: {
+                            JarvisSectionHeadline(group.title)
                         }
-                        if section == .account {
-                            accountActions
-                        }
-                    } header: {
-                        Text(section.title(language: language))
+                        .textCase(nil)
                     }
-                    .textCase(nil)
+                }
+                if section == .account && !visibleAccountActions.isEmpty {
+                    Section { accountActions }
+                        .textCase(nil)
                 }
             }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+        .contentMargins(.top, 0, for: .scrollContent)
+        .listSectionSpacing(JarvisPageHeaderMetrics.spacing)
+        .id(selectedSection)
         .overlay {
             if !hasVisibleContent {
                 Text(copy(search.isEmpty ? .noItems : .noResults))
@@ -196,7 +266,8 @@ struct JarvisSettingsArea: View {
                 rowContent(JarvisSettingsRow(id: "signOut", title: .signOut, detail: nil))
             }
             .disabled(signingOut)
-            .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
+            .foregroundStyle(.red)
+            .accessibilityIdentifier("settings.signOut")
         }
         if visibleAccountActions.contains("signOutAll") {
             Button {
@@ -205,30 +276,27 @@ struct JarvisSettingsArea: View {
                 rowContent(JarvisSettingsRow(id: "signOutAll", title: .signOutAll, detail: nil))
             }
             .disabled(signingOut)
-            .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
+            .foregroundStyle(.red)
+            .accessibilityIdentifier("settings.signOutAll")
         }
     }
 
     private var bottomBar: some View {
-        HStack(spacing: JarvisDesignTokens.settingsSectionSpacing) {
-            JarvisSearchField(
-                placeholder: copy(.search),
-                text: $search,
-                identifier: "settings.search",
-                clearTitle: copy(.cancel)
-            )
-
-            JarvisIconButton(
-                title: copy(.addDeployment),
-                systemImage: "plus",
-                identifier: "settings.addDeployment"
-            ) {
-                path.append(.newDeployment)
+        VStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
+            if response != nil { sectionPicker }
+            HStack(spacing: JarvisDesignTokens.settingsSectionSpacing) {
+                JarvisSearchField(
+                    placeholder: copy(.search), text: $search,
+                    identifier: "settings.search", clearTitle: copy(.cancel)
+                )
+                JarvisIconButton(
+                    title: copy(.addDeployment), systemImage: "plus",
+                    identifier: "settings.addDeployment"
+                ) { path.append(.newDeployment) }
             }
+            .padding(.horizontal, JarvisPageHeaderMetrics.inset)
         }
-        .padding(.horizontal, JarvisDesignTokens.settingsHorizontalInset)
-        .padding(.top, JarvisDesignTokens.settingsSectionSpacing)
-        .padding(.bottom, JarvisDesignTokens.settingsSectionSpacing)
+        .padding(.vertical, JarvisPageHeaderMetrics.actionSpacing)
     }
 
     private var errorState: some View {
@@ -246,8 +314,8 @@ struct JarvisSettingsArea: View {
     }
 
     private var hasVisibleContent: Bool {
-        JarvisSettingsSection.allCases.contains { !visibleRows(in: $0).isEmpty } ||
-            !visibleAccountActions.isEmpty
+        visibleSections.contains { !visibleRows(in: $0).isEmpty } ||
+            (visibleSections.contains(.account) && !visibleAccountActions.isEmpty)
     }
 
     private func visibleRows(in section: JarvisSettingsSection) -> [JarvisSettingsRow] {
@@ -343,18 +411,59 @@ struct JarvisSettingsArea: View {
 
     @ViewBuilder
     private func rowContent(_ row: JarvisSettingsRow) -> some View {
-        HStack(spacing: JarvisDesignTokens.settingsSectionSpacing) {
-            Text(copy(row.title))
-                .foregroundStyle(row.disabledHint == nil ? .primary : .secondary)
-            Spacer(minLength: JarvisDesignTokens.settingsSectionSpacing)
-            if let value = row.value, !value.isEmpty {
-                Text(value)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+        let stacksValue = dynamicTypeSize.isAccessibilitySize || row.disabledHint != nil
+        let layout = stacksValue
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing))
+            : AnyLayout(HStackLayout(spacing: JarvisDesignTokens.settingsSectionSpacing))
+        HStack(spacing: JarvisPageHeaderMetrics.spacing) {
+            Image(systemName: symbol(for: row.id))
+                .font(.system(size: JarvisDesignTokens.settingsIconSize))
+                .foregroundStyle(row.id.hasPrefix("signOut") ? Color.red : JarvisDesignTokens.primaryAccent)
+                .frame(width: JarvisDesignTokens.settingsIconSize)
+                .accessibilityHidden(true)
+            layout {
+                Text(copy(row.title))
+                    .foregroundStyle(row.id.hasPrefix("signOut") ? Color.red : (row.disabledHint == nil ? Color.primary : Color.secondary))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
+                if !stacksValue {
+                    Spacer(minLength: JarvisDesignTokens.settingsSectionSpacing)
+                }
+                if let value = row.value, !value.isEmpty {
+                    Text(value)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(stacksValue ? nil : 1)
+                        .truncationMode(.middle)
+                }
             }
         }
+        .frame(minHeight: JarvisDesignTokens.controlMinimumHeight - JarvisPageHeaderMetrics.rowVerticalInset * 2)
         .contentShape(Rectangle())
+    }
+
+    private func symbol(for id: String) -> String {
+        switch id {
+        case "language": "globe"
+        case "appearance": "slider.horizontal.3"
+        case "personality": "face.smiling"
+        case "identity", "owner": "person"
+        case "voice": "waveform"
+        case "research": "magnifyingglass"
+        case "proactive": "bolt"
+        case "notifications": "bell"
+        case "routines": "calendar"
+        case "memory": "brain"
+        case "jarvis", "deployments": "cloud"
+        case "decisions", "credentials", "healthCredential": "key"
+        case "roles": "person.2"
+        case "codingAgents", "projectDefaults": "chevron.left.forwardslash.chevron.right"
+        case "limits": "gauge.with.dots.needle.50percent"
+        case "training": "dumbbell"
+        case "nutrition": "fork.knife"
+        case "healthGoals": "heart"
+        case "signOut", "signOutAll": "rectangle.portrait.and.arrow.right"
+        default: "gearshape"
+        }
     }
 
     @ViewBuilder

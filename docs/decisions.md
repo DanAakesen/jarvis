@@ -11073,3 +11073,39 @@ XXXL exposed transparent-header overlap, clipped totals and crowded period label
 The shared header/controls and Usage layout now adapt at accessibility sizes. Chat
 has no callers of these components and is unchanged. Fresh native captures remain
 required; the previous test pass is not visual acceptance.
+
+## 2026-11-05 — Extend the approved board alignment to Settings and Voice
+
+The owner expanded the non-Chat page scope to include Settings and Voice and
+authorized TestFlight after verification for the 6 November morning target.
+Settings adopts the board's bottom segments and meaningful section groups while
+retaining existing native detail/save flows. Large text uses a scrolling segment
+strip and stacked row values. Chat and the shared orb remain unchanged.
+
+## Settings native geometry correction (5 November 2026)
+
+Native artifact 13461059102 exposed truncated four-way section labels and decorative symbols expanding beyond their reserved row width at accessibility XXXL. Use the existing continuous glass segmented bar from P15-94, with its full hit target, switch Settings to the shared scrolling strip above default text size, and retain fixed semantic symbol geometry. Existing callers keep their defaults; Chat is unchanged.
+
+## 6 November 2026 — Final combined native findings
+
+Run 42134678739 compiled and passed 61/62 UI tests. The new completion test opened
+Tasks due for fixture tasks due today; the recording confirms the production
+split is correct. Select and expand Today while retaining both removal and
+continued-usability assertions. Explicitly select dark for the lift success capture.
+
+Actual Health images still showed truncated monthly endpoint dates and normal-size
+rows behind the pinned title. Use native AxisValueLabel anchors/intrinsic width and
+restore the iOS soft scroll-edge effect, retaining the AX material. Apple API docs
+were read directly; no new dependency or custom blur is needed. Verify these actual
+findings in one combined Settings run before the final merge. Chat remains unchanged.
+
+## 6 November 2026 — Explicit native material behind scrolled custom headers
+
+Run 42141442953 passed all 62 UI tests; the later standalone capture sweep timed
+out with attachments retained. Monthly endpoints and task/lift feedback are
+accepted from actual images. The shared soft scroll-edge style did not prevent
+rows crossing the custom header. Observe the Boolean top-edge crossing using
+onScrollGeometryChange and add native regular material only while scrolled.
+Preserve the transparent resting board and existing AX material. Recheck the
+same native suite once for this observed finding; keep all assertions and avoid
+a duplicate integration run. Chat and signing remain unchanged.

@@ -164,18 +164,27 @@ final class TodayUITests: XCTestCase {
     }
 
     func testCompletingATaskConfirmsSuccessAndKeepsOtherTasksUsable() {
-        launch()
+        launch(appearance: "dark")
         XCTAssertTrue(screen("today").waitForExistence(timeout: 10))
-        let due = app.buttons["today.tab.due"]
-        for _ in 0..<4 where !due.isHittable { app.swipeUp() }
-        due.tap()
+        // t1/t2 are due today. Tasks due deliberately contains overdue/upcoming tasks.
+        XCTAssertTrue(app.buttons["today.tab.today"].isSelected)
+        let expand = app.buttons["today.list.expand"]
+        for _ in 0..<4 where !expand.isHittable { app.swipeUp() }
+        XCTAssertTrue(expand.isHittable)
+        expand.tap()
         let first = app.buttons["today.task.done.t1"]
         for _ in 0..<4 where !first.isHittable { app.swipeUp() }
         XCTAssertTrue(first.isHittable)
         first.tap()
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "P15-success-task-dark-en"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
         let removed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: first)
         XCTAssertEqual(XCTWaiter.wait(for: [removed], timeout: 5), .completed)
         let second = app.buttons["today.task.done.t2"]
+        for _ in 0..<4 where !second.isHittable { app.swipeUp() }
+        XCTAssertTrue(second.isHittable)
         XCTAssertTrue(second.isEnabled, "Confirmation must not block another completion")
         second.tap()
         let secondRemoved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: second)
@@ -203,7 +212,7 @@ final class TodayUITests: XCTestCase {
     }
 
     func testLiftSavingNeedsALiftAndADate() {
-        launch()
+        launch(appearance: "dark")
         let log = app.buttons["today.logLift"]
         XCTAssertTrue(log.waitForExistence(timeout: 10))
         log.tap()

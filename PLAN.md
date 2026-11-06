@@ -2219,13 +2219,15 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **P15-94 / #1600:** Home now shares one glass segmented surface and separated calendar/task rows. Factory has Board/Releases only, includes Needs Dan in Board, and reveals the column for its old entry. All 469 Core tests and changed Swift parser checks pass; native screenshot/interaction cases are added, but native visual acceptance is pending. Home follows the published Today/Tasks due grouping under the issue's board-wins rule; Delegated wording remains a clarification.
-
-- **P15-95 / #1601:** Health now has the board's three periods, training donut/chart and Last lifts/Recent sessions/Body trend order. Merged HealthKit step totals replace raw overlapping-source sums; local workouts and saved Home lift notes join the dashboard without changing the write path. Core regressions and backend sync tests pass locally. Native visual acceptance and device-source parity are pending; see `docs/ios/design/p15-95-verification.md`.
-
-- **P15-96 / #1602:** Current Usage contract decoding, range/cache handling, reconciled charts and all five page audits are implemented locally. All 474 Core and 23 backend Usage/Now-feed checks pass. Native build, board/build comparison and owner acceptance remain pending; see `docs/ios/design/p15-96-verification.md`. Reuses #1604 and the shared segmented-bar change in #1606.
-- **P15-92 / #1598:** PR #1604 implements the shared native page pattern from the board merged in #1603. All 468 Core tests pass locally. Native compilation, CI and CodeQL passed on edc8ec36; 45/46 UI tests passed, including all four bilingual/light-dark page-order cases. The remaining Workspaces case used a nonexistent sidebar entry; its fixture entry is corrected. The Mac job again timed out during later captures. Dan approved preserving available images with `if: always()` on the existing upload step; all 74 workflow checks pass. Fresh native checks and board/build visual acceptance remain pending; see `docs/ios/design/p15-92-verification.md`. #1599–#1602 follow this shared change.
-- **P15-93 / #1599:** Notes follow-up is implemented on a separate branch based on #1598, which must merge first. Root/direct-folder browsing, matching counts, Back, nested note and empty-folder creation, last-opened tiles, graph labels/colors and task-create priority are covered by 476 passing Core tests and 89 backend tests. Native interaction checks and captures are prepared; Mac compilation and board/build visual acceptance are pending. See `docs/ios/design/p15-93-verification.md`.
+- **P15 board delivery (#1598–#1602 and Settings):** Shared, Notes, Home/Factory,
+  Health and Insights merged in order; main is `2b865706`. Notes and latest main
+  backend deployments passed readiness and live acceptance. Settings source
+  `93a09531` passed 62/62 native tests, 493 Core tests and CodeQL; its later capture
+  sweep timed out with artifacts retained. Monthly labels and success feedback
+  are visually accepted. Scrolled header overlap persisted, so the shared header
+  now adds native material only past the top edge. One necessary native recheck
+  precedes Settings merge and TestFlight for 6 November 06:00 Copenhagen. Never
+  merge #1609. See `docs/ios/design/p15-integration-verification.md`.
 
 - **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window
   acknowledgement; iOS detaches observation on lock and refreshes persisted
@@ -3860,3 +3862,30 @@ Insights 084dcfc1 passed 50/50 native UI tests in run 42124893661. Normal EN/dar
 Usage, Status, Proactive and Notifications captures were inspected. Accessibility-size
 overlap and clipped totals prompted shared header/control and Usage layout fixes;
 combined native re-verification is pending.
+
+## P15 Settings board continuation (5 November 2026)
+
+Implemented General/Models/Health/Account navigation, board section grouping,
+shared row spacing and accessibility-size adaptation without changing detail
+editors or Chat. Added native section/search/detail cases to the existing selected
+component suite. Scoped Core/localization/design guards: 53 passed; Swift parser
+passed. Native compilation and visual acceptance are pending. Release follows
+#1604, the page PRs, successful Notes backend deployment, then TestFlight.
+
+Settings first native pass: 49/49 selected UI tests passed on 4b823206. Screenshot review found truncated section labels and accessibility-size icon overlap; the final shared segmented bar and Settings symbol sizing await the next native pass. Shared prerequisite #1604 merged as c818a6b3; remaining delivery order is Notes, Home/Factory, Health, Insights, Settings, then backend readiness and TestFlight.
+
+## Owner-selected polish and remaining proposals (6 November 2026)
+
+The owner authorised the shorter Home greeting and subtle success haptics with
+interruptible transitions for lift saves, task completion and note creation in this
+release. Notes and Home/Factory own those changes, with Reduce Motion support.
+
+Remaining suggestions are proposals only: an actionable Needs you queue, consistent
+freshness language, remembered page selections, task Undo and evidence-backed Health
+comparisons, actionable empty states and draft preservation. They do not expand
+this release's scope.
+
+Settings corrected source is accepted in combined native run 42129251285 (61/61 UI
+tests), artifact 13465195628. General EN/dark, DA/light and AX XXXL plus Models,
+Health and Account EN/dark were inspected; tabs and symbols are corrected. Final
+combined verification of the owner-selected polish is running separately.
