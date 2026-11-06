@@ -33,9 +33,10 @@ screen, composer, voice session, backend or managed-runtime implementation.
   unchanged. Settings adopts the same composition; top scroll-edge effects are
   hidden so rows cannot need a scrim beneath the title.
 - Health has no custom full-width bottom background. Its automatic bottom edge
-  effect is hidden; the shared bounded selector rail and selected glass lens stay
-  consistent with other selectors. A new owner screenshot was not available, so
-  the exact Health cause remains a hypothesis until native capture review.
+  effect is hidden. The owner's subsequent screenshot also identified the bounded
+  selector's opaque rail. The combined candidate replaces that rail with one
+  content-bearing clear glass surface across joined selectors; see
+  [Body trend and selector feedback](p15-body-trend-feedback.md).
 
 The retained pre-change native task-group capture was visually inspected:
 `/tmp/p15-native-7e5/ui-test-attachments/6D551BA9-577A-4504-A0C4-969E50692A14.png`.
@@ -99,3 +100,9 @@ The intentional design choice is transparent shared header space and individuall
 glassed controls, rather than the default edge treatment. Readability comes from
 reserved/clipped content geometry. Existing glass Reduce Transparency fallbacks
 remain intact.
+
+The initial a5599089 candidate passed general CI42236611082 and
+CodeQL42236610687. Its app compiled in native run42236610739, but that run
+was cancelled when the owner added widget and Body trend corrections. No full
+native pass or visual acceptance is claimed for that superseded source. The
+combined candidate requires one fresh native run after all edits.
