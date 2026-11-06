@@ -23,6 +23,10 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case run = "health.run"
     case steps = "health.steps"
     case activity = "health.activity"
+    case training = "health.training"
+    case activeTime = "health.activeTime"
+    case lastLifts = "health.lastLifts"
+    case totalTarget = "health.totalTarget"
     case target = "health.target"
     case targetLabel = "health.targetLabel"
     case noTarget = "health.noTarget"
@@ -110,6 +114,9 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case kcalEaten = "health.kcalEaten"
     case sleepChart = "health.sleepChart"
     case heroPages = "health.heroPages"
+    case nightsRecorded = "health.nightsRecorded"
+    case mealsLogged = "health.mealsLogged"
+    case dailyAverage = "health.dailyAverage"
 }
 
 public enum JarvisHealthLocalization {

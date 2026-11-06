@@ -62,6 +62,47 @@ final class JarvisTodayGymTests: XCTestCase {
         XCTAssertEqual(JarvisGymLiftType.benchPress.title(language: .da), "Bænkpres")
     }
 
+    func testSavedHomeLiftCanBeReadBackWithoutInventingMissingValues() throws {
+        let lift = JarvisGymLift(exercise: "Bench press", weightKg: 62.5, reps: 8, sets: 3)
+        let content = JarvisGymLogNote.content(for: entry(.chest, lift: lift), timeZone: zone)
+        XCTAssertEqual(JarvisGymLogNote.lift(from: content), lift)
+        XCTAssertNil(JarvisGymLogNote.lift(from: JarvisGymLogNote.content(for: entry(.legs), timeZone: zone)))
+        XCTAssertNil(JarvisGymLogNote.lift(from: "- Lift: Bench press · 62.5 kg × 0 × 3"))
+        XCTAssertNil(JarvisGymLogNote.lift(from: "- Lift: Bench press · unknown kg × 8 × 3"))
+    }
+
+    func testRecentVaultLiftsReadsTheNewestSavedNoteAndReportsItsReadLimit() async throws {
+        let lift = JarvisGymLift(exercise: "Bench press", weightKg: 62.5, reps: 8, sets: 3)
+        let latest = entry(.chest, lift: lift)
+        let previous = JarvisGymLogEntry(performedAt: latest.performedAt - 86400, session: .legs)
+        let path = JarvisGymLogNote.path(for: latest, timeZone: zone)
+        let paths = [JarvisGymLogNote.path(for: previous, timeZone: zone), path]
+        let notes: [[String: Any]] = paths.map {
+            ["path": $0, "title": "Gym log", "folder": "Personal", "directory": JarvisGymLogNote.folder,
+             "updatedAt": "2026-11-02T13:05:00Z"]
+        }
+        let interactions: [[String: Any]] = [
+            ["method": "GET", "path": "/api/notes", "query": ["limit": "50", "offset": "0", "directory": JarvisGymLogNote.folder],
+             "response": ["statusCode": 200, "body": ["notes": notes, "limit": 50, "offset": 0, "hasMore": false]]],
+            ["method": "GET", "path": "/api/notes/note", "query": ["path": path],
+             "response": ["statusCode": 200, "body": ["path": path,
+                "content": JarvisGymLogNote.content(for: latest, timeZone: zone), "sha": String(repeating: "a", count: 40),
+                "url": "https://github.com/example/vault/blob/main/log.md"]]],
+        ]
+        let transport = try FixtureTransport(scenario: JSONSerialization.data(withJSONObject: ["version": 1, "interactions": interactions]))
+        let client = JarvisNotesClient(client: try JarvisClient(
+            configuration: JarvisClientConfiguration(baseURL: URL(string: "https://fixture.invalid/api")!),
+            transport: transport, tokenStore: GymHistoryTokenStore(), accessTokenProvider: GymHistoryTokenProvider()
+        ))
+        let history = try await JarvisVaultGymLogStore(client: client, timeZone: zone)
+            .recentLifts(since: latest.performedAt - 172800, maximumNoteReads: 1)
+        XCTAssertEqual(history.entries.map(\.lift), [lift])
+        XCTAssertEqual(history.entries.first?.performedAt, latest.performedAt)
+        XCTAssertTrue(history.partial)
+        let remaining = await transport.remainingInteractions()
+        XCTAssertEqual(remaining, 0)
+    }
+
     func testVaultPathIsAValidNotePathAndRoundTrips() throws {
         for session in JarvisGymSessionType.allCases {
             let value = entry(session)
@@ -166,4 +207,14 @@ final class JarvisCombinedGymLogStoreTests: XCTestCase {
             XCTAssertEqual(error as? JarvisGymLogError, .failed)
         }
     }
+}
+
+private actor GymHistoryTokenStore: TokenStore {
+    func read() async throws -> String? { "fixture.session" }
+    func write(_ token: String) async throws {}
+    func delete() async throws {}
+}
+private struct GymHistoryTokenProvider: AccessTokenProvider {
+    func currentToken(for request: HTTPRequest) async throws -> String { "fixture.access" }
+    func requestSignIn() async {}
 }

@@ -59,13 +59,13 @@ final class JarvisHealthSyncTests: XCTestCase {
         XCTAssertTrue(requests.allSatisfy { $0.anchor == nil })
     }
 
-    func testFirstSyncReadsAWeekAndLaterSyncsStartAtTheAnchorsDay() {
+    func testFirstSyncReadsSevenWholeCalendarDaysAndLaterSyncsStartAtTheAnchorsDay() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         XCTAssertEqual(
             JarvisHealthSyncWindow.start(anchor: nil, now: now, calendar: calendar),
-            now.addingTimeInterval(-7 * 86_400)
+            calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: now))
         )
         let anchor = now.addingTimeInterval(-3_600)
         XCTAssertEqual(
@@ -76,6 +76,16 @@ final class JarvisHealthSyncTests: XCTestCase {
             JarvisHealthSyncWindow.start(anchor: now.addingTimeInterval(86_400), now: now, calendar: calendar),
             calendar.startOfDay(for: now)
         )
+    }
+
+    func testSyncWindowUsesCopenhagenMidnightAcrossTheDSTBoundary() {
+        let formatter = ISO8601DateFormatter()
+        let now = formatter.date(from: "2026-10-25T23:30:00Z")!
+        let start = JarvisHealthSyncWindow.recentStart(now: now, days: 7)
+        XCTAssertEqual(formatter.string(from: start), "2026-10-19T22:00:00Z")
+        XCTAssertEqual(JarvisHealthLogic.day(formatter.string(from: start)), "2026-10-20")
+        let lateWorkout = formatter.date(from: "2026-10-19T22:30:00Z")!
+        XCTAssertGreaterThanOrEqual(lateWorkout, start, "The first local day's workout must not be dropped at UTC midnight")
     }
 
     func testCompleteSyncSendsEverythingAndAdvancesTheAnchor() async {
@@ -130,6 +140,54 @@ final class JarvisHealthSyncTests: XCTestCase {
         let retried = await runner.sync(batch())
         guard case .complete = retried else { return XCTFail("retry should complete") }
         XCTAssertEqual(store.anchor, t0 + 7200)
+    }
+
+    func testBacklogLargerThanRequestLimitUploadsCompleteCopenhagenDays() async throws {
+        let date = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-10-25T22:59:00Z"))
+        let samples = (0..<24_000).map { index in
+            let start = index < 12_000 ? date : date + 120
+            return JarvisHealthSample(id: "s\(index)", metric: "active_energy", unit: "kcal",
+                                      start: start, end: start, value: 1)
+        }
+        let large = JarvisHealthSyncBatch(samples: samples, sleep: [], workouts: [], readTypes: ["active_energy"],
+                                         deniedOrUnreadTypes: [], windowStart: date, windowEnd: date + 120)
+        let sender = RecordingSender()
+        let store = MemoryAnchorStore()
+        let state = await JarvisHealthSyncRunner(sender: sender, store: store).sync(large)
+        guard case .complete = state else { return XCTFail("A multi-day backlog must complete") }
+        let requests = await sender.requests
+        XCTAssertEqual(requests.map { $0.samples.count }, [12_000, 12_000])
+        XCTAssertEqual(requests.flatMap(\.samples).count, samples.count)
+        XCTAssertEqual(store.anchor, large.windowEnd)
+    }
+
+    func testOversizedSingleDayIsNeverPartiallyUploadedOrAcknowledged() async {
+        let samples = (0..<20_001).map { index in
+            JarvisHealthSample(id: "s\(index)", metric: "heart_rate", unit: "count/min", start: t0, end: t0, value: 60)
+        }
+        let large = JarvisHealthSyncBatch(samples: samples, sleep: [], workouts: [], readTypes: ["heart_rate"],
+                                         deniedOrUnreadTypes: [], windowStart: t0, windowEnd: t0 + 1)
+        let sender = RecordingSender()
+        let store = MemoryAnchorStore()
+        let state = await JarvisHealthSyncRunner(sender: sender, store: store).sync(large)
+        XCTAssertEqual(state, .failed)
+        let requests = await sender.requests
+        XCTAssertTrue(requests.isEmpty)
+        XCTAssertNil(store.anchor)
+    }
+
+    func testLocalStepsPreserveMissingHistoryAndReplaceExplicitZeroByCopenhagenDay() throws {
+        let date = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-10-25T23:30:00Z"))
+        let retained: [[String: JSONValue]] = [
+            ["metric_date": .string("2026-10-24"), "value": .number(9000)],
+            ["metric_date": .string("2026-10-26"), "value": .number(1000)],
+        ]
+        let rows = JarvisHealthStepDays.merging(retained: retained, local: [date: 0])
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows[0], retained[0])
+        XCTAssertEqual(rows[1]["metric_date"], .string("2026-10-26"))
+        XCTAssertEqual(rows[1]["value"], .number(0))
+        XCTAssertEqual(JarvisHealthStepDays.merging(retained: retained, local: [:]), retained)
     }
 
     func testSyncLocalizationExistsInDanishAndEnglish() {

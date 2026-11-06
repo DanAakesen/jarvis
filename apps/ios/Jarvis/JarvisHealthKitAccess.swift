@@ -65,7 +65,9 @@ struct JarvisHealthKitWorkoutSource: JarvisGymLogStore {
                 performedAt: workout.startDate,
                 session: Self.session(workout.workoutActivityType),
                 durationMinutes: workout.duration / 60,
-                activeKilocalories: energy?.doubleValue(for: .kilocalorie()) ?? 0
+                activeKilocalories: energy?.doubleValue(for: .kilocalorie()) ?? 0,
+                healthKitID: workout.uuid.uuidString,
+                healthActivity: JarvisHealthKitReader.activityName(workout.workoutActivityType)
             )
         }
     }

@@ -3158,8 +3158,7 @@ preference.
 The checked-in `docs/ios/design/board.html?screen=health&tab=track&lang=da`
 shows Exercises and History only. Plus opens **New lift** with name, kg, reps
 and sets and past-exercise quick-add chips; no form or save status sits on the
-tab. Native logging reuses the shared lift routes from #1423. Last lifts remains
-omitted from the Dashboard. The existing one-boot simulator screenshot job now
+tab. Native logging reuses the shared lift routes from #1423. Last lifts is restored to the Dashboard in P15-95, above Recent sessions and Body trend. The existing one-boot simulator screenshot job now
 includes Track workout, New lift and empty states in both languages and themes,
 with a board link beside the artifact in its PR comment. Linux Chromium review
 covers the board, not native rendering; simulator compilation/captures and owner
@@ -3263,3 +3262,38 @@ reuse Notes' shared brief glass confirmation. Lift/workout sheets keep their sav
 text, with one success haptic and a short opacity/scale transition. All new motion
 honors Reduce Motion; confirmation never blocks another action or sheet dismissal.
 Home's checkbox no longer displays a checkmark before a successful write.
+
+## Health board alignment (P15-95 / #1601; 5 November 2026)
+
+The Health carousel uses Training, Sleep and Nutrition with the same compact
+Today / 7 days / 30 days control in every hero header; 7 days is the initial
+selection. Training uses one workout donut, Gym/Run legend, steps and active-time
+figures, and a steps chart. All charts retain their average/day selection,
+Settings target and compact numbers. The shared chart summary and hero geometry
+are compacted after the first native comparison; fresh validation is required, including large
+Dynamic Type.
+Sleep now uses recorded stage proportions with matching text legends when all
+stages are available; missing stages stay unknown. Sleep and Nutrition summary
+values follow the selected period instead of retaining the latest day's values.
+The Sleep summary uses observed average hours and recorded-night count because
+the current source contract has no bedtime/wake-up fields. Nutrition shows daily
+mean calories (calories left for Today) and the actual logged-meal count; it does
+not invent a meal target. Both keep the board's divided two-column summary row.
+
+Below the hero: Last lifts with the shared Log text action, Recent sessions,
+then Body trend. Rows use shared spacing and separators. The duplicate summary
+block is removed. Body trend reads a labelled 30-day window and shows the reading
+date, so Today does not suppress an earlier measurement. The latest daily value
+precedes a daily average. Log and plus open the same Home lift/workout sheets.
+
+Local HealthKit steps/workouts supplement retained server data. Unsynced device
+workouts do not offer a backend-only detail link. Last lifts combines retained
+Health history with existing Home vault logs; incomplete vault reads remain
+visible as partial. No illustrative board number is used as live app data.
+
+The Health hero page indicator exposes a bounded VoiceOver adjustment for Training, Sleep and Nutrition. Its explicit page transition honors Reduce Motion, matching the charts and other non-Chat page transitions.
+
+Health screenshot review of run 42124896873 found overlapping 30-day chart labels.
+Long periods now show five evenly spaced date labels; all daily bars and selection
+remain available. Seven-day charts retain weekday labels. This correction joins the
+VoiceOver/Reduce Motion refinement for the next combined native pass.

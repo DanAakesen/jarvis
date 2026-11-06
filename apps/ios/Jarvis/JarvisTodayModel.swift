@@ -135,6 +135,7 @@ final class JarvisTodayModel: ObservableObject {
 
     func refreshWorkouts() async {
         guard !isFixture else { return }
+        now = dependencies.now()
         await loadWorkouts()
     }
 

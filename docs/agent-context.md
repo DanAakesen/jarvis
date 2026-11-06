@@ -7046,9 +7046,33 @@ native tests cover initial/confirmed nested paths and the real Open action.
 
 Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
 
+## Health board/source checks (P15-95 / #1601)
+
+Use `swift test` in `apps/ios/Packages/JarvisCore`, plus backend Vitest
+`src/health/sync/device-sync.test.ts`. The Core checks include local calendar/DST
+bounds, old workout names, workout identity matching and reading saved Home
+vault lift notes. Native capture coverage is in the existing selected
+`ComponentGalleryUITests`; no workflow or project change is needed. HealthKit
+source merging and rendered/large-type layouts still require Apple execution.
+The native sync continues to use the existing owner-only route and unchanged
+schema. HealthKit body-fat fractions are labelled as such for normalization.
+
+## Native board evidence and follow-up checks (Refs #1601; 5 November 2026)
+
+Last lifts is an explicit accessibility container so its Log child keeps its identifier. The native test retains the Log-to-shared-sheet assertion and scrolls in bounded short steps. The first native comparison prompted a compact chart headline, Training divider and smaller shared hero/chart geometry.
+
 Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
 the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
 from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
+
+
+## Health summary regression checks
+
+Sleep and Nutrition summaries now follow the selected period. Core regressions
+cover bounds, missing observations and duplicate daily records. Sleep uses stage
+proportions and real average/night-count summaries; bedtime/wake-up are absent
+from the current contract. Nutrition shows actual logged meals without a target.
+See `p15-95-verification.md` for screenshot provenance and pending native checks.
 
 ## Native shared-heading verification
 
@@ -7057,3 +7081,5 @@ inherited foreground style. The shared component now uses explicit semantic
 `Color.secondary`; see `p15-92-verification.md` for image provenance. The prior
 head passed 46/46 UI tests. Corrected native captures and owner acceptance remain
 pending. No additional workflow/project change or release action is included.
+
+Health hero accessibility uses the existing page indicator as an adjustable control; native swipe assertions remain unchanged. The final follow-up also removes the explicit page animation under Reduce Motion. This does not establish live VoiceOver or HealthKit permission acceptance.

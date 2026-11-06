@@ -250,8 +250,10 @@ enum JarvisDesignTokens {
     static let healthControlHeight: CGFloat = 44
     static let healthRingSize: CGFloat = 64
     static let healthRingStroke: CGFloat = 5
-    static let healthChartHeight: CGFloat = 120
-    static let healthHeroHeight: CGFloat = 500
+    static let healthChartHeight: CGFloat = 100
+    static let healthLegendDotSize: CGFloat = 8
+    static let healthDonutInnerRatio: CGFloat = 0.78
+    static let healthHeroHeight: CGFloat = 416
     static let healthHeroRingSize: CGFloat = 96
     static let healthBarRadius: CGFloat = 4
     static let healthMenuSpacing: CGFloat = 6

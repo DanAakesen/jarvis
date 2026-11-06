@@ -10958,9 +10958,44 @@ clarification, not a new task-data contract. Native visual acceptance is pending
 
 Factory UI tests now use the existing Simulator navigation fixture, the observed Button role for GitHub links, and explicit expanded/title/hittability checks. The default failure recording showed a sign-in cover; the legacy-entry accessibility tree showed the task action.
 
+## 5 November 2026 — Health source parity and dashboard (P15-95 / #1601)
+
+Use merged HealthKit statistics for step counts; raw overlapping source samples
+were being added by the normalizer. Re-read 30 days of steps/workouts/body values
+for late or corrected records. Display current permitted phone readings without
+requiring an upload, while keeping retained server data and failures visible.
+Keep Copenhagen day boundaries and recognize older numeric workout names.
+
+Read Home's existing vault lift notes into Last lifts instead of changing or
+migrating the owner's logging workflow. Bound note reads and disclose partial
+coverage. Keep the board's three hero periods, one training donut and section
+order. Body trend uses a labelled 30-day window and dated values. This is local
+implementation; native visual and real-device HealthKit acceptance are pending.
+
+P15-95 also labels HealthKit body-fat values as fractions (0–1), allowing the
+existing normalizer to retain the correct percentage (0.20 becomes 20%).
+
+## Native board corrections supported by screenshots (Refs #1601; 5 November 2026)
+
+Last lifts is an explicit accessibility container so its Log child keeps its identifier. The native test retains the Log-to-shared-sheet assertion and scrolls in bounded short steps. The first native comparison prompted a compact chart headline, Training divider and smaller shared hero/chart geometry.
+
 Fresh Mac verification is pending. This workspace has no Swift or Ruby executable;
 the unchanged pipeline suite currently reaches 59 passing cases and 15 setup errors
 from missing Ruby. No project/workflow change, merge, deployment or TestFlight upload.
+
+
+## 5 November 2026 — Health summaries use recorded data for the selected period
+
+Sleep and Nutrition summaries now follow the selected period. Core regressions
+cover bounds, missing observations and duplicate daily records. Sleep uses stage
+proportions and real average/night-count summaries; bedtime/wake-up are absent
+from the current contract. Nutrition shows actual logged meals without a target.
+See `p15-95-verification.md` for screenshot provenance and pending native checks.
+
+
+## 2026-11-05: P15 Health backlog and retained history
+
+Use anchored HealthKit query pagination and complete-day upload requests rather than discarding a quantity at the whole-window cap. Keep the existing owner-only API and 20,000-item request bound; reject an oversized single day honestly, before any upload. A partial local step snapshot replaces only matching Copenhagen days and cannot mark retained history fresh. Regression tests cover multi-day backlogs, rejection, local midnight and explicit zero readings.
 
 ## 5 November 2026 — Preserve shared heading contrast inside List
 
@@ -10996,3 +11031,7 @@ event/task priorities while health stays in the cards. Confirmations follow succ
 writes, and Home completion errors are surfaced rather than swallowed. The existing
 lift/workout saved state remains persistent and dismissible. No Chat change, backend
 contract change or new dependency is required. Native verification is pending.
+
+## Health page accessibility (5 November 2026)
+
+The Health hero indicator previously announced page position but offered no adjustment, and the explicit page transition ignored Reduce Motion. Keep the native pager and existing visual geometry, expose bounded increment/decrement actions on its indicator, and disable the explicit animation under Reduce Motion.
