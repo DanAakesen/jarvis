@@ -33,8 +33,8 @@ printed `managed_chat_provisioned` at 13:48:33 UTC with definition refresh off.
 At 13:49:08, its full-policy canary failed at `response_start` with HTTP 400,
 `invalid_request`, no parameter and `BadRequestError`. The prior `instructions`
 rejection changed; this new error does not establish a role, model or policy-size
-restriction. The configured comparison remains selectable but is not accepted
-as working.
+restriction. The configured comparison may now be selectable, but owner-authenticated
+availability has not been observed and inference is not accepted as working.
 
 Microsoft's current [Copilot limits](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions)
 include Sweden Central and region-available models with reasoning and tool
