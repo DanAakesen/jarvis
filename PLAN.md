@@ -2252,10 +2252,11 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   that syncs Apple Health before reloading data. Later owner reports also authorize
   shared tool discovery/validation guidance, reminder schema alignment, voice
   capture startup recovery, unified voice/chat history and reliable Home send/camera
-  handoffs. These are implemented locally. Backend: 373 tests across six suites,
-  build and scoped lint passed; the final shared-schema review added one regression
-  and passed 101 tests in the two affected suites plus build/lint. Native compile,
-  capture and device acceptance remain pending. Qualify the approved batch; see `docs/ios/design/p15-device-feedback-2026-11-06.md`.
+  handoffs. General CI at 4c9f62f4 passed, including 7,361 backend tests (one skipped)
+  and all 493 Core tests. Native run 42179796750 compiled and is collecting UI
+  evidence. A test-only CodeQL correction and the subsequently requested web/iOS
+  runtime tester are integrated locally; qualify that final combined tree before
+  merge. See `docs/ios/design/p15-device-feedback-2026-11-06.md`.
 
 - **P15 board delivery (#1598–#1602 and Settings): Complete.** All owning PRs merged
   in the recorded order. Notes backend deployment passed readiness and live
@@ -3972,12 +3973,25 @@ research, Health and milestone facilities are reused; no duplicate job system.
   high-priority vault task defaults, replay protection and exact-time reminder marker;
   general validation/schema repair; unified transcript and Home handoff corrections;
   shared glass/padding/headings, Health pull refresh and animated loading.
-- Local: eight affected workflow suites passed 247 tests. Earlier tool/voice batch
-  passed 373 tests plus the 101-test shared-schema follow-up. Backend build and
-  scoped ESLint passed before the final approval-bypass guard; that guard is being
-  qualified with the complete changed backend set.
-- Next: finish local checks, push the single reviewable batch to #1614, qualify one
-  native tree and inspect task groups, periods/glass, refresh, loading motion and
-  Chat handoffs. Then merge, wait for backend/agent readiness and acceptance, and
-  upload the verified main app to TestFlight. Physical voice startup, HealthKit
-  permission and haptic feel still require the owner's device.
+- Qualification: general CI 42179796923 passed the full selected set, including
+  7,361 backend tests (one skipped) and 493 Core tests. The final runtime addition
+  passed 80 backend, 146 web and 39 provisioning/deployment tests, backend/web
+  builds, scoped lint and browser checks at phone/desktop widths in both themes.
+- Next: retain the current native results, push the combined candidate to #1614,
+  qualify its new runtime UI and inspect the captured changes. Then merge, wait
+  for backend/agent readiness and acceptance, explicitly activate/verify the
+  Copilot comparison, and upload the verified main app to TestFlight. Physical
+  voice startup, HealthKit permission and haptic feel still require the owner's
+  device. No live Copilot success or upload is claimed yet.
+
+### UI/UX recommendations requested on 6 November
+
+Proposals for the next pass, separate from the approved fixes: connect existing
+chart selection to the selected day's actual records, preserve period/scroll
+state on return, add useful Open/Edit/Undo receipts after confirmed writes, and
+bring Factory's meaningful milestones and required decisions into its summaries.
+Use shared interruptible transitions to preserve context, keep readable content
+stable under moving glass controls, and retain known data during refresh. Compare
+equal periods and keep missing/partial health data distinct from zero. Final
+recommendations will distinguish current screenshots from source-only findings;
+these proposals are not additional implementation authorization.
