@@ -2219,15 +2219,14 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **P15 board delivery (#1598–#1602 and Settings):** Shared, Notes, Home/Factory,
-  Health and Insights merged in order; main is `2b865706`. Notes and latest main
-  backend deployments passed readiness and live acceptance. Settings source
-  `93a09531` passed 62/62 native tests, 493 Core tests and CodeQL; its later capture
-  sweep timed out with artifacts retained. Monthly labels and success feedback
-  are visually accepted. Scrolled header overlap persisted, so the shared header
-  now adds native material only past the top edge. One necessary native recheck
-  precedes Settings merge and TestFlight for 6 November 06:00 Copenhagen. Never
-  merge #1609. See `docs/ios/design/p15-integration-verification.md`.
+- **P15 board delivery (#1598–#1602 and Settings): Complete.** All owning PRs merged
+  in the recorded order. Notes backend deployment passed readiness and live
+  acceptance. Final native verification passed 62/62 tests; 493 Core tests and
+  CodeQL passed. Corrected native screenshots were inspected. TestFlight build
+  75 uploaded at 02:54:03 UTC on 6 November. Chat and the
+  shared orb remain unchanged. See `docs/ios/design/p15-release-2026-11-06.md` for
+  evidence, Apple processing status and physical-device limits. #1609 was never
+  merged. Further UI ideas remain proposals.
 
 - **P15-49 / #1498:** accepted research/weather work no longer depends on client progress-window
   acknowledgement; iOS detaches observation on lock and refreshes persisted

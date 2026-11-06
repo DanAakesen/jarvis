@@ -11109,3 +11109,12 @@ onScrollGeometryChange and add native regular material only while scrolled.
 Preserve the transparent resting board and existing AX material. Recheck the
 same native suite once for this observed finding; keep all assertions and avoid
 a duplicate integration run. Chat and signing remain unchanged.
+
+## 6 November 2026 — P15 release acceptance
+
+Accept the final combined source after 62/62 native tests, 493 Core tests, CodeQL
+and actual screenshot inspection. Merge Settings last, compare the complete
+app/test tree, and upload through the existing TestFlight workflow after the Notes
+backend dependency passed readiness and live acceptance. Build 75 uploaded
+successfully at 02:54:03 UTC. Chat and the shared orb remain unchanged.
+See `ios/design/p15-release-2026-11-06.md` for exact evidence and device limits.

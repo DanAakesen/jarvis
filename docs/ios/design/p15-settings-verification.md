@@ -48,3 +48,11 @@ cases. Its overall result was 61/62 because the new Home completion test selecte
 the wrong task group. The Settings AX General capture was inspected with the
 shared accessibility header; label and symbol layout remains readable. The final
 normal-size native scroll-edge correction joins one new combined Settings run.
+
+## 6 November 2026 — Final release acceptance
+
+Final combined run 42147200343 passed all 62 native tests on
+`0f7c7c199c5e8d9193c6584349a313964d5c6480`. Corrected shared scrolling headers and retained Settings
+section/search/detail behavior were accepted before #1610 merged last. The whole
+released app/test tree matches that source. TestFlight build 75 uploaded
+successfully; see `p15-release-2026-11-06.md` for the complete record.
