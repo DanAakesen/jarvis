@@ -3024,25 +3024,29 @@ Synthetic preview and screenshot mode allows one fixture text turn; attachment
 uploads and activity writes are disabled with accessibility explanations, never
 simulated as successful backend actions.
 
-## Native iOS Notes area (P15-12; 30 October 2026)
+## Native iOS Notes area (P15-93; 5 November 2026)
 
-The approved iPhone area has four text-only segments (Notes, Tasks, List and
-Graph), with content aligned beneath one title/refresh row. The bottom search
-and plus action stay fixed above the keyboard; Notes adds folder filters directly
-above them. Native SwiftUI Lists, DisclosureGroups, sheets, navigation, system
-materials, semantic colors and SF Symbols provide the interaction and appearance.
-Selection tints labels and icons, never row surfaces. The graph uses a native
-Canvas renderer with pan/zoom and an accessible list alternative.
+The approved board in PR #1603 has three segments: Notes, Tasks and Graph.
+Notes and Tasks use the shared phrase, hero, section headings and separated rows.
+Notes browses direct child folders and notes with a breadcrumb and Back control;
+its count comes from the same collection as its visible note rows. Recent is a
+horizontal strip of last-opened note tiles with folder color and opening time.
+Search and plus stay fixed at the bottom. Graph uses a native Canvas with pan/zoom,
+folder-color legend, labels only for search/selection, and an Open action for the
+selected node. Every node retains its spoken title, folder and Open accessibility
+action. Showing a label must not move its node or edge endpoints.
 
 Custom geometry lives in `JarvisDesignTokens` in
 `apps/ios/Jarvis/JarvisDesignSystem.swift`; cross-platform tree and deterministic
-graph-position logic lives in `JarvisCore`. The checked-in concept board still
-shows three tabs and two plus-menu actions, while this approved issue requires
-four tabs and creation of notes, folders and tasks. The implementation follows
-the four-tab issue and omits standalone New folder because the shared backend
-has no folder-create route; notes saved beneath a nested path create the folder.
-No note delete/rename/move, task delete, task-create priority, or offline cache
-is represented. Danish and English strings come from the JarvisCore localization
+graph-position logic lives in `JarvisCore`. The New note sheet has a hierarchical
+folder picker: New folder adds a child inside the open directory, then saving the
+note persists it. The New folder sheet uses the same drill-down picker to select
+its parent and persists an empty folder. The New task sheet puts title, date/time,
+scope and priority in board order, with shared segments. All creation sheets use
+confirm-left/cancel-right actions. Note delete/rename/move and task delete remain
+unavailable. Recent opening history
+is stored in the account-bound app cache and clears on sign-out.
+Danish and English strings come from the JarvisCore localization
 catalog; the app-owned Settings preference defaults to Danish and controls date
 formatting as well as visible and accessibility copy.
 
@@ -3229,3 +3233,11 @@ One look, taken from the Chat header: Apple glass, 44 pt target, secondary accen
 - **Gallery**: `JarvisComponentGallery` (debug builds only, launch argument `--component-gallery`, no user-facing entry) shows every button state, the orb at three sizes and the scaffold; `ComponentGalleryUITests` attaches a screenshot.
 - Apple documentation used: Human Interface Guidelines (Buttons, Toolbars, Materials); SwiftUI `Glass`, `glassEffect`, `ButtonStyle.glass` and `Button`.
 
+### Native confirmed-action feedback (6 November 2026)
+
+`JarvisSuccessFeedback.swift` owns the shared checkmark/text glass confirmation.
+It reuses existing spacing, radius and timing tokens; a new success replaces the
+current one and cancels its expiry. A short opacity/scale transition honors Reduce
+Motion and never consumes touches. Haptics and VoiceOver announcements follow a
+confirmed write. Notes displays this feedback before continuing its existing editor
+navigation; the successful navigation itself remains immediate.

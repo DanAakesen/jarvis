@@ -2042,6 +2042,44 @@ export function createVaultModule(options: {
         return directoryTree;
       });
 
+      app.post<{ Body: { path: string } }>('/notes/folders', {
+        schema: {
+          body: { type: 'object', properties: { path: { type: 'string', minLength: 1, maxLength: maxPathLength - 9 } },
+            required: ['path'], additionalProperties: false },
+          response: {
+            200: { type: 'object', properties: { path: { type: 'string' }, commit: { type: 'string', pattern: '^[\\da-f]{40}$' } },
+              required: ['path', 'commit'], additionalProperties: false },
+            400: apiError, 403: apiError, 409: apiError, 503: apiError,
+          },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        const signal = AbortSignal.timeout(30_000);
+        let folder = 'other';
+        try {
+          const path = validateDirectoryPath(request.body.path);
+          if (!path || !path.split('/').every(visibleDirectorySegment) || path.length > maxPathLength - 9) {
+            throw new ToolRefusal('Use a visible folder name inside the vault.');
+          }
+          const top = path.split('/')[0]!;
+          if (folderNames.has(top)) folder = top;
+          const files = await options.client.tree(signal);
+          if (files.some((file) => file.path === path || file.path.startsWith(`${path}/`))) {
+            return reply.code(409).send({ error: 'This folder already exists' });
+          }
+          // Git retains directories through files. The empty marker is excluded from note indexing.
+          const commit = await options.client.write(`${path}/.gitkeep`, '', 'jarvis: create folder', undefined, signal);
+          indexAfterNoteWrite();
+          log('vault.write', { outcome: 'ok', folder });
+          return { path, commit };
+        } catch (error) {
+          log('vault.write', { outcome: error instanceof ToolRefusal ? 'refused' : 'error', folder });
+          if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
+          if (error instanceof VaultWriteConflictError) return reply.code(409).send({ error: 'This folder already exists' });
+          return reply.code(503).send({ error: 'Vault folder could not be created' });
+        }
+      });
+
       app.get<{ Querystring: { q?: string; state?: VaultTaskState } }>('/vault/tasks', {
         schema: {
           querystring: vaultTaskQuerySchema,
@@ -2128,7 +2166,7 @@ export function createVaultModule(options: {
         }
       });
 
-      app.post<{ Body: { text: string; scope: 'personal' | 'work'; due?: string; time?: string } }>('/vault/tasks', {
+      app.post<{ Body: { text: string; scope: 'personal' | 'work'; due?: string; time?: string; priority?: 'high' | 'medium' | 'normal' } }>('/vault/tasks', {
         schema: {
           body: taskCreateSchema,
           response: { 200: taskWriteResponseSchema, 400: taskWriteErrorSchema, 403: apiError, 409: taskWriteErrorSchema, 503: taskWriteErrorSchema },
