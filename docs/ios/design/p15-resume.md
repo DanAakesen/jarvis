@@ -50,3 +50,21 @@ After native acceptance, merge owning PRs in order, compare the final app/test t
 with the verified integration, confirm Notes backend readiness, and dispatch the
 unchanged `ios-testflight.yml` on main with `branch=main`. Track upload/build number;
 Apple processing and physical-device behavior require separate evidence.
+
+## 00:21 UTC continuation
+
+Combined 4ea30d09 run 42129251285 completed successfully with 61/61 native tests.
+Corrected Settings captures in artifact 13465195628 were inspected and accepted.
+The next combined run 42134678739 at 7aa08ec6 has compiled and is running UI/captures
+(job 127619694894). Its apps/ios tree is 418a4878b80d8aff940b6d7119f99191f369f590.
+Do not push integration again until that evidence is retained. Local integration
+now differs only in documentation and the necessary Linux runner compatibility fix.
+
+GitHub moved ubuntu-latest to Ubuntu 26.04, unsupported by the pinned Swift action.
+Notes 1a2f06bd pins only the Linux Core job to the previously passing ubuntu-24.04
+image. This necessary exception was made under the authorised direct release task
+and announced to the owner; no checks, Mac, project or signing behavior changed.
+Fresh Notes CI 42135284949 has passed 476 Core tests (job 127622426540); remaining
+CI is active. The earlier Ubuntu 26.04 setup failures are infrastructure failures,
+not test passes. Redundant Notes native runs were cancelled; 42134357593 needed
+force-cancel after ordinary cancellation did not stop it promptly.
