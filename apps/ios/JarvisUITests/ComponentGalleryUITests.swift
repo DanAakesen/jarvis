@@ -251,7 +251,71 @@ final class ComponentGalleryUITests: XCTestCase {
             app.swipeUp()
             attach(app.screenshot(), named: "P15-95-health-lower-\(position)-\(theme)-\(language)")
         }
+        captureBodyTrends(language: language, theme: theme)
         app.terminate()
+    }
+
+    private func captureBodyTrends(language: String, theme: String) {
+        let weight = revealBodyChart("body_mass")
+        let details = app.descendants(matching: .any)["health.body.body_mass.details"]
+        let latest = details.label
+        let latestChartValue = weight.value as? String
+        attach(app.screenshot(), named: "Build76-body-weight-latest-\(theme)-\(language)")
+        // The fixture contains four unevenly spaced records. A point in the left quarter
+        // of the full-width chart selects an earlier record, not the initial latest value.
+        weight.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).tap()
+        let changed = NSPredicate { _, _ in
+            details.exists && details.label != latest && (weight.value as? String) != latestChartValue
+        }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: changed, object: nil)], timeout: 5), .completed,
+                       "Tapping a historical point must update both the visible reading and accessible chart value")
+        attach(app.screenshot(), named: "Build76-body-weight-selected-\(theme)-\(language)")
+        details.tap()
+        let title = language == "da" ? "Vægt" : "Weight"
+        let navigation = app.navigationBars[title]
+        XCTAssertTrue(navigation.waitForExistence(timeout: 5), "The chart's header must open existing measurement details")
+        attach(app.screenshot(), named: "Build76-body-weight-detail-\(theme)-\(language)")
+        navigation.buttons.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["page.title"].waitForExistence(timeout: 5))
+
+        for metric in ["body_fat_percentage", "lean_body_mass"] {
+            let chart = revealBodyChart(metric)
+            XCTAssertFalse((chart.value as? String ?? "").isEmpty, "The chart must expose its recorded value and date")
+            if metric == "lean_body_mass" {
+                XCTAssertTrue(app.staticTexts[language == "da" ? "1 måling" : "1 measurement"].exists,
+                              "A single reading must remain a single measurement")
+            }
+            attach(app.screenshot(), named: "Build76-body-\(metric)-\(theme)-\(language)")
+        }
+    }
+
+    /// Keep the complete chart and its detail link between the reserved header and floating dock.
+    /// Bidirectional, bounded drags also recover when an earlier full-screen swipe passed the target.
+    @discardableResult
+    private func revealBodyChart(_ metric: String, includeHeader: Bool = true) -> XCUIElement {
+        let chart = app.descendants(matching: .any)["health.body.\(metric).chart"]
+        let details = app.descendants(matching: .any)["health.body.\(metric).details"]
+        let first = includeHeader ? details : chart
+        for _ in 0..<9 {
+            let top = max(app.staticTexts["page.title"].frame.maxY,
+                          app.buttons["navigation.openSidebar"].frame.maxY) + 8
+            let bottom = min(app.buttons["health.mode.0"].frame.minY,
+                             app.textFields["health.search"].frame.minY) - 8
+            if chart.exists, first.exists, chart.isHittable, first.isHittable,
+               first.frame.minY >= top, chart.frame.maxY <= bottom { return chart }
+            let passed = first.exists && first.frame.minY < top
+            let upper = top + (bottom - top) * 0.15
+            let lower = top + (bottom - top) * 0.85
+            let needed = passed ? top - first.frame.minY + 12
+                : chart.exists ? chart.frame.maxY - bottom + 12 : lower - upper
+            let distance = min(max(needed, 24), lower - upper)
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: app.frame.width * 0.8, dy: passed ? upper : lower))
+            let end = origin.withOffset(CGVector(dx: app.frame.width * 0.8, dy: passed ? upper + distance : lower - distance))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTFail("The complete \(metric) chart and detail action must remain reachable above the dock")
+        return chart
     }
 
     func testUsageCurrentContractAndEveryPeriodAndBreakdownControl() {
@@ -355,6 +419,9 @@ final class ComponentGalleryUITests: XCTestCase {
             captureReservedHeaderAfterScroll(named: "Build76-health-scrolled-\(language)-\(theme)-accessibility")
             XCTAssertTrue(app.buttons["health.mode.0"].isHittable)
             XCTAssertTrue(app.textFields["health.search"].isHittable)
+            let chart = revealBodyChart("body_mass", includeHeader: false)
+            XCTAssertFalse((chart.value as? String ?? "").isEmpty)
+            attach(app.screenshot(), named: "Build76-body-weight-\(language)-\(theme)-accessibility")
         }
     }
 
