@@ -3479,4 +3479,5 @@ body charts and transparent Health header/dock were inspected. Decimal readings
 now retain up to two fraction digits, and detail has a concrete initial loading
 state. Loading highlights clip to each bar's opaque geometry at a restrained 14%
 peak instead of being attenuated by the translucent placeholder twice. Corrected
-rendering and motion remain pending native e0d6821e qualification.
+rendering and motion remain pending native df56bcaa qualification in 42258268925.
+General CI, all 502 Core tests and CodeQL passed for this candidate.

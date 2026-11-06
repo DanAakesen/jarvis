@@ -8,8 +8,8 @@ correction is in progress for per-element shimmer, generic task-source labels,
 transparent headers and floating Notes/Health docks, plus shared top-left widget
 headings/compact layouts and real Body trend charts. Candidate 7acb5ec5 passed CI, 502 Core tests and CodeQL; native 42243718420
 finished 64/68. Actual recordings guided the detail-loading/decimal corrections
-and precise widget/scroll-test fixes. Candidate df56bcaa now qualifies in native
-42258268925, CI 42258269045 and CodeQL 42258268841. Its app/test tree matches
+and precise widget/scroll-test fixes. Candidate df56bcaa passed CI 42258269045,
+all 502 Core tests and CodeQL 42258268841; native 42258268925 remains active. Its app/test tree matches
 e0d6821e; the follow-up fixes archive-retention assertions. The old Mac job
 was cancelled before simulator boot. Actual bilingual/AX captures
 and complete loading-motion review remain required before upload.

@@ -7256,7 +7256,10 @@ the expired private config/device code must not be reused.
 
 Native 7acb finished 64/68; its actual recordings distinguish blank measurement
 detail from test-only widget optical offset and fast-drag overshoot. Corrected
-e0d6821e qualifies in native 42257412529/CI 42257412696/CodeQL 42257412505. The original
+df56bcaa passed CI 42258269045 (502 Core tests) and CodeQL 42258268841; native
+42258268925 is the single active qualification. It retains e0d6821e’s app/test
+tree; the older native job was cancelled before simulator boot after two workflow
+archive assertions needed updating. The original
 archive exceeded the 512 MiB connector limit. Artifact-only extraction reused its
 captures without a build/simulator; future native evidence uploads separately from
 the broad screenshot sweep. Keep raw failure records and their hashes. Do not

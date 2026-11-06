@@ -8,8 +8,8 @@ widget layouts and real Body trend plots. Earlier candidates stopped before boot
 on compiler/fixture checks. Candidate 7acb5ec5 passed CI, 502 Core tests and CodeQL,
 but native 42243718420 finished 64/68. Actual recordings exposed blank Health
 measurement details, decimal rounding and test gesture/alignment assumptions.
-Corrected candidate df56bcaa is qualifying in native 42258268925, CI 42258269045 and
-CodeQL 42258268841. It retains e0d6821e’s app/test tree; the follow-up updates two
+Corrected candidate df56bcaa passed CI 42258269045, all 502 Core tests and
+CodeQL 42258268841. Its single native qualification 42258268925 remains active. It retains e0d6821e’s app/test tree; the follow-up updates two
 workflow assertions for split evidence retention. The old Mac job was cancelled
 before simulator boot. Inspect bilingual/large-text charts, widgets, surfaces and loading
 motion before merge/upload. No duplicate simulator was used to retrieve evidence.

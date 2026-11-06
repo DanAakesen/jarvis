@@ -11312,7 +11312,9 @@ Group; mount a concrete loading container before data. Preserve decimal readings
 in graph/records and selected reading/scroll on Back. AX charts fit; use slow held
 test drags to avoid coast, keeping full visibility assertions. Widget headers fit
 with a 1.17 pt optical symbol/text offset; allow up to 2 pt within unchanged 16 pt bounds.
-Fresh native e0d6821e qualification remains required.
+Fresh native qualification remains required: df56bcaa retains e0d6821e’s
+app/test tree and corrects two archive-retention assertions. CI, 502 Core tests
+and CodeQL passed; native 42258268925 remains active.
 
 The stored trusted-role diagnostic also failed policy application after user-only
 requests succeeded. Do not discard or demote Jarvis policy to enable Copilot. The
