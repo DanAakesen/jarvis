@@ -25,7 +25,6 @@
 "notes.all" = "Alle";
 "notes.notes" = "Noter";
 "notes.tasks" = "Opgaver";
-"notes.list" = "Liste";
 "notes.graph" = "Graf";
 "notes.newNote" = "Ny note";
 "notes.newTask" = "Ny opgave";
@@ -33,7 +32,6 @@
 "notes.loading" = "Indlæser";
 "notes.emptyNotes" = "Ingen noter";
 "notes.emptyTasks" = "Ingen opgaver";
-"notes.emptyList" = "Notearkivet er tomt";
 "notes.emptyGraph" = "Ingen noter at vise";
 "notes.noResults" = "Ingen resultater";
 "notes.offline" = "Offline. Ingen offlinekopi er tilgængelig.";
@@ -64,8 +62,6 @@
 "notes.priorityNormal" = "Normal";
 "notes.complete" = "Udfør";
 "notes.completed" = "Udført";
-"notes.showGraphList" = "Vis graf som liste";
-"notes.showGraph" = "Vis graf";
 "notes.resetGraph" = "Nulstil grafvisning";
 "notes.vaultRoot" = "Rod";
 "notes.recent" = "Seneste";
@@ -158,3 +154,11 @@
 "voice.sentPhoto" = "Foto sendt";
 "voice.sentVideo" = "Video sendt";
 "voice.sentScreen" = "Skærmdeling sendt";
+"notes.priority" = "Prioritet";
+"notes.folderName" = "Mappenavn";
+"notes.newFolderHere" = "Ny mappe her";
+"notes.useFolder" = "Vælg denne mappe";
+"notes.parentFolder" = "Overordnet";
+"notes.folderSavedWithNote" = "Nye mapper gemmes, når du gemmer en note i dem.";
+"notes.folderInvalidName" = "Brug et mappenavn uden skråstreger, et punktum i starten eller URL-tegn.";
+"notes.folderAlreadyExists" = "Denne mappe findes allerede.";

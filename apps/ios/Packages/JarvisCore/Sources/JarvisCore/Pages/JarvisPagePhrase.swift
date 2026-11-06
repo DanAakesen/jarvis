@@ -89,19 +89,6 @@ public enum JarvisFactoryPagePhrase {
         let needs = da
             ? count(counts.needs, one: "opgave", many: "opgaver")
             : count(counts.needs, one: "task", many: "tasks")
-        if segment == .needsDan {
-            if counts.needs == 0 {
-                return JarvisPagePhrase(markup: da
-                    ? "Dan, intet kræver dig i \(project) lige nu."
-                    : "Dan, nothing needs you in \(project) right now.")
-            }
-            if da {
-                return JarvisPagePhrase(markup: "Dan, {\(needs)} kræver dig"
-                    + (counts.failed > 0 ? ", og {\(counts.failed)} af dem er {fejlet}." : "."))
-            }
-            return JarvisPagePhrase(markup: "Dan, {\(needs)} \(counts.needs == 1 ? "needs" : "need") you"
-                + (counts.failed > 0 ? ", and {\(counts.failed)} of them \(counts.failed == 1 ? "has" : "have") {failed}." : "."))
-        }
         let lead: String
         if counts.needs > 0 {
             if da {

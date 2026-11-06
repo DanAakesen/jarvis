@@ -202,6 +202,11 @@ enum JarvisDesignTokens {
     static let notesRowMinimumHeight: CGFloat = 52
     static let notesIconSize: CGFloat = 18
     static let notesChipSpacing: CGFloat = 8
+    static let notesRecentTileWidth: CGFloat = 168
+    static let notesFolderPersonal = adaptiveColor(
+        light: UIColor(red: 45.0 / 255, green: 179.0 / 255, blue: 93.0 / 255, alpha: 1),
+        dark: UIColor(red: 61.0 / 255, green: 220.0 / 255, blue: 132.0 / 255, alpha: 1)
+    )
     /// Tighter rows in forms and sheets, which open at half height.
     static let sheetRowMinimumHeight: CGFloat = 40
     static let labelledHorizontalPadding: CGFloat = 16
@@ -223,6 +228,7 @@ enum JarvisDesignTokens {
     static let notesConflictPanelRadius: CGFloat = 16
     static let notesGraphSelectionStroke: CGFloat = 2
     static let notesGraphNodeLabelWidth: CGFloat = 96
+    static let notesGraphLabelOffset: CGFloat = 18
     static let notesGraphMinimumZoom: CGFloat = 0.65
     static let notesGraphMaximumZoom: CGFloat = 4
     static let notesGraphEmphasizedOpacity: Double = 0.38
@@ -244,8 +250,10 @@ enum JarvisDesignTokens {
     static let healthControlHeight: CGFloat = 44
     static let healthRingSize: CGFloat = 64
     static let healthRingStroke: CGFloat = 5
-    static let healthChartHeight: CGFloat = 120
-    static let healthHeroHeight: CGFloat = 500
+    static let healthChartHeight: CGFloat = 100
+    static let healthLegendDotSize: CGFloat = 8
+    static let healthDonutInnerRatio: CGFloat = 0.78
+    static let healthHeroHeight: CGFloat = 416
     static let healthHeroRingSize: CGFloat = 96
     static let healthBarRadius: CGFloat = 4
     static let healthMenuSpacing: CGFloat = 6

@@ -25,7 +25,6 @@
 "notes.all" = "All";
 "notes.notes" = "Notes";
 "notes.tasks" = "Tasks";
-"notes.list" = "List";
 "notes.graph" = "Graph";
 "notes.newNote" = "New note";
 "notes.newTask" = "New task";
@@ -33,7 +32,6 @@
 "notes.loading" = "Loading";
 "notes.emptyNotes" = "No notes";
 "notes.emptyTasks" = "No tasks";
-"notes.emptyList" = "The vault is empty";
 "notes.emptyGraph" = "No notes to show";
 "notes.noResults" = "No results";
 "notes.offline" = "Offline. No offline copy is available.";
@@ -64,8 +62,6 @@
 "notes.priorityNormal" = "Normal";
 "notes.complete" = "Complete";
 "notes.completed" = "Completed";
-"notes.showGraphList" = "Show graph as list";
-"notes.showGraph" = "Show graph";
 "notes.resetGraph" = "Reset graph view";
 "notes.vaultRoot" = "Vault root";
 "notes.recent" = "Recent";
@@ -158,3 +154,11 @@
 "voice.sentPhoto" = "Photo sent";
 "voice.sentVideo" = "Video sent";
 "voice.sentScreen" = "Screen sharing sent";
+"notes.priority" = "Priority";
+"notes.folderName" = "Folder name";
+"notes.newFolderHere" = "New folder here";
+"notes.useFolder" = "Use this folder";
+"notes.parentFolder" = "Parent";
+"notes.folderSavedWithNote" = "New folders are saved when you save a note inside them.";
+"notes.folderInvalidName" = "Use a folder name without slashes, a leading dot or URL characters.";
+"notes.folderAlreadyExists" = "This folder already exists.";

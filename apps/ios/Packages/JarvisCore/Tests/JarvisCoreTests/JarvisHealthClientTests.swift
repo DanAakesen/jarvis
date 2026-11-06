@@ -36,6 +36,27 @@ final class JarvisHealthClientTests: XCTestCase {
         XCTAssertNil(JarvisHealthPeriod(startDate: "2026-10-31", endDate: "2026-10-30"))
     }
 
+    func testDashboardHasOnlyThreePeriodsAndRecognizesOlderHealthKitWorkoutNames() {
+        XCTAssertEqual(JarvisHealthPeriodPreset.dashboardPresets, [.today, .sevenDays, .thirtyDays])
+        XCTAssertEqual(JarvisHealthLogic.workoutKind("HKWorkoutActivityType(rawValue: 50)"), .gym)
+        XCTAssertEqual(JarvisHealthLogic.workoutKind("HKWorkoutActivityType(rawValue: 37)"), .run)
+        XCTAssertEqual(JarvisHealthLogic.workoutKind("traditional_strength_training"), .gym)
+        XCTAssertEqual(JarvisHealthLogic.workoutKind("HKWorkoutActivityType(rawValue: 999)"), .other)
+        XCTAssertEqual(JarvisHealthLogic.day("2026-11-01T23:30:00Z"), "2026-11-02")
+        XCTAssertEqual(JarvisHealthLogic.day("2026-11-01"), "2026-11-01")
+        XCTAssertNil(JarvisHealthLogic.day("invalid"))
+    }
+
+    func testLocalAndSyncedWorkoutsAreMergedByIdentityWithoutDroppingDistinctSessions() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let stored = JarvisHealthWorkoutIdentity(id: "ABC", start: start, kind: .gym)
+        XCTAssertTrue(stored.matches(.init(id: "abc", start: start, kind: .gym)))
+        XCTAssertFalse(stored.matches(.init(id: "another", start: start + 60, kind: .gym)))
+        XCTAssertTrue(stored.matches(.init(id: nil, start: start + 1800, kind: .gym)))
+        XCTAssertFalse(stored.matches(.init(id: nil, start: start + 1800, kind: .run)))
+        XCTAssertFalse(stored.matches(.init(id: nil, start: start + 8000, kind: .gym)))
+    }
+
     func testRingProgressAndNutritionBalanceDoNotInventTargets() {
         XCTAssertEqual(JarvisHealthLogic.ringProgress(value: 4, target: 8), 0.5)
         XCTAssertEqual(JarvisHealthLogic.ringProgress(value: 12, target: 8), 1)

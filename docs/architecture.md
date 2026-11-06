@@ -1504,27 +1504,32 @@ CI retains both scheme and dedicated navigation result bundles on
 failure, including failures before screenshot capture completes.
 No iOS-specific backend routes are added.
 
-### iOS Notes area (P15-12)
+### iOS Notes area (P15-12; P15-93 follow-up)
 
 The Notes destination composes the existing `JarvisNotesClient` from the shared
 `JarvisClient`, app `URLSessionTransport` and Keychain token store. The client
 uses only the shared routes documented in `docs/ios/integration-contract.md`:
 `/notes/tree`, `/notes`,
-`/notes/note`, `/vault/tasks`, `/knowledge/graph` and `/knowledge/search`.
+`/notes/note`, `/notes/folders`, `/vault/tasks`, `/knowledge/graph` and `/knowledge/search`.
 Graph search loads the graph before resolving result node IDs. The SwiftUI
 destination owns presentation state; typed route validation, task grouping,
 folder-tree construction and deterministic graph positions live in `JarvisCore`.
 The app's persisted `jarvis.appLanguage` preference selects the localized
 JarvisCore resource catalog and date locale, defaulting to Danish; it does not
-read or write the separate backend voice-language setting. No iOS-only backend
-route, local database or offline cache is added.
+read or write the separate backend voice-language setting. Recent successful
+openings use the existing account-bound cache under a key that survives note
+refresh and clears on sign-out. No offline write queue is added.
 
 The app currently has no native Entra sign-in provider. The Notes composition
 can use a stored owner session; when none is available, the provider returns a
 visible sign-in error rather than generating a token or fixture response.
-Standalone folder creation, note delete/rename/move, task delete and priority
-on task creation remain unavailable because the shared backend has no matching
-screen route or payload.
+P15-93 adds owner-only `POST /notes/folders` with a bounded visible path. It writes
+an empty `.gitkeep` marker, refreshes the existing folder inventory and never
+indexes the marker as a note. Duplicate paths return 409; uncertain writes are not
+automatically retried. The UI retains confirmed paths while the folder index
+catches up. Task creation accepts optional normal/medium/high priority. These
+backend changes must precede the new client release. Note delete/rename/move and
+task delete remain unavailable.
 
 ### iOS Settings area (P15-20)
 
@@ -5170,11 +5175,12 @@ unless the task text, tick state, due date, time and priority all read back as i
 returns `commit: null`. The commit message is `jarvis: edit a task`. PATCH, PUT and POST all return the line's new `version` (a
 tick or an edit changes the line, so the next change sends the returned one). The write carries the file SHA and retries once; a
 changed or conflicting line returns 409, a refused path or scope 400.
-`POST /vault/tasks` takes `{text, scope: personal|work, due?, time?}`
+`POST /vault/tasks` takes `{text, scope: personal|work, due?, time?, priority?}`
 (`time` is `HH:MM` and needs `due`),
 strips control characters, comments and metadata emoji, caps text at 200 characters,
 refuses secret-looking text, and appends `- [ ] text` (with `📅 date`, plus ` HH:MM` when
-timed) to
+timed, and `⏫`/`🔼` for optional high/medium priority; normal or omitted priority
+adds no marker) to
 `Personal/Inbox.md` or `Work/Inbox.md`, creating the note when missing and refusing
 an open code fence or an oversized file. Both commit as Jarvis (`jarvis: complete a
 task`, `reopen a task`, `edit a task` or `add a task`), refresh the notes index and log
@@ -8586,6 +8592,33 @@ iOS pages read server lists through `JarvisRepository` (JarvisCore `Cache/`) ove
 
 `JarvisWidgets` also renders eight Gym and Factory home screen widgets. `JarvisWidgetSnapshotPublisher` (app) builds a versioned snapshot (`JarvisCore/Widgets`) from HealthKit steps and workouts, the Health training targets, Factory tasks and pending confirmations, and writes `widget-snapshot.json` to the App Group; it then reloads the timelines. Widgets read it through `JarvisHomeWidgetProvider` and `JarvisWidgetTimeline` (scheduled entries, visible staleness). Buttons are App Intents (`Shared/FactoryWidgetIntents.swift`) that run through `JarvisFactoryWidgetActions` in the app, or queue in the App Group when the extension process runs them. No credentials are shared.
 
+## Native Health source alignment (P15-95 / #1601; 5 November 2026)
+
+`JarvisHealthKitReader` uploads one merged `HKStatisticsCollectionQuery`
+`.cumulativeSum` step total per Copenhagen day through the unchanged owner-only
+`POST /health/sync` sample contract. The existing normalizer/upsert replaces
+that metric day; the app no longer uploads overlapping raw step streams.
+Steps, workouts and body measurements re-read 30 calendar days; other types
+keep the existing incremental window, now starting on a complete local day.
+Quantity, sleep and workout queries resume bounded pages with HealthKit anchors. Uploads group complete Copenhagen metric days and sleep end-days; a single day over the server limit fails before any upload. Only a fully read/uploaded batch advances the durable sync date anchor. Local step data replaces matching days and retains missing server history and freshness. Workout
+activity names are stable rather than enum debug descriptions.
+
+Health's dashboard can read merged local steps and Home's combined workout
+source without uploading. Local/synced workout IDs deduplicate; unsynced records
+retain a usable row without attempting unavailable backend detail. Local dates
+and retained timestamp fallbacks use Copenhagen boundaries. A failed local read
+does not erase retained server data.
+
+`JarvisVaultGymLogStore.recentLifts` lists existing `Personal/Gym log` notes and
+reads at most 30 recent note bodies, with cancellation and a 25-second budget
+checked between bounded requests. It parses the same validated format Home
+writes and exposes partial coverage. The Health view combines those lifts with
+its existing SQL lift history; the logging path and stored notes are unchanged.
+Body catalogue/metric queries use a 30-day window and retain measurement dates.
+
+P15-95 also labels HealthKit body-fat values as fractions (0–1), allowing the
+existing normalizer to retain the correct percentage (0.20 becomes 20%).
+
 ## Native Usage contract and page data (P15-96)
 
 `JarvisUsageReport` decodes current `toolCalls` and `healthToolUsage` plus optional
@@ -8601,5 +8634,6 @@ cap, so all plotted values reconcile with the returned report.
 Status/Proactive phrases use their loaded evidence. Proactive distinguishes
 unloaded findings from an observed zero and exposes retained-read failures.
 Notifications uses `BackgroundTaskPresentation` for running/actionable/quiet
-jobs; completed jobs no longer keep its background section or Now bar visible.
+jobs; completed jobs no longer appear in its background section. Chat's Now bar
+behavior is unchanged.
 The existing server expiry and success exclusion remain the feed authority.
