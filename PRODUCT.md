@@ -2346,8 +2346,8 @@ Existing Home vault lift notes remain readable without migration or rewriting.
 The recent-note read is bounded and labels incomplete results. Stored and local
 workouts match by HealthKit ID; legacy manual gym logs follow Home's existing
 two-hour gym-session match. Distinct HealthKit IDs remain distinct workouts.
-Native Health captures have been inspected; final chart-edge and scrolled-header
-corrections require one combined pass. Real-device source parity remains unverified.
+Native Health captures, including corrected chart edges and scrolled headers,
+are accepted for the 6 November release. Real-device source parity remains unverified.
 
 P15-95 also labels HealthKit body-fat values as fractions (0–1), allowing the
 existing normalizer to retain the correct percentage (0.20 becomes 20%).
@@ -2367,8 +2367,8 @@ shows its first real finding and next check, three expandable findings and a
 two-column source list (one column at accessibility text sizes). Read failures
 remain visible. Notifications uses grouped rows, clear-all for any dismissible
 item and the existing running/failed task presentation; successful jobs do not
-appear. Native bilingual and accessibility captures have been inspected; final
-shared-header verification is recorded in the integration verification file.
+appear. Native bilingual, accessibility and final shared-header captures were
+inspected for the 6 November release; see the integration verification file.
 
 ## Native Settings board navigation (5 November 2026)
 

@@ -1,6 +1,7 @@
 # P15 integrated board verification
 
-Current checkpoint: **6 November 2026, 01:12 UTC**. This record supersedes earlier
+Historical pre-release checkpoint: **6 November 2026**.
+Final outcome: [released build and accepted evidence](p15-release-2026-11-06.md). This record supersedes earlier
 pending-state notes in page verification documents. Reference: approved board.html
 from #1603, rendered unchanged at 402 × 874 logical points / scale 3. The board is
 a composition reference, not evidence of the native app or live backend data.
@@ -107,7 +108,7 @@ brief confirmation geometry and approved ambient composition are app choices; Ap
 does not specify those exact dimensions. Native material, controls, feedback and
 accessibility behavior support that composition.
 
-## Remaining release gates and limits
+## Pre-release gates (historical)
 
 Inspect final native results/captures, pass Settings CI, merge Settings last and
 compare the entire released app/test tree with the verified source. Then dispatch
@@ -137,3 +138,17 @@ resting state and existing accessibility material are preserved. Apple's
 Markdown was read directly; the Boolean transform avoids updating the page on each
 offset. One new native run must confirm resting and scrolled appearance. Existing
 tests and captures remain intact; no duplicate integration run is required.
+
+## Final acceptance and release
+
+Settings source `0f7c7c199c5e8d9193c6584349a313964d5c6480` passed all 62 native tests in run
+42147200343; workflow result: cancelled after the later standalone capture sweep timed out. Artifact
+13472647339 was inspected for the corrected chart boundaries, scrolled
+headers and task/lift feedback. General CI 42147200262 passed 493 Core tests and
+CodeQL passed. The final app/test tree matched main after the last Settings merge.
+
+TestFlight build **75** uploaded successfully in run **42152517098**.
+Apple processing: not independently confirmed; no matching Apple processing email was available at 02:55 UTC. See the release record for exact source
+and upload time. Earlier pending statements above describe the historical
+checkpoint and are superseded by this acceptance. Physical haptic feel, live
+VoiceOver and real HealthKit permissions remain device checks.

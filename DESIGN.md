@@ -3347,3 +3347,11 @@ scroll-edge setting alone did not protect the custom pinned title. The shared
 header now observes a Boolean top-edge crossing and adds native regular material
 only while scrolled. Its resting appearance stays transparent. Existing AX material
 is retained. Fresh resting/scrolled captures are required before release.
+
+## 6 November 2026 — P15 final visual acceptance
+
+Final native artifact 13472647339 confirms readable monthly boundary dates,
+protected scrolling headers and successful-action feedback. The accepted board
+composition includes Settings and the shorter Home greeting. Full provenance and
+physical-device limits are in `docs/ios/design/p15-release-2026-11-06.md`. This
+acceptance supersedes the earlier pending capture notes for this delivery.
