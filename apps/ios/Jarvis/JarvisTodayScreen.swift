@@ -1,8 +1,8 @@
 import JarvisCore
 import SwiftUI
 
-/// Home: the first screen on launch. No title: the data-phrase headline sits at the top, then the activity hero
-/// (workouts and steps), what is next, tasks, quick log, and the Chat composer that carries over into Chat and Voice.
+/// Home: the greeting, activity overview, quick actions and a native swipeable agenda.
+/// The pinned composer carries the same draft into Chat and Voice.
 struct JarvisTodayScreen: View {
     private enum Tab: Hashable { case today, due }
 
@@ -20,6 +20,7 @@ struct JarvisTodayScreen: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject var model: JarvisTodayModel
     let language: JarvisAppLanguage
     let fixtureMode: Bool
@@ -41,6 +42,7 @@ struct JarvisTodayScreen: View {
     @State private var taskCompletionFailed = false
     @State private var taskCompletionError = ""
     @ScaledMetric(relativeTo: .largeTitle) private var greetingSize: CGFloat = 25
+    @ScaledMetric(relativeTo: .body) private var agendaIconSize: CGFloat = 20
     @FocusState private var composerFocused: Bool
 
     private func copy(_ key: JarvisTodayLocalizationKey) -> String {
@@ -48,10 +50,12 @@ struct JarvisTodayScreen: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
+        JarvisList(customRowBackgrounds: true) {
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
                 greeting
                 JarvisHealthSyncIssue(state: healthSyncState, language: language)
+                JarvisSectionHeadline(copy(.page))
+                    .accessibilityIdentifier("today.section.home")
                 JarvisTodayActivityCard(model: model, language: language, fixtureMode: fixtureMode)
                 if model.isShowingOfflineCopy {
                     Label(copy(.offline), systemImage: "wifi.slash")
@@ -59,11 +63,15 @@ struct JarvisTodayScreen: View {
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("today.offline")
                 }
+                JarvisSectionHeadline(copy(.quickActions))
+                    .accessibilityIdentifier("today.section.quickActions")
                 quickActions
-                agenda
+                JarvisSectionHeadline(copy(.upcoming))
+                    .accessibilityIdentifier("today.section.upcoming")
+                agendaControls
             }
             .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-            .padding(.bottom, 12)
+            .padding(.bottom, JarvisPageHeaderMetrics.spacing)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 Color.clear
@@ -71,7 +79,15 @@ struct JarvisTodayScreen: View {
                     .onTapGesture { model.activity.clearSelection() }
                     .accessibilityHidden(true)
             }
+        } content: {
+            dayRows
         }
+        .listStyle(.plain)
+        .listRowSpacing(0)
+        .contentMargins(.top, 0, for: .scrollContent)
+        .contentMargins(.bottom, JarvisPageHeaderMetrics.spacing, for: .scrollContent)
+        .scrollEdgeEffectHidden()
+        .accessibilityIdentifier("today.list")
         .refreshable {
             healthSyncState = await onSyncAppleHealth?()
             guard !Task.isCancelled else { return }
@@ -114,7 +130,7 @@ struct JarvisTodayScreen: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 12)
-        .padding(.bottom, 16)
+        .padding(.bottom, JarvisPageHeaderMetrics.rowLineSpacing)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(value.plainText)
@@ -150,13 +166,10 @@ struct JarvisTodayScreen: View {
 
     private var taskLists: JarvisTodayTaskLists? { model.taskData.value?.lists }
 
-    private var agenda: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: JarvisDesignTokens.segmentedBarSpacing) {
-                tabControl
-                plusMenu
-            }
-            dayCard
+    private var agendaControls: some View {
+        HStack(spacing: JarvisDesignTokens.segmentedBarSpacing) {
+            tabControl
+            plusMenu
         }
         .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: tab)
         .accessibilityElement(children: .contain)
@@ -193,42 +206,88 @@ struct JarvisTodayScreen: View {
         }
     }
 
-    private var dayCard: some View {
+    @ViewBuilder
+    private var dayRows: some View {
         let visibleRows = rows(for: tab)
         let expansion = JarvisTodayExpansion(total: visibleRows.count, isExpanded: listExpanded)
-        return JarvisRowGroup {
-            if tab == .today { calendarIssue }
-            taskIssue
-            if visibleRows.isEmpty {
-                if !isLoadingRows, !hasRowIssue {
+        if isLoadingRows || hasRowIssue {
+            JarvisRowGroup {
+                if tab == .today { calendarIssue }
+                taskIssue
+            }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(agendaInsets)
+        }
+        if visibleRows.isEmpty {
+            if !isLoadingRows, !hasRowIssue {
+                JarvisRowGroup {
                     statusRow(
                         copy(tab == .today ? .nothingToday : .nothingDue),
                         systemImage: tab == .today ? "calendar" : "checklist"
                     )
                     .jarvisListRow(separator: false)
                 }
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(visibleRows.prefix(expansion.visible).enumerated()), id: \.element.id) { index, row in
-                        Group {
-                            switch row {
-                            case .entry(let entry): calendarRow(entry)
-                            case .task(let task): taskRow(task)
-                            }
-                        }
-                        .jarvisListRow(separator: index < expansion.visible - 1)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(agendaInsets)
+            }
+        } else {
+            ForEach(Array(visibleRows.prefix(expansion.visible).enumerated()), id: \.element.id) { index, row in
+                let shape = UnevenRoundedRectangle(
+                    topLeadingRadius: index == 0 ? JarvisDesignTokens.surfaceRadius : 0,
+                    bottomLeadingRadius: index == expansion.visible - 1 ? JarvisDesignTokens.surfaceRadius : 0,
+                    bottomTrailingRadius: index == expansion.visible - 1 ? JarvisDesignTokens.surfaceRadius : 0,
+                    topTrailingRadius: index == 0 ? JarvisDesignTokens.surfaceRadius : 0
+                )
+                Group {
+                    switch row {
+                    case .entry(let entry): calendarRow(entry)
+                    case .task(let task): taskRow(task)
                     }
                 }
-                expandButton(
-                    expansion: expansion,
-                    isExpanded: listExpanded,
-                    identifier: "today.list.expand"
-                ) { listExpanded.toggle() }
+                .jarvisListRow(separator: index < expansion.visible - 1)
+                .background(.regularMaterial, in: shape)
+                .clipShape(shape)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .listRowInsets(agendaInsets)
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    if case .task(let task) = row {
+                        Button {
+                            Task { await completeTask(task) }
+                        } label: {
+                            Label(copy(.markDone), systemImage: "checkmark")
+                        }
+                        .tint(JarvisDesignTokens.primaryAccent)
+                        .disabled(pendingTaskIDs.contains(task.id))
+                        .accessibilityIdentifier("today.task.done.\(task.id)")
+                    }
+                }
             }
+            expandButton(
+                expansion: expansion,
+                isExpanded: listExpanded,
+                identifier: "today.list.expand"
+            ) { listExpanded.toggle() }
+            .listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(agendaInsets)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("today.nextUp")
+    }
+
+    private var agendaInsets: EdgeInsets {
+        EdgeInsets(top: 0, leading: JarvisDesignTokens.notesHorizontalInset,
+                   bottom: 0, trailing: JarvisDesignTokens.notesHorizontalInset)
+    }
+
+    private func agendaIcon(_ name: String) -> some View {
+        Image(systemName: name)
+            .font(.system(size: agendaIconSize, weight: .regular))
+            .foregroundStyle(JarvisDesignTokens.primaryAccent)
+            .frame(width: agendaIconSize + JarvisPageHeaderMetrics.rowLineSpacing,
+                   height: agendaIconSize + JarvisPageHeaderMetrics.rowLineSpacing)
+            .accessibilityHidden(true)
     }
 
     private var isLoadingRows: Bool {
@@ -273,36 +332,47 @@ struct JarvisTodayScreen: View {
 
     private func calendarRow(_ entry: JarvisTodayCalendarEntry) -> some View {
         let notes = model.correlatedNotes(for: entry)
-        return VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(JarvisTodayGreeting.timeText(entry.start, language: language))
-                    .font(.subheadline.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(JarvisDesignTokens.primaryAccent)
-                    .frame(minWidth: 48, alignment: .leading)
-                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                    Text(entry.title).font(.body).lineLimit(2)
-                    if let location = entry.location {
-                        Text(location).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+        return HStack(alignment: .top, spacing: JarvisPageHeaderMetrics.spacing) {
+            agendaIcon("calendar")
+            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                Text(entry.title).font(.body).fixedSize(horizontal: false, vertical: true)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline) {
+                        eventTime(entry)
+                        Spacer(minLength: JarvisPageHeaderMetrics.actionSpacing)
+                        Text(relativeStart(entry)).font(.footnote).foregroundStyle(.secondary)
+                            .fixedSize()
+                    }
+                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                        eventTime(entry)
+                        Text(relativeStart(entry)).font(.footnote).foregroundStyle(.secondary)
                     }
                 }
-                Spacer(minLength: 8)
-                Text(relativeStart(entry))
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            ForEach(notes) { note in
-                Label(note.title, systemImage: "note.text")
-                    .font(.footnote)
-                    .foregroundStyle(JarvisDesignTokens.secondaryAccent)
-                    .lineLimit(1)
-                    .padding(.leading, 58)
+                if let location = entry.location {
+                    Text(location).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+                }
+                ForEach(notes) { note in
+                    Label(note.title, systemImage: "note.text")
+                        .font(.footnote)
+                        .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+                        .lineLimit(1)
+                }
             }
         }
         .frame(minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .leading)
         .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(copy(.calendarEvent)): \(entry.title)")
+        .accessibilityValue(([JarvisTodayGreeting.timeText(entry.start, language: language), relativeStart(entry)]
+            + [entry.location].compactMap { $0 } + notes.map(\.title)).joined(separator: ", "))
         .accessibilityIdentifier("today.entry.\(entry.id)")
+    }
+
+    private func eventTime(_ entry: JarvisTodayCalendarEntry) -> some View {
+        Text(JarvisTodayGreeting.timeText(entry.start, language: language))
+            .font(.footnote.weight(.medium))
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
+            .fixedSize()
     }
 
     private func relativeStart(_ entry: JarvisTodayCalendarEntry) -> String {
@@ -329,14 +399,11 @@ struct JarvisTodayScreen: View {
     }
 
     private func taskRow(_ task: VaultTask) -> some View {
-        HStack(spacing: 4) {
-            JarvisCheckButton(
-                title: "\(copy(.markDone)): \(JarvisTaskTitle.plain(task.text))",
-                identifier: "today.task.done.\(task.id)",
-                isWorking: pendingTaskIDs.contains(task.id)
-            ) { Task { await completeTask(task) } }
+        HStack(alignment: .top, spacing: JarvisPageHeaderMetrics.spacing) {
+            agendaIcon("checklist")
             VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                Text(JarvisTaskTitle.formatted(task.text)).font(.body).lineLimit(2)
+                Text(JarvisTaskTitle.formatted(task.text)).font(.body)
+                    .fixedSize(horizontal: false, vertical: true)
                 if let due = dueText(task) {
                     Text(due)
                         .font(.footnote)
@@ -344,9 +411,15 @@ struct JarvisTodayScreen: View {
                 }
             }
             Spacer(minLength: 0)
+            if pendingTaskIDs.contains(task.id) { JarvisLoadingView(size: .inline) }
         }
         .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-        .accessibilityElement(children: .contain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(copy(.newTask)): \(JarvisTaskTitle.plain(task.text))")
+        .accessibilityValue(pendingTaskIDs.contains(task.id) ? copy(.saving) : (dueText(task) ?? ""))
+        .accessibilityAction(named: Text(copy(.markDone))) {
+            Task { await completeTask(task) }
+        }
         .accessibilityIdentifier("today.task.\(task.id)")
     }
 
@@ -443,7 +516,10 @@ struct JarvisTodayScreen: View {
     // MARK: Quick actions
 
     private var quickActions: some View {
-        HStack(spacing: 10) {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: JarvisPageHeaderMetrics.spacing))
+            : AnyLayout(HStackLayout(spacing: 10))
+        return layout {
             JarvisTileButton(
                 title: copy(.logWorkout),
                 subtitle: model.lastWorkoutText(language: language),

@@ -7294,3 +7294,26 @@ Deploy 42281871580 passed readiness/all 15 Current acceptance checks, then TestF
 42282578034 uploaded build 77 from exact main 380782a0. This qualification/release
 is complete; Apple processing/owner visibility is not yet confirmed. Do not repeat
 an unchanged full simulator suite.
+
+## Home hierarchy follow-up qualification (6 November 2026)
+
+The owner accepts current loading motion. Preserve it while qualifying Home section
+headings, shared hero alignment, native swipe completion, transparent page headers
+and Notes/Factory footer containers. Existing Today cases retain the same launch
+coverage while adding bilingual AX captures and native partial/full swipe checks.
+Shared-page captures include scrolled headers and footer reachability. Native
+compilation/visual inspection is pending; Linux has no Swift/Xcode. Use one combined
+Simulator qualification and exact-tree reuse after merge, followed by accepted
+normal deployment before the unchanged TestFlight workflow.
+
+The owner subsequently accepted widget layouts and requested matching-page taps.
+The earlier native run 42291240849 compiled the Home/chrome candidate but was
+cancelled early as superseded before full verification. Final qualification also
+covers registered widget links through cold and warm system URL opens; preserve
+layouts and the existing gate. Two new navigation cases make 70 native cases.
+
+Follow-up native 42292434058 passed 69/70 cases. The one failure is a Home geometry
+assertion against accessibility content bounds. Native captures also expose Home
+AX XXXL crowding. The correction reruns all Today cases and both widget URL cases;
+retain the 55 unchanged cases only with reviewed source/call-site proof. The
+focused validation workflow is never merged; normal per-test limits stay 120/150 s.

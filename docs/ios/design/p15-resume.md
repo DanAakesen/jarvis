@@ -1,5 +1,13 @@
 # P15 release checkpoints
 
+## Active Home/chrome follow-up
+
+The owner accepts the loading animations. New Home hierarchy, hero alignment,
+agenda icons/swipes and transparent header/footer corrections are prepared on
+`codex/p15-home-hierarchy`, based on 0b4fe857. Native checks and release are pending.
+See [the scoped record](p15-home-hierarchy-feedback.md). Previous build 77 receipts
+remain history and do not qualify these new changes.
+
 ## Completed device-feedback release — build 77
 
 The owner is testing build 76 and accepts Voice/history, Home send/camera,

@@ -67,7 +67,6 @@ struct JarvisHomeSmallWidgetView: View {
             .opacity(stale ? 0.55 : 1)
         }
         .jarvisWidgetSurface()
-        .widgetURL(JarvisWidgetLink.url(for: .home))
     }
 }
 
@@ -104,7 +103,6 @@ struct JarvisHomeMediumWidgetView: View {
             .opacity(stale ? 0.55 : 1)
         }
         .jarvisWidgetSurface()
-        .widgetURL(JarvisWidgetLink.url(for: .home))
     }
 
     /// Workouts done of target, from the Gym data; a dash while that data is missing.
@@ -145,7 +143,6 @@ struct JarvisHomeLargeWidgetView: View {
             .opacity(stale ? 0.55 : 1)
         }
         .jarvisWidgetSurface()
-        .widgetURL(JarvisWidgetLink.url(for: .home))
     }
 
     private var factoryItem: JarvisFactoryWidgetData.Task? {

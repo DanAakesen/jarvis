@@ -171,7 +171,6 @@ struct JarvisFactoryArea: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             JarvisTaskActivityNotice(language: language)
         }
-        .jarvisAmbientBackground()
         .environment(\.locale, language.locale)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if showsSegmentRow {
@@ -181,6 +180,9 @@ struct JarvisFactoryArea: View {
                 }
             }
         }
+        .jarvisAmbientBackground()
+        .toolbarBackground(.hidden, for: .bottomBar)
+        .scrollEdgeEffectHidden()
         .task {
             await loadProjects()
         }

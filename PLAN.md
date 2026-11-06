@@ -1,3 +1,22 @@
+## Active follow-up — Home hierarchy, transparent chrome and widget navigation
+
+The owner accepts the loading animations. Preserve them. The next correction adds
+Home / Quick actions / Upcoming section headings, equal hero title insets with
+trailing period controls, distinct orange calendar/task icons and native task
+swipe completion. Shared page navigation bars default to transparent; Notes and
+Factory paint their ambient background behind the entire footer inset.
+
+The owner also accepts widget layouts. Fix each widget tap to open its matching
+section through one shared topic URL and registered scheme. Add cold/warm URL
+checks. The earlier native run 42291240849 compiled but was cancelled early as
+superseded; it is not final acceptance.
+
+Implementation and native test updates are prepared on
+`codex/p15-home-hierarchy`. Native rendering and interactions are not yet verified.
+Run one combined qualification, inspect bilingual/large-text Home and shared page
+captures, then release under the existing authorization. Do not rerun unchanged
+Simulator coverage after merge when exact tree identity has been established.
+
 ## Current release — 6 November 2026, build 77
 
 Owner-reported passes: cold Voice/unified transcript, Home send/camera, task/reminder
@@ -4049,3 +4068,11 @@ stable under moving glass controls, and retain known data during refresh. Compar
 equal periods and keep missing/partial health data distinct from zero. Final
 recommendations will distinguish current screenshots from source-only findings;
 these proposals are not additional implementation authorization.
+
+Native 42292434058 compiled and passed 69/70 cases, including both cold/warm
+widget routes, Health hero alignment and native Home task swipes. Home's normal
+layout check used the glass accessibility content union as its visual boundary;
+correct the measurement to page/section anchors. Rendered AX XXXL also exposed
+cramped Home quick actions and activity summaries. Stack those at accessibility
+sizes and preserve normal geometry. Rerun Home and widget-link coverage on the
+new candidate; retain the unchanged page/Chat evidence with explicit source proof.

@@ -9,6 +9,8 @@
 "today.greeting.workoutOne" = "You logged {1 workout} this week.";
 "today.greeting.workouts" = "You logged {%ld workouts} this week.";
 "today.nextUp" = "Next up";
+"today.upcoming" = "Upcoming";
+"today.calendarEvent" = "Calendar event";
 "today.tomorrow" = "Tomorrow";
 "today.overdue" = "Overdue";
 "today.tab.today" = "Today";

@@ -63,6 +63,16 @@
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>$(PRODUCT_BUNDLE_IDENTIFIER).widgets</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>jarvis-widget</string>
+			</array>
+		</dict>
+		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>msauth.$(PRODUCT_BUNDLE_IDENTIFIER)</string>

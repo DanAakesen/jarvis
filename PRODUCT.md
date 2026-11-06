@@ -2460,3 +2460,21 @@ Copilot comparison availability requires demonstrated compatibility with Jarvis'
 complete trusted policy, including changing per-turn instructions. Configuration
 or a plain response alone is insufficient. If compatibility is absent or stale,
 explain why the test runtime is unavailable and keep Current usable.
+
+### Home hierarchy and transparent page chrome (6 November 2026)
+
+Home groups its activity hero, log controls and mixed agenda under Home, Quick
+actions and Upcoming headings. Calendar entries and tasks use distinct orange
+icons without a surrounding surface. Tasks complete through native trailing swipe
+and an accessible named action; writes must succeed before removing a task or
+showing success. Period controls align right and hero titles align left with equal
+top/leading inset. All page headers and the Notes/Factory footer containers remain
+transparent while their individual glass controls remain visible. The owner accepts
+the current loading animations; this correction preserves them.
+
+The owner accepts the widget layouts. Every widget size must open its matching
+section: Notes → Notes, Factory → Software Factory, Workouts/Steps → Health,
+Home → Home. Taps retain the app's authentication/lock gate.
+
+Home's quick actions and activity values must remain readable at accessibility
+text sizes, using stacked groups and wrapping labels instead of compressed tiles.

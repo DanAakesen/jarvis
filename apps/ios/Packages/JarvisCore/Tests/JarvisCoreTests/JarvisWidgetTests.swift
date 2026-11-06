@@ -355,6 +355,8 @@ final class JarvisWidgetTests: XCTestCase {
     }
 
     func testWidgetLinksOpenTheMatchingPage() {
+        XCTAssertEqual(JarvisWidgetLink.destination(for: JarvisWidgetLink.url(for: .gym)), .health)
+        XCTAssertEqual(JarvisWidgetLink.destination(for: JarvisWidgetLink.url(for: .factory)), .softwareFactory)
         XCTAssertEqual(JarvisWidgetLink.destination(for: JarvisWidgetLink.url(for: .notes)), .notes)
         XCTAssertEqual(JarvisWidgetLink.destination(for: JarvisWidgetLink.url(for: .home)), .today)
         XCTAssertNil(JarvisWidgetLink.destination(for: URL(string: "https://notes")!))
