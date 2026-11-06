@@ -14,6 +14,26 @@ public struct NotesGraphPosition: Equatable, Sendable {
 }
 
 public enum JarvisNotesPresentation {
+    /// Compact source context, excluding generic collection names already implied by the task list.
+    /// Stored headings/paths remain unchanged and are still available in task details.
+    public static func taskSourceLabel(heading: String?, path: String) -> String? {
+        let generic: Set<String> = [
+            "task", "tasks", "todo", "todos", "to-do", "to-dos", "opgave", "opgaver", "gøremål",
+            "action", "actions", "action items", "handling", "handlinger", "handlingspunkter",
+            ".", "..",
+            "work", "personal", "arbejde", "privat", "notes", "noter", "projects", "projekter"
+        ]
+        let note = URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+        let components = path.split(separator: "/").map(String.init)
+        // Vault task paths are Work/Personal notes or root task files. Never turn
+        // an enclosing vault/root folder into invented project context.
+        let scoped = components.first.map { ["work", "personal"].contains($0.lowercased()) } ?? false
+        let folders = scoped ? Array(components.dropFirst().dropLast().reversed()) : []
+        return ([heading, note].compactMap { $0 } + folders)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty && !generic.contains($0.lowercased()) }
+    }
+
     /// The most recently modified notes, newest first. Nodes whose date cannot be read sort last.
     public static func recentNotes(_ nodes: [KnowledgeGraphNode], limit: Int = 5) -> [KnowledgeGraphNode] {
         let fractional = ISO8601DateFormatter()

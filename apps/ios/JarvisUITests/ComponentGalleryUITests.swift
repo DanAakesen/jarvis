@@ -269,10 +269,7 @@ final class ComponentGalleryUITests: XCTestCase {
                 "phrase": ["x": phrase.frame.minX, "y": phrase.frame.minY, "width": phrase.frame.width, "height": phrase.frame.height],
                 "filter": ["x": filter.frame.minX, "y": filter.frame.minY, "width": filter.frame.width, "height": filter.frame.height],
             ]
-            if largeText {
-                app.swipeUp()
-                attach(app.screenshot(), named: "P15-\(destination)-accessibility-text")
-            }
+            captureReservedHeaderAfterScroll(named: "Build76-\(destination)-scrolled-\(theme)-\(language)-large-\(largeText)")
             if let data = try? JSONSerialization.data(withJSONObject: geometry, options: [.sortedKeys, .prettyPrinted]),
                let json = String(data: data, encoding: .utf8) {
                 let bounds = XCTAttachment(string: json)
@@ -280,6 +277,17 @@ final class ComponentGalleryUITests: XCTestCase {
                 bounds.lifetime = .keepAlways
                 add(bounds)
             }
+        }
+        if largeText {
+            // Reuse this AX launch for the Health dock/header instead of another simulator/app run.
+            openPage("health", language: language, theme: theme, launch: false)
+            XCTAssertTrue(app.descendants(matching: .any)["health.hero.training"].waitForExistence(timeout: 15))
+            XCTAssertTrue(app.buttons["health.mode.0"].isHittable)
+            XCTAssertTrue(app.textFields["health.search"].isHittable)
+            attach(app.screenshot(), named: "Build76-health-header-dock-\(language)-\(theme)-accessibility")
+            captureReservedHeaderAfterScroll(named: "Build76-health-scrolled-\(language)-\(theme)-accessibility")
+            XCTAssertTrue(app.buttons["health.mode.0"].isHittable)
+            XCTAssertTrue(app.textFields["health.search"].isHittable)
         }
     }
 
@@ -319,7 +327,10 @@ final class ComponentGalleryUITests: XCTestCase {
 
     func testInitialLoadingHidesFiltersAndUsesOnePageSkeleton() {
         for destination in ["usage", "status", "proactive"] {
-            openPage(destination, extra: ["--ui-test-insights=loading"])
+            let theme = destination == "status" ? "light" : "dark"
+            let reduced = destination == "proactive"
+            openPage(destination, theme: theme, extra: ["--ui-test-insights=loading"]
+                     + (reduced ? ["--ui-test-loading-reduced-motion"] : []))
             defer { app.terminate() }
             let loading = app.descendants(matching: .any)["\(destination).loading"]
             XCTAssertTrue(loading.waitForExistence(timeout: 8))
@@ -329,14 +340,17 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).count, 0)
             XCTAssertTrue(app.buttons["navigation.openSidebar"].isHittable, "Navigation stays available")
             attach(app.screenshot(), named: "P15-92-\(destination)-loading")
-            if destination == "usage" {
-                let first = loading.screenshot()
-                Thread.sleep(forTimeInterval: 0.6)
-                let second = loading.screenshot()
-                attach(first, named: "Loading shimmer frame 1")
-                attach(second, named: "Loading shimmer frame 2")
+            let first = loading.screenshot()
+            Thread.sleep(forTimeInterval: 0.6)
+            let second = loading.screenshot()
+            attach(first, named: "Build76-loading-\(theme)-reduced-\(reduced)-frame-1")
+            attach(second, named: "Build76-loading-\(theme)-reduced-\(reduced)-frame-2")
+            if reduced {
+                XCTAssertEqual(first.pngRepresentation, second.pngRepresentation,
+                               "Reduce Motion must keep placeholders still")
+            } else {
                 XCTAssertNotEqual(first.pngRepresentation, second.pngRepresentation,
-                                  "Pending data must have visible loading motion")
+                                  "Both appearances must retain quiet placeholder motion")
             }
         }
     }
@@ -515,6 +529,9 @@ final class ComponentGalleryUITests: XCTestCase {
         let first = app.descendants(matching: .any).matching(identifier: firstID).firstMatch
         let completion = first.buttons["notes.task.complete"]
         XCTAssertTrue(completion.isHittable)
+        let firstMetadata = first.buttons["notes.task.open"].value as? String ?? ""
+        XCTAssertFalse(firstMetadata.isEmpty, "Task context remains accessible")
+        XCTAssertFalse(firstMetadata.contains("Tasks"), "Generic collection names are not useful task context")
         // AX frame subtraction can report 43.99999999999994 for an exact 44pt target.
         // Allow only sub-micropoint arithmetic error, never a visibly smaller target.
         XCTAssertLessThanOrEqual(max(0, 44 - completion.frame.width), 0.000_001)
@@ -539,6 +556,11 @@ final class ComponentGalleryUITests: XCTestCase {
             open.tap()
             let fullTitle = app.staticTexts[title]
             XCTAssertTrue(fullTitle.waitForExistence(timeout: 5), "Details retain the full task title")
+            let sourcePath = app.staticTexts["notes.task.source.path"]
+            for _ in 0..<3 { if sourcePath.isHittable { break }; app.swipeUp() }
+            XCTAssertTrue(sourcePath.isHittable, "Source provenance remains reachable in the scrolling detail")
+            XCTAssertEqual(sourcePath.label, "Work/Synthetic.md")
+            XCTAssertEqual(app.staticTexts["notes.task.source.heading"].label, "Project kickoff")
             attach(app.screenshot(), named: "P15-task-board-detail-\(language)-\(theme)")
         } else {
             let lastID = "notes.task.row." + String(repeating: "0", count: 63) + "9"
@@ -574,6 +596,16 @@ final class ComponentGalleryUITests: XCTestCase {
             app.swipeDown()
         }
         XCTFail("Task completion must be fully visible between the header and search dock")
+    }
+
+    private func captureReservedHeaderAfterScroll(named name: String) {
+        let title = app.staticTexts["page.title"]
+        let frame = title.frame
+        app.swipeUp()
+        XCTAssertTrue(title.isHittable)
+        XCTAssertEqual(title.frame.minY, frame.minY, accuracy: 1, "The header has reserved space above scrolling content")
+        XCTAssertTrue(app.buttons["navigation.openSidebar"].isHittable)
+        attach(app.screenshot(), named: name)
     }
 
     private func notesReach(_ identifier: String, upward: Bool = true) {
@@ -644,6 +676,7 @@ final class ComponentGalleryUITests: XCTestCase {
         XCTAssertTrue(languageRow.isHittable)
         XCTAssertGreaterThanOrEqual(languageRow.frame.height, 44)
         attach(app.screenshot(), named: "P15-settings-general-\(language)-\(theme)-large-\(largeText)")
+        captureReservedHeaderAfterScroll(named: "Build76-settings-scrolled-\(language)-\(theme)-large-\(largeText)")
         for section in ["models", "health", "account"] {
             let segment = app.buttons["settings.section.\(section)"]
             if !segment.isHittable {

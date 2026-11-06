@@ -61,6 +61,7 @@ struct JarvisNotesCopy {
     var titleField: String { text(.titleField) }
     var folderField: String { text(.folderField) }
     var priority: String { text(.priority) }
+    var source: String { text(.source) }
     var folderName: String { text(.folderName) }
     var newFolderHere: String { text(.newFolderHere) }
     var useFolder: String { text(.useFolder) }
@@ -208,13 +209,9 @@ struct JarvisNotesArea: View {
                 .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
                 .padding(.top, JarvisDesignTokens.notesSectionSpacing)
                 .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
-                .background {
-                    if selectedTab == .tasks {
-                        Rectangle().fill(.regularMaterial).ignoresSafeArea(edges: .bottom)
-                    }
-                }
             }
         }
+        .scrollEdgeEffectHidden(for: .bottom)
         .task(id: "\(selectedTab.rawValue)-\(refreshVersion)") {
             await loadSelectedTab(force: refreshVersion > 0)
         }
@@ -733,6 +730,18 @@ struct JarvisNotesArea: View {
                     )
                 }
                 Text(priorityText(task.priority))
+            }
+            Section {
+                Text(task.path)
+                    .font(.footnote)
+                    .accessibilityIdentifier("notes.task.source.path")
+                if let heading = task.heading, !heading.isEmpty {
+                    Text(heading)
+                        .font(.footnote)
+                        .accessibilityIdentifier("notes.task.source.heading")
+                }
+            } header: {
+                Text(copy.source).foregroundStyle(.primary)
             }
             if !task.done {
                 Section {

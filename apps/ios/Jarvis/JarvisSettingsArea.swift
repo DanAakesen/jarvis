@@ -90,8 +90,7 @@ struct JarvisSettingsArea: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            VStack(spacing: 0) {
-                header
+            Group {
                 if loading && response == nil {
                     loadingState
                 } else if response == nil {
@@ -100,6 +99,7 @@ struct JarvisSettingsArea: View {
                     settingsList
                 }
             }
+            .jarvisPageHeader { header }
             .jarvisAmbientBackground()
             .environment(\.locale, language.locale)
             .tint(JarvisDesignTokens.settingsAccent)

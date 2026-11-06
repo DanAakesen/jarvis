@@ -49,8 +49,8 @@ struct JarvisTaskListRow: View {
 
     private var scope: String { task.scope == .work ? copy.work : copy.personal }
     private var overdue: Bool { task.dueDate.map { $0 < today } ?? false }
-    private var source: String {
-        task.heading ?? URL(fileURLWithPath: task.path).deletingPathExtension().lastPathComponent
+    private var source: String? {
+        JarvisNotesPresentation.taskSourceLabel(heading: task.heading, path: task.path)
     }
 
     private var due: String? {
@@ -146,7 +146,7 @@ struct JarvisTaskListRow: View {
             HStack(spacing: 6) {
                 scopeLabel
                 priorityLabel
-                Text(source).lineLimit(1)
+                if let source { Text(source).lineLimit(1) }
             }
             HStack(spacing: 6) {
                 scopeLabel

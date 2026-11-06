@@ -107,9 +107,9 @@ jobs:
     needs: linux
     if: always() && inputs.simulator != 'skip' && (needs.linux.result == 'success' || needs.linux.result == 'skipped') && ((github.event_name == 'pull_request' && github.event.pull_request.draft == false) || (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'schedule' && github.ref == 'refs/heads/main'))
     runs-on: macos-26
-    # The full device suite takes about 35 minutes after build/boot. Leave time
-    # for result finalization and screenshot export; retain every assertion.
-    timeout-minutes: 65
+    # The accepted 68-test run took 62m49s. Feedback captures reuse its launches;
+    # leave finalization/export headroom without relaxing any per-test limit.
+    timeout-minutes: 75
     permissions:
       contents: read
       issues: write

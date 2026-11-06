@@ -635,10 +635,10 @@ class SafeFailureTests(unittest.TestCase):
             workflow["jobs"]["macos"]["if"],
         )
         self.assertIn("    runs-on: macos-26", source)
-        # The expanded 67-test suite took 35 minutes after build/boot, so the
-        # former 45-minute job cap interrupted result finalization. Keep an
-        # explicit overall cap and the existing individual test limits.
-        self.assertEqual(workflow["jobs"]["macos"]["timeout-minutes"], 65)
+        # The accepted 68-test run took 62m49s including capture/export. Additional
+        # feedback captures reuse its launches; retain room for final artifacts
+        # and runner variation without changing individual test limits.
+        self.assertEqual(workflow["jobs"]["macos"]["timeout-minutes"], 75)
         self.assertIn("-default-test-execution-time-allowance 120", source)
         self.assertIn("-maximum-test-execution-time-allowance 150", source)
         self.assertIn("      cancel-in-progress: true", source)

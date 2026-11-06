@@ -76,11 +76,16 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
             ("Finish the synthetic checklist", nil, nil, "high", "Work", nil),
         ]
         tasks = samples.enumerated().map { index, sample in
-            ["id": String(repeating: "0", count: 63) + String(index + 1, radix: 16),
+            let noteName = index == 2 ? "Roadmap draft" : [0, 8].contains(index) ? "Tasks" : "Synthetic"
+            let heading: String? = [0, 2, 8].contains(index) ? "Tasks" : sample.5
+            return ["id": String(repeating: "0", count: 63) + String(index + 1, radix: 16),
              "text": sample.0, "done": false,
              "dueDate": sample.1 as Any? ?? NSNull(), "dueTime": sample.2 as Any? ?? NSNull(),
-             "dueAt": NSNull(), "priority": sample.3, "path": "\(sample.4)/Synthetic.md",
-             "line": index + 1, "heading": sample.5 as Any? ?? NSNull(), "version": String(repeating: "a", count: 64)]
+             "dueAt": NSNull(), "priority": sample.3,
+             "path": "\(sample.4)/\(noteName).md",
+             "line": index + 1,
+             "heading": heading as Any? ?? NSNull(),
+             "version": String(repeating: "a", count: 64)]
         }
     }
 
