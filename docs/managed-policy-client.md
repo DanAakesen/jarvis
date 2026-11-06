@@ -54,8 +54,9 @@ message/reasoning/function-call output is already in the native conversation and
 is filtered out, rather than replayed. A cursor tracks original input positions;
 it does not use text matching to guess whether an item was already sent.
 
-Requests contain only conversation, current input delta, current shared policy
-instructions and streaming. Registered tools are verified once before native
+Requests contain only conversation, input and streaming. A new turn or policy
+change prepends one typed `developer` message containing the complete current
+shared policy to the unchanged current input delta. Registered tools are verified once before native
 creation/inference and the shared loop's actual advertised schemas must still
 match at request time. No per-request tool override is sent. Unsupported store,
 previous-response, token-limit and reasoning override fields are not forwarded.
@@ -66,14 +67,45 @@ the native stream enforces a final-text-only boundary: any function item, includ
 a new action with different arguments, fails before dispatch. Text-only synthesis
 can complete. No extra provider suppression parameter is sent.
 
+### Trusted policy input (6 November 2026)
+
+Activation [42219195236](https://github.com/DanAakesen/jarvis/actions/runs/42219195236)
+successfully provisioned and pinned the comparison at 13:17:00 UTC. Its canary
+then failed at `response_start` with HTTP 400, `invalid_payload`, parameter
+`instructions`, exception `BadRequestError` at 13:17:58. This identifies the
+rejected top-level request field; no raw error or policy content was retained.
+
+The shared request builder now uses the typed message form in Microsoft's
+[Foundry input contract](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/aiproject#openaiinputmessage):
+`type: message`, `role: developer`, and one `input_text` content part containing
+the exact full instructions string. That role has precedence over user input.
+The policy still comes exclusively from the shared application composition path.
+Reference text, attachments, steering and tool outputs are not promoted into it.
+There is no top-level `instructions` override, truncation, policy omission or
+change to registered tools, definition verification, claims or source boundaries.
+
+The builder adds current policy after cursor selection on the first response of
+each application turn and whenever its exact composed text changes, including
+mode changes. A per-turn in-memory record is updated only after response creation
+returns; identical policy is omitted on tool continuations. New turns always
+start with fresh policy, including on an existing native conversation. No cursor
+positions or caller input lists change. Foundry prepends native history to new
+inputs and persists completed response input items, so a new developer policy
+follows earlier items and precedes current reference/user/tool inputs. One full
+policy per turn/change therefore remains in native history; this patch neither
+deletes history nor introduces an undocumented compaction or database schema.
+Existing conversation and uncertain-turn recovery rules still apply. The harness preview's live
+acceptance of this input form remains subject to the full-policy canary; the
+general Responses schema alone is not proof of successful managed inference.
+
 ### Policy-shaped activation canary (6 November 2026)
 
-`managed_response_request` builds the same conversation/input/instructions/stream
+`managed_response_request` builds the same conversation/input/stream
 request for `_create_response` and the fixed administrative canary. Shared
 `runtime_instructions` extracts the existing format/channel/food/capability clauses
 without changing their content; both paths then use `personalize_instructions`
 with selected identity, mode, preferences and backend capability settings. A local
-HTTP fixture compares the complete canary instructions to an actual policy turn.
+HTTP fixture compares the complete canary developer-policy message to an actual policy turn.
 The probe sends synthetic reference/user messages, executes no tools and bypasses
 owner context and claims. It therefore validates provider compatibility without
 claiming full owner-session acceptance. It cannot consume or release an owner source.
@@ -101,12 +133,13 @@ the existing HTTP reason-omission behavior. The browser error retains structured
 metadata, not provider message text. No retry, claim release or default-runtime
 change follows from a 4xx; that recovery policy remains an owner decision.
 
-The original rejected parameter is still unverified. A synthetic 400 reporting
-`unsupported_parameter` / `instructions` tests diagnostic propagation only; it is
-not evidence that Foundry rejected that parameter. Do not remove instructions or
-flatten input speculatively: doing so can lose shared policy, tool receipts or
-source boundaries. Use a newly captured safe cause before correcting the native
-request, then qualify a real Copilot test-chat turn.
+The older #1373 failure did not identify its rejected parameter. The 6 November
+activation above now establishes rejection of `instructions` for the actual
+full-policy canary. Synthetic 400 fixtures continue to test safe propagation and
+no replay. Additional fixtures reject top-level overrides, verify full-policy
+preservation in developer input, and prove that rejection of the developer input
+or message list fails the canary even when a plain-string probe would pass.
+Provider acceptance and a real Copilot test-chat turn still need live verification.
 
 The verifier must fetch the actual immutable prompt-agent version, validate the
 normal-chat schemas, disabled built-ins, identity definition/model/effort and

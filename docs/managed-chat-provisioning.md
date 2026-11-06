@@ -101,6 +101,25 @@ Local checks exercise refresh refusal, one-version creation, old-version retenti
 ambiguous matches, unowned versions, uncertain creation and later exact reuse.
 Live target state and original-path inference still require coordinator acceptance.
 
+After the version-route correction, activation
+[42219195236](https://github.com/DanAakesen/jarvis/actions/runs/42219195236), job
+`127913011998`, printed `managed_chat_provisioned` at 13:17:00 UTC. Backend target
+configuration and readiness completed, but the full-policy canary failed at
+13:17:58 with `reason=managed_probe_failed`, `stage=response_start`, HTTP 400,
+`provider_code=invalid_payload`, `provider_param=instructions` and
+`provider_exception=BadRequestError`. The target remains configured. Metadata
+availability can therefore verify while inference fails; a selectable runtime
+must not be reported as working from that metadata alone.
+
+The [shared policy transport correction](managed-policy-client.md#trusted-policy-input-6-november-2026)
+preserves the complete runtime policy in a trusted developer input message instead
+of the rejected top-level override. It changes neither manifest nor fingerprint.
+Deploy the updated hosted agent, inspect/reuse the unique current-manifest version,
+then require the same full-policy canary before declaring Copilot ready. No extra
+immutable version, cleanup mutation, access change or availability bypass is
+needed for this transport-only correction. Earlier uncertain owner turns still
+require their existing explicit recovery flow.
+
 The refresh request follows Microsoft's
 [create-agent-version REST contract](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/aiproject#agents---create-agent-version):
 `POST /agents/{agent_name}/versions?api-version=v1`, with `definition` and ownership
