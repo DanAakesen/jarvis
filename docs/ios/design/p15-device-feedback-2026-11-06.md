@@ -686,3 +686,30 @@ apps/ios files except the changed gallery test to dce71639. It keeps pinned Xcod
 26.6/XcodeGen 2.46 and test deadlines, uploads the xcresult and source receipt even
 on failure and requires the one case to succeed. The temporary workflow cannot
 qualify production by itself; its checked-out source and actual results must match.
+
+## Final native acceptance — 6 November, 19:41 UTC
+
+Candidate 1766b727 passed CI 42280051912 (502 Core tests) and CodeQL 42280051874.
+Immutable CI artifact 13534069863, SHA256
+b5b544b55b1bcc6299e5afdad8575862f4ddf04b22adc9dd583f7ea98e643052, records the exact
+PR head and full tree 8c18563542ef60ac423d4397ba3a3bc7d1837989.
+
+Focused native 42280276801 passed the gallery in 120.262 seconds: one test, zero
+failures, unchanged 120/150-second limits. Artifact 13534689492 (6022400 bytes,
+SHA256 c0187e4efd32cfd7e4e02a6b2998ceed0c1966c6690806d5bf7c58ee3ef46682) retains
+xcresult, summary, exact checkout/full-tree/app-tree proof and actual attachments.
+English/dark 7E1B90D5 and Danish/light 9D1FE98B were inspected: top-left headers,
+metric columns, compact Factory counters/two rows and Notes contents fit.
+
+This completes coverage as 67 full-suite passes on dce71639 plus the one focused
+pass on 1766b727. Production source and the other 67 tests are identical. It is not
+a claim that the earlier timed-out full run passed 68/68. Gallery host tint, actual
+SpringBoard refresh, live HealthKit and physical haptics remain device checks.
+
+PR #1621 merged as 380782a02712322090de54d577991420351f460e. The merged full tree
+8c18563542ef60ac423d4397ba3a3bc7d1837989 and app/test tree
+70f5cefe1e153390376cfab48b50e099c1f7fde4 match exactly, with no file differences.
+Normal Deploy 42281871580 is pending. Duplicate automatic main Simulator
+42281871658 was cancelled after source proof; it entered compilation before
+cancellation settled, so its boot status must be confirmed. No new TestFlight
+upload is claimed yet.
