@@ -1098,10 +1098,21 @@ class SafeFailureTests(unittest.TestCase):
         )
         self.assertEqual(artifact["with"]["retention-days"], 14)
         self.assertEqual(artifact["with"]["if-no-files-found"], "error")
-        self.assertEqual(artifact["with"]["path"], "${{ runner.temp }}/ios-screenshots/")
+        self.assertEqual(artifact["with"]["path"].splitlines(), [
+            "${{ runner.temp }}/ios-screenshots/",
+            "!${{ runner.temp }}/ios-screenshots/ui-test-attachments/",
+        ])
+        evidence = next(step for step in job["steps"] if step.get("id") == "ui-evidence")
+        self.assertEqual(evidence["uses"], artifact["uses"])
+        self.assertEqual(evidence["if"], "always()")
+        self.assertEqual(evidence["with"]["path"], "${{ runner.temp }}/ios-screenshots/ui-test-attachments/")
+        self.assertEqual(evidence["with"]["retention-days"], 14)
+        self.assertEqual(evidence["with"]["if-no-files-found"], "error")
         comment = next(step for step in job["steps"] if step.get("name") == "Post or update screenshot comment")
         self.assertEqual(comment["env"]["GH_TOKEN"], "${{ github.token }}")
         self.assertIn("ARTIFACT_URL", comment["env"])
+        self.assertEqual(comment["env"]["UI_EVIDENCE_URL"], "${{ steps.ui-evidence.outputs.artifact-url }}")
+        self.assertIn("[Native UI test evidence]($UI_EVIDENCE_URL)", comment["run"])
         self.assertIn("<!-- ios-screenshot-review -->", comment["run"])
         self.assertIn("gh api --method PATCH", comment["run"])
         self.assertIn("gh api --method POST", comment["run"])
@@ -1176,7 +1187,10 @@ class SafeFailureTests(unittest.TestCase):
         subprocess.run(["bash", "-n"], input=capture["run"], text=True, check=True)
         compare = next(step for step in steps if step.get("name") == "Pair simulator captures with approved board renders")
         artifact = next(step for step in steps if step.get("name") == "Upload iOS screenshots")
-        self.assertEqual(artifact["with"]["path"], "${{ runner.temp }}/ios-screenshots/")
+        self.assertEqual(artifact["with"]["path"].splitlines(), [
+            "${{ runner.temp }}/ios-screenshots/",
+            "!${{ runner.temp }}/ios-screenshots/ui-test-attachments/",
+        ])
         screens = ("chat", "voice", "notifications", "factory", "settings", "notes", "health", "sidebar")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "ios-screenshots"

@@ -125,3 +125,11 @@ review archives below the connector download limit. No test, screenshot or failu
 recording is removed. Fresh native/motion inspection remains required. The candidate
 also includes the localized Copilot policy-unverified explanation in its existing
 runtime picker; it does not change Chat appearance.
+
+Candidate e0d6821e passed502 Core tests and CodeQL; its Python CI found two
+existing assertions still expecting the former single-archive upload path.
+They now verify the intentional exclusion, separate always-retained UI archive,
+retention/failure policy and both PR links. All24 existing iOS workflow tests
+passed locally with the installed Node YAML parser. Its Mac job42257412529 was
+still queued and was cancelled before any simulator build/boot; the app/test tree
+is unchanged by this workflow-test correction.
