@@ -44,7 +44,7 @@ successful OIDC login and manifest retrieval but before `managed_chat_provisione
 or the response canary. The existing diagnostic does not establish the failing
 operation, a permission denial, or whether a write completed. Do not blindly
 repeat the mutation. Bounded operation/status/code diagnostics and a GET-only
-inspection path are being prepared before another apply. Normal live acceptance
+inspection path were qualified before another apply, as recorded below. Normal live acceptance
 and its release-result job still passed; neither substitutes for the failed
 comparison job.
 
@@ -52,11 +52,11 @@ TestFlight **build 76 uploaded successfully at 12:14:34 UTC / 13:14:34 Copenhage
 through unchanged workflow 42215302636 (job 127883700403). Checkout logs confirm
 verified source ab464314; the complete job and signing cleanup passed. UI
 acceptance and the required normal backend dependency passed before dispatch.
-Copilot activation continues separately without an app rebuild; its unavailable
-state remains visible until target verification succeeds. This follows the
+Copilot activation continues separately without an app rebuild. Target metadata
+verification controls selection; it does not establish successful inference. This follows the
 owner's release authorization and existing partial-delivery cadence. Apple
 processing is not independently confirmed: no matching email was available in
-the connected mailbox at 12:15 UTC.
+the connected mailbox at 12:15 UTC or in the later 13:55 UTC check.
 
 Diagnostic PR #1615, candidate bbb60479, passed full CI 42214612550 and CodeQL
 42214612464 and merged as 8398f7a7. Its app/test tree is unchanged. Normal Deploy
@@ -111,11 +111,22 @@ user/tool roles, sends fresh policy on each application turn/change and avoids
 identical repeats within that turn. Claims, history cursors and the strong canary
 remain intact. All 78 focused tests, scoped lint/compilation, CI 42225996401 and
 CodeQL 42225996097 passed. The candidate merged as cac5d05d with an identical
-source tree and unchanged app/test tree. Normal Deploy 42227486613 and explicit
-comparison check 42227506332 are running; definition refresh is false.
-Deployment must reuse the current comparison version without definition
-refresh, then pass the actual policy-shaped response canary before claiming
-Copilot inference works.
+source tree and unchanged app/test tree. Normal Deploy 42227486613 passed hosted
+agent deployment, readiness and normal conversation acceptance. Explicit comparison
+42227506332 reused the existing version with definition refresh false and printed
+`managed_chat_provisioned` at 13:48:33 UTC. Its response canary then failed at
+13:49:08 with HTTP 400, `invalid_request`, no parameter and `BadRequestError` at
+`response_start`. No actual model or reasoning effort was reported. Normal acceptance
+and the release-result job passed, but the overall comparison run failed.
+
+The second response does not establish that developer input, policy length or the
+configured model is unsupported. Current published limits and the request contract
+do not identify a further concrete incompatibility. Next: retain allowlisted nested
+provider diagnostics and run a separate, explicitly selected diagnostic with fixed
+synthetic request shapes on the already configured target. Each shape owns and cleans
+up its new conversation, executes no tools and never counts as runtime acceptance.
+The full production-policy canary remains required before claiming Copilot inference
+works. Owner-authenticated conversation parity remains a separate check.
 
 ## Release authorization
 

@@ -14,7 +14,10 @@ read-only inspection found one older version and no current-manifest match.
 PR #1617 corrected the confirmed version-creation endpoint mismatch; provisioning
 then succeeded, but the actual response rejected the instructions override.
 PR #1619 qualified and merged the complete-policy developer-input correction;
-its live check reuses the existing version with definition refresh false. #1618 also
+its live check reused the existing version with definition refresh false, then
+failed with HTTP 400 `invalid_request` without a field hint. A separate fixed-input
+diagnostic is being prepared; do not guess the remaining incompatibility or repeat
+provisioning. #1618 also
 qualified and merged a post-build OIDC refresh after a registry authentication
 failure. Copilot inference remains unverified. TestFlight build **76 uploaded at
 12:14:34 UTC / 13:14:34 Copenhagen** from verified main ab464314 (42215302636).

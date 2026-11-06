@@ -4006,8 +4006,11 @@ research, Health and milestone facilities are reused; no duplicate job system.
   provisioning before the canary. Read-only inspection confirmed one older version
   and no current-manifest match. #1617's corrected version-creation route passed
   CI/CodeQL and merged. Provisioning succeeded; the live canary rejected the
-  instructions override. #1619 passed CI/CodeQL and merged; repeat its canary using the
-  existing version. TestFlight build 76
+  instructions override. #1619 passed CI/CodeQL and merged; its normal deploy passed,
+  but comparison 42227506332 reused the version and failed with generic HTTP 400
+  `invalid_request`. Prepare a separately selected fixed-input diagnostic to isolate
+  the provider constraint; preserve full-policy acceptance and existing claims.
+  TestFlight build 76
   uploaded from verified source ab464314; activation needs no app rebuild.
   Physical voice startup,
   HealthKit permissions and haptic feel still require the owner's device.
