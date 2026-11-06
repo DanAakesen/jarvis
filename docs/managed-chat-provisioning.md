@@ -81,6 +81,25 @@ whether a storage write returns success. The production builder and full-policy
 canary stay unchanged; stored static definition instructions alone cannot replace
 Jarvis's dynamic mode, capability and receipt policy.
 
+The stored-policy check qualified in PR #1623 (`de6a5681`; CI 42247195691 and
+CodeQL 42247195606 passed) and merged as `11463376`. Normal deployment
+[42248895975](https://github.com/DanAakesen/jarvis/actions/runs/42248895975)
+passed hosted-agent rollout, readiness and Current live acceptance. Its explicit
+diagnostic [42252117950](https://github.com/DanAakesen/jarvis/actions/runs/42252117950)
+returned both `conversation_developer_policy` and `conversation_system_policy`
+as `unavailable` with `managed_probe_policy_not_applied` at `response_stream` at
+16:26:57 UTC. Storage and inference proceeded, but the required current-policy
+sentinel was not returned. The safe record does not distinguish first-turn failure
+from failure of the replacement policy; neither outcome qualifies the transport.
+No raw reply, owner context, history or claims were captured or changed.
+
+There is currently no verified channel for the complete dynamic Jarvis policy
+on this Copilot target. The general Responses/conversation contract is broader
+than this observed harness behavior. Do not label Copilot inference accepted,
+weaken the policy into user content, replace it with static definition text,
+retry an owner source, or refresh the definition to hide this incompatibility.
+The normal Current runtime remains accepted.
+
 After the updated hosted agent is deployed, explicitly dispatch Deploy on `main`
 with only `diagnose_managed_chat=true`. All comparison inspection, provisioning
 and definition-refresh inputs must remain false. The existing qualification,
@@ -115,8 +134,9 @@ The handoff independently revalidates output and prints one
 `managed_chat_request_diagnostics_complete`. That means the diagnostic returned,
 not that Copilot works. It never prints `managed_chat_comparison_canary_ok`.
 The unchanged full-policy `managed_text_canary` remains the only comparison
-acceptance check. Both earlier matrix results are recorded above; the conversation
-policy comparison still requires its own explicit live run.
+acceptance check. All three diagnostic results are recorded above. Further live
+checks need a concrete supported-channel hypothesis; repeating these rejected
+shapes or plain-text canaries does not qualify the actual Jarvis workflow.
 
 Manual Deploy [40877005757](https://github.com/DanAakesen/jarvis/actions/runs/40877005757)
 reached `agent_identity_unverified` on 29 October 2026. That check follows readback

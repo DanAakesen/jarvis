@@ -150,8 +150,15 @@ Both trusted roles are therefore rejected in response inputs on this target.
 The next [request comparison](managed-chat-provisioning.md#6-november-diagnostic-request-comparison)
 checks the documented conversation-items channel, with exact policy-only sentinels,
 conflicting user input and a second policy update on each owned conversation.
-The production request builder remains unchanged until an accepted trusted,
-dynamic policy form is established. Synthetic 400 fixtures continue to test safe propagation and
+The stored-policy diagnostic [42252117950](https://github.com/DanAakesen/jarvis/actions/runs/42252117950)
+also failed both roles with `managed_probe_policy_not_applied` at `response_stream`
+at 16:26:57 UTC. A successful storage/inference call did not satisfy the required
+policy sentinel. The safe result does not identify whether the first or replacement
+turn failed; both must pass before this channel can be used. No accepted trusted,
+dynamic policy form is established, and the production request builder remains
+unchanged. Any future stored-policy implementation must preserve uncertain-write
+ownership, advance its turn-local cache only after acknowledged writes, retain
+native history and keep trusted policy out of visible runtime conversation history. Synthetic 400 fixtures continue to test safe propagation and
 no replay. Additional fixtures reject top-level overrides, verify full-policy
 preservation in developer input, and prove that rejection of the developer input
 or message list fails the canary even when a plain-string probe would pass.
