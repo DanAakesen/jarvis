@@ -89,6 +89,8 @@ struct JarvisHealthBodyChart: View {
 }
 
 struct JarvisBodyTrendPlot: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .caption) private var chartHeight = JarvisDesignTokens.healthChartHeight
     let trend: JarvisBodyTrend
     let period: JarvisHealthPeriod
     let title: String
@@ -98,7 +100,10 @@ struct JarvisBodyTrendPlot: View {
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
     private var start: Date { parseDate(period.startDate)! }
     private var end: Date { parseDate(period.endDate)! }
-    private var ticks: [Date] { [start, start.addingTimeInterval(end.timeIntervalSince(start) / 2), end] }
+    private var ticks: [Date] {
+        dynamicTypeSize.isAccessibilitySize ? [start, end]
+            : [start, start.addingTimeInterval(end.timeIntervalSince(start) / 2), end]
+    }
 
     var body: some View {
         Chart {
@@ -155,7 +160,7 @@ struct JarvisBodyTrendPlot: View {
                     }
             }
         }
-        .frame(height: JarvisDesignTokens.healthChartHeight)
+        .frame(height: chartHeight)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(accessibilitySummary)
