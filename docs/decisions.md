@@ -11239,3 +11239,19 @@ task/selector captures were inspected. The verified candidate merged through
 #1614 as ab464314. Backend deployment, comparison activation and TestFlight
 outcomes are recorded separately in the device-feedback delivery record; this
 source qualification does not by itself establish those live outcomes.
+
+## 6 November 2026 — Release verified app while comparison activation continues
+
+The normal backend dependency and live conversation acceptance passed before
+TestFlight dispatch. Upload the accepted app source independently of the optional
+Copilot comparison repair, following the owner's release authorization and existing
+partial-delivery cadence. Build 76 uploaded from ab464314 at 12:14:34 UTC; Apple
+processing remains unconfirmed. Runtime availability continues to enforce its
+existing verification boundary. A selectable option alone never proves inference.
+
+After provisioning returned only azure_request_failed, add content-free operation
+diagnostics and a separate GET-only inspection mode before any mutation retry.
+PR #1615 preserves ownership/identity checks and exact-version reuse after an
+uncertain write. It adds no grant, default runtime change or automatic write retry.
+Its CI/CodeQL passed; live inspection and activation outcomes belong in the
+device-feedback delivery record.

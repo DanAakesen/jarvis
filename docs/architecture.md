@@ -79,6 +79,13 @@ and unverified identities stop the handoff. Old versions remain; only the separa
 comparison selector and its three backend activation values change. The existing
 readback/fingerprint/canary checks still follow activation.
 
+The separate default-off `inspect_managed_chat` input reads preflight metadata,
+version inventory, exact definition matches and the current pin without changing
+them. It rejects provision/refresh combinations and exits before backend
+configuration or inference. Failed Azure requests expose only a fixed operation,
+method, write-attempt flag and recognized status/code; private provider content
+is discarded. Inspection is not evidence of successful activation or inference.
+
 Migration 0069 adds owner-bound immutable test-runtime metadata and an opaque
 server-only native conversation reference to existing SQL sessions. The normal UI
 feed explicitly excludes test sessions; internal context/source reads retain
@@ -92,8 +99,8 @@ managed chat client. Unconfigured managed selections fail without fallback.
 The independent managed protocol adapter uses an agent-scoped HTTP Responses
 client and native conversation continuations, with existing backend function
 execution. Its definition validator requires the selected model/effort, immutable
-version, exact functions and disabled extra built-ins. It is not wired into
-production. Durable turn/source claims and an internal agent-authenticated binding
+version, exact functions and disabled extra built-ins. Only a verified, explicitly
+selected test runtime can reach it. Durable turn/source claims and an internal agent-authenticated binding
 client now cover provider creation and continuations; uncertain work stays active
 without automatic replay. `ManagedPolicyClient` reuses the existing application
 policies through a narrow provider transport seam. The lazy factory and pinned

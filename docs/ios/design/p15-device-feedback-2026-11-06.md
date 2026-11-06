@@ -48,12 +48,19 @@ inspection path are being prepared before another apply. Normal live acceptance
 and its release-result job still passed; neither substitutes for the failed
 comparison job.
 
-At 12:07 UTC, the unchanged TestFlight workflow was dispatched as build 76,
-run 42215302636, on verified main ab464314. UI acceptance and the required normal
-backend dependency already passed. Copilot's separate activation can continue
-without changing the app; its unavailable state remains visible until target
-verification succeeds. Upload is in progress, not yet claimed successful. This
-follows the owner's release authorization and existing partial-delivery cadence.
+TestFlight **build 76 uploaded successfully at 12:14:34 UTC / 13:14:34 Copenhagen**
+through unchanged workflow 42215302636 (job 127883700403). Checkout logs confirm
+verified source ab464314; the complete job and signing cleanup passed. UI
+acceptance and the required normal backend dependency passed before dispatch.
+Copilot activation continues separately without an app rebuild; its unavailable
+state remains visible until target verification succeeds. This follows the
+owner's release authorization and existing partial-delivery cadence. Apple
+processing is not independently confirmed: no matching email was available in
+the connected mailbox at 12:15 UTC.
+
+Diagnostic PR #1615, candidate bbb60479, passed full CI 42214612550 and CodeQL
+42214612464 and merged as 8398f7a7. Its app/test tree is unchanged. Normal Deploy
+42215955386 and explicit read-only inspection 42215978680 are in progress.
 
 ## Release authorization
 

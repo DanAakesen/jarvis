@@ -10,9 +10,10 @@ backend-only or documentation changes.
 
 Normal backend/agent/web deployment and live conversation acceptance passed.
 Explicit Copilot comparison activation failed before its response canary. A
-read-only diagnostic follow-up is in progress. TestFlight build 76 is now running
-on verified main ab464314 (42215302636); the normal backend dependency is already
-accepted, while Copilot activation continues separately. Read the
+read-only diagnostic follow-up is in progress. TestFlight build **76 uploaded at
+12:14:34 UTC / 13:14:34 Copenhagen** from verified main ab464314 (42215302636).
+The normal backend dependency is accepted; Copilot activation continues separately.
+Apple processing is not independently confirmed. Read the
 [device-feedback delivery record](p15-device-feedback-2026-11-06.md) for exact
 runs, retained evidence and current delivery status. Later owner instructions
 authorize functional Chat/voice fixes and its runtime-testing Plus option while
