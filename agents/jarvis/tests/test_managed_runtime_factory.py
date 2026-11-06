@@ -1,4 +1,5 @@
 """Actual lazy managed assembly over synthetic HTTP; no credentials or inference."""
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from types import SimpleNamespace as NS
@@ -370,3 +371,138 @@ async def test_canary_diagnostics_retain_status_but_discard_unsafe_provider_fiel
     assert result["stage"] == "response_start"
     assert "PRIVATE" not in json.dumps(result)
     assert "private field" not in json.dumps(result)
+
+
+class DiagnosticFixture(CanaryFixture):
+    def __init__(self, failures=None):
+        super().__init__()
+        self.created, self.deleted, self.shapes = [], [], []
+        self.failures = failures or {}
+        self.started = asyncio.Event()
+
+    async def handle(self, request):
+        if request.method == "POST" and request.url.path.endswith("/conversations"):
+            self.requests.append(request)
+            native_id = f"owned-diagnostic-{len(self.created)}"
+            self.created.append(native_id)
+            return httpx.Response(200, json={"id": native_id, "object": "conversation",
+                                             "created_at": 1, "metadata": {}})
+        if request.method == "DELETE":
+            self.requests.append(request)
+            native_id = request.url.path.rsplit("/", 1)[-1]
+            assert native_id in self.created and native_id not in self.deleted
+            self.deleted.append(native_id)
+            return httpx.Response(200, json={"id": native_id, "deleted": True,
+                                             "object": "conversation.deleted"})
+        if request.url.path.endswith("/responses"):
+            inputs = json.loads(request.content)["input"]
+            if isinstance(inputs, str):
+                shape = "plain_text"
+            elif inputs[0]["role"] == "user":
+                shape = "user_messages"
+            else:
+                shape = ("managed_policy" if "Shared backend capability block" in str(inputs)
+                         else "developer_message")
+            self.shapes.append(shape)
+            self.fault = self.failures.get(shape)
+            if self.fault == "hang":
+                self.requests.append(request)
+                self.started.set()
+                await asyncio.Event().wait()
+        return await super().handle(request)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failures,statuses", [
+    ({}, ["ok"] * 4),
+    ({"user_messages": "input"}, ["ok", "unavailable", "ok", "ok"]),
+    ({"developer_message": "developer", "managed_policy": "developer"},
+     ["ok", "ok", "unavailable", "unavailable"]),
+    ({"managed_policy": "developer"}, ["ok", "ok", "ok", "unavailable"]),
+    ({"plain_text": "timeout", "user_messages": "tool"},
+     ["unavailable", "unavailable", "ok", "ok"]),
+])
+async def test_diagnostics_compare_owned_shapes_without_readiness_or_tools(failures, statuses):
+    f = DiagnosticFixture(failures)
+    async with f.runtime() as (runtime, _):
+        result = await runtime.diagnose_requests()
+    assert result["status"] == "diagnostic"  # Never the canary's status=ok.
+    assert [row["status"] for row in result["results"]] == statuses
+    assert f.shapes == ["plain_text", "user_messages", "developer_message", "managed_policy"]
+    assert f.created == f.deleted and len(set(f.created)) == 4
+    requests = [json.loads(r.content) for r in f.requests if r.url.path.endswith("/responses")]
+    assert [r["conversation"] for r in requests] == f.created
+    assert all(set(r) == {"input", "conversation", "stream"} for r in requests)
+    assert requests[1]["input"] == requests[2]["input"][1:] == requests[3]["input"][1:]
+    assert not any("/claim" in r.url.path for r in f.requests)
+    assert not any(r.url.path.startswith("/tools/") or r.url.path == "/factory/context"
+                   for r in f.backend.requests)
+    assert "PRIVATE" not in json.dumps(result)
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_attempt_deadline_cleans_owned_conversation_then_continues(monkeypatch):
+    monkeypatch.setattr("managed_runtime_factory.DIAGNOSTIC_ATTEMPT_SECONDS", 0.02)
+    f = DiagnosticFixture({"plain_text": "hang"})
+    async with f.runtime() as (runtime, _):
+        result = await runtime.diagnose_requests()
+    assert result["results"][0]["reason"] == "managed_probe_timeout"
+    assert result["results"][0]["stage"] == "diagnostic_budget"
+    assert [row["status"] for row in result["results"][1:]] == ["ok"] * 3
+    assert f.created == f.deleted and len(f.created) == 4
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_cancellation_propagates_after_only_owned_cleanup():
+    f = DiagnosticFixture({"plain_text": "hang"})
+    async with f.runtime() as (runtime, _):
+        task = asyncio.create_task(runtime.diagnose_requests())
+        await asyncio.wait_for(f.started.wait(), 1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert f.created == f.deleted and len(f.created) == 1
+    assert f.shapes == ["plain_text"]
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_total_budget_never_starts_an_unbounded_attempt(monkeypatch):
+    monkeypatch.setattr("managed_runtime_factory.DIAGNOSTIC_TOTAL_SECONDS", 0)
+    f = DiagnosticFixture()
+    async with f.runtime() as (runtime, _):
+        result = await runtime.diagnose_requests()
+    assert all(row["status"] == "skipped" and row["reason"] == "managed_probe_budget_exhausted"
+               for row in result["results"])
+    assert not f.requests
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_setup_failure_cannot_infer_or_repeat_identical_failed_readback():
+    f = DiagnosticFixture()
+    f.readback_mutation = lambda dto: dto.update(definition={"kind": "hosted"})
+    async with f.runtime() as (runtime, _):
+        result = await runtime.diagnose_requests()
+    assert result["results"][0]["stage"] == "definition_readback"
+    assert all(row["status"] == "skipped" for row in result["results"][1:])
+    assert not f.created and not f.shapes
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_target_change_aborts_before_another_conversation_or_inference():
+    class ChangedTargetFixture(DiagnosticFixture):
+        async def handle(self, request):
+            response = await super().handle(request)
+            if request.url.path.endswith("/responses"):
+                # The next complete target DTO/readback agrees internally but no
+                # longer matches the identity pinned for this diagnostic matrix.
+                self.definition["instructions"] += " Changed approved definition."
+            return response
+
+    f = ChangedTargetFixture()
+    async with f.runtime() as (runtime, _):
+        result = await runtime.diagnose_requests()
+    assert result["results"][0]["status"] == "ok"
+    assert result["results"][1]["reason"] == "managed_probe_target_changed"
+    assert all(row["status"] == "skipped" for row in result["results"][2:])
+    assert f.created == f.deleted and len(f.created) == 1
+    assert f.shapes == ["plain_text"]

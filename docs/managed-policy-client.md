@@ -121,9 +121,14 @@ cleanup of only the freshly created synthetic conversation remain unchanged.
 `managed_policy_turn_failed` remains the closed reason for an unknown inference
 outcome; `managed_policy_setup_failed` still describes failure before inference
 and tools. Both can carry `providerCause`: integer `httpStatus` (100–599),
-provider `code` and `param` matching `[a-z0-9_.]{1,48}`, and a bounded identifier
-`exceptionType` as fallback. Invalid metadata is omitted. Exception messages,
-response bodies, headers and request values never enter this object.
+provider `code`, known request-field `param`, and `exceptionType` from closed
+vocabularies in `managed_provider_cause.py`. A regex-safe string is not sufficient:
+unknown identifiers are omitted. Up to four known code/target pairs from Azure's
+documented `error`, `details` and `innererror` structure can accompany administrative
+diagnostics as `details`. Traversal is limited to 16 nodes and three nested levels.
+Exception messages, raw response bodies, headers and request values never enter
+this object. Existing public keys remain compatible; downstream chat decoders can
+continue to omit the additional administrative detail pairs.
 
 The hosted error event, backend `conversation.reply_failed` log, backend chat
 error event, browser `ChatTurnError` and retained system smoke entries preserve
@@ -134,8 +139,11 @@ metadata, not provider message text. No retry, claim release or default-runtime
 change follows from a 4xx; that recovery policy remains an owner decision.
 
 The older #1373 failure did not identify its rejected parameter. The 6 November
-activation above now establishes rejection of `instructions` for the actual
-full-policy canary. Synthetic 400 fixtures continue to test safe propagation and
+activation above established rejection of `instructions` for the actual
+full-policy canary. After the developer-message correction, run 42227506332 instead
+returned HTTP 400 `invalid_request` with no parameter. The remaining constraint is
+unknown; see the explicit [request comparison](managed-chat-provisioning.md#6-november-diagnostic-request-comparison)
+for the bounded diagnostic path. Synthetic 400 fixtures continue to test safe propagation and
 no replay. Additional fixtures reject top-level overrides, verify full-policy
 preservation in developer input, and prove that rejection of the developer input
 or message list fails the canary even when a plain-string probe would pass.

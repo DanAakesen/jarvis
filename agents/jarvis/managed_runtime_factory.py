@@ -50,6 +50,9 @@ from model_client import (
 from model_contract import ModelStreamChunk
 from state import ModelSettings
 
+DIAGNOSTIC_TOTAL_SECONDS = 180
+DIAGNOSTIC_ATTEMPT_SECONDS = 45
+
 
 @asynccontextmanager
 async def _owned(client, cleanup_seconds):
@@ -169,16 +172,17 @@ class LazyManagedRuntime:
             raise ManagedChatError("managed_readback_unavailable") from None
 
     @asynccontextmanager
-    async def _prepared(self, settings):
+    async def _prepared(self, settings, *, cleanup_seconds=None):
         backend = self._current._tools
         credential = self._current._credential
         if credential is None:
             raise ManagedChatError("managed_existing_credential_unavailable")
         timeout = settings.backend_http_timeout_seconds
+        cleanup_timeout = cleanup_seconds or timeout
         async with _owned(httpx.AsyncClient(
             base_url=backend._base_url, timeout=timeout, follow_redirects=False,
             transport=self._transport,
-        ), timeout) as backend_http:
+        ), cleanup_timeout) as backend_http:
             dto = await self._json(backend_http, "/agent/runtime-tests/target", {
                 "Authorization": "Bearer " + await backend._token(),
             }, timeout_seconds=timeout)
@@ -209,7 +213,7 @@ class LazyManagedRuntime:
             async with _owned(httpx.AsyncClient(
                 timeout=self._current._client.timeout, follow_redirects=False,
                 transport=self._transport,
-            ), timeout) as provider_http:
+            ), cleanup_timeout) as provider_http:
                 async def verify(verified_target, requested, tools):
                     try:
                         headers = {"Authorization": "Bearer " + await token(),
@@ -254,7 +258,7 @@ class LazyManagedRuntime:
                 async with _owned(AsyncOpenAI(
                     api_key=token, http_client=provider_http, timeout=self._current._client.timeout,
                     **agent_client_options(endpoint, target.agent_name),
-                ), timeout) as sdk:
+                ), cleanup_timeout) as sdk:
                     yield sdk, target, bindings, verify
 
     async def complete_chat(
@@ -281,17 +285,64 @@ class LazyManagedRuntime:
         Caller owns the existing 210-second invocation deadline. Only the freshly
         created canary conversation may be deleted; cleanup is bounded/best effort.
         """
+        return await self._probe_shape("managed_policy")
+
+    async def diagnose_requests(self):
+        """Explicit fixed diagnostic comparison, never readiness or a fallback.
+
+        No caller-provided inputs, claims or history. Each shape has its own
+        conversation and a single inference attempt. Reserve cleanup time under
+        the existing 210-second administrative invocation ceiling.
+        """
+        deadline = asyncio.get_running_loop().time() + DIAGNOSTIC_TOTAL_SECONDS
+        results = []
+        target_identity = []
+        setup_failed = False
+        for shape in ("plain_text", "user_messages", "developer_message", "managed_policy"):
+            remaining = deadline - asyncio.get_running_loop().time()
+            if setup_failed or remaining < 30:
+                result = {"status": "skipped", "reason": (
+                    "managed_probe_setup_failed" if setup_failed
+                    else "managed_probe_budget_exhausted"
+                )}
+            else:
+                try:
+                    # Reserve five seconds each for stream, conversation, SDK,
+                    # provider HTTP and backend HTTP cleanup after cancellation.
+                    async with asyncio.timeout(min(DIAGNOSTIC_ATTEMPT_SECONDS, remaining - 25)):
+                        result = await self._probe_shape(
+                            shape, cleanup_seconds=5, target_identity=target_identity,
+                        )
+                except TimeoutError:
+                    result = {"status": "unavailable", "reason": "managed_probe_timeout",
+                              "stage": "diagnostic_budget"}
+                setup_failed = result.get("stage") in {
+                    "settings", "target_setup", "definition_readback",
+                }
+            results.append({"shape": shape, **result})
+        return {"status": "diagnostic", "results": results}
+
+    async def _probe_shape(self, shape, *, cleanup_seconds=None, target_identity=None):
         stage = "settings"
         try:
             settings = await self.session_settings()
             if (settings.model, settings.reasoning_effort) != ("gpt-6.1-terra", "high"):
                 raise ManagedChatError("managed_probe_settings_mismatch")
+            cleanup_timeout = cleanup_seconds or settings.backend_http_timeout_seconds
             stage = "target_setup"
-            async with self._prepared(settings) as (sdk, target, _bindings, verify):
+            async with self._prepared(settings, cleanup_seconds=cleanup_seconds) as prepared:
+                sdk, target, _bindings, verify = prepared
                 stage = "definition_readback"
                 await verify(target, settings, chat_model_tools(model_tools(
                     await self._current._tools.tools(),
                 )))
+                if target_identity is not None:
+                    identity = (target.agent_name, target.agent_version, target.fingerprint,
+                                target.model, target.reasoning_effort)
+                    if target_identity and target_identity[0] != identity:
+                        raise ManagedChatError("managed_probe_target_changed")
+                    if not target_identity:
+                        target_identity.append(identity)
                 native_id = None
                 try:
                     stage = "conversation_create"
@@ -312,10 +363,17 @@ class LazyManagedRuntime:
                         {"role": "user", "content": "Reply with the single word OK. "
                          "Do not call tools."},
                     ]
+                    request = managed_response_request(native_id, inputs, instructions)
+                    if shape == "plain_text":
+                        request["input"] = inputs[-1]["content"]
+                    elif shape == "user_messages":
+                        request["input"] = inputs
+                    elif shape == "developer_message":
+                        request = managed_response_request(
+                            native_id, inputs, "You are a helpful assistant. Do not call tools.",
+                        )
                     stage = "response_start"
-                    stream = await sdk.responses.create(**managed_response_request(
-                        native_id, inputs, instructions,
-                    ))
+                    stream = await sdk.responses.create(**request)
                     stage = "response_stream"
                     seen_text, completed = False, False
                     try:
@@ -332,17 +390,17 @@ class LazyManagedRuntime:
                             elif event.type in {"error", "response.failed", "response.incomplete"}:
                                 raise ManagedChatError("managed_probe_incomplete")
                     finally:
-                        async with asyncio.timeout(settings.backend_http_timeout_seconds):
+                        async with asyncio.timeout(cleanup_timeout):
                             await stream.close()
                     if not completed or not seen_text:
                         raise ManagedChatError("managed_probe_empty_or_unfinished")
                     return {"status": "ok", "model": target.model,
                             "reasoningEffort": target.reasoning_effort,
-                            "requestShape": "managed_policy"}
+                            "requestShape": shape}
                 finally:
                     if native_id is not None:
                         try:
-                            async with asyncio.timeout(settings.backend_http_timeout_seconds):
+                            async with asyncio.timeout(cleanup_timeout):
                                 await sdk.conversations.delete(native_id)
                         except Exception:
                             pass  # Best effort; never delete another or guessed conversation.

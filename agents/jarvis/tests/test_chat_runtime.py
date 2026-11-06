@@ -133,6 +133,39 @@ def test_fixed_managed_canary_does_not_accept_text_or_expose_probe_errors() -> N
     assert extra.status_code == 400
 
 
+def test_fixed_request_diagnostics_use_existing_admin_route_and_reject_all_caller_inputs() -> None:
+    class Probe:
+        calls = 0
+
+        async def diagnose_requests(self):
+            self.calls += 1
+            return {"status": "diagnostic", "results": []}
+
+    async def no_history(*_args):
+        raise AssertionError("Diagnostic operation cannot load user history")
+
+    probe, current = Probe(), FakeModel()
+    app = create_app(current, copilot_chat_client=probe, configure_observability=None,
+                     chat_context_loader=no_history)
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={"operation": "managed_request_diagnostics"})
+        for key, value in [("text", "private"), ("shapes", ["plain_text"]), ("model", "other"),
+                           ("delegatedAuthorization", AUTHORIZATION), ("messageId", "42")]:
+            rejected = client.post("/invocations", json={
+                "operation": "managed_request_diagnostics",
+                "delegatedAuthorization": AUTHORIZATION, key: value,
+            })
+            assert rejected.status_code == 400
+        rejected = client.post("/invocations", json={
+            "operation": "managed_request_diagnostics", "delegatedAuthorization": AUTHORIZATION,
+            "messageId": "42", "text": "Private owner text", "language": "en",
+        })
+        assert rejected.status_code == 400
+    assert response.status_code == 200 and response.json()["status"] == "diagnostic"
+    assert response.headers["cache-control"] == "no-store"
+    assert probe.calls == 1 and current.chat_calls == 0
+
+
 @pytest.mark.parametrize("stored_runtime", [None, "current", "copilot"])
 def test_runtime_selection_comes_only_from_verified_history(stored_runtime) -> None:
     async def context(*_args):
