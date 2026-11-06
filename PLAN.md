@@ -6,22 +6,18 @@ per-element shimmer, useful task-source labels with full detail provenance,
 transparent protected headers/docks, shared clear-glass selectors, three medium
 widget layouts and real Body trend plots.
 
-Native dce71639 run 42268563484 finished with 67 of 68 cases passing. Camera,
-Health EN/DA/detail/Back, accessibility and task scrolling passed. Only the widget
-gallery exceeded its existing 120-second test deadline while repeatedly querying
-unchanged AX geometry. Both widget languages, corrected task scrolling and primary
-Health-detail headings were captured and visually accepted.
+The final UI source 1766b727 is qualified and merged as 380782a0. CI 42280051912
+passed, including 502 Core tests, and CodeQL 42280051874 passed. Native coverage
+is 67 passing cases in 42268563484 plus the focused gallery pass in 42280276801;
+production source and the other 67 tests are identical. Both widget languages,
+Health graphs/detail/Back, accessibility, task scrolling, transparent controls and
+local shimmer motion were inspected. Retained failures are recorded separately.
 
-Candidate 1766b727 changes only gallery query reuse and its evidence document;
-production app/Core/widgets and the other 67 tests are identical to dce71639.
-It retains all layout assertions and the original 120/150-second test limits.
-App/test tree: 70f5cefe1e153390376cfab48b50e099c1f7fde4; full tree:
-8c18563542ef60ac423d4397ba3a3bc7d1837989. Focused native run 42280276801 checks out
-that exact source and runs the gallery alone. Validation branch
-codex/p15-gallery-validation must never merge. Automatic duplicate full native
-42280051712 was cancelled without executing steps. Final CI 42280051912 and focused
-native qualification remain pending; CodeQL 42280051874 passed. No new upload is
-claimed. Retain all earlier failures and reuse the 67 unchanged passing cases.
+Merged full tree: 8c18563542ef60ac423d4397ba3a3bc7d1837989; app/test tree:
+70f5cefe1e153390376cfab48b50e099c1f7fde4. The automatic main simulator was cancelled
+before boot after this identity check; no duplicate simulator was run. Normal
+Deploy 42281871580 passed readiness and is checking live conversation acceptance.
+The authorised TestFlight upload follows acceptance; no new upload is claimed yet.
 
 ## Backend and runtime comparison status
 

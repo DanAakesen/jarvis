@@ -1,6 +1,6 @@
 # Build 76 Home Screen widget feedback
 
-6 November 2026 — English native content reviewed; corrected full qualification pending.
+6 November 2026 — bilingual native content inspected and gallery qualification passed.
 
 The owner reported three medium-widget defects: Workouts placed its heading in
 the right column beside the ring, Factory clipped its heading above oversized

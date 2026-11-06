@@ -2,8 +2,10 @@
 
 This candidate addresses the owner's device feedback about broad loading shine,
 generic task-source labels, opaque header bands and the Notes/Health bottom docks.
-Native verification of this candidate is pending. It does not change the Chat
-screen, composer, voice session, backend or managed-runtime implementation.
+Native verification and visual inspection passed; #1621 merged as 380782a0.
+The source does not change Chat appearance, the composer or voice session. The
+runtime picker adds the specific compatibility explanation from deployed #1624.
+See the delivery record for actual deployment and TestFlight status.
 
 ## Findings and changes
 

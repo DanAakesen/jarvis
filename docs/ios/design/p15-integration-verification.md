@@ -10,10 +10,10 @@ For the later owner-approved device-feedback batch, use the
 [current delivery record](p15-device-feedback-2026-11-06.md). The original
 build-75 acceptance below does not qualify those subsequent changes. Build 76
 was uploaded and accepted for functional owner testing. The current graph/widget/
-surface correction is 1766b727 in #1621. Native 42268563484 passed 67 cases;
-only the widget gallery timed out. Focused 42280276801 verifies reduced duplicate
-AX queries on identical production source. Earlier failures and inspected evidence
-are retained in the delivery record; final qualification/upload remain pending.
+surface correction is merged as 380782a0 from qualified 1766b727 in #1621.
+Native coverage is 67 passing cases in 42268563484 plus one focused gallery pass
+in 42280276801 on identical production source. CI/CodeQL and visual inspection
+passed. Earlier failures remain in the delivery record; deployment/upload is pending.
 
 ## Scope and delivery
 

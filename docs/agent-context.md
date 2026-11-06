@@ -7286,5 +7286,9 @@ all other tests are unchanged. Focused 42280276801 binds exact source and both t
 retains result bundle/captures/provenance and requires the selected case to pass.
 Reuse the 67 passing cases only with this source proof. The validation-only workflow
 branch must never merge. Automatic duplicate 42280051712 cancelled with no executed
-steps. Final CI receipt must match 1766b727 and full tree 8c185635; merge/upload is
-still pending. Do not repeat an unchanged full simulator suite.
+steps. Final CI 42280051912 and its receipt match 1766b727/full tree 8c185635;
+focused 42280276801 passed one case with zero failures. Main 380782a0 matches both
+trees exactly. Automatic main native 42281871658 was force-cancelled during partial
+compilation, with Boot iPhone Simulator still pending and no start time. Normal
+Deploy 42281871580 and authorised upload follow. Do not repeat an unchanged full
+simulator suite.

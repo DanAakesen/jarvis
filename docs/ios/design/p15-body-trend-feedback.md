@@ -1,5 +1,8 @@
 # Body trend and selector feedback — 6 November 2026
 
+Qualified and merged in #1621 / 380782a0; native EN/DA/detail/Back and accessibility
+checks passed. Actual release status is in the device-feedback delivery record.
+
 The owner rejected build 76's body-measurement rows and requested graphs on the
 Health dashboard. The checked-in board has small row sparklines; this later
 request replaces that composition with full-width native plots in the existing
