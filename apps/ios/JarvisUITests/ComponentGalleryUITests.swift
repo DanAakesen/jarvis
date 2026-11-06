@@ -309,9 +309,12 @@ final class ComponentGalleryUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["usage.error"].waitForExistence(timeout: 8))
         let week = app.buttons["usage.range.7d"]
         XCTAssertTrue(week.isHittable)
+        attach(app.screenshot(), named: "P15-usage-error-period-recovery-before")
         week.tap()
         XCTAssertTrue(app.descendants(matching: .any)["usage.error"].waitForExistence(timeout: 8))
         XCTAssertTrue(week.isHittable)
+        XCTAssertTrue(week.isSelected)
+        attach(app.screenshot(), named: "P15-usage-error-period-recovery-after")
     }
 
     func testInitialLoadingHidesFiltersAndUsesOnePageSkeleton() {

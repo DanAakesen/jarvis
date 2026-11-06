@@ -121,7 +121,17 @@ acknowledgement, preserving the schema/no-field-stripping assertions. Its 12
 focused tests and scoped ESLint pass. The security gate must pass on the final
 commit before merge.
 
-Native run 42179796750 has compiled the app and is running the existing UI tests
-and screenshot collection. Its results and visual inspection are still pending.
-The test-only security correction does not change the native app/test tree; reuse
-this native evidence for that correction rather than start a duplicate simulator.
+Native run 42179796750 compiled and completed 67 tests: 66 passed. Usage error
+recovery failed because changing its period temporarily unmounted the recovery
+selector. Keep that selector mounted after the first response, including while
+retrying; initial loading still shows only its skeleton. The existing assertion
+is retained, with selected-state and before/after capture coverage added. Chat,
+Home, task-board and shimmer tests passed in this run. The job reached its overall
+45-minute limit while finalizing the result bundle, and artifact export failed;
+no screenshots from that run were available for visual acceptance. Increase the
+job limit to 65 minutes to accommodate build/boot, the unchanged full suite,
+result finalization and capture. Per-test limits and assertions are unchanged.
+
+The owner subsequently requested web/iOS runtime testing. That implementation
+and the recovery fix require a fresh combined native run; the test-only CodeQL
+correction itself did not require a second simulator.

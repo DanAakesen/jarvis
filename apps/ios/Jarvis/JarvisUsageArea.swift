@@ -14,6 +14,7 @@ struct JarvisUsageArea: View {
     @State private var period = JarvisUsagePeriod.default
     @State private var groupBy = JarvisUsageGroupBy.project
     @State private var load: JarvisInsightsLoad<JarvisUsageSummary> = .loading
+    @State private var hasResolvedLoad = false
     @State private var selectedBucketID: String?
     @State private var chartSelection: String?
     @State private var selectedSliceID: String?
@@ -70,11 +71,15 @@ struct JarvisUsageArea: View {
     }
 
     @ViewBuilder private var content: some View {
+        // After the first result, keep period recovery mounted while a retry is
+        // pending. Initial loading still has one skeleton and no premature filters.
+        if client != nil, hasResolvedLoad {
+            if case .loaded = load {} else { periodSelector }
+        }
         switch load {
         case .loading:
             JarvisPageLoadingView(title: text(.loading), identifier: "usage.loading")
         case .failed(let failure):
-            if client != nil { periodSelector }
             JarvisInsightsStateView(kind: .failure(failure), language: language, identifier: "usage.error") {
                 if client == nil { onRetryConfiguration() }
                 forceReload = true
@@ -111,10 +116,12 @@ struct JarvisUsageArea: View {
             if Task.isCancelled { return }
             switch update {
             case .cached(let report, _), .fresh(let report):
+                hasResolvedLoad = true
                 load = .loaded(JarvisUsageSummary(report: report, period: selected))
             case .refreshing:
                 break
             case .failed(let error, let cached):
+                hasResolvedLoad = true
                 if let cached {
                     load = .loaded(JarvisUsageSummary(report: cached, period: selected))
                     refreshFailedWithCache = true
@@ -123,7 +130,10 @@ struct JarvisUsageArea: View {
                 }
             }
         }
-        if !Task.isCancelled, case .loading = load { load = .failed(.failed) }
+        if !Task.isCancelled, case .loading = load {
+            hasResolvedLoad = true
+            load = .failed(.failed)
+        }
     }
 
     // MARK: Loaded
