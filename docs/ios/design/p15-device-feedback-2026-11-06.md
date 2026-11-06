@@ -579,3 +579,16 @@ has full tree `3627eaeaec04207a27e3f82f338e1eb04e92d1c1`, differing only by the
 independently qualified backend gate. Full main CI must qualify that merge;
 matching app/test scope permits reuse only after native 42258268925 actually passes
 and its visuals are accepted. That single native run compiled and is still active.
+
+## Exact PR qualification boundary
+
+The release-state implementation requires successful qualification for the merged
+PR head, matching the final full tree. A manual CI run on main is not a substitute.
+After native 42258268925 and its rendered evidence pass, incorporate current main
+into #1621 and record the final scoped evidence. Prove the entire apps/ios tree is
+still `d3f0f3c1c7e71bd0ed0d97b0b7c11520255ad12a`, retain that native result, and
+cancel the automatically queued unchanged simulator before boot. Regular CI and
+CodeQL must qualify the resulting PR head before its guarded merge. The normal
+deployment then checks readiness and Current acceptance using that exact receipt.
+No additional simulator execution or TestFlight upload is authorized by a pending
+result alone; the owner's release authorization remains in effect after checks.
