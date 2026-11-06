@@ -298,7 +298,7 @@ class LazyManagedRuntime:
         results = []
         target_identity = []
         setup_failed = False
-        for shape in ("plain_text", "user_messages", "developer_message", "managed_policy"):
+        for shape in ("typed_user", "developer_string", "system_message", "system_string"):
             remaining = deadline - asyncio.get_running_loop().time()
             if setup_failed or remaining < 30:
                 result = {"status": "skipped", "reason": (
@@ -364,14 +364,18 @@ class LazyManagedRuntime:
                          "Do not call tools."},
                     ]
                     request = managed_response_request(native_id, inputs, instructions)
-                    if shape == "plain_text":
-                        request["input"] = inputs[-1]["content"]
-                    elif shape == "user_messages":
-                        request["input"] = inputs
-                    elif shape == "developer_message":
-                        request = managed_response_request(
-                            native_id, inputs, "You are a helpful assistant. Do not call tools.",
-                        )
+                    if shape != "managed_policy":
+                        # Compare role and message encoding independently. These
+                        # fixed synthetic controls never select production policy.
+                        policy = "You are a helpful assistant. Do not call tools."
+                        role = {"typed_user": "user", "developer_string": "developer",
+                                "system_message": "system", "system_string": "system"}[shape]
+                        if shape in {"typed_user", "system_message"}:
+                            message = {"type": "message", "role": role,
+                                       "content": [{"type": "input_text", "text": policy}]}
+                        else:
+                            message = {"role": role, "content": policy}
+                        request["input"] = [message, *inputs]
                     stage = "response_start"
                     stream = await sdk.responses.create(**request)
                     stage = "response_stream"

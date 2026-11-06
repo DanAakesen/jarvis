@@ -46,6 +46,23 @@ documents nested `details`, `innererror.code` and `target`; the SDK retains that
 decoded body even when its top-level `param` is absent. The diagnostic helper now
 retains only closed-vocabulary code/target pairs, never messages or raw values.
 
+The first fixed matrix ran in [42239012647](https://github.com/DanAakesen/jarvis/actions/runs/42239012647)
+at 15:03 UTC: `plain_text` and `user_messages` completed with the expected
+Terra/High target; `developer_message` and `managed_policy` both failed at
+`response_start` with HTTP 400 `invalid_request` and no field hint. This establishes
+that a simple message list works. It does not isolate the role: the rejected
+message also used the typed `message` / `input_text` encoding, while the accepted
+user messages used string content.
+
+The next fixed comparison separates those variables: `typed_user` uses the typed
+form with a user role; `developer_string` uses a developer role with simple string
+content; `system_message` and `system_string` compare the two encodings with the
+system role. Every first message contains the same short synthetic instruction,
+followed by identical synthetic reference/user messages. The production policy
+builder and full-policy canary remain unchanged. A successful diagnostic is not
+permission to demote policy into user content; any accepted production form must
+retain its trusted role and pass the complete-policy canary.
+
 After the updated hosted agent is deployed, explicitly dispatch Deploy on `main`
 with only `diagnose_managed_chat=true`. All comparison inspection, provisioning
 and definition-refresh inputs must remain false. The existing qualification,
@@ -58,16 +75,15 @@ workflow still follows the normal deployment plan; the comparison branch itself
 does not mutate target configuration.
 
 The fixed administrative operation accepts no extra fields or caller text. It
-compares `plain_text`, `user_messages`, `developer_message` (short trusted policy),
-and `managed_policy` (the shared production builder and complete dynamic policy).
+compares `typed_user`, `developer_string`, `system_message`, and `system_string`
+with fixed synthetic content.
 All four use the existing approved Terra/High definition and verify the same
 target identity. Each shape creates its own synthetic conversation, attempts one
 response, refuses tool output and deletes only that owned conversation. No user
 history, claims, function executor, grants, retries or fallback is involved.
-The two list-based controls retain the same synthetic reference/user messages
-as the full-policy request; the plain string contains only the fixed user request.
-Results isolate request-shape differences; they do not by themselves explain an
-unreported provider constraint.
+All controls retain the same synthetic reference/user messages as the full-policy
+request. Results isolate role and encoding differences without selecting a
+production fallback or changing any stored instruction.
 
 Attempts have a 45-second ceiling, a 180-second matrix budget and five-second
 cleanup limits, within the existing 210-second administrative invocation bound.
@@ -81,7 +97,8 @@ The handoff independently revalidates output and prints one
 `managed_chat_request_diagnostics_complete`. That means the diagnostic returned,
 not that Copilot works. It never prints `managed_chat_comparison_canary_ok`.
 The unchanged full-policy `managed_text_canary` remains the only comparison
-acceptance check. No live diagnostic has run while preparing this patch.
+acceptance check. The first matrix result is recorded above; the follow-up role
+and encoding comparison still requires its own explicit live run.
 
 Manual Deploy [40877005757](https://github.com/DanAakesen/jarvis/actions/runs/40877005757)
 reached `agent_identity_unverified` on 29 October 2026. That check follows readback

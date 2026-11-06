@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "managed_chat_diagnostic_output.py"
-SHAPES = ["plain_text", "user_messages", "developer_message", "managed_policy"]
+SHAPES = ["typed_user", "developer_string", "system_message", "system_string"]
 
 
 class DiagnosticOutputTests(unittest.TestCase):
