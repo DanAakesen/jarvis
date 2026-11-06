@@ -1,16 +1,16 @@
-## Current owner feedback — 6 November 2026, build76
+## Current owner feedback — 6 November 2026, build 76
 
 Owner-reported passes: cold Voice/unified transcript, Home send/camera, task/reminder
-workflow and Health pull refresh. Compact task rows accepted. PR1621 now combines
+workflow and Health pull refresh. Compact task rows accepted. PR #1621 now combines
 per-element shimmer, generic-source suppression with full detail provenance,
 transparent protected headers/docks, shared clear-glass selectors, three medium
-widget layouts and real Body trend plots. Initiala559CI/CodeQL passed; its native
+widget layouts and real Body trend plots. Initial a559 CI/CodeQL passed; its native
 run was superseded/cancelled. Complete one fresh native qualification and inspect
 actual bilingual/large-text charts/widgets/surfaces and motion before upload.
 
-Normal1620deployment passed. Diagnostic42239012647 proved plain/simple-user
+Normal #1620 deployment passed. Diagnostic 42239012647 proved plain/simple-user
 requests succeed and typed policy requests fail; role versus encoding remains
-unresolved. Fixed format controls in1622 qualify next. Preserve full policy and
+unresolved. Fixed format controls in #1622 qualify next. Preserve full policy and
 owner approvals; do not claim Copilot inference from diagnostic completion.
 
 ## Managed policy request qualification — 6 November 2026

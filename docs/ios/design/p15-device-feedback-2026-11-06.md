@@ -20,13 +20,13 @@ smaller Factory counters and rows, and a balanced Workouts metric grid. Body tre
 must show real graphs directly on the dashboard. The new plots preserve the actual
 30-day dates, separate units, single-point state, point inspection and records
 navigation. The visible Health selector rail also moves to the shared clear glass
-surface. Scoped implementation/verification records are in `p15-build76-surfaces.md`,
+surface. Scoped implementation/verification records are in `p15-build 76-surfaces.md`,
 `p15-widget-feedback.md` and `p15-body-trend-feedback.md`.
 
-Initial surface candidatea5599089 passed CI42236611082 and CodeQL42236610687.
-Native42236610739 compiled, then was cancelled as superseded by these additional
+Initial surface candidate a5599089 passed CI 42236611082 and CodeQL 42236610687.
+Native 42236610739 compiled, then was cancelled as superseded by these additional
 owner requests. No native pass is claimed for that source. One combined candidate
-will retain the existing68cases/app launches with added native chart/widget captures.
+will retain the existing 68 cases/app launches with added native chart/widget captures.
 
 This changes the native source and needs one new combined simulator run, actual
 resting/scrolled/large-text captures and loading-motion inspection before another
@@ -191,7 +191,7 @@ structural headers and floating Notes/Health docks, filters exact generic task
 source labels, and adds localized full source details. The previous detail view
 did not show that provenance; it is newly exposed here, not merely retained.
 Chat appearance and backend behavior remain unchanged. See
-[surface correction evidence](p15-build76-surfaces.md) for Apple references,
+[surface correction evidence](p15-build 76-surfaces.md) for Apple references,
 scope and remaining visual hypotheses.
 
 CodeQL 42236610687 passed. CI 42236611082 and the single native run 42236610739
@@ -404,15 +404,24 @@ do not change app rendering; their fresh native run is required before release.
 
 ## 15:03 UTC — Fixed-input Copilot diagnostic
 
-Normal Deploy42232951549 passed all selected application/readiness/acceptance jobs
-for merged1620/main2b58f2f2. Explicit diagnostic42239012647 completed without
+Normal Deploy 42232951549 passed all selected application/readiness/acceptance jobs
+for merged #1620 / main 2b58f2f2. Explicit diagnostic 42239012647 completed without
 configuration mutation. Plain text and simple user messages returned the expected
 gpt-6.1-terra/high. Typed developer-message and complete managed-policy requests
-failed atresponse_start with HTTP400invalid_request/BadRequestError, no field hint.
+failed at response_start with HTTP 400 invalid_request/BadRequestError, no field hint.
 The diagnostic's success conclusion means the matrix finished, not that Copilot
-passed acceptance. Because role and encoding both differ, PR1622 adds fixed typed
+passed acceptance. Because role and encoding both differ, PR #1622 adds fixed typed
 user, simple developer, typed system and simple system controls before changing
 production policy encoding. Full-policy acceptance remains required.
 
 Default workspace GitHub access was restored; no new login is pending. The earlier
 private CLI credential/device code expired and must not be reused.
+
+## Combined native candidate b7e22951
+
+PR #1621 now contains the complete owner feedback through Body trend and widgets.
+Source `b7e22951e1dea5faaee07ffc81068c75246aa7aa`, full tree
+`05ab4bb27be6c4b20ff2f26cfd304ecfab31fa93`, app/test tree
+`0c1105c286d17b01ef632eb7cc7b3e76b95136e9`. General CI 42241800531,
+CodeQL 42241800485 and the sole native qualification 42241800577 started on this
+source. No pass, visual acceptance or next TestFlight upload is claimed yet.

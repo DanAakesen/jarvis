@@ -25,10 +25,10 @@ PR #1619 qualified and merged the complete-policy developer-input correction;
 its live check reused the existing version with definition refresh false, then
 failed with HTTP 400 `invalid_request` without a field hint. A separate fixed-input
 diagnostic qualified through #1620 and merged as `2b58f2f2`. Normal deployment
-42232951549 passed. Diagnostic42239012647 completed: plain text and simple user
+42232951549 passed. Diagnostic 42239012647 completed: plain text and simple user
 messages passed with the configured Terra/High; typed developer messages and the
-full-policy request failed with400. Role and message encoding are still confounded.
-PR1622 adds fixed typed-user/simple-developer/typed-system/simple-system controls
+full-policy request failed with 400. Role and message encoding are still confounded.
+PR #1622 adds fixed typed-user/simple-developer/typed-system/simple-system controls
 before any production conversion. Do not guess or repeat provisioning. #1618 also
 qualified and merged a post-build OIDC refresh after a registry authentication
 failure. Copilot inference remains unverified. TestFlight build **76 uploaded at

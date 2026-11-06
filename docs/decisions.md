@@ -11290,13 +11290,13 @@ deletion or new database state is introduced. Existing claims and uncertain-writ
 handling remain unchanged. PR #1619 passed CI/CodeQL and merged as cac5d05d;
 live provider acceptance is recorded separately in the delivery record.
 
-## 6 November2026 — Owner corrects Body trend and shared surfaces
+## 6 November 2026 — Owner corrects Body trend and shared surfaces
 
 The owner rejects measurement rows and flat selector/header/dock backings in
-build76. Replace Body trend rows with real date-aware native plots, preserve a
+build 76. Replace Body trend rows with real date-aware native plots, preserve a
 single observation as a point and expose measurement details. Separate units and
 mark partial/stale data. Use one content-bearing clear-glass surface for joined
-selectors to matchSearch without nested refraction. Medium widgets share top-left
+selectors to match Search without nested refraction. Medium widgets share top-left
 headings and compact content within their existing margins. These are approved
 choices; fresh native evidence is required before release.
 

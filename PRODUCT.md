@@ -2442,9 +2442,9 @@ Reduce Motion. Navigation stays available and real content replaces loading as
 soon as it arrives. Release follows successful checks and native visual review,
 with backend/agent readiness before the dependent TestFlight upload.
 
-### Body trend graphs and medium widget consistency (6 November2026)
+### Body trend graphs and medium widget consistency (6 November 2026)
 
-Health's Body trend shows actual30-day measurement graphs directly on the
+Health's Body trend shows actual 30-day measurement graphs directly on the
 dashboard, including single readings, with accessible point inspection and records
 details. Weight/body fat/lean mass keep separate units/scales and no synthetic
 missing-day values. Workouts, Factory and Notes medium widgets share a top-left
