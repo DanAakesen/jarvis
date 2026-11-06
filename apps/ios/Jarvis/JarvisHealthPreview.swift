@@ -440,6 +440,17 @@ private actor JarvisHealthPreviewTransport: HTTPTransport {
         if request.url.path == "/api/health/capabilities" {
             payload["sources"] = (payload["sources"] as? [String] ?? []) + ["daily.health.lifts"]
         }
+        // Synthetic sparse histories exercise real date spacing and tap inspection.
+        // Lean mass deliberately keeps one point to verify the single-reading chart.
+        if source == "daily.health.metrics", let metric = body?["metric"] as? String,
+           metric == "body_mass" || metric == "body_fat_percentage" {
+            let dates = ["2026-10-08", "2026-10-18", "2026-10-25", "2026-10-31"]
+            let values = metric == "body_mass" ? [73.0, 72.8, 72.6, 72.4] : [19.2, 19.0, 18.7, 18.5]
+            payload["items"] = zip(dates, values).map { day, value in
+                ["metric_date": day, "metric_name": metric, "value": value,
+                 "unit": metric == "body_mass" ? "kg" : "%"] as [String: Any]
+            }
+        }
         if let start = body?["startDate"] as? String, let end = body?["endDate"] as? String,
            let items = payload["items"] as? [[String: Any]] {
             let filtered = items.filter { item in

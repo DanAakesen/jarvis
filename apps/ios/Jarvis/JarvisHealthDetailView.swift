@@ -38,6 +38,7 @@ struct JarvisHealthDetailView: View {
     @State private var unavailable = false
     @State private var retryVersion = 0
     @State private var loading = false
+    @State private var selectedMetricReading: Int?
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
 
@@ -89,8 +90,8 @@ struct JarvisHealthDetailView: View {
             sleepList(data.items)
         case .meals:
             mealsList(data.items)
-        case .metric:
-            metricList(data.items)
+        case .metric(_, let title, let period):
+            metricList(data.items, title: title, period: period)
         }
     }
 
@@ -213,30 +214,26 @@ struct JarvisHealthDetailView: View {
         .listStyle(.insetGrouped)
     }
 
-    private func metricList(_ rows: [[String: JSONValue]]) -> some View {
-        let points = metricPoints(rows)
-        return List {
+    private func metricList(_ rows: [[String: JSONValue]], title: JarvisHealthLocalizationKey,
+                            period: JarvisHealthPeriod) -> some View {
+        let trend = JarvisBodyTrend(rows: rows, period: period)
+        let selected = trend.readings.first { $0.id == selectedMetricReading } ?? trend.latest
+        return JarvisList {
             Section(copy.text(.metricTrend)) {
-                if !points.isEmpty {
-                    Chart(points) { point in
-                        LineMark(
-                            x: .value(copy.text(.date), point.date),
-                            y: .value(copy.text(.metricTrend), point.value)
-                        )
-                        .foregroundStyle(JarvisDesignTokens.healthAccent)
-                        PointMark(
-                            x: .value(copy.text(.date), point.date),
-                            y: .value(copy.text(.metricTrend), point.value)
-                        )
-                        .foregroundStyle(JarvisDesignTokens.healthAccent)
+                if let selected {
+                    healthValue(JarvisHealthLocalization.formattedDate(selected.day, language: language),
+                                "\(formatNumber(selected.value, language: language)) \(selected.unit)")
+                    JarvisBodyTrendPlot(trend: trend, period: period, title: copy.text(title),
+                                        language: language, selectedID: $selectedMetricReading)
+                    if trend.excludesOtherUnits {
+                        Text(copy.text(.partial)).foregroundStyle(.secondary)
                     }
-                    .frame(height: JarvisDesignTokens.healthChartHeight)
-                    .accessibilityLabel(copy.text(.metricTrend))
-                    .accessibilityValue(points.map { formatNumber($0.value, language: language) }.joined(separator: ", "))
                 }
+            }
+            Section(copy.text(.measurements)) {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                     if let date = date(row["metric_date"]),
-                       let value = row["avg_value"]?.numberValue ?? row["value"]?.numberValue {
+                       let value = row["value"]?.numberValue ?? row["avg_value"]?.numberValue {
                         healthValue(
                             JarvisHealthLocalization.formattedDate(date, language: language),
                             "\(formatNumber(value, language: language)) \(row["unit"]?.stringValue ?? "")"
@@ -250,18 +247,6 @@ struct JarvisHealthDetailView: View {
 
     private func healthValue(_ label: String, _ value: String) -> some View {
         LabeledContent(label, value: value)
-    }
-
-    private func metricPoints(_ rows: [[String: JSONValue]]) -> [JarvisHealthChartPoint] {
-        rows.compactMap { row in
-            guard let date = date(row["metric_date"]),
-                  let parsed = parseDate(date),
-                  let value = row["avg_value"]?.numberValue ?? row["value"]?.numberValue else {
-                return nil
-            }
-            return JarvisHealthChartPoint(date: parsed, value: value)
-        }
-        .sorted { $0.date < $1.date }
     }
 
     private func heartRatePoints(_ rows: [[String: JSONValue]]) -> [JarvisHealthChartPoint] {

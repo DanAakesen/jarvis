@@ -544,7 +544,8 @@ private struct JarvisSelectionPressStyle: ButtonStyle {
     }
 }
 
-/// The selected lens uses native Liquid Glass; its identity lets the system morph between choices.
+/// A joined control has one optical glass surface; the moving selection sits inside it.
+/// Separate scrolling choices each carry their own native lens.
 private struct JarvisSelectionLens: ViewModifier {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -554,7 +555,13 @@ private struct JarvisSelectionLens: ViewModifier {
 
     func body(content: Content) -> some View {
         if isSelected {
-            if reduceTransparency {
+            if !isSeparate {
+                content.background {
+                    Capsule()
+                        .fill(Color.primary.opacity(JarvisDesignTokens.segmentedSelectionOpacity))
+                        .matchedGeometryEffect(id: "selected", in: namespace)
+                }
+            } else if reduceTransparency {
                 content.background(JarvisDesignTokens.glassSolid, in: Capsule())
             } else {
                 // GlassEffectContainer captures this content above its material.
@@ -579,7 +586,6 @@ private struct JarvisSelectionLens: ViewModifier {
 private struct JarvisSelectionRow<Tag: Hashable>: View {
     enum Layout { case segments, period, scrolling }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Namespace private var namespace
     let title: String
     let identifierPrefix: String
@@ -597,42 +603,12 @@ private struct JarvisSelectionRow<Tag: Hashable>: View {
 
     var body: some View {
         GlassEffectContainer(spacing: layout == .scrolling ? 8 : 0) {
-            HStack(spacing: layout == .scrolling ? 8 : 0) {
-                ForEach(Array(items.enumerated()), id: \.element.tag) { index, item in
-                    Button { selection = item.tag } label: {
-                        Text(item.title)
-                            .font(font.weight(selection == item.tag ? .semibold : .regular))
-                            .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .padding(.horizontal, JarvisDesignTokens.labelledHorizontalPadding)
-                            .padding(.vertical, JarvisDesignTokens.labelledVerticalPadding)
-                            .frame(
-                                minWidth: JarvisDesignTokens.controlMinimumHeight,
-                                maxWidth: layout == .segments ? .infinity : nil,
-                                minHeight: JarvisDesignTokens.controlMinimumHeight
-                            )
-                            .contentShape(Rectangle())
-                            .modifier(JarvisSelectionLens(namespace: namespace,
-                                                          isSelected: selection == item.tag,
-                                                          isSeparate: layout == .scrolling))
-                    }
-                    .buttonStyle(JarvisSelectionPressStyle())
-                    .accessibilityAddTraits(selection == item.tag ? .isSelected : [])
-                    .accessibilityIdentifier(item.identifier ?? "\(identifierPrefix).\(index)")
-                }
-            }
-            .padding(layout == .scrolling ? 0 : JarvisDesignTokens.segmentedSelectionInset)
-        }
-        .background {
-            // The rail is a quiet backing; only the content-bearing choice owns
-            // an optical lens, so nested glass cannot sample its foreground text.
-            if layout != .scrolling {
-                if reduceTransparency {
-                    Capsule().fill(JarvisDesignTokens.glassSolid)
-                } else {
-                    Capsule().fill(.ultraThinMaterial)
-                }
+            if layout == .scrolling {
+                choices
+            } else {
+                // Apply glass to the label-bearing control, just like Search. A detached
+                // or nested optical background can refract the labels themselves.
+                choices.jarvisGlassCapsule()
             }
         }
         .animation(reduceMotion ? nil : .spring(
@@ -641,6 +617,35 @@ private struct JarvisSelectionRow<Tag: Hashable>: View {
         ), value: selection)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(title)
+    }
+
+    private var choices: some View {
+        HStack(spacing: layout == .scrolling ? 8 : 0) {
+            ForEach(Array(items.enumerated()), id: \.element.tag) { index, item in
+                Button { selection = item.tag } label: {
+                    Text(item.title)
+                        .font(font.weight(selection == item.tag ? .semibold : .regular))
+                        .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, JarvisDesignTokens.labelledHorizontalPadding)
+                        .padding(.vertical, JarvisDesignTokens.labelledVerticalPadding)
+                        .frame(
+                            minWidth: JarvisDesignTokens.controlMinimumHeight,
+                            maxWidth: layout == .segments ? .infinity : nil,
+                            minHeight: JarvisDesignTokens.controlMinimumHeight
+                        )
+                        .contentShape(Rectangle())
+                        .modifier(JarvisSelectionLens(namespace: namespace,
+                                                      isSelected: selection == item.tag,
+                                                      isSeparate: layout == .scrolling))
+                }
+                .buttonStyle(JarvisSelectionPressStyle())
+                .accessibilityAddTraits(selection == item.tag ? .isSelected : [])
+                .accessibilityIdentifier(item.identifier ?? "\(identifierPrefix).\(index)")
+            }
+        }
+        .padding(layout == .scrolling ? 0 : JarvisDesignTokens.segmentedSelectionInset)
     }
 }
 

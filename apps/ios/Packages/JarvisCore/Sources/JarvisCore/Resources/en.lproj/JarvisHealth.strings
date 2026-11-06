@@ -119,3 +119,7 @@
 
 "health.syncPullFailed" = "Apple Health could not refresh. Pull down to try again.";
 "health.syncPullPartial" = "Some Apple Health data could not refresh. Check Health access in Settings, then pull down to try again.";
+
+"health.measurements" = "Measurements";
+"health.oneMeasurement" = "1 measurement";
+"health.measurementCount" = "%d measurements";
