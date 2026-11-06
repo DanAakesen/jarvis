@@ -8,16 +8,22 @@ follow-up is PR #1621: local shimmer, generic task-source suppression, transpare
 headers/floating docks, clear-glass selectors, consistent medium widgets and real
 Body trend graphs.
 
-Native df56bcaa run 42258268925 finished 66/68. Health EN/DA detail/Back and AX cases
-passed; charts, task context, shared surfaces and a full loading movie were inspected.
-Camera-menu activation and a widget intrinsic-width assumption failed. Rendered task
-groups also exposed sticky-heading overlap. Candidate dce71639 corrects the group
-flow, uses shared primary Health-detail headings, refines the geometry assertion,
-retains both widget languages before checks and synchronizes one camera-menu tap.
-It includes accepted main; app/test tree c45cc6b07fa0754bd100ca9b1db25e069b7daeff.
-CI 42268563357, all 502 Core tests and CodeQL 42268563412 passed. Native
-42268563484 compiled and is the single active qualification.
-Review corrected captures before release; no new upload is claimed.
+Native dce71639 run 42268563484 finished with 67 of 68 cases passing. Camera,
+Health EN/DA/detail/Back, accessibility and task scrolling passed. Only the widget
+gallery exceeded its existing 120-second test deadline while repeatedly querying
+unchanged AX geometry. Both widget languages, corrected task scrolling and primary
+Health-detail headings were captured and visually accepted.
+
+Candidate 1766b727 changes only gallery query reuse and its evidence document;
+production app/Core/widgets and the other 67 tests are identical to dce71639.
+It retains all layout assertions and the original 120/150-second test limits.
+App/test tree: 70f5cefe1e153390376cfab48b50e099c1f7fde4; full tree:
+8c18563542ef60ac423d4397ba3a3bc7d1837989. Focused native run 42280276801 checks out
+that exact source and runs the gallery alone. Validation branch
+codex/p15-gallery-validation must never merge. Automatic duplicate full native
+42280051712 was cancelled without executing steps. Final CI 42280051912 and focused
+native qualification remain pending; CodeQL 42280051874 passed. No new upload is
+claimed. Retain all earlier failures and reuse the 67 unchanged passing cases.
 
 Backend PR #1624 / 1fb0f908 deployed successfully in 42258321357 with all 15 Current
 acceptance checks passing. Its exact compatibility gate is accepted. Copilot itself

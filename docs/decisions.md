@@ -11334,3 +11334,13 @@ width and camera-menu synchronization assumptions. Do not add camera delays or
 retry taps without a confirmed application defect. Retain both widget languages
 before assertions and every failed attempt's evidence. Candidate dce71639 includes
 accepted main and needs its own exact CI/native qualification before release.
+
+## 6 November 2026 — Reuse settled widget geometry within unchanged assertions
+
+The dce71639 gallery exceeded 120 seconds because each repeated AX frame/identifier
+query crosses the application boundary. Read one snapshot per settled element and
+reuse its frame; retain every bounds, alignment and disabled-action assertion.
+The other 67 native cases passed and all production source is unchanged. Run only
+the corrected gallery with the same limits, exact-source provenance and failure
+artifacts. Both language widget captures and corrected heading/scroll views were
+visually accepted; this does not establish SpringBoard or physical-device behavior.

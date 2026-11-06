@@ -7276,3 +7276,15 @@ from a diagnostic matrix, metadata-only read or unqualified plain text response.
 The receipt is private deployment configuration, not a client override or owner
 approval replacement. Preserve valid evidence on normal deploy and invalidate it
 when target/settings/transport no longer match.
+
+### Final gallery-only qualification
+
+Native dce71639 / 42268563484 passed 67 cases; the gallery alone timed out on
+redundant AX queries. Candidate 1766b727 reads each settled element snapshot once,
+retaining every geometry assertion and 120/150-second limits. Production app and
+all other tests are unchanged. Focused 42280276801 binds exact source and both trees,
+retains result bundle/captures/provenance and requires the selected case to pass.
+Reuse the 67 passing cases only with this source proof. The validation-only workflow
+branch must never merge. Automatic duplicate 42280051712 cancelled with no executed
+steps. Final CI receipt must match 1766b727 and full tree 8c185635; merge/upload is
+still pending. Do not repeat an unchanged full simulator suite.

@@ -644,3 +644,45 @@ c6e68a5f6ee7d8073343f0fe4eda58d37d56cd55 and full tree
 All selected component checks succeeded. Receipt retained at
 /tmp/p15-dce-ci-evidence.json. Native compilation also passed; its single combined
 test/capture step started at 18:16:14 UTC and remains active.
+
+## 19:35 UTC — 67 native cases passed; gallery-only qualification
+
+Native dce71639 run 42268563484 finished with 67 of 68 cases passing. Camera,
+Health EN/DA/detail/Back, accessibility and task scrolling passed. Only the widget
+gallery exceeded its existing 120-second test deadline while repeatedly querying
+unchanged AX geometry. Both widget languages, corrected task scrolling and primary
+Health-detail headings were captured and visually accepted.
+
+Candidate 1766b727 changes only gallery query reuse and its evidence document;
+production app/Core/widgets and the other 67 tests are identical to dce71639.
+It retains all layout assertions and the original 120/150-second test limits.
+App/test tree: 70f5cefe1e153390376cfab48b50e099c1f7fde4; full tree:
+8c18563542ef60ac423d4397ba3a3bc7d1837989. Focused native run 42280276801 checks out
+that exact source and runs the gallery alone. Validation branch
+codex/p15-gallery-validation must never merge. Automatic duplicate full native
+42280051712 was cancelled without executing steps. Final CI 42280051912 and focused
+native qualification remain pending; CodeQL 42280051874 passed. No new upload is
+claimed. Retain all earlier failures and reuse the 67 unchanged passing cases.
+
+The full dce run counted 68 started and 67 passed, including camera (49.335 seconds),
+Health accessibility (109.897 seconds), both Health/detail/Back flows and task-group
+scrolling. The restarted runner's final 60-case summary omits earlier passing cases;
+it is not the full-run total. The gallery continued through Danish Notes bounds
+past the deadline; no layout assertion failed. Do not call this run 68/68 or green.
+
+UI artifact 13534102426 is retained (236245959 bytes, SHA256
+9265eeec5ec3c5ad583a8f71d0e2fbdfc0939b9a853d3e0348ff8285a761f298).
+The complete PNG/manifest/failure attachments were extracted locally; the verified
+ZIP copy was removed to recover disk. EN widget CAD12F75 and DA widget 5A987ECF
+show all three headers and contents fitting. EN/DA task scroll E3AC7F52/5255FC07
+shows headings separated from rows and a clear Search/Plus dock. Health detail
+BA71AA19/3656AE39 shows primary headings, decimal records and a populated graph.
+Unchanged local shimmer motion retains the previously inspected 6.398-second df56
+recording and identical reduced-motion content pixels.
+
+Focused validation workflow commit bb9700969811cddd9ee6156b8dbc344281191830 checks
+out 1766b727328bf9f44a3a241a1314bfb14ef4e120, verifies both trees and compares all
+apps/ios files except the changed gallery test to dce71639. It keeps pinned Xcode
+26.6/XcodeGen 2.46 and test deadlines, uploads the xcresult and source receipt even
+on failure and requires the one case to succeed. The temporary workflow cannot
+qualify production by itself; its checked-out source and actual results must match.

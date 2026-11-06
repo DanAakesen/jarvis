@@ -6,21 +6,22 @@ per-element shimmer, useful task-source labels with full detail provenance,
 transparent protected headers/docks, shared clear-glass selectors, three medium
 widget layouts and real Body trend plots.
 
-Candidate df56bcaa passed CI, 502 Core tests and CodeQL; native 42258268925 ran
-66/68 successfully. Both Health language/detail/Back cases and accessibility Health
-passed, and actual charts, headers, task rows and full loading motion were reviewed.
-The two failures were camera-menu activation and an intrinsic widget text-width
-assertion. Review also exposed pinned task headings overlapping rows. Corrected
-candidate dce71639 keeps headings in normal list flow, uses primary-color Health
-detail headings, measures widget column geometry, captures both widget languages
-before assertions and synchronizes the single camera-menu test tap.
+Native dce71639 run 42268563484 finished with 67 of 68 cases passing. Camera,
+Health EN/DA/detail/Back, accessibility and task scrolling passed. Only the widget
+gallery exceeded its existing 120-second test deadline while repeatedly querying
+unchanged AX geometry. Both widget languages, corrected task scrolling and primary
+Health-detail headings were captured and visually accepted.
 
-The candidate includes accepted main before qualification. Its app/test tree is
-c45cc6b07fa0754bd100ca9b1db25e069b7daeff. One fresh native 42268563484, CI 42268563357
-and CodeQL 42268563412 qualify this combined correction. CI, all 502 Core tests
-and CodeQL have passed; native remains active. Inspect final bilingual
-widgets, task-group scrolling and Health-detail headings before merge/upload.
-Retain failed evidence; do not repeat an unchanged simulator to retrieve artifacts.
+Candidate 1766b727 changes only gallery query reuse and its evidence document;
+production app/Core/widgets and the other 67 tests are identical to dce71639.
+It retains all layout assertions and the original 120/150-second test limits.
+App/test tree: 70f5cefe1e153390376cfab48b50e099c1f7fde4; full tree:
+8c18563542ef60ac423d4397ba3a3bc7d1837989. Focused native run 42280276801 checks out
+that exact source and runs the gallery alone. Validation branch
+codex/p15-gallery-validation must never merge. Automatic duplicate full native
+42280051712 was cancelled without executing steps. Final CI 42280051912 and focused
+native qualification remain pending; CodeQL 42280051874 passed. No new upload is
+claimed. Retain all earlier failures and reuse the 67 unchanged passing cases.
 
 ## Backend and runtime comparison status
 

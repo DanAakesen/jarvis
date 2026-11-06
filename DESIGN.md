@@ -3485,5 +3485,8 @@ Back retains selection. Health detail now adopts the shared primary-color headin
 Task-group headers in a plain List were pinning over scrolling tasks: render them
 as ordinary clear first rows within their native sections, preserving swipe actions.
 The 6.398-second loading recording shows per-bar shine and static card surfaces;
-reduced-motion fixture pixels are identical. These subsequent heading/test changes
-qualify in dce71639 / native 42268563484; do not claim acceptance before fresh review.
+reduced-motion fixture pixels are identical. Fresh dce71639 captures confirm normal-flow task headings, primary Health-detail
+headings and both widget languages. All three widget titles fit at top left; Workouts
+has aligned columns, Factory retains two rows and Danish Notes fits its summary.
+Gallery timeout qualification continues separately on unchanged production views;
+these are native content captures, not SpringBoard/tint or live-refresh evidence.
