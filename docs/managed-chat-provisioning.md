@@ -101,6 +101,26 @@ Local checks exercise refresh refusal, one-version creation, old-version retenti
 ambiguous matches, unowned versions, uncertain creation and later exact reuse.
 Live target state and original-path inference still require coordinator acceptance.
 
+The refresh request follows Microsoft's
+[create-agent-version REST contract](https://learn.microsoft.com/en-us/rest/api/microsoft-foundry/aiproject#agents---create-agent-version):
+`POST /agents/{agent_name}/versions?api-version=v1`, with `definition` and ownership
+`metadata` in the body. The name belongs in the path. The earlier refresh code
+incorrectly reused `POST /agents` with a body name, which is the separate
+agent-creation operation. Initial provisioning still uses that documented
+agent-creation operation; only refreshing an existing agent uses the version
+route. Diagnostics distinguish `agent_create` from `agent_version_create`.
+
+This contract was checked on 6 November against the published
+[azure-ai-projects 2.7.0](https://pypi.org/project/azure-ai-projects/2.7.0/) and
+[2.9.0](https://pypi.org/project/azure-ai-projects/2.9.0/) wheel sources:
+`operations/_operations.py`'s `build_agents_create_version_request` and
+`AgentsOperations.create_version` agree on the route and body. The 2.7.0 wheel's
+SHA256 `4bce987ebc93641311f7f9406b94f75f00d96b7d388056bb8b06e1f6f64deeaf`
+matches the repository's voice-provisioner lockfile. This establishes a request
+contract defect, not the failing operation in the earlier opaque live log.
+Inventory inspection must still precede any apply, and uncertain writes are
+never automatically retried.
+
 ### Read existing inventory before retrying
 
 The separate default-off `inspect_managed_chat` Deploy input runs the same bounded

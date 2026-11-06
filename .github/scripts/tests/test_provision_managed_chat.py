@@ -48,6 +48,8 @@ class FakeAzure:
     def data(self, path, method="GET", body=None):
         self.calls.append((method, path, body))
         if method == "POST":
+            assert path == "/agents", "A new agent uses the agent-creation route"
+            assert body["name"] == script.AGENT_NAME
             if self.fail_create:
                 raise script.Blocked("azure_request_failed")
             self.existing = True
@@ -76,6 +78,9 @@ class VersionedAzure(FakeAzure):
 
     def data(self, path, method="GET", body=None):
         if method == "POST":
+            # SDK create_version takes the agent name in the URL, not the body.
+            assert path == "/agents/" + script.AGENT_NAME + "/versions"
+            assert set(body) == {"metadata", "definition"}
             self.calls.append((method, path, body))
             self.versions.append({**copy.deepcopy(self.version), "version": str(len(self.versions) + 1),
                                   "definition": copy.deepcopy(body["definition"])})
@@ -137,7 +142,10 @@ class ProvisionTests(unittest.TestCase):
         activation = script.provision(azure, expected, refresh_definition=True)
         self.assertEqual(activation["version"], "2")
         self.assertEqual(azure.versions[0], original)
-        self.assertEqual([call[0] for call in azure.calls if call[0] != "GET"], ["POST", "PATCH"])
+        writes = [call for call in azure.calls if call[0] != "GET"]
+        self.assertEqual([call[0] for call in writes], ["POST", "PATCH"])
+        self.assertEqual(writes[0], ("POST", "/agents/" + script.AGENT_NAME + "/versions",
+                                     {"metadata": script.MARKER, "definition": expected}))
         azure.calls.clear()
         self.assertEqual(script.provision(azure, expected), activation)
         self.assertFalse(any(call[0] != "GET" for call in azure.calls))
@@ -148,7 +156,8 @@ class ProvisionTests(unittest.TestCase):
         expected = script.definition(MANIFEST)
         with self.assertRaisesRegex(script.Blocked, "^azure_request_failed$"):
             script.provision(azure, expected, refresh_definition=True)
-        self.assertEqual([call[0] for call in azure.calls if call[0] != "GET"], ["POST"])
+        self.assertEqual([call for call in azure.calls if call[0] != "GET"], [
+            ("POST", "/agents/" + script.AGENT_NAME + "/versions", {"metadata": script.MARKER, "definition": expected})])
         self.assertEqual(azure.selector["version_selection_rules"][0]["agent_version"], "1")
         azure.calls.clear()
         self.assertEqual(script.provision(azure, expected, refresh_definition=True)["version"], "2")
@@ -175,7 +184,8 @@ class ProvisionTests(unittest.TestCase):
         self.assertRegex(first["fingerprint"], "^[0-9a-f]{64}$")
         writes = [item for item in azure.calls if item[0] != "GET"]
         self.assertEqual([item[0] for item in writes], ["POST", "PATCH"])
-        self.assertEqual(writes[0][2]["name"], script.AGENT_NAME)
+        self.assertEqual(writes[0], ("POST", "/agents", {"name": script.AGENT_NAME,
+                                                       "metadata": script.MARKER, "definition": script.definition(MANIFEST)}))
         self.assertEqual(writes[1][1], "/agents/" + script.AGENT_NAME)
         self.assertEqual(azure.selector["version_selection_rules"], [
             {"type": "FixedRatio", "agent_version": "1", "traffic_percentage": 100}])
@@ -304,7 +314,8 @@ class ProvisionTests(unittest.TestCase):
                  ("GET", data + "/" + script.AGENT_NAME, "agent_read"),
                  ("GET", data + "/" + script.AGENT_NAME + "/versions", "version_inventory"),
                  ("GET", data + "/" + script.AGENT_NAME + "/versions/PRIVATE", "version_read"),
-                 ("POST", data, "agent_version_create"),
+                 ("POST", data, "agent_create"),
+                 ("POST", data + "/" + script.AGENT_NAME + "/versions", "agent_version_create"),
                  ("PATCH", data + "/" + script.AGENT_NAME, "endpoint_pin")]
         error = b'ERROR: Forbidden({"error":{"code":"AuthorizationFailed","message":"PRIVATE token"}})'
         for method, url, operation in cases:
