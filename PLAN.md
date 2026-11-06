@@ -1,3 +1,21 @@
+## Managed policy request qualification — 6 November 2026
+
+The 30 October #1373 evidence records a real Responses 4xx after native binding,
+but its discarded exception cannot identify the rejected field. The old canary
+sent a plain string without per-turn instructions and could miss that failure.
+The fixed canary now shares the real managed request builder and complete normal
+chat instruction composition, sends only synthetic reference/user input, refuses
+tool requests and cleans up its own native conversation. Activation requires its
+`requestShape: managed_policy` success marker. Bounded stage/provider metadata is
+independently filtered into deployment diagnostics; raw content remains private.
+
+Local validation: 446 hosted tests (shared model loop, runtime, policy transport,
+provider diagnostics and chat entrypoint), 13 handoff tests, scoped Ruff and shell
+syntax. No iOS source changes. Next: deploy the hosted agent before the handoff,
+capture the actual cause if rejected, correct only a proven incompatibility, then
+verify a real isolated owner conversation. This closes a qualification gap; it
+does not establish that the historical live request now works.
+
 ## Runtime testing on iOS and comparison activation — 6 November 2026
 
 Implemented locally: the shared native Plus menu opens an explicit isolated

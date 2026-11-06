@@ -23,6 +23,18 @@ from model_contract import ModelStreamChunk
 from state import ModelMessage, ModelSettings
 
 
+def managed_response_request(
+    conversation_id: str, inputs: list[dict[str, Any]], instructions: str,
+) -> dict[str, Any]:
+    """The provider contract shared by real policy turns and the fixed canary.
+
+    Callers still own source verification, claims and input cursors. This builder
+    cannot execute tools, create a session or override the registered catalogue.
+    """
+    return {"conversation": conversation_id, "input": inputs,
+            "instructions": instructions, "stream": True}
+
+
 @dataclass(frozen=True)
 class ManagedPolicyTarget(ManagedTarget):
     agent_version: str
@@ -261,11 +273,10 @@ class ManagedPolicyClient(AzureOpenAIResponsesClient):
                 raise ManagedChatError("managed_steering_source_unclaimed")
             turn.sources.append(source)
         await self._ensure_native_conversation()
-        native_request = {
-            "conversation": turn.binding.conversation_id,
-            "input": turn.cursor.take(request["input"]),
-            "instructions": request["instructions"], "stream": True,
-        }
+        native_request = managed_response_request(
+            turn.binding.conversation_id, turn.cursor.take(request["input"]),
+            request["instructions"],
+        )
         # Once called, transport outcome may be unknown even if no stream arrives.
         turn.inference_attempted = True
         stream = await self._client.responses.create(**native_request)

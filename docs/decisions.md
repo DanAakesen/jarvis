@@ -1,3 +1,21 @@
+## 6 November 2026 — Qualify the managed policy provider request
+
+The old fixed canary omitted the message list and per-turn instructions present
+in the failing real Copilot request. Share its request builder and full normal
+chat instruction composition with the production policy path, retaining the
+fixed synthetic input, existing bridge credential, no tool execution and owned
+conversation cleanup. Require an explicit policy-request success marker during
+activation, and independently revalidate content-free provider diagnostics before
+printing them. This does not create an owner authorization bypass or alter claims.
+
+#1373 retained only a live 4xx, not its exact rejected parameter. Current Microsoft
+[harness documentation](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness)
+and [limits](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions#microsoft-copilot-harness-preview)
+were reviewed on 6 November; neither establishes that per-turn instructions or
+message-list input must be removed. Preserve the actual request until a new safe
+provider cause identifies a concrete incompatibility. Local regressions prove the
+old false-positive canary gap; a real owner turn remains required live acceptance.
+
 ## 6 November 2026 — Explicit native runtime tests and comparison refresh
 
 The owner requested repair of the disabled web Copilot choice and equivalent

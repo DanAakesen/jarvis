@@ -73,9 +73,9 @@ if ! timeout 210s az rest --method POST --url "$invocations" --resource https://
   --only-show-errors >"$private_dir/canary.json" 2>"$private_dir/cli.err"; then
   fail managed_chat_canary_unavailable
 fi
-if ! jq -e 'type == "object" and .status == "ok" and .model == "gpt-6.1-terra" and .reasoningEffort == "high"' \
+if ! jq -e 'type == "object" and .status == "ok" and .model == "gpt-6.1-terra" and .reasoningEffort == "high" and .requestShape == "managed_policy"' \
   "$private_dir/canary.json" >/dev/null 2>"$private_dir/cli.err"; then
-  # Emit only exact internal labels and a bounded integral HTTP status, never provider fields.
+  # Emit only fixed labels and independently revalidated content-free provider metadata.
   if ! diagnostic=$(jq -sr '
     ["managed_readback_forbidden", "managed_readback_unauthorized", "managed_readback_unavailable",
      "managed_readback_invalid", "managed_existing_credential_unavailable", "managed_target_invalid",
@@ -95,6 +95,7 @@ if ! jq -e 'type == "object" and .status == "ok" and .model == "gpt-6.1-terra" a
     ["none", "low", "medium", "high", "xhigh"] as $efforts |
     (if length == 1 and (.[0] | type) == "object" then .[0] else {} end) |
     .reason as $reason | .stage as $stage | .httpStatus as $http | .model as $model | .reasoningEffort as $effort |
+    (if (.providerCause | type) == "object" then .providerCause else {} end) as $cause |
     (if ($reason | type) == "string" and ($reasons | index($reason)) != null then $reason else "not_reported" end) as $safeReason |
     (if ($stage | type) == "string" and ($stages | index($stage)) != null then $stage else "managed_text_canary" end) as $safeStage |
     (if ($model | type) == "string" and ($models | index($model)) != null then $model else "not_reported" end) as $safeModel |
@@ -103,7 +104,21 @@ if ! jq -e 'type == "object" and .status == "ok" and .model == "gpt-6.1-terra" a
     (if ($http | type) == "number" then
        if $http >= 400 and $http <= 599 and ($http | floor) == $http then " http_status=\($http | floor)" else "" end
      else "" end) +
-    " expected_model=gpt-6.1-terra actual_model=" + $safeModel + " expected_effort=high actual_effort=" + $safeEffort
+    " expected_model=gpt-6.1-terra actual_model=" + $safeModel + " expected_effort=high actual_effort=" + $safeEffort +
+    (if ($cause.httpStatus | type) == "number" then
+       if $cause.httpStatus >= 100 and $cause.httpStatus <= 599 and ($cause.httpStatus | floor) == $cause.httpStatus
+       then " provider_http_status=\($cause.httpStatus | floor)" else "" end
+     else "" end) +
+    (if ($cause.code | type) == "string" then
+       if ($cause.code | test("^[a-z0-9_.]{1,48}\\z")) then " provider_code=" + $cause.code else "" end
+     else "" end) +
+    (if ($cause.param | type) == "string" then
+       if ($cause.param | test("^[a-z0-9_.]{1,48}\\z")) then " provider_param=" + $cause.param else "" end
+     else "" end) +
+    (if ($cause.exceptionType | type) == "string" then
+       if ($cause.exceptionType | test("^[A-Za-z_][A-Za-z0-9_]{0,47}\\z"))
+       then " provider_exception=" + $cause.exceptionType else "" end
+     else "" end)
   ' "$private_dir/canary.json" 2>"$private_dir/cli.err"); then
     diagnostic="managed_chat_canary_diagnostic reason=not_reported stage=managed_text_canary expected_model=gpt-6.1-terra actual_model=not_reported expected_effort=high actual_effort=not_reported"
   fi

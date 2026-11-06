@@ -112,7 +112,13 @@ The existing AAD-protected hosted Invocations endpoint also accepts two exact
 administrative operations. The manifest operation reads static Jarvis instructions
 and authoritative function schemas without user context, inference or function
 execution. The fixed text canary uses the actual bridge credential and an owned
-synthetic native conversation; it reads no history and executes no tools. Normal
+synthetic native conversation; it reads no history and executes no tools. It now
+shares `managed_response_request` and `runtime_instructions` with normal policy
+turns, including selected identity/preferences and dynamic capability instructions.
+Its reference/user message list is synthetic. Successful reports identify
+`requestShape: managed_policy`; failures preserve only bounded stage and sanitized
+provider metadata, revalidated by the deployment handoff. This checks the provider
+request contract, not owner authorization, durable claims or tool execution. Normal
 chat still requires delegated authorization and verified stored source messages.
 The default-off manual Deploy job uses these operations with existing OIDC and
 never assigns roles or changes the normal runtime default.

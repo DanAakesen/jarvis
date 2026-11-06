@@ -64,6 +64,25 @@ src/AttentionPopover.test.tsx`, plus web lint/build. Native checks from
 `apps/ios/Packages/JarvisCore`: `swift test --filter
 'JarvisApprovalsClientTests|JarvisNowFeedClientTests'` and `swift build`.
 
+## Managed policy canary qualification (6 November 2026)
+
+The fixed `managed_text_canary` now uses the full shared chat instruction
+composition and the same provider request builder as real managed policy turns.
+Deploy the updated hosted agent before running the comparison handoff: the
+handoff requires `requestShape: managed_policy` and rejects an older plain-string
+canary success. It retains only validated stage/status/code/parameter/exception
+metadata; never print the private response or provider message. No new owner-auth
+bypass, tools, claim reset or automatic mutation retry is added.
+
+Run hosted pytest for `test_managed_runtime_factory.py`,
+`test_managed_policy_client.py`, `test_managed_provider_cause.py`,
+`test_model_client.py` and `test_chat_runtime.py`, plus scoped Ruff. Run
+`.github/scripts/tests/test_managed_chat_handoff.py` and `bash -n` on the handoff.
+The synthetic request must match actual policy instructions and must expose a
+synthetic 400 that the old request misses. Live success remains unverified;
+follow the canary with the ordinary authenticated isolated owner conversation,
+never `/status/smoke` as a substitute for Copilot acceptance.
+
 ## Managed policy cause diagnostics (#1373; 30 October 2026)
 
 Use the existing hosted pytest/Ruff environment. Focused checks:

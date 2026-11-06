@@ -48,7 +48,7 @@ elif args[:2] == ['rest','--method']:
         if 'CANARY_BODY' in os.environ:
             print(os.environ['CANARY_BODY'])
             sys.exit(0)
-        print(json.dumps({'status':'ok','model':'other' if os.environ.get('BAD_CANARY') else 'gpt-6.1-terra','reasoningEffort':'high'}))
+        print(json.dumps({'status':'ok','model':'other' if os.environ.get('BAD_CANARY') else 'gpt-6.1-terra','reasoningEffort':'high','requestShape':'managed_policy'}))
 elif args[:2] == ['containerapp','update']:
     assert '--set-env-vars' in args
     names = [arg.split('=',1)[0] for arg in args if arg.startswith('FOUNDRY_')]
@@ -181,6 +181,32 @@ class ManagedHandoffTests(unittest.TestCase):
             self.assertNotIn("private-", result.stdout + result.stderr)
         line, _ = self.diagnostic(json.dumps({"reason": "managed_probe_timeout"}))
         self.assertEqual(line, "managed_chat_canary_diagnostic reason=managed_probe_timeout stage=managed_text_canary" + MISSING_SETTINGS)
+
+    def test_policy_canary_safe_cause_is_reported_without_free_text(self):
+        line, result = self.diagnostic(json.dumps({
+            "reason": "managed_probe_failed", "stage": "response_start", "providerCause": {
+                "httpStatus": 400, "code": "unsupported_parameter", "param": "instructions",
+                "exceptionType": "BadRequestError", "message": "PRIVATE_SECRET",
+            },
+        }))
+        self.assertEqual(line, "managed_chat_canary_diagnostic reason=managed_probe_failed stage=response_start"
+                         + MISSING_SETTINGS + " provider_http_status=400 provider_code=unsupported_parameter"
+                         " provider_param=instructions provider_exception=BadRequestError")
+        self.assertNotIn("PRIVATE", result.stdout + result.stderr)
+
+    def test_policy_canary_unsafe_causes_and_legacy_success_are_not_accepted(self):
+        for cause in [{"httpStatus": 600, "code": "private secret", "param": "secret\n::error::injected",
+                       "exceptionType": "secret value"},
+                      {"code": "bad_request\n", "param": "input\n", "exceptionType": "BadRequestError\n"},
+                      {"httpStatus": True}, ["private"], "private"]:
+            line, result = self.diagnostic(json.dumps({"providerCause": cause}))
+            self.assertNotIn("provider_", line)
+            self.assertNotIn("private", result.stdout + result.stderr)
+        result, _calls = self.run_handoff(CANARY_BODY=json.dumps({
+            "status": "ok", "model": "gpt-6.1-terra", "reasoningEffort": "high",
+        }))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("comparison_canary_ok", result.stdout)
 
     def test_expected_and_actual_settings_are_only_bounded_constants(self):
         for model, effort in [("gpt-6.1-terra", "high"), ("gpt-6-luna", "xhigh")]:

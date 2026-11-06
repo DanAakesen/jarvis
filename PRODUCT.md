@@ -48,6 +48,10 @@ show unavailable reasons and let the owner check availability again. Missing
 server activation is distinguished from failed configuration verification. A
 changed Jarvis tool/identity definition can be refreshed only through the explicit
 comparison deployment input; this does not select Copilot for normal chat.
+Activation must pass a synthetic request with the same dynamic policy instructions
+and message-list format as real managed turns. Metadata-only availability or a
+plain-text canary does not establish a working conversation; a real isolated owner
+turn still requires verification before declaring Copilot usable.
 
 Replace the custom main chat loop through a controlled, switchable Foundry
 Copilot-harness migration after fixing the live baseline. Preserve native audio,

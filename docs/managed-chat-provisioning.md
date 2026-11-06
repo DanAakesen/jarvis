@@ -13,7 +13,8 @@ The private canary response was deleted and never uploaded. No exact model,
 permission or protocol cause is established. The local diagnostic correction
 preserves existing safe reason codes and logs only allowlisted stage, bounded
 HTTP status and model/effort constants. Missing internal stage is reported as the
-known `managed_text_canary` handoff operation; Python runtime code is unchanged.
+known `managed_text_canary` handoff operation. The 6 November policy-shaped
+canary below supersedes that earlier diagnostic-only change.
 Raw responses, instructions, schemas,
 CLI errors and identifiers remain private. No retry or new resource is included.
 
@@ -212,9 +213,14 @@ It preserves other environment values and the normal agent/model defaults. It
 then follows the existing bounded `latestRevisionName == latestReadyRevisionName`
 readiness pattern and calls the fixed `managed_text_canary` hosted operation.
 The canary uses the actual bridge credential for one synthetic managed text turn,
-executes no backend tool and cleans up only its own canary conversation. The job
-requires `status: ok`, model `gpt-6.1-terra` and effort `high`; it prints no returned
-text or raw provider error. Each invocation has the existing 210-second bound.
+executes no backend tool and cleans up only its own canary conversation. It shares
+the production policy request builder and full dynamic chat instructions while
+sending only synthetic reference/user inputs. Deploy the updated hosted agent
+first: the job requires `status: ok`, model `gpt-6.1-terra`, effort `high` and
+`requestShape: managed_policy`; an old plain-string success does not qualify.
+Failures log only revalidated stage, HTTP status, provider code/parameter and
+exception identifier, never returned text, instructions or raw provider error.
+Each invocation has the existing 210-second bound.
 The job's 20-minute timeout accommodates the existing readiness loop. There is no
 new grant, credential, connection or automatic mutation retry.
 
