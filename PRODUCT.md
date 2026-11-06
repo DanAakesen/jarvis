@@ -2478,3 +2478,7 @@ Home → Home. Taps retain the app's authentication/lock gate.
 
 Home's quick actions and activity values must remain readable at accessibility
 text sizes, using stacked groups and wrapping labels instead of compressed tiles.
+
+The Home/chrome/widget-navigation correction is delivered in build 78. Native
+cold/warm routing and task swipe completion are verified; real Home Screen widget
+taps and physical haptic/Face ID behavior remain device acceptance checks.

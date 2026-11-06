@@ -1,23 +1,36 @@
-## Active follow-up — Home hierarchy, transparent chrome and widget navigation
+## Current release — Home/chrome/widget follow-up, build 78
 
-The owner accepts the loading animations. Preserve them. The next correction adds
-Home / Quick actions / Upcoming section headings, equal hero title insets with
-trailing period controls, distinct orange calendar/task icons and native task
-swipe completion. Shared page navigation bars default to transparent; Notes and
-Factory paint their ambient background behind the entire footer inset.
+Build **78 uploaded successfully at 22:48:32 UTC / 23:48:32 Copenhagen on 6 November 2026**
+in unchanged TestFlight workflow [42306553415](https://github.com/DanAakesen/jarvis/actions/runs/42306553415),
+from main `ca5ca838399be5debe2115c4b2ba6879f3f062a9` (PR #1625). Apple processing and
+physical device visibility are not independently confirmed.
 
-The owner also accepts widget layouts. Fix each widget tap to open its matching
-section through one shared topic URL and registered scheme. Add cold/warm URL
-checks. The earlier native run 42291240849 compiled but was cancelled early as
-superseded; it is not final acceptance.
+Home now has Home / Quick actions / Upcoming headings, aligned hero titles/periods,
+distinct orange agenda icons and native task swipe completion. At accessibility
+sizes its log actions and activity groups stack with readable labels. Shared
+headers and Notes/Factory footer containers are transparent. Every widget family
+has one registered topic link: Workouts/Steps → Health, Factory → Software Factory,
+Notes → Notes and Home → Home. Accepted loading/widget visuals and Chat appearance
+are preserved.
 
-Implementation and native test updates are prepared on
-`codex/p15-home-hierarchy`. Native rendering and interactions are not yet verified.
-Run one combined qualification, inspect bilingual/large-text Home and shared page
-captures, then release under the existing authorization. Do not rerun unchanged
-Simulator coverage after merge when exact tree identity has been established.
+CI 42302597659 passed (502 Core tests) and CodeQL 42302597761 passed. Native coverage
+is 55 unchanged cases from 42292434058 plus all 15 Home/widget cases passing in
+42302707513 on exact candidate `c4e141551c35c2d6c4c6895112cf1b6ade54f8f7`.
+The full run's one incorrect Home geometry assertion remains recorded; it measured
+glass accessibility content bounds rather than visual insets. The final focused
+run retains unchanged 120/150-second per-test limits and verifies source identity
+outside the corrected Home views/Home-only tile. Actual bilingual light/dark,
+AX XXXL, native swipe, shared header/dock and widget destination captures were reviewed.
 
-## Current release — 6 November 2026, build 77
+Merged full tree `9ecf8636632db51d8a47768d8b8e51cf5eca65f2` and iOS tree
+`169764ccd98da54bbe309ef0766cba9da65df004` exactly match qualification. Automatic main
+Simulator 42306089300 was cancelled before boot after proving identity. Normal
+Deploy 42306089293 was accepted with readiness and all 15 Current checks passing
+before the single TestFlight dispatch. No further Simulator run is needed for this
+unchanged app/test tree. Physical widget-host taps, Face ID and haptic feel remain
+device checks; native cold/warm URL delivery passed.
+
+## Previous release — 6 November 2026, build 77
 
 Owner-reported passes: cold Voice/unified transcript, Home send/camera, task/reminder
 workflow and Health pull refresh. Compact task rows are accepted. PR #1621 combines
@@ -57,7 +70,7 @@ Copilot itself remains incompatible: fixed diagnostics accepted ordinary user in
 rejected trusted-role response input, and failed stored-policy precedence/replacement
 sentinels. No working comparison is claimed. The iOS Plus runtime-testing sheet and
 web availability/retry flow shipped in build 76; current user-only provider success
-does not qualify Jarvis operation. Normal Current is accepted and build 77 is uploaded.
+does not qualify Jarvis operation. Normal Current is accepted and build 78 is uploaded.
 See [the delivery record](docs/ios/design/p15-device-feedback-2026-11-06.md) for exact
 runs, retained evidence, previous failures and acceptance boundaries.
 
@@ -68,7 +81,7 @@ confirmed it is available. It includes unified typed/voice history, cold Voice
 readiness, Home send/camera handoff, Health pull refresh, shared tool schema/error
 hints, high-priority vault task/reminder timing and approval-gated own-code bug or
 feature proposals. These remain implemented. Build 77 delivers the subsequent
-visual corrections.
+visual corrections; build 78 adds the Home, transparency and widget-navigation follow-up.
 
 ## P15-78 — retire Daily feeds, rename Daily to Health, iPhone Health sync (#1571)
 
@@ -4074,5 +4087,6 @@ widget routes, Health hero alignment and native Home task swipes. Home's normal
 layout check used the glass accessibility content union as its visual boundary;
 correct the measurement to page/section anchors. Rendered AX XXXL also exposed
 cramped Home quick actions and activity summaries. Stack those at accessibility
-sizes and preserve normal geometry. Rerun Home and widget-link coverage on the
-new candidate; retain the unchanged page/Chat evidence with explicit source proof.
+sizes and preserve normal geometry. Focused run 42302707513 passed all 15 Home/widget cases on the
+final candidate; 55 unchanged page/Chat/navigation cases are retained with source proof.
+The final captures were reviewed and build 78 uploaded.

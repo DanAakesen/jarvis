@@ -1,6 +1,58 @@
 # Home hierarchy and transparency follow-up
 
-Status: implemented locally; native qualification pending.
+Status: released as build 78. The verification notes below retain the earlier
+failed and superseded candidates; the final outcome is recorded first.
+
+## Final accepted release
+
+Build **78 uploaded successfully at 22:48:32 UTC / 23:48:32 Copenhagen on 6 November 2026**
+in unchanged TestFlight workflow [42306553415](https://github.com/DanAakesen/jarvis/actions/runs/42306553415),
+from main `ca5ca838399be5debe2115c4b2ba6879f3f062a9` (PR #1625). Apple processing and
+physical device visibility are not independently confirmed.
+
+Home now has Home / Quick actions / Upcoming headings, aligned hero titles/periods,
+distinct orange agenda icons and native task swipe completion. At accessibility
+sizes its log actions and activity groups stack with readable labels. Shared
+headers and Notes/Factory footer containers are transparent. Every widget family
+has one registered topic link: Workouts/Steps → Health, Factory → Software Factory,
+Notes → Notes and Home → Home. Accepted loading/widget visuals and Chat appearance
+are preserved.
+
+CI 42302597659 passed (502 Core tests) and CodeQL 42302597761 passed. Native coverage
+is 55 unchanged cases from 42292434058 plus all 15 Home/widget cases passing in
+42302707513 on exact candidate `c4e141551c35c2d6c4c6895112cf1b6ade54f8f7`.
+The full run's one incorrect Home geometry assertion remains recorded; it measured
+glass accessibility content bounds rather than visual insets. The final focused
+run retains unchanged 120/150-second per-test limits and verifies source identity
+outside the corrected Home views/Home-only tile. Actual bilingual light/dark,
+AX XXXL, native swipe, shared header/dock and widget destination captures were reviewed.
+
+Merged full tree `9ecf8636632db51d8a47768d8b8e51cf5eca65f2` and iOS tree
+`169764ccd98da54bbe309ef0766cba9da65df004` exactly match qualification. Automatic main
+Simulator 42306089300 was cancelled before boot after proving identity. Normal
+Deploy 42306089293 was accepted with readiness and all 15 Current checks passing
+before the single TestFlight dispatch. No further Simulator run is needed for this
+unchanged app/test tree. Physical widget-host taps, Face ID and haptic feel remain
+device checks; native cold/warm URL delivery passed.
+
+Focused evidence artifact 13545477771 has SHA256
+30061116eb125530f9a3033a86838bf1071f793614ee377ad664cfc42884b67a.
+Its provenance binds the exact candidate/full/iOS trees and proves the unaffected
+source used for the 55 retained cases. All 15 selected tests passed, with zero
+failures or skips. The final EN/DA normal and AX captures show readable log labels,
+stacked activity values and the intended title/period insets. Both partial and full
+native completion swipes pass; widget cold and warm routes pass.
+
+CI evidence 13544089609 has SHA256
+d999e2fb25e86684026774514ac49e796bd9ea72688a4467d66b6098477d6201.
+Accepted deployment evidence 13545319369 has SHA256
+89df9b0b300037a8c02701ac9e20fdab998d0afe3205824aaf77c84ca437a74d.
+Both downloads were verified. Backend/web/agent/infra reuse their already accepted
+versions from 1fb0f908; the deployed Current conversation passes all 15 checks.
+Automatic PR Simulator 42302597789 and main Simulator 42306089300 were stopped
+before boot. The focused validation branch must never merge.
+
+## Implementation and verification history
 
 Scope: Home / Quick actions / Upcoming headings; equal hero title insets and
 trailing period controls; orange calendar/task icons and native task completion

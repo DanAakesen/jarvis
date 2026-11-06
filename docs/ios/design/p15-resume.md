@@ -1,12 +1,40 @@
 # P15 release checkpoints
 
-## Active Home/chrome follow-up
+## Completed Home/chrome/widget follow-up — build 78
 
-The owner accepts the loading animations. New Home hierarchy, hero alignment,
-agenda icons/swipes and transparent header/footer corrections are prepared on
-`codex/p15-home-hierarchy`, based on 0b4fe857. Native checks and release are pending.
-See [the scoped record](p15-home-hierarchy-feedback.md). Previous build 77 receipts
-remain history and do not qualify these new changes.
+Build **78 uploaded successfully at 22:48:32 UTC / 23:48:32 Copenhagen on 6 November 2026**
+in unchanged TestFlight workflow [42306553415](https://github.com/DanAakesen/jarvis/actions/runs/42306553415),
+from main `ca5ca838399be5debe2115c4b2ba6879f3f062a9` (PR #1625). Apple processing and
+physical device visibility are not independently confirmed.
+
+Home now has Home / Quick actions / Upcoming headings, aligned hero titles/periods,
+distinct orange agenda icons and native task swipe completion. At accessibility
+sizes its log actions and activity groups stack with readable labels. Shared
+headers and Notes/Factory footer containers are transparent. Every widget family
+has one registered topic link: Workouts/Steps → Health, Factory → Software Factory,
+Notes → Notes and Home → Home. Accepted loading/widget visuals and Chat appearance
+are preserved.
+
+CI 42302597659 passed (502 Core tests) and CodeQL 42302597761 passed. Native coverage
+is 55 unchanged cases from 42292434058 plus all 15 Home/widget cases passing in
+42302707513 on exact candidate `c4e141551c35c2d6c4c6895112cf1b6ade54f8f7`.
+The full run's one incorrect Home geometry assertion remains recorded; it measured
+glass accessibility content bounds rather than visual insets. The final focused
+run retains unchanged 120/150-second per-test limits and verifies source identity
+outside the corrected Home views/Home-only tile. Actual bilingual light/dark,
+AX XXXL, native swipe, shared header/dock and widget destination captures were reviewed.
+
+Merged full tree `9ecf8636632db51d8a47768d8b8e51cf5eca65f2` and iOS tree
+`169764ccd98da54bbe309ef0766cba9da65df004` exactly match qualification. Automatic main
+Simulator 42306089300 was cancelled before boot after proving identity. Normal
+Deploy 42306089293 was accepted with readiness and all 15 Current checks passing
+before the single TestFlight dispatch. No further Simulator run is needed for this
+unchanged app/test tree. Physical widget-host taps, Face ID and haptic feel remain
+device checks; native cold/warm URL delivery passed.
+
+See [the scoped record](p15-home-hierarchy-feedback.md) for retained failures and artifact digests.
+Earlier pending-state notes below are historical. Copilot remains unavailable under
+the previously recorded provider-policy gate; this release does not enable it.
 
 ## Completed device-feedback release — build 77
 

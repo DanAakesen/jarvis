@@ -3518,3 +3518,12 @@ chrome. At accessibility sizes, Home's quick log actions and activity/chart grou
 stack vertically; action labels can wrap and the donut stays within 200 pt.
 The Home glass accessibility container reports content bounds, so layout tests
 measure visual inset contracts from the page and preceding section instead.
+
+### Build 78 rendered acceptance
+
+The final candidate's normal EN/DA light/dark Home and AX XXXL activity/action
+captures were inspected after focused run 42302707513 passed all 15 Home/widget
+cases. Titles and periods follow their insets, action labels wrap at large sizes,
+and agenda icons/swipes are clear. Shared headers and Notes/Factory docks retain
+the transparent page background in resting/scrolled captures. The owner-accepted
+loading/widget visuals remain unchanged. Build 78 delivers these corrections.
