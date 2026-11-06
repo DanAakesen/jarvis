@@ -11,6 +11,7 @@ public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case runtimeUnavailable = "chat.runtime.runtimeUnavailable"
     case runtimeNotConfigured = "chat.runtime.runtimeNotConfigured"
     case runtimeNotVerified = "chat.runtime.runtimeNotVerified"
+    case runtimePolicyNotVerified = "chat.runtime.runtimePolicyNotVerified"
     case runtimeVerificationFailed = "chat.runtime.runtimeVerificationFailed"
     case runtimeStorageUnavailable = "chat.runtime.runtimeStorageUnavailable"
     case runtimeSettingsMismatch = "chat.runtime.runtimeSettingsMismatch"

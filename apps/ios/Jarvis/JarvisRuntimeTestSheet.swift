@@ -285,6 +285,7 @@ struct JarvisRuntimeTestSheet: View {
         switch code {
         case "copilot_not_configured": .runtimeNotConfigured
         case "copilot_not_verified": .runtimeNotVerified
+        case "copilot_policy_not_verified": .runtimePolicyNotVerified
         case "copilot_settings_mismatch": .runtimeSettingsMismatch
         case "copilot_definition_mismatch": .runtimeDefinitionMismatch
         case "verification_unavailable": .runtimeVerificationFailed
