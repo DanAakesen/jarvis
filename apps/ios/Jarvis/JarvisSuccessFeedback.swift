@@ -31,6 +31,7 @@ private struct JarvisSuccessFeedbackModifier: ViewModifier {
             }
             .animation(reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.filterAnimationDuration), value: confirmation?.id)
             .sensoryFeedback(.success, trigger: confirmation?.id) { _, new in new != nil }
+            .onDisappear { confirmation = nil }
             .task(id: confirmation?.id) {
                 guard let current = confirmation else { return }
                 UIAccessibility.post(notification: .announcement, argument: current.message)

@@ -150,7 +150,17 @@ final class JarvisTodayModel: ObservableObject {
             return
         }
         guard let client = dependencies.notes else { throw JarvisTodayFailure.unavailable }
-        _ = try await client.setTaskDone(task, done: true)
+        do {
+            _ = try await client.setTaskDone(task, done: true)
+        } catch {
+            // A conflict or uncertain write needs fresh versions before another attempt.
+            await JarvisAppCache.invalidateAll(.tasks)
+            await loadTasks(force: true)
+            throw error
+        }
+        if let data = taskData.value {
+            taskData.value = JarvisTodayTaskData(tasks: data.tasks.filter { $0.id != task.id }, today: data.today)
+        }
         await JarvisAppCache.invalidateAll(.tasks)
         await loadTasks(force: true)
     }
