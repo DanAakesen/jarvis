@@ -425,3 +425,15 @@ Source `b7e22951e1dea5faaee07ffc81068c75246aa7aa`, full tree
 `0c1105c286d17b01ef632eb7cc7b3e76b95136e9`. General CI 42241800531,
 CodeQL 42241800485 and the sole native qualification 42241800577 started on this
 source. No pass, visual acceptance or next TestFlight upload is claimed yet.
+
+## 15:21 UTC — Corrected chart conversion and next diagnostic
+
+Both Core and native build for b7e22951 failed before simulator boot because Swift
+could not type-check the chained body-trend conversion. The corrected 0f93aa09
+uses an explicit typed loop, separate guards and sorting, preserving behavior and
+assertions. Fresh runs: CI 42242238319, CodeQL 42242238354, native 42242238364.
+The failed source has no UI-test pass or visual acceptance.
+
+Diagnostic PR #1622 / c1999570 passed CI 42240555035 and CodeQL 42240554834 and
+merged as 806d49db at 15:21 UTC. Normal Deploy 42242252546 is queued; its fixed
+role/encoding matrix follows deployment. Production policy remains unchanged.

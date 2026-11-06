@@ -5,12 +5,14 @@ workflow and Health pull refresh. Compact task rows accepted. PR #1621 now combi
 per-element shimmer, generic-source suppression with full detail provenance,
 transparent protected headers/docks, shared clear-glass selectors, three medium
 widget layouts and real Body trend plots. Initial a559 CI/CodeQL passed; its native
-run was superseded/cancelled. Complete one fresh native qualification and inspect
+run was superseded/cancelled. b7e22951 then failed Swift type checking before boot;
+0f93aa09 simplifies the conversion and is qualifying. Complete fresh native qualification and inspect
 actual bilingual/large-text charts/widgets/surfaces and motion before upload.
 
 Normal #1620 deployment passed. Diagnostic 42239012647 proved plain/simple-user
 requests succeed and typed policy requests fail; role versus encoding remains
-unresolved. Fixed format controls in #1622 qualify next. Preserve full policy and
+unresolved. Fixed format controls qualified through #1622 / 806d49db; deployment and the next
+matrix are pending. Preserve full policy and
 owner approvals; do not claim Copilot inference from diagnostic completion.
 
 ## Managed policy request qualification — 6 November 2026
