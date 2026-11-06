@@ -7241,3 +7241,15 @@ simulator run only after confirming the app/test tree is identical. Deploy the
 backend and shared identity agent first, verify readiness/live acceptance, then
 use unchanged TestFlight signing/upload on main. The previous build 75 checkpoint
 is historical and does not verify these new changes.
+
+## Build76 follow-up qualification — 6 November2026
+
+Use one combined native run for PR1621's shimmer/chrome/task-source corrections,
+clear-glass selectors, body graphs and widget layouts. Preserve existing68tests
+and120/150second per-test limits; job cap75minutes accommodates retained captures.
+Initiala559native42236610739 compiled then was cancelled as superseded; it is not
+a pass. SwiftUI/WidgetKit compilation is unavailable in the Linux workspace.
+Review actual artifacts, test counts and frame captures: workflow success alone
+can hide the intentionally nonblocking UI-test result. Gallery widget evidence is
+actual SwiftUI content, not SpringBoard/tint acceptance. Defaultgh auth works;
+the expired private config/device code must not be reused.

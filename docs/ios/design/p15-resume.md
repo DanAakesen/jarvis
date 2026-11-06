@@ -5,7 +5,8 @@
 The owner is testing build 76 and reports that Voice/history, Home send/camera,
 task/reminder creation and Health pull refresh work. A new combined native
 correction is in progress for per-element shimmer, generic task-source labels,
-transparent headers and floating Notes/Health docks. These edits require one new
+transparent headers and floating Notes/Health docks, plus shared top-left widget
+headings/compact layouts and real Body trend charts. These edits require one new
 simulator qualification with actual screenshots/motion review before another upload;
 do not reuse build 76's app-tree evidence for the changed rendering.
 
@@ -23,9 +24,12 @@ then succeeded, but the actual response rejected the instructions override.
 PR #1619 qualified and merged the complete-policy developer-input correction;
 its live check reused the existing version with definition refresh false, then
 failed with HTTP 400 `invalid_request` without a field hint. A separate fixed-input
-diagnostic qualified through #1620 and merged as `2b58f2f2`; deploy the hosted agent,
-then explicitly run `diagnose_managed_chat=true` with all other comparison inputs
-false. Do not guess the remaining incompatibility or repeat provisioning. #1618 also
+diagnostic qualified through #1620 and merged as `2b58f2f2`. Normal deployment
+42232951549 passed. Diagnostic42239012647 completed: plain text and simple user
+messages passed with the configured Terra/High; typed developer messages and the
+full-policy request failed with400. Role and message encoding are still confounded.
+PR1622 adds fixed typed-user/simple-developer/typed-system/simple-system controls
+before any production conversion. Do not guess or repeat provisioning. #1618 also
 qualified and merged a post-build OIDC refresh after a registry authentication
 failure. Copilot inference remains unverified. TestFlight build **76 uploaded at
 12:14:34 UTC / 13:14:34 Copenhagen** from verified main ab464314 (42215302636).

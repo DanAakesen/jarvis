@@ -8758,3 +8758,16 @@ the task time, and suppresses the generic early deadline alert. Legacy tasks ret
 the one-hour lead. Delivery revalidates the open high-priority task and its timing;
 completion/rescheduling cancels obsolete reminders. Quiet hours, preference gates,
 delivery caps and provider-acceptance semantics remain. No SQL migration is needed.
+
+### Native Body trend presentation and widget qualification (6 November)
+
+`JarvisBodyTrend` inCore prepares the existing health metric query rows: finite
+dated values, latest unit, sparse chronological observations. Dashboard and metric
+detail share `JarvisBodyTrendPlot`; selection stays local to the view. Queries,
+cache, HealthKit ingest and backend contracts are unchanged. Mixed-unit exclusions,
+pagination and stale reads retain visible state.
+
+The app's DEBUG simulator gallery compiles the existing widget view/sample sources
+to inspect actual SwiftUI medium layouts at329×155pt with the same16ptinset.
+It disables sample actions and creates no new network/data path. WidgetKit previews
+and device checks remain the source for host margins/tinting.

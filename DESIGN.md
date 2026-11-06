@@ -3455,3 +3455,20 @@ scenes and removed content. Compact task metadata suppresses exact generic task
 headings/file names while retaining useful note/project context and full sources
 in details. This is the approved correction direction; fresh native rendering and
 motion evidence is required before accepting the implementation.
+
+### Build76 follow-up: body graphs, glass selectors and widgets
+
+The owner now requests full-width Body trend graphs instead of rows/small sparklines.
+Each metric uses its actual date spacing and independent labelled scale; sparse
+series show recorded points, including a single reading, and missing days are not
+zeroes. Point inspection updates the value/date; the metric heading opens records.
+The 30-day window remains independent of the hero period. Accessibility text scales
+the chart and reduces date-label density. Native evidence is pending.
+
+The later screenshot supersedes the quiet material selector rail: joined choices
+use one content-bearing clear-glass surface like Search, with a moving tonal
+selection and shared press response. Avoid overlapping optical layers that refract
+text. Every medium Workouts/Factory/Notes widget has the same top-left icon/title.
+Workouts balances a2×2metric grid beside its ring; Factory compacts counters and
+rows within existing16ptinsets. Native content captures do not establish WidgetKit
+Home Screen tint/host rendering.

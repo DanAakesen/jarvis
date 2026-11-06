@@ -15,6 +15,19 @@ meaningful source context only in compact rows; floating glass dock controls;
 transparent shared headers with structural protection against scrolling overlap.
 Keep full source details, safe-area clearance, accessibility and Chat appearance.
 
+Later screenshots add three medium-widget corrections: matching top-left icon/title,
+smaller Factory counters and rows, and a balanced Workouts metric grid. Body trend
+must show real graphs directly on the dashboard. The new plots preserve the actual
+30-day dates, separate units, single-point state, point inspection and records
+navigation. The visible Health selector rail also moves to the shared clear glass
+surface. Scoped implementation/verification records are in `p15-build76-surfaces.md`,
+`p15-widget-feedback.md` and `p15-body-trend-feedback.md`.
+
+Initial surface candidatea5599089 passed CI42236611082 and CodeQL42236610687.
+Native42236610739 compiled, then was cancelled as superseded by these additional
+owner requests. No native pass is claimed for that source. One combined candidate
+will retain the existing68cases/app launches with added native chart/widget captures.
+
 This changes the native source and needs one new combined simulator run, actual
 resting/scrolled/large-text captures and loading-motion inspection before another
 upload. Build 76's passing run does not qualify the new rendering changes. Copilot
@@ -388,3 +401,18 @@ The test now re-resolves and reveals the full completion control between the
 header and dock before tapping. The actual completion, disappearance, next-row
 availability and full-title detail assertions remain. These test-only corrections
 do not change app rendering; their fresh native run is required before release.
+
+## 15:03 UTC — Fixed-input Copilot diagnostic
+
+Normal Deploy42232951549 passed all selected application/readiness/acceptance jobs
+for merged1620/main2b58f2f2. Explicit diagnostic42239012647 completed without
+configuration mutation. Plain text and simple user messages returned the expected
+gpt-6.1-terra/high. Typed developer-message and complete managed-policy requests
+failed atresponse_start with HTTP400invalid_request/BadRequestError, no field hint.
+The diagnostic's success conclusion means the matrix finished, not that Copilot
+passed acceptance. Because role and encoding both differ, PR1622 adds fixed typed
+user, simple developer, typed system and simple system controls before changing
+production policy encoding. Full-policy acceptance remains required.
+
+Default workspace GitHub access was restored; no new login is pending. The earlier
+private CLI credential/device code expired and must not be reused.
