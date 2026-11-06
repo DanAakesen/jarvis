@@ -3399,8 +3399,8 @@ including task groups; counts and metadata remain secondary.
 Remove the persistent Apple Health sync button and repeated timestamps from
 Health. Home and Health use pull-to-refresh for a device read/upload followed by
 fresh content. Successful refresh is quiet; failed/partial refresh and stale data
-remain visible. These local changes await the owner's OK before CI or native
-visual/motion verification.
+remain visible. The owner subsequently approved build and release after UI checks;
+the combined native visual/motion verification is running.
 
 The later feedback adds voice transcripts to the existing Chat presentation, with
 no new conversation picker or bubble design. Home composer actions continue into

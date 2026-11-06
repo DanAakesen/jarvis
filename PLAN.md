@@ -2270,11 +2270,13 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   that syncs Apple Health before reloading data. Later owner reports also authorize
   shared tool discovery/validation guidance, reminder schema alignment, voice
   capture startup recovery, unified voice/chat history and reliable Home send/camera
-  handoffs. General CI at 4c9f62f4 passed, including 7,361 backend tests (one skipped)
-  and all 493 Core tests. Native run 42179796750 compiled and is collecting UI
-  evidence. A test-only CodeQL correction and the subsequently requested web/iOS
-  runtime tester are integrated locally; qualify that final combined tree before
-  merge. See `docs/ios/design/p15-device-feedback-2026-11-06.md`.
+  handoffs. Combined native run 42185446322 at 7dba227a compiled and is collecting
+  UI evidence. It includes the runtime tester and the Usage recovery correction
+  found by the prior 67-test run. Current CI passed 7,361 backend tests (one
+  skipped), 497 Core tests and the other component jobs; its sole Python workflow
+  budget guard failure is corrected locally. CodeQL and its security gate passed.
+  Retain native evidence before the final backend/test-only push, then qualify
+  that final tree before merge. See `docs/ios/design/p15-device-feedback-2026-11-06.md`.
 
 - **P15 board delivery (#1598–#1602 and Settings): Complete.** All owning PRs merged
   in the recorded order. Notes backend deployment passed readiness and live

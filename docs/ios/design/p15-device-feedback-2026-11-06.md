@@ -4,8 +4,8 @@
 
 The owner explicitly lifted the hold after his final loading-animation feedback:
 build everything and release after checks and UI inspection. The earlier hold
-while testing build 75 is historical. PR #1614 is ready for review and contains
-the accumulated corrections through 4c9f62f4. Opening the draft PR automatically
+while testing build 75 is historical. PR #1614 contains the accumulated corrections
+and the subsequently requested web/iOS runtime tester. Opening the draft PR automatically
 started CI just before the hold. CI 42169223014, Simulator 42169222922 and CodeQL
 42169222883 were cancelled. None verifies the held changes.
 
@@ -64,7 +64,7 @@ reply, mute/unmute, leaving/reopening Voice, and a later voice session appearing
 the same Chat timeline. Also check denied permission/capture recovery, delayed
 Chat loading and camera permission denial without losing the draft.
 
-## Local verification
+## Local verification before the release hold was lifted
 
 - Six backend suites: tool arguments, owner reminders, realtime, startup, relay
   and repository tools — 373 tests passed. Command: `node node_modules/vitest/vitest.mjs
@@ -135,3 +135,22 @@ result finalization and capture. Per-test limits and assertions are unchanged.
 The owner subsequently requested web/iOS runtime testing. That implementation
 and the recovery fix require a fresh combined native run; the test-only CodeQL
 correction itself did not require a second simulator.
+
+## Combined runtime candidate
+
+Candidate 7dba227a compiled in native run 42185446322; its complete UI suite and
+capture export are in progress. General CI 42185446432 passed backend (7,361 tests,
+one skipped), Core (497 tests), web, agent, database and contract jobs. Its Python
+job found the workflow guard still requiring the former literal 45-minute native
+budget. The correction asserts the parsed 65-minute job cap and explicitly retains
+both per-test time limits; final CI must qualify that change. CodeQL analysis
+42185446195 and its aggregate security gate passed.
+
+The stronger managed-runtime canary shares the real request builder and complete
+chat policy, and activation requires its success marker. Its local qualification
+passed 446 agent tests and 13 handoff tests. These backend/deployment-only changes
+leave the native app/test tree unchanged. Retain and inspect the running native
+evidence before pushing the final candidate, then cancel only redundant native
+runs after proving app/test-tree equality. A green general deployment receipt
+does not include the separately dispatched comparison job: that job and its
+`managed_chat_comparison_canary_ok` result must also pass before claiming activation.
