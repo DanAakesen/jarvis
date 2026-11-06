@@ -1366,6 +1366,9 @@ function registerVoiceRoute(
             savedUserMessages.set(sourceItemId, message);
           }
         }
+        // Activity transitions can arrive before storage finishes. Notify the
+        // shared timeline only once this transcript is available to history reads.
+        app.nowEventHub.publish({ type: 'refresh' });
       }).catch(() => {
         transcriptPersistenceFailed = true;
         request.log.warn('voice.transcript_persistence_failed');

@@ -2223,7 +2223,19 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
   implemented with inset groups, quiet completion controls, section counts,
   trailing dates and readable Markdown titles. New synthetic long-title and
   large-text captures plus completion/detail checks await the single PR native
-  run. Home shares only the title-display correction; Chat remains unchanged.
+  run. The board correction preserves Chat's appearance.
+  The owner lifted the CI/release hold after the final loading request. PR #1614
+  is being completed for one combined native run, backend/agent deployment and
+  TestFlight upload after successful checks and visual review.
+  The held batch now also includes shared glass selection/press feedback, equal
+  selector padding, primary-color section headings, and Home/Health pull-to-refresh
+  that syncs Apple Health before reloading data. Later owner reports also authorize
+  shared tool discovery/validation guidance, reminder schema alignment, voice
+  capture startup recovery, unified voice/chat history and reliable Home send/camera
+  handoffs. These are implemented locally. Backend: 373 tests across six suites,
+  build and scoped lint passed; the final shared-schema review added one regression
+  and passed 101 tests in the two affected suites plus build/lint. Native compile,
+  capture and device acceptance remain pending. Qualify the approved batch; see `docs/ios/design/p15-device-feedback-2026-11-06.md`.
 
 - **P15 board delivery (#1598–#1602 and Settings): Complete.** All owning PRs merged
   in the recorded order. Notes backend deployment passed readiness and live
@@ -3894,3 +3906,58 @@ Settings corrected source is accepted in combined native run 42129251285 (61/61 
 tests), artifact 13465195628. General EN/dark, DA/light and AX XXXL plus Models,
 Health and Account EN/dark were inspected; tabs and symbols are corrected. Final
 combined verification of the owner-selected polish is running separately.
+
+## Owner's everyday workflows — assessment (6 November 2026)
+
+The owner approved this assessment, extended self-repair to new features with
+mandatory approval, and subsequently authorized build/release after verification.
+The implementation status below supersedes the earlier CI hold. Existing project,
+research, Health and milestone facilities are reused; no duplicate job system.
+
+1. Unify personal/work task and reminder intent. A dated task and “remind me to”
+   should share one workflow, creating the task if missing and linking an optional
+   timed notification without duplicates. Keep deadline and alert time distinct
+   internally. Current owner_reminders still requires an existing exact open-task
+   match and narrowly parsed owner intent; the schema fix does not remove that
+   limitation. Exercise ordinary English/Danish paraphrases and Copenhagen DST.
+2. Make self-repair an explicit approved workflow. After correcting arguments,
+   investigate evidence of a code defect; distinguish permissions, missing data
+   and temporary service failures. Offer a concrete repair with a sanitized
+   reproduction and acceptance criteria. After the owner accepts, reuse an open
+   issue/task or create one for DanAakesen/jarvis and start its Codex Factory task.
+   Preserve the agreed CI/release policy, report milestone evidence and do not
+   equate a PR with a deployed fix. Existing repo/issue/Factory tools supply the
+   building blocks; an approval-bound proposal and regression coverage are the
+   missing integration, not a new autonomous deployment permission.
+3. Finish everyday actions with useful receipts in the shared conversation:
+   saved note title/scope, task date and reminder time, repository/project links,
+   review findings, issue/task/PR links and verified final status. Prefer concise
+   visible results with open/edit actions over repeated spoken summaries.
+4. Follow coding/research work through meaningful milestones: started, blocked,
+   decision needed, ready for review and delivered. Retain the chosen task and
+   update preference across voice/chat without duplicate jobs or noisy polling.
+5. Give Health answers from comparable periods, actual goals and source coverage;
+   distinguish missing/unsynced data from zero. Research should finish with a
+   source-backed answer and reusable report, not only a job-start acknowledgement.
+6. Qualify the owner's actual workflows end to end: Work/Personal note creation,
+   due tasks and reminders, managed GitHub project creation, code review and issue
+   execution, updates, research, Health questions and accepted self-repair. Include
+   voice/chat/Home entry, cold startup, paraphrases, corrected retries, duplicate
+   prevention and explicit refusal/recovery—not only isolated tool unit tests.
+
+
+### Active follow-up qualification
+
+- Implemented: own-code bug/feature proposal gates; shared identity/task awareness;
+  high-priority vault task defaults, replay protection and exact-time reminder marker;
+  general validation/schema repair; unified transcript and Home handoff corrections;
+  shared glass/padding/headings, Health pull refresh and animated loading.
+- Local: eight affected workflow suites passed 247 tests. Earlier tool/voice batch
+  passed 373 tests plus the 101-test shared-schema follow-up. Backend build and
+  scoped ESLint passed before the final approval-bypass guard; that guard is being
+  qualified with the complete changed backend set.
+- Next: finish local checks, push the single reviewable batch to #1614, qualify one
+  native tree and inspect task groups, periods/glass, refresh, loading motion and
+  Chat handoffs. Then merge, wait for backend/agent readiness and acceptance, and
+  upload the verified main app to TestFlight. Physical voice startup, HealthKit
+  permission and haptic feel still require the owner's device.

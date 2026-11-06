@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { ToolRefusal } from '../core/tool-registry.js';
 import { parseTodosWithContext } from '../proactive/todo-file.js';
 import {
@@ -12,6 +13,7 @@ export interface TaskCreateInput {
   due?: string;
   time?: string;
   priority?: 'high' | 'medium' | 'normal';
+  remindAtDue?: boolean;
 }
 
 export interface TaskCompleteInput {
@@ -27,6 +29,7 @@ export interface TaskEditInput extends Omit<TaskCompleteInput, 'done'> {
   due?: string | null;
   time?: string | null;
   priority?: 'high' | 'medium' | 'normal';
+  remindAtDue?: boolean;
 }
 
 const textSchema = { type: 'string', minLength: 1, maxLength: 400 };
@@ -47,8 +50,14 @@ export const taskCreateSchema = {
     due: dateSchema,
     time: { type: 'string', pattern: timePattern },
     priority: { type: 'string', enum: ['high', 'medium', 'normal'] },
+    remindAtDue: { type: 'boolean', description: 'Notify at the task time, not the automatic one-hour lead. Requires due, time and high priority.' },
   },
   required: ['text', 'scope'],
+  dependencies: { time: ['due'] },
+  allOf: [{
+    if: { properties: { remindAtDue: { const: true } }, required: ['remindAtDue'] },
+    then: { required: ['due', 'time'], properties: { priority: { const: 'high' } } },
+  }],
   additionalProperties: false,
 };
 
@@ -67,6 +76,7 @@ export const taskEditSchema = {
     due: { type: ['string', 'null'], format: 'date' },
     time: { type: ['string', 'null'], pattern: timePattern },
     priority: { type: 'string', enum: ['high', 'medium', 'normal'] },
+    remindAtDue: { type: 'boolean', description: 'Notify at the task time, not the automatic one-hour lead. Requires due, time and high priority.' },
   },
   required: ['path', 'line', 'text', 'version', 'newText'],
   additionalProperties: false,
@@ -105,9 +115,12 @@ function validIdentity(value: Record<string, unknown>): boolean {
 }
 
 export function validateTaskCreateInput(value: unknown): value is TaskCreateInput {
-  return record(value) && onlyKeys(value, ['text', 'scope', 'due', 'time', 'priority']) &&
+  return record(value) && onlyKeys(value, ['text', 'scope', 'due', 'time', 'priority', 'remindAtDue']) &&
     boundedText(value.text, 400) && (value.scope === 'personal' || value.scope === 'work') &&
+    (!('time' in value) || 'due' in value) &&
+    (value.remindAtDue !== true || ('due' in value && 'time' in value && (!('priority' in value) || value.priority === 'high'))) &&
     (!('due' in value) || validDate(value.due)) && (!('time' in value) || validTime(value.time)) &&
+    (!('remindAtDue' in value) || typeof value.remindAtDue === 'boolean') &&
     (!('priority' in value) || (typeof value.priority === 'string' && ['high', 'medium', 'normal'].includes(value.priority)));
 }
 
@@ -117,10 +130,11 @@ export function validateTaskCompleteInput(value: unknown): value is TaskComplete
 }
 
 export function validateTaskEditInput(value: unknown): value is TaskEditInput {
-  return record(value) && onlyKeys(value, ['path', 'line', 'text', 'version', 'newText', 'due', 'time', 'priority']) &&
+  return record(value) && onlyKeys(value, ['path', 'line', 'text', 'version', 'newText', 'due', 'time', 'priority', 'remindAtDue']) &&
     validIdentity(value) && boundedText(value.newText, 400) &&
     (!('due' in value) || value.due === null || validDate(value.due)) &&
     (!('time' in value) || value.time === null || validTime(value.time)) &&
+    (!('remindAtDue' in value) || typeof value.remindAtDue === 'boolean') &&
     (!('priority' in value) || (typeof value.priority === 'string' && ['high', 'medium', 'normal'].includes(value.priority)));
 }
 
@@ -151,7 +165,7 @@ export interface TaskWriterOptions {
   setTaskDone: (content: string, path: string, line: number, text: string, version: string, done: boolean) => DoneChange;
   setTaskText: (
     content: string, path: string, line: number, text: string, version: string,
-    edit: { newText: string; due?: string | null | undefined; time?: string | null | undefined; priority?: 'high' | 'medium' | 'normal' | undefined },
+    edit: { newText: string; due?: string | null | undefined; time?: string | null | undefined; priority?: 'high' | 'medium' | 'normal' | undefined; remindAtDue?: boolean | undefined },
   ) => TextChange;
   appendVaultTask: (existing: string | null, taskLine: string) => { content: string; line: number } | null;
   vaultTaskId: (path: string, line: number) => string;
@@ -172,6 +186,7 @@ export interface TaskWriteResult {
   priority: 'high' | 'medium' | 'normal';
   version: string;
   commit: string | null;
+  remindAtDue: boolean;
 }
 
 const changedMessage = 'This task changed in the vault. Refresh the list.';
@@ -185,7 +200,7 @@ export function createTaskWriter(options: TaskWriterOptions) {
       id: options.vaultTaskId(path, line), path, line,
       text: options.shouldRedact(task.text) ? '[redacted]' : task.text,
       done: task.done, dueDate: task.dueDate, dueTime: task.dueTime, dueAt: task.dueAt,
-      priority: task.priorityLevel, version: task.version, commit,
+      priority: task.priorityLevel, version: task.version, commit, remindAtDue: task.remindAtDue === true,
     };
   }
 
@@ -243,7 +258,7 @@ export function createTaskWriter(options: TaskWriterOptions) {
         const change = complete
           ? options.setTaskDone(current.content, path, input.line, input.text, input.version, input.done)
           : options.setTaskText(current.content, path, input.line, input.text, input.version, {
-            newText: newText!, due: input.due, time: input.time, priority: input.priority,
+            newText: newText!, due: input.due, time: input.time, priority: input.priority, remindAtDue: input.remindAtDue,
           });
         if (change.status === 'mismatch') throw new TaskWriteError(409, changedMessage);
         if (change.status === 'refused') throw new TaskWriteError(400, 'That wording cannot be saved on this task line.');
@@ -272,7 +287,7 @@ export function createTaskWriter(options: TaskWriterOptions) {
     edit(input: TaskEditInput, signal = AbortSignal.timeout(30_000)) {
       return update(input, signal, 'edit');
     },
-    async create(input: TaskCreateInput, signal = AbortSignal.timeout(30_000)): Promise<TaskWriteResult> {
+    async create(input: TaskCreateInput, signal = AbortSignal.timeout(30_000), sourceMessageId?: string): Promise<TaskWriteResult> {
       let folder = 'other';
       return run(() => folder, async () => {
         if (!validateTaskCreateInput(input)) throw new TaskWriteError(400, 'Invalid task input. Supply text, Personal or Work scope, and a valid optional date and time.');
@@ -282,14 +297,25 @@ export function createTaskWriter(options: TaskWriterOptions) {
         if (!options.inTaskScope(path)) throw new TaskWriteError(400, 'That note does not hold vault tasks.');
         if (input.time && !input.due) throw new TaskWriteError(400, 'Pick a day for the time.');
         const priority = input.priority === 'high' ? ' ⏫' : input.priority === 'medium' ? ' 🔼' : '';
-        const taskLine = `- [ ] ${text}${priority}${input.due ? ` 📅 ${input.due}${input.time ? ` ${input.time}` : ''}` : ''}`;
+        if (input.remindAtDue && (!input.due || !input.time || input.priority !== 'high')) {
+          throw new TaskWriteError(400, 'An exact-time reminder needs due (YYYY-MM-DD), time (HH:mm in Copenhagen) and priority high.');
+        }
+        const stableId = sourceMessageId ? createHash('sha256').update(JSON.stringify([sourceMessageId, input.scope, text, input.due, input.time, input.priority, input.remindAtDue === true])).digest('hex').slice(0, 24) : undefined;
+        const taskLine = `- [ ] ${text}${priority}${input.due ? ` 📅 ${input.due}${input.time ? ` ${input.time}` : ''}` : ''}${input.remindAtDue ? ' [reminder:: at_due_time]' : ''}${stableId ? ` 🆔 ${stableId}` : ''}`;
         for (let attempt = 0; attempt < 2; attempt += 1) {
           signal.throwIfAborted();
           const current = await options.client.read(path, signal);
+          if (stableId && current) {
+            const existing = current.content.split(/\r?\n/u).findIndex((line) => line.includes(`🆔 ${stableId}`));
+            if (existing >= 0) return persisted(current.content, path, existing + 1, null);
+          }
           const next = options.appendVaultTask(current?.content ?? null, taskLine);
           if (!next) throw new TaskWriteError(400, 'The Inbox note ends inside a code block, so nothing was added.');
           checkSize(next.content, true);
           const result = persisted(next.content, path, next.line, null);
+          if (input.due && (result.dueDate !== input.due || result.dueTime !== (input.time ?? null))) {
+            throw new TaskWriteError(400, 'That Copenhagen date/time does not exist. Choose a valid local time.');
+          }
           try {
             signal.throwIfAborted();
             const commit = await options.client.write(path, next.content,

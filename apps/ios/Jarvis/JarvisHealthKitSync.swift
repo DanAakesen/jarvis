@@ -201,95 +201,62 @@ final class JarvisHealthSyncModel: ObservableObject {
     @Published private(set) var state: JarvisHealthSyncState = .neverSynced
     @Published private(set) var isSyncing = false
     @Published private(set) var lastSync: Date?
-    private let client: JarvisHealthClient
     private let store: JarvisHealthSyncAnchorStore
+    private var inFlight: Task<JarvisHealthSyncState, Never>?
 
-    init(client: JarvisHealthClient, store: JarvisHealthSyncAnchorStore = JarvisHealthUserDefaultsAnchorStore()) {
-        self.client = client
+    init(store: JarvisHealthSyncAnchorStore = JarvisHealthUserDefaultsAnchorStore()) {
         self.store = store
         lastSync = store.lastSync
         if let lastSync { state = .complete(at: lastSync) }
     }
 
-    func sync() async {
-        guard !isSyncing else { return }
+    deinit { inFlight?.cancel() }
+
+    /// Home and Health share this operation. Another pull awaits the active read/upload.
+    func sync(client: JarvisHealthClient) async -> JarvisHealthSyncState {
+        if let inFlight { return await inFlight.value }
         isSyncing = true
-        defer { isSyncing = false }
-        do {
-            let batch = try await JarvisHealthKitReader().read(anchor: store.anchor)
-            state = await JarvisHealthSyncRunner(sender: client, store: store).sync(batch)
-        } catch {
-            state = .failed
+        let operation = Task { [store] in
+            do {
+                let batch = try await JarvisHealthKitReader().read(anchor: store.anchor)
+                try Task.checkCancellation()
+                return await JarvisHealthSyncRunner(sender: client, store: store).sync(batch)
+            } catch {
+                return JarvisHealthSyncState.failed
+            }
         }
+        inFlight = operation
+        let result = await operation.value
+        inFlight = nil
+        state = result
         lastSync = store.lastSync
+        isSyncing = false
+        return result
     }
 }
 
-/// Sync control for the Health page. HIG: Loading (one shared loader while it runs), Feedback (visible success and
-/// error, with a retry), Buttons (shared glass button), Accessibility (status is a labelled element).
-struct JarvisHealthSyncSection: View {
-    @StateObject private var model: JarvisHealthSyncModel
+/// Pull-to-refresh owns progress. Only a failed or partial refresh needs persistent page feedback.
+struct JarvisHealthSyncIssue: View {
+    let state: JarvisHealthSyncState?
     let language: JarvisAppLanguage
 
-    init(client: JarvisHealthClient, language: JarvisAppLanguage) {
-        _model = StateObject(wrappedValue: JarvisHealthSyncModel(client: client))
-        self.language = language
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.notesInlineSpacing) {
-            if model.isSyncing {
-                JarvisLoadingView(title: text(.syncing))
-                    .accessibilityIdentifier("health.sync.loading")
-            } else {
-                JarvisLabelledButton(
-                    title: text(.sync),
-                    systemImage: "arrow.triangle.2.circlepath",
-                    identifier: "health.sync"
-                ) { Task { await model.sync() } }
-                status
-            }
-            if let lastSync = model.lastSync {
-                Text("\(text(.lastSync)) · \(time(lastSync))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("health.sync.lastTime")
-            }
-        }
-        .animation(.default, value: model.isSyncing)
-    }
-
     @ViewBuilder
-    private var status: some View {
-        switch model.state {
-        case .neverSynced:
-            Text(text(.syncNever)).font(.caption).foregroundStyle(.secondary)
-                .accessibilityIdentifier("health.sync.status")
-        case let .complete(at):
-            Label(String(format: text(.syncComplete), time(at)), systemImage: "checkmark.circle.fill")
-                .font(.caption).foregroundStyle(.secondary)
-                .accessibilityIdentifier("health.sync.status")
-        case let .partial(at, missing):
-            Label(String(format: text(.syncPartial), time(at), missing.joined(separator: ", ")), systemImage: "exclamationmark.circle")
-                .font(.caption).foregroundStyle(.secondary)
-                .accessibilityIdentifier("health.sync.status")
-        case .failed:
-            Label(text(.syncFailed), systemImage: "exclamationmark.triangle.fill")
-                .font(.caption).foregroundStyle(.secondary)
-                .accessibilityIdentifier("health.sync.status")
-            JarvisLabelledButton(
-                title: text(.syncRetry),
-                systemImage: "arrow.clockwise",
-                identifier: "health.sync.retry"
-            ) { Task { await model.sync() } }
+    var body: some View {
+        if let key = issueKey {
+            Label(JarvisHealthLocalization.string(key, language: language), systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("health.sync.issue")
         }
     }
 
-    private func text(_ key: JarvisHealthLocalizationKey) -> String {
-        JarvisHealthLocalization.string(key, language: language)
-    }
-
-    private func time(_ date: Date) -> String {
-        date.formatted(.dateTime.locale(language.locale).day().month().hour().minute())
+    private var issueKey: JarvisHealthLocalizationKey? {
+        guard let state else { return nil }
+        switch state {
+        case .failed: return .syncPullFailed
+        case .partial: return .syncPullPartial
+        default: return nil
+        }
     }
 }

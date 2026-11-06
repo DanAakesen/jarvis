@@ -112,7 +112,7 @@ describe('shared task writer', () => {
       id: createHash('sha256').update(`${path}\0${parsed.line}`).digest('hex'),
       path, line: 3, text: 'Review release notes', done: false, commit,
       dueDate: parsed.dueDate, dueTime: parsed.dueTime, dueAt: parsed.dueAt,
-      priority: 'normal', version: parsed.version,
+      priority: 'normal', version: parsed.version, remindAtDue: false,
     });
     expect(state.client.read).toHaveBeenCalledTimes(1);
     expect(state.onWrite).toHaveBeenCalledTimes(1);
@@ -328,5 +328,38 @@ describe('shared task writer', () => {
     expect(Array.from(result.text).length).toBe(200);
     expect(state.file()!.content.split('\n')).toHaveLength(4);
     await expect(state.writer.create({ text: '📅', scope: 'personal' })).rejects.toMatchObject({ statusCode: 400 });
+  });
+});
+
+
+describe('owner reminder task workflow', () => {
+  it('persists an exact reminder once per owner request, edits its time, and completes the same task', async () => {
+    const state = fixture(null);
+    const input = { text: 'Call the dentist', scope: 'personal' as const,
+      due: '2026-11-06', time: '14:00', priority: 'high' as const, remindAtDue: true };
+    const first = await state.writer.create(input, undefined, '901');
+    const replay = await state.writer.create(input, undefined, '901');
+    expect(replay.id).toBe(first.id);
+    expect(replay.remindAtDue).toBe(true);
+    expect(state.client.write).toHaveBeenCalledTimes(1);
+    expect(first.dueAt).toBe('2026-11-06T13:00:00.000Z');
+    const edited = await state.writer.edit({ ...taskIdentity(state.input()), newText: first.text, time: '15:00' });
+    expect(edited).toMatchObject({ remindAtDue: true, dueTime: '15:00', text: first.text });
+    const done = await state.writer.complete(state.input());
+    expect(done).toMatchObject({ done: true, remindAtDue: true });
+    expect(parseTodosWithContext(state.file()!.content, path)).toHaveLength(1);
+  });
+
+  it('requires a real timed high-priority reminder and can remove its exact timing marker', async () => {
+    const state = fixture(null);
+    await expect(state.writer.create({ text: 'Call dentist', scope: 'personal', remindAtDue: true }))
+      .rejects.toMatchObject({ statusCode: 400 });
+    await expect(state.writer.create({ text: 'Call dentist', scope: 'personal', due: '2027-03-28', time: '02:30', priority: 'high', remindAtDue: true }))
+      .rejects.toMatchObject({ statusCode: 400 });
+    expect(state.client.write).not.toHaveBeenCalled();
+    await state.writer.create({ text: 'Call dentist', scope: 'personal', due: '2026-11-06', time: '14:00', priority: 'high', remindAtDue: true });
+    const cleared = await state.writer.edit({ ...taskIdentity(state.input()), newText: 'Call dentist', time: null, remindAtDue: false });
+    expect(cleared).toMatchObject({ dueTime: null, remindAtDue: false });
+    expect(state.file()!.content).not.toContain('[reminder::');
   });
 });

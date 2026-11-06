@@ -11,6 +11,7 @@ export interface ParsedTodo {
   dueHasTime: boolean;
   done: boolean;
   highPriority: boolean;
+  remindAtDue?: boolean;
 }
 
 export interface ParsedVaultTodo extends ParsedTodo {
@@ -102,6 +103,7 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
       : null;
     const text = sanitizeFactText(rawText
       .replace(dueMarkersPattern, ' ')
+      .replace(/\[reminder::\s*at_due_time\]/giu, ' ')
       .replace(/🕒\s*\d{2}:\d{2}/gu, ' ')
       .replace(/[⏳🛫➕✅❌]\s*\d{4}-\d{2}-\d{2}/gu, ' ')
       .replace(/🔁\s*[^📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔🕒[]*/gu, ' ')
@@ -116,6 +118,7 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
       dueHasTime: time !== undefined && dueAt !== null,
       done: task[1]!.toLowerCase() === 'x',
       highPriority,
+      ...(/\[reminder::\s*at_due_time\]/iu.test(rawText) ? { remindAtDue: true } : {}),
       priorityLevel: highPriority ? 'high' : mediumPriorityPattern.test(rawText) ? 'medium' : 'normal',
       dueDate: dueAt === null ? null : dueMarker?.[1] ?? null,
       dueTime: dueAt !== null && time !== undefined ? time : null,
@@ -130,8 +133,8 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
 }
 
 export function parseTodos(content: string): ParsedTodo[] {
-  return parseTodosWithContext(content, '').map(({ text, dueAt, dueHasTime, done, highPriority }) =>
-    ({ text, dueAt, dueHasTime, done, highPriority }));
+  return parseTodosWithContext(content, '').map(({ text, dueAt, dueHasTime, done, highPriority, remindAtDue }) =>
+    ({ text, dueAt, dueHasTime, done, highPriority, ...(remindAtDue ? { remindAtDue } : {}) }));
 }
 
 export { MAX_VAULT_FILE_BYTES };

@@ -7155,3 +7155,37 @@ check successful completion and full detail titles, and verify final-row clearan
 above search. Reuse the normal PR simulator job; do not dispatch a duplicate.
 Native evidence is pending for this follow-up. Build 75's evidence does not verify
 these new changes. Chat and release/project configuration remain untouched.
+
+Owner hold, 6 November: collect further device findings locally. PR #1614 is draft;
+its automatic CI/native runs were cancelled when the owner asked to wait. No new
+CI, push, merge or TestFlight dispatch until the owner explicitly says OK.
+
+The same held batch also changes all shared selector variants (including Home and
+Health periods), section-heading contrast, and Apple Health pull-to-refresh on
+Home/Health. See `ios/design/p15-device-feedback-2026-11-06.md`. No build verifies
+these local changes yet; the cancelled run is not a pass.
+
+Later 6 November feedback explicitly authorizes functional Chat/voice corrections:
+show voice in the one Chat timeline, carry Home send/camera actions through
+navigation, and investigate/fix first-launch voice. Chat styling and signing remain
+outside that correction. The held backend changes align reminder schemas and
+shared validation/discovery; deploy and check backend readiness before qualifying
+the dependent app after the hold is released. No migration is required.
+
+Local backend verification: six relevant Vitest suites passed 373 tests with
+`--no-cache`; build and scoped ESLint passed. A final shared-schema regression then
+passed the affected tool-arguments/realtime suites (101 tests) plus build/lint.
+The Linux workspace has no Swift compiler. Native tests were added to the existing
+Today/ChatComposer suites; do not start a separate simulator run. Detailed checks
+and remaining device acceptance are in the device-feedback record. This workspace
+uses a local ignored node_modules symlink to the pre-existing dependency install;
+it must not be committed.
+
+
+Hold lifted by the owner on 6 November after the loading-animation request:
+build, CI, merge and release are authorized once checks and UI review pass. Keep
+one combined native run for this changed tree; cancel a redundant post-merge
+simulator run only after confirming the app/test tree is identical. Deploy the
+backend and shared identity agent first, verify readiness/live acceptance, then
+use unchanged TestFlight signing/upload on main. The previous build 75 checkpoint
+is historical and does not verify these new changes.

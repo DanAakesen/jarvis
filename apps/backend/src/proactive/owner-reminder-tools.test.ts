@@ -1,4 +1,4 @@
-import type { FastifyRequest } from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 import { createMemoryOwnerReminderStore } from './owner-reminder-store.js';
 import { createOwnerReminderTool } from './owner-reminder-tools.js';
@@ -31,6 +31,57 @@ function fixture(content = dueDateOnly, channel: 'chat' | 'voice' | 'phone' = 'c
 const tomorrowAtTwo = '2026-10-24T12:00:00.000Z';
 
 describe('owner-requested reminder tool', () => {
+  it.each([
+    ['Remind me to Synthetic task tomorrow at 14:00', '2026-10-24T12:00:00Z'],
+    ['Remind me to Synthetic task tomorrow at 14:00 once', '2026-10-24T14:00:00+02:00'],
+    ['Mind mig om Synthetic task i morgen kl. 14:00 én gang', '2026-10-24T07:00:00-05:00'],
+  ])('creates a one-time reminder and deduplicates equivalent timestamp retries: %s', async (text, fireAt) => {
+    const f = fixture();
+    const input = { operation: 'create', task: 'Synthetic task', fireAt, cadence: 'once' };
+    const direct = f.request(text, '43');
+    expect(f.tool.validateInput?.(input)).toBe(true);
+    await expect(f.tool.execute(input, direct, f.signal)).resolves.toMatchObject({ created: true });
+    await expect(f.tool.execute({ ...input, fireAt: tomorrowAtTwo }, direct, f.signal))
+      .resolves.toMatchObject({ created: false });
+    expect(f.store.snapshot()).toHaveLength(1);
+    expect(f.store.snapshot()[0]).toMatchObject({ cadence: null, fireAt: new Date(tomorrowAtTwo) });
+  });
+
+  it('advertises the same per-operation shape and timestamp requirements that it validates', async () => {
+    const f = fixture();
+    const app = Fastify();
+    app.post('/', { schema: { body: f.tool.inputSchema } }, async (request) => request.body);
+    const create = { operation: 'create', task: 'Synthetic task', fireAt: tomorrowAtTwo };
+    const update = { ...create, operation: 'update', id: owner };
+    const cases: [unknown, boolean][] = [
+      [{ operation: 'read' }, true], [{ operation: 'read', task: 'Synthetic task' }, false],
+      [create, true], [{ ...create, cadence: 'once' }, true], [{ ...create, id: owner }, false],
+      [{ ...create, task: '   ' }, false], [{ ...create, cadence: 'once', untilTaskDone: true }, false],
+      [{ ...create, fireAt: '2026-10-24T14:00:00+02:00' }, true],
+      [{ ...create, fireAt: '2026-10-24T12:00:00Z' }, true],
+      [{ ...create, fireAt: '2026-02-30T14:00:00Z' }, false],
+      [{ ...create, fireAt: '2026-10-24T14:00:00' }, false],
+      [{ operation: 'create' }, false], [update, true], [{ ...create, operation: 'update' }, false],
+      [{ ...update, operation: 'snooze' }, true], [{ ...update, operation: 'snooze', cadence: 'daily' }, false],
+      [{ operation: 'cancel', id: owner, task: 'Synthetic task' }, true],
+      [{ operation: 'cancel', id: owner }, false], [{ ...update, operation: 'cancel' }, false],
+      [{ ...create, extra: 'private-value' }, false],
+    ];
+    try {
+      for (const [input, valid] of cases) {
+        expect(f.tool.validateInput?.(input), JSON.stringify(input)).toBe(valid);
+        // Strict guards run before Fastify can strip unknown fields in production.
+        if (!valid && Object.hasOwn(input as object, 'extra')) continue;
+        const response = await app.inject({ method: 'POST', url: '/', payload: input as object });
+        expect(response.statusCode, JSON.stringify(input)).toBe(valid ? 200 : 400);
+        if (valid) expect(response.json()).toEqual(input);
+      }
+    } finally {
+      await app.close();
+    }
+    expect(f.store.snapshot()).toEqual([]);
+  });
+
   it('creates an independent date-only task reminder from a direct English request and deduplicates tool retries', async () => {
     const f = fixture();
     const direct = f.request('Remind me to Synthetic task tomorrow at 14:00 every day until done', '42');

@@ -17,11 +17,8 @@ final class VoiceAudioEngine: @unchecked Sendable {
     private var playbackProgress: [String: PlaybackProgress] = [:]
     private var playbackFinished: (@Sendable (String, Bool) -> Void)?
     private var hasCaptureTap = false
-
-    init() {
-        engine.attach(player)
-        engine.connect(player, to: engine.mainMixerNode, format: targetFormat)
-    }
+    private var hasPlaybackGraph = false
+    private var ownsActiveSession = false
 
     static func requestMicrophonePermission() async -> Bool {
         await withCheckedContinuation { continuation in
@@ -30,7 +27,14 @@ final class VoiceAudioEngine: @unchecked Sendable {
     }
 
     func startCapture() throws -> AsyncStream<Data> {
+        // Activating playAndRecord can change the hardware route on first use.
+        // Build the graph only after that, rather than against the previous session.
         try configureSession()
+        if !hasPlaybackGraph {
+            engine.attach(player)
+            engine.connect(player, to: engine.mainMixerNode, format: targetFormat)
+            hasPlaybackGraph = true
+        }
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0,
@@ -137,13 +141,17 @@ final class VoiceAudioEngine: @unchecked Sendable {
         playbackFinished = nil
         converter = nil
         lock.unlock()
-        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        if ownsActiveSession {
+            try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+            ownsActiveSession = false
+        }
     }
 
     private func configureSession() throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
         try session.setActive(true)
+        ownsActiveSession = true
     }
 
     private func convert(_ input: AVAudioPCMBuffer) -> Data? {

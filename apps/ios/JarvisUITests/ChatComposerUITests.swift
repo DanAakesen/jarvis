@@ -5,6 +5,24 @@ final class ChatComposerUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    func testVoiceAndChatShareHistoryAndTheNextTypedTurnUsesTheChatSession() {
+        let app = launch(language: "en", extraArguments: ["--ui-test-voice-history"])
+        let spokenReply = app.descendants(matching: .any)["chat-markdown-block-421-0"]
+        XCTAssertTrue(spokenReply.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any).matching(
+            NSPredicate(format: "label == %@", "You: Synthetic spoken question")
+        ).firstMatch.exists)
+        let input = app.descendants(matching: .any)["chat.input"]
+        input.tap()
+        input.typeText("The fixture turn")
+        app.buttons["chat.send"].tap()
+        // The fixture accepts turns only on chat session 12, never voice session 13.
+        let typedReply = app.descendants(matching: .any)["chat-markdown-block-431-0"]
+        XCTAssertTrue(typedReply.waitForExistence(timeout: 10))
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "chat-markdown-block-431-0").count, 1)
+        app.terminate()
+    }
+
     func testSentMessageBubbleIsVisibleAboveComposer() {
         for language in ["en", "da"] {
             let app = launch(language: language)

@@ -62,6 +62,7 @@ export interface SourceFact {
   endsAt?: string | null;
   allDay?: boolean;
   dueHasTime?: boolean;
+  remindAtDue?: boolean;
   highPriority?: boolean;
 }
 

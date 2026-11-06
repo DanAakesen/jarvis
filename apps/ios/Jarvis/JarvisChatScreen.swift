@@ -122,8 +122,7 @@ struct JarvisChatScreen: View {
     @FocusState private var composerFocused: Bool
     private let initialActivitySheet: ActivitySheetKind?
     let onNavigate: (JarvisDestination) -> Void
-    private let handoff: JarvisChatHandoff?
-    private let onHandoffConsumed: () -> Void
+    @Binding private var handoff: JarvisChatHandoff?
     @EnvironmentObject private var navigation: JarvisNavigationModel
     private var onBackToToday: (() -> Void)? {
         navigation.cameFromToday ? { navigation.navigate(to: .today) } : nil
@@ -135,8 +134,7 @@ struct JarvisChatScreen: View {
         fixtureMode: Bool = false,
         initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
-        handoff: JarvisChatHandoff? = nil,
-        onHandoffConsumed: @escaping () -> Void = {},
+        handoff: Binding<JarvisChatHandoff?> = .constant(nil),
         onNavigate: @escaping (JarvisDestination) -> Void
     ) {
         let chatModel = JarvisChatModel(
@@ -144,12 +142,10 @@ struct JarvisChatScreen: View {
             fixtureMode: fixtureMode,
             startupError: startupError
         )
-        if let handoff { chatModel.draft = handoff.text }
         _model = StateObject(wrappedValue: chatModel)
         self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
         self.onNavigate = onNavigate
-        self.handoff = handoff
-        self.onHandoffConsumed = onHandoffConsumed
+        _handoff = handoff
     }
 
     private var renderedRows: [RenderedChatRow] {
@@ -228,22 +224,20 @@ struct JarvisChatScreen: View {
             }
             .sharedBackgroundVisibility(.hidden)
         }
-        .task(id: handoff?.id) {
-            guard let handoff else { return }
-            if !handoff.text.isEmpty { model.draft = handoff.text }
-            if let action = handoff.action {
+        .task(id: handoff?.action != nil || model.isReadyForHandoff ? handoff?.id : nil) {
+            // Observe the root-owned action directly, even when navigation renders
+            // Chat before its parent refreshes. Readiness replaces the old 10s poll.
+            guard !Task.isCancelled, let pending = handoff,
+                  pending.action != nil || model.isReadyForHandoff else { return }
+            model.draft = pending.text
+            if let action = pending.action {
                 composerFocused = true
                 performPlusAction(action)
             } else {
-                // A message typed on Home is sent here, once the history is in, so it is not replaced by it.
-                var waited = 0
-                while model.isLoading, !Task.isCancelled, waited < 200 {
-                    try? await Task.sleep(for: .milliseconds(50))
-                    waited += 1
-                }
-                if !Task.isCancelled { sendMessage() }
+                guard model.canSend else { return }
+                sendMessage()
             }
-            onHandoffConsumed()
+            if handoff?.id == pending.id { handoff = nil }
         }
         .task {
             await model.load()

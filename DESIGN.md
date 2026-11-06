@@ -3362,7 +3362,7 @@ The owner's device screenshot showed that Notes → Tasks still used full-width
 rows and glass action buttons instead of the approved board. Task groups now use
 inset rounded surfaces, adjacent heading counts and a compact unfilled completion
 control. A single-line title sits above scope/source and non-normal priority; due
-date/time sits on the right. Overdue headings/dates and labelled priority controls
+date/time sits on the right. Overdue dates and labelled priority controls
 retain semantic colors. Accessibility text stacks metadata and due dates and
 allows the full title to wrap. Details retain the full title at every size.
 
@@ -3372,3 +3372,36 @@ backing so scrolling text cannot compete with its controls. Native compilation
 and actual bilingual/large-type screenshots are pending; no new visual acceptance
 is claimed yet. Reference: the owner's 6 November board screenshot and unchanged
 `docs/ios/design/board.html` Tasks view.
+
+## 6 November 2026 — Shared selectors and section contrast (local batch)
+
+The owner requests a native glass selected lens and a soft press/rebound across
+all equivalent choice controls. Segmented bars, period selectors and scrolling
+tabs now share one selection row and press style; workspace filter chips opt into
+the same response. Labels use the existing shared horizontal and vertical control
+padding. Period rows scroll when needed instead of squeezing labels against their
+neighbors or edges. Reduce Motion removes custom movement, Reduce Transparency
+uses a solid lens, and selected traits/touch targets remain intact. Section
+headings use semantic primary text (white in dark mode, dark in light mode),
+including task groups; counts and metadata remain secondary.
+
+Remove the persistent Apple Health sync button and repeated timestamps from
+Health. Home and Health use pull-to-refresh for a device read/upload followed by
+fresh content. Successful refresh is quiet; failed/partial refresh and stale data
+remain visible. These local changes await the owner's OK before CI or native
+visual/motion verification.
+
+The later feedback adds voice transcripts to the existing Chat presentation, with
+no new conversation picker or bubble design. Home composer actions continue into
+Chat as pending actions, not navigation alone. Voice's existing connecting/retry
+surfaces cover microphone startup; device audio acceptance remains pending.
+
+### 6 November loading refinement
+
+Initial page skeletons now share a restrained travelling highlight rather than
+static placeholders. Inline pending actions keep three softly pulsing dots. Motion
+runs only while visible and the scene is active; Reduce Motion keeps a static,
+labelled loading state. Skeletons remain noninteractive and expose one localized
+loading label instead of decorative shapes. Content is never delayed for an exit
+animation. The existing native capture run retains two shimmer frames and a brief
+Factory loading video; visual acceptance is pending that run.

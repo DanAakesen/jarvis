@@ -5,6 +5,7 @@ import type { AwayModeState } from './away-mode.js';
 
 interface IdentityContract {
   version: number;
+  revision?: number;
   precedence: string[];
   fixedKernel: Record<'da' | 'en', string>;
   productIdentity: Record<'da' | 'en', string>;
@@ -32,6 +33,7 @@ export function identityCompositionRevision(
 ): string {
   return createHash('sha256').update(JSON.stringify({
     contractVersion: identityContract.version,
+    contractRevision: identityContract.revision ?? 1,
     identity,
     personality,
     mode: presence.mode,

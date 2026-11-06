@@ -10,6 +10,7 @@ struct ContentView: View {
     @StateObject private var workspaceRuntime: WorkspaceRuntime
     @StateObject private var voiceModel: VoiceScreenModel
     @StateObject private var todayModel: JarvisTodayModel
+    @StateObject private var healthSyncModel = JarvisHealthSyncModel()
     @Namespace private var carryOver
     @State private var chatHandoff: JarvisChatHandoff?
     private let chatClient: JarvisClient?
@@ -189,8 +190,7 @@ struct ContentView: View {
                                         || fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications")
                                         ? .activity : nil),
                                 startupError: startupError,
-                                handoff: chatHandoff,
-                                onHandoffConsumed: { chatHandoff = nil },
+                                handoff: $chatHandoff,
                                 onNavigate: { navigate(to: $0) }
                             )
                             .id(sessionEpoch)
@@ -297,7 +297,8 @@ struct ContentView: View {
                     chatHandoff = handoff
                     navigate(to: .chat)
                 },
-                onVoice: { navigate(to: .voice) }
+                onVoice: { navigate(to: .voice) },
+                onSyncAppleHealth: refreshAppleHealth
             )
         } else if destination == .chat {
             JarvisChatScreen(
@@ -321,7 +322,8 @@ struct ContentView: View {
                 now: fixtureMode ? JarvisHealthPreview.now : Date(),
                 workoutInitiallySelected: healthScreenshotState != nil,
                 presentNewLiftAfterLoading: healthScreenshotState == "newlift",
-                gymModel: todayModel
+                gymModel: todayModel,
+                onSyncAppleHealth: refreshAppleHealth
             )
         } else if destination == .usage {
             JarvisUsageArea(
@@ -489,6 +491,20 @@ struct ContentView: View {
         let draft = JarvisProactiveLogic.taskDraft(for: item)
         _ = try await notesClient.createTask(text: draft.text, scope: .personal, due: draft.due, time: draft.time)
         await JarvisAppCache.invalidateAll(.tasks)
+    }
+
+    @MainActor
+    private func refreshAppleHealth() async -> JarvisHealthSyncState? {
+        // Synthetic screenshots/tests never read or upload the device's HealthKit store.
+        guard !fixtureMode else { return nil }
+        if healthClient == nil { healthClient = Self.makeHealthClient(fixtureMode: false) }
+        guard let healthClient else { return .failed }
+        let state = await healthSyncModel.sync(client: healthClient)
+        switch state {
+        case .complete, .partial: await JarvisAppCache.invalidateAll(.health)
+        default: break
+        }
+        return state
     }
 
     private static func makeTodayDependencies(

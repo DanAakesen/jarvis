@@ -11129,3 +11129,57 @@ source. Expand the synthetic fixture because a single short task failed to expos
 this discrepancy. Native screenshot acceptance remains pending. Apple's Lists and
 tables guidance supports succinct rows with full detail disclosure; the exact
 composition and geometry come from the approved board.
+
+## 6 November 2026 — Collect owner feedback before qualification
+
+The owner is testing build 75 and explicitly paused CI until saying OK. PR #1614
+was opened immediately before that instruction; all triggered CI/native/CodeQL
+runs were cancelled and the PR was converted to draft. Do not push this local
+batch, restart checks, merge or upload until the owner releases the hold.
+
+Apply shared selector geometry and press feedback at the component layer, including
+periods and scrolling alternatives. Use primary foreground for section headings.
+Replace the manual Health sync block with pull-to-refresh on Health and Home,
+awaiting Apple Health ingestion before fresh reads. Coalesce overlapping sync
+requests and retain honest failure/partial feedback. No new native acceptance is
+claimed. Apple's glassEffectID guidance was read for matching glass shapes within
+a GlassEffectContainer; exact response/padding remains an app design choice.
+
+## 6 November 2026 — Tool diagnostics and one native conversation
+
+The owner expanded the held batch to cover reminder failures, general backend
+schema/error visibility, first-launch voice, missing voice transcripts and Home
+send/camera handoffs. This authorizes functional changes to Chat; it does not
+change the agreed Chat appearance or release hold.
+
+Expose exact tool schemas through named capability lookup and voice discovery,
+retaining provider-specific flattening only where function registration requires
+it. Route strict voice validation through the same bounded explanation path as
+HTTP, and derive generic constraints from registered schemas. Accept one-shot
+reminders and normalize equivalent zoned times without relaxing owner intent,
+quiet hours or duplicate-write protection.
+
+Keep one visible chat/voice history, with transport IDs internal. Notify history
+readers after transcript persistence, bind pending Home actions directly, and wait
+for initialization before automatic send. Activate the audio session before
+building its graph and make capture startup/readiness failures recoverable.
+373 backend tests passed; the final shared-schema follow-up passed 101 affected
+tests, build and lint. Native compile, actual cold-start reproduction and device
+verification remain pending under the owner's hold.
+
+
+## 6 November 2026 — Approved workflows and resumed release
+
+The owner accepted the everyday-workflow assessment and clarified that self-change
+covers features as well as bugs and always needs his approval. Implemented shared
+identity revision 2 and server-side own-repository proposal gates, retaining the existing
+Factory execution and confirmation machinery. Ordinary task/reminder requests use
+high-priority vault tasks so the existing Azure job discovers them. An explicit
+at-time marker avoids silently sending the legacy one-hour warning. Independent
+and recurring schedules retain owner_reminders, without changing task deadlines.
+
+The owner then requested animated loading throughout the app and explicitly
+approved building and releasing after checks and UI inspection. This supersedes
+the earlier no-CI hold. Shared shimmer and active-scene dot animation are included.
+Native qualification, backend/agent readiness and TestFlight upload are still
+pending; do not interpret authorization as evidence that those steps passed.

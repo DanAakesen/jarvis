@@ -326,6 +326,15 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).count, 0)
             XCTAssertTrue(app.buttons["navigation.openSidebar"].isHittable, "Navigation stays available")
             attach(app.screenshot(), named: "P15-92-\(destination)-loading")
+            if destination == "usage" {
+                let first = loading.screenshot()
+                Thread.sleep(forTimeInterval: 0.6)
+                let second = loading.screenshot()
+                attach(first, named: "Loading shimmer frame 1")
+                attach(second, named: "Loading shimmer frame 2")
+                XCTAssertNotEqual(first.pngRepresentation, second.pngRepresentation,
+                                  "Pending data must have visible loading motion")
+            }
         }
     }
 

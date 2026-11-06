@@ -567,7 +567,7 @@ struct JarvisNotesArea: View {
                                 }
                             }
                         } header: {
-                            Text(copy.notes)
+                            JarvisSectionHeadline(copy.notes)
                         }
                     }
                     if !visibleSearchTasks.isEmpty {
@@ -656,7 +656,7 @@ struct JarvisNotesArea: View {
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
                         .listRowInsets(EdgeInsets())
-                    taskSection(groups.overdue, title: copy.overdue, today: list.today, overdue: true)
+                    taskSection(groups.overdue, title: copy.overdue, today: list.today)
                     taskSection(groups.today, title: copy.today, today: list.today)
                     taskSection(groups.upcoming, title: copy.upcoming, today: list.today)
                     taskSection(groups.noDate, title: copy.noDate, today: list.today)
@@ -673,14 +673,14 @@ struct JarvisNotesArea: View {
     }
 
     @ViewBuilder
-    private func taskSection(_ tasks: [VaultTask], title: String, today: String, overdue: Bool = false) -> some View {
+    private func taskSection(_ tasks: [VaultTask], title: String, today: String) -> some View {
         if !tasks.isEmpty {
             Section {
                 ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
                     taskRow(task, today: today, isFirst: index == 0, isLast: index == tasks.count - 1)
                 }
             } header: {
-                JarvisSectionHeadline(title, count: tasks.count, tint: overdue ? .red : .secondary)
+                JarvisSectionHeadline(title, count: tasks.count)
                     .textCase(nil)
                     .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
             }

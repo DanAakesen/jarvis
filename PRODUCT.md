@@ -2383,3 +2383,49 @@ counts, concise metadata and separately aligned due dates. Long titles remain
 fully available in details and accessibility text; inline Markdown is presented
 as formatted text, including on Home, while persisted task source and completion
 identity stay unchanged. Completion, swipe completion and search remain available.
+
+### Owner device-feedback batch (6 November 2026)
+
+Equivalent segmented, period and scrolling selectors share padding and native
+glass selection/press feedback across non-Chat pages and sheets. Section headings
+use strong semantic foreground contrast. Pull-to-refresh on Home and Health must
+read/upload permitted Apple Health data before fetching updated page data. Remove
+the persistent Health sync button and duplicate last-sync copy; keep errors,
+partial refresh and stale-data warnings visible. No data permissions, stored task
+source or HealthKit anchor/completeness rules change.
+
+Voice and typed messages belong in one visible Chat timeline, including both owner
+transcripts and Jarvis replies. Returning to Chat and live transcript persistence
+must refresh that timeline; backend transport session IDs must not become separate
+user-facing conversations. A Home send must submit the pending text once Chat is
+ready, and Home's Camera action must open capture after navigation.
+
+Tool discovery must expose the registered backend schema on request, including
+operation-specific fields. Validation refusals should identify the relevant
+constraints or tool-specific correction so Jarvis can retry correctly. Preserve
+authorization, semantic refusals, private error handling and write idempotency.
+Owner reminders accept explicit once cadence and equivalent zoned ISO timestamps.
+Voice must not claim microphone readiness before audio frames arrive or silently
+remain listening when capture/send startup fails.
+
+### 6 November follow-up: owner workflows and loading
+
+The owner approved implementing the workflow assessment, then explicitly lifted
+the build/CI/release hold after adding loading feedback. Jarvis's shared English
+and Danish identity includes improving its own implementation for bugs and new
+features, with a concrete proposal and the owner's later approval before issue
+creation or execution. Personal/Work tasks remain central to conversation context.
+Natural task/reminder intent creates or updates a high-priority vault task by
+default, making it discoverable by the existing Azure job. Explicit reminder time
+must not silently become the automatic one-hour warning. Existing independent or
+recurring reminder schedules retain their separate tool and deadline semantics.
+Successful actions give concise title/scope/time receipts; coding reviews reference
+files and accepted findings, and background work reports meaningful milestones.
+Existing managed project creation, saved research reports and source-aware Health
+queries remain the workflow foundations, with no new parallel job system.
+
+Pending page data uses a shared animated skeleton, including Software Factory;
+inline loading uses the shared dots. Both stop when inactive/offscreen and respect
+Reduce Motion. Navigation stays available and real content replaces loading as
+soon as it arrives. Release follows successful checks and native visual review,
+with backend/agent readiness before the dependent TestFlight upload.

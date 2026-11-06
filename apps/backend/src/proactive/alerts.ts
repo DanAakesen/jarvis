@@ -95,7 +95,10 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
       }
       const candidates: AlertCandidate[] = context.findings.filter((finding) => {
         const evidenceRefs = finding.evidenceRefs ?? [];
-        const sources = context.facts.filter(({ ref }) => evidenceRefs.includes(ref)).map(({ source }) => source);
+        const evidence = context.facts.filter(({ ref }) => evidenceRefs.includes(ref));
+        // Explicit reminder timing takes precedence over the automatic early deadline alert.
+        if (finding.category === 'deadline' && evidence.some((fact) => fact.remindAtDue)) return false;
+        const sources = evidence.map(({ source }) => source);
         return findingAllowed(settings, finding.category, finding.suggestionScope, finding.relatedCategories) &&
           proactiveEvidenceSourcesAllowed(settings, sources);
       }).flatMap((finding) => {

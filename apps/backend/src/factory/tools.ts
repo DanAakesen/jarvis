@@ -69,6 +69,7 @@ interface PendingIssueCreation {
   repository: string;
   explicitRepository?: boolean;
   issueNumber?: number;
+  startExisting?: boolean;
   publicAttachment?: IssueAttachment;
   project?: string;
   title: string;
@@ -410,9 +411,11 @@ async function resolveCreateIssueProject(
   }
 }
 
-function issueApprovalSummary(action: Pick<PendingIssueCreation, 'repository' | 'title' | 'issueNumber' | 'publicAttachment'>): string {
-  const target = action.issueNumber === undefined
-    ? `Create a GitHub issue in ${action.repository} titled "${action.title}".`
+function issueApprovalSummary(action: Pick<PendingIssueCreation, 'repository' | 'title' | 'issueNumber' | 'startExisting' | 'publicAttachment'>): string {
+  const target = action.startExisting
+    ? `Start Codex Factory work on issue #${action.issueNumber} in ${action.repository}: "${action.title}".`
+    : action.issueNumber === undefined
+    ? `Create a GitHub issue in ${action.repository} titled "${action.title}" and start its selected executor.`
     : `Add a comment to issue #${action.issueNumber} in ${action.repository}.`;
   return action.publicAttachment ? `${target} It also publishes the image ${action.publicAttachment.name} publicly.` : target;
 }
@@ -488,7 +491,7 @@ async function confirmProjectArchive(
 
 async function stageIssueCreation(
   server: FastifyInstance,
-  input: { project?: string; repository?: string; title: string; body: string; executor?: IssueExecutor; issueNumber?: number } & IssueAttachmentInput,
+  input: { project?: string; repository?: string; title: string; body: string; executor?: IssueExecutor; issueNumber?: number; startExisting?: boolean } & IssueAttachmentInput,
   source: ConversationMessage,
   signal: AbortSignal,
   resolvedProject?: Project,
@@ -523,7 +526,7 @@ async function stageIssueCreation(
   const attachments = await issueAttachments(server, input);
   const body = withAttachmentDescriptions(input.body, attachments);
   validateIssueDraft(input.title, body);
-  if (input.issueNumber !== undefined && body.length > (input.publish === 'public' ? 3_300 : 4_000)) {
+  if (input.issueNumber !== undefined && !input.startExisting && body.length > (input.publish === 'public' ? 3_300 : 4_000)) {
     throw new ToolRefusal('The comment and attachment descriptions exceed the 4,000-character limit.');
   }
   const publicAttachment = input.publish === 'public' ? attachments[0] : undefined;
@@ -546,6 +549,7 @@ async function stageIssueCreation(
     repository: preview.repository,
     ...(input.repository !== undefined ? { explicitRepository: true } : {}),
     ...(input.issueNumber === undefined ? {} : { issueNumber: input.issueNumber }),
+    ...(input.startExisting ? { startExisting: true } : {}),
     ...(publicAttachment ? { publicAttachment } : {}),
     ...(selectedProject ? { project: selectedProject.id } : {}),
     title: input.title.trim(),
@@ -558,6 +562,7 @@ async function stageIssueCreation(
         repository: preview.repository,
         title: input.title.trim(),
         ...(input.issueNumber === undefined ? {} : { issueNumber: input.issueNumber }),
+        ...(input.startExisting ? { startExisting: true } : {}),
         ...(publicAttachment ? { publicAttachment } : {}),
       }),
       family: 'factory',
@@ -645,6 +650,13 @@ async function confirmIssueCreation(
   try {
     return await action.confirmation.execute(async () => {
       signal.throwIfAborted();
+      if (action.startExisting && action.issueNumber !== undefined) {
+        const issue = await request.server.githubIssueClient?.readIssue(action.repository, action.issueNumber);
+        if (!issue || issue.title !== action.title || (issue.body ?? '') !== action.body) {
+          throw new ToolRefusal('The issue changed after the proposal. Review it again before starting.');
+        }
+        return executeStartIssue(request, action.issueNumber, action.project);
+      }
       if (action.issueNumber !== undefined) {
         const issue = await request.server.githubIssueClient?.readIssue(action.repository, action.issueNumber);
         if (!issue || issue.isPullRequest) throw new ToolRefusal('That GitHub issue was not found; nothing was written.');
@@ -768,6 +780,31 @@ async function controlTask(
   return result.task;
 }
 
+async function executeStartIssue(request: FastifyRequest, issue: number, project?: string) {
+  const result = await startIssueTask({
+    projects: request.server.projectStore,
+    tasks: request.server.taskStore,
+    github: request.server.githubIssueClient,
+    ...(project ? { project } : {}),
+    issue,
+  }).catch((error: unknown) => {
+    if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+    throw new ToolFailure('GitHub issue task service is unavailable.');
+  });
+  if (result.kind === 'project-not-found') throw new ToolRefusal('That project is not in the active project registry. No task was created; ask Dan which active project he means.');
+  if (result.kind === 'issue-not-found') throw new ToolRefusal('That GitHub issue was not found.');
+  if (result.kind === 'issue-closed') throw new ToolRefusal('Only open GitHub issues can be started.');
+  if (result.kind === 'not-an-issue') throw new ToolRefusal('A pull request cannot be started as an issue.');
+  if (result.kind === 'prompt-too-large') throw new ToolRefusal('The issue and repository instructions exceed the task prompt limit.');
+  return {
+    task: { id: result.task.id, title: result.task.title, state: result.task.state, agent: result.task.agent },
+    issue: { number: issue, url: `https://github.com/${result.repository}/issues/${issue}` },
+    confirmation: result.kind === 'created'
+      ? `Started Codex task ${result.task.id} from issue #${issue}.`
+      : `Issue #${issue} already has active Factory task ${result.task.id}.`,
+  };
+}
+
 export const factoryTools: readonly JarvisTool[] = [
   {
     name: 'get_work_status',
@@ -779,7 +816,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'create_issue',
-    description: 'Create a P11 GitHub issue directly for new project-code work. Secret-free attachment descriptions and public image publication need later simple approval.',
+    description: 'Create a P11 issue for project-code work. Changes to my own implementation (bugs or features) always stage a reviewable proposal; only confirm_create_issue after Dan’s later approval creates the issue and starts Factory. Attachments also require approval.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -802,6 +839,10 @@ export const factoryTools: readonly JarvisTool[] = [
         }
         const selectedProject = await resolveCreateIssueProject(request, draft, source);
         validateIssueDraft(draft.title, draft.body);
+        const targetRepository = selectedProject?.repo ?? JARVIS_REPOSITORY;
+        if (targetRepository.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
+          return await stageIssueCreation(request.server, draft, source, signal, selectedProject);
+        }
         if (!draft.attachmentIds?.length && draft.publish !== 'public') {
           const repository = selectedProject?.repo ?? JARVIS_REPOSITORY;
           const issuer = request.server.githubAppTokenIssuer;
@@ -915,7 +956,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'confirm_create_issue',
-    description: 'Confirm a staged issue or comment using its returned code. The server reads Dan’s own later message to decide whether it approves or declines; nothing you pass can approve it. If it is unclear the server refuses; then ask him one short natural question.',
+    description: 'Confirm a staged issue, own-code execution proposal or comment using its returned code. The server reads Dan’s own later message to decide whether it approves or declines; nothing you pass can approve it. If it is unclear the server refuses; then ask him one short natural question.',
     inputSchema: {
       type: 'object',
       properties: { confirmationCode: { type: 'string', pattern: '^[0-9]{8}$' } },
@@ -929,7 +970,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'start_issue',
-    description: 'Start an open GitHub issue as a Codex Factory task in an active project.',
+    description: 'Start an open GitHub issue as a Codex Factory task. My own repository always stages a proposal for Dan’s later approval through confirm_create_issue; repeated starts reuse the active task.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -939,7 +980,7 @@ export const factoryTools: readonly JarvisTool[] = [
       required: ['issue'],
       additionalProperties: false,
     },
-    execute: async (input, request) => {
+    execute: async (input, request, signal) => {
       const message = await currentDanMessage(request);
       const { project, issue } = input as StartIssueToolInput;
       if (project === undefined && requiresProjectSelector(message.text)) {
@@ -948,28 +989,21 @@ export const factoryTools: readonly JarvisTool[] = [
       if (project !== undefined) {
         await resolveProjectForMessage(project, message.text, request.server.projectStore ?? null);
       }
-      const result = await startIssueTask({
-        projects: request.server.projectStore,
-        tasks: request.server.taskStore,
-        github: request.server.githubIssueClient,
-        ...(project ? { project } : {}),
-        issue,
-      }).catch((error: unknown) => {
-        if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
-        throw new ToolFailure('GitHub issue task service is unavailable.');
-      });
-      if (result.kind === 'project-not-found') throw new ToolRefusal('That project is not in the active project registry. No task was created; ask Dan which active project he means.');
-      if (result.kind === 'issue-not-found') throw new ToolRefusal('That GitHub issue was not found.');
-      if (result.kind === 'issue-closed') throw new ToolRefusal('Only open GitHub issues can be started.');
-      if (result.kind === 'not-an-issue') throw new ToolRefusal('A pull request cannot be started as an issue.');
-      if (result.kind === 'prompt-too-large') throw new ToolRefusal('The issue and repository instructions exceed the task prompt limit.');
-      return {
-        task: { id: result.task.id, title: result.task.title, state: result.task.state, agent: result.task.agent },
-        issue: { number: issue, url: `https://github.com/${result.repository}/issues/${issue}` },
-        confirmation: result.kind === 'created'
-          ? `Started Codex task ${result.task.id} from issue #${issue}.`
-          : `Issue #${issue} already has active Factory task ${result.task.id}.`,
-      };
+      const selectedProject = project !== undefined
+        ? await resolveProjectForMessage(project, message.text, request.server.projectStore ?? null)
+        : undefined;
+      const repository = selectedProject?.repo ?? JARVIS_REPOSITORY;
+      if (repository.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
+        const existing = await request.server.githubIssueClient?.readIssue(repository, issue);
+        if (!existing || existing.isPullRequest || existing.state !== 'open') {
+          throw new ToolRefusal('Only an open GitHub issue can be started.');
+        }
+        return stageIssueCreation(request.server, {
+          ...(selectedProject ? { project: selectedProject.id } : {}),
+          issueNumber: issue, startExisting: true, title: existing.title, body: existing.body ?? '',
+        }, message, signal, selectedProject);
+      }
+      return executeStartIssue(request, issue, project);
     },
   },
   {
@@ -1150,7 +1184,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'create_task',
-    description: 'Create a linked GitHub issue and Ready Factory task for confirmed non-code work. For project-code changes, use create_issue so P11 allocation and executor handoff run.',
+    description: 'Create a linked GitHub issue and Ready Factory task for confirmed non-code work. My own repository requires create_issue and later confirm_create_issue, even through this non-code path. For project-code changes, use create_issue so P11 allocation and executor handoff run.',
     execution: { defaultEffect: 'action' },
     inputSchema: {
       type: 'object',
@@ -1192,6 +1226,10 @@ export const factoryTools: readonly JarvisTool[] = [
         agent === undefined || !isOption(reasoning, reasoningOptions)
       )) {
         throw new ToolRefusal(`Unsupported reasoning. Specify a coding agent and use one of its valid reasoning levels: ${optionsList(reasoningOptions)}.`);
+      }
+      const selected = await activeProject(projectId, request);
+      if (selected.repo.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
+        throw new ToolRefusal('My own Factory work requires a reviewed proposal. Use create_issue, then confirm_create_issue after Dan’s later approval; do not bypass it with create_task.');
       }
       const store = requireStore(request.server.taskStore, 'Task service');
       const linked = await createLinkedTaskFromPrompt({

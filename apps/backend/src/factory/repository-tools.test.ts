@@ -63,6 +63,19 @@ afterEach(async () => {
 });
 
 describe('repository Jarvis tools', () => {
+  it('returns a registered tool’s exact backend contract without fetching repository content', async () => {
+    const { app, fetchImpl, githubAppTokenIssuer } = fixture();
+    const response = await callTool(app, 'list_capabilities', { tool: 'repo_read' });
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: {
+      name: 'repo_read', inputSchema: app.jarvisTools.get('repo_read')!.inputSchema,
+    } });
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(githubAppTokenIssuer.issueForContents).not.toHaveBeenCalled();
+    const unknown = await callTool(app, 'list_capabilities', { tool: 'private_nonexistent' });
+    expect(unknown.json().result.refused).toContain('use a registered name');
+    expect(unknown.body).not.toContain('private_nonexistent');
+  });
+
   it('lists registered capabilities by area and includes feature statuses', async () => {
     const { app, record } = fixture();
     const catalogue = await app.inject({ url: '/tools', headers });

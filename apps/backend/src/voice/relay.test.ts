@@ -3540,6 +3540,11 @@ describe('backend-relayed Voice Live WebSocket', () => {
     }));
     const activityEvents: unknown[] = [];
     app.jarvisActivityHub.subscribe((event) => activityEvents.push(event));
+    const historyRefreshes: number[] = [];
+    let storedTranscripts = 0;
+    app.nowEventHub.subscribe((event) => {
+      if (event.type === 'refresh') historyRefreshes.push(storedTranscripts);
+    });
     await app.listen({ host: '127.0.0.1', port: 0 });
     const address = app.server.address() as AddressInfo;
     const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
@@ -3553,6 +3558,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
           model: input.model,
           at: new Date('2026-10-03T12:00:01Z'),
         };
+        storedTranscripts += 1;
         if (conversationStore.addMessage.mock.calls.length === 2) resolve();
         return message;
       });
@@ -3577,6 +3583,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       ['jarvis', 'The task is complete.'],
     ]);
     expect(conversationStore.endSession).toHaveBeenCalledWith('41');
+    expect(historyRefreshes).toEqual([1, 2]);
     expect(forwarded).not.toContain('jarvis.session.end');
   });
 

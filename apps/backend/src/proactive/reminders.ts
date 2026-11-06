@@ -11,9 +11,9 @@ export interface ReminderPlannerLogger {
   warn?: (data: { runId: string; count?: number; durationMs?: number; reason: string }, message: string) => void;
 }
 
-export function reminderKey(text: string, dueAt: string): string {
+export function reminderKey(text: string, dueAt: string, remindAtDue = false): string {
   return createHash('sha256')
-    .update(['todo_due_soon', normaliseFactText(text), dueAt].join('|'))
+    .update(['todo_due_soon', normaliseFactText(text), dueAt, ...(remindAtDue ? ['at_due_time'] : [])].join('|'))
     .digest('hex').slice(0, 32);
 }
 
@@ -34,7 +34,7 @@ export function reminderDedupeKey(key: string): string {
 
 export async function planTodoReminders(options: {
   reminders: Pick<ProactiveReminderStore, 'plan'>;
-  facts: readonly Pick<FindingsStoredContext['facts'][number], 'kind' | 'text' | 'dueAt' | 'dueHasTime'>[];
+  facts: readonly Pick<FindingsStoredContext['facts'][number], 'kind' | 'text' | 'dueAt' | 'dueHasTime' | 'remindAtDue'>[];
   now: Date;
   plannedRunId: string | null;
   onPlanned?: (fireAt: Date) => void;
@@ -48,11 +48,11 @@ export async function planTodoReminders(options: {
       if (!title) return [];
       const dueIso = dueAt.toISOString();
       return [{
-        reminderKey: reminderKey(fact.text, dueIso),
-        deadlineAlertKey: proactiveAlertKey(
+        reminderKey: reminderKey(fact.text, dueIso, fact.remindAtDue),
+        deadlineAlertKey: fact.remindAtDue ? null : proactiveAlertKey(
           'deadline_24h', deterministicDedupeKey('deadline', fact.text, dueIso),
         ),
-        fireAt: new Date(dueAt.getTime() - 60 * 60_000),
+        fireAt: new Date(dueAt.getTime() - (fact.remindAtDue ? 0 : 60 * 60_000)),
         dueAt,
         title,
         plannedRunId: options.plannedRunId,

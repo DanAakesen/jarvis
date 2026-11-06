@@ -565,7 +565,9 @@ export async function executeRealtimeCapabilityCall(
       const definition = {
         name: capability.name,
         description: capability.description,
-        parameters: toModelToolSchema(capability.inputSchema),
+        // This is tool-result data, not a provider function declaration. Preserve
+        // unions and conditional requirements exactly as the backend validates them.
+        parameters: capability.inputSchema,
       };
       const candidate = [...capabilities, definition];
       const nextOffset = nextIndex + 1 < catalogue.length ? nextIndex + 1 : null;
@@ -633,9 +635,11 @@ export async function executeRealtimeToolCall(
       }, request.log));
     }
     const unexpected = unexpectedToolArgument(input, tool.inputSchema);
-    if (unexpected) return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, unexpected, request.log));
-    if (tool.validateInput && !tool.validateInput(input)) {
-      throw new ToolRefusal('The tool arguments are invalid. Nothing was written.');
+    const strictError = unexpected ?? (tool.validateInput?.(input) === false
+      ? { keyword: 'schema', instancePath: '', schemaPath: '#/strictInput', params: {} }
+      : undefined);
+    if (strictError) {
+      return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, strictError, request.log, { input, app: request.server }));
     }
     if (!request.validateInput(input, tool.inputSchema, 'body')) {
       const errors = request.getValidationFunction(tool.inputSchema)?.errors ?? undefined;

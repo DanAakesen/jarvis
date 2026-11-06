@@ -57,7 +57,7 @@ export interface FindingsStoredContext {
   }[];
   facts: Pick<ReadFact,
     'ref' | 'identity' | 'taskScope' | 'projectRelated' | 'source' | 'kind' | 'text' |
-    'dueAt' | 'dueHasTime' | 'highPriority' | 'startsAt' | 'endsAt' | 'allDay'>[];
+    'dueAt' | 'dueHasTime' | 'remindAtDue' | 'highPriority' | 'startsAt' | 'endsAt' | 'allDay'>[];
   sources: { id: SourceId; state: 'ok' | 'unavailable'; reason?: string }[];
 }
 
@@ -330,7 +330,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       const context: FindingsStoredContext = {
         runId: run.id, trigger: run.trigger, now: now(), signal: controller.signal, findings: stored,
         facts: facts.map(({
-          ref, identity, taskScope, projectRelated, source, kind, text, dueAt, dueHasTime,
+          ref, identity, taskScope, projectRelated, source, kind, text, dueAt, dueHasTime, remindAtDue,
           highPriority, startsAt, endsAt, allDay,
         }) => ({
           ref, source, kind, text,
@@ -339,6 +339,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
           ...(projectRelated === undefined ? {} : { projectRelated }),
           ...(dueAt === undefined ? {} : { dueAt }),
           ...(dueHasTime === undefined ? {} : { dueHasTime }),
+          ...(remindAtDue === undefined ? {} : { remindAtDue }),
           ...(highPriority === undefined ? {} : { highPriority }),
           ...(startsAt === undefined ? {} : { startsAt }),
           ...(endsAt === undefined ? {} : { endsAt }),

@@ -403,7 +403,13 @@ describe('Voice Live capability-preserving fallback', () => {
   });
 
   it('discovers bounded pages from the real compact fallback selected by the relay', async () => {
-    const f = await fixture({}, 'en', catalogue());
+    const conditionalSchema = {
+      type: 'object', oneOf: [
+        { type: 'object', properties: { operation: { const: 'read' } }, required: ['operation'] },
+        { type: 'object', properties: { operation: { const: 'update' }, id: { type: 'string' } }, required: ['operation', 'id'] },
+      ],
+    };
+    const f = await fixture({}, 'en', [...catalogue(), { ...probeTool('conditional_tool'), inputSchema: conditionalSchema }]);
     f.upstream.open();
     f.upstream.event('error', { error: { code: 'schema_constraint' } });
     await vi.advanceTimersByTimeAsync(0);
@@ -424,10 +430,13 @@ describe('Voice Live capability-preserving fallback', () => {
       active.event('response.done', { response: { id: responseId, status: 'completed' } });
       await vi.advanceTimersByTimeAsync(0);
       const output = JSON.parse(toolOutput(callId) as string) as {
-        outcome: string; result: { capabilities: { name: string }[]; nextOffset: number | null };
+        outcome: string; result: { capabilities: { name: string; parameters: unknown }[]; nextOffset: number | null };
       };
       expect(output.outcome).toBe('ok');
       expect(output.result.capabilities.length).toBeLessThanOrEqual(8);
+      for (const capability of output.result.capabilities) {
+        expect(capability.parameters).toEqual(f.app.jarvisTools.get(capability.name)!.inputSchema);
+      }
       discovered.push(...output.result.capabilities.map(({ name }) => name));
       offset = output.result.nextOffset;
     } while (offset !== null);

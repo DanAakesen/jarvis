@@ -199,6 +199,16 @@ jobs:
           else
             mkdir -p "$SCREENSHOT_DIR/ui-test-attachments"
           fi
+          # Retain a short motion sample before the broad still-capture sweep.
+          xcrun simctl ui "$DEVICE_ID" appearance dark
+          xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
+            --screenshot-chat-fixture --screenshot-factory-fixture \
+            --screenshot-factory-state=loading --screenshot-factory-language=en
+          xcrun simctl io "$DEVICE_ID" recordVideo --codec=h264 --force "$SCREENSHOT_DIR/loading-shimmer.mp4" &
+          LOADING_CAPTURE_PID=$!
+          sleep 4
+          kill -INT "$LOADING_CAPTURE_PID"
+          wait "$LOADING_CAPTURE_PID"
           xcrun simctl ui "$DEVICE_ID" appearance light
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis --screenshot-chat-fixture
           sleep 2

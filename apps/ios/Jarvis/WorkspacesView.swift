@@ -111,7 +111,8 @@ struct WorkspacesView: View {
         return JarvisLabelledButton(
             title: title,
             systemImage: selected ? "checkmark" : nil,
-            isSelected: selected
+            isSelected: selected,
+            usesSelectionFeedback: true
         ) {
             withAnimation(reduceMotion ? nil : .snappy(duration: JarvisDesignTokens.filterAnimationDuration)) {
                 selectedKind = selected ? nil : kind
