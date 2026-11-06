@@ -1,5 +1,25 @@
 # 6 November device-feedback batch
 
+## Owner testing of build 76 — current follow-up
+
+The owner confirmed build 76 is available in TestFlight and reported that checks
+1 (cold Voice/unified history), 2 (Home send/camera), 3 (task/reminder workflow) and
+5 (Health pull refresh) work. These are owner reports, not additional automated
+or exhaustive permission/delivery checks. The compact task list looks good.
+
+The owner rejected the large shimmer travelling over an entire grouped surface,
+the generic source label `Tasks` after priority, the full-width backing behind
+Notes Search/Plus, and the opaque header/Health dashboard-selector regions. Prepare
+one combined correction: subtle highlights confined to placeholder elements;
+meaningful source context only in compact rows; floating glass dock controls;
+transparent shared headers with structural protection against scrolling overlap.
+Keep full source details, safe-area clearance, accessibility and Chat appearance.
+
+This changes the native source and needs one new combined simulator run, actual
+resting/scrolled/large-text captures and loading-motion inspection before another
+upload. Build 76's passing run does not qualify the new rendering changes. Copilot
+diagnostics continue separately; neither line of work replaces the other.
+
 ## Final qualification and delivery
 
 PR #1614 merged as `ab464314a25fd45f1f1fcccc44644f636607afca` after final

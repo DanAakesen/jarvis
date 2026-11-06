@@ -3438,3 +3438,20 @@ Proactive and runtime captures: selected labels are sharp, and normal Danish
 Settings labels are complete. Native selection and loading frames were inspected;
 tactile feel remains a device check. Retained artifacts and capture limitations
 are recorded in `docs/ios/design/p15-device-feedback-2026-11-06.md`.
+
+### Build 76 owner feedback: transparent chrome and local loading motion
+
+The owner accepts the compact task rows but rejects the generic `Tasks` source
+label, card-wide shimmer and rectangular material regions behind the header and
+bottom controls. This supersedes the earlier scrolled/AX header material and Tasks
+dock backing choice. Headers stay transparent; reserve and clip the scrolling
+content below them so rows cannot cross the title. Search, Plus and Health's
+dashboard selector float over the shared ambient scene with their own glass
+surfaces and safe-area clearance. Keep control-level Reduce Transparency support.
+
+Loading highlights belong only inside individual placeholder elements. Hero and
+group surfaces remain quiet; shared motion still stops for Reduce Motion, inactive
+scenes and removed content. Compact task metadata suppresses exact generic task
+headings/file names while retaining useful note/project context and full sources
+in details. This is the approved correction direction; fresh native rendering and
+motion evidence is required before accepting the implementation.

@@ -3998,6 +3998,12 @@ research, Health and milestone facilities are reused; no duplicate job system.
 
 ### Active follow-up qualification
 
+- Owner testing of build 76 confirms Voice/history, Home send/camera, task/reminder
+  creation and Health pull refresh work. New approved visual corrections: confine
+  shimmer to individual placeholders, suppress generic task-source labels, remove
+  the Notes dock slab, and keep shared headers/Health dock transparent without
+  scrolling overlap. Prepare one combined native candidate and fresh visual/motion
+  qualification; previous app-tree evidence does not cover these edits.
 - Implemented and merged through #1614: own-code bug/feature proposal gates;
   shared identity/task awareness; high-priority vault task defaults, replay
   protection and exact-time reminder marker; general validation/schema repair;

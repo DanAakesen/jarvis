@@ -13,7 +13,8 @@ also rereads vault lifts and device workouts/steps. Fixture mode never queries o
 uploads the real HealthKit store. Existing complete-day uploads and durable-anchor
 rules stay in JarvisHealthSyncRunner; the old manual sync view is removed.
 The combined source passed CI and 68 native tests in run 42202162500. Real
-HealthKit permissions, ingestion and physical-device refresh remain device checks.
+HealthKit permission/failure combinations and exhaustive ingestion parity remain
+device checks. The owner subsequently reported that build 76 pull refresh works.
 
 ## Suggestion-to-approval binding (P15-46 / #1494)
 
