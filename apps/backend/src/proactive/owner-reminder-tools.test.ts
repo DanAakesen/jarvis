@@ -50,7 +50,11 @@ describe('owner-requested reminder tool', () => {
   it('advertises the same per-operation shape and timestamp requirements that it validates', async () => {
     const f = fixture();
     const app = Fastify();
-    app.post('/', { schema: { body: f.tool.inputSchema } }, async (request) => request.body);
+    let parsedInput: unknown;
+    app.post('/', { schema: { body: f.tool.inputSchema } }, async (request) => {
+      parsedInput = structuredClone(request.body);
+      return { accepted: true };
+    });
     const create = { operation: 'create', task: 'Synthetic task', fireAt: tomorrowAtTwo };
     const update = { ...create, operation: 'update', id: owner };
     const cases: [unknown, boolean][] = [
@@ -74,7 +78,10 @@ describe('owner-requested reminder tool', () => {
         if (!valid && Object.hasOwn(input as object, 'extra')) continue;
         const response = await app.inject({ method: 'POST', url: '/', payload: input as object });
         expect(response.statusCode, JSON.stringify(input)).toBe(valid ? 200 : 400);
-        if (valid) expect(response.json()).toEqual(input);
+        if (valid) {
+          expect(response.json()).toEqual({ accepted: true });
+          expect(parsedInput).toEqual(input);
+        }
       }
     } finally {
       await app.close();

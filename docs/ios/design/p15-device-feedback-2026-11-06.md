@@ -4,8 +4,8 @@
 
 The owner explicitly lifted the hold after his final loading-animation feedback:
 build everything and release after checks and UI inspection. The earlier hold
-while testing build 75 is historical. Draft PR #1614 contains the first task-list
-change at 30820b3c; subsequent changes remain local. Opening the PR automatically
+while testing build 75 is historical. PR #1614 is ready for review and contains
+the accumulated corrections through 4c9f62f4. Opening the draft PR automatically
 started CI just before the hold. CI 42169223014, Simulator 42169222922 and CodeQL
 42169222883 were cancelled. None verifies the held changes.
 
@@ -110,3 +110,18 @@ rows with their own grouped backgrounds; no guard was weakened. Native run
 42178648500 compiled successfully but was stopped as superseded before acceptance.
 Its duplicate queued run 42178649078 was cancelled without a second build.
 The corrected candidate needs fresh CI/native qualification.
+
+## Corrected candidate qualification
+
+Candidate 4c9f62f4 passed general CI 42179796923, including all 493 Core tests
+and 7,361 backend tests (one skipped). CodeQL analysis 42179796639 completed,
+but its security gate identified a reflected-request response in the reminder
+schema test. The test now captures parsed input locally and returns a fixed
+acknowledgement, preserving the schema/no-field-stripping assertions. Its 12
+focused tests and scoped ESLint pass. The security gate must pass on the final
+commit before merge.
+
+Native run 42179796750 has compiled the app and is running the existing UI tests
+and screenshot collection. Its results and visual inspection are still pending.
+The test-only security correction does not change the native app/test tree; reuse
+this native evidence for that correction rather than start a duplicate simulator.
