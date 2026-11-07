@@ -100,12 +100,12 @@ struct JarvisSettingsArea: View {
                 }
             }
             .jarvisPageHeader { header }
-            .jarvisAmbientBackground()
             .environment(\.locale, language.locale)
             .tint(JarvisDesignTokens.settingsAccent)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            .jarvisPageFooter {
                 bottomBar
             }
+            .jarvisAmbientBackground()
             .task {
                 if response == nil { await reload() }
             }

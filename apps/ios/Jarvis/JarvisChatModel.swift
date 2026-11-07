@@ -82,7 +82,11 @@ struct PendingChatAttachment: Identifiable {
 @MainActor
 final class JarvisChatModel: ObservableObject {
     @Published var messages: [JarvisChatRow] = []
-    @Published var draft = ""
+    @Published var composerDraft = ComposerDraft()
+    var draft: String {
+        get { composerDraft.text }
+        set { composerDraft.replace(with: newValue) }
+    }
     @Published var pendingAttachments: [PendingChatAttachment] = []
     @Published var isLoading = true
     @Published private(set) var isReadyForHandoff = false
@@ -348,7 +352,7 @@ final class JarvisChatModel: ObservableObject {
         isReconnecting = false
         toolActivities = []
         turnMessageIDs = []
-        let text = draft
+        let text = composerDraft.consume()
         let attachments = pendingAttachments
         thinkingPhrase = ChatThinkingPhrase.phrase(
             forRequest: text,
@@ -364,18 +368,16 @@ final class JarvisChatModel: ObservableObject {
             text: text,
             at: ISO8601DateFormatter().string(from: Date())
         ))
-        draft = ""
         sendTask = Task { await sendTurn(text: text, attachments: attachments, visualFrame: visualFrame) }
     }
 
     /// The composer stays active while Jarvis answers: a follow-up joins the running turn instead of waiting for it.
     private func steer() {
-        let text = draft
         guard let client, let sessionID, activeMessageID != nil else {
             actionError = JarvisChatLocalization.string(.followUpUnavailable, language: appLanguage)
             return
         }
-        draft = ""
+        let text = composerDraft.consume()
         let followUpID = "local-\(UUID().uuidString)"
         addOrReplace(JarvisChatRow(
             id: followUpID, role: .dan, text: text, at: ISO8601DateFormatter().string(from: Date())

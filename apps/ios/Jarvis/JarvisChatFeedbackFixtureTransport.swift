@@ -19,6 +19,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     private var activity: [[String: Any]] = []
     private var language = "en"
     private var completionObserver: ChatFixtureCompletionObserver?
+    private var acknowledgmentObserver: ChatFixtureCompletionObserver?
 
     init(base: any HTTPTransport) { self.base = base }
 
@@ -67,15 +68,17 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
         let body = AsyncThrowingStream<Data, any Error> { continuation in
             turn = continuation
             continuation.yield(event("user", saved))
-            continuation.yield(event("delta", ["text": "I’ll check the synthetic project."]))
-            continuation.yield(event("acknowledgment", ["text": "I’ll check the synthetic project."]))
-        }
-        publishTool(finished: false)
-        Task {
-            try? await Task.sleep(for: .milliseconds(250))
-            publishTool(finished: true)
         }
         return HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: body)
+    }
+
+    private func acknowledgeTurn() {
+        guard turn != nil else { return }
+        turn?.yield(event("delta", ["text": "I’ll check the synthetic project."]))
+        turn?.yield(event("acknowledgment", ["text": "I’ll check the synthetic project."]))
+        publishTool(finished: false)
+        publishTool(finished: true)
+        acknowledgmentObserver = nil
     }
 
     private func finishTurn() {
@@ -93,7 +96,10 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
         guard Self.isEnabled, completionObserver == nil else { return }
         // The Simulator test explicitly releases the held response after checking
         // the interrupted state. A timer can finish while XCTest is taking snapshots.
-        completionObserver = ChatFixtureCompletionObserver { [weak self] in
+        acknowledgmentObserver = ChatFixtureCompletionObserver(name: "com.jarvis.uitests.acknowledge-chat-feedback") { [weak self] in
+            Task { await self?.acknowledgeTurn() }
+        }
+        completionObserver = ChatFixtureCompletionObserver(name: "com.jarvis.uitests.finish-chat-feedback") { [weak self] in
             Task { await self?.finishTurn() }
         }
     }
@@ -123,10 +129,11 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
 
 /// Core Foundation exposes Darwin notifications to Swift without private C symbols.
 private final class ChatFixtureCompletionObserver: Sendable {
-    private static let name = "com.jarvis.uitests.finish-chat-feedback"
+    private let name: String
     private let complete: @Sendable () -> Void
 
-    init(complete: @escaping @Sendable () -> Void) {
+    init(name: String, complete: @escaping @Sendable () -> Void) {
+        self.name = name
         self.complete = complete
         CFNotificationCenterAddObserver(
             CFNotificationCenterGetDarwinNotifyCenter(),
@@ -136,7 +143,7 @@ private final class ChatFixtureCompletionObserver: Sendable {
                 Unmanaged<ChatFixtureCompletionObserver>.fromOpaque(observer)
                     .takeUnretainedValue().complete()
             },
-            Self.name as CFString, nil, .deliverImmediately
+            name as CFString, nil, .deliverImmediately
         )
     }
 
@@ -144,7 +151,7 @@ private final class ChatFixtureCompletionObserver: Sendable {
         CFNotificationCenterRemoveObserver(
             CFNotificationCenterGetDarwinNotifyCenter(),
             Unmanaged.passUnretained(self).toOpaque(),
-            CFNotificationName(rawValue: Self.name as CFString), nil
+            CFNotificationName(rawValue: name as CFString), nil
         )
     }
 }

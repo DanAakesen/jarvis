@@ -59,7 +59,7 @@ struct JarvisChatScreen: View {
     @State private var screenShare = ScreenShareSession()
     @State private var screenSharePickerToken = 0
     @State private var photoSelection: [PhotosPickerItem] = []
-    @FocusState private var composerFocused: Bool
+    @State private var composerFocused = false
     private let initialActivitySheet: ActivitySheetKind?
     let onNavigate: (JarvisDestination) -> Void
     @Binding private var handoff: JarvisChatHandoff?
@@ -351,10 +351,6 @@ struct JarvisChatScreen: View {
                             if let acknowledgment = model.acknowledgment {
                                 messageBubble(text: acknowledgment, role: .jarvis, interrupted: false, messageID: "acknowledgment")
                             }
-                            if model.acknowledgment == nil && model.streamingText.isEmpty {
-                                messageBubble(text: model.statusLine ?? copy(.turnWorking), role: .jarvis,
-                                              interrupted: false, messageID: "streaming")
-                            }
                             if model.isSending && !model.liveTools.isEmpty {
                                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
                                     ForEach(model.liveTools) { tool in
@@ -500,17 +496,9 @@ struct JarvisChatScreen: View {
         )
         let content = VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             HStack(alignment: .center, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                if messageID == "streaming" && model.streamingText.isEmpty {
-                    JarvisOrb(
-                        activity: .thinking,
-                        size: JarvisDesignTokens.chatMiniCoreSize,
-                        isStatic: model.fixtureMode || reduceMotion
-                    )
-                }
                 messageText(text, role: role, messageID: messageID)
                     .font(.body)
-                    .foregroundStyle(messageID == "streaming" && model.streamingText.isEmpty ? .secondary : .primary)
-                    .jarvisShimmer(isActive: messageID == "streaming" && model.streamingText.isEmpty && !reduceMotion && !model.fixtureMode)
+                    .foregroundStyle(.primary)
                     .textSelection(.enabled)
                     .frame(maxWidth: isUser ? nil : .infinity, alignment: .leading)
             }
@@ -645,8 +633,9 @@ struct JarvisChatScreen: View {
                 HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
                     JarvisOrb(activity: .thinking, size: JarvisDesignTokens.chatMiniCoreSize,
                               isStatic: model.fixtureMode || reduceMotion)
-                    Text(copy(model.isReconnecting ? .thinkingReconnecting :
-                                (model.streamingText.isEmpty ? .turnWorking : .turnWriting)))
+                    Text(model.isReconnecting ? copy(.thinkingReconnecting) :
+                            (!model.streamingText.isEmpty ? copy(.turnWriting) :
+                                (model.statusLine ?? copy(.turnWorking))))
                         .font(.footnote)
                         .foregroundStyle(.primary)
                     Spacer(minLength: 0)
@@ -660,7 +649,7 @@ struct JarvisChatScreen: View {
             }
             JarvisComposerBar(
                 placeholder: copy(.messagePlaceholder),
-                text: $model.draft,
+                draft: $model.composerDraft,
                 isFocused: $composerFocused,
                 inputIdentifier: "chat.input",
                 inputHint: model.fixtureTurnUnavailable ? "The fixture supports one sample turn." : "",

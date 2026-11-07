@@ -166,8 +166,25 @@ enum JarvisFactoryFixtureScenario {
     private static func jsonArray(for key: String, in source: String) -> String {
         guard let data = source.data(using: .utf8),
               let value = try? JSONSerialization.jsonObject(with: data) as? [String: [Any]],
-              let cards = value[key],
-              let array = try? JSONSerialization.data(withJSONObject: cards),
+              var cards = value[key] else { return "[]" }
+#if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-page-chrome"), key == "in_progress",
+           let original = cards.first as? [String: Any] {
+            cards = (0..<16).map { offset -> [String: Any] in
+                var card = original
+                var issue = card["issue"] as! [String: Any]
+                issue["number"] = 100 + offset
+                issue["title"] = "Synthetic scrolling task \(offset + 1)"
+                issue["url"] = "https://github.com/example/example/issues/\(100 + offset)"
+                card["issue"] = issue
+                var task = card["task"] as! [String: Any]
+                task["id"] = String(200 + offset)
+                card["task"] = task
+                return card
+            }
+        }
+#endif
+        guard let array = try? JSONSerialization.data(withJSONObject: cards),
               let text = String(data: array, encoding: .utf8) else {
             return "[]"
         }

@@ -1,13 +1,32 @@
+## Active — build 79 owner-reported regressions (7 November 2026)
+
+Track every incoming bug in [the feedback record](docs/ios/design/p15-build79-feedback.md).
+The iOS batch covers opaque headers, opaque Notes/Factory footer containers,
+duplicate Chat progress rows, sent text remaining in the composer, and two-line
+task titles with scope/priority only. PR #1631 remains unreleased. Native run
+42386993715 passed runtime isolation and primary-page assertions, but exposed
+keyboard focus/Return submission failures and a wrong Factory test route. The
+shared input now uses a stable native editor; the Factory route and full-screen
+capture method are corrected. CI 42390263250 and CodeQL 42390263234 passed. Native 42390300501 passed six
+cases including Home/runtime handoffs and all page-chrome cases. One Chat empty
+accessibility-value assertion failed despite a visibly empty editor and preserved
+next draft. The corrected test now handles UIKit's nil empty value only for a
+visible editor; qualify that case again and inspect the retained six passing cases.
+
+Notes browsing/editing concepts preserve Notes / Tasks / Graph, pins, recents,
+folder browsing and full-source Raw access. The latest three concepts await owner
+selection. Preserve the separate Copilot blocker and all earlier owner reports.
+
 ## Active — scaffold approval recovery (7 November 2026)
 
-The owner still cannot prepare/approve the Jarvis widget scaffold. A backend-only
-candidate now recovers real pending proposals and safely stages an explicitly new
-own-code replacement when state is missing. Its three backend files exactly match
-independently reviewed candidate 91c23fc8: 89 focused tests, 7,397 full backend tests
-(one skipped), lint/build and CodeQL passed there. This separate branch requires
-fresh CI/CodeQL and normal live deployment acceptance before asking the owner to
-retry. iOS build 79 feedback and Notes design exploration remain separate active
-work. See [the recovery record](docs/scaffold-approval-recovery.md).
+Backend-only PR #1632 merged as ce652a06 after fresh CI 42389069811 and CodeQL
+42389069717 passed and independent review approved its exact source. It recovers
+real pending proposals and safely stages a fresh own-code replacement when state
+is missing, requiring a later explicit approval. Normal Deploy 42389927724 passed readiness and required live acceptance at
+16:18:52 UTC. The owner was told to retry “Prepare the widget in Jarvis”; the actual
+owner scaffold write is still unconfirmed. No iOS update is needed for this
+backend correction. See [the recovery record](docs/scaffold-approval-recovery.md).
+
 
 ## Current release — Settings, Chat and scaffold follow-up, build 79
 

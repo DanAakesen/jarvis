@@ -11480,3 +11480,23 @@ single TestFlight upload 42380495562, build 79. Preserve the owner's separate
 approval before creating the widget issue/starting its coding task. Copilot's failed
 second-policy check remains a separate unresolved limitation. See the scoped
 release record for hashes, visual review, upload time and device-only checks.
+
+## 7 November 2026 — Reopen build 79 regressions; recover actual issue proposals
+
+Owner screenshots supersede earlier acceptance of sent-draft clearing, progress
+and transparent chrome. Track all reports in the build 79 feedback ledger and
+qualify the actual focused-keyboard/scrolled states. Factory will expose its saved
+proposal to the next verified conversation turn, following the existing Calendar
+recovery pattern; a guessed create retry must not overwrite approved scope. Keep
+later-message approval, session isolation, expiry and at-most-once consumption.
+Process-local proposals remain unavailable after restart; report that honestly.
+
+The independent review also confirms that fresh own-repository replacement staging
+is permitted after missing/expired state, while the current yes cannot approve it.
+This avoids a recovery loop without approving or writing anything implicitly.
+
+Native verification found that replacing the SwiftUI editor to clear it dismissed
+the keyboard, and vertical TextField Return inserted a newline despite its Send
+label. Use one stable UIKit text view in the shared composer, with explicit Return
+handling, ordinary focus ownership and revision reconciliation. Preserve composition,
+paste and the existing size cap. Keep the failed run and verify all three callers.

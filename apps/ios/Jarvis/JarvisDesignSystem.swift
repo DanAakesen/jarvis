@@ -463,7 +463,7 @@ extension View {
             .scrollContentBackground(.hidden)
             .background { JarvisScreenBackground() }
             .toolbarBackground(transparentNavigationBar ? .hidden : .automatic, for: .navigationBar)
-            .toolbarBackground(.ultraThinMaterial, for: .bottomBar)
+            .toolbarBackgroundVisibility(.hidden, for: .bottomBar)
             .presentationBackground { JarvisScreenBackground() }
     }
 }
