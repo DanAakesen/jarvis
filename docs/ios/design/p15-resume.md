@@ -1,5 +1,35 @@
 # P15 release checkpoints
 
+## Completed Settings/Chat/widget/scaffold follow-up — build 79
+
+Build **79 uploaded successfully at 14:18:29 UTC / 15:18:29 Copenhagen on 7 November 2026** in unchanged
+TestFlight workflow [42380495562](https://github.com/DanAakesen/jarvis/actions/runs/42380495562),
+from main `2504bc6a9b0c99d29c14a96bc261e8417df93fa1` (PR #1629). Apple processing
+and physical device visibility are not independently confirmed.
+
+The backend fixes oversized GitHub issue-list reads that prevented scaffold drafts,
+with safe failure guidance and the existing later-approval requirement. Chat clears
+sent dictation, reconciles steering by saved ID, keeps progress visible, fits short
+owner bubbles to their text, groups tools under Jarvis and supports native text
+selection. Settings fields keep their labels. Light-mode widget text is darker;
+Tasks replaces the Notes widget and opens its task tab. Away mode is removed from
+iOS Notifications and an empty activity bar stays hidden.
+
+CI 42377620992 and CodeQL 42377620945 passed. All 20 scoped Settings/Chat/Home cases
+are qualified from the final two-case pass 42377707190 and unchanged earlier passes;
+10 widget/navigation cases are retained. Actual screenshots were inspected. The
+merged full tree `05557824a3b533ef5a40789830ab1c7adf76b52c` and iOS tree
+`7c20b275fa8fc8a6fa7fb9bb40757363dfb3e473` exactly match qualification. Main Simulator
+42378965945 was cancelled before boot after verifying identity. Normal Deploy
+42378966004 passed readiness and all 15 Current acceptance checks before upload.
+No duplicate native run is needed for this source.
+
+Copilot remains disabled: the live second-turn policy check reused the first turn's
+policy. Do not weaken the receipt gate or run another unchanged activation attempt.
+The [scoped record](p15-chat-settings-feedback.md) retains failures, artifact hashes
+and the owner's retest checklist. Physical dictation, haptics and widget-host behavior
+remain owner checks. Earlier pending-state notes below are historical.
+
 ## Completed Home/chrome/widget follow-up — build 78
 
 Build **78 uploaded successfully at 22:48:32 UTC / 23:48:32 Copenhagen on 6 November 2026**

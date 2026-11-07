@@ -11457,3 +11457,15 @@ A real read showed issue page 7 at 1,099,352 bytes, exceeding the existing 1 MiB
 limit. Preserve the limit and split oversized windows, with no writes or partial
 allocation. The corrected read returned all 1,626 records. Keep own-code approval
 requirements unchanged. Native candidate checks remain pending.
+
+## 7 November 2026 — Release the qualified Chat, Settings and scaffold fixes
+
+PR #1629 is merged as 2504bc6a. Exact-head CI/CodeQL, 20 scoped native cases using
+unchanged-source reuse, and retained widget/navigation evidence qualify this batch.
+Failed fixture attempts remain recorded; the final two cases pass in 42377707190.
+The merged full/iOS trees match the tested source, so main Simulator 42378965945
+was cancelled before boot. Accepted normal deployment 42378966004 precedes the
+single TestFlight upload 42380495562, build 79. Preserve the owner's separate
+approval before creating the widget issue/starting its coding task. Copilot's failed
+second-policy check remains a separate unresolved limitation. See the scoped
+release record for hashes, visual review, upload time and device-only checks.

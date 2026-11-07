@@ -7,9 +7,12 @@ normal Chat view remains mounted with its draft. Disabled choices show the serve
 reason; Check again re-reads availability. Closing is allowed during read-only
 loads and blocked during session creation or a reply; Stop reply requests server
 cancellation and keeps reading the saved reply. An uncertain managed claim stays
-blocked even after Refresh test history. Copy is Danish/English. Native Simulator
-inspection remains pending; the web selector/retry flow was inspected at 390 and
-1440 pixels in both themes with reduced motion included (6 November).
+blocked even after Refresh test history. Copy is Danish/English. Native run
+42373705592 passed the Current selector/retry and isolated conversation flow,
+including normal draft/history preservation; the selector capture was inspected.
+The web selector/retry flow was inspected at 390 and 1440 pixels in both themes
+with reduced motion included (6 November). Live Copilot compatibility remains
+unqualified after its second-turn policy check failed.
 
 The existing chat menu will contain Test agent runtime. Dan chooses Current or
 Copilot and opens a separate, clearly labelled conversation. Normal chats stay

@@ -1,7 +1,12 @@
 # Settings and Chat feedback — 7 November 2026
 
 This follow-up includes widgets/Tasks/empty activity from PR #1629 plus the owner's
-new Settings, Chat interaction and blocked scaffold reports. It is not released.
+new Settings, Chat interaction and blocked scaffold reports. PR #1629 is merged as
+2504bc6a9b0c99d29c14a96bc261e8417df93fa1. Normal backend deployment passed.
+Build **79 uploaded successfully at 14:18:29 UTC / 15:18:29 Copenhagen on 7 November 2026** in unchanged
+TestFlight workflow [42380495562](https://github.com/DanAakesen/jarvis/actions/runs/42380495562),
+from main `2504bc6a9b0c99d29c14a96bc261e8417df93fa1` (PR #1629). Apple processing
+and physical device visibility are not independently confirmed.
 
 ## Retained evidence
 
@@ -17,7 +22,7 @@ are not accepted, despite passing AX existence checks. The test now includes the
 fixture argument and a hittability assertion. Earlier failed run 42368114024 remains
 retained, including the gallery deadline and widget-tab failures corrected in e9aa.
 
-## Changes awaiting native qualification
+## Qualified changes
 
 - Persistent Settings labels, trailing values and accessibility/multiline stacking.
 - Native selection across complete formatted Jarvis replies.
@@ -32,17 +37,80 @@ retained, including the gallery deadline and widget-tab failures corrected in e9
 Local focused suites passed: 157 backend tests, 45 contract tests, backend no-emit
 typecheck. The pre-fix real repository read measured page 7 at 1,099,352 bytes.
 The corrected reader returned 1,626 issue/PR titles in 21 GETs, zero writes.
-This confirms the read boundary, not a production scaffold write or deployment.
+This confirms the read boundary, not a production scaffold write. Deployment and
+Current acceptance are recorded below; the owner must still retest the proposal flow.
 
 ## Delivery
 
-CI/CodeQL and focused native Settings/Chat checks are pending. Reuse unchanged widget
-captures and navigation tests with source-path proof; do not repeat that gallery.
-Normal backend deploy/acceptance must precede TestFlight. Keep the owner's current
-project draft and data intact. That E2E test is now blocked by the reproduced read
-failure; release remains authorized after qualification. Copilot remains disabled after its second policy
-canary used the previous turn's policy; docs/runtime-comparison-owner-test.md is the
+Final source 44cbbfcdfcb7594583df6d40737d549f90f845de passed CI 42377620992
+(7,391 backend tests passed, one skipped; 509 Core tests passed) and CodeQL
+42377620945. Native 42377707190 passed both remaining cases with no failures or
+skips. Reuse 17 passing cases from 42373705592, English target editing from
+42375612793, and 10 unchanged widget/navigation cases from 42370022661. Only
+fixture/test-driver files changed during the final corrections; production UI
+source has not changed since f8651cda. All earlier failures are retained below.
+
+Qualified and merged full tree: 05557824a3b533ef5a40789830ab1c7adf76b52c.
+Qualified and merged iOS tree: 7c20b275fa8fc8a6fa7fb9bb40757363dfb3e473.
+Automatic main Simulator 42378965945 was cancelled before boot after checking
+both identities; its boot step had no start time. The validation-only branch
+codex/widget-contrast-validation must never merge. No further native run is needed
+for this unchanged app/test tree. Xcode 26.6, XcodeGen 2.46.0 and the existing
+120/150-second test limits were retained.
+
+CI artifact 13575923537 was downloaded and its SHA-256 verified:
+238218fbef8e11789f753417b4d2a370a224743cd1f45496271a5d25f81d7bf5.
+The qualification receipt binds PR #1629, the final head and full tree.
+Native artifact 13575959044 was downloaded and its SHA-256 verified:
+f1a8dd62e549de01ed234efba46e8e661ae4c347af87fe513578ee88cf5cee4f.
+Its provenance binds the final source and iOS tree, and the actual summary records
+2/2 passing tests on iPhone 17 Pro / iOS 26.4.1.
+
+Inspected native captures include the acknowledgment/live tools, interrupted turn
+still Working with a next draft, one compact question bubble, final collapsed
+assistant tools, native selection handles across formatted text, English/dark and
+Danish/light labelled Settings, accessibility stacking, and corrected empty
+Notifications/Chat views. The Current runtime selector/retry and isolated synthetic
+conversation passed; normal draft/history preservation is asserted. These fixtures
+do not establish live Copilot acceptance or physical microphone/haptic behavior.
+
+Normal backend deployment 42378966004 passed readiness and all 15 Current live
+acceptance entries before the single TestFlight dispatch. Its accepted release
+receipt binds source 2504bc6a and the qualified full tree. Artifact 13576943195
+was downloaded and SHA-256 verified:
+88d6229508f039fc1d83c0b920cb943c4a43e8673b8a70d6e680655925a3eedc.
+Backend image sha256:1f20b534db942977f51a9f2ceb3aaa17a027728039ef7a6c28ea279bc496e5a7
+is ready in revision ca-jarvis-backend-rmw7kae3bza6a--0000536; Current agent version
+197 and Web deployed successfully. The single unchanged TestFlight workflow
+42380495562 uploaded build 79 from exact main 2504bc6a at 14:18:29 UTC / 15:18:29 Copenhagen on 7 November 2026.
+Apple processing/device availability is not independently confirmed.
+ The owner's project draft/data remain intact; the read reproduction
+performed no writes. Copilot remains disabled after its second policy canary used
+the previous turn's policy. See docs/runtime-comparison-owner-test.md for the
 comparison guide once compatible activation is possible.
+
+## Owner retest after release
+
+1. Retry “Prepare the widget in Jarvis.” Inspect the proposed scope and wait for
+   the normal later approval before creating the issue or starting coding work.
+   This release does not approve that separate widget project for the owner.
+2. During a long reply, send one “?”. It should appear once in a compact bubble;
+   Working/reconnecting feedback should remain until the turn completes. Type a
+   next draft while waiting and confirm it stays intact.
+3. Dictate and send a message. The composer should clear once and late speech
+   callbacks must not restore it. Check both the send button and keyboard Return.
+4. Long-press a Jarvis reply and select part of a sentence using native handles.
+   Live tools should follow Jarvis's acknowledgment; final tools should be collapsed
+   beneath the reply and expand on tap.
+5. Check Training targets and other Settings fields: each value has a persistent
+   label, including after editing, at the owner's preferred text size.
+6. Check lighter widget supporting text, the Tasks widget opening its task tab,
+   and no Background activity bar when the activity sheet has nothing visible.
+
+Copilot is still unavailable. Current can be tested in a separate conversation;
+use the comparison guide only once faithful Copilot activation is established.
+
+## Retained failed attempts and corrections
 
 The first follow-up CI (42373384283, source 872f3503) built JarvisCore and ran
 509 tests with three failed assertions: the older transport-fixture expectation
@@ -104,3 +172,9 @@ signal now uses the documented CFNotificationCenterAddObserver/PostNotification
 APIs, with an observer owned by the fixture and removed on destruction. Apple’s
 API documentation confirms main-thread delivery; the callback hops to the fixture
 actor. This is another retained build failure, not native verification.
+
+Final native 42377707190 qualified both corrected cases. The test-owned completion
+signal holds Chat until the interrupted Working state and next draft are asserted;
+the final capture confirms one compact follow-up, preserved next draft and collapsed
+tools beneath Jarvis. The Danish target edit validates and saves the intended value.
+No test limit was raised and no assertion was removed.
