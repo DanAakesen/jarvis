@@ -8,7 +8,7 @@ import {
 import type { Project, ProjectStore } from './projects.js';
 import type { TaskRecord, TaskStore } from './task-store.js';
 import { GitHubIssueRequestError, type GitHubIssue, type GitHubIssueClient } from '../github/issues.js';
-import { ToolRefusal } from '../core/tool-registry.js';
+import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import { taskStates } from './task-lifecycle.js';
 
 const maxPromptBytes = 50_000;
@@ -122,7 +122,12 @@ export async function previewP11TaskCode(input: {
   const repository = input.project === undefined
     ? await resolveRepository(undefined, input.projects)
     : (await resolveProject(input.project, input.projects)).repo;
-  const issueTitles = await input.github.listIssueTitles(repository);
+  let issueTitles: readonly string[];
+  try {
+    issueTitles = await input.github.listIssueTitles(repository);
+  } catch {
+    throw new ToolFailure('I couldn’t read the complete GitHub issue list needed to allocate a task number. No issue or task was created. Check GitHub access and the issue-list service before retrying; rewording the request will not fix this.');
+  }
   return { repository, taskCode: allocateP11TaskCode(issueTitles) };
 }
 

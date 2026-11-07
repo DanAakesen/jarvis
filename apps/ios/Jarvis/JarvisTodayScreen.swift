@@ -545,6 +545,7 @@ struct JarvisTodayScreen: View {
 
     private func sendDraft() {
         guard canSend else { return }
+        dictation.stop()
         let text = draft
         draft = ""
         composerFocused = false

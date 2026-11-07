@@ -64,11 +64,12 @@ final class ChatPresentationUITests: XCTestCase {
     func testCompletedJobsHideNowBarAndAwayModeInBothLanguages() {
         for language in ["en", "da"] {
             let app = XCUIApplication()
-            app.launchArguments = ["--screenshot-activity-state=empty", "-jarvis.appLanguage", language,
+            app.launchArguments = ["--screenshot-chat-fixture", "--screenshot-activity-state=empty", "-jarvis.appLanguage", language,
                                    "-jarvis.appTheme", language == "en" ? "dark" : "light"]
             app.launch()
             let hero = app.descendants(matching: .any)["notifications.hero"]
             XCTAssertTrue(hero.waitForExistence(timeout: 10))
+            XCTAssertTrue(hero.isHittable, "The empty Notifications view must be visible above the gate")
             XCTAssertFalse(app.staticTexts["Away mode"].exists)
             XCTAssertFalse(app.staticTexts["Fraværstilstand"].exists)
             let empty = XCTAttachment(screenshot: app.screenshot())
@@ -116,42 +117,33 @@ final class ChatPresentationUITests: XCTestCase {
         app.launchArguments = ["--screenshot-chat-fixture"]
         app.launch()
 
-        let heading = markdownBlock(in: app, messageID: "413", index: 0)
-        let introduction = markdownBlock(in: app, messageID: "413", index: 1)
-        let productReview = markdownBlock(in: app, messageID: "413", index: 2)
-        let dentistAppointment = markdownBlock(in: app, messageID: "413", index: 3)
-        let quarterlyPlanning = markdownBlock(in: app, messageID: "413", index: 4)
-
-        XCTAssertTrue(heading.waitForExistence(timeout: 10))
-        XCTAssertEqual(heading.label, "Calendar for the next 30 days")
-        XCTAssertEqual(introduction.label, "You have 3 important events:")
-        XCTAssertEqual(productReview.label, "Monday, 2 November · 09:00–09:30 — Product review")
-        XCTAssertEqual(dentistAppointment.label, "Wednesday, 11 November · 14:00–15:00 — Dentist appointment")
-        XCTAssertEqual(quarterlyPlanning.label, "Friday, 20 November · 10:00–11:00 — Quarterly planning")
-
-        let blocks = [heading, introduction, productReview, dentistAppointment, quarterlyPlanning]
-        for (previous, next) in zip(blocks, blocks.dropFirst()) {
-            XCTAssertGreaterThan(
-                next.frame.minY,
-                previous.frame.maxY + 4,
-                "Markdown blocks should have visible vertical separation."
-            )
+        let reply = app.textViews["chat.reply.413"]
+        XCTAssertTrue(reply.waitForExistence(timeout: 10))
+        let text = reply.value as? String ?? reply.label
+        for expected in ["Calendar for the next 30 days", "You have 3 important events:",
+                         "Monday, 2 November · 09:00–09:30", "Product review",
+                         "Wednesday, 11 November · 14:00–15:00", "Dentist appointment",
+                         "Friday, 20 November · 10:00–11:00", "Quarterly planning"] {
+            XCTAssertTrue(text.contains(expected), "Missing formatted reply content: \(expected)")
         }
-
-        let toolStatus = app.descendants(matching: .any)
-            .matching(NSPredicate(
-                format: "label CONTAINS[c] %@ AND label CONTAINS[c] %@",
-                "get calendar events",
-                "ok"
-            ))
-            .firstMatch
-        XCTAssertTrue(toolStatus.exists)
-        XCTAssertEqual(toolStatus.frame.minX, heading.frame.minX, accuracy: 2)
+        XCTAssertTrue(text.contains("\n"), "Markdown paragraphs remain separate in one selectable reply")
+        XCTAssertFalse(text.contains("**"))
+        let tools = app.buttons["chat.tools.413"]
+        XCTAssertTrue(tools.exists)
+        XCTAssertEqual(tools.frame.minX, reply.frame.minX, accuracy: 2)
+        XCTAssertGreaterThan(tools.frame.minY, reply.frame.maxY)
+        XCTAssertFalse(app.staticTexts["get calendar events"].exists)
+        tools.tap()
+        XCTAssertTrue(app.staticTexts["get calendar events"].waitForExistence(timeout: 3))
+        tools.tap()
+        XCTAssertFalse(app.staticTexts["get calendar events"].exists)
+        reply.press(forDuration: 1.2)
+        XCTAssertTrue(app.menuItems["Copy"].waitForExistence(timeout: 5), "Native text selection must expose Copy")
+        let capture = XCTAttachment(screenshot: app.screenshot())
+        capture.name = "chat-native-reply-selection-and-collapsed-tools"
+        capture.lifetime = .keepAlways
+        add(capture)
+        app.terminate()
     }
 
-    private func markdownBlock(in app: XCUIApplication, messageID: String, index: Int) -> XCUIElement {
-        app.descendants(matching: .any)
-            .matching(identifier: "chat-markdown-block-\(messageID)-\(index)")
-            .firstMatch
-    }
 }

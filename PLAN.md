@@ -1,3 +1,33 @@
+## 7 November 2026 — Settings, Chat turn feedback and issue drafting
+
+Active follow-up in PR #1629: persistent Settings field labels; native reply text
+selection; content-sized owner bubbles; exact-ID replacement of saved steering
+messages; invalidation of stopped dictation callbacks; acknowledgment/tool/final
+reply grouping; visible active/reconnecting status throughout an interrupted turn.
+Backend activity now includes an optional validated message ID for safe live tool
+correlation. The existing receipt gate for Copilot stays closed after its second
+policy turn failed. The owner comparison guide remains available.
+
+The reported scaffold failure has a reproducible upstream read cause: repository
+issue page 7 is 1,099,352 bytes, above the 1 MiB GitHub client limit. The new reader
+splits only oversized windows, preserving the response ceiling and full scan
+before task-code allocation. A read-only real-repository check returned all 1,626
+records using 21 GET requests and zero writes. Focused backend tests: 157 passed;
+contract tests: 45 passed; backend no-emit typecheck passed. Native Settings/Chat
+verification and CI are pending; do not mark this candidate released.
+
+Widget/Now source e9aa204b passed all 10 automated focused cases in 42370022661.
+The EN-light widget and active Notifications captures were inspected. The empty
+Notifications/Chat attachments exposed a verification gap: the screenshot launch
+omitted the existing chat fixture flag and showed the sign-in cover despite AX
+existence checks. The next focused run adds that flag and visible/hittable checks;
+those captures are not accepted visual evidence. Retain the earlier failed run
+42368114024. Reuse unchanged widget/navigation evidence; do not rerun the gallery.
+
+Continue isolated checks while the owner tests project scaffolding. After review,
+normal backend deployment/acceptance must precede the new TestFlight upload.
+See docs/ios/design/p15-chat-settings-feedback.md for the current evidence.
+
 ## 7 November 2026 — Widget contrast and Tasks focus
 
 The owner requests darker supporting widget labels in light mode and a task-only

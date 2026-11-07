@@ -197,7 +197,12 @@ public final class JarvisWorkspaceClient: Sendable {
         switch event.name {
         case "now", "refresh", "mode":
             decoded = .pendingConfirmationsChanged
-        case "jarvis-activity", "job":
+        case "jarvis-activity":
+            if let tool = try? JSONDecoder().decode(ChatToolActivity.self, from: Data(event.data.utf8)) {
+                continuation.yield(.chatToolActivity(tool))
+            }
+            decoded = .activityChanged
+        case "job":
             decoded = .activityChanged
         case "status":
             guard let status = try? JSONDecoder().decode(WorkspaceStatusEvent.self, from: Data(event.data.utf8)) else {

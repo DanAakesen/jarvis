@@ -49,7 +49,7 @@ final class ChatComposerUITests: XCTestCase {
 
     func testVoiceAndChatShareHistoryAndTheNextTypedTurnUsesTheChatSession() {
         let app = launch(language: "en", extraArguments: ["--ui-test-voice-history"])
-        let spokenReply = app.descendants(matching: .any)["chat-markdown-block-421-0"]
+        let spokenReply = app.descendants(matching: .any)["chat.reply.421"]
         XCTAssertTrue(spokenReply.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any).matching(
             NSPredicate(format: "label == %@", "You: Synthetic spoken question")
@@ -59,9 +59,9 @@ final class ChatComposerUITests: XCTestCase {
         input.typeText("The fixture turn")
         app.buttons["chat.send"].tap()
         // The fixture accepts turns only on chat session 12, never voice session 13.
-        let typedReply = app.descendants(matching: .any)["chat-markdown-block-431-0"]
+        let typedReply = app.descendants(matching: .any)["chat.reply.431"]
         XCTAssertTrue(typedReply.waitForExistence(timeout: 10))
-        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "chat-markdown-block-431-0").count, 1)
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "chat.reply.431").count, 1)
         app.terminate()
     }
 

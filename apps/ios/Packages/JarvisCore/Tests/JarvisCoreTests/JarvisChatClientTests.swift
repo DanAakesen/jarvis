@@ -202,6 +202,8 @@ final class JarvisChatClientTests: XCTestCase {
                 at: "2026-10-30T00:00:00.000Z"
             )),
             .delta(text: "Hello"),
+            .connectionState(.reconnecting),
+            .connectionState(.connected),
             .done(ChatMessage(
                 id: "43", sessionId: "12", role: .jarvis, text: "Hello", model: nil,
                 at: "2026-10-30T00:00:01.000Z"
@@ -413,7 +415,7 @@ final class JarvisChatClientTests: XCTestCase {
 
     func testSteerTurnPostsFollowUpAndReportsNoActiveTurn() async throws {
         let transport = FakeChatTransport([
-            .response(jsonResponse(status: 202, body: ["id": "43"])),
+            .response(jsonResponse(status: 202, body: ["id": "43", "sessionId": "12", "role": "dan", "text": "Hurtigere", "at": "2026-11-07T13:14:00Z"])),
             .response(HTTPResponse(statusCode: 409)),
         ])
         let chat = makeChatClient(transport: transport)
@@ -421,13 +423,27 @@ final class JarvisChatClientTests: XCTestCase {
         let steered = try await chat.steerTurn(sessionId: "12", text: "Hurtigere", language: .da)
         let idle = try await chat.steerTurn(sessionId: "12", text: "Hurtigere", language: .da)
 
-        XCTAssertTrue(steered)
-        XCTAssertFalse(idle)
+        XCTAssertEqual(steered?.id, "43")
+        XCTAssertEqual(steered?.text, "Hurtigere")
+        XCTAssertNil(idle)
         let requests = await transport.recordedRequests()
         XCTAssertEqual(requests.map(\.url.path), [
             "/api/conversation/sessions/12/steer",
             "/api/conversation/sessions/12/steer",
         ])
+    }
+
+    func testSteeringRejectsAnUnrelatedMessageInsteadOfReplacingTheDraftByText() async throws {
+        for (session, role) in [("99", "dan"), ("12", "jarvis")] {
+            let chat = makeChatClient(transport: FakeChatTransport([
+                .response(jsonResponse(status: 202, body: ["id": "43", "sessionId": session,
+                    "role": role, "text": "?", "at": "2026-11-07T13:14:00Z"])),
+            ]))
+            do {
+                _ = try await chat.steerTurn(sessionId: "12", text: "?", language: .en)
+                XCTFail("A saved follow-up must belong to this owner turn")
+            } catch { XCTAssertEqual(error as? JarvisChatClientError, .invalidResponse) }
+        }
     }
 
     func testUploadsOneMultipartAttachmentWithinSizeLimit() async throws {

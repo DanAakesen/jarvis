@@ -208,3 +208,32 @@ describe('GitHub issue client', () => {
     }));
   });
 });
+
+
+it('splits oversized issue pages and preserves every task-code title and suffix match', async () => {
+  const records = Array.from({ length: 130 }, (_, index) => ({
+    number: index + 1, title: index === 129 ? 'P11-99: Factory task 42' : `P11-${String(index + 1).padStart(2, '0')}: Existing`,
+    body: 'x'.repeat(16_000),
+  }));
+  const windows: string[] = [];
+  const client = createGitHubIssueClient({ issueForRepositoryRead: vi.fn(async () => 'token') } as unknown as GitHubAppTokenIssuer,
+    async (input) => {
+      const url = new URL(String(input));
+      const size = Number(url.searchParams.get('per_page'));
+      const page = Number(url.searchParams.get('page'));
+      windows.push(`${size}:${page}`);
+      return Response.json(records.slice((page - 1) * size, page * size));
+    });
+  await expect(client.listIssueTitles('DanAakesen/jarvis')).resolves.toEqual(records.map(({ title }) => title));
+  expect(windows).toEqual(['100:1', '25:1', '25:2', '25:3', '25:4', '100:2']);
+  await expect(client.findIssueByTitleSuffix('DanAakesen/jarvis', 'Factory task 42')).resolves.toEqual({
+    number: 130, url: 'https://github.com/DanAakesen/jarvis/issues/130',
+  });
+});
+
+it('never allocates from partial results when even one issue exceeds the response ceiling', async () => {
+  const request = vi.fn(async () => Response.json([{ title: 'P11-01', body: 'x'.repeat(1_100_000) }]));
+  const client = createGitHubIssueClient({ issueForRepositoryRead: vi.fn(async () => 'token') } as unknown as GitHubAppTokenIssuer, request);
+  await expect(client.listIssueTitles('DanAakesen/jarvis')).rejects.toThrow('response is too large');
+  expect(request).toHaveBeenCalledTimes(4);
+});

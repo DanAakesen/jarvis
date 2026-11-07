@@ -149,3 +149,11 @@
 "chat.runtime.runtimeStopFailed" = "Kunne ikke bekræfte, at svaret blev stoppet. Vent på svaret, og tjek handlingens status.";
 "chat.runtime.runtimeYou" = "Dig";
 "chat.runtime.older" = "Hent ældre beskeder";
+
+"chat.turn.working" = "Arbejder…";
+"chat.turn.writing" = "Skriver svar…";
+"chat.turn.tools" = "Værktøjsaktivitet";
+"chat.turn.toolRunning" = "Kører";
+"chat.turn.toolOK" = "Færdig";
+"chat.turn.toolRefused" = "Ikke tilladt";
+"chat.turn.toolError" = "Mislykkedes";

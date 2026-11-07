@@ -3553,3 +3553,17 @@ Native run 42368114024 produced inspected English/dark and Danish/light widget
 captures with readable secondary text and three Tasks rows. It was not a pass:
 the gallery timed out and widget task-tab selection failed. Root-owned tab state
 and bounded snapshot-based geometry checks await a new focused native run.
+
+### Settings and Chat feedback refinement (7 November 2026)
+
+JarvisSettingsTextField provides persistent primary-text labels and trailing values,
+with stacked multiline/accessibility fallbacks. The reference is the owner-approved
+Health goals form. Keep existing ranges, save controls and validation.
+Chat owner surfaces fit short content while preserving the readable width cap.
+One native, noneditable selectable reply retains headings, emphasis, links and list
+spacing. Selection spans paragraphs and survives unrelated activity refreshes.
+The shared row control expands final tool details below Jarvis's reply. Live tools
+remain expanded under acknowledgment text; a small orb/status row above the composer
+stays visible while working/reconnecting. It disappears only on completion/failure,
+where existing error recovery remains visible. Reduce Motion retains static feedback.
+Native rendering/selection checks for this follow-up are pending.

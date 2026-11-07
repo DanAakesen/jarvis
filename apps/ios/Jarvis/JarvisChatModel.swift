@@ -4,6 +4,7 @@ import SwiftUI
 
 struct JarvisChatRow: Identifiable, Equatable {
     let id: String
+    let sessionID: String
     let channel: ConversationChannel
     let role: ConversationRole
     var text: String
@@ -14,6 +15,7 @@ struct JarvisChatRow: Identifiable, Equatable {
 
     init(_ message: ChatHistoryMessage) {
         id = message.id
+        sessionID = message.sessionId
         channel = message.channel
         role = message.role
         text = message.text
@@ -30,6 +32,7 @@ struct JarvisChatRow: Identifiable, Equatable {
 
     init(id: String, role: ConversationRole, text: String, at: String) {
         self.id = id
+        sessionID = "local"
         channel = .chat
         self.role = role
         self.text = text
@@ -41,6 +44,7 @@ struct JarvisChatRow: Identifiable, Equatable {
 
     init(_ message: ChatMessage) {
         id = message.id
+        sessionID = message.sessionId
         channel = .chat
         role = message.role
         text = message.text
@@ -95,6 +99,12 @@ final class JarvisChatModel: ObservableObject {
     @Published var actionError: String?
     @Published var statusLine: String?
     @Published var streamingText = ""
+    @Published private(set) var acknowledgment: String?
+    @Published private(set) var isReconnecting = false
+    @Published private var toolActivities: [ChatToolActivity] = []
+    private var turnMessageIDs = Set<String>()
+
+    var liveTools: [ChatToolActivity] { toolActivities.filter { turnMessageIDs.contains($0.messageId) } }
     @Published var nowFeed: JarvisNowFeed?
     @Published private(set) var backgroundTasks: [BackgroundTaskRecord] = []
     @Published var activityError: String?
@@ -147,10 +157,10 @@ final class JarvisChatModel: ObservableObject {
 
     var canSend: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-            (!fixtureMode || !fixtureTurnUsed)
+            (!fixtureMode || JarvisChatFeedbackFixtureTransport.isEnabled || !fixtureTurnUsed)
     }
 
-    var fixtureTurnUnavailable: Bool { fixtureMode && fixtureTurnUsed }
+    var fixtureTurnUnavailable: Bool { fixtureMode && !JarvisChatFeedbackFixtureTransport.isEnabled && fixtureTurnUsed }
     var canCancel: Bool { activeMessageID != nil }
     var hasOlderMessages: Bool { historyPaging.nextCursor != nil }
 
@@ -334,6 +344,10 @@ final class JarvisChatModel: ObservableObject {
         isCancelling = false
         actionError = nil
         streamingText = ""
+        acknowledgment = nil
+        isReconnecting = false
+        toolActivities = []
+        turnMessageIDs = []
         let text = draft
         let attachments = pendingAttachments
         thinkingPhrase = ChatThinkingPhrase.phrase(
@@ -369,7 +383,13 @@ final class JarvisChatModel: ObservableObject {
         steeringMessageIDs.append(followUpID)
         Task {
             do {
-                if try await client.steerTurn(sessionId: sessionID, text: text, language: language) { return }
+                if let saved = try await client.steerTurn(sessionId: sessionID, text: text, language: language) {
+                    turnMessageIDs.insert(saved.id)
+                    messages.removeAll { $0.id == followUpID }
+                    steeringMessageIDs.removeAll { $0 == followUpID }
+                    addOrReplace(JarvisChatRow(saved))
+                    return
+                }
                 actionError = JarvisChatLocalization.string(.followUpUnavailable, language: appLanguage)
             } catch {
                 actionError = message(for: error)
@@ -456,12 +476,21 @@ final class JarvisChatModel: ObservableObject {
     }
 
     func watchActivity() async {
-        guard !fixtureMode else { return }
+        guard !fixtureMode || JarvisChatFeedbackFixtureTransport.isEnabled else { return }
         guard let updatesClient else { return }
         do {
             for try await event in updatesClient.events() {
                 try Task.checkCancellation()
                 switch event {
+                case .chatToolActivity(let tool):
+                    guard isSending else { continue }
+                    if let index = toolActivities.firstIndex(where: { $0.id == tool.id }) {
+                        // A replayed start must not replace a completed outcome.
+                        if toolActivities[index].outcome == nil || tool.outcome != nil { toolActivities[index] = tool }
+                    } else {
+                        toolActivities.append(tool)
+                        if toolActivities.count > 128 { toolActivities.removeFirst() }
+                    }
                 case .pendingConfirmationsChanged:
                     await refreshActivity()
                     if !isSending { await refreshHistory() }
@@ -664,7 +693,7 @@ final class JarvisChatModel: ObservableObject {
             statusLine = nil
             discardOptimisticMessage()
             if !Task.isCancelled { actionError = message(for: error) }
-            streamingText = ""
+            // Keep any partial reply readable beside the failure; it is not a completed response.
         }
         sendTask = nil
     }
@@ -740,6 +769,7 @@ final class JarvisChatModel: ObservableObject {
             sessionID = turn.sessionId
             language = turn.language
             activeMessageID = turn.messageId
+            turnMessageIDs.insert(turn.messageId)
             isSending = true
             statusLine = JarvisChatLocalization.string(.thinkingReconnecting, language: appLanguage)
             sendTask = Task { await reattach(turn) }
@@ -753,20 +783,33 @@ final class JarvisChatModel: ObservableObject {
         for try await event in events {
             try Task.checkCancellation()
             switch event {
+            case .connectionState(let state):
+                isReconnecting = state == .reconnecting
             case .user(let message):
-                activeMessageID = message.id
+                turnMessageIDs.insert(message.id)
+                if activeMessageID == nil { activeMessageID = message.id }
                 sessionID = message.sessionId
                 discardOptimisticMessage()
                 addOrReplace(JarvisChatRow(message))
             case .delta(let text):
                 streamingText += text
             case .acknowledgment(let text):
-                statusLine = text
-            case .interrupted(let message), .done(let message):
+                acknowledgment = text
+                if streamingText.hasPrefix(text) { streamingText.removeFirst(text.count) }
+            case .interrupted(let message):
+                var row = JarvisChatRow(message)
+                row.interrupted = true
+                addOrReplace(row)
+                streamingText = ""
+                acknowledgment = nil
+                // An interrupted round can continue with a steering message on the same turn.
+            case .done(let message):
                 addOrReplace(JarvisChatRow(message))
                 activeMessageID = nil
                 streamingText = ""
                 statusLine = nil
+                acknowledgment = nil
+                isReconnecting = false
             case .foodInvitation, .error, .unknown:
                 break
             }

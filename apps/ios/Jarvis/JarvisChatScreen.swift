@@ -30,74 +30,12 @@ private enum ChatSheet: Identifiable {
 private struct RenderedChatRow: Identifiable {
     let message: JarvisChatRow
     let showsTimestamp: Bool
+    let replyTools: [ChatHistoryToolCall]
+    let unansweredTools: [ChatHistoryToolCall]
 
     var id: String { message.id }
 }
 
-private enum ChatMarkdownBlock {
-    case heading(level: Int, text: String)
-    case paragraph(String)
-    case listItem(marker: String, text: String)
-
-    static func parse(_ markdown: String) -> [ChatMarkdownBlock] {
-        var blocks: [ChatMarkdownBlock] = []
-        var paragraphLines: [String] = []
-
-        func appendParagraph() {
-            guard !paragraphLines.isEmpty else { return }
-            blocks.append(.paragraph(paragraphLines.joined(separator: " ")))
-            paragraphLines.removeAll()
-        }
-
-        for sourceLine in markdown.components(separatedBy: .newlines) {
-            let line = sourceLine.trimmingCharacters(in: .whitespaces)
-            guard !line.isEmpty else {
-                appendParagraph()
-                continue
-            }
-
-            let headingLevel = line.prefix(while: { $0 == "#" }).count
-            if (1...6).contains(headingLevel),
-               line.dropFirst(headingLevel).first?.isWhitespace == true {
-                appendParagraph()
-                let heading = line.dropFirst(headingLevel).trimmingCharacters(in: .whitespaces)
-                blocks.append(.heading(level: headingLevel, text: heading))
-                continue
-            }
-
-            if let marker = ["- ", "* ", "+ "].first(where: line.hasPrefix) {
-                appendParagraph()
-                blocks.append(.listItem(
-                    marker: "•",
-                    text: String(line.dropFirst(marker.count))
-                ))
-                continue
-            }
-
-            if let listItem = numberedListItem(line) {
-                appendParagraph()
-                blocks.append(.listItem(marker: listItem.marker, text: listItem.text))
-                continue
-            }
-
-            paragraphLines.append(line)
-        }
-
-        appendParagraph()
-        return blocks
-    }
-
-    private static func numberedListItem(_ line: String) -> (marker: String, text: String)? {
-        guard let separator = line.firstIndex(where: { $0 == "." || $0 == ")" }),
-              line[line.index(after: separator)...].first?.isWhitespace == true else {
-            return nil
-        }
-        let number = line[..<separator]
-        guard !number.isEmpty, number.allSatisfy(\.isNumber) else { return nil }
-        let text = line[line.index(after: separator)...].trimmingCharacters(in: .whitespaces)
-        return ("\(number)\(line[separator])", text)
-    }
-}
 
 struct JarvisChatScreen: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -131,6 +69,7 @@ struct JarvisChatScreen: View {
     }
     private let runtimeTestClient: JarvisChatClient?
     private let screenShareBridge = VoiceScreenShareBridge()
+    @State private var expandedTools = Set<String>()
 
     init(
         client: JarvisClient?,
@@ -153,7 +92,11 @@ struct JarvisChatScreen: View {
     }
 
     private var renderedRows: [RenderedChatRow] {
-        model.messages.enumerated().map { index, message in
+        let placement = ChatToolPlacement(messages: model.messages.map {
+            .init(id: $0.id, sessionID: $0.sessionID, channel: $0.channel, role: $0.role,
+                  tools: $0.toolCalls, interrupted: $0.interrupted)
+        })
+        return model.messages.enumerated().map { index, message in
             let previous = index > 0 ? model.messages[index - 1] : nil
             return RenderedChatRow(
                 message: message,
@@ -162,7 +105,9 @@ struct JarvisChatScreen: View {
                     at: message.at,
                     previousRole: previous?.role,
                     previousAt: previous?.at
-                )
+                ),
+                replyTools: placement.replies[message.id] ?? [],
+                unansweredTools: placement.unanswered[message.id] ?? []
             )
         }
     }
@@ -398,16 +343,32 @@ struct JarvisChatScreen: View {
                         }
                         ForEach(renderedRows) { row in
                             messageRow(row)
+                            if !row.unansweredTools.isEmpty && !model.isSending {
+                                completedTools(row.unansweredTools, messageID: "unanswered-\(row.id)")
+                            }
                         }
                         if model.isSending || !model.streamingText.isEmpty {
-                            messageBubble(
-                                text: model.streamingText.isEmpty
-                                    ? (model.statusLine ?? "Thinking…") : model.streamingText,
-                                role: .jarvis,
-                                interrupted: false,
-                                messageID: "streaming"
-                            )
-                                .id("streaming-message")
+                            if let acknowledgment = model.acknowledgment {
+                                messageBubble(text: acknowledgment, role: .jarvis, interrupted: false, messageID: "acknowledgment")
+                            }
+                            if model.acknowledgment == nil && model.streamingText.isEmpty {
+                                messageBubble(text: model.statusLine ?? copy(.turnWorking), role: .jarvis,
+                                              interrupted: false, messageID: "streaming")
+                            }
+                            if model.isSending && !model.liveTools.isEmpty {
+                                VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                                    ForEach(model.liveTools) { tool in
+                                        toolRow(name: tool.toolName, outcome: tool.outcome)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityIdentifier("chat.tools.live")
+                            }
+                            if !model.streamingText.isEmpty {
+                                messageBubble(text: model.streamingText, role: .jarvis,
+                                              interrupted: !model.isSending, messageID: "streaming")
+                                    .id("streaming-message")
+                            }
                         }
                         Color.clear
                             .frame(height: 1)
@@ -467,23 +428,7 @@ struct JarvisChatScreen: View {
                 interrupted: row.message.interrupted,
                 messageID: row.message.id
             )
-            if !row.message.toolCalls.isEmpty {
-                VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    ForEach(row.message.toolCalls, id: \.id) { tool in
-                        HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                            Image(systemName: tool.outcome == .ok ? "checkmark.circle" : "exclamationmark.circle")
-                                .foregroundStyle(tool.outcome == .ok ? Color.secondary : Color.orange)
-                                .accessibilityHidden(true)
-                            Text(tool.tool.replacingOccurrences(of: "_", with: " "))
-                            Text(tool.outcome.rawValue.capitalized)
-                                .foregroundStyle(.secondary)
-                        }
-                        .font(.caption)
-                        .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
-                        .accessibilityElement(children: .combine)
-                    }
-                }
-            }
+            if !row.replyTools.isEmpty { completedTools(row.replyTools, messageID: row.id) }
             if !row.message.attachments.isEmpty {
                 HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
                     ForEach(row.message.attachments, id: \.id) { attachment in
@@ -500,6 +445,46 @@ struct JarvisChatScreen: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: row.message.role == .dan ? .trailing : .leading)
+    }
+
+    private func completedTools(_ tools: [ChatHistoryToolCall], messageID: String) -> some View {
+        let expanded = expandedTools.contains(messageID)
+        return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+            JarvisRowButton(identifier: "chat.tools.\(messageID)", action: {
+                if expanded { expandedTools.remove(messageID) } else { expandedTools.insert(messageID) }
+            }) {
+                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                    Image(systemName: "wrench.and.screwdriver")
+                    Text(copy(.toolActivity))
+                    Text("\(tools.count)")
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .accessibilityValue(copy(expanded ? .menuExpanded : .menuCollapsed))
+            if expanded {
+                ForEach(tools, id: \.id) { tool in toolRow(name: tool.tool, outcome: tool.outcome) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func toolRow(name: String, outcome: ChatToolOutcome?) -> some View {
+        HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+            if let outcome {
+                Image(systemName: outcome == .ok ? "checkmark.circle" : "exclamationmark.circle")
+                    .foregroundStyle(outcome == .ok ? Color.secondary : Color.orange)
+                    .accessibilityHidden(true)
+            } else {
+                ProgressView().controlSize(.mini).accessibilityHidden(true)
+            }
+            Text(name.replacingOccurrences(of: "_", with: " "))
+            Text(copy(outcome.map { $0 == .ok ? .toolOK : ($0 == .refused ? .toolRefused : .toolError) } ?? .toolRunning))
+                .foregroundStyle(.secondary)
+        }
+        .font(.caption)
+        .accessibilityElement(children: .combine)
     }
 
     private func messageBubble(
@@ -527,7 +512,7 @@ struct JarvisChatScreen: View {
                     .foregroundStyle(messageID == "streaming" && model.streamingText.isEmpty ? .secondary : .primary)
                     .jarvisShimmer(isActive: messageID == "streaming" && model.streamingText.isEmpty && !reduceMotion && !model.fixtureMode)
                     .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(maxWidth: isUser ? nil : .infinity, alignment: .leading)
             }
             if interrupted {
                 Text("Interrupted")
@@ -539,7 +524,7 @@ struct JarvisChatScreen: View {
             if isUser {
                 content
                     .padding(JarvisDesignTokens.chatGlassInset)
-                    .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
                     .background {
                         if reduceTransparency {
                             userBubbleShape
@@ -561,6 +546,7 @@ struct JarvisChatScreen: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("You: \(text)")
                     .accessibilityIdentifier("chat.message.user")
+                    .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .trailing)
             } else {
                 content
                     .padding(.vertical, JarvisDesignTokens.chatGlassInset)
@@ -573,7 +559,9 @@ struct JarvisChatScreen: View {
 
     @ViewBuilder
     private func messageText(_ text: String, role: ConversationRole, messageID: String) -> some View {
-        if role == .jarvis {
+        if role == .jarvis && messageID != "streaming" && messageID != "acknowledgment" {
+            JarvisSelectableReply(text: text, identifier: "chat.reply.\(messageID)")
+        } else if role == .jarvis {
             let blocks = ChatMarkdownBlock.parse(text)
             VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
                 ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
@@ -586,7 +574,7 @@ struct JarvisChatScreen: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             Text(text)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -652,6 +640,20 @@ struct JarvisChatScreen: View {
                 }
                 .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                 .accessibilityElement(children: .contain)
+            }
+            if model.isSending {
+                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                    JarvisOrb(activity: .thinking, size: JarvisDesignTokens.chatMiniCoreSize,
+                              isStatic: model.fixtureMode || reduceMotion)
+                    Text(copy(model.isReconnecting ? .thinkingReconnecting :
+                                (model.streamingText.isEmpty ? .turnWorking : .turnWriting)))
+                        .font(.footnote)
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("chat.turn.status")
             }
             if model.shouldShowNowBar {
                 nowBar
@@ -1040,6 +1042,7 @@ struct JarvisChatScreen: View {
 
     private func sendMessage() {
         guard model.canSend else { return }
+        dictation.stop()
         if !model.isSending, let source = liveSource {
             let frame = source == .screen ? screenShareBridge.latestFrame() : cameraCapture?.latestFrame()
             guard let frame else {

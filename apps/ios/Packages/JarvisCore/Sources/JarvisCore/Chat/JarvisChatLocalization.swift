@@ -1,6 +1,13 @@
 import Foundation
 
 public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
+    case turnWorking = "chat.turn.working"
+    case turnWriting = "chat.turn.writing"
+    case toolActivity = "chat.turn.tools"
+    case toolRunning = "chat.turn.toolRunning"
+    case toolOK = "chat.turn.toolOK"
+    case toolRefused = "chat.turn.toolRefused"
+    case toolError = "chat.turn.toolError"
     case runtimeOlder = "chat.runtime.older"
     case runtimeTest = "chat.runtime.runtimeTest"
     case runtimeTestIntro = "chat.runtime.runtimeTestIntro"

@@ -10,9 +10,9 @@ enum JarvisFixtureScenario {
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!
             ),
-            transport: JarvisRuntimeTestFixtureTransport(base: WorkspaceFixtureTransport(base: FixtureTransport(scenario: try fixtureScenarioData(
+            transport: JarvisChatFeedbackFixtureTransport(base: JarvisRuntimeTestFixtureTransport(base: WorkspaceFixtureTransport(base: FixtureTransport(scenario: try fixtureScenarioData(
                 emptyActivity: emptyActivity, calendarChangeLanguage: calendarChangeLanguage
-            )), completedActivity: emptyActivity)),
+            )), completedActivity: emptyActivity))),
             tokenStore: FixtureTokenStore(),
             accessTokenProvider: FixtureTokenProvider()
         )
@@ -93,7 +93,7 @@ enum JarvisFixtureScenario {
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!
             ),
-            transport: FixtureTransport(scenario: Data(settingsScenario.utf8)),
+            transport: try JarvisSettingsFixtureTransport(scenario: Data(settingsScenario.utf8)),
             tokenStore: FixtureTokenStore(),
             accessTokenProvider: FixtureTokenProvider()
         )

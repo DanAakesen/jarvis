@@ -7378,3 +7378,19 @@ The instrumented Copilot activation 42369093453 failed on turn 2: stream and fin
 classify as previous_policy; turn 1 passed. Current normal Deploy 42367439515 is
 accepted with all 15 checks. No receipt exists. Do not retry unchanged provisioning
 or weaken the gate. Investigate a supported instruction-update path first.
+
+## Settings/Chat/scaffold continuation (7 November 2026)
+
+PR #1629 now also covers owner-reported Settings labels, duplicate steering bubbles,
+sent dictation restoration, native text selection and visible turn/tool progress.
+Read docs/ios/design/p15-chat-settings-feedback.md. Native checks must use the real
+candidate tree and existing 120/150-second limits. The 10/10 e9aa automated run is
+retained; empty-activity visual evidence needs correction because its launch omitted
+--screenshot-chat-fixture. No duplicate widget simulator run is needed.
+
+The scaffold draft reader was reproduced against GitHub without writes: page 7
+exceeds 1 MiB; the adaptive reader now reads all 1,626 records in 21 requests.
+Backend/contracts tests passed locally; native and CI are pending. Normal accepted
+backend deployment precedes iOS upload. Keep the owner E2E test undisturbed while
+preparing and verifying these changes. Copilot remains unavailable; no receipt,
+policy weakening or additional live probe is authorized by this UI correction.

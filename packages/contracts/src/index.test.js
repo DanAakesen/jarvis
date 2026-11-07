@@ -1227,3 +1227,15 @@ test('workspace snapshots report a device kind and commands may name a target', 
   assert.equal(isWorkspaceCommand({ commandId: 'c1', operation: 'minimise-all', target: 'tablet' }), false);
   assert.equal(isWorkspaceCommand({ commandId: 'c1', operation: 'minimise-all' }), true);
 });
+
+
+test('correlates tool activity with a validated conversation message without exposing payloads', () => {
+  const base = { type: 'tool-call-started', activityId: '12345678-1234-4234-8234-123456789abc', source: 'chat', toolName: 'repo_read' };
+  assert.equal(isJarvisActivityEvent(base), true);
+  assert.equal(isJarvisActivityEvent({ ...base, messageId: '42' }), true);
+  assert.equal(isJarvisActivityEvent({ ...base, type: 'tool-call-finished', outcome: 'error', messageId: '42' }), true);
+  for (const messageId of [0, '0', '', '9223372036854775808', null, '42\n']) {
+    assert.equal(isJarvisActivityEvent({ ...base, messageId }), false);
+  }
+  assert.equal(isJarvisActivityEvent({ ...base, messageId: '42', arguments: { secret: 'fixture' } }), false);
+});

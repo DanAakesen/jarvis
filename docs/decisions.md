@@ -11442,3 +11442,18 @@ Instrumented Copilot activation confirms initial structured policy works but a
 second policy is ignored in the same native conversation (42369093453, turn 2,
 stream/final previous_policy). Keep Copilot disabled; faithful policy-update
 compatibility is not established. Do not deploy during the owner's E2E project test.
+
+## 7 November 2026 — Chat feedback, selection and oversized GitHub reads
+
+Confirmed owner requests: persist Settings labels; select reply text natively;
+size short owner bubbles to content; show one copy per sent message; show an
+acknowledgment and live tools followed by collapsed tools beneath Jarvis's final
+reply; keep working/reconnecting status visible until the turn ends. Exact saved
+identity replaces steering placeholders; text matching is not a deduplication key.
+Stopped recognition sessions invalidate queued callbacks before cancelling audio.
+History grouping cannot transfer calls across voice/chat/test sessions.
+
+A real read showed issue page 7 at 1,099,352 bytes, exceeding the existing 1 MiB
+limit. Preserve the limit and split oversized windows, with no writes or partial
+allocation. The corrected read returned all 1,626 records. Keep own-code approval
+requirements unchanged. Native candidate checks remain pending.

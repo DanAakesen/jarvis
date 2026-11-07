@@ -404,10 +404,13 @@ private struct JarvisMemoryEditorView: View {
             } else if !loaded {
                 JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
             } else {
-                TextEditor(text: $draft)
-                    .frame(minHeight: 180)
-                    .accessibilityLabel(copy(.memoryText))
-                    .disabled(readOnly || saving || deleting)
+                VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                    Text(copy(.memoryText)).foregroundStyle(.primary)
+                    TextEditor(text: $draft)
+                        .frame(minHeight: 180)
+                        .accessibilityLabel(copy(.memoryText))
+                        .disabled(readOnly || saving || deleting)
+                }
             }
             JarvisLabelledButton(
                 title: copy(.delete),
@@ -573,12 +576,10 @@ struct JarvisTargetsSettingsView: View {
                 ForEach(kind.keys, id: \.self) { key in
                     if let bound = targets.bounds[key] {
                         VStack(alignment: .leading, spacing: JarvisDesignTokens.settingsSectionSpacing / 2) {
-                            TextField(copy(kind.title(for: key)), text: Binding(
+                            JarvisSettingsTextField(title: copy(kind.title(for: key)), text: Binding(
                                 get: { drafts[key] ?? "" },
                                 set: { drafts[key] = $0; error = nil }
-                            ))
-                            .keyboardType(.numberPad)
-                            .accessibilityLabel(copy(kind.title(for: key)))
+                            ), identifier: "settings.target.\(key)", keyboard: .numberPad)
                             Text("\(bound.min)–\(bound.max) \(localizedUnit(bound.unit))")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)

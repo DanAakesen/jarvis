@@ -66,15 +66,7 @@ struct JarvisHealthGoalsSettingsView: View {
     }
 
     private func field(_ title: JarvisSettingsLocalizationKey, text: Binding<String>, id: String) -> some View {
-        HStack {
-            Text(copy(title))
-            Spacer(minLength: 0)
-            TextField(copy(title), text: text)
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: 100)
-                .accessibilityIdentifier(id)
-        }
+        JarvisSettingsTextField(title: copy(title), text: text, identifier: id, keyboard: .decimalPad)
     }
 
     private static func text(_ value: Double) -> String {

@@ -1630,10 +1630,12 @@ export function isJarvisActivityEvent(value) {
   }
   if (!['tool-call-started', 'tool-call-finished'].includes(value.type) ||
     !boundedString(value.toolName, 64, 1) || !toolNamePattern.test(value.toolName)) return false;
+  if (value.messageId !== undefined && (typeof value.messageId !== 'string' ||
+    !/^[1-9][0-9]{0,18}$/.test(value.messageId) || value.messageId.trim() !== value.messageId || BigInt(value.messageId) > 9223372036854775807n)) return false;
   return value.type === 'tool-call-started'
-    ? Object.keys(value).every((key) => ['type', 'activityId', 'source', 'toolName'].includes(key))
+    ? Object.keys(value).every((key) => ['type', 'activityId', 'source', 'toolName', 'messageId'].includes(key))
     : Object.keys(value).every((key) =>
-      ['type', 'activityId', 'source', 'toolName', 'outcome'].includes(key)) &&
+      ['type', 'activityId', 'source', 'toolName', 'outcome', 'messageId'].includes(key)) &&
       ['ok', 'refused', 'error'].includes(value.outcome);
 }
 

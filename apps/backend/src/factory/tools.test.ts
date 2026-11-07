@@ -1247,3 +1247,17 @@ describe('Software Factory Jarvis tools', () => {
     }));
   });
 });
+
+
+it('explains a failed issue-list read before staging self-improvement and makes no writes', async () => {
+  const test = fixture();
+  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', text: 'Prepare the widget in Jarvis', model: null, at: new Date() });
+  test.githubIssueClient.listIssueTitles.mockRejectedValue(new Error('private upstream details'));
+  const response = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
+    payload: { title: 'Prepare the widget', body: 'Create a scaffold proposal.' } });
+  expect(response.json().outcome).toBe('error');
+  expect(JSON.stringify(response.json())).toContain('complete GitHub issue list');
+  expect(JSON.stringify(response.json())).not.toContain('private upstream details');
+  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+  expect(test.taskStore.create).not.toHaveBeenCalled();
+});

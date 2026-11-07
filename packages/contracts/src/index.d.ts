@@ -644,12 +644,14 @@ export type JarvisActivityEvent =
     activityId: string;
     source: JarvisActivitySource;
     toolName: string;
+    messageId?: string;
   }
   | {
     type: 'tool-call-finished';
     activityId: string;
     source: JarvisActivitySource;
     toolName: string;
+    messageId?: string;
     outcome: JarvisActivityOutcome;
   };
 

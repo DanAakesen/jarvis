@@ -2511,3 +2511,24 @@ web, and approval requirements, remain unchanged. The composer activity bar and
 Notifications use the same visible job categories: running work, actionable and
 dismissible failures, approvals and feed updates. Completed/cancelled jobs alone
 must not keep an empty Background activity bar visible.
+
+## Owner feedback: Settings and a reliable Chat turn (7 November 2026)
+
+All editable Settings fields retain visible names after values are entered. Long
+labels and accessibility text can stack; validation and save behavior stay intact.
+Jarvis replies support native selection of arbitrary text across paragraphs.
+Short owner bubbles hug their text within the existing maximum readable width.
+A submitted message appears once: a temporary follow-up uses the returned saved
+identity, and identical text in genuinely distinct messages remains distinct.
+Stopped dictation cannot restore a sent draft or overwrite the next dictation.
+
+Jarvis's acknowledgment precedes expanded live tool progress. A running turn stays
+visibly active even between tool calls, while reconnecting, or after an interrupted
+round. Failure remains visible. Stored calls display beneath the matching final
+Jarvis reply, collapsed by default and expandable, without crossing voice or test
+sessions. Arguments and raw tool results are excluded from activity metadata.
+
+Preparing an approved self-improvement proposal must handle large issue lists.
+Oversized GitHub pages are split within existing read limits; task codes are never
+allocated from incomplete data. Proposal preparation still does not create an issue
+or start coding until the existing later-owner-approval condition is satisfied.

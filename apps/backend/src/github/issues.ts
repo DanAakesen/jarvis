@@ -56,6 +56,10 @@ export class GitHubIssueRequestError extends Error {
   }
 }
 
+export class GitHubIssueResponseTooLargeError extends Error {
+  constructor() { super('GitHub issue response is too large'); }
+}
+
 function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -71,7 +75,7 @@ async function readJson(response: Response, limit = maxResponseBytes): Promise<u
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && Number(contentLength) > limit) {
     await response.body?.cancel().catch(() => undefined);
-    throw new Error('GitHub issue response is too large');
+    throw new GitHubIssueResponseTooLargeError();
   }
   const reader = response.body?.getReader();
   if (!reader) throw new Error('GitHub issue response is invalid');
@@ -84,7 +88,7 @@ async function readJson(response: Response, limit = maxResponseBytes): Promise<u
       size += value.byteLength;
       if (size > limit) {
         await reader.cancel().catch(() => undefined);
-        throw new Error('GitHub issue response is too large');
+        throw new GitHubIssueResponseTooLargeError();
       }
       chunks.push(value);
     }
@@ -126,6 +130,30 @@ async function request(
   }
   if (response.status === 204) return null;
   return readJson(response, contentsObject ? 2 * maxResponseBytes : maxResponseBytes);
+}
+
+// Preserve the 1 MiB response ceiling and the 10,000-record scan bound. Large
+// issue bodies can overflow a 100-record page even when only titles are needed.
+// Split that exact window into smaller pages; never allocate from a partial scan.
+async function readIssueWindow(
+  fetchImpl: typeof fetch, token: string, repository: string, offset: number, size = 100,
+): Promise<unknown[]> {
+  try {
+    const response = await request(fetchImpl, token,
+      `/repos/${repository}/issues?state=all&per_page=${size}&page=${offset / size + 1}`);
+    if (!Array.isArray(response) || response.length > size) throw new Error('GitHub issue list is invalid');
+    return response;
+  } catch (error) {
+    if (!(error instanceof GitHubIssueResponseTooLargeError) || size === 1) throw error;
+    const smaller = size === 100 ? 25 : size === 25 ? 5 : 1;
+    const records: unknown[] = [];
+    for (let start = offset; start < offset + size; start += smaller) {
+      const part = await readIssueWindow(fetchImpl, token, repository, start, smaller);
+      records.push(...part);
+      if (part.length < smaller) break;
+    }
+    return records;
+  }
 }
 
 function parsedIssue(value: unknown, repository: string, issue: number): GitHubIssue {
@@ -267,11 +295,7 @@ export function createGitHubIssueClient(
       const token = await issueToken(repository, 'read');
       const titles: string[] = [];
       for (let page = 1; page <= maxIssueTitlePages; page += 1) {
-        const response = await request(
-          fetchImpl,
-          token,
-          `/repos/${path}/issues?state=all&per_page=100&page=${page}`,
-        );
+        const response = await readIssueWindow(fetchImpl, token, path, (page - 1) * 100);
         if (!Array.isArray(response) || response.length > 100 ||
             response.some((issue) => !object(issue) || typeof issue.title !== 'string')) {
           throw new Error('GitHub issue list is invalid');
@@ -287,11 +311,7 @@ export function createGitHubIssueClient(
       const token = await issueToken(repository, 'read');
       let match: GitHubIssueReference | null = null;
       for (let page = 1; page <= maxIssueTitlePages; page += 1) {
-        const response = await request(
-          fetchImpl,
-          token,
-          `/repos/${path}/issues?state=all&per_page=100&page=${page}`,
-        );
+        const response = await readIssueWindow(fetchImpl, token, path, (page - 1) * 100);
         if (!Array.isArray(response) || response.length > 100 ||
             response.some((issue) => !object(issue) || typeof issue.title !== 'string' ||
               !Number.isSafeInteger(issue.number) || (issue.number as number) < 1)) {

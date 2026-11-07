@@ -425,10 +425,12 @@ export async function executeReflexAction(
   if (reflexSkipReason(classification, request, signal, mode)) return null;
   const target = classification!.target!;
 
-  const activityId = `reflex-${messageId}-${target.tool.name}`;
+  const activityId = randomUUID();
+  const activityMessage = /^[1-9][0-9]{0,18}$/.test(messageId) && BigInt(messageId) <= 9223372036854775807n
+    ? { messageId } : {};
   request.server.jarvisActivityHub.publish({
     type: 'tool-call-started', activityId, source: request.routeOptions.url?.includes('/voice') ? 'voice' : 'chat',
-    toolName: target.tool.name,
+    toolName: target.tool.name, ...activityMessage,
   });
   let outcome: ToolCallOutcome = 'ok';
   let result: unknown;
@@ -482,7 +484,7 @@ export async function executeReflexAction(
   request.server.jarvisActivityHub.publish({
     type: 'tool-call-finished', activityId,
     source: request.routeOptions.url?.includes('/voice') ? 'voice' : 'chat',
-    toolName: target.tool.name, outcome,
+    toolName: target.tool.name, outcome, ...activityMessage,
   });
   const confirmation = confirmToolCall(target.tool.name, outcome, result);
   return {

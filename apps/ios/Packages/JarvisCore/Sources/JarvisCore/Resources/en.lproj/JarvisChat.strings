@@ -149,3 +149,11 @@
 "chat.runtime.runtimeStopFailed" = "Could not confirm that the reply stopped. Wait for the reply and check action status.";
 "chat.runtime.runtimeYou" = "You";
 "chat.runtime.older" = "Load older messages";
+
+"chat.turn.working" = "Working…";
+"chat.turn.writing" = "Writing reply…";
+"chat.turn.tools" = "Tool activity";
+"chat.turn.toolRunning" = "Running";
+"chat.turn.toolOK" = "Done";
+"chat.turn.toolRefused" = "Not allowed";
+"chat.turn.toolError" = "Failed";
