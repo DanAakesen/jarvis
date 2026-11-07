@@ -2482,3 +2482,11 @@ text sizes, using stacked groups and wrapping labels instead of compressed tiles
 The Home/chrome/widget-navigation correction is delivered in build 78. Native
 cold/warm routing and task swipe completion are verified; real Home Screen widget
 taps and physical haptic/Face ID behavior remain device acceptance checks.
+
+## Copilot test runtime recovery (7 November 2026)
+
+Runtime discovery must return a known unavailable state without unnecessary
+provider calls, leaving Current available. Copilot must receive the full current
+Jarvis policy through a provider-supported trusted instruction channel and pass
+precedence/replacement qualification before it can be selected. The structured
+input implementation is pending live acceptance; no available-runtime claim yet.

@@ -15,13 +15,13 @@ TOOLS = [{"type": "function", "name": "fixture_lookup", "strict": False,
 
 def version():
     return {"name": TARGET.agent_name, "version": "1", "status": "active",
-            "definition": managed_agent_definition(TARGET, SETTINGS, "prepared identity", TOOLS)}
+            "definition": managed_agent_definition(TARGET, SETTINGS, "{{jarvis_policy}}", TOOLS)}
 
 
 def validate(value):
     validate_managed_agent_version(
         value, expected_version="1", target=TARGET, settings=SETTINGS,
-        instructions="prepared identity", function_tools=TOOLS,
+        instructions="{{jarvis_policy}}", function_tools=TOOLS,
     )
 
 

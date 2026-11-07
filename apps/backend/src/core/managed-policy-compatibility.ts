@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { ManagedTargetReadback } from './managed-target-reader.js';
 
 /** Bump when the trusted policy transport changes; prior activation then fails closed. */
-export const MANAGED_POLICY_TRANSPORT_REVISION = 'jarvis-developer-input-v1';
+export const MANAGED_POLICY_TRANSPORT_REVISION = 'jarvis-structured-policy-v1';
 
 export function managedPolicyCompatibilityReceipt(metadata: ManagedTargetReadback): string {
   const { target } = metadata;

@@ -6,6 +6,8 @@ import hashlib
 import json
 from typing import Any
 
+from managed_policy_template import POLICY_INPUTS, POLICY_TEMPLATE
+
 
 def normalized_managed_definition(definition: dict[str, Any]) -> dict[str, Any]:
     """Ignore benign omitted/null defaults, never parameter data or enabled extras."""
@@ -14,11 +16,24 @@ def normalized_managed_definition(definition: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(definition, dict) or not required <= definition.keys():
         raise ValueError("managed_definition_invalid")
     for key, value in definition.items():
+        if key == "structured_inputs" and value:
+            continue  # Validated below; retained in the fingerprint, never discarded.
         if key not in required and value is not None and not (
             key in benign and value == benign[key]
         ):
             raise ValueError("managed_definition_extra_setting")
     result = copy.deepcopy({key: definition[key] for key in required})
+    if definition.get("structured_inputs"):
+        inputs = definition["structured_inputs"]
+        if (not isinstance(inputs, dict) or set(inputs) != {"jarvis_policy"}
+                or not isinstance(inputs["jarvis_policy"], dict)):
+            raise ValueError("managed_definition_policy_template_invalid")
+        cleaned = {key: value for key, value in inputs["jarvis_policy"].items()
+                   if value is not None}
+        if ({"jarvis_policy": cleaned} != POLICY_INPUTS
+                or result["instructions"] != POLICY_TEMPLATE):
+            raise ValueError("managed_definition_policy_template_invalid")
+        result["structured_inputs"] = copy.deepcopy(POLICY_INPUTS)
     if (result["kind"] != "prompt" or result["harness"] != {"type": "microsoft_copilot_preview"}
             or not isinstance(result["model"], str) or not result["model"]
             or not isinstance(result["instructions"], str) or not result["instructions"]):

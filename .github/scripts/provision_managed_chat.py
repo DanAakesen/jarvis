@@ -47,9 +47,11 @@ def canonical(value: object) -> str:
 
 
 def definition(manifest: dict) -> dict:
+    from managed_policy_template import POLICY_INPUTS, POLICY_TEMPLATE
+
     require(isinstance(manifest, dict) and set(manifest) == {"instructions", "tools"}, "manifest_invalid")
     instructions, tools = manifest["instructions"], manifest["tools"]
-    require(isinstance(instructions, str) and bool(instructions.strip()) and len(instructions) <= 100_000,
+    require(instructions == POLICY_TEMPLATE,
             "manifest_invalid")
     require(isinstance(tools, list) and 0 < len(tools) <= 256, "manifest_invalid")
     names = set()
@@ -65,6 +67,7 @@ def definition(manifest: dict) -> dict:
         names.add(name)
     return {"kind": "prompt", "harness": {"type": "microsoft_copilot_preview"},
             "model": MODEL, "reasoning": {"effort": "high"}, "instructions": instructions,
+            "structured_inputs": copy.deepcopy(POLICY_INPUTS),
             "tools": [{"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": False}},
                       *sorted(copy.deepcopy(tools), key=lambda tool: tool["name"])]}
 

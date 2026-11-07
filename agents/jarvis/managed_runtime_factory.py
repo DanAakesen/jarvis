@@ -351,7 +351,7 @@ class LazyManagedRuntime:
                     if not isinstance(native.id, str) or not native.id:
                         raise ManagedChatError("managed_probe_conversation_missing")
                     native_id = native.id
-                    # Exercise the same trusted developer policy and message-list wire
+                    # Exercise the same structured policy and message-list wire
                     # contract as _create_response. The old plain-string probe could
                     # pass while the actual policy request was rejected with 4xx.
                     instructions = personalize_instructions(

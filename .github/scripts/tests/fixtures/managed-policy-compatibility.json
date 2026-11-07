@@ -7,6 +7,6 @@
     "model": "gpt-6.1-terra",
     "effort": "high"
   },
-  "policyTransportRevision": "jarvis-developer-input-v1",
-  "receipt": "ca69a1939dc1b89d237a21576a9b827ccda27e906898ebf2edaf63b0dd4d0273"
+  "policyTransportRevision": "jarvis-structured-policy-v1",
+  "receipt": "29e33bc752d6b7217d7c221307ba39968a5bc06e891ebecd83cb466e063dd4a3"
 }

@@ -8818,3 +8818,17 @@ and iOS trees match the qualified source exactly. Normal Deploy 42306089293 reus
 accepted backend/web/agent/infra versions and passed all 15 Current checks before
 the unchanged TestFlight workflow ran. No new backend or runtime activation is
 part of this release.
+
+## Structured Copilot policy transport (7 November 2026)
+
+The comparison prompt definition uses `{{jarvis_policy}}` and one required string
+structured input, without a default. The shared application loop composes the
+same full policy as Current; the managed request builder supplies it via the
+OpenAI SDK's `extra_body.structured_inputs` on every response. The input cursor
+still handles only user/reference messages and function outputs. Definition
+normalization hashes the policy template/schema; backend and Python readback
+reject extra bindings, optional policy, defaults or a mismatched template.
+`jarvis-structured-policy-v1` invalidates earlier compatibility receipts. Discovery
+skips provider readback when no receipt exists, but present evidence still requires
+live selected target/settings readback. Native history and authorization do not
+change. Live qualification is pending; see docs/managed-chat-provisioning.md.

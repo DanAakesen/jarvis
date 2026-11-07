@@ -25,21 +25,20 @@ from state import ModelMessage, ModelSettings
 
 def managed_response_request(
     conversation_id: str, inputs: list[dict[str, Any]], instructions: str,
-    *, previous_instructions: str | None = None,
 ) -> dict[str, Any]:
     """The provider contract shared by real policy turns and the fixed canary.
 
     Callers still own source verification, claims and input cursors. This builder
     cannot execute tools, create a session or override the registered catalogue.
-    The managed endpoint rejects top-level instructions overrides. Send the full
-    application policy as trusted developer input on new turns and policy changes.
-    Identical policy already sent in this turn stays in native history; current
-    user/tool inputs are unchanged. Callers never reuse this cache across turns.
+    Foundry substitutes the required structured input into the pinned agent's
+    instruction template. Send the complete policy on every response, including
+    tool continuations and mode updates; values are request-scoped, not history.
+    User, reference and tool content remains in its original input channel.
     """
-    policy = {"type": "message", "role": "developer",
-              "content": [{"type": "input_text", "text": instructions}]}
-    policy_inputs = [] if previous_instructions == instructions else [policy]
-    return {"conversation": conversation_id, "input": [*policy_inputs, *inputs], "stream": True}
+    if not isinstance(instructions, str) or not instructions.strip():
+        raise ManagedChatError("managed_definition_instructions_missing")
+    return {"conversation": conversation_id, "input": copy.deepcopy(inputs), "stream": True,
+            "extra_body": {"structured_inputs": {"jarvis_policy": instructions}}}
 
 
 @dataclass(frozen=True)
@@ -102,7 +101,6 @@ class _Turn:
     registered_tools: list[dict[str, Any]]
     sources: list[str] = field(default_factory=list)
     inference_attempted: bool = False
-    sent_instructions: str | None = None
 
 
 class _CheckedStream:
@@ -283,12 +281,11 @@ class ManagedPolicyClient(AzureOpenAIResponsesClient):
         await self._ensure_native_conversation()
         native_request = managed_response_request(
             turn.binding.conversation_id, turn.cursor.take(request["input"]),
-            request["instructions"], previous_instructions=turn.sent_instructions,
+            request["instructions"],
         )
         # Once called, transport outcome may be unknown even if no stream arrives.
         turn.inference_attempted = True
         stream = await self._client.responses.create(**native_request)
-        turn.sent_instructions = request["instructions"]
         return _CheckedStream(
             stream, turn.settings.backend_http_timeout_seconds,
             allow_function_calls=bool(request.get("tools")),

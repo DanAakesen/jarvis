@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from managed_copilot import ManagedChatError, ManagedTarget
+from managed_policy_template import POLICY_INPUTS, POLICY_TEMPLATE
 from state import ModelSettings
 
 DISABLED_BUILTINS = {
@@ -40,12 +41,13 @@ def managed_agent_definition(
 ) -> dict[str, Any]:
     """Build a new prompt-agent definition with only existing Jarvis functions."""
     target.validate(settings)
-    if not instructions.strip():
+    if instructions != POLICY_TEMPLATE:
         raise ManagedChatError("managed_definition_instructions_missing")
     return {
         "kind": "prompt", "harness": {"type": "microsoft_copilot_preview"},
         "model": target.model, "reasoning": {"effort": target.reasoning_effort},
         "instructions": instructions,
+        "structured_inputs": copy.deepcopy(POLICY_INPUTS),
         "tools": [copy.deepcopy(DISABLED_BUILTINS), *_functions(function_tools)],
     }
 
@@ -68,12 +70,12 @@ def validate_managed_agent_version(
     actual = readback.get("definition")
     if not isinstance(actual, dict):
         raise ManagedChatError("managed_agent_definition_missing")
-    for key in ("kind", "harness", "model", "reasoning", "instructions"):
+    for key in ("kind", "harness", "model", "reasoning", "instructions", "structured_inputs"):
         if actual.get(key) != expected[key]:
             raise ManagedChatError("managed_agent_definition_mismatch")
     if actual.get("skills"):
         raise ManagedChatError("managed_agent_extra_skills")
-    for key in ("temperature", "top_p", "tool_choice", "text", "structured_inputs"):
+    for key in ("temperature", "top_p", "tool_choice", "text"):
         if actual.get(key) is not None:
             raise ManagedChatError("managed_agent_unsupported_setting")
     tools = actual.get("tools")

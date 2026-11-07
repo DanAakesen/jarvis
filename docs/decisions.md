@@ -11392,3 +11392,19 @@ trees match after merge, so cancel automatic main Simulator before boot. Normal
 Deploy 42306089293 passes readiness and all 15 Current checks, then unchanged
 TestFlight 42306553415 uploads build 78. Widget destinations retain sign-in/lock
 handling; loading motion, widget appearance and Chat appearance are preserved.
+
+## 7 November 2026 — Use required structured input for managed policy
+
+Use Microsoft's documented agent instruction templating to carry the complete
+current Jarvis policy, instead of response instruction overrides or developer/system
+message roles that the live harness rejected. The single required string has no
+default; user/reference/tool data cannot populate it. Every response supplies the
+current policy, including continuations and mode updates. Pin and hash the exact
+template/schema and bump the transport receipt revision. Keep the two-turn policy
+precedence/update canary as the activation boundary. Availability skips readback
+when missing activation evidence already proves unavailability. Live compatibility
+remains pending; a failed canary must leave Copilot disabled.
+
+Sources reviewed on 7 November: [Structured inputs](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/structured-inputs),
+[Copilot harness](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness)
+and [service limits](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions).
