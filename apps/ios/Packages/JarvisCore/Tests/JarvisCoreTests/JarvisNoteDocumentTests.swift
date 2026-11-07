@@ -14,6 +14,8 @@ final class JarvisNoteDocumentTests: XCTestCase {
     func testEditingAndCheckingLeaveMetadataAndUnrelatedContentUntouched() {
         let source = "---\r\nprivate: true\r\n---\r\n# Ella\r\n\r\n- [ ] Sushi\r\n<custom>untouched</custom>"
         var document = JarvisNoteDocument(source)
+        XCTAssertEqual(document.blocks.count, 4)
+        guard document.blocks.count == 4 else { return }
         document.blocks[2].toggleCheck()
         document.blocks[2].text = "Sushi dinner"
         XCTAssertEqual(document.markdown, source.replacingOccurrences(of: "- [ ] Sushi", with: "- [x] Sushi dinner"))

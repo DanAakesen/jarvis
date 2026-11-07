@@ -31,13 +31,16 @@ public struct JarvisNoteDocument: Equatable, Sendable {
 
     public init(_ source: String) {
         var lines: [(String, String)] = []
-        let parts = source.components(separatedBy: "\n")
-        for (index, part) in parts.enumerated() {
-            let hasNewline = index < parts.count - 1
-            if hasNewline && part.hasSuffix("\r") {
-                lines.append((String(part.dropLast()), "\r\n"))
-            } else { lines.append((part, hasNewline ? "\n" : "")) }
+        var line = String.UnicodeScalarView()
+        for scalar in source.unicodeScalars {
+            if scalar.value == 10 {
+                let hasCarriageReturn = line.last?.value == 13
+                if hasCarriageReturn { line.removeLast() }
+                lines.append((String(line), hasCarriageReturn ? "\r\n" : "\n"))
+                line = String.UnicodeScalarView()
+            } else { line.append(scalar) }
         }
+        lines.append((String(line), ""))
         metadata = ""
         if lines.first?.0 == "---", let end = lines.dropFirst().firstIndex(where: { $0.0 == "---" || $0.0 == "..." }) {
             metadata = lines[...end].map { $0.0 + $0.1 }.joined()
