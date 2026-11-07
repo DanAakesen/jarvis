@@ -40,6 +40,12 @@ describe('persisted runtime sessions', () => {
       's.ended_at IS NULL', 'r.native_conversation_id IS NULL', 'DATALENGTH(@nativeId)', "t.status = N'active'", 't.claim_id = @claimId', 't.source_message_id = @sourceId']) expect(statement).toContain(predicate);
     expect(query).toHaveBeenCalledOnce();
   });
+  it('compares the exact expected native ID when rotating an active claim', async () => {
+    const { store, query, input } = fixture([], [1]);
+    await expect(store.bindNativeConversation({ ...claim, nativeConversationId: 'new', expectedNativeConversationId: 'old' })).resolves.toBe(true);
+    expect(input).toHaveBeenCalledWith('expectedNativeId', sql.NVarChar(512), 'old');
+    expect(query.mock.calls[0]![0]).toContain('DATALENGTH(@expectedNativeId)');
+  });
   it('reports binding conflict/foreign/ended session without pretending success', async () => {
     await expect(fixture().store.bindNativeConversation({ ...claim, nativeConversationId: 'other' })).resolves.toBe(false);
   });

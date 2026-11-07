@@ -11546,3 +11546,22 @@ uses title-led pinned tiles in a horizontal carousel, moves their pin icon to th
 section heading, and places New folder at the browse sheet's bottom right. Preserve
 the approved rendered editor and visible Raw access to complete Markdown/metadata.
 The revised image is a design target; build 80 does not implement this redesign.
+
+## Copilot policy refresh implementation (7 November 2026)
+
+The provider captures structured policy when creating a native conversation. The
+managed adapter now starts a new provider conversation for every verified Jarvis
+turn and whenever policy changes during a tool loop. It seeds the same verified
+Jarvis history and completed tool call/output pairs without rerunning tools or
+promoting content to instructions. Unchanged-policy continuations send only deltas.
+
+Native rebinding uses the active source claim plus an exact compare-and-swap of the
+previous native ID. Owner/session checks, consumed-source deduplication, uncertain
+turn locks and immutable target checks remain. No database schema change is needed.
+The compatibility revision is jarvis-fresh-policy-v2; previous receipts cannot
+enable this transport. The synthetic two-turn gate uses the production rotation
+helper and includes the earlier assistant answer in the second request.
+
+Focused local agent tests: 116 passed. Backend route/store/compatibility tests:
+39 passed before adding the additional compare-and-swap test. Type checking passed.
+Full CI, SQL integration and live activation remain required before availability.

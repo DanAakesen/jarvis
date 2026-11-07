@@ -79,6 +79,15 @@ describe('durable runtime session isolation', () => {
     expect(next.kind).toBe('claimed');
     if (next.kind !== 'claimed') throw new Error('Missing next claim');
     expect(next.nativeConversationId).toBe(nativeConversationId);
+    const nextCapability = { ownerObjectId: owner, sessionId, sourceMessageId: losingSource, claimId: next.claimId };
+    await expect(store.bindNativeConversation({ ...nextCapability, nativeConversationId: 'fresh-1', expectedNativeConversationId: 'wrong' })).resolves.toBe(false);
+    const rotations = await Promise.all(['fresh-1', 'fresh-2'].map((id) => store.bindNativeConversation({
+      ...nextCapability, nativeConversationId: id, expectedNativeConversationId: nativeConversationId,
+    })));
+    expect(rotations.filter(Boolean)).toHaveLength(1);
+    const rotated = rotations[0] ? 'fresh-1' : 'fresh-2';
+    expect((await store.getSession(owner, sessionId))?.nativeConversationId).toBe(rotated);
+    await expect(store.bindNativeConversation({ ...capability, nativeConversationId: 'stale-claim', expectedNativeConversationId: rotated })).resolves.toBe(false);
     // A new process sees the persistent active claim; there is no timer or implicit recovery.
     const third = await source();
     await expect(createRuntimeSessionStore(pool).claimTurn(claim(third))).resolves.toEqual({ kind: 'session_busy' });

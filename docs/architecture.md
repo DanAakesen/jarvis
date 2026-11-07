@@ -8936,3 +8936,22 @@ binding requires a subsequent approval. All three native composer callers (Home,
 Chat, runtime test) use revision ownership; runtime-test recovery gates are retained.
 Physical system-keyboard dictation may deliver later native input and still needs
 device acceptance; generation checks alone are not proof for that OS behavior.
+
+## Copilot policy refresh implementation (7 November 2026)
+
+The provider captures structured policy when creating a native conversation. The
+managed adapter now starts a new provider conversation for every verified Jarvis
+turn and whenever policy changes during a tool loop. It seeds the same verified
+Jarvis history and completed tool call/output pairs without rerunning tools or
+promoting content to instructions. Unchanged-policy continuations send only deltas.
+
+Native rebinding uses the active source claim plus an exact compare-and-swap of the
+previous native ID. Owner/session checks, consumed-source deduplication, uncertain
+turn locks and immutable target checks remain. No database schema change is needed.
+The compatibility revision is jarvis-fresh-policy-v2; previous receipts cannot
+enable this transport. The synthetic two-turn gate uses the production rotation
+helper and includes the earlier assistant answer in the second request.
+
+Focused local agent tests: 116 passed. Backend route/store/compatibility tests:
+39 passed before adding the additional compare-and-swap test. Type checking passed.
+Full CI, SQL integration and live activation remain required before availability.

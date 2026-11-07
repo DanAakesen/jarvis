@@ -191,12 +191,14 @@ export function createRuntimeSessionStore(pool: sql.ConnectionPool): RuntimeSess
     async bindNativeConversation(input) {
       validateManagedTurnClaim(input);
       validateNativeConversationId(input.nativeConversationId);
+      if (input.expectedNativeConversationId != null) validateNativeConversationId(input.expectedNativeConversationId);
       const result = await pool.request()
         .input('owner', sql.UniqueIdentifier, input.ownerObjectId)
         .input('sessionId', sql.BigInt, BigInt(input.sessionId))
         .input('sourceId', sql.BigInt, BigInt(input.sourceMessageId))
         .input('claimId', sql.UniqueIdentifier, input.claimId)
         .input('nativeId', sql.NVarChar(512), input.nativeConversationId)
+        .input('expectedNativeId', sql.NVarChar(512), input.expectedNativeConversationId ?? null)
         .query(`UPDATE r SET native_conversation_id = @nativeId
           FROM dbo.session_runtime_tests r
           JOIN dbo.jarvis_sessions s ON s.id = r.jarvis_session_id
@@ -204,7 +206,8 @@ export function createRuntimeSessionStore(pool: sql.ConnectionPool): RuntimeSess
           WHERE r.jarvis_session_id = @sessionId AND r.owner_object_id = @owner
             AND r.runtime_test = N'copilot' AND s.ended_at IS NULL
             AND t.source_message_id = @sourceId AND t.claim_id = @claimId AND t.status = N'active'
-            AND (r.native_conversation_id IS NULL OR
+            AND ((r.native_conversation_id IS NULL AND @expectedNativeId IS NULL) OR
+              (r.native_conversation_id = @expectedNativeId AND DATALENGTH(r.native_conversation_id) = DATALENGTH(@expectedNativeId)) OR
               (r.native_conversation_id = @nativeId AND DATALENGTH(r.native_conversation_id) = DATALENGTH(@nativeId)));`);
       return result.rowsAffected[0] === 1;
     },

@@ -109,3 +109,22 @@ release 13572579084, SHA256
 625b3d0fc9848dfeffa226d49942fa7104c8876140a952b4ac3b717c9884a321;
 acceptance 13572866396, SHA256
 e1bcbe44e187243a0d10cf1185166e3fceb8795b8b73351fefab69ffea0e5ebb.
+
+## Copilot policy refresh implementation (7 November 2026)
+
+The provider captures structured policy when creating a native conversation. The
+managed adapter now starts a new provider conversation for every verified Jarvis
+turn and whenever policy changes during a tool loop. It seeds the same verified
+Jarvis history and completed tool call/output pairs without rerunning tools or
+promoting content to instructions. Unchanged-policy continuations send only deltas.
+
+Native rebinding uses the active source claim plus an exact compare-and-swap of the
+previous native ID. Owner/session checks, consumed-source deduplication, uncertain
+turn locks and immutable target checks remain. No database schema change is needed.
+The compatibility revision is jarvis-fresh-policy-v2; previous receipts cannot
+enable this transport. The synthetic two-turn gate uses the production rotation
+helper and includes the earlier assistant answer in the second request.
+
+Focused local agent tests: 116 passed. Backend route/store/compatibility tests:
+39 passed before adding the additional compare-and-swap test. Type checking passed.
+Full CI, SQL integration and live activation remain required before availability.
