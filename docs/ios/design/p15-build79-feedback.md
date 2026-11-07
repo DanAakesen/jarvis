@@ -7,20 +7,30 @@ retain any failures and rerun only changed or unqualified cases.
 
 | Report | State | Required verification |
 | --- | --- | --- |
-| Headers remain nontransparent on pages other than Home/Chat | Investigating | Inspect resting and genuinely scrolled Notes, Health, Factory, Settings and shared Insights headers, including after navigating from Chat. |
-| Notes and Factory footer containers remain nontransparent | Investigating | Inspect long content under floating search/Plus and Factory tabs in both themes; exercise the controls after scrolling. |
-| Two thinking rows appear for one Chat turn | Shared single progress row implemented; native verification pending | Exactly one active progress indicator before acknowledgment, during tools, after steering/interruption, and while streaming/reconnecting; it disappears only when the turn ends. |
-| Sent text remains in the composer (“Yes please” screenshot) | Investigating; prior fix insufficient | Test send button and keyboard Return with a focused field; verify clearing, stale input callback rejection and preservation of a newly typed draft. Keep custom/system dictation in scope. |
-| Task titles truncate to one line; source labels such as Inbox remain | Two-line titles and no source metadata implemented; native verification pending | Inspect long titles/date-time combinations in both themes; retain scope and priority, with full provenance only in details. |
-| Scaffold cannot proceed after “Yes please”: create_issue returns Not allowed, earlier proposal cannot be recovered | Owner confirmed still broken after backend release | Trace actual project selection and approval/proposal persistence across turns; test prepare → inspect → later approve → one issue/task. Do not weaken own-code approval or require repeated rewording. |
+| Headers remain nontransparent on pages other than Home/Chat | Implemented and native-verified; Uploaded in build 80; owner device check pending | Inspect resting and genuinely scrolled Notes, Health, Factory, Settings and shared Insights headers, including after navigating from Chat. |
+| Notes and Factory footer containers remain nontransparent | Implemented and native-verified; Uploaded in build 80; owner device check pending | Inspect long content under floating search/Plus and Factory tabs in both themes; exercise the controls after scrolling. |
+| Two thinking rows appear for one Chat turn | Single row verified in the scoped native turn; Uploaded in build 80; owner device check pending | Exactly one active progress indicator before acknowledgment, during tools, after steering/interruption, and while streaming/reconnecting; it disappears only when the turn ends. |
+| Sent text remains in the composer (“Yes please” screenshot) | Button/Return native checks passed; system dictation needs device acceptance | Test send button and keyboard Return with a focused field; verify clearing, stale input callback rejection and preservation of a newly typed draft. Keep custom/system dictation in scope. |
+| Task titles truncate to one line; source labels such as Inbox remain | Two-line titles and no source metadata visually verified; Uploaded in build 80; owner device check pending | Inspect long titles/date-time combinations in both themes; retain scope and priority, with full provenance only in details. |
+| Scaffold cannot proceed after “Yes please”: create_issue returns Not allowed, earlier proposal cannot be recovered | Recovery deployed in #1632; owner retest pending | Trace actual project selection and approval/proposal persistence across turns; test prepare → inspect → later approve → one issue/task. Do not weaken own-code approval or require repeated rewording. |
+
+## Current qualification
+
+PR #1631 merged as 294a7929 with exact-tree identity, CI/CodeQL and independent
+review complete. All seven scoped native cases are qualified by six unchanged
+passes in 42390300501 and the corrected Chat pass in 42392408582. All 22 page
+captures and final Chat captures were reviewed. Build 80 uploaded at 17:06:13 UTC in TestFlight 42394179996;
+[the build 80 record](p15-build80-release.md) contains the evidence and limits.
+Backend PR #1632 is deployed and the owner has been told to retry the prepare
+prompt; the actual owner scaffold write is not yet confirmed.
 
 ## Separate unresolved work
 
-Copilot remains disabled because the same provider conversation reused the first
-turn's policy on turn two. The receipt gate must remain intact; do not repeat an
-unchanged live activation probe. The owner retested scaffold preparation
-and reported failure after approval. The issue-list correction did not complete
-the end-to-end fix; project-selection/refusal and proposal recovery remain open.
+Copilot remains disabled because trusted dynamic-policy compatibility has not
+passed and there is no valid receipt. Keep the receipt gate intact and do not
+repeat an unchanged live activation probe. The earlier owner scaffold failure
+led to the separately deployed recovery in #1632; only owner confirmation of the
+actual prepare/approve/write flow remains pending after that correction.
 
 ## Evidence gaps found during this follow-up
 
@@ -28,13 +38,15 @@ The earlier Factory capture labelled “scrolled” still showed its full top ph
 the short fixture did not require scrolling. A stationary title assertion alone
 cannot prove a transparent scrolled header. New coverage must first prove content
 actually moved, then inspect the chrome. The previous sent-draft check covered a
-button send with synthetic text; the physical focused-keyboard path remains open until the new native Return test passes.
+button send with synthetic text. The focused native Return check subsequently
+passed in 42392408582. Physical-device behavior and system dictation still need
+owner acceptance.
 
-No new fix or release is claimed by this record. Current source baseline is main
+At the start of this investigation, no new fix or release was claimed. The baseline was main
 9b112afc (product release source 2504bc6a, TestFlight 79). Working branch:
 codex/ios-transparent-chrome in /tmp/p15-widget-contrast.
 
-## Candidate implementation (not released)
+## Initial candidate implementation history
 
 - Page chrome reserves header/footer space in ordinary layout; its ancestor hides
   native bar backgrounds and scroll-edge effects. The ambient scene remains
@@ -100,8 +112,9 @@ Notes design feedback: the owner liked the first set's Quiet Library and Clear
 Folders styling, wants pinning, a recent view, and folders as an optional browsing
 mode. A second set explores Recents with Pins, Library Tabs and Browse Drawer in
 that displayed order. Raw must expose the complete note source, including metadata;
-the normal reader/editor should render the content. No revised option is selected
-yet. Preserve all underlying vault content and existing task behavior.
+the normal reader/editor should render the content. This earlier set was
+superseded by the selected Recent Focus refinement recorded in DESIGN.md.
+Preserve all underlying vault content and existing task behavior.
 
 Both independent source reviews approved corrected candidate 91c23fc8 with no
 remaining source blocker. Native run 42386993715 compiled that candidate and
@@ -134,7 +147,10 @@ files are byte-identical to 91c23fc8; fresh exact-head checks still apply.
 The owner clarified the Notes concepts must start with the existing Notes / Tasks /
 Graph selector. Every option must include pins, a recent view, folder browsing and
 Raw, with variations of that same flow. The third displayed set is Compact Library,
-Recent Focus and Folder Shortcuts; earlier sets are superseded. Selection is pending.
+Recent Focus and Folder Shortcuts; earlier sets are superseded. The owner then
+selected Recent Focus and requested a title-led pinned carousel with its pin icon
+in the section heading, plus New folder at the sheet's bottom right. The revised
+image was shown; implementation is separate from this bug-fix release.
 
 Native 42390300501 at source 82fe69ca completed 6/7 cases. Runtime isolation, Home
 handoff and all four light/dark page cases passed. The only failure was the empty
