@@ -31,3 +31,23 @@ Apple documentation actually read: URLSession.AsyncBytes and
 URLRequest.timeoutInterval (developer.apple.com documentation JSON). The latter
 defines timeout as inactivity and recommends cancellation for long operations;
 this keeps the existing explicit cancellation and bounded recovery.
+
+## Retained native evidence
+
+Run 42396567474 / artifact 13584311993 (ZIP SHA-256
+`27a45c656a013212b5f16eebafa506f479a0bd0b52454e9edb2ce3ec22264ac8`)
+ran four cases: both real URLSession transport tests and Home handoff passed;
+Chat feedback failed its first empty-editor wait. Both retained native values are
+empty and hittable, and the actual captures show the empty focused editor, one
+progress row, one compact follow-up bubble and the preserved next draft.
+The failing three-second predicate made separate existence, hittability and value
+queries; its first poll took over two seconds after the initial polling delay.
+The helper now queries the native editor and empty value together and asserts
+hittability separately. The three-second deadline and all interaction assertions
+remain. Production composer code is unchanged. Requalify only the affected Chat
+case; retain the three passed cases with source/call-site identity evidence.
+
+Issue #1634's existing task branch contains scaffold commit
+`3ace0ad86092026e99a52f5f791c9fdb376afcc1` at 17:30:31 UTC, before Factory's
+17:32:28 UTC `disk_low` stop. Coding began and was saved; completed validation and
+a delivery PR are not confirmed.
