@@ -76,7 +76,8 @@ final class SettingsFieldUITests: XCTestCase {
         let current = field.value as? String ?? ""
         // Values are trailing-aligned. Tap beyond the final digit so deletion
         // starts at the end instead of inserting before the existing number.
-        field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
+        field.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5))
+            .withOffset(CGVector(dx: -1, dy: 0)).tap()
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count) + value)
     }
 }

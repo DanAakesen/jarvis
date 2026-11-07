@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import JarvisCore
 
 /// Controlled, synthetic turn for native regression checks. No external request is made.
@@ -17,6 +18,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     private var listeners: [UUID: AsyncThrowingStream<Data, any Error>.Continuation] = [:]
     private var activity: [[String: Any]] = []
     private var language = "en"
+    private var completionNotification: Int32?
 
     init(base: any HTTPTransport) { self.base = base }
 
@@ -40,10 +42,6 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
             partial["interrupted"] = true
             history.append(partial)
             turn?.yield(event("interrupted", partial))
-            Task {
-                try? await Task.sleep(for: .seconds(3))
-                finishTurn()
-            }
             return try json(saved, status: 202)
         default: return try await base.send(request)
         }
@@ -61,6 +59,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
             return HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: body)
         }
         guard request.url.path == "/api/conversation/sessions/12/turns" else { return try await base.stream(request) }
+        try registerTestCompletion()
         let requestBody = try JSONSerialization.jsonObject(with: request.body!) as! [String: Any]
         var saved = message(id: "42", role: "dan", text: requestBody["text"] as! String)
         saved["toolCalls"] = [["id": "tool-42", "tool": "repo_read", "outcome": "ok"]]
@@ -80,12 +79,31 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     }
 
     private func finishTurn() {
+        guard turn != nil else { return }
         let saved = message(id: "45", role: "jarvis", text: "The synthetic check is complete.")
         history.append(saved)
         turn?.yield(event("delta", ["text": "The synthetic check is complete."]))
         turn?.yield(event("done", saved))
         turn?.finish()
         turn = nil
+        if let completionNotification { notify_cancel(completionNotification) }
+        completionNotification = nil
+    }
+
+    private func registerTestCompletion() throws {
+        guard Self.isEnabled, completionNotification == nil else { return }
+        // The Simulator test explicitly releases the held response after checking
+        // the interrupted state. A timer can finish while XCTest is taking snapshots.
+        var token: Int32 = 0
+        let status = notify_register_dispatch("com.jarvis.uitests.finish-chat-feedback", &token, .main) { [weak self] _ in
+            Task { await self?.finishTurn() }
+        }
+        guard status == 0 else { throw FixtureTransportError.invalidScenario }
+        completionNotification = token
+    }
+
+    deinit {
+        if let completionNotification { notify_cancel(completionNotification) }
     }
 
     private func publishTool(finished: Bool) {

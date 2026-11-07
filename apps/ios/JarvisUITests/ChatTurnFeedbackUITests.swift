@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 
 final class ChatTurnFeedbackUITests: XCTestCase {
     func testSteeringClearsComposerOnceKeepsNextDraftAndShowsProgressUntilReply() {
@@ -30,6 +31,9 @@ final class ChatTurnFeedbackUITests: XCTestCase {
         XCTAssertTrue(status.exists, "An interrupted round must retain the active turn status")
         input.tap()
         input.typeText("Keep my next draft")
+        XCTAssertTrue(status.exists)
+        attach(app, "chat-interrupted-turn-still-working-with-next-draft")
+        XCTAssertEqual(notify_post("com.jarvis.uitests.finish-chat-feedback"), 0)
         XCTAssertTrue(app.textViews["chat.reply.45"].waitForExistence(timeout: 10))
         XCTAssertEqual(input.value as? String, "Keep my next draft")
         XCTAssertEqual(question.count, 1, "Refreshing persisted history must not duplicate a sent follow-up")

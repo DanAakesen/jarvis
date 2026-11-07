@@ -81,3 +81,19 @@ Apple API review: UITextView/isSelectable provide a single native rich-text sele
 range; TextField documents that iOS uses its label as a placeholder, hence the explicit
 persistent label; ViewThatFits selects the compact or stacked arrangement. Sources
 are linked in PR #1629. No custom selection handles or gesture recognizers are added.
+
+CI 42375571409 and CodeQL 42375571446 passed on 63f26a0a. Focused native
+42375612793 passed the English Settings edit. Chat's single compact follow-up,
+cleared composer, retained next draft and final tool placement passed, but its
+interrupted-state assertion ran after the fixture's three-second final response.
+The Danish Settings check still inserted before the digit: two percent of the
+full-width stacked field is wider than half the digit. These two cases remain
+unqualified. Artifact 13575669446 SHA-256:
+f203ab1c4dc895f8ba92fcbe17d662ab8e4474c77d0f2dd19e31a2d5d0f29e17.
+
+The Chat fixture now holds the response until an explicit test-only Darwin
+notification, registered only by the enabled DEBUG Simulator fixture and cancelled
+on completion/destruction. It checks progress with the next draft present before
+releasing the response; no timed race remains. Settings taps one point inside the
+trailing edge regardless of field width. Rerun only Chat feedback and Danish target
+editing; reuse the passing English edit and all other unchanged screen evidence.
