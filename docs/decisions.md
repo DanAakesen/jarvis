@@ -1,3 +1,14 @@
+## 7 November 2026 — Recover approval state before recreating work
+
+Later model turns do not retain private tool results. Add a session-bound read of
+the actual staged issue rather than relying on prose to reconstruct its code or
+scope. A mistaken create retry preserves a live draft. Missing state may stage a
+new own-repository replacement, explicitly requiring another later approval. This
+breaks the recovery deadlock without turning a bare yes into authority for unseen
+work. Retain the process-local TTL and disclose its limit. Publish this backend
+correction separately so the owner can retest scaffold preparation while iOS input
+and chrome verification continues. No live scaffold write is claimed by tests.
+
 ## 6 November 2026 — Diagnose request shapes without changing the managed target
 
 After the confirmed instructions-override repair, the live provider still returned

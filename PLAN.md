@@ -1,22 +1,29 @@
 ## Active — build 79 owner-reported regressions (7 November 2026)
 
 Track every incoming bug in [the feedback record](docs/ios/design/p15-build79-feedback.md).
-Current batch: opaque headers; opaque Notes/Factory footer containers; duplicate
-Chat thinking/progress rows; sent text remaining in the composer; scaffold approval
-refused with create_issue Not allowed; two-line task titles and removal of all
-source metadata after scope/priority. These remain open
-despite the earlier build 79 qualification. Preserve the separate Copilot blocker
-and the owner's ongoing scaffold retest. Do not mark this batch complete until each
-item has its own fix, actual verification and recorded release status.
+The iOS batch covers opaque headers, opaque Notes/Factory footer containers,
+duplicate Chat progress rows, sent text remaining in the composer, and two-line
+task titles with scope/priority only. PR #1631 remains unreleased. Native run
+42386993715 passed runtime isolation and primary-page assertions, but exposed
+keyboard focus/Return submission failures and a wrong Factory test route. The
+shared input now uses a stable native editor; the Factory route and full-screen
+capture method are corrected. The changed source needs fresh CI/CodeQL and a
+single focused native pass including the shared Home composer handoff.
 
-Candidate PR #1631 includes all six corrections. The final local backend checks
-pass 89 focused tests, ESLint and TypeScript build; the updated Health footer
-source guard passes. Independent reviews corrected a missed runtime-test composer
-caller before native execution and checked the replacement-proposal approval
-boundary. Hosted native compile previously failed before Simulator boot; the
-corrected source still needs native UI captures and complete CI/CodeQL.
-Notes browsing/editing design concepts, including full-source Raw access, are
-separate exploration awaiting owner selection and do not replace this batch.
+Notes browsing/editing concepts preserve Notes / Tasks / Graph, pins, recents,
+folder browsing and full-source Raw access. The latest three concepts await owner
+selection. Preserve the separate Copilot blocker and all earlier owner reports.
+
+## Active — scaffold approval recovery (7 November 2026)
+
+Backend-only PR #1632 merged as ce652a06 after fresh CI 42389069811 and CodeQL
+42389069717 passed and independent review approved its exact source. It recovers
+real pending proposals and safely stages a fresh own-code replacement when state
+is missing, requiring a later explicit approval. Normal Deploy 42389927724 is
+running. Tell the owner to retry “Prepare the widget in Jarvis” only after live
+readiness and Current-runtime acceptance pass. No iOS update is needed for this
+backend correction. See [the recovery record](docs/scaffold-approval-recovery.md).
+
 
 ## Current release — Settings, Chat and scaffold follow-up, build 79
 
