@@ -43,32 +43,29 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertTrue(element(id, label: label).waitForExistence(timeout: 10), id)
         }
         attach(app.screenshot(), named: "Component gallery")
-        captureMediumWidgetLayouts()
     }
 
-    /// Reuses this gallery launch and the extension's actual views. Host tinting remains a WidgetKit preview/device check.
-    private func captureMediumWidgetLayouts() {
-        app.buttons["gallery.widgets"].tap()
-        // Retain both renderings before language-specific geometry checks can stop the test.
-        for language in ["en", "da"] {
-            let choice = app.buttons["gallery.widgetLanguage.\(language == "en" ? 0 : 1)"]
-            XCTAssertTrue(choice.waitForExistence(timeout: 5))
-            choice.tap()
-            XCTAssertTrue(choice.isSelected)
-            attach(app.screenshot(), named: "P15-widgets-medium-\(language == "en" ? "dark" : "light")-\(language)")
-        }
-        for language in ["en", "da"] {
-            let choice = app.buttons["gallery.widgetLanguage.\(language == "en" ? 0 : 1)"]
-            choice.tap()
-            XCTAssertTrue(choice.isSelected)
+    func testMediumWidgetsDarkEnglish() { captureMediumWidgetLayouts(language: "en") }
+    func testMediumWidgetsLightDanish() { captureMediumWidgetLayouts(language: "da") }
+    func testMediumWidgetsLightEnglish() { captureMediumWidgetLayouts(language: "en-light") }
+
+    /// Each language has its own unchanged per-test deadline and uses actual extension views.
+    private func captureMediumWidgetLayouts(language: String) {
+        app.launchArguments = ["--widget-layout-gallery", "--widget-language=\(language)"]
+        app.launch()
+        defer { app.terminate() }
+        let firstCard = app.descendants(matching: .any)["widget.preview.workouts"]
+        XCTAssertTrue(firstCard.waitForExistence(timeout: 10))
+        attach(app.screenshot(), named: "P15-widgets-medium-\(language)")
+        do {
+            // One settled accessibility snapshot checks every element without a round trip per assertion.
+            let snapshot = try app.snapshot()
             for (kind, title) in [
-                ("workouts", language == "en" ? "Workouts" : "Træning"),
-                ("factory", "Factory"), ("notes", language == "en" ? "Notes" : "Noter"),
+                ("workouts", language == "da" ? "Træning" : "Workouts"),
+                ("factory", "Factory"), ("notes", language == "da" ? "Opgaver" : "Tasks"),
             ] {
-                let card = app.descendants(matching: .any)["widget.preview.\(kind)"]
-                XCTAssertTrue(card.waitForExistence(timeout: 5))
-                let header = card.staticTexts["widget.header.title"]
-                XCTAssertTrue(header.exists, "\(kind) must have its shared title")
+                let card = try widgetSnapshot("widget.preview.\(kind)", in: snapshot)
+                let header = try widgetSnapshot("widget.header.title", in: card)
                 XCTAssertEqual(header.label, title)
                 let cardFrame = card.frame
                 XCTAssertEqual(cardFrame.width, 329, accuracy: 0.5)
@@ -81,8 +78,8 @@ final class ComponentGalleryUITests: XCTestCase {
                                          "The title must remain within 2 pt of the top inset")
                 XCTAssertLessThan(headerFrame.minX, inset.minX + 30, "The title follows its top-left symbol")
                 if kind == "workouts" {
-                    let metrics = ["lift", "run", "kilometers", "calories"].map {
-                        assertWidgetElement(card.descendants(matching: .any)["widget.workouts.\($0)"], within: inset)
+                    let metrics = try ["lift", "run", "kilometers", "calories"].map {
+                        assertWidgetElement(try widgetSnapshot("widget.workouts.\($0)", in: card), within: inset)
                     }
                     // Combined AX frames bound the text, not the equal-width layout slots.
                     // Verify each column's origin and containment in its allocated half.
@@ -105,44 +102,50 @@ final class ComponentGalleryUITests: XCTestCase {
                     XCTAssertGreaterThanOrEqual(metrics[2].minY - metrics[0].maxY, 5)
                 } else if kind == "factory" {
                     for status in ["running", "awaiting", "review", "failed"] {
-                        let count = card.descendants(matching: .any)["widget.factory.count.\(status)"]
+                        let count = try widgetSnapshot("widget.factory.count.\(status)", in: card)
                         let countFrame = assertWidgetElement(count, within: inset)
                         XCTAssertLessThanOrEqual(countFrame.height, 29, "Medium count cells must leave room for both task rows")
                     }
                     for id in ["c1", "t1"] {
-                        assertWidgetElement(card.descendants(matching: .any)["widget.factory.task.\(id)"], within: inset)
+                        assertWidgetElement(try widgetSnapshot("widget.factory.task.\(id)", in: card), within: inset)
                     }
-                    XCTAssertEqual(card.buttons.count, 2, "Both task actions retain their place")
-                    for button in card.buttons.allElementsBoundByIndex {
+                    let buttons = widgetDescendants(card).filter { $0.elementType == .button }
+                    XCTAssertEqual(buttons.count, 2, "Both task actions retain their place")
+                    for button in buttons {
                         assertWidgetElement(button, within: inset)
                         XCTAssertFalse(button.isEnabled, "Synthetic actions must never write")
                     }
                 } else {
-                    assertWidgetElement(card.staticTexts["widget.notes.summary"], within: inset)
-                    assertWidgetElement(card.descendants(matching: .any)["widget.notes.next"], within: inset)
+                    XCTAssertFalse(widgetDescendants(card).contains { $0.identifier == "widget.notes.summary" })
+                    for id in ["k1", "k2", "k3"] {
+                        assertWidgetElement(try widgetSnapshot("widget.tasks.row.\(id)", in: card), within: inset)
+                    }
+                    XCTAssertFalse(widgetDescendants(card).contains { $0.label == (language == "da" ? "Idéer til widgets" : "Widget ideas") })
                 }
             }
+        } catch {
+            XCTFail("The widget layout snapshot must include every required element: \(error)")
         }
     }
 
+    private func widgetDescendants(_ snapshot: XCUIElementSnapshot) -> [XCUIElementSnapshot] {
+        [snapshot] + snapshot.children.flatMap { widgetDescendants($0) }
+    }
+
+    private func widgetSnapshot(_ identifier: String, in snapshot: XCUIElementSnapshot) throws -> XCUIElementSnapshot {
+        try XCTUnwrap(widgetDescendants(snapshot).first { $0.identifier == identifier }, identifier)
+    }
+
     @discardableResult
-    private func assertWidgetElement(_ element: XCUIElement, within bounds: CGRect) -> CGRect {
-        // Each XCUI property query crosses into the app. Read the settled geometry
-        // once and reuse it so identical bounds checks do not exhaust the test deadline.
-        do {
-            let snapshot = try element.snapshot()
-            let frame = snapshot.frame
-            let identifier = snapshot.identifier
-            XCTAssertFalse(frame.isEmpty, identifier)
-            XCTAssertGreaterThanOrEqual(frame.minX, bounds.minX - 0.5, identifier)
-            XCTAssertGreaterThanOrEqual(frame.minY, bounds.minY - 0.5, identifier)
-            XCTAssertLessThanOrEqual(frame.maxX, bounds.maxX + 0.5, identifier)
-            XCTAssertLessThanOrEqual(frame.maxY, bounds.maxY + 0.5, identifier)
-            return frame
-        } catch {
-            XCTFail("The widget element must exist and provide a layout snapshot: \(error)")
-            return .zero
-        }
+    private func assertWidgetElement(_ snapshot: XCUIElementSnapshot, within bounds: CGRect) -> CGRect {
+        let frame = snapshot.frame
+        let identifier = snapshot.identifier
+        XCTAssertFalse(frame.isEmpty, identifier)
+        XCTAssertGreaterThanOrEqual(frame.minX, bounds.minX - 0.5, identifier)
+        XCTAssertGreaterThanOrEqual(frame.minY, bounds.minY - 0.5, identifier)
+        XCTAssertLessThanOrEqual(frame.maxX, bounds.maxX + 0.5, identifier)
+        XCTAssertLessThanOrEqual(frame.maxY, bounds.maxY + 0.5, identifier)
+        return frame
     }
 
     /// Two screenshots of the live orb taken apart in time must differ: the orb flows, it is not a still image.

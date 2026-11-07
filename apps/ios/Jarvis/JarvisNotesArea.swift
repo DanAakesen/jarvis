@@ -2,7 +2,7 @@ import Foundation
 import JarvisCore
 import SwiftUI
 
-private enum JarvisNotesTab: String, CaseIterable, Identifiable {
+enum JarvisNotesTab: String, CaseIterable, Identifiable {
     case notes
     case tasks
     case graph
@@ -134,8 +134,7 @@ struct JarvisNotesArea: View {
     let client: JarvisNotesClient?
     let language: JarvisAppLanguage
     let onRetryConfiguration: () -> Void
-
-    @State private var selectedTab: JarvisNotesTab = .notes
+    @Binding var selectedTab: JarvisNotesTab
     @State private var selectedScope: JarvisNotesSearchScope = .all
     @State private var selectedFolder = ""
     @State private var searchText = ""

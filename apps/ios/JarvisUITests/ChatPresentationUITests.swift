@@ -56,6 +56,32 @@ final class ChatPresentationUITests: XCTestCase {
             let approve = app.buttons["now-confirmation-approve-\(confirmationID)"]
             XCTAssertTrue(approve.waitForExistence(timeout: 10))
             assertLocalizedControls(decline: decline, approve: approve, language: language)
+            XCTAssertTrue(app.buttons["chat.now"].exists, "Pending approvals keep the activity bar visible")
+            app.terminate()
+        }
+    }
+
+    func testCompletedJobsHideNowBarAndAwayModeInBothLanguages() {
+        for language in ["en", "da"] {
+            let app = XCUIApplication()
+            app.launchArguments = ["--screenshot-activity-state=empty", "-jarvis.appLanguage", language,
+                                   "-jarvis.appTheme", language == "en" ? "dark" : "light"]
+            app.launch()
+            let hero = app.descendants(matching: .any)["notifications.hero"]
+            XCTAssertTrue(hero.waitForExistence(timeout: 10))
+            XCTAssertFalse(app.staticTexts["Away mode"].exists)
+            XCTAssertFalse(app.staticTexts["Fraværstilstand"].exists)
+            let empty = XCTAttachment(screenshot: app.screenshot())
+            empty.name = "notifications-empty-\(language)"
+            empty.lifetime = .keepAlways
+            add(empty)
+            app.buttons["chat.notifications.done"].tap()
+            XCTAssertTrue(app.buttons["chat.notifications"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["chat.now"].exists, "Finished jobs and Away mode must not create an empty bar")
+            let chat = XCTAttachment(screenshot: app.screenshot())
+            chat.name = "chat-without-empty-now-bar-\(language)"
+            chat.lifetime = .keepAlways
+            add(chat)
             app.terminate()
         }
     }

@@ -8835,3 +8835,26 @@ change. Live activation 42365966747 failed the policy sentinel after a completed
 response; no compatibility receipt was stamped. The probe now records only its
 turn number and closed streamed/final text classifications on mismatches. These
 fields cannot affect acceptance. See docs/copilot-runtime-recovery-2026-11-07.md.
+
+## Task widgets and secondary text (7 November 2026)
+
+The widget palette owns a resolving ShapeStyle for stronger full-color light text.
+Every secondary text call site in the Home Screen widget views uses it; decorative
+skeleton, ring and border colors retain their original semantics. One shared stale
+modifier preserves light text while retaining dark/tinted opacity treatment.
+
+The existing notes topic/kind IDs and Codable snapshot remain compatible, but
+widgets render Tasks only. The publisher resolves the existing open-task cache and
+passes no notes to the snapshot builder. ContentView converts the compatible Notes
+widget URL into a one-use task-tab request consumed by JarvisNotesArea on initial
+or repeated delivery; ordinary Notes navigation gets no request. No backend/API,
+credential, storage migration or Chat appearance change is required.
+
+### iOS widget routing and activity visibility follow-up (7 November 2026)
+
+ContentView owns the Notes tab binding and selects Tasks for the existing widget
+URL. Leaving Notes resets the tab for ordinary navigation; repeated widget taps
+select Tasks without relying on a consumed on-appear request. Notifications and
+the Now bar share BackgroundTaskPresentation.isEmpty, which excludes terminal
+success/cancellation records. Removing the iOS Away row changes no presence API,
+approval error handling or backend mode.

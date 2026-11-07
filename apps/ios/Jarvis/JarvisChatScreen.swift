@@ -1093,6 +1093,7 @@ struct JarvisChatScreen: View {
             title: model.nowTitle,
             systemImage: model.nowFeed?.running.isEmpty == false ? "gearshape.2" : "sparkles",
             trailingSystemImage: "chevron.up",
+            identifier: "chat.now",
             isFullWidth: true,
             isLeading: true,
             accessibilityTitle: "Background activity, \(model.nowTitle)"

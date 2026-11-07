@@ -12,7 +12,7 @@ enum JarvisFixtureScenario {
             ),
             transport: JarvisRuntimeTestFixtureTransport(base: WorkspaceFixtureTransport(base: FixtureTransport(scenario: try fixtureScenarioData(
                 emptyActivity: emptyActivity, calendarChangeLanguage: calendarChangeLanguage
-            )))),
+            )), completedActivity: emptyActivity)),
             tokenStore: FixtureTokenStore(),
             accessTokenProvider: FixtureTokenProvider()
         )
@@ -41,7 +41,7 @@ enum JarvisFixtureScenario {
                 "running": [],
                 "items": [],
                 "updatedAt": "2026-10-30T09:34:00Z",
-                "awayMode": false,
+                "awayMode": emptyActivity,
                 "confirmations": [],
             ]
         }
@@ -188,8 +188,18 @@ enum JarvisFixtureScenario {
     /// Keep the ordered chat playback intact while allowing an independently opened saved-items page.
     private struct WorkspaceFixtureTransport: HTTPTransport {
         let base: FixtureTransport
+        let completedActivity: Bool
 
         func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+            if request.method == .get, request.url.path == "/api/jobs" {
+                let jobs: [[String: Any]] = completedActivity ? ["done", "cancelled"].enumerated().map { index, status in
+                    ["jobId": String(format: "00000000-0000-0000-0000-%012d", index),
+                     "kind": "proactive", "title": "Synthetic finished job", "status": status,
+                     "startedAt": "2026-10-30T09:30:00Z", "updatedAt": "2026-10-30T09:34:00Z"]
+                } : []
+                return HTTPResponse(statusCode: 200, headers: ["content-type": "application/json"],
+                                    body: try JSONSerialization.data(withJSONObject: ["jobs": jobs]))
+            }
             guard request.method == .get, request.url.path == "/api/workspaces" else {
                 return try await base.send(request)
             }

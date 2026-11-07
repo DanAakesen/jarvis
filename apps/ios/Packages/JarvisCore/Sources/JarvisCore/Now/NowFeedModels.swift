@@ -51,6 +51,8 @@ public struct BackgroundTaskPresentation: Equatable, Sendable {
         quiet = failed.filter { $0.kind != "research" }
     }
 
+    public var isEmpty: Bool { running.isEmpty && actionable.isEmpty && quiet.isEmpty }
+
     public var needsYouCount: Int { actionable.count }
 }
 
