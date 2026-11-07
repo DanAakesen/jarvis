@@ -7433,7 +7433,7 @@ identical (dcf84176); only the Chat test and docs changed. Actual captures were
 reviewed, including all 22 page captures. Do not repeat these native checks for
 unchanged source. Main duplicate 42393878123 was cancelled before boot after
 identity verification. Details and failure hashes are in
-`ios/design/p15-build 80-release.md`.
+[the build 80 release record](ios/design/p15-build80-release.md).
 
 Normal Deploy 42393878132 passed required acceptance. TestFlight 42394179996
 uploaded build 80 at 17:06:13 UTC / 18:06:13 Copenhagen. Apple processing/device
