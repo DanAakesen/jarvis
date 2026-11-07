@@ -66,8 +66,13 @@ targets:
     deploymentTarget: "26.0"
     sources:
       - path: JarvisUITests
+      # Exercise the production URLSession adapter, including real AsyncBytes,
+      # from the native test runner with a synthetic URLProtocol.
+      - path: Jarvis/URLSessionTransport.swift
     dependencies:
       - target: Jarvis
+      - package: JarvisCore
+        product: JarvisCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.danaakesen.jarvis.uitests

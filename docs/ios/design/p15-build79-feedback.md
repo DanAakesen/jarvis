@@ -167,3 +167,11 @@ Backend PR #1632 deployed successfully in 42389927724, with readiness and requir
 live acceptance passing at 16:18:52 UTC. The owner was told they can retry the
 prepare prompt without an iOS update. The actual owner scaffold write remains an
 owner confirmation; no Copilot activation is claimed.
+
+## New owner reports after build 80 upload
+
+Home prepare showed thinking and then the offline banner; the installed build was
+not established. Track the active correction in `p15-home-stream-recovery.md`.
+Direct Chat later created issue #1634 / Factory task 23 after yes. Worker execution
+and scaffold completion remain unconfirmed. Owner also requests a review and
+reduction of repeated approval gates; this is separate from stream recovery.

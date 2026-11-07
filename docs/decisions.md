@@ -1,3 +1,12 @@
+## 7 November 2026 — Deliver native stream acceptance before waiting
+
+Flush URLSession SSE lines while the connection remains open. A 16 KB-only buffer
+can hide the message ID required for safe GET recovery and discard it on failure.
+Use a separate 240-second stream idle budget; keep ordinary request bounds and
+never replay an unacknowledged POST. Replace the inaccurate offline claim with
+separate interruption/timeout copy. Native URLProtocol qualification is pending;
+the exact owner request transport exception was not retrieved.
+
 ## 7 November 2026 — Recover approval state before recreating work
 
 Later model turns do not retain private tool results. Add a session-bound read of

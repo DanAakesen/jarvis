@@ -1,3 +1,13 @@
+## Active: Home stream failure and approval friction (7 November 2026)
+
+- Home prepare reported offline after thinking. Shared SSE buffering/idle-budget
+  correction implemented; native URLSession regression and CI qualification pending.
+  See `docs/ios/design/p15-home-stream-recovery.md`.
+- Direct Chat later created issue #1634 and Factory task 23. The created-event
+  comment proves handoff, not current worker execution or completion.
+- Owner requests fewer repeated approvals. Review direct Factory instructions
+  separately; do not lose the active iOS transport correction or Notes design target.
+
 ## Current release — build 80 (7 November 2026)
 
 PR #1631 merged as 294a7929 with exact source-tree identity. CI 42392412036,

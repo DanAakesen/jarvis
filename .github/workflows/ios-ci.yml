@@ -182,6 +182,7 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult" \
             -only-testing:JarvisUITests/SidebarNavigationTests \
             -only-testing:JarvisUITests/ChatComposerUITests \
+            -only-testing:JarvisUITests/URLSessionTransportTests \
             -only-testing:JarvisUITests/TodayUITests \
             -only-testing:JarvisUITests/ComponentGalleryUITests \
             -parallel-testing-enabled NO \

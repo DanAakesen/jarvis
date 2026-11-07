@@ -1,3 +1,11 @@
+## Direct Home send recovery (7 November 2026)
+
+Home and Chat share streaming acceptance and recovery. Small accepted/progress
+events must arrive while the response remains open; a quiet reasoning interval
+must not be reported as phone connectivity loss. Reconnect only to the accepted
+turn identity and never automatically resubmit the original message. Distinguish
+request timeout from an interrupted connection and retain conversation context.
+
 ## Recoverable own-code proposals (7 November 2026)
 
 Jarvis can recover the original staged issue proposal in the current conversation

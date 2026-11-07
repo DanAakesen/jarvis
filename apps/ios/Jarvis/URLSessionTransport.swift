@@ -35,7 +35,10 @@ public final class URLSessionTransport: HTTPTransport, @unchecked Sendable {
                     for try await byte in bytes {
                         try Task.checkCancellation()
                         chunk.append(byte)
-                        if chunk.count == 16_384 {
+                        // SSE frames are small and the connection stays open. Deliver each
+                        // line immediately so acceptance/progress reaches the recovery client
+                        // before an idle timeout, rather than waiting for 16 KB or EOF.
+                        if byte == 0x0A || byte == 0x0D || chunk.count == 16_384 {
                             if case .terminated = continuation.yield(chunk) { return }
                             chunk.removeAll(keepingCapacity: true)
                         }

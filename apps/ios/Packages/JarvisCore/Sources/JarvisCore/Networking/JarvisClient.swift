@@ -202,7 +202,7 @@ public final class JarvisClient: Sendable {
             queryItems: queryItems,
             accept: accept,
             contentType: contentType,
-            timeout: timeout
+            timeout: min(timeout ?? configuration.requestTimeout, configuration.requestTimeout)
         )
 
         var retries = 0
@@ -304,7 +304,10 @@ public final class JarvisClient: Sendable {
             authorization: .current,
             queryItems: [],
             accept: accept,
-            contentType: "application/json"
+            contentType: "application/json",
+            // Match the existing ingress stream ceiling and allow the hosted
+            // agent's 210-second invocation budget. Ordinary reads remain 30s.
+            timeout: .seconds(240)
         )
         try Task.checkCancellation()
         do {
@@ -349,7 +352,7 @@ public final class JarvisClient: Sendable {
         queryItems: [URLQueryItem],
         accept: String,
         contentType: String?,
-        timeout: Duration? = nil
+        timeout: Duration
     ) async throws -> HTTPRequest {
         var url = configuration.baseURL
         for component in path { url.append(path: component) }
@@ -372,7 +375,7 @@ public final class JarvisClient: Sendable {
             url: url,
             headers: requestHeaders,
             body: body,
-            timeout: min(timeout ?? configuration.requestTimeout, configuration.requestTimeout)
+            timeout: timeout
         )
         let token: String
         switch authorization {
