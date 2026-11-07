@@ -1,38 +1,23 @@
 # Shared Jarvis policy with managed native Responses (#1350)
 
-## 7 November 2026 — Copilot runtime recovery in progress
+## 7 November 2026 — Copilot runtime recovery
 
-The owner sees a long availability spinner followed by the policy-compatibility
-failure. Discovery currently reads provider metadata before noticing that no
-activation receipt exists. The correction returns that known result without a
-Foundry call; a present receipt still requires live target/settings verification.
+PR #1627 is merged as `4e06a275`. CI 42363816219 and CodeQL 42363816092 passed;
+normal Deploy 42364576232 is accepted with readiness and all 15 Current checks.
+Missing compatibility evidence now returns immediately without a provider lookup.
+The deployed managed transport supplies the complete Jarvis policy on every
+response through the required `{{jarvis_policy}}` structured input. Exact template,
+schema, target, settings and transport revision remain part of activation evidence.
 
-Microsoft's [structured input contract](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/structured-inputs)
-provides a concrete alternative to the rejected instruction overrides and message
-roles. The candidate pins an instruction template `{{jarvis_policy}}` with one
-required string input and no default. Every response supplies the complete shared
-policy through `structured_inputs.jarvis_policy`, including tool continuations and
-mode changes. Reference, user and tool content stays in its existing input channel.
-No policy is omitted or converted to user content. Tool authorization, native
-history, ownership/uncertain-source claims, model/effort and disabled built-ins
-remain unchanged.
-
-The transport receipt revision is `jarvis-structured-policy-v1`; older receipts
-cannot enable it. Definition readback/fingerprints include the exact required
-schema. Deployment must update the hosted agent and backend first, then explicitly
-refresh the existing comparison agent's immutable version through the existing
-handoff. Only its two-turn full-policy canary can stamp compatibility. Confirm
-policy precedence and replacement with the conflicting synthetic user input.
-Do not recreate the agent, retry owner messages, or claim compatibility from local
-tests. No iOS source change, Simulator run or TestFlight upload is needed.
-
-Local checks: 504 hosted Python tests and 48 provision/handoff/diagnostic tests
-passed. Backend target/availability/session checks cover 114 cases, including six
-additional unsafe-template cases. Backend build, scoped ESLint and Ruff pass.
-The complete workflow test run could not finish locally: 40 errors were missing
-Ruby/PowerShell executables, not failed assertions; hosted CI must qualify it.
-Live deployment and canary are pending.
-The prior rejected transports remain recorded below as historical evidence.
+Manual activation 42365966747 provisioned the new definition, but failed with
+`managed_probe_policy_not_applied` at `response_stream`; Copilot remains disabled.
+The follow-up adds closed diagnostics for the failing turn and whether streamed
+and final text match the expected, previous or user reply code. It retains the
+exact acceptance condition and never prints response text. See the
+[release record](copilot-runtime-recovery-2026-11-07.md) for source identity,
+artifact digests, retained local-check limitations and the live outcome. The prior
+rejected transports below remain historical evidence. No app source change,
+Simulator run or TestFlight upload is needed; build 78 remains the app release.
 
 `ManagedPolicyClient` in `agents/jarvis/managed_policy_client.py` is a local,
 explicitly injected transport variant of `AzureOpenAIResponsesClient`. It delegates

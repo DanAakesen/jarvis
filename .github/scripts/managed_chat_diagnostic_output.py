@@ -27,6 +27,8 @@ STAGES = frozenset({"settings", "target_setup", "definition_readback", "conversa
                     "conversation_policy_write", "response_start", "response_stream",
                     "diagnostic_budget"})
 SHAPES = ("conversation_developer_policy", "conversation_system_policy")
+TEXT_KINDS = frozenset({"empty", "expected", "user_override", "previous_policy",
+                        "expected_with_extra_text", "overflow", "other"})
 
 
 def known(value, allowed, fallback="not_reported"):
@@ -36,6 +38,13 @@ def known(value, allowed, fallback="not_reported"):
 def failure_fields(value):
     fields = ["reason=" + known(value.get("reason"), REASONS),
               "stage=" + known(value.get("stage"), STAGES, "managed_text_canary")]
+    turn = value.get("probeTurn")
+    if type(turn) is int and turn in (1, 2):
+        fields.extend([
+            f"probe_turn={turn}",
+            "stream_text=" + known(value.get("streamTextKind"), TEXT_KINDS),
+            "final_text=" + known(value.get("finalTextKind"), TEXT_KINDS),
+        ])
     status = value.get("httpStatus")
     if type(status) in (int, float) and 400 <= status <= 599 and int(status) == status:
         fields.append(f"http_status={int(status)}")
