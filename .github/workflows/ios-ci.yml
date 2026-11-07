@@ -5,8 +5,8 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: a6d484739b697a77313b8aecac489e3fc07650a1
-  TASK_IOS_TREE: 5d0954e7ac2aca4efbb36b1be7aad9e69fdcd207
+  TASK_SOURCE_SHA: 44cbbfcdfcb7594583df6d40737d549f90f845de
+  TASK_IOS_TREE: 7c20b275fa8fc8a6fa7fb9bb40757363dfb3e473
 jobs:
   gallery:
     name: Verify corrected Chat and Settings fixture cases
@@ -29,7 +29,7 @@ jobs:
           allowed = ['apps/ios/Jarvis/JarvisChatFeedbackFixtureTransport.swift', 'apps/ios/JarvisUITests/ChatTurnFeedbackUITests.swift', 'apps/ios/JarvisUITests/SettingsFieldUITests.swift']
           changed = subprocess.check_output(["git", "diff", "--name-only", "63f26a0acd00b698f59a655c2ddbfb24891a2cc4", "HEAD", "--", "apps/ios"], text=True).splitlines()
           assert sorted(changed) == sorted(allowed), changed
-          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "prior_native_runs":[42292434058,42302707513,42370022661,42373705592,42375612793], "selected_tests":['ChatTurnFeedbackUITests', 'SettingsFieldUITests/testPersistentTargetLabelsLightDanish'], "changed_ios_paths":changed, "unchanged_widget_sources":True, "empty_activity_capture_requires_recheck":False, "unchanged_production_ui":True}
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "prior_native_runs":[42292434058,42302707513,42370022661,42373705592,42375612793], "selected_tests":['ChatTurnFeedbackUITests', 'SettingsFieldUITests/testPersistentTargetLabelsLightDanish'], "changed_ios_paths":changed, "unchanged_widget_sources":True, "empty_activity_capture_requires_recheck":False, "unchanged_production_ui":True, "failed_build_before_boot":42377189552}
           pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
           PYCODE
       - name: Select pinned Xcode 26.6
