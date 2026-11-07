@@ -2542,3 +2542,7 @@ An own-code proposal must be recoverable in its original conversation after a la
 “yes please”; the owner need not repeat the project or scope. Recovery never grants
 approval, recreates work or claims a completed write. Expired/unavailable proposals
 require checking existing work before a new proposal and later approval.
+
+Task list titles show up to two lines, with unlimited wrapping at accessibility
+sizes. List metadata contains scope and priority only; remove all source labels,
+including Inbox and meaningful note/project names. Provenance remains in details.

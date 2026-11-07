@@ -3,7 +3,8 @@
 Track every incoming bug in [the feedback record](docs/ios/design/p15-build79-feedback.md).
 Current batch: opaque headers; opaque Notes/Factory footer containers; duplicate
 Chat thinking/progress rows; sent text remaining in the composer; scaffold approval
-refused with create_issue Not allowed. These remain open
+refused with create_issue Not allowed; two-line task titles and removal of all
+source metadata after scope/priority. These remain open
 despite the earlier build 79 qualification. Preserve the separate Copilot blocker
 and the owner's ongoing scaffold retest. Do not mark this batch complete until each
 item has its own fix, actual verification and recorded release status.

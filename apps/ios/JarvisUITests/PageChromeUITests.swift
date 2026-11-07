@@ -31,6 +31,17 @@ final class PageChromeUITests: XCTestCase {
             }
             let content = app.descendants(matching: .any).matching(identifier: marker).firstMatch
             XCTAssertTrue(content.waitForExistence(timeout: 10), marker)
+            if page == "notes" {
+                XCTAssertGreaterThan(content.frame.height, 78, "The long task title must wrap to two lines")
+                let metadata = content.buttons["notes.task.open"].value as? String ?? ""
+                XCTAssertFalse(metadata.contains("Tasks"))
+                XCTAssertFalse(metadata.contains("Inbox"))
+                let roadmapID = "notes.task.row." + String(repeating: "0", count: 63) + "3"
+                let roadmap = app.descendants(matching: .any)[roadmapID].buttons["notes.task.open"]
+                if roadmap.exists {
+                    XCTAssertFalse((roadmap.value as? String ?? "").contains("Roadmap draft"), "No source labels remain, including meaningful note titles")
+                }
+            }
             capture("build79-\(page)-resting-\(theme)")
             scrollAndCapture(marker: content, name: "build79-\(page)-scrolled-\(theme)")
             if page == "notes" {

@@ -11,6 +11,7 @@ retain any failures and rerun only changed or unqualified cases.
 | Notes and Factory footer containers remain nontransparent | Investigating | Inspect long content under floating search/Plus and Factory tabs in both themes; exercise the controls after scrolling. |
 | Two thinking rows appear for one Chat turn | Shared single progress row implemented; native verification pending | Exactly one active progress indicator before acknowledgment, during tools, after steering/interruption, and while streaming/reconnecting; it disappears only when the turn ends. |
 | Sent text remains in the composer (“Yes please” screenshot) | Investigating; prior fix insufficient | Test send button and keyboard Return with a focused field; verify clearing, stale input callback rejection and preservation of a newly typed draft. Keep custom/system dictation in scope. |
+| Task titles truncate to one line; source labels such as Inbox remain | Two-line titles and no source metadata implemented; native verification pending | Inspect long titles/date-time combinations in both themes; retain scope and priority, with full provenance only in details. |
 | Scaffold cannot proceed after “Yes please”: create_issue returns Not allowed, earlier proposal cannot be recovered | Owner confirmed still broken after backend release | Trace actual project selection and approval/proposal persistence across turns; test prepare → inspect → later approve → one issue/task. Do not weaken own-code approval or require repeated rewording. |
 
 ## Separate unresolved work
@@ -64,3 +65,12 @@ compressing existing wording within the unchanged 15,000-code-point budget.
 Backend TypeScript build and ESLint completed successfully. These are synthetic
 handler-level checks, not a claim that the owner's live scaffold now succeeds.
 Native compile, focused UI captures and release qualification remain pending.
+
+The owner added task-row feedback while qualification was building. The title now
+wraps to two lines (unlimited at accessibility sizes), and the due column is bounded
+so it cannot consume most of the row. All source metadata is removed from the list,
+not just generic names. The obsolete source-filter helper/tests were removed;
+actual source provenance is still available in task details. Focused run 42385082799
+was cancelled during compilation, before Simulator boot, to include these changes
+in the same native verification pass. Automatic duplicate 42385111644 was also
+cancelled during compilation before boot. No new Simulator test ran in either.

@@ -22,6 +22,7 @@ enum JarvisTaskTitle {
 /// Board task anatomy, inside a native List so swipe completion remains available.
 struct JarvisTaskListRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .subheadline) private var maximumDueWidth = 120
     let task: VaultTask
     let copy: JarvisNotesCopy
     let today: String
@@ -49,9 +50,6 @@ struct JarvisTaskListRow: View {
 
     private var scope: String { task.scope == .work ? copy.work : copy.personal }
     private var overdue: Bool { task.dueDate.map { $0 < today } ?? false }
-    private var source: String? {
-        JarvisNotesPresentation.taskSourceLabel(heading: task.heading, path: task.path)
-    }
 
     private var due: String? {
         let time = task.dueTime.map { JarvisNotesLocalization.formattedDueTime($0, language: copy.language) }
@@ -111,13 +109,14 @@ struct JarvisTaskListRow: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         dueLabel
-                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(maxWidth: maximumDueWidth, alignment: .trailing)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             .buttonStyle(.plain)
             .accessibilityLabel(JarvisTaskTitle.plain(task.text))
-            .accessibilityValue([scope, priority, due, source].compactMap { $0 }.joined(separator: ", "))
+            .accessibilityValue([scope, priority, due].compactMap { $0 }.joined(separator: ", "))
             .accessibilityIdentifier("notes.task.open")
         }
         .padding(.leading, 8)
@@ -137,17 +136,12 @@ struct JarvisTaskListRow: View {
         Text(JarvisTaskTitle.formatted(task.text))
             .font(.body.weight(.semibold))
             .foregroundStyle(.primary)
-            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             .fixedSize(horizontal: false, vertical: true)
     }
 
     private var metadata: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 6) {
-                scopeLabel
-                priorityLabel
-                if let source { Text(source).lineLimit(1) }
-            }
             HStack(spacing: 6) {
                 scopeLabel
                 priorityLabel
@@ -189,6 +183,7 @@ struct JarvisTaskListRow: View {
         if let due {
             Text(due)
                 .font(.subheadline)
+                .multilineTextAlignment(dynamicTypeSize.isAccessibilitySize ? .leading : .trailing)
                 .foregroundStyle(overdue ? Color.red : Color.secondary)
         }
     }

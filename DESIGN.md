@@ -3579,3 +3579,7 @@ ambient scene visible between them. Verify real scrolling before accepting a
 scrolled capture; short fixtures are insufficient. Chat has one pinned progress
 row, with real acknowledgments and streamed replies in the transcript. Reset the
 native composer editor on submit so sent text cannot linger; preserve the next draft.
+
+The owner's latest task-row feedback supersedes retaining meaningful source context:
+show only scope and priority below the two-line title. Bound the trailing due column
+to preserve title width. Source headings/paths remain accessible in task details.
