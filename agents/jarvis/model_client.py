@@ -607,14 +607,14 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         return self._tools.diagnostics()
 
     async def managed_definition_manifest(self) -> dict[str, Any]:
-        """Static instructions and authoritative schemas for the existing deploy caller.
+        """Required policy template and schemas for the existing deploy caller.
 
         No model request, personal context/settings read, or function execution.
         Foundry's existing invocation authorization protects this administrative read.
         """
-        return {"instructions": compose_identity_instructions(
-                    DEFAULT_MODEL_SETTINGS.identity_description, "en",
-                ) + "\n\n" + CHAT_INSTRUCTIONS["en"],
+        from managed_policy_template import POLICY_TEMPLATE
+
+        return {"instructions": POLICY_TEMPLATE,
                 "tools": chat_model_tools(model_tools(await self._tools.tools()))}
 
     async def session_settings(self) -> ModelSettings:

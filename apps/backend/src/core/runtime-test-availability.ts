@@ -1,3 +1,6 @@
+import { hasManagedPolicyCompatibility } from './managed-policy-compatibility.js';
+import type { ManagedTargetReadback } from './managed-target-reader.js';
+
 /** A configured adapter is usable only after its definition and policy checks pass. */
 export interface RuntimeTestAvailability {
   readonly available: boolean;
@@ -10,6 +13,20 @@ export interface ConversationRuntimeTests {
 }
 
 export type ConversationRuntimeTestReader = () => Promise<ConversationRuntimeTests>;
+
+/** Missing activation evidence is already decisive; do not wait for Foundry. */
+export async function readCopilotRuntimeTest(input: {
+  readonly receipt?: string | undefined;
+  readonly readTarget: () => Promise<ManagedTargetReadback | null>;
+}): Promise<RuntimeTestAvailability> {
+  if (!input.receipt || !/^[0-9a-f]{64}$/u.test(input.receipt)) {
+    return { available: false, reason: 'copilot_policy_not_verified' };
+  }
+  const metadata = await input.readTarget();
+  if (!metadata) return { available: false, reason: 'copilot_not_verified' };
+  return hasManagedPolicyCompatibility(metadata, input.receipt)
+    ? { available: true } : { available: false, reason: 'copilot_policy_not_verified' };
+}
 
 export async function readRuntimeTests(input: {
   readonly storageAvailable: boolean;

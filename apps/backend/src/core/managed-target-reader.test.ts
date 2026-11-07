@@ -9,7 +9,9 @@ function wire() {
     version: { object: 'agent.version', id: 'fixture:7', name: 'fixture', version: '7', metadata: {},
       created_at: 1793270000, status: 'active', draft: false, definition: {
         kind: 'prompt', harness: { type: 'microsoft_copilot_preview' }, model: 'gpt-6.1-terra',
-        reasoning: { effort: 'high' }, instructions: 'Synthetic Jarvis identity.', tools: [
+        reasoning: { effort: 'high' }, instructions: '{{jarvis_policy}}', structured_inputs: { jarvis_policy: {
+          description: 'Complete trusted Jarvis policy for the current response.', required: true, schema: { type: 'string' },
+        } }, tools: [
           { type: 'microsoft_copilot_toolset_preview', default_config: { enabled: false } },
           { type: 'function', name: 'fixture_read', strict: false, description: 'Read a synthetic fixture.',
             parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'], additionalProperties: false } },
@@ -77,6 +79,18 @@ describe('managed target metadata reader', () => {
     const f = fixture(wire(), { readSelectedSettings: settings });
     expect(await f.read()).not.toBeNull(); expect(await f.read()).toBeNull(); expect(await f.read()).toBeNull();
     expect(f.getToken).toHaveBeenCalledTimes(3);
+  });
+
+  it.each(['missing', 'optional', 'default', 'extra', 'schema', 'template'])('rejects unsafe policy template %s', async mutation => {
+    const metadata = wire();
+    const definition = metadata.version.definition;
+    if (mutation === 'missing') Object.assign(definition, { structured_inputs: undefined });
+    if (mutation === 'optional') definition.structured_inputs.jarvis_policy.required = false;
+    if (mutation === 'default') Object.assign(definition.structured_inputs.jarvis_policy, { default_value: 'fallback' });
+    if (mutation === 'extra') Object.assign(definition.structured_inputs, { other: { required: true } });
+    if (mutation === 'schema') definition.structured_inputs.jarvis_policy.schema.type = 'object';
+    if (mutation === 'template') definition.instructions = '{{other}}';
+    expect(await fixture(metadata).read()).toBeNull();
   });
 
   it.each([

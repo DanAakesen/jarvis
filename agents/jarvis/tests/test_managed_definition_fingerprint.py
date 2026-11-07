@@ -9,6 +9,7 @@ from managed_definition_fingerprint import (
     managed_definition_fingerprint,
     normalized_managed_definition,
 )
+from managed_policy_template import POLICY_INPUTS, POLICY_TEMPLATE
 
 
 def definition():
@@ -36,6 +37,24 @@ def test_fingerprint_exact_cross_boundary_contract_and_benign_defaults():
                                           provider) == digest
     assert normalized_managed_definition(provider)["tools"][1]["parameters"] == \
         base["tools"][0]["parameters"]
+
+
+def test_required_policy_template_is_hashed_and_cannot_gain_default_or_extra_bindings():
+    value = definition()
+    old = managed_definition_fingerprint("https://fixture", "agent", "1", value)
+    value.update(instructions=POLICY_TEMPLATE, structured_inputs=copy.deepcopy(POLICY_INPUTS))
+    new = managed_definition_fingerprint("https://fixture", "agent", "1", value)
+    assert new != old
+    assert normalized_managed_definition(value)["structured_inputs"] == POLICY_INPUTS
+    for field, unexpected in [("required", False), ("default_value", "fallback"),
+                              ("schema", {"type": "object"})]:
+        changed = copy.deepcopy(value)
+        changed["structured_inputs"]["jarvis_policy"][field] = unexpected
+        with pytest.raises(ValueError):
+            normalized_managed_definition(changed)
+    value["structured_inputs"]["untrusted_tool_binding"] = {"required": True}
+    with pytest.raises(ValueError):
+        normalized_managed_definition(value)
 
 
 @pytest.mark.parametrize("mutation", ["enabled", "extra", "nonfinite", "reasoning"])

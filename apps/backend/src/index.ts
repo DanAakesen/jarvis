@@ -19,6 +19,7 @@ import { createConversationStore } from './database/conversation-store.js';
 import { createRuntimeSessionStore } from './database/runtime-session-store.js';
 import { createManagedTargetReader } from './core/managed-target-reader.js';
 import { hasManagedPolicyCompatibility } from './core/managed-policy-compatibility.js';
+import { readCopilotRuntimeTest } from './core/runtime-test-availability.js';
 import { createConversationSummaryStore } from './database/conversation-summary-store.js';
 import { createPhoneSessionStore } from './database/phone-session-store.js';
 import { createPhoneStatusModule } from './phone/status.js';
@@ -514,6 +515,7 @@ try {
   const managedRuntime = readManagedTarget && database
     ? { sessions: createRuntimeSessionStore(database.pool), readTargetMetadata: readManagedTarget,
       readVerifiedTarget: async () => {
+        if (!config.foundryCopilotPolicyCompatibility) return null;
         const metadata = await readManagedTarget();
         return metadata && hasManagedPolicyCompatibility(metadata, config.foundryCopilotPolicyCompatibility)
           ? metadata.target : null;
@@ -1175,12 +1177,10 @@ try {
     ...(managedRuntime && readManagedTarget ? {
       managedRuntime,
       conversationRuntimeTests: async () => {
-        const metadata = await readManagedTarget();
         return {
           current: { available: Boolean(conversationAgent) },
-          copilot: !metadata ? { available: false, reason: 'copilot_not_verified' } :
-            hasManagedPolicyCompatibility(metadata, config.foundryCopilotPolicyCompatibility)
-              ? { available: true } : { available: false, reason: 'copilot_policy_not_verified' },
+          copilot: await readCopilotRuntimeTest({ readTarget: readManagedTarget,
+            receipt: config.foundryCopilotPolicyCompatibility }),
         };
       },
     } : {}),

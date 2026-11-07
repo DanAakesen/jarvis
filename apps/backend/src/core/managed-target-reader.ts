@@ -78,8 +78,17 @@ function validDefinition(value: Record<string, unknown>, model: string, effort: 
       !record(value.harness) || value.harness.type !== 'microsoft_copilot_preview' || !only(value.harness, ['type']) ||
       !record(value.reasoning) || value.reasoning.effort !== effort || !only(value.reasoning, ['effort']) ||
       typeof value.instructions !== 'string' || !value.instructions.trim()) return false;
+  // Accept only the one required trusted-policy template, not arbitrary tool bindings.
+  const inputs = value.structured_inputs;
+  if (value.instructions !== '{{jarvis_policy}}' || !record(inputs) || !only(inputs, ['jarvis_policy']) ||
+      !record(inputs.jarvis_policy)) return false;
+  const policy = inputs.jarvis_policy;
+  if (!Object.entries(policy).every(([key, field]) => field === null || ['description', 'required', 'schema'].includes(key)) ||
+      policy.description !== 'Complete trusted Jarvis policy for the current response.' ||
+      policy.required !== true || !record(policy.schema) || policy.schema.type !== 'string' ||
+      !only(policy.schema, ['type'])) return false;
   if (value.skills !== undefined && value.skills !== null && (!Array.isArray(value.skills) || value.skills.length > 0)) return false;
-  for (const key of ['temperature', 'top_p', 'tool_choice', 'text', 'text_format', 'response_format', 'verbosity', 'structured_inputs']) {
+  for (const key of ['temperature', 'top_p', 'tool_choice', 'text', 'text_format', 'response_format', 'verbosity']) {
     if (value[key] !== undefined && value[key] !== null) return false;
   }
   if (!Array.isArray(value.tools)) return false;

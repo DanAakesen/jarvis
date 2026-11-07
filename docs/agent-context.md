@@ -7329,3 +7329,16 @@ Automatic main 42306089300 was stopped before boot, and normal Deploy 4230608929
 was accepted before upload. The validation-only branch must never merge. Any new
 app changes need affected-path verification. Apple processing/device availability
 is not independently confirmed.
+
+## Copilot recovery continuation (7 November 2026)
+
+Branch `codex/copilot-runtime-recovery` replaces rejected developer response input
+with Microsoft's documented structured instruction template. Read the new sections
+in docs/managed-policy-client.md and docs/managed-chat-provisioning.md. After
+qualification and normal deployment, use the existing Deploy workflow with
+`provision_managed_chat=true` and `refresh_managed_chat_definition=true`; inspection
+and diagnostics remain false. This is a new documented-channel hypothesis; prior
+instructions against repeating rejected shapes do not block this bounded check.
+The existing agent is versioned, not recreated. Two full-policy turns must pass
+before the handoff grants the new target/transport receipt. No iOS changes or
+Simulator work is needed. User authorization covers fixing and releasing this.

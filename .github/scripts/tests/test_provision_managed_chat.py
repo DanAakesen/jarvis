@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import provision_managed_chat as script
 
-MANIFEST = {"instructions": "Synthetic private instruction æ", "tools": [
+MANIFEST = {"instructions": "{{jarvis_policy}}", "tools": [
     {"type": "function", "name": "synthetic_b", "strict": False, "parameters": {"type": "object", "properties": {}}},
     {"type": "function", "name": "synthetic_a", "description": "Synthetic", "strict": False,
      "parameters": {"type": "object", "properties": {"text": {"type": "string"}}}},
