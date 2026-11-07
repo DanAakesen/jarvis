@@ -199,7 +199,7 @@ struct JarvisNotesArea: View {
         .jarvisPageHeader { header }
         .jarvisSuccessFeedback($successConfirmation)
         .environment(\.locale, language.locale)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .jarvisPageFooter {
             if !isInitialLoading {
                 VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
                     searchBar

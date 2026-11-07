@@ -8877,3 +8877,18 @@ bound. An oversized 100-record window is recursively read as 25/5/1-record pages
 no allocation proceeds on incomplete reads. A preparation failure returns safe,
 actionable issue-list guidance. Existing later-message approval remains mandatory
 for Jarvis's own code. Deploy this backend before the dependent iOS build.
+
+### Build 79 proposal recovery and editor ownership
+
+Factory exposes `get_pending_issue` to read its existing process-local pending
+proposal by verified conversation, returning original scope/code/expiry. Staging
+replaces only that session's previous proposal. Later affirmation mistakenly sent
+to create returns the saved proposal; only confirm validates and consumes later
+approval. Fresh explicit own-code selection may supersede a stale clarification
+without bypassing review. Restart/expiry returns none and instructs work-status
+checking; no durable-store or approval-boundary migration is made.
+
+Shared iOS ComposerDraft owns text and an editor revision. Submit consumes text and
+rotates the revision; bindings reject delayed edits from the previous editor. The
+single Chat progress row follows the active root turn. Shared page chrome uses
+reserved layout and hidden native bar/scroll-edge backgrounds.

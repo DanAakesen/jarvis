@@ -32,7 +32,11 @@ struct JarvisTodayScreen: View {
     @State private var tab: Tab = .today
     @State private var listExpanded = false
     @State private var sheet: Sheet?
-    @State private var draft = ""
+    @State private var composerDraft = ComposerDraft()
+    private var draft: String {
+        get { composerDraft.text }
+        nonmutating set { composerDraft.replace(with: newValue) }
+    }
     @StateObject private var dictation = ChatDictation()
     @State private var dictationFailed = false
     @State private var flyingText: String?
@@ -546,8 +550,7 @@ struct JarvisTodayScreen: View {
     private func sendDraft() {
         guard canSend else { return }
         dictation.stop()
-        let text = draft
-        draft = ""
+        let text = composerDraft.consume()
         composerFocused = false
         guard !reduceMotion else {
             onChat(JarvisChatHandoff(text: text))
@@ -582,8 +585,7 @@ struct JarvisTodayScreen: View {
     }
 
     private func handOffPlusAction(_ action: JarvisComposerPlusAction) {
-        let text = draft
-        draft = ""
+        let text = composerDraft.consume()
         composerFocused = false
         onChat(JarvisChatHandoff(text: text, action: action))
     }
@@ -636,7 +638,7 @@ struct JarvisTodayScreen: View {
             }
             JarvisComposerBar(
                 placeholder: chatCopy(.messagePlaceholder),
-                text: $draft,
+                draft: $composerDraft,
                 isFocused: $composerFocused,
                 inputIdentifier: "today.input",
                 rimState: dictation.isListening ? .listening : (canSend ? .typing : .idle),

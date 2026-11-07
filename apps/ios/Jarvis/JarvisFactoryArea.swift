@@ -167,12 +167,14 @@ struct JarvisFactoryArea: View {
                 boardContent
             }
         }
-        .jarvisPageHeader { header }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            JarvisTaskActivityNotice(language: language)
+        .jarvisPageHeader {
+            VStack(spacing: 0) {
+                JarvisTaskActivityNotice(language: language)
+                header
+            }
         }
         .environment(\.locale, language.locale)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .jarvisPageFooter {
             if showsSegmentRow {
                 VStack(spacing: 0) {
                     segmentRow

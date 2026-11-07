@@ -289,6 +289,34 @@ function rememberProjectClarification(
   });
 }
 
+/** Recover server-owned proposal data; tool results are not retained in later turn history. */
+function pendingIssueForMessage(server: FastifyInstance, message: ConversationMessage): PendingIssueCreation | undefined {
+  const actions = pendingIssueCreations.get(server);
+  if (!actions) return undefined;
+  for (const [code, action] of actions) {
+    if (!action.confirmation.pending) actions.delete(code);
+  }
+  return [...actions.values()].find((action) =>
+    action.confirmation.proposal.sourceSessionId === message.sessionId);
+}
+
+function issueProposal(action: PendingIssueCreation) {
+  return {
+    ...action.confirmation.presentation,
+    repository: action.repository,
+    ...(action.project ? { project: action.project } : {}),
+    taskCode: action.taskCode,
+    title: action.taskCode ? `${action.taskCode}: ${action.title}` : action.title,
+    body: action.body,
+    executor: action.executor,
+    ...(action.issueNumber !== undefined ? { issueNumber: action.issueNumber } : {}),
+    ...(action.startExisting ? { startExisting: true } : {}),
+    confirmationCode: action.confirmation.proposal.key,
+    ...(action.publicAttachment ? { warning: `This repository is public. Publishing ${action.publicAttachment.name} makes the image readable by anyone and commits it to Git history.` } : {}),
+    instruction: 'This is the original saved proposal. Use confirm_create_issue with this code only after Dan’s later approval; do not recreate it or change its scope.',
+  };
+}
+
 async function resolveCreateIssueProject(
   request: FastifyRequest,
   input: Record<string, unknown> & { project?: string },
@@ -310,6 +338,21 @@ async function resolveCreateIssueProject(
     }
     if (source.id === sourceMessageId) {
       throw new ToolRefusal('I asked which project you mean; wait for a new reply before continuing. No changes were made.');
+    }
+    // A fresh, explicit own-code request can replace an earlier clarification. It still
+    // only stages a proposal: the new scope needs a separate later approval.
+    if (action.confirmation.eligible(source) && input.project &&
+        !isClearProjectAffirmation(source.text) && !isUnclearProjectSelection(source.text)) {
+      try {
+        const explicit = await resolveProjectForMessage(input.project, source.text, request.server.projectStore ?? null);
+        if (explicit.repo.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
+          action.confirmation.cancel();
+          pending?.delete(source.sessionId);
+          return explicit;
+        }
+      } catch (error) {
+        if (!(error instanceof ToolRefusal)) throw error;
+      }
     }
     if (!action.confirmation.eligible(source) ||
         issueRequestFingerprint(input) !== action.requestFingerprint) {
@@ -537,8 +580,12 @@ async function stageIssueCreation(
     pendingIssueCreations.set(server, actions);
   }
   const now = Date.now();
-  for (const action of actions.values()) action.confirmation.cancel();
-  actions.clear();
+  for (const [code, action] of actions) {
+    if (!action.confirmation.pending || action.confirmation.proposal.sourceSessionId === source.sessionId) {
+      action.confirmation.cancel();
+      actions.delete(code);
+    }
+  }
   if (actions.size >= maxPendingIssueCreations) throw new Error('Too many pending issue creations');
   let confirmationCode: string;
   do {
@@ -834,6 +881,15 @@ export const factoryTools: readonly JarvisTool[] = [
       const draft = input as { project?: string; title: string; body: string; executor?: IssueExecutor } & IssueAttachmentInput;
       try {
         const source = await currentDanMessage(request, 'issue creation');
+        const pending = pendingIssueForMessage(request.server, source);
+        if (pending && isClearProjectAffirmation(source.text)) {
+          // A mistaken create call after approval must not change or replace the reviewed draft.
+          return issueProposal(pending);
+        }
+        if (!pending && isClearProjectAffirmation(source.text) &&
+            !pendingProjectClarifications.get(request.server)?.has(source.sessionId)) {
+          throw new ToolRefusal('No issue proposal is pending in this conversation. Use get_work_status to check whether work already exists; if nothing exists, recover the requested scope from conversation history and present a new proposal before asking for approval. Do not treat this reply as approval of a new draft.');
+        }
         if (draft.project === undefined && requiresProjectSelector(source.text)) {
           throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
         }
@@ -952,6 +1008,20 @@ export const factoryTools: readonly JarvisTool[] = [
         if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         throw new ToolRefusal('The issue comment is invalid, contains a secret, or could not be prepared.');
       }
+    },
+  },
+  {
+    name: 'get_pending_issue',
+    description: 'Read the original server-staged issue, own-code execution or comment proposal in this conversation, including its confirmationCode, scope and expiry. Use after Dan later agrees; then confirm_create_issue with this code. Read-only: never creates, approves or restages work. A none status does not prove whether an issue already exists; check get_work_status before proposing a retry.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    sensitive: true,
+    execute: async (_input, request) => {
+      const message = await currentDanMessage(request, 'issue proposal recovery');
+      const action = pendingIssueForMessage(request.server, message);
+      return action ? issueProposal(action) : {
+        status: 'none',
+        instruction: 'No live proposal is pending in this conversation (it may have completed, expired or been lost on restart). Check get_work_status before proposing new work. Never invent a confirmation code or infer approval for a new draft.',
+      };
     },
   },
   {

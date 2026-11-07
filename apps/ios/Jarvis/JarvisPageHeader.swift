@@ -77,6 +77,7 @@ private struct JarvisPageHeaderModifier<Header: View>: ViewModifier {
             content.clipped()
         }
         .scrollEdgeEffectHidden()
+        .toolbarBackgroundVisibility(.hidden, for: .navigationBar, .bottomBar)
     }
 }
 
@@ -84,6 +85,16 @@ extension View {
     /// A transparent, structurally reserved header. Scrolling content cannot overlap its title or actions.
     func jarvisPageHeader<Header: View>(@ViewBuilder _ header: () -> Header) -> some View {
         modifier(JarvisPageHeaderModifier(header: header()))
+    }
+
+    /// Floating controls reserve their own space without creating a native bar backdrop.
+    func jarvisPageFooter<Footer: View>(@ViewBuilder _ footer: () -> Footer) -> some View {
+        VStack(spacing: 0) {
+            self.clipped()
+            footer()
+        }
+        .scrollEdgeEffectHidden()
+        .toolbarBackgroundVisibility(.hidden, for: .bottomBar)
     }
 }
 

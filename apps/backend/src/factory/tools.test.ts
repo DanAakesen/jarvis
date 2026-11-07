@@ -321,7 +321,7 @@ describe('Software Factory Jarvis tools', () => {
   it('registers every project and task tool for discovery and English voice', async () => {
     const names = [
       'get_work_status',
-      'create_issue', 'issue_comment', 'confirm_create_issue', 'start_issue',
+      'create_issue', 'issue_comment', 'get_pending_issue', 'confirm_create_issue', 'start_issue',
       'list_projects', 'update_project', 'archive_project', 'confirm_project_archive',
       'list_tasks', 'get_task', 'list_releases', 'get_release', 'get_deployment_status',
       'create_task', 'set_task_model', 'retry_task', 'steer_task', 'pause_task', 'resume_task', 'cancel_task',
@@ -1260,4 +1260,79 @@ it('explains a failed issue-list read before staging self-improvement and makes 
   expect(JSON.stringify(response.json())).not.toContain('private upstream details');
   expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
   expect(test.taskStore.create).not.toHaveBeenCalled();
+});
+
+it('recovers the original scaffold after yes please and confirms once without reselecting the project', async () => {
+  const test = fixture();
+  const call = (name: string, payload: object, id = '42') => test.app.inject({
+    method: 'POST', url: `/tools/${name}`, headers: { ...headers, 'x-jarvis-message-id': id }, payload,
+  });
+  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', text: 'Prepare the widget in Jarvis', model: null, at: new Date() });
+  const staged = (await call('create_issue', { project: project.id, title: 'Prepare widget scaffold', body: 'Create apps/winwidget. Acceptance: the scaffold builds.' })).json();
+  expect(staged).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation', repository: project.repo } });
+  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+  const early = await call('confirm_create_issue', { confirmationCode: staged.result.confirmationCode });
+  expect(early.json().outcome).toBe('refused');
+  test.setLatestMessage({ id: '43', sessionId: 'session', role: 'dan', text: 'Yes please', model: null, at: new Date(Date.now() + 2_000) });
+  const recovered = (await call('get_pending_issue', {}, '43')).json();
+  expect(recovered).toMatchObject({ outcome: 'ok', result: {
+    status: 'awaiting_confirmation', confirmationCode: staged.result.confirmationCode,
+    body: staged.result.body, repository: project.repo,
+  } });
+  // Even if the model mistakenly retries create, it cannot replace the approved scope.
+  const retry = (await call('create_issue', { project: project.id, title: 'A changed title', body: 'A different scope' }, '43')).json();
+  expect(retry.result).toEqual(recovered.result);
+  const confirmations = await Promise.all([1, 2].map(() => call('confirm_create_issue', { confirmationCode: recovered.result.confirmationCode }, '43')));
+  expect(confirmations.map((r) => r.json().outcome).sort()).toEqual(['ok', 'refused']);
+  expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
+  expect(test.githubIssueClient.createIssue.mock.calls[0]?.[2]).toContain('Create apps/winwidget');
+  expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
+  expect((await call('get_pending_issue', {}, '43')).json().result.status).toBe('none');
+  const after = await call('create_issue', { project: project.id, title: 'Prepare widget scaffold', body: 'Same scope' }, '43');
+  expect(after.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('get_work_status') } });
+  expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
+});
+
+it('replaces a stale own-project clarification with an explicit scaffold request, still requiring later approval', async () => {
+  const test = fixture();
+  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', text: 'Prepare the widget in the repo', model: null, at: new Date() });
+  const first = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
+    payload: { project: project.id, title: 'Widget', body: 'Scaffold the app.' } });
+  expect(first.json().outcome).toBe('refused');
+  test.setLatestMessage({ id: '43', sessionId: 'session', role: 'dan', text: 'Prepare the widget in Jarvis', model: null, at: new Date(Date.now() + 2_000) });
+  const explicit = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers: { ...headers, 'x-jarvis-message-id': '43' },
+    payload: { project: project.id, title: 'Prepare widget scaffold', body: 'Create apps/winwidget with build instructions.' } });
+  expect(explicit.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation', repository: project.repo } });
+  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+});
+
+it('does not expose or cancel a pending issue from another conversation', async () => {
+  const test = fixture();
+  const call = (name: string, payload: object, id: string) => test.app.inject({ method: 'POST', url: `/tools/${name}`, headers: { ...headers, 'x-jarvis-message-id': id }, payload });
+  const source = { role: 'dan' as const, model: null, at: new Date() };
+  test.setLatestMessage({ ...source, id: '42', sessionId: 'session', text: 'Prepare the widget in Jarvis' });
+  const first = (await call('create_issue', { project: project.id, title: 'Widget', body: 'Original scope' }, '42')).json().result;
+  test.setLatestMessage({ ...source, id: '43', sessionId: 'runtime-test', text: 'Prepare a chart in Jarvis' });
+  expect((await call('get_pending_issue', {}, '43')).json().result.status).toBe('none');
+  await call('create_issue', { project: project.id, title: 'Chart', body: 'Separate scope' }, '43');
+  test.setLatestMessage({ ...source, id: '44', sessionId: 'session', text: 'Yes please', at: new Date(Date.now() + 2_000) });
+  expect((await call('get_pending_issue', {}, '44')).json().result.confirmationCode).toBe(first.confirmationCode);
+  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+});
+
+it('reports an expired proposal as none and never invents approval for a replacement', async () => {
+  let now = Date.now();
+  vi.spyOn(Date, 'now').mockImplementation(() => now);
+  const test = fixture();
+  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', text: 'Prepare the widget in Jarvis', model: null, at: new Date() });
+  await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
+    payload: { project: project.id, title: 'Widget', body: 'Original scope' } });
+  now += 11 * 60_000;
+  const later = now;
+  try {
+    test.setLatestMessage({ id: '43', sessionId: 'session', role: 'dan', text: 'Yes please', model: null, at: new Date(later) });
+    const result = await test.app.inject({ method: 'POST', url: '/tools/get_pending_issue', headers: { ...headers, 'x-jarvis-message-id': '43' }, payload: {} });
+    expect(result.json()).toMatchObject({ outcome: 'ok', result: { status: 'none' } });
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+  } finally { vi.restoreAllMocks(); }
 });

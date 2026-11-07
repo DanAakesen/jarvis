@@ -2532,3 +2532,13 @@ Preparing an approved self-improvement proposal must handle large issue lists.
 Oversized GitHub pages are split within existing read limits; task codes are never
 allocated from incomplete data. Proposal preparation still does not create an issue
 or start coding until the existing later-owner-approval condition is satisfied.
+
+### Build 79 owner feedback: retained bugs and proposal recovery
+
+The active regression ledger is `docs/ios/design/p15-build79-feedback.md`.
+A sent composer clears immediately and rejects late input from that submission,
+while preserving a new draft. One active progress row remains until the turn ends.
+An own-code proposal must be recoverable in its original conversation after a later
+“yes please”; the owner need not repeat the project or scope. Recovery never grants
+approval, recreates work or claims a completed write. Expired/unavailable proposals
+require checking existing work before a new proposal and later approval.

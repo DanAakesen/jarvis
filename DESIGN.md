@@ -3570,3 +3570,12 @@ remain expanded under acknowledgment text; a small orb/status row above the comp
 stays visible while working/reconnecting. It disappears only on completion/failure,
 where existing error recovery remains visible. Reduce Motion retains static feedback.
 Native rendering/selection checks for this follow-up are pending.
+
+### Build 79 chrome and Chat correction
+
+Use ordinary reserved layout for shared header/footer regions and explicitly hide
+native scroll-edge/bar backgrounds. Keep glass on individual controls and the
+ambient scene visible between them. Verify real scrolling before accepting a
+scrolled capture; short fixtures are insufficient. Chat has one pinned progress
+row, with real acknowledgments and streamed replies in the transcript. Reset the
+native composer editor on submit so sent text cannot linger; preserve the next draft.

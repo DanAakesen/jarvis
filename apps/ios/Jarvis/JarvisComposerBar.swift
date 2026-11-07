@@ -1,3 +1,4 @@
+import JarvisCore
 import SwiftUI
 
 /// The one composer, used by Chat and Home: a text field above one row (a leading control, the live dictation line
@@ -5,7 +6,7 @@ import SwiftUI
 /// only in what they put in `header`, `leading` and `actions`, and in the space around it.
 struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
     let placeholder: String
-    @Binding var text: String
+    @Binding var draft: ComposerDraft
     let isFocused: FocusState<Bool>.Binding
     let inputIdentifier: String
     let inputHint: String
@@ -20,7 +21,7 @@ struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
 
     init(
         placeholder: String,
-        text: Binding<String>,
+        draft: Binding<ComposerDraft>,
         isFocused: FocusState<Bool>.Binding,
         inputIdentifier: String,
         inputHint: String = "",
@@ -34,7 +35,7 @@ struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
         @ViewBuilder actions: () -> Actions
     ) {
         self.placeholder = placeholder
-        _text = text
+        _draft = draft
         self.isFocused = isFocused
         self.inputIdentifier = inputIdentifier
         self.inputHint = inputHint
@@ -49,9 +50,14 @@ struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
     }
 
     var body: some View {
+        let revision = draft.revision
         VStack(spacing: 0) {
             header
-            TextField(placeholder, text: $text, axis: .vertical)
+            TextField(placeholder, text: Binding(
+                get: { draft.text },
+                set: { draft.edit($0, revision: revision) }
+            ), axis: .vertical)
+                .id(revision)
                 .font(.body)
                 .lineLimit(1...JarvisDesignTokens.chatComposerMaximumLines)
                 .focused(isFocused)
