@@ -7562,3 +7562,12 @@ capacity and sanitized retained task outcomes. This wakes a deallocated worker
 for read-only inspection; it submits no Factory work. Normal idle deallocation
 then stops compute again. The evidence artifact contains no prompts or credentials.
 The mailbox polls every 20 seconds when idle and every second around active work.
+
+
+Worker inspection also reports bounded Azure deployment error codes when the VM
+does not exist. Provisioning failures retain the same code-only diagnostics, with
+no provider response messages, template parameters or credentials in logs.
+For a provisioning-only retry, `existing_image_tag` may reuse a prior image only
+after its source passes the normal exact-tree qualification and its complete runner
+build context matches the current source (deployment scripts and tests excluded).
+The resolved image is still pinned by digest.

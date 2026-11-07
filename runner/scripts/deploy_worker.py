@@ -11,6 +11,7 @@ from pathlib import Path
 
 from deploy import az, backend_settings
 from worker_cloud_init import render
+from worker_diagnostics import deployment_errors
 
 VM_NAME = 'vm-jarvis-factory'
 
@@ -79,6 +80,9 @@ def provision(args):
             '--template-file', 'infra/factory-worker.bicep', '--parameters', '@' + str(parameter_file),
             '--only-show-errors', '--output', 'none'], capture_output=True, timeout=900)
         if applied.returncode:
+            evidence['deploymentErrors'] = deployment_errors(applied.stderr)
+            args.state.write_text(json.dumps(evidence, indent=2))
+            print('Factory deployment error codes: ' + json.dumps(evidence['deploymentErrors']), flush=True)
             raise RuntimeError('Factory worker provisioning failed')
     az(args.subscription, 'vm', 'start', '--resource-group', resource_group, '--name', VM_NAME, '--no-wait')
     if exists:

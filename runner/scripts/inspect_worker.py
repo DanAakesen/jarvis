@@ -6,6 +6,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from worker_diagnostics import deployment_errors
+
 
 def az(subscription, *arguments):
     result = subprocess.run(['az', *arguments, '--subscription', subscription,
@@ -21,11 +23,28 @@ def main():
     parser.add_argument('--subscription', required=True)
     parser.add_argument('--state', type=Path, required=True)
     args = parser.parse_args()
+    evidence = {}
+    try:
+        deployment = az(args.subscription, 'deployment', 'group', 'show', '--resource-group', 'rg-jarvis',
+                        '--name', 'jarvis-factory-worker')
+        properties = deployment.get('properties', {})
+        evidence['deploymentState'] = properties.get('provisioningState')
+        if properties.get('error'):
+            evidence['deploymentErrors'] = deployment_errors(json.dumps(properties['error']))
+    except RuntimeError:
+        evidence['deploymentState'] = 'Unavailable'
+    args.state.write_text(json.dumps(evidence, indent=2))
+    vms = az(args.subscription, 'vm', 'list', '--resource-group', 'rg-jarvis')
+    if not any(vm.get('name') == 'vm-jarvis-factory' for vm in vms):
+        evidence['workerExists'] = False
+        args.state.write_text(json.dumps(evidence, indent=2))
+        print(json.dumps(evidence))
+        return
     flags = ('--resource-group', 'rg-jarvis', '--name', 'vm-jarvis-factory')
     vm = az(args.subscription, 'vm', 'get-instance-view', *flags)
     power = next((x['code'] for x in vm['instanceView']['statuses'] if x['code'].startswith('PowerState/')), None)
-    evidence = {'powerStateBeforeInspection': power,
-                'workspaceGiB': vm['storageProfile']['dataDisks'][0].get('diskSizeGB')}
+    evidence.update(workerExists=True, powerStateBeforeInspection=power,
+                    workspaceGiB=vm['storageProfile']['dataDisks'][0].get('diskSizeGB'))
     args.state.write_text(json.dumps(evidence))
     if power == 'PowerState/deallocated':
         az(args.subscription, 'vm', 'start', *flags, '--no-wait')

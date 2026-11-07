@@ -8,6 +8,10 @@ on:
       - '.github/workflows/runner-deploy.yml'
   workflow_dispatch:
     inputs:
+      existing_image_tag:
+        description: Reuse a qualified runner image when its complete build context is unchanged
+        type: string
+        default: ''
       inspect_workspace:
         description: Read disk capacity and task outcomes without submitting work
         type: boolean
@@ -56,6 +60,27 @@ jobs:
         run: |
           git fetch --depth=2 origin main
           PYTHONPATH=.github/scripts python -c 'import os; from release_state import qualify; qualify(os.environ["GITHUB_SHA"])'
+      - name: Verify the reused worker image source and context
+        if: inputs.existing_image_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REUSE_IMAGE_TAG: ${{ inputs.existing_image_tag }}
+          PROVISION_WORKSPACE: ${{ inputs.provision_workspace }}
+          INSPECT_WORKSPACE: ${{ inputs.inspect_workspace }}
+        run: |
+          PYTHONPATH=.github/scripts python - <<'PY'
+          import os, re, subprocess
+          from release_state import qualify
+          tag = os.environ['REUSE_IMAGE_TAG']
+          if os.environ['PROVISION_WORKSPACE'] != 'true' or os.environ['INSPECT_WORKSPACE'] == 'true' or not re.fullmatch(r'[a-f0-9]{40}-[0-9]+-[0-9]+', tag):
+              raise SystemExit('A valid existing image is allowed only for worker provisioning')
+          source = tag.split('-')[0]
+          subprocess.run(['git', 'fetch', '--depth=1', 'origin', source], check=True)
+          qualify(source)
+          subprocess.run(['git', 'diff', '--exit-code', source, os.environ['GITHUB_SHA'], '--', 'runner', ':!runner/scripts/**', ':!runner/tests/**'], check=True)
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('IMAGE_TAG=' + tag + '\n')
+          PY
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
@@ -69,7 +94,7 @@ jobs:
         if: inputs.provision_workspace == true && inputs.inspect_workspace == true
         run: exit 1
       - name: Build small technology images in ACR
-        if: inputs.inspect_workspace != true
+        if: inputs.inspect_workspace != true && inputs.existing_image_tag == ''
         run: |
           az acr build --registry "$REGISTRY" --image "jarvis-runner-base:$IMAGE_TAG" --file runner/Dockerfile --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
           az acr build --registry "$REGISTRY" --image "jarvis-runner-dotnet:$IMAGE_TAG" --file runner/Dockerfile.dotnet --build-arg "RUNNER_BASE_IMAGE=$REGISTRY_HOST/jarvis-runner-base:$IMAGE_TAG" --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
