@@ -24,8 +24,11 @@ existence checks. The next focused run adds that flag and visible/hittable check
 those captures are not accepted visual evidence. Retain the earlier failed run
 42368114024. Reuse unchanged widget/navigation evidence; do not rerun the gallery.
 
-Continue isolated checks while the owner tests project scaffolding. After review,
-normal backend deployment/acceptance must precede the new TestFlight upload.
+CI 42374596904 passed. Native 42373705592 passed 17/20 cases; reply text selection,
+collapsed tool history, empty activity and Settings label captures were inspected.
+Three fixture/edit-input failures are corrected with no production UI changes and
+will be rechecked alone. The owner's scaffold test is blocked by the reproduced
+issue-list failure; after qualification, deploy its fix before the TestFlight upload.
 See docs/ios/design/p15-chat-settings-feedback.md for the current evidence.
 
 ## 7 November 2026 — Widget contrast and Tasks focus

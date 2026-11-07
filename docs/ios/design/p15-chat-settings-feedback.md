@@ -39,7 +39,8 @@ This confirms the read boundary, not a production scaffold write or deployment.
 CI/CodeQL and focused native Settings/Chat checks are pending. Reuse unchanged widget
 captures and navigation tests with source-path proof; do not repeat that gallery.
 Normal backend deploy/acceptance must precede TestFlight. Keep the owner's current
-E2E project test undisturbed. Copilot remains disabled after its second policy
+project draft and data intact. That E2E test is now blocked by the reproduced read
+failure; release remains authorized after qualification. Copilot remains disabled after its second policy
 canary used the previous turn's policy; docs/runtime-comparison-owner-test.md is the
 comparison guide once compatible activation is possible.
 
@@ -59,3 +60,24 @@ locally. Native 42373705592 is the only active Simulator run; the app built and
 interaction checks are running against f8651cda / iOS tree
 ed7db56a1dc12ddf403850f7f62d91b0c22604b1. This backend test-only correction does
 not change that tree or require a duplicate native run.
+
+CI 42374596904 passed on 748f01c0, including the full backend suite. Native
+42373705592 completed with 17/20 cases passing and three failed cases. Artifact
+13575482150 SHA-256:
+353ec5fa4277fccf93596ccf8e72769afbc3b52cc6a9780e54694ea716e9469e.
+Its actual reply-selection capture shows native word handles, formatted text and
+Copy/Look Up/Translate. The empty Notifications/Chat captures now show the real
+views, no Away row and no empty activity bar. Training labels at normal and AX
+sizes were inspected; long labels wrap and the large list scrolls.
+
+The controlled Chat fixture returned English for a newly requested Danish session,
+so the client correctly rejected it before opening a turn. It now echoes the
+requested language and supplies SSE headers. The two Settings edit checks tapped
+before the trailing digit, producing 54 instead of 5. They now put the caret after
+the current value and assert the replacement value before checking validation/save.
+Only these three cases require another native run. Production UI source is unchanged.
+
+Apple API review: UITextView/isSelectable provide a single native rich-text selection
+range; TextField documents that iOS uses its label as a placeholder, hence the explicit
+persistent label; ViewThatFits selects the compact or stacked arrangement. Sources
+are linked in PR #1629. No custom selection handles or gesture recognizers are added.

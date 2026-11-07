@@ -16,6 +16,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     private var turn: AsyncThrowingStream<Data, any Error>.Continuation?
     private var listeners: [UUID: AsyncThrowingStream<Data, any Error>.Continuation] = [:]
     private var activity: [[String: Any]] = []
+    private var language = "en"
 
     init(base: any HTTPTransport) { self.base = base }
 
@@ -24,7 +25,10 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
         switch request.url.path {
         case "/api/conversation/history": return try json(["messages": history, "nextCursor": NSNull()])
         case "/api/conversation/turns/active": return try json(["turns": []])
-        case "/api/conversation/sessions": return try json(["id": "12", "channel": "chat", "language": "en"], status: 201)
+        case "/api/conversation/sessions":
+            let body = try JSONSerialization.jsonObject(with: request.body!) as! [String: Any]
+            language = body["language"] as! String
+            return try json(["id": "12", "channel": "chat", "language": language], status: 201)
         case "/api/now": return try json(["running": [], "items": [], "confirmations": [], "awayMode": false, "updatedAt": "2026-11-07T12:00:00Z"])
         case "/api/jobs": return try json(["jobs": []])
         case "/api/conversation/sessions/12/steer":
@@ -54,7 +58,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
                 for item in activity { continuation.yield(event("jarvis-activity", item)) }
                 continuation.onTermination = { _ in Task { await self.removeListener(id) } }
             }
-            return HTTPStreamResponse(statusCode: 200, body: body)
+            return HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: body)
         }
         guard request.url.path == "/api/conversation/sessions/12/turns" else { return try await base.stream(request) }
         let requestBody = try JSONSerialization.jsonObject(with: request.body!) as! [String: Any]
@@ -72,7 +76,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
             try? await Task.sleep(for: .milliseconds(250))
             publishTool(finished: true)
         }
-        return HTTPStreamResponse(statusCode: 200, body: body)
+        return HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: body)
     }
 
     private func finishTurn() {
@@ -93,7 +97,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     }
 
     private func message(id: String, role: String, text: String) -> [String: Any] {
-        ["id": id, "sessionId": "12", "channel": "chat", "language": "en", "role": role,
+        ["id": id, "sessionId": "12", "channel": "chat", "language": language, "role": role,
          "text": text, "at": "2026-11-07T12:00:\(id)Z", "interrupted": false, "toolCalls": [], "attachments": []]
     }
 

@@ -28,12 +28,13 @@ final class SettingsFieldUITests: XCTestCase {
         attach(app, "settings-labelled-targets-\(language)-large-\(large)")
         guard !large else { return }
         let field = app.textFields["settings.target.gymSessionsPerWeek"]
-        field.tap()
-        field.typeText(XCUIKeyboardKey.delete.rawValue + "99")
+        replaceValue(in: field, with: "99")
+        XCTAssertEqual(field.value as? String, "99")
         XCTAssertTrue(app.staticTexts["settings.target.gymSessionsPerWeek.label"].isHittable)
         let save = app.buttons["sheet.confirm"]
         XCTAssertFalse(save.isEnabled, "Existing target bounds must still reject 99 sessions")
-        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 2) + "5")
+        replaceValue(in: field, with: "5")
+        XCTAssertEqual(field.value as? String, "5")
         XCTAssertTrue(save.isEnabled)
         save.tap()
         let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == false"), object: save)
@@ -69,5 +70,13 @@ final class SettingsFieldUITests: XCTestCase {
         capture.name = name
         capture.lifetime = .keepAlways
         add(capture)
+    }
+
+    private func replaceValue(in field: XCUIElement, with value: String) {
+        let current = field.value as? String ?? ""
+        // Values are trailing-aligned. Tap beyond the final digit so deletion
+        // starts at the end instead of inserting before the existing number.
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0.5)).tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count) + value)
     }
 }
