@@ -7571,3 +7571,18 @@ For a provisioning-only retry, `existing_image_tag` may reuse a prior image only
 after its source passes the normal exact-tree qualification and its complete runner
 build context matches the current source (deployment scripts and tests excluded).
 The resolved image is still pinned by digest.
+
+
+### Factory quota blocker (7 November 2026, 23:49 UTC)
+
+Provisioning 42426685636 failed with InvalidTemplateDeployment / QuotaExceeded;
+worker routing was never enabled. The main deploy 42426666246 succeeded. Resolve
+the subscription quota before claiming 128 GiB delivery. The reviewed worker is
+Standard_D2as_v5 (2 vCPUs, 8 GiB) in Sweden Central. Owner current limit/usage for
+its VM family and Total Regional vCPUs is pending; do not invent either value.
+The deploy identity is rg-jarvis scoped and cannot administer subscription quotas.
+After quota resolution, rerun qualified main provisioning with reusable image tag
+`a59ed10742edb5543c2667309a97e1d290d8e2a3-42422208795-1` only while the existing
+build-context equivalence checks pass. Verify capacity, provider access and real
+idle deallocation, then recover existing task 23 from the authenticated owner app.
+The deploy principal is smoke-only and must not impersonate that owner session.
