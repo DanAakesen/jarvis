@@ -11639,3 +11639,19 @@ Code field. The workspace remains unprovisioned until live capacity and idle che
 pass. Owner Copilot comparison instructions now include changing a conversational
 format rule while retaining note/task context; this supplements the passed live
 application-policy canary without claiming they are the same test.
+
+
+### 7 November 2026 — Azure quota blocks Factory activation
+
+Diagnostic PR #1643 passed CI 42425881356 and CodeQL, then merged as 91adf10e.
+Normal deployment 42426666246 passed readiness and live conversation acceptance.
+Worker provisioning 42426685636 reused the qualified image and returned
+InvalidTemplateDeployment plus QuotaExceeded before activation. The selected
+Standard_D2as_v5 requires two available vCPUs in Sweden Central; the exact limiting
+quota and usage have not been read. The owner has been asked for Standard DASv5
+family and Total Regional vCPU quota details. Bootstrap grants the deploy identity
+Contributor and RBAC Administrator at rg-jarvis only, not subscription quota rights.
+No migration, worker execution or idle billing proof is claimed. Task 23 still has
+its saved branch commit and no delivery PR; do not duplicate its Prepare request.
+Copilot remains enabled after its passed live policy canary, and build 82 remains
+uploaded with Notes/Ember. Their owner acceptance is pending independently.
