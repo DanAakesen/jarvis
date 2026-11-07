@@ -20,7 +20,7 @@ struct ContentView: View {
     private let settingsClient: JarvisSettingsClient?
     private let voiceScreenshotLanguage: JarvisAppLanguage?
     @State private var notesClient: JarvisNotesClient?
-    @State private var widgetTasksRequest: UUID?
+    @State private var notesSelectedTab: JarvisNotesTab = .notes
     @State private var healthClient: JarvisHealthClient?
     @State private var usageClient: JarvisUsageClient?
     @State private var statusClient: JarvisStatusClient?
@@ -165,7 +165,7 @@ struct ContentView: View {
         .onOpenURL { url in
             if let destination = JarvisWidgetLink.destination(for: url) {
                 // Existing installed Notes widgets now present Tasks; keep their URL compatible.
-                if destination == .notes { widgetTasksRequest = UUID() }
+                if destination == .notes { notesSelectedTab = .tasks }
                 navigate(to: destination)
             }
         }
@@ -317,8 +317,7 @@ struct ContentView: View {
                 client: notesClient,
                 language: language,
                 onRetryConfiguration: { notesClient = Self.makeNotesClient(fixtureMode: fixtureMode) },
-                taskRequestID: widgetTasksRequest,
-                onTaskRequestHandled: { widgetTasksRequest = nil }
+                selectedTab: $notesSelectedTab
             )
         } else if destination == .health {
             JarvisHealthArea(
@@ -414,6 +413,7 @@ struct ContentView: View {
     }
 
     private func prepareNavigation(to destination: JarvisDestination, from previous: JarvisDestination) {
+        if previous == .notes && destination != .notes { notesSelectedTab = .notes }
         if destination == .voice {
             voiceModel.restore()
         } else if previous == .voice && voiceModel.isSessionActive {

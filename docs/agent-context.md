@@ -7365,3 +7365,16 @@ run, retain source/tree proof and existing 120/150-second limits; never merge it
 workflow. Cancel duplicate automatic simulator jobs before boot. User release
 authorization persists; upload only after actual native review and normal accepted
 deployment. This new iOS source cannot reuse build 78's rendering evidence alone.
+
+The first widget-focused run 42368114024 failed its combined gallery deadline and
+both widget tab-selection checks. Retain it and the inspected captures; do not
+claim native qualification. Follow-up uses root-owned tab binding and separate
+widget-language cases with one AX snapshot each, unchanged per-test limits and
+all prior geometry assertions. Add empty-activity/Away-absence and active-approval
+checks for the newest request. No deployment/shared runtime mutation while the
+owner tests new-project scaffolding.
+
+The instrumented Copilot activation 42369093453 failed on turn 2: stream and final
+classify as previous_policy; turn 1 passed. Current normal Deploy 42367439515 is
+accepted with all 15 checks. No receipt exists. Do not retry unchanged provisioning
+or weaken the gate. Investigate a supported instruction-update path first.

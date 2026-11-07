@@ -7,7 +7,13 @@ import WidgetKit
 /// WidgetKit's Xcode previews/device checks still own host margins, tinting and Home Screen rendering.
 struct JarvisWidgetLayoutGallery: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var language = "en"
+    @State private var language: String
+
+    init() {
+        let requested = ProcessInfo.processInfo.arguments.first { $0.hasPrefix("--widget-language=") }
+            .map { String($0.dropFirst("--widget-language=".count)) }
+        _language = State(initialValue: ["en", "da", "en-light"].contains(requested ?? "") ? requested! : "en")
+    }
 
     private var appLanguage: JarvisAppLanguage { language == "da" ? .da : .en }
 

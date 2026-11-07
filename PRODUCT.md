@@ -280,8 +280,8 @@ to 20 MB and images up to 10 MB per attachment. Synthetic fixtures are clearly
 marked and used only in previews and CI screenshots. Native Entra sign-in remains
 a separate concern; no fake conversation or successful live sign-in is implied.
 The activity sheet keeps the no-activity icon and text without empty category rows.
-The composer Now bar appears only while a turn is sending or the feed contains
-background activity.
+The composer Now bar appears only when there is visible background activity,
+an approval or a feed update. Finished routine jobs alone do not display it.
 
 The notifications toolbar button keeps its badge inside the 44-point control,
 including two-digit counts. Notifications and Background activity sheets use a
@@ -2503,3 +2503,11 @@ widget identifiers and cached snapshot compatibility. A tap opens the Tasks tab
 inside Notes; the app's Notes area remains available. Task-widget refresh must not
 depend on an unrelated Notes fetch. Supporting labels on all Home Screen widget
 families must remain readable in light mode, including stale-data timestamps.
+
+## iOS activity visibility (7 November 2026)
+
+iOS no longer shows an Away mode section. Presence behavior on the backend and
+web, and approval requirements, remain unchanged. The composer activity bar and
+Notifications use the same visible job categories: running work, actionable and
+dismissible failures, approvals and feed updates. Completed/cancelled jobs alone
+must not keep an empty Background activity bar visible.

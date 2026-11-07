@@ -83,3 +83,29 @@ Factory and Health. Score correctness and tool reliability before speed and styl
 No owner test notes, tasks, repositories or coding jobs were created for this
 release verification; physical-device and functional owner-turn results remain
 separate from the synthetic compatibility canary.
+
+## Instrumented activation outcome — initial policy retained on turn 2
+
+PR #1628 merged as b01f5f0306a1b134d4cf633796217a1928fb2b78 with full tree
+20e3d1c433349a707a0e578ad3e163f5ecf61962. CI 42366663928 and CodeQL
+42366663891 passed. Normal Deploy 42367439515 is accepted, not superseded,
+with readiness and all 15 Current checks passing.
+
+Manual activation 42369093453 provisioned at 11:41:14 UTC. At 11:42:01 UTC,
+job 128393502221 reported managed_probe_policy_not_applied at response_stream:
+probe_turn=2, stream_text=previous_policy, final_text=previous_policy. Turn 1
+passed. No provider text or private policy was logged. No compatibility receipt
+was stamped. Copilot is still unavailable.
+
+This isolates stale instructions within one Copilot conversation. The official
+Foundry Copilot harness guide, read on 7 November, says to save and start a new
+chat after instruction changes. A supported per-turn update route that preserves
+Jarvis's full policy and conversation is unresolved. Do not weaken the two-turn
+check or move trusted instructions into ordinary user content.
+
+Verified artifacts: CI 13572007964, SHA256
+c36a81cec95234b1f203c6d20aef6578c9c74fb8aba96cad55f5edeabf6fa2e9;
+release 13572579084, SHA256
+625b3d0fc9848dfeffa226d49942fa7104c8876140a952b4ac3b717c9884a321;
+acceptance 13572866396, SHA256
+e1bcbe44e187243a0d10cf1185166e3fceb8795b8b73351fefab69ffea0e5ebb.

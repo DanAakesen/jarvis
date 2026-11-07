@@ -11428,3 +11428,17 @@ now Tasks: remove latest-note content from all sizes, show due-today tasks and m
 its tap select the Tasks tab. Retain installed kind IDs/URL compatibility and the
 snapshot format. Drop the publisher's unused Notes fetch so Tasks availability
 cannot depend on it. Existing in-app Notes functionality remains unchanged.
+
+## 7 November 2026 — iOS activity cleanup and reliable Tasks widget routing
+
+The owner removes Away mode from iOS and asks the Now bar to disappear when empty.
+Use the visible background-job presentation for both sheet and bar, preserving
+failed/active jobs and approvals. Retain backend/web presence semantics. Native
+widget checks exposed task-tab handoff failure; one root-owned binding replaces
+the consumed request. Separate per-language widget checks preserve the original
+geometry assertions and deadlines while avoiding repeated AX round trips.
+
+Instrumented Copilot activation confirms initial structured policy works but a
+second policy is ignored in the same native conversation (42369093453, turn 2,
+stream/final previous_policy). Keep Copilot disabled; faithful policy-update
+compatibility is not established. Do not deploy during the owner's E2E project test.

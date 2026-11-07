@@ -8849,3 +8849,12 @@ passes no notes to the snapshot builder. ContentView converts the compatible Not
 widget URL into a one-use task-tab request consumed by JarvisNotesArea on initial
 or repeated delivery; ordinary Notes navigation gets no request. No backend/API,
 credential, storage migration or Chat appearance change is required.
+
+### iOS widget routing and activity visibility follow-up (7 November 2026)
+
+ContentView owns the Notes tab binding and selects Tasks for the existing widget
+URL. Leaving Notes resets the tab for ordinary navigation; repeated widget taps
+select Tasks without relying on a consumed on-appear request. Notifications and
+the Now bar share BackgroundTaskPresentation.isEmpty, which excludes terminal
+success/cancellation records. Removing the iOS Away row changes no presence API,
+approval error handling or backend mode.

@@ -3543,3 +3543,13 @@ icon/title heading followed by up to three compact title/time rows; large shows
 up to five tasks. Remove the latest-note phrase and note fallback from every size.
 The debug gallery adds an English/light capture beside retained English/dark and
 Danish/light states. These source changes await actual native rendering review.
+
+### iOS activity cleanup and widget verification follow-up
+
+Remove the Away mode heading/status row from Notifications. An empty feed keeps
+the existing empty state and overview; no empty Background activity capsule
+appears above Chat's composer. Active items keep the accepted bar styling.
+Native run 42368114024 produced inspected English/dark and Danish/light widget
+captures with readable secondary text and three Tasks rows. It was not a pass:
+the gallery timed out and widget task-tab selection failed. Root-owned tab state
+and bounded snapshot-based geometry checks await a new focused native run.

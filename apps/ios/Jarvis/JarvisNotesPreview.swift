@@ -3,11 +3,13 @@ import JarvisCore
 import SwiftUI
 
 #Preview("Noter · Dansk") {
+    @Previewable @State var selectedTab: JarvisNotesTab = .notes
     NavigationStack {
         JarvisNotesArea(
             client: JarvisNotesPreview.makeClient(),
             language: .da,
-            onRetryConfiguration: {}
+            onRetryConfiguration: {},
+            selectedTab: $selectedTab
         )
     }
     .environmentObject(JarvisNavigationModel())
@@ -15,11 +17,13 @@ import SwiftUI
 }
 
 #Preview("Notes · English") {
+    @Previewable @State var selectedTab: JarvisNotesTab = .notes
     NavigationStack {
         JarvisNotesArea(
             client: JarvisNotesPreview.makeClient(),
             language: .en,
-            onRetryConfiguration: {}
+            onRetryConfiguration: {},
+            selectedTab: $selectedTab
         )
     }
     .environmentObject(JarvisNavigationModel())
