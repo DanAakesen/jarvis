@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   MAX_APPROVAL_REPLY_CHARS, MAX_APPROVAL_SUMMARY_CHARS, approvalDeciderFor, approvalSystemPrompt, buildApprovalPrompt,
   createApprovalInterpreter, fastApprovalDecider, parseApprovalVerdict, safeDecision,
-  preferenceIntentSystemPrompt, type ApprovalDecider, type ApprovalModelPort, type ApprovalQuestion,
+  preferenceIntentSystemPrompt, factoryRequestSystemPrompt, type ApprovalDecider, type ApprovalModelPort, type ApprovalQuestion,
 } from './approval-interpreter.js';
 
 const summary = 'Create 2 events in Google Calendar: "Synthetic Hotel Alpha" on 14 June 2027 and "Synthetic Hotel Beta" on 9 December 2027.';
@@ -50,6 +50,40 @@ describe('parseApprovalVerdict', () => {
 });
 
 describe('createApprovalInterpreter', () => {
+  it('checks the full direct coding scope separately from approval of an existing proposal', async () => {
+    const model = modelReturning(verdictJson('approve'));
+    const interpret = createApprovalInterpreter({ model });
+    const summary = `Repository: DanAakesen/jarvis. ${'Scaffold details. '.repeat(150)} Final acceptance: no live integration.`;
+    const request = question('Prepare the widget in Jarvis now', {
+      family: 'factory', intent: 'factory_request', summary,
+    });
+    await expect(interpret(request)).resolves.toEqual({ verdict: 'approve', path: 'model' });
+    expect(model.mock.calls[0]?.[0].system).toBe(factoryRequestSystemPrompt);
+    expect(model.mock.calls[0]?.[0].user).toContain('Final acceptance: no live integration.');
+    await interpret({ ...request, intent: undefined });
+    expect(model).toHaveBeenCalledTimes(2);
+    expect(model.mock.calls[1]?.[0].system).toBe(approvalSystemPrompt);
+  });
+
+  it.each(['yes', 'ja tak', 'no', 'okay'])('does not turn bare %s into permission for a new coding proposal', async (reply) => {
+    const model = modelReturning(verdictJson('approve'));
+    const request = question(reply, { family: 'factory', intent: 'factory_request' });
+    await expect(createApprovalInterpreter({ model })(request)).resolves.toEqual({ verdict: 'neither', path: 'fast' });
+    await expect(fastApprovalDecider(request, new AbortController().signal)).resolves.toBe('neither');
+    expect(model).not.toHaveBeenCalled();
+  });
+
+  it('does not apply direct coding authorization to other action families or bypass model failure', async () => {
+    const model = modelReturning(verdictJson('approve'));
+    await expect(createApprovalInterpreter({ model })(question('Send the email', {
+      intent: 'factory_request',
+    }))).resolves.toEqual(failed);
+    expect(model).not.toHaveBeenCalled();
+    await expect(createApprovalInterpreter()(question('Fix the widget', {
+      family: 'factory', intent: 'factory_request',
+    }))).resolves.toEqual(failed);
+  });
+
   it('uses instruction meaning, not bare approval fast paths, for proactive preferences', async () => {
     const model = modelReturning(verdictJson('approve'));
     const interpret = createApprovalInterpreter({ model });

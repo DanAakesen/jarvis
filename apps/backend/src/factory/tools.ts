@@ -2,7 +2,7 @@ import { createHash, randomInt } from 'node:crypto';
 import { issueAttachmentFields, type IssueAttachmentInput } from '@jarvis/contracts';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { approvalInstruction, approvalNotPending } from '../core/approval.js';
-import { approvalDeciderFor } from '../core/approval-interpreter.js';
+import { approvalDeciderFor, safeDecision } from '../core/approval-interpreter.js';
 import { PendingAction } from '../core/pending-action.js';
 import type { JarvisTool } from '../core/tool-registry.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
@@ -92,6 +92,32 @@ const maxPendingProjectArchives = 50;
 const issueCreationTtlMs = 10 * 60_000;
 const maxPendingIssueCreations = 50;
 const maxPendingProjectClarifications = 50;
+// Keep duplicate calls for one verified instruction on one result, including
+// uncertain writes. This is process-local, not a durable global issue lookup.
+const requestedIssues = new WeakMap<FastifyInstance, Map<string, {
+  fingerprint: string; expiresAt: number; result: Promise<unknown>;
+}>>();
+
+function oncePerIssueInstruction(
+  server: FastifyInstance, source: ConversationMessage, draft: Record<string, unknown>,
+  work: () => Promise<unknown>,
+): Promise<unknown> {
+  let requests = requestedIssues.get(server);
+  if (!requests) { requests = new Map(); requestedIssues.set(server, requests); }
+  const now = Date.now();
+  for (const [key, entry] of requests) if (entry.expiresAt <= now) requests.delete(key);
+  const key = `${source.sessionId}:${source.id}`;
+  const fingerprint = issueRequestFingerprint(draft);
+  const existing = requests.get(key);
+  if (existing) {
+    if (existing.fingerprint !== fingerprint) throw new ToolRefusal('This instruction already has an issue request. Check its saved proposal or work status before changing the scope.');
+    return existing.result;
+  }
+  if (requests.size >= 100) throw new ToolFailure('Too many recent issue requests; check work status before retrying.');
+  const result = Promise.resolve().then(work);
+  requests.set(key, { fingerprint, expiresAt: now + issueCreationTtlMs, result });
+  return result;
+}
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -657,6 +683,7 @@ async function confirmIssueCreation(
   request: FastifyRequest,
   confirmationCode: string,
   signal: AbortSignal,
+  directInstruction = false,
 ) {
   const message = await currentDanMessage(request, 'issue creation');
   const actions = pendingIssueCreations.get(request.server);
@@ -671,13 +698,30 @@ async function confirmIssueCreation(
   };
   cleanExpired();
   const action = actions?.get(confirmationCode);
-  if (!actions || !action || !action.confirmation.eligible(message)) throw new ToolRefusal(approvalNotPending);
-  const verdict = await action.confirmation.decision(message, approvalDeciderFor(request), signal);
+  const eligible = action && (directInstruction
+    ? action.confirmation.pending && action.repository.toLowerCase() === JARVIS_REPOSITORY.toLowerCase() &&
+      !action.publicAttachment && action.confirmation.proposal.sourceMessageId === message.id &&
+      action.confirmation.proposal.sourceSessionId === message.sessionId
+    : action.confirmation.eligible(message));
+  if (!actions || !action || !eligible) throw new ToolRefusal(approvalNotPending);
+  const verdict = directInstruction
+    ? await safeDecision(approvalDeciderFor(request), {
+      family: 'factory', intent: 'factory_request', reply: message.text,
+      summary: JSON.stringify({
+        repository: action.repository, operation: action.startExisting ? 'start_existing_issue' : 'create_issue',
+        issue: action.issueNumber, executor: action.executor, title: action.title, body: action.body,
+      }),
+      messageId: message.id, sessionId: message.sessionId, actionKey: confirmationCode,
+    }, signal)
+    : await action.confirmation.decision(message, approvalDeciderFor(request), signal);
   const stillPending = () => {
     cleanExpired();
     return !signal.aborted && actions.get(confirmationCode) === action;
   };
   if (!stillPending()) throw new ToolRefusal(approvalNotPending);
+  // Discussion, missing context or unavailable interpretation remains a real
+  // reviewable proposal. Only a verified direct request consumes it immediately.
+  if (directInstruction && verdict !== 'approve') return issueProposal(action);
   if (verdict !== 'approve') {
     action.confirmation.consume(verdict, signal);
     actions.delete(confirmationCode);
@@ -863,7 +907,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'create_issue',
-    description: 'Create a P11 issue for project-code work. Changes to my own implementation (bugs or features) always stage a reviewable proposal; only confirm_create_issue after Dan’s later approval creates the issue and starts Factory. Attachments also require approval.',
+    description: 'Create a P11 issue and start requested project-code work. A clear owner request can authorize my own code work immediately; the server verifies the actual message. Discussion/plan-only requests stage a proposal for later confirm_create_issue. Attachments still require review. Check existing work before retrying.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -906,7 +950,13 @@ export const factoryTools: readonly JarvisTool[] = [
         validateIssueDraft(draft.title, draft.body);
         const targetRepository = selectedProject?.repo ?? JARVIS_REPOSITORY;
         if (targetRepository.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
-          return await stageIssueCreation(request.server, draft, source, signal, selectedProject);
+          if (draft.attachmentIds?.length || draft.publish === 'public') {
+            return await stageIssueCreation(request.server, draft, source, signal, selectedProject);
+          }
+          return await oncePerIssueInstruction(request.server, source, { repository: targetRepository, ...draft }, async () => {
+            const staged = await stageIssueCreation(request.server, draft, source, signal, selectedProject);
+            return confirmIssueCreation(request, staged.confirmationCode, signal, true);
+          });
         }
         if (!draft.attachmentIds?.length && draft.publish !== 'public') {
           const repository = selectedProject?.repo ?? JARVIS_REPOSITORY;
@@ -1049,7 +1099,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'start_issue',
-    description: 'Start an open GitHub issue as a Codex Factory task. My own repository always stages a proposal for Dan’s later approval through confirm_create_issue; repeated starts reuse the active task.',
+    description: 'Start an open GitHub issue as a Codex Factory task. Clear owner instructions can start my own repository work directly; otherwise stage for later confirm_create_issue. Repeated starts reuse the active task without another approval.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1077,10 +1127,15 @@ export const factoryTools: readonly JarvisTool[] = [
         if (!existing || existing.isPullRequest || existing.state !== 'open') {
           throw new ToolRefusal('Only an open GitHub issue can be started.');
         }
-        return stageIssueCreation(request.server, {
+        const ownProject = selectedProject ?? await resolveProject(JARVIS_REPOSITORY, request.server.projectStore ?? null);
+        if (await request.server.taskStore?.findActiveByIssue?.(ownProject.id, issue)) {
+          return executeStartIssue(request, issue, ownProject.id);
+        }
+        const staged = await stageIssueCreation(request.server, {
           ...(selectedProject ? { project: selectedProject.id } : {}),
           issueNumber: issue, startExisting: true, title: existing.title, body: existing.body ?? '',
         }, message, signal, selectedProject);
+        return confirmIssueCreation(request, staged.confirmationCode, signal, true);
       }
       return executeStartIssue(request, issue, project);
     },
@@ -1263,7 +1318,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'create_task',
-    description: 'Create a linked GitHub issue and Ready Factory task for confirmed non-code work. My own repository requires create_issue and later confirm_create_issue, even through this non-code path. For project-code changes, use create_issue so P11 allocation and executor handoff run.',
+    description: 'Create a linked GitHub issue and Ready Factory task for confirmed non-code work. For my own repository and all project-code changes, use create_issue so owner-instruction verification, P11 allocation and executor handoff run.',
     execution: { defaultEffect: 'action' },
     inputSchema: {
       type: 'object',
@@ -1308,7 +1363,7 @@ export const factoryTools: readonly JarvisTool[] = [
       }
       const selected = await activeProject(projectId, request);
       if (selected.repo.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
-        throw new ToolRefusal('My own Factory work requires a reviewed proposal. Use create_issue, then confirm_create_issue after Dan’s later approval; do not bypass it with create_task.');
+        throw new ToolRefusal('Use create_issue for my own Factory work. It verifies Dan’s instruction and either starts the requested work or returns a proposal for review; do not bypass it with create_task.');
       }
       const store = requireStore(request.server.taskStore, 'Task service');
       const linked = await createLinkedTaskFromPrompt({

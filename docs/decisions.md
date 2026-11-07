@@ -1,3 +1,15 @@
+## 7 November 2026 — A clear coding instruction should not require a second yes
+
+Dan explicitly requested that the approval layer be reviewed and toned down after
+“Prepare the widget in Jarvis now” still asked permission. Supersede the blanket
+own-code later-reply rule with a server-verified direct-request path for issue
+creation and starting requested coding work. Keep discussion/plan-first requests
+as proposals, and reuse existing active tasks. Natural restatements may approve
+an unchanged existing proposal without special words. Unchanged boundaries include
+identity/session provenance, project selection, permissions, public attachments,
+archive, merge/deploy and other action families. This is a concrete Factory
+correction; direct live acceptance and broader follow-up remain distinct.
+
 ## 7 November 2026 — Recover approval state before recreating work
 
 Later model turns do not retain private tool results. Add a session-bound read of

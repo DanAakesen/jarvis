@@ -1,3 +1,14 @@
+## Direct Factory instruction qualification (7 November 2026)
+
+Scope and limits: `approval-friction-review.md`. Run backend tests for
+approval-interpreter, pending-action, factory/tools, capability-instructions and
+Google natural-approval, then lint/typecheck and exact-head CI. Existing natural
+approval and provenance checks remain required. Current-message Factory mode is
+server-selected and separate from later approval; do not expose it as a tool flag.
+Issue #1634 / task 23 was created after the owner's yes; that comment only proves
+handoff. Do not replay the owner's scaffold request or claim live direct-request
+acceptance from synthetic interpreter fixtures. PR #1635 owns iOS stream recovery.
+
 ## Notes and Home widgets (P15-89 / #1593; 5 November 2026)
 
 - The new widgets live in `apps/ios/Widgets/JarvisNotesWidgetViews.swift` and `JarvisHomeWidgetViews.swift`; the snapshot types, builders, phrases and `JarvisWidgetLink` are in `Packages/JarvisCore/Sources/JarvisCore/Widgets/`. Check them with `swift test` in `apps/ios/Packages/JarvisCore`; the widget views compile only in the iOS CI Simulator job.
