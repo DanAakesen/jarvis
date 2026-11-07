@@ -7,7 +7,7 @@ import SwiftUI
 struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
     let placeholder: String
     @Binding var draft: ComposerDraft
-    let isFocused: FocusState<Bool>.Binding
+    let isFocused: Binding<Bool>
     let inputIdentifier: String
     let inputHint: String
     let isInputDisabled: Bool
@@ -22,7 +22,7 @@ struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
     init(
         placeholder: String,
         draft: Binding<ComposerDraft>,
-        isFocused: FocusState<Bool>.Binding,
+        isFocused: Binding<Bool>,
         inputIdentifier: String,
         inputHint: String = "",
         isInputDisabled: Bool = false,
@@ -50,26 +50,20 @@ struct JarvisComposerBar<Header: View, Leading: View, Actions: View>: View {
     }
 
     var body: some View {
-        let revision = draft.revision
         VStack(spacing: 0) {
             header
-            TextField(placeholder, text: Binding(
-                get: { draft.text },
-                set: { draft.edit($0, revision: revision) }
-            ), axis: .vertical)
-                .id(revision)
-                .font(.body)
-                .lineLimit(1...JarvisDesignTokens.chatComposerMaximumLines)
-                .focused(isFocused)
-                .submitLabel(.send)
-                .onSubmit(onSubmit)
-                .disabled(isInputDisabled)
+            JarvisComposerTextInput(
+                draft: $draft,
+                isFocused: isFocused,
+                placeholder: placeholder,
+                identifier: inputIdentifier,
+                hint: inputHint,
+                isDisabled: isInputDisabled,
+                onSubmit: onSubmit
+            )
                 .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
                 .padding(.top, JarvisDesignTokens.chatComposerTextInset)
                 .padding(.bottom, JarvisDesignTokens.chatComposerSpacing / 2)
-                .accessibilityLabel(placeholder)
-                .accessibilityIdentifier(inputIdentifier)
-                .accessibilityHint(inputHint)
 
             HStack(spacing: 0) {
                 leading

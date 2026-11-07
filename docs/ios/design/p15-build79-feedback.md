@@ -95,3 +95,43 @@ The owner also requested design images for Notes browsing, creation and editing,
 including a visible Raw button for complete Markdown/metadata. This is design
 exploration, not authorization to choose and ship a new Notes design without the
 owner's feedback. It does not replace the six implementation reports above.
+
+Notes design feedback: the owner liked the first set's Quiet Library and Clear
+Folders styling, wants pinning, a recent view, and folders as an optional browsing
+mode. A second set explores Recents with Pins, Library Tabs and Browse Drawer in
+that displayed order. Raw must expose the complete note source, including metadata;
+the normal reader/editor should render the content. No revised option is selected
+yet. Preserve all underlying vault content and existing task behavior.
+
+Both independent source reviews approved corrected candidate 91c23fc8 with no
+remaining source blocker. Native run 42386993715 compiled that candidate and
+is executing the selected UI cases, including the runtime-test composer. The
+automatic duplicate 42386943370 was cancelled before Simulator boot. CodeQL
+42386943361 passed all four analyses. Full CI 42386943336 passed, including
+7,397 backend tests (one skipped) and 509 Core tests. Native screenshots are
+still required; no new upload is claimed.
+
+Native 42386993715 completed 3/6 cases: runtime isolation and primary-page dark/light
+passed. The focused keyboard checks exposed two real input defects: the revision
+view replacement dismissed the keyboard, and multiline SwiftUI Return inserted a
+newline instead of submitting. Both Factory cases failed before reaching Factory
+because the test used `navigation.factory` instead of `navigation.softwareFactory`.
+Artifact 13580676157 has SHA256
+c0064905b2eea2e7eead393388faa8c7b33e7f570ad96134a0d2939d0249e541.
+
+A stable shared UITextView now reconciles draft revisions without replacing the
+first responder and intercepts Return outside composition. Multiline paste, selection,
+Dynamic Type, the five-line cap and input identifiers remain. UIKit owns focus via
+an ordinary binding. Physical system-keyboard dictation still needs device acceptance.
+The next native pass also covers Home handoff. Some app-element captures omitted
+chrome despite geometry assertions, so capture the full XCUIScreen and assert header
+window containment before accepting visual transparency. Retain these failures.
+
+Scaffold recovery is separated into backend-only PR #1632 so its normal deployment
+can proceed while these iOS findings are corrected. The three backend source/test
+files are byte-identical to 91c23fc8; fresh exact-head checks still apply.
+
+The owner clarified the Notes concepts must start with the existing Notes / Tasks /
+Graph selector. Every option must include pins, a recent view, folder browsing and
+Raw, with variations of that same flow. The third displayed set is Compact Library,
+Recent Focus and Folder Shortcuts; earlier sets are superseded. Selection is pending.

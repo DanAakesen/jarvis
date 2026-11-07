@@ -59,7 +59,7 @@ struct JarvisChatScreen: View {
     @State private var screenShare = ScreenShareSession()
     @State private var screenSharePickerToken = 0
     @State private var photoSelection: [PhotosPickerItem] = []
-    @FocusState private var composerFocused: Bool
+    @State private var composerFocused = false
     private let initialActivitySheet: ActivitySheetKind?
     let onNavigate: (JarvisDestination) -> Void
     @Binding private var handoff: JarvisChatHandoff?

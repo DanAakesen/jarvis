@@ -11483,3 +11483,9 @@ Process-local proposals remain unavailable after restart; report that honestly.
 The independent review also confirms that fresh own-repository replacement staging
 is permitted after missing/expired state, while the current yes cannot approve it.
 This avoids a recovery loop without approving or writing anything implicitly.
+
+Native verification found that replacing the SwiftUI editor to clear it dismissed
+the keyboard, and vertical TextField Return inserted a newline despite its Send
+label. Use one stable UIKit text view in the shared composer, with explicit Return
+handling, ordinary focus ownership and revision reconciliation. Preserve composition,
+paste and the existing size cap. Keep the failed run and verify all three callers.

@@ -8889,7 +8889,10 @@ without bypassing review. Restart/expiry returns none and instructs work-status
 checking; no durable-store or approval-boundary migration is made.
 
 Shared iOS ComposerDraft owns text and an editor revision. Submit consumes text and
-rotates the revision; bindings reject delayed edits from the previous editor. The
+rotates the revision; a stable UITextView bridge rejects stale revision callbacks
+and reconciles consumed text without replacing the first responder. Return submits
+outside IME composition, while native paste retains line breaks. UIKit focus uses
+an ordinary binding, and measured content grows to the existing five-line cap. The
 single Chat progress row follows the active root turn. Shared page chrome uses
 reserved layout and hidden native bar/scroll-edge backgrounds.
 
@@ -8897,3 +8900,5 @@ Missing own-code proposals may be staged again under a bare affirmative only as
 new replacement proposals for the active own repository. The new source-message
 binding requires a subsequent approval. All three native composer callers (Home,
 Chat, runtime test) use revision ownership; runtime-test recovery gates are retained.
+Physical system-keyboard dictation may deliver later native input and still needs
+device acceptance; generation checks alone are not proof for that OS behavior.

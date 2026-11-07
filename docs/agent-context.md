@@ -7412,9 +7412,10 @@ release provides no compatibility receipt and does not authorize weakening its g
 
 ## Build 79 follow-up verification (7 November 2026)
 
-Use `docs/ios/design/p15-build79-feedback.md` for the five open owner reports.
-Focused native scope: PageChromeUITests and ChatTurnFeedbackUITests, plus Core
-ComposerDraftTests. Inspect captured light/dark headers and floating docks; the
+Use `docs/ios/design/p15-build79-feedback.md` for the six open owner reports.
+Focused native scope: PageChromeUITests, ChatTurnFeedbackUITests, the existing
+runtime-test composer isolation case, plus Core ComposerDraftTests. Inspect
+captured light/dark headers and floating docks; the
 scroll tests must prove content moved. One hosted Simulator run qualifies the final
 source; retain failures and rerun only affected/unqualified cases. Backend scope:
 Factory tools/project-context and capability-instruction budgets, followed by CI.

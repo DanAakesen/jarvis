@@ -149,7 +149,7 @@ struct JarvisRuntimeTestSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var model: JarvisRuntimeTestModel
-    @FocusState private var inputFocused: Bool
+    @State private var inputFocused = false
     @State private var requestTask: Task<Void, Never>?
     private let appLanguage: JarvisAppLanguage
     private let fixtureMode: Bool

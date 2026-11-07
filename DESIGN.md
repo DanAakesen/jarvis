@@ -3577,8 +3577,9 @@ Use ordinary reserved layout for shared header/footer regions and explicitly hid
 native scroll-edge/bar backgrounds. Keep glass on individual controls and the
 ambient scene visible between them. Verify real scrolling before accepting a
 scrolled capture; short fixtures are insufficient. Chat has one pinned progress
-row, with real acknowledgments and streamed replies in the transcript. Reset the
-native composer editor on submit so sent text cannot linger; preserve the next draft.
+row, with real acknowledgments and streamed replies in the transcript. Clear the
+native composer text on submit while retaining the focused editor and next draft.
+Keyboard Send submits outside text composition; pasted line breaks remain content.
 
 The owner's latest task-row feedback supersedes retaining meaningful source context:
 show only scope and priority below the two-line title. Bound the trailing due column

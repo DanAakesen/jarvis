@@ -30,7 +30,7 @@ final class TodayUITests: XCTestCase {
     private func reveal(_ element: XCUIElement) {
         let list = app.descendants(matching: .any).matching(identifier: "today.list").firstMatch
         for _ in 0..<10 {
-            let bottom = app.textFields["today.input"].frame.minY - 20
+            let bottom = app.descendants(matching: .any)["today.input"].frame.minY - 20
             let top = list.frame.minY + 8
             if element.exists && element.isHittable && element.frame.minY >= top && element.frame.maxY < bottom { return }
             let above = element.exists && !element.frame.isEmpty && element.frame.minY < top
@@ -120,7 +120,7 @@ final class TodayUITests: XCTestCase {
                 XCTAssertEqual(todayTab.frame.maxX, dueTab.frame.minX, accuracy: 1, "Home segments share one continuous control")
                 XCTAssertGreaterThanOrEqual(todayTab.frame.height, 44)
                 XCTAssertTrue(app.buttons["today.plus"].exists)
-                XCTAssertTrue(app.textFields["today.input"].exists)
+                XCTAssertTrue(app.descendants(matching: .any)["today.input"].exists)
                 XCTAssertTrue(app.buttons["today.composer.plus"].exists, "Composer plus on the left")
                 XCTAssertTrue(app.buttons["today.dictate"].exists, "Composer dictation on the right")
                 XCTAssertTrue(app.buttons["today.voice"].exists, "Composer voice on the right")
@@ -256,7 +256,7 @@ final class TodayUITests: XCTestCase {
         let secondRemoved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: second)
         XCTAssertEqual(XCTWaiter.wait(for: [secondRemoved], timeout: 5), .completed,
                        "A full native swipe completes the second task")
-        XCTAssertTrue(app.textFields["today.input"].isEnabled)
+        XCTAssertTrue(app.descendants(matching: .any)["today.input"].isEnabled)
     }
 
     func testWorkoutSavingNeedsASessionAndTheDateIsSaved() {
@@ -312,7 +312,7 @@ final class TodayUITests: XCTestCase {
 
     func testTypingShowsSendAndSendOpensChatThenHomeReturns() {
         launch()
-        let input = app.textFields["today.input"]
+        let input = app.descendants(matching: .any)["today.input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["today.voice"].exists, "Voice is the default trailing control")
         input.tap()

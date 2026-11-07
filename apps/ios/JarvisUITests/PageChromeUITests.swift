@@ -62,7 +62,7 @@ final class PageChromeUITests: XCTestCase {
     private func checkFactory(theme: String) {
         launch(theme: theme)
         defer { app.terminate() }
-        navigate("factory")
+        navigate("softwareFactory")
         let column = app.buttons["factory.column.in_progress"]
         XCTAssertTrue(column.waitForExistence(timeout: 10))
         column.tap()
@@ -98,13 +98,20 @@ final class PageChromeUITests: XCTestCase {
         XCTAssertTrue(!marker.exists || marker.frame.minY < original - 20,
                       "Capture requires real content scrolling, not just a stationary title")
         XCTAssertTrue(title.isHittable)
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(title.frame), "The complete header stays on screen")
         XCTAssertEqual(title.frame.minY, top, accuracy: 1)
         XCTAssertTrue(app.buttons["navigation.openSidebar"].isHittable)
         capture(name)
     }
 
     private func capture(_ name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
+        let title = app.staticTexts["page.title"].frame
+        let sidebar = app.buttons["navigation.openSidebar"].frame
+        let geometry = XCTAttachment(string: "window=\(app.windows.firstMatch.frame); title=\(title); sidebar=\(sidebar)")
+        geometry.name = "\(name)-geometry"
+        geometry.lifetime = .keepAlways
+        add(geometry)
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)

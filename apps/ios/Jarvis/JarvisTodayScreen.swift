@@ -47,7 +47,7 @@ struct JarvisTodayScreen: View {
     @State private var taskCompletionError = ""
     @ScaledMetric(relativeTo: .largeTitle) private var greetingSize: CGFloat = 25
     @ScaledMetric(relativeTo: .body) private var agendaIconSize: CGFloat = 20
-    @FocusState private var composerFocused: Bool
+    @State private var composerFocused = false
 
     private func copy(_ key: JarvisTodayLocalizationKey) -> String {
         JarvisTodayLocalization.string(key, language: language)
