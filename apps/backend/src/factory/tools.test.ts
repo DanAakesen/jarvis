@@ -1289,7 +1289,8 @@ it('recovers the original scaffold after yes please and confirms once without re
   expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
   expect((await call('get_pending_issue', {}, '43')).json().result.status).toBe('none');
   const after = await call('create_issue', { project: project.id, title: 'Prepare widget scaffold', body: 'Same scope' }, '43');
-  expect(after.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('get_work_status') } });
+  expect(after.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation', replacement: true } });
+  expect((await call('confirm_create_issue', { confirmationCode: after.json().result.confirmationCode }, '43')).json().outcome).toBe('refused');
   expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
 });
 
@@ -1335,4 +1336,33 @@ it('reports an expired proposal as none and never invents approval for a replace
     expect(result.json()).toMatchObject({ outcome: 'ok', result: { status: 'none' } });
     expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
   } finally { vi.restoreAllMocks(); }
+});
+
+
+it('stages a missing own-code proposal under yes without approving it, then accepts only another later reply', async () => {
+  const test = fixture();
+  const call = (tool: string, payload: object, id: string) => test.app.inject({ method: 'POST', url: `/tools/${tool}`,
+    headers: { ...headers, 'x-jarvis-message-id': id }, payload });
+  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', text: 'Yes please', model: null, at: new Date() });
+  const staged = (await call('create_issue', { title: 'Recovered scaffold scope', body: 'Prepare the reviewed widget scaffold.' }, '42')).json();
+  expect(staged).toMatchObject({ outcome: 'ok', result: { replacement: true, status: 'awaiting_confirmation', repository: project.repo } });
+  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+  expect((await call('confirm_create_issue', { confirmationCode: staged.result.confirmationCode }, '42')).json().outcome).toBe('refused');
+  test.setLatestMessage({ id: '43', sessionId: 'session', role: 'dan', text: 'Yes please', model: null, at: new Date(Date.now() + 2_000) });
+  const recovered = (await call('get_pending_issue', {}, '43')).json().result;
+  expect(recovered.confirmationCode).toBe(staged.result.confirmationCode);
+  expect((await call('confirm_create_issue', { confirmationCode: recovered.confirmationCode }, '43')).json().outcome).toBe('ok');
+  expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
+  expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
+});
+
+it('does not use bare approval to select or write an external repository when no proposal exists', async () => {
+  const external = { ...project, id: '8', name: 'Other', repo: 'synthetic/other' };
+  const test = fixture([project, external]);
+  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', text: 'Yes please', model: null, at: new Date() });
+  const result = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
+    payload: { project: external.id, title: 'Unreviewed external scope', body: 'Do work.' } });
+  expect(result.json().outcome).toBe('refused');
+  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+  expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
 });

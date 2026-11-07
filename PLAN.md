@@ -9,6 +9,15 @@ despite the earlier build 79 qualification. Preserve the separate Copilot blocke
 and the owner's ongoing scaffold retest. Do not mark this batch complete until each
 item has its own fix, actual verification and recorded release status.
 
+Candidate PR #1631 includes all six corrections. The final local backend checks
+pass 89 focused tests, ESLint and TypeScript build; the updated Health footer
+source guard passes. Independent reviews corrected a missed runtime-test composer
+caller before native execution and checked the replacement-proposal approval
+boundary. Hosted native compile previously failed before Simulator boot; the
+corrected source still needs native UI captures and complete CI/CodeQL.
+Notes browsing/editing design concepts, including full-source Raw access, are
+separate exploration awaiting owner selection and do not replace this batch.
+
 ## Current release — Settings, Chat and scaffold follow-up, build 79
 
 Build **79 uploaded successfully at 14:18:29 UTC / 15:18:29 Copenhagen on 7 November 2026** in unchanged

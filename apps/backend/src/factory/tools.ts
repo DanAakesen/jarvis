@@ -888,7 +888,16 @@ export const factoryTools: readonly JarvisTool[] = [
         }
         if (!pending && isClearProjectAffirmation(source.text) &&
             !pendingProjectClarifications.get(request.server)?.has(source.sessionId)) {
-          throw new ToolRefusal('No issue proposal is pending in this conversation. Use get_work_status to check whether work already exists; if nothing exists, recover the requested scope from conversation history and present a new proposal before asking for approval. Do not treat this reply as approval of a new draft.');
+          const selected = await resolveProject(draft.project ?? JARVIS_REPOSITORY, request.server.projectStore ?? null);
+          if (selected.repo.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
+            // Missing/expired state is not approval. A replacement is reviewable now,
+            // bound to this message, and cannot execute until another later reply.
+            return {
+              ...await stageIssueCreation(request.server, draft, source, signal, selected),
+              replacement: true,
+              instruction: 'This is a new replacement proposal, not the earlier approval. Check get_work_status before offering duplicate work. Show the complete scope and ask for fresh later approval; this message cannot approve it. Nothing has been written.',
+            };
+          }
         }
         if (draft.project === undefined && requiresProjectSelector(source.text)) {
           throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');

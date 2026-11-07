@@ -11479,3 +11479,7 @@ proposal to the next verified conversation turn, following the existing Calendar
 recovery pattern; a guessed create retry must not overwrite approved scope. Keep
 later-message approval, session isolation, expiry and at-most-once consumption.
 Process-local proposals remain unavailable after restart; report that honestly.
+
+The independent review also confirms that fresh own-repository replacement staging
+is permitted after missing/expired state, while the current yes cannot approve it.
+This avoids a recovery loop without approving or writing anything implicitly.

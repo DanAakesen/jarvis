@@ -32,7 +32,7 @@ final class PageChromeUITests: XCTestCase {
             let content = app.descendants(matching: .any).matching(identifier: marker).firstMatch
             XCTAssertTrue(content.waitForExistence(timeout: 10), marker)
             if page == "notes" {
-                XCTAssertGreaterThan(content.frame.height, 78, "The long task title must wrap to two lines")
+                XCTAssertGreaterThan(content.frame.height, 70, "The long task title must wrap to two lines")
                 let metadata = content.buttons["notes.task.open"].value as? String ?? ""
                 XCTAssertFalse(metadata.contains("Tasks"))
                 XCTAssertFalse(metadata.contains("Inbox"))

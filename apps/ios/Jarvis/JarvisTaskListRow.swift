@@ -22,7 +22,7 @@ enum JarvisTaskTitle {
 /// Board task anatomy, inside a native List so swipe completion remains available.
 struct JarvisTaskListRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @ScaledMetric(relativeTo: .subheadline) private var maximumDueWidth = 120
+    @ScaledMetric(relativeTo: .subheadline) private var maximumDueWidth: CGFloat = 120
     let task: VaultTask
     let copy: JarvisNotesCopy
     let today: String

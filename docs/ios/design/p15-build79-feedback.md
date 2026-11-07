@@ -60,7 +60,7 @@ content movement before capturing scrolled chrome. Factory uses 16 synthetic tas
 
 ## Local candidate checks
 
-Factory/project tests: 69 passed. Capability instruction tests: 18 passed after
+Factory/project tests: 71 passed. Capability instruction tests: 18 passed after
 compressing existing wording within the unchanged 15,000-code-point budget.
 Backend TypeScript build and ESLint completed successfully. These are synthetic
 handler-level checks, not a claim that the owner's live scaffold now succeeds.
@@ -74,3 +74,24 @@ actual source provenance is still available in task details. Focused run 4238508
 was cancelled during compilation, before Simulator boot, to include these changes
 in the same native verification pass. Automatic duplicate 42385111644 was also
 cancelled during compilation before boot. No new Simulator test ran in either.
+
+## Review corrections and new Notes exploration
+
+Independent reviews found the runtime-test composer still used the removed String
+initializer; hosted compile 42385394473 confirmed that exact failure before any
+Simulator boot. The third composer now shares revision ownership. The Python
+source guard was updated to assert the same footer placement using the shared
+reserved-footer modifier instead of the former safe-area inset.
+
+Review also identified missing-state recovery friction: when no proposal exists,
+a bare yes may stage a clearly marked NEW own-repository replacement using the
+fresh active registry. It is bound to that current message and requires a different,
+later approval; the same yes cannot execute it. External projects retain their
+existing selection guard. Live pending proposals are still recovered unchanged.
+Work-status checking before replacement is model guidance, not duplicate-proofing
+of separate newly approved requests.
+
+The owner also requested design images for Notes browsing, creation and editing,
+including a visible Raw button for complete Markdown/metadata. This is design
+exploration, not authorization to choose and ship a new Notes design without the
+owner's feedback. It does not replace the six implementation reports above.

@@ -8,7 +8,11 @@ private final class JarvisRuntimeTestModel: ObservableObject {
     @Published var selection: ChatRuntimeTest?
     @Published var session: ChatSession?
     @Published var messages: [JarvisChatRow] = []
-    @Published var draft = ""
+    @Published var composerDraft = ComposerDraft()
+    var draft: String {
+        get { composerDraft.text }
+        set { composerDraft.replace(with: newValue) }
+    }
     @Published var partial = ""
     @Published var loading = false
     @Published var creating = false
@@ -87,8 +91,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
 
     func send() {
         guard canSend, let client, let session else { return }
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        draft = ""
+        let text = composerDraft.consume().trimmingCharacters(in: .whitespacesAndNewlines)
         sending = true
         error = nil
         partial = ""
@@ -262,7 +265,7 @@ struct JarvisRuntimeTestSheet: View {
     }
 
     private var composer: some View {
-        JarvisComposerBar(placeholder: copy(.runtimeMessage), text: $model.draft, isFocused: $inputFocused,
+        JarvisComposerBar(placeholder: copy(.runtimeMessage), draft: $model.composerDraft, isFocused: $inputFocused,
                           inputIdentifier: "runtimeTest.input", isInputDisabled: model.loading || model.sending || model.recovery.requiresHistoryReview || model.recovery.sessionBlocked,
                           rimState: model.sending ? .thinking : .idle, isRimAnimated: !fixtureMode && !reduceMotion,
                           onSubmit: model.send, header: { EmptyView() }, leading: { EmptyView() }, actions: {
