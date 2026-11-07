@@ -1,3 +1,15 @@
+## Owner tracking and next bundle (7 November 2026)
+
+Use PLAN.md's owner status ledger for all discussed work, including items not yet
+implemented or owner-tested. The next TestFlight build is held while the owner
+bundles changes. Notes redesign and background 3 / Ember are approved visual
+targets, not implemented. The owner authorized 128 GiB workspaces and automatic
+compute shutdown after tasks; migration is not implemented or provisioned. Current
+Factory workers are Foundry sessions (120-second idle timeout), while the separate
+backend Container App keeps one minimum replica. Build 81 owner tests are recorded
+in docs/ios/design/p15-build81-release.md. Copilot remains blocked by stale policy
+on turn 2; its owner comparison must wait for compatibility evidence.
+
 ## Build 81 qualification and delivery (7 November 2026)
 
 Approval #1636 is live at 93a0f629 after CI 42397991835 / CodeQL and accepted
@@ -7520,3 +7532,10 @@ helper and includes the earlier assistant answer in the second request.
 Focused local agent tests: 116 passed. Backend route/store/compatibility tests:
 39 passed before adding the additional compare-and-swap test. Type checking passed.
 Full CI, SQL integration and live activation remain required before availability.
+### Active bundle (7 November 2026)
+
+The owner's latest instruction supersedes the earlier build hold. Deliver all five
+items tracked at the top of PLAN.md. Notes/Ember implementation uses the native
+shared controls and account-bound cache, with lossless document and native workflow
+coverage. Do not confuse a source implementation, a CI pass, a live deployment and
+owner acceptance. Factory and Copilot still require their own live evidence.

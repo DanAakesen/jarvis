@@ -72,3 +72,23 @@ extension JarvisCache {
         await write(data: data, validator: nil, key: "recentlyOpenedNotes")
     }
 }
+
+
+extension JarvisCache {
+    /// Pins are local preferences scoped to the signed-in account, independent of note refreshes.
+    public func pinnedNotePaths() async -> [String] {
+        guard let entry = await read("pinnedNotePaths"),
+              let paths = try? JSONDecoder().decode([String].self, from: entry.data) else { return [] }
+        var seen = Set<String>()
+        return paths.filter { JarvisNotesLogic.validNotePath($0) && seen.insert($0).inserted }
+    }
+
+    public func setNotePinned(path: String, pinned: Bool) async {
+        guard JarvisNotesLogic.validNotePath(path), let account = currentAccount else { return }
+        var paths = await pinnedNotePaths().filter { $0 != path }
+        guard currentAccount == account else { return }
+        if pinned { paths.insert(path, at: 0) }
+        guard let data = try? JSONEncoder().encode(paths) else { return }
+        await write(data: data, validator: nil, key: "pinnedNotePaths")
+    }
+}

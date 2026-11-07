@@ -1,3 +1,26 @@
+## 7 November 2026 — Authorize 128 GiB workspaces with automatic compute shutdown
+
+The owner approved proceeding with 128 GiB workspaces at the discussed indicative
+storage/compute pricing. This supersedes the earlier proposal-only status. The
+current Factory worker is a Foundry session with 120-second idle expiry, separate
+from the backend Container App configured with one minimum replica. Foundry's
+current documented session budget cannot be resized to 128 GiB through the
+deployment definition. A replacement worker needs verified capacity, task/control
+integration, recovery, and automatic deallocation after work; stopping a container
+is insufficient to establish stopped VM compute charges. No worker migration or
+storage purchase is claimed yet. Keep one owner status ledger in PLAN.md and
+distinguish shipped/native-verified changes from owner acceptance.
+
+## 7 November 2026 — Select Ember for the next iOS bundle
+
+The owner selected background 3 from the replacement PNGs: warm near-black
+charcoal with restrained amber illumination. Preserve orange controls, readable
+secondary text, and transparent header/footer regions. Implement alongside the
+approved Notes design, while holding the next TestFlight build until the owner
+finishes bundling additions. This is an accepted visual direction, not a released
+change. The storage pricing discussion does not authorize or record a provisioned
+worker migration.
+
 ## 7 November 2026 — Retain native evidence across a test-observation correction
 
 Run 42396567474 passed transport/recovery and Home, but failed the first Chat
@@ -11565,3 +11588,11 @@ helper and includes the earlier assistant answer in the second request.
 Focused local agent tests: 116 passed. Backend route/store/compatibility tests:
 39 passed before adding the additional compare-and-swap test. Type checking passed.
 Full CI, SQL integration and live activation remain required before availability.
+## 2026-11-07 — Complete the approved delivery bundle
+
+The owner explicitly requests Factory end-to-end operation with 128 GiB workspaces,
+a working Copilot harness and comparison, Notes redesign and Ember background now.
+This supersedes the earlier next-build hold. Notes and Ember implementation is on
+the delivery branch; native qualification and release remain to be established.
+Local account-bound pins avoid modifying vault metadata. A lossless Markdown
+projection keeps Raw as an exact escape hatch and preserves existing conflicts.

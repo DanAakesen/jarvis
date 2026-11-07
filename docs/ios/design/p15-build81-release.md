@@ -1,5 +1,38 @@
 # Build 81 qualification and release
 
+## Owner acceptance checklist
+
+Use build 81 and the Current runtime. These device checks are still outstanding;
+automated/native qualification below is not an owner's pass. Keep test messages
+read-only and distinct. Do not resend the widget prepare request: issue 1634 /
+task 23 already exists and remains blocked by disk capacity.
+
+1. From Home, send "List my next three upcoming tasks. Do not change anything."
+   Confirm one user message, an immediately cleared composer, a visible response
+   or progress state, and final content without the previous false offline error.
+   Repeat once directly from Chat with different text.
+2. Send using the button, then keyboard Send, then system dictation. Each should
+   clear once. Type a new draft while Jarvis works; the new draft must survive
+   completion and delayed text/dictation callbacks.
+3. During a tool-using reply, check one active progress indicator. Tool activity
+   belongs to the assistant, expands while active and collapses after the final
+   response. A short follow-up should produce one content-sized user bubble.
+   Long-press a final Jarvis reply and select part of a sentence.
+4. During a read-only reply, briefly interrupt connectivity, restore it, and
+   inspect the conversation before sending again. Accepted-turn recovery must
+   not duplicate the message. A failure must say interrupted/timed out with a
+   recovery path; a final reply is not guaranteed through every outage.
+5. Scroll Notes, Health, Factory and Settings. Headers and the Notes/Factory
+   footer containers should remain transparent around individual glass controls.
+   Check long task titles wrap and metadata shows scope/priority without Inbox.
+6. Spot-check prior requested changes: widget light-mode supporting text and
+   destinations, labelled health settings, Home section/agenda layout, Health body
+   graph, and no Away mode or empty Background activity bar. The selected Notes
+   redesign and Ember background are not present in this build.
+
+For any failure, retain the build number, screen, input method, approximate time,
+network conditions and screenshot. Mark only the exercised item passed.
+
 ## Changes
 
 Home and Chat now receive small native SSE frames while the connection remains

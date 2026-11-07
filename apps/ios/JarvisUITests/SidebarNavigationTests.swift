@@ -200,7 +200,7 @@ final class SidebarNavigationTests: XCTestCase {
             "Tapping \(destination) must close the drawer"
         )
         if destination == "notes" {
-            let hero = app.descendants(matching: .any).matching(identifier: "notes.hero").firstMatch
+            let hero = app.descendants(matching: .any).matching(identifier: "notes.browseFolders").firstMatch
             XCTAssertTrue(hero.waitForExistence(timeout: 8), "Capture loaded Notes content")
             let capture = XCTAttachment(screenshot: app.screenshot())
             capture.name = "P15-92-notes-\(language == "en" ? "dark" : "light")-\(language)"

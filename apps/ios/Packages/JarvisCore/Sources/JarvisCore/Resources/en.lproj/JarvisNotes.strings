@@ -163,3 +163,18 @@
 "notes.folderSavedWithNote" = "New folders are saved when you save a note inside them.";
 "notes.folderInvalidName" = "Use a folder name without slashes, a leading dot or URL characters.";
 "notes.folderAlreadyExists" = "This folder already exists.";
+
+"notes.pinned" = "Pinned";
+"notes.pin" = "Pin note";
+"notes.unpin" = "Unpin note";
+"notes.browseFolders" = "Browse folders";
+"notes.raw" = "Raw";
+"notes.formatted" = "Formatted";
+"notes.done" = "Done";
+"notes.yesterday" = "Yesterday";
+"notes.earlier" = "Earlier";
+"notes.heading" = "Heading";
+"notes.checklist" = "Checklist";
+"notes.addLink" = "Link";
+"notes.undo" = "Undo";
+"notes.emptyPinned" = "Pin a note from its editor to keep it here.";

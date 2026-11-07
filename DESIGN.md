@@ -3612,3 +3612,28 @@ swipe affordance. New folder sits at the bottom right of the Browse folders shee
 The separate pin/unpin action remains in the editor. Raw must retain all Markdown
 and frontmatter. An updated three-panel image was shown; this is a design record,
 not a claim that the redesigned Notes UI has been implemented or released.
+
+### Dark background exploration for the next bundle
+
+On 7 November the owner requested three app-wide background concepts, primarily
+for dark mode, before bundling another iOS build. Generated screens hold the
+selected Notes layout constant and explore Graphite (neutral charcoal), Midnight
+(deep navy with soft cool illumination), and Ember (warm charcoal with soft amber
+illumination), in that displayed order. Preserve orange action accents, readable
+secondary text, transparent header/footer regions and glass on individual
+controls. The owner subsequently selected background 3, Ember, from the replacement
+PNG set (/tmp/jarvis-backgrounds/3-ember.png). Warm near-black charcoal, broad soft
+amber illumination toward the upper right and a restrained warm wash at the lower
+left replace the cool multi-colour atmosphere in dark mode. Preserve white and
+readable secondary text and orange actions. This selection is for the next bundle;
+the background and Notes redesign remain pending implementation and qualification.
+
+### Approved Notes / Ember implementation (7 November 2026)
+
+The delivery branch implements the selected Recent Focus direction: tabs first,
+pin symbol in the section heading, title-only swipeable pinned tiles, recent notes,
+and a folder browser sheet with New folder aligned right. The editor has a large
+title, folder path, pin control, Raw/Formatted toggle, Done, and a formatting toolbar.
+Ember is a generated background-only PNG in the native asset catalogue, scaled to
+fill by the shared screen renderer. Light mode keeps its existing palette. Native
+qualification is pending; these are implementation facts, not device acceptance.

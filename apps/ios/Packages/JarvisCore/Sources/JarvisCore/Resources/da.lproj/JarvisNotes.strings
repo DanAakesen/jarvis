@@ -163,3 +163,18 @@
 "notes.folderSavedWithNote" = "Nye mapper gemmes, når du gemmer en note i dem.";
 "notes.folderInvalidName" = "Brug et mappenavn uden skråstreger, et punktum i starten eller URL-tegn.";
 "notes.folderAlreadyExists" = "Denne mappe findes allerede.";
+
+"notes.pinned" = "Fastgjorte";
+"notes.pin" = "Fastgør note";
+"notes.unpin" = "Frigør note";
+"notes.browseFolders" = "Gennemse mapper";
+"notes.raw" = "Rå";
+"notes.formatted" = "Formateret";
+"notes.done" = "Færdig";
+"notes.yesterday" = "I går";
+"notes.earlier" = "Tidligere";
+"notes.heading" = "Overskrift";
+"notes.checklist" = "Tjekliste";
+"notes.addLink" = "Link";
+"notes.undo" = "Fortryd";
+"notes.emptyPinned" = "Fastgør en note i editoren for at beholde den her.";

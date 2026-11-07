@@ -27,7 +27,7 @@ final class NavigationReliabilityTests: XCTestCase {
             }
             tap(rootNote)
             tap(app.buttons["note.back"])
-            let recent = app.buttons["notes.recent.welcome.md"]
+            let recent = app.buttons["notes.note.welcome.md"]
             for _ in 0..<5 {
                 if recent.isHittable { break }
                 app.swipeDown()
@@ -35,7 +35,6 @@ final class NavigationReliabilityTests: XCTestCase {
             XCTAssertTrue(recent.isHittable)
             XCTAssertTrue(app.staticTexts[label].exists)
             XCTAssertFalse(app.buttons["notes.tab.list"].exists)
-            XCTAssertLessThanOrEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "notes.recent.")).count, 5)
             attachScreenshot("Notes root and recently opened (\(language))")
         }
     }
@@ -251,18 +250,13 @@ final class NavigationReliabilityTests: XCTestCase {
         defer { app.terminate() }
         navigate(to: "notes")
         let title = app.descendants(matching: .any)["page.title"]
-        let headline = app.descendants(matching: .any)["page.headline"]
-        let hero = app.descendants(matching: .any)["notes.hero"]
         let tabs = app.buttons["notes.tab.notes"]
-        waitFor(hero, key: "exists", value: true)
+        let browse = app.buttons["notes.browseFolders"]
+        waitFor(browse, key: "exists", value: true)
         waitFor(tabs, key: "exists", value: true)
-        XCTAssertLessThan(title.frame.maxY, headline.frame.minY, "Header, then the data phrase")
-        XCTAssertLessThan(headline.frame.maxY, hero.frame.minY, "Data phrase, then the hero")
-        XCTAssertLessThan(hero.frame.maxY, tabs.frame.minY, "Hero, then the segmented bar")
-        let folder = app.buttons["notes.folder.header"].firstMatch
-        if folder.exists {
-            XCTAssertLessThan(tabs.frame.maxY, folder.frame.minY, "Segmented bar, then the list")
-        }
+        XCTAssertLessThan(title.frame.maxY, tabs.frame.minY, "Header, then Notes / Tasks / Graph")
+        XCTAssertLessThan(tabs.frame.maxY, browse.frame.minY, "Library follows the segmented bar")
+        XCTAssertFalse(app.descendants(matching: .any)["notes.hero"].exists)
         XCTAssertFalse(app.buttons["notes.scope"].exists, "The extra button between search and plus stays removed")
         XCTAssertTrue(app.buttons["notes.plus"].exists)
         attachScreenshot("Notes page order")
