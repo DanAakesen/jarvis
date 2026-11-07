@@ -243,11 +243,12 @@ export const coreModule: BackendModule = {
 
         const activityId = randomUUID();
         const source = voiceItemHeader === undefined ? 'chat' : 'voice';
+        const activityMessage = validMessageId ? { messageId: messageId! } : {};
         const activity = (type: 'tool-call-started' | 'tool-call-finished' | 'failed', outcome?: ToolCallOutcome) => {
           if (type === 'tool-call-started') {
-            app.jarvisActivityHub.publish({ type, activityId, source, toolName: tool.name });
+            app.jarvisActivityHub.publish({ type, activityId, source, toolName: tool.name, ...activityMessage });
           } else if (type === 'tool-call-finished') {
-            app.jarvisActivityHub.publish({ type, activityId, source, toolName: tool.name, outcome: outcome ?? 'error' });
+            app.jarvisActivityHub.publish({ type, activityId, source, toolName: tool.name, outcome: outcome ?? 'error', ...activityMessage });
           } else {
             app.jarvisActivityHub.publish({ type, activityId, source });
           }

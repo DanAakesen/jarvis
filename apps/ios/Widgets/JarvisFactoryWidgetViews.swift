@@ -66,7 +66,7 @@ struct JarvisFactoryDoneWidgetView: View {
                 )
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(data.doneTotal)").font(.title.weight(.bold))
-                    Text(JarvisWidgetCopy.done.text(language: language)).font(.caption).foregroundStyle(.secondary)
+                    Text(JarvisWidgetCopy.done.text(language: language)).font(.caption).foregroundStyle(JarvisWidgetPalette.secondaryText)
                 }
                 JarvisWidgetBarChart(
                     values: data.doneLast7Days,
@@ -126,7 +126,7 @@ private struct JarvisFactoryCountCells: View {
     private func label(_ status: JarvisFactoryWidgetData.Status) -> some View {
         Text(title(status).text(language: language))
             .font(.system(size: 9))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(JarvisWidgetPalette.secondaryText)
             .minimumScaleFactor(0.8)
     }
 }
@@ -143,7 +143,7 @@ private struct JarvisFactoryTaskRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(task.title).font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold)).lineLimit(1)
-                Text(task.detail).font(compact ? .caption2 : .caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(task.detail).font(compact ? .caption2 : .caption).foregroundStyle(JarvisWidgetPalette.secondaryText).lineLimit(1)
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("widget.factory.task.\(task.id)")
@@ -195,7 +195,7 @@ struct JarvisFactoryMediumWidgetView: View {
                 JarvisFactoryCountCells(data: data, language: language, compact: true)
                 ForEach(data.tasks.prefix(2)) { JarvisFactoryTaskRow(task: $0, language: language, compact: true) }
                 if data.tasks.isEmpty {
-                    Text(JarvisWidgetCopy.noTasks.text(language: language)).font(.caption).foregroundStyle(.secondary)
+                    Text(JarvisWidgetCopy.noTasks.text(language: language)).font(.caption).foregroundStyle(JarvisWidgetPalette.secondaryText)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -219,7 +219,7 @@ struct JarvisFactoryLargeWidgetView: View {
                 JarvisFactoryCountCells(data: data, language: language)
                 ForEach(data.tasks.prefix(5)) { JarvisFactoryTaskRow(task: $0, language: language) }
                 if data.tasks.isEmpty {
-                    Text(JarvisWidgetCopy.noTasks.text(language: language)).font(.caption).foregroundStyle(.secondary)
+                    Text(JarvisWidgetCopy.noTasks.text(language: language)).font(.caption).foregroundStyle(JarvisWidgetPalette.secondaryText)
                 }
                 Spacer(minLength: 0)
             }

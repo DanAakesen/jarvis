@@ -113,7 +113,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
                         partial = ""
                     case .interrupted(let message): append(JarvisChatRow(message))
                     case .error(let failure): throw JarvisChatClientError.serverEvent(code: failure.code, message: nil)
-                    case .acknowledgment, .foodInvitation, .unknown: break
+                    case .acknowledgment, .foodInvitation, .unknown, .connectionState: break
                     }
                 }
             } catch {

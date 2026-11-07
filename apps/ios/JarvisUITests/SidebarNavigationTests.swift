@@ -14,6 +14,7 @@ final class SidebarNavigationTests: XCTestCase {
             app.open(URL(string: "jarvis-widget://\(topic)")!)
             let screen = app.descendants(matching: .any).matching(identifier: "screen.\(destination)").firstMatch
             XCTAssertTrue(screen.waitForExistence(timeout: 10), "A cold widget tap opens \(destination)")
+            if topic == "notes" { assertTasksTabSelected() }
             let capture = XCTAttachment(screenshot: app.screenshot())
             capture.name = "widget-link-cold-\(topic)"
             capture.lifetime = .keepAlways
@@ -29,7 +30,21 @@ final class SidebarNavigationTests: XCTestCase {
             app.open(URL(string: "jarvis-widget://\(topic)")!)
             let screen = app.descendants(matching: .any).matching(identifier: "screen.\(destination)").firstMatch
             XCTAssertTrue(screen.waitForExistence(timeout: 10), "A warm widget tap opens \(destination)")
+            if topic == "notes" {
+                assertTasksTabSelected()
+                app.buttons["notes.tab.notes"].tap()
+                XCTAssertTrue(app.buttons["notes.tab.notes"].isSelected)
+                app.open(URL(string: "jarvis-widget://notes")!)
+                assertTasksTabSelected()
+            }
         }
+    }
+
+    private func assertTasksTabSelected() {
+        let tasks = app.buttons["notes.tab.tasks"]
+        XCTAssertTrue(tasks.waitForExistence(timeout: 10))
+        let selected = NSPredicate { _, _ in tasks.isSelected }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: selected, object: nil)], timeout: 5), .completed)
     }
 
     func testPhysicalMenuTapOpensSidebarWithinTwoSecondsInDanish() {

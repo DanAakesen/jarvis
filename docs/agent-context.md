@@ -7352,3 +7352,45 @@ After qualification/deployment, the same explicit handoff can reuse the existing
 matching version for one instrumented check. Do not recreate agents or infer
 compatibility from normal deployment success. Retained evidence and the owner's
 comparison checklist are linked in docs/copilot-runtime-recovery-2026-11-07.md.
+
+## Widget contrast/Tasks continuation (7 November 2026)
+
+Worktree /tmp/p15-widget-contrast, branch codex/widget-text-contrast. Keep the
+Copilot recovery active separately. The owner authorizes darker light widget text
+and converting Notes widgets to Tasks. Existing widget IDs/data contracts stay
+compatible; do not delete note data or change the in-app Notes product. Qualification
+needs actual native widget captures plus cold/warm/repeated task-tab delivery and
+ordinary Notes navigation. Use a validation-only branch for a focused five-case
+run, retain source/tree proof and existing 120/150-second limits; never merge its
+workflow. Cancel duplicate automatic simulator jobs before boot. User release
+authorization persists; upload only after actual native review and normal accepted
+deployment. This new iOS source cannot reuse build 78's rendering evidence alone.
+
+The first widget-focused run 42368114024 failed its combined gallery deadline and
+both widget tab-selection checks. Retain it and the inspected captures; do not
+claim native qualification. Follow-up uses root-owned tab binding and separate
+widget-language cases with one AX snapshot each, unchanged per-test limits and
+all prior geometry assertions. Add empty-activity/Away-absence and active-approval
+checks for the newest request. No deployment/shared runtime mutation while the
+owner tests new-project scaffolding.
+
+The instrumented Copilot activation 42369093453 failed on turn 2: stream and final
+classify as previous_policy; turn 1 passed. Current normal Deploy 42367439515 is
+accepted with all 15 checks. No receipt exists. Do not retry unchanged provisioning
+or weaken the gate. Investigate a supported instruction-update path first.
+
+## Settings/Chat/scaffold continuation (7 November 2026)
+
+PR #1629 now also covers owner-reported Settings labels, duplicate steering bubbles,
+sent dictation restoration, native text selection and visible turn/tool progress.
+Read docs/ios/design/p15-chat-settings-feedback.md. Native checks must use the real
+candidate tree and existing 120/150-second limits. The 10/10 e9aa automated run is
+retained; empty-activity visual evidence needs correction because its launch omitted
+--screenshot-chat-fixture. No duplicate widget simulator run is needed.
+
+The scaffold draft reader was reproduced against GitHub without writes: page 7
+exceeds 1 MiB; the adaptive reader now reads all 1,626 records in 21 requests.
+Backend/contracts tests passed locally; native and CI are pending. Normal accepted
+backend deployment precedes iOS upload. Keep the owner E2E test undisturbed while
+preparing and verifying these changes. Copilot remains unavailable; no receipt,
+policy weakening or additional live probe is authorized by this UI correction.

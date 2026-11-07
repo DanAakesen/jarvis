@@ -70,19 +70,19 @@ struct JarvisFactoryLargeWidget: Widget {
 
 struct JarvisNotesSmallWidget: Widget {
     var body: some WidgetConfiguration {
-        homeWidget(.notesSmall, name: .displayNameNotes, family: .systemSmall) { JarvisNotesSmallWidgetView(entry: $0).padding(14) }
+        homeWidget(.notesSmall, name: .tasks, family: .systemSmall) { JarvisNotesSmallWidgetView(entry: $0).padding(14) }
     }
 }
 
 struct JarvisNotesMediumWidget: Widget {
     var body: some WidgetConfiguration {
-        homeWidget(.notesMedium, name: .displayNameNotes, family: .systemMedium) { JarvisNotesMediumWidgetView(entry: $0).padding(16) }
+        homeWidget(.notesMedium, name: .tasks, family: .systemMedium) { JarvisNotesMediumWidgetView(entry: $0).padding(16) }
     }
 }
 
 struct JarvisNotesLargeWidget: Widget {
     var body: some WidgetConfiguration {
-        homeWidget(.notesLarge, name: .displayNameNotes, family: .systemLarge) { JarvisNotesLargeWidgetView(entry: $0).padding(16) }
+        homeWidget(.notesLarge, name: .tasks, family: .systemLarge) { JarvisNotesLargeWidgetView(entry: $0).padding(16) }
     }
 }
 

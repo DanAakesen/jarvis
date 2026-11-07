@@ -1,3 +1,63 @@
+## 7 November 2026 — Settings, Chat turn feedback and issue drafting
+
+Active follow-up in PR #1629: persistent Settings field labels; native reply text
+selection; content-sized owner bubbles; exact-ID replacement of saved steering
+messages; invalidation of stopped dictation callbacks; acknowledgment/tool/final
+reply grouping; visible active/reconnecting status throughout an interrupted turn.
+Backend activity now includes an optional validated message ID for safe live tool
+correlation. The existing receipt gate for Copilot stays closed after its second
+policy turn failed. The owner comparison guide remains available.
+
+The reported scaffold failure has a reproducible upstream read cause: repository
+issue page 7 is 1,099,352 bytes, above the 1 MiB GitHub client limit. The new reader
+splits only oversized windows, preserving the response ceiling and full scan
+before task-code allocation. A read-only real-repository check returned all 1,626
+records using 21 GET requests and zero writes. Focused backend tests: 157 passed;
+contract tests: 45 passed; backend no-emit typecheck passed. Native Settings/Chat
+verification and CI are pending; do not mark this candidate released.
+
+Widget/Now source e9aa204b passed all 10 automated focused cases in 42370022661.
+The EN-light widget and active Notifications captures were inspected. The empty
+Notifications/Chat attachments exposed a verification gap: the screenshot launch
+omitted the existing chat fixture flag and showed the sign-in cover despite AX
+existence checks. The next focused run adds that flag and visible/hittable checks;
+those captures are not accepted visual evidence. Retain the earlier failed run
+42368114024. Reuse unchanged widget/navigation evidence; do not rerun the gallery.
+
+CI 42374596904 passed. Native 42373705592 passed 17/20 cases; reply text selection,
+collapsed tool history, empty activity and Settings label captures were inspected.
+Three fixture/edit-input failures are corrected with no production UI changes and
+will be rechecked alone. The owner's scaffold test is blocked by the reproduced
+issue-list failure; after qualification, deploy its fix before the TestFlight upload.
+See docs/ios/design/p15-chat-settings-feedback.md for the current evidence.
+
+## 7 November 2026 — Widget contrast and Tasks focus
+
+The owner requests darker supporting widget labels in light mode and a task-only
+replacement for the Notes widget. One shared text style now covers Factory,
+Workouts, Home and Tasks labels, dates, units, chart labels and state copy. Light
+full-color stale content keeps readable text with its explicit Updated timestamp;
+dark/tinted rendering keeps its existing treatment.
+
+The three existing Notes widget identifiers are retained, but their picker/header
+name is Tasks. They show only today's tasks (up to three medium/five large), never
+latest notes. The publisher no longer fetches Notes to refresh task widgets. Taps
+use the compatible installed URL and select the Tasks tab; ordinary Notes
+navigation remains unchanged. The first focused run (42368114024) compiled but
+failed: the combined gallery exceeded its unchanged test deadline, and task-tab
+selection failed on both cold/warm widget delivery. The native English/dark and
+Danish/light captures show the requested text contrast and task-only rows. The
+follow-up gives Notes one root-owned tab binding, checks each widget language in
+its own case using one accessibility snapshot, and retains all geometry checks.
+
+The owner also requests removing Away mode from iOS and hiding an empty Now bar.
+The sheet no longer renders presence state; the bar uses the same visible job
+presentation as the sheet, excluding done/cancelled jobs while retaining running,
+failed, approval and notification items. Backend presence/approval behavior stays
+intact. Native empty/active checks and final qualification are pending. The owner
+is testing a new-project scaffold end to end; do not deploy or change shared runtime
+configuration during that test. Continue implementation and isolated verification.
+
 ## 7 November 2026 — Copilot runtime recovery
 
 PR #1627 is merged as `4e06a275`. CI 42363816219 and CodeQL 42363816092 passed;
@@ -7,15 +67,17 @@ The deployed managed transport supplies the complete Jarvis policy on every
 response through the required `{{jarvis_policy}}` structured input. Exact template,
 schema, target, settings and transport revision remain part of activation evidence.
 
-Manual activation 42365966747 provisioned the new definition, but failed with
-`managed_probe_policy_not_applied` at `response_stream`; Copilot remains disabled.
-The follow-up adds closed diagnostics for the failing turn and whether streamed
-and final text match the expected, previous or user reply code. It retains the
-exact acceptance condition and never prints response text. See the
-[release record](docs/copilot-runtime-recovery-2026-11-07.md) for source identity,
-artifact digests, retained local-check limitations and the live outcome. The prior
-rejected transports below remain historical evidence. No app source change,
-Simulator run or TestFlight upload is needed; build 78 remains the app release.
+Manual activation 42365966747 failed at the policy sentinel. The diagnostic
+follow-up (#1628, main b01f5f03) passed CI 42366663928 and CodeQL 42366663891;
+normal Deploy 42367439515 is accepted with all 15 Current checks. Instrumented
+activation 42369093453 shows turn 1 passed, but turn 2 returned the previous
+policy's reply code in both streamed and final text. The same Copilot conversation
+retains its initial instructions despite changed structured inputs. No compatibility
+receipt was stamped and Copilot remains disabled. Microsoft's harness guide also
+requires a new conversation after instruction changes. A supported faithful update
+path is unresolved; do not repeat activation, relax the canary, or demote policy.
+See [the recovery record](docs/copilot-runtime-recovery-2026-11-07.md) and
+[the owner's comparison guide](docs/runtime-comparison-owner-test.md).
 
 ## Current release — Home/chrome/widget follow-up, build 78
 

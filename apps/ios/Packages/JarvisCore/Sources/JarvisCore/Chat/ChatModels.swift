@@ -61,6 +61,8 @@ public struct ChatTurnFailure: Codable, Equatable, Sendable {
 }
 
 public enum ChatEvent: Equatable, Sendable {
+    /// Local transport state; never included in the replayed server event sequence.
+    case connectionState(ChatConnectionState)
     case user(ChatMessage)
     case delta(text: String)
     case acknowledgment(text: String)
@@ -69,6 +71,11 @@ public enum ChatEvent: Equatable, Sendable {
     case done(ChatMessage)
     case error(ChatTurnFailure)
     case unknown(name: String, data: String)
+}
+
+public enum ChatConnectionState: Equatable, Sendable {
+    case reconnecting
+    case connected
 }
 
 public struct ActiveChatTurn: Codable, Equatable, Sendable {

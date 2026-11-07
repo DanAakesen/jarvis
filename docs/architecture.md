@@ -8835,3 +8835,45 @@ change. Live activation 42365966747 failed the policy sentinel after a completed
 response; no compatibility receipt was stamped. The probe now records only its
 turn number and closed streamed/final text classifications on mismatches. These
 fields cannot affect acceptance. See docs/copilot-runtime-recovery-2026-11-07.md.
+
+## Task widgets and secondary text (7 November 2026)
+
+The widget palette owns a resolving ShapeStyle for stronger full-color light text.
+Every secondary text call site in the Home Screen widget views uses it; decorative
+skeleton, ring and border colors retain their original semantics. One shared stale
+modifier preserves light text while retaining dark/tinted opacity treatment.
+
+The existing notes topic/kind IDs and Codable snapshot remain compatible, but
+widgets render Tasks only. The publisher resolves the existing open-task cache and
+passes no notes to the snapshot builder. ContentView converts the compatible Notes
+widget URL into a one-use task-tab request consumed by JarvisNotesArea on initial
+or repeated delivery; ordinary Notes navigation gets no request. No backend/API,
+credential, storage migration or Chat appearance change is required.
+
+### iOS widget routing and activity visibility follow-up (7 November 2026)
+
+ContentView owns the Notes tab binding and selects Tasks for the existing widget
+URL. Leaving Notes resets the tab for ordinary navigation; repeated widget taps
+select Tasks without relying on a consumed on-appear request. Notifications and
+the Now bar share BackgroundTaskPresentation.isEmpty, which excludes terminal
+success/cancellation records. Removing the iOS Away row changes no presence API,
+approval error handling or backend mode.
+
+### Chat activity and issue-list reads (7 November 2026)
+
+Tool start/finish events can carry a validated optional SQL message ID. The iOS
+workspace decoder emits a typed chat-tool event and preserves ordinary activity
+refreshes; only IDs belonging to the active turn/follow-ups render live progress.
+The 128-event buffer contains names/outcomes, never arguments/results. History
+presentation groups calls by transport session/channel and attaches pending calls
+to the next non-interrupted assistant reply. Storage ownership is unchanged.
+Steer POST returns its existing saved-message response, now consumed by iOS to
+replace exactly one local placeholder. Local reconnect events are outside SSE replay
+history. Interrupted rounds retain the root turn ID until the terminal done event.
+Recognition sessions reject callbacks queued before stop/restart.
+
+GitHub issue title/suffix scans retain the 1 MiB response limit and 10,000-record
+bound. An oversized 100-record window is recursively read as 25/5/1-record pages;
+no allocation proceeds on incomplete reads. A preparation failure returns safe,
+actionable issue-list guidance. Existing later-message approval remains mandatory
+for Jarvis's own code. Deploy this backend before the dependent iOS build.

@@ -3527,3 +3527,43 @@ cases. Titles and periods follow their insets, action labels wrap at large sizes
 and agenda icons/swipes are clear. Shared headers and Notes/Factory docks retain
 the transparent page background in resting/scrolled captures. The owner-accepted
 loading/widget visuals remain unchanged. Build 78 delivers these corrections.
+
+### Widget contrast and Tasks content (7 November 2026)
+
+The owner finds light-mode supporting labels too faint, including Factory count
+labels. All Home Screen widget families use the shared secondary-text style in
+JarvisWidgetComponents.swift. It resolves to opaque dark grey on full-color light
+surfaces; dark/accented rendering retains the system secondary style. Do not fade
+light-mode stale content on top of that text color; the Updated timestamp carries
+freshness. Number/status accents, borders, geometry and accepted loading motion
+remain unchanged.
+
+Rename the former Notes widget to Tasks/Opgaver. The medium layout uses its shared
+icon/title heading followed by up to three compact title/time rows; large shows
+up to five tasks. Remove the latest-note phrase and note fallback from every size.
+The debug gallery adds an English/light capture beside retained English/dark and
+Danish/light states. These source changes await actual native rendering review.
+
+### iOS activity cleanup and widget verification follow-up
+
+Remove the Away mode heading/status row from Notifications. An empty feed keeps
+the existing empty state and overview; no empty Background activity capsule
+appears above Chat's composer. Active items keep the accepted bar styling.
+Native run 42368114024 produced inspected English/dark and Danish/light widget
+captures with readable secondary text and three Tasks rows. It was not a pass:
+the gallery timed out and widget task-tab selection failed. Root-owned tab state
+and bounded snapshot-based geometry checks await a new focused native run.
+
+### Settings and Chat feedback refinement (7 November 2026)
+
+JarvisSettingsTextField provides persistent primary-text labels and trailing values,
+with stacked multiline/accessibility fallbacks. The reference is the owner-approved
+Health goals form. Keep existing ranges, save controls and validation.
+Chat owner surfaces fit short content while preserving the readable width cap.
+One native, noneditable selectable reply retains headings, emphasis, links and list
+spacing. Selection spans paragraphs and survives unrelated activity refreshes.
+The shared row control expands final tool details below Jarvis's reply. Live tools
+remain expanded under acknowledgment text; a small orb/status row above the composer
+stays visible while working/reconnecting. It disappears only on completion/failure,
+where existing error recovery remains visible. Reduce Motion retains static feedback.
+Native rendering/selection checks for this follow-up are pending.

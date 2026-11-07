@@ -10,7 +10,15 @@ struct JarvisApp: App {
             if ProcessInfo.processInfo.arguments.contains("--component-gallery") {
                 JarvisComponentGallery()
             } else {
+                #if targetEnvironment(simulator)
+                if ProcessInfo.processInfo.arguments.contains("--widget-layout-gallery") {
+                    JarvisWidgetLayoutGallery()
+                } else {
+                    appRoot
+                }
+                #else
                 appRoot
+                #endif
             }
             #else
             appRoot

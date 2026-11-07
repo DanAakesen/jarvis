@@ -1236,8 +1236,8 @@ describe('conversation routes', () => {
         outcome: 'ok',
       }));
       expect(activities).toEqual(expect.arrayContaining([
-        expect.objectContaining({ type: 'tool-call-started', source: 'chat', toolName: 'get_status_summary' }),
-        expect.objectContaining({ type: 'tool-call-finished', source: 'chat', toolName: 'get_status_summary', outcome: 'ok' }),
+        expect.objectContaining({ type: 'tool-call-started', source: 'chat', toolName: 'get_status_summary', messageId: '42' }),
+        expect.objectContaining({ type: 'tool-call-finished', source: 'chat', toolName: 'get_status_summary', outcome: 'ok', messageId: '42' }),
       ]));
     });
 

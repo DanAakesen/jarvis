@@ -3,6 +3,39 @@ import XCTest
 @testable import JarvisCore
 
 final class JarvisWorkspaceClientTests: XCTestCase {
+    func testCorrelatedToolEventPreservesOrdinaryActivityRefresh() async throws {
+        let transport = FakeWorkspaceTransport(streams: [.stream(sseResponse("jarvis-activity", [
+            "type": "tool-call-finished", "source": "chat", "activityId": "12345678-1234-4234-8234-123456789abc",
+            "messageId": "42", "toolName": "repo_read", "outcome": "error",
+        ], staysOpen: true))], responses: [])
+        var events: [WorkspaceEvent] = []
+        for try await event in makeWorkspaceClient(transport: transport).events() {
+            events.append(event)
+            if events.count == 2 { break }
+        }
+        guard case .chatToolActivity(let tool) = events.first else { return XCTFail("Missing tool event") }
+        XCTAssertEqual(tool.messageId, "42")
+        XCTAssertEqual(tool.outcome, .error)
+        XCTAssertEqual(events.last, .activityChanged)
+    }
+
+    func testVoiceUncorrelatedAndMalformedActivityNeverBecomesChatToolProgress() async throws {
+        let invalid: [[String: Any]] = [
+            ["source": "voice", "messageId": "42"],
+            ["source": "chat"],
+            ["source": "chat", "messageId": "0"],
+        ]
+        for fields in invalid {
+            let base: [String: Any] = ["type": "tool-call-started", "activityId": "12345678-1234-4234-8234-123456789abc", "toolName": "repo_read"]
+            let payload = base
+                .merging(fields) { _, new in new }
+            let transport = FakeWorkspaceTransport(streams: [.stream(sseResponse("jarvis-activity", payload, staysOpen: true))], responses: [])
+            for try await event in makeWorkspaceClient(transport: transport).events() {
+                XCTAssertEqual(event, .activityChanged)
+                break
+            }
+        }
+    }
     func testJobEventTriggersActivitySnapshotRefresh() async throws {
         let transport = FakeWorkspaceTransport(
             streams: [.stream(sseResponse("job", ["jobId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "status": "running"], staysOpen: true))],

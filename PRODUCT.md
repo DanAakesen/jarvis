@@ -280,8 +280,8 @@ to 20 MB and images up to 10 MB per attachment. Synthetic fixtures are clearly
 marked and used only in previews and CI screenshots. Native Entra sign-in remains
 a separate concern; no fake conversation or successful live sign-in is implied.
 The activity sheet keeps the no-activity icon and text without empty category rows.
-The composer Now bar appears only while a turn is sending or the feed contains
-background activity.
+The composer Now bar appears only when there is visible background activity,
+an approval or a feed update. Finished routine jobs alone do not display it.
 
 The notifications toolbar button keeps its badge inside the 44-point control,
 including two-digit counts. Notifications and Background activity sheets use a
@@ -2493,3 +2493,42 @@ input request was accepted but its live policy check failed in 42365966747; no
 available-runtime claim is made. Failure evidence must identify the synthetic turn
 and classify expected/previous/user reply-code behavior without exposing private
 instructions or provider text. The existing approval and activation gates remain.
+
+## Task-focused Home Screen widgets (7 November 2026)
+
+The owner uses the former Notes widget for tasks, not note browsing. Rename its
+picker and headings to Tasks/Opgaver, remove all latest-note summaries/fallbacks,
+and use the space for due-today task titles and times. Keep existing installed
+widget identifiers and cached snapshot compatibility. A tap opens the Tasks tab
+inside Notes; the app's Notes area remains available. Task-widget refresh must not
+depend on an unrelated Notes fetch. Supporting labels on all Home Screen widget
+families must remain readable in light mode, including stale-data timestamps.
+
+## iOS activity visibility (7 November 2026)
+
+iOS no longer shows an Away mode section. Presence behavior on the backend and
+web, and approval requirements, remain unchanged. The composer activity bar and
+Notifications use the same visible job categories: running work, actionable and
+dismissible failures, approvals and feed updates. Completed/cancelled jobs alone
+must not keep an empty Background activity bar visible.
+
+## Owner feedback: Settings and a reliable Chat turn (7 November 2026)
+
+All editable Settings fields retain visible names after values are entered. Long
+labels and accessibility text can stack; validation and save behavior stay intact.
+Jarvis replies support native selection of arbitrary text across paragraphs.
+Short owner bubbles hug their text within the existing maximum readable width.
+A submitted message appears once: a temporary follow-up uses the returned saved
+identity, and identical text in genuinely distinct messages remains distinct.
+Stopped dictation cannot restore a sent draft or overwrite the next dictation.
+
+Jarvis's acknowledgment precedes expanded live tool progress. A running turn stays
+visibly active even between tool calls, while reconnecting, or after an interrupted
+round. Failure remains visible. Stored calls display beneath the matching final
+Jarvis reply, collapsed by default and expandable, without crossing voice or test
+sessions. Arguments and raw tool results are excluded from activity metadata.
+
+Preparing an approved self-improvement proposal must handle large issue lists.
+Oversized GitHub pages are split within existing read limits; task codes are never
+allocated from incomplete data. Proposal preparation still does not create an issue
+or start coding until the existing later-owner-approval condition is satisfied.

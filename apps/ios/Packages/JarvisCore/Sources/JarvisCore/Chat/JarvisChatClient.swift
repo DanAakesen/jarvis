@@ -146,8 +146,9 @@ public final class JarvisChatClient: Sendable {
     }
 
     /// Adds a follow-up message to the turn that is still running, so the user can steer it mid-answer.
-    /// Returns false when no turn is active any more and the text must be sent as a normal turn instead.
-    public func steerTurn(sessionId: String, text: String, language: ChatLanguage) async throws -> Bool {
+    /// Returns the persisted message so the optimistic row can be replaced by identity.
+    /// A nil result means no turn is active any more; it does not resubmit the text.
+    public func steerTurn(sessionId: String, text: String, language: ChatLanguage) async throws -> ChatMessage? {
         guard Self.validID(sessionId) else { throw JarvisChatClientError.invalidResponse }
         try validateTurn(text: text, attachmentIds: [], screenContext: nil)
         do {
@@ -158,9 +159,9 @@ public final class JarvisChatClient: Sendable {
                 idempotent: false
             )
             guard response.statusCode == 202 else { throw JarvisChatClientError.invalidResponse }
-            return true
+            return try Self.decodeMessage(response.body, expectedRole: .dan, sessionId: sessionId)
         } catch let error as JarvisClientError {
-            if case .httpStatus(409) = error { return false }
+            if case .httpStatus(409) = error { return nil }
             throw error
         }
     }
@@ -297,7 +298,7 @@ public final class JarvisChatClient: Sendable {
                     if case .error(let failure) = chatEvent {
                         throw JarvisChatClientError.serverEvent(code: failure.code, message: failure.message)
                     }
-                    if case .user(let message) = chatEvent { acceptedMessageId = message.id }
+                    if case .user(let message) = chatEvent, acceptedMessageId == nil { acceptedMessageId = message.id }
                     previouslyReceived.append(event)
                     continuation.yield(chatEvent)
                     if case .done = chatEvent { return true }
@@ -338,12 +339,14 @@ public final class JarvisChatClient: Sendable {
                                 throw mappedError
                             }
                             try Task.checkCancellation()
+                            continuation.yield(.connectionState(.reconnecting))
                             try await waitForNextAttempt(since: recoveryStart)
                             response = try await openReattachResponse(
                                 sessionId: sessionId,
                                 messageId: acceptedMessageId,
                                 since: recoveryStart
                             )
+                            continuation.yield(.connectionState(.connected))
                             replayIndex = 0
                             isReplayConnection = true
                         }

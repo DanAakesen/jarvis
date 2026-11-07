@@ -34,9 +34,7 @@ struct JarvisActivitySheet: View {
                         }
                     } else if let feed = model.nowFeed {
                         let presentation = model.backgroundPresentation
-                        let hasActivity = !feed.confirmations.isEmpty || !feed.running.isEmpty ||
-                            !feed.items.isEmpty || !presentation.running.isEmpty ||
-                            !presentation.actionable.isEmpty || !presentation.quiet.isEmpty
+                        let hasActivity = model.shouldShowNowBar
                         if let error = model.activityError {
                             HStack {
                                 Text(error)
@@ -57,9 +55,6 @@ struct JarvisActivitySheet: View {
                                 .accessibilityAddTraits(.updatesFrequently)
                         }
                         pageHead(feed)
-                        if hasActivity || feed.awayMode {
-                            awayModeSection(feed.awayMode)
-                        }
                         if !feed.confirmations.isEmpty {
                             confirmationSection(feed.confirmations)
                         }
@@ -299,16 +294,6 @@ struct JarvisActivitySheet: View {
                     }
                     .jarvisListRow(separator: task.id != tasks.last?.id)
                 }
-            }
-        }
-    }
-
-    private func awayModeSection(_ isAway: Bool) -> some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            JarvisSectionHeadline(copy(.activityAwayMode))
-            JarvisRowGroup {
-                Label(isAway ? copy(.activityOn) : copy(.activityOff), systemImage: isAway ? "moon.fill" : "sun.max")
-                    .font(.body).jarvisListRow(separator: false)
             }
         }
     }

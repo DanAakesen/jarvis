@@ -67,17 +67,19 @@ describe('Jarvis tool activity events', () => {
       type: 'tool-call-started',
       source: 'chat',
       toolName: 'activity_test',
+      messageId: '101',
     });
     expect(events[1]).toMatchObject({
       type: 'tool-call-finished',
       source: 'chat',
       toolName: 'activity_test',
       outcome,
+      messageId: '101',
     });
     expect((events[0] as { activityId: string }).activityId)
       .toBe((events[1] as { activityId: string }).activityId);
     expect(JSON.stringify(events)).not.toMatch(/private|argument|secret|result|transcript/iu);
     expect(events.every((event) => Object.keys(event as object).every((key) =>
-      ['type', 'activityId', 'source', 'toolName', 'outcome'].includes(key)))).toBe(true);
+      ['type', 'activityId', 'source', 'toolName', 'outcome', 'messageId'].includes(key)))).toBe(true);
   });
 });

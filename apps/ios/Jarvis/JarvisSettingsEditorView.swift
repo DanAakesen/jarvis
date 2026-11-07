@@ -194,17 +194,15 @@ struct JarvisSettingsEditorView: View {
                 .pickerStyle(.menu)
             }
         case .text:
-            TextField(copy(field.title), text: binding(for: field))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+            JarvisSettingsTextField(title: copy(field.title), text: binding(for: field),
+                                    identifier: "settings.field.\(field.id)")
         case .multiline:
-            TextField(copy(field.title), text: binding(for: field), axis: .vertical)
-                .lineLimit(4...8)
-                .accessibilityLabel(copy(field.title))
+            JarvisSettingsTextField(title: copy(field.title), text: binding(for: field),
+                                    identifier: "settings.field.\(field.id)", multiline: true)
         case .number:
-            TextField(copy(field.title), text: binding(for: field))
-                .keyboardType(field.title == .visionDailyBudget ? .decimalPad : .numberPad)
-                .accessibilityLabel(copy(field.title))
+            JarvisSettingsTextField(title: copy(field.title), text: binding(for: field),
+                                    identifier: "settings.field.\(field.id)",
+                                    keyboard: field.title == .visionDailyBudget ? .decimalPad : .numberPad)
         case .toggle:
             Toggle(copy(field.title), isOn: Binding(
                 get: { draft[field.id] == "true" },

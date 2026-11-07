@@ -16,7 +16,7 @@ struct JarvisWidgetFreshnessLine: View {
         if let text {
             Text(text)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(JarvisWidgetPalette.secondaryText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -36,7 +36,7 @@ struct JarvisWidgetListRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.subheadline.weight(.semibold)).lineLimit(1)
                 if let detail {
-                    Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    Text(detail).font(.caption).foregroundStyle(JarvisWidgetPalette.secondaryText).lineLimit(1)
                 }
             }
             Spacer(minLength: 4)
@@ -69,11 +69,32 @@ private extension JarvisNotesWidgetData {
         )
     }
 
-    func noteRow(_ note: Note, now: Date, language: JarvisAppLanguage) -> some View {
-        JarvisWidgetListRow(
-            dot: JarvisWidgetPalette.stone, title: note.title,
-            detail: JarvisWidgetPhrase.edited(note.editedAt, now: now, language: language)
-        )
+}
+
+/// A compact task and its due time share one readable row in the medium widget.
+private struct JarvisWidgetCompactTaskRow: View {
+    let task: JarvisNotesWidgetData.Task
+    let language: JarvisAppLanguage
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(Color.orange).frame(width: 7, height: 7)
+                .accessibilityHidden(true)
+            Text(task.title)
+                .font(.footnote.weight(.semibold))
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            if let when = JarvisWidgetPhrase.when(task, language: language) {
+                Text(when)
+                    .font(.caption)
+                    .foregroundStyle(JarvisWidgetPalette.secondaryText)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("widget.tasks.row.\(task.id)")
     }
 }
 
@@ -100,7 +121,7 @@ struct JarvisNotesSmallWidgetView: View {
             if case .empty = entry.notes {
                 layout(language: language) { JarvisWidgetNoTasksPhrase(language: language) }
             } else {
-                JarvisWidgetStateView(state: entry.notes, language: language, emptyCopy: .emptyNotes, skeletonRows: 3) { data, stale in
+                JarvisWidgetStateView(state: entry.notes, language: language, emptyCopy: .emptyTasks, skeletonRows: 3) { data, stale in
                     layout(language: language, freshness: freshness(data.generatedAt, stale: stale, language: language)) {
                         if let next = data.tasks.first, data.tasksToday > 0 {
                             VStack(alignment: .leading, spacing: 2) {
@@ -109,24 +130,19 @@ struct JarvisNotesSmallWidgetView: View {
                                     Text(JarvisWidgetPhrase.label(
                                         data.tasksToday, one: .taskTodayOne, many: .taskTodayMany, language: language
                                     ))
-                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.7)
+                                    .font(.caption).foregroundStyle(JarvisWidgetPalette.secondaryText).lineLimit(1).minimumScaleFactor(0.7)
                                 }
                                 Text(next.title).font(.footnote.weight(.semibold)).lineLimit(1)
                                 if let when = JarvisWidgetPhrase.when(next, language: language) {
-                                    Text(when).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                                    Text(when).font(.caption2).foregroundStyle(JarvisWidgetPalette.secondaryText).lineLimit(1)
                                 }
                             }
                             .accessibilityElement(children: .combine)
                         } else {
-                            VStack(alignment: .leading, spacing: 4) {
-                                JarvisWidgetNoTasksPhrase(language: language)
-                                if let note = data.notes.first {
-                                    Text(note.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                            }
+                            JarvisWidgetNoTasksPhrase(language: language)
                         }
                     }
-                    .opacity(stale ? 0.55 : 1)
+                    .jarvisWidgetStaleAppearance(stale)
                 }
             }
         }
@@ -137,11 +153,7 @@ struct JarvisNotesSmallWidgetView: View {
         language: JarvisAppLanguage, freshness: String? = nil, @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Image(systemName: tasksSymbol)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.orange)
-                .widgetAccentable()
-                .accessibilityHidden(true)
+            JarvisWidgetHeader(symbol: tasksSymbol, title: JarvisWidgetCopy.tasks.text(language: language))
             Spacer(minLength: 0)
             content()
             JarvisWidgetFreshnessLine(text: freshness)
@@ -150,39 +162,34 @@ struct JarvisNotesSmallWidgetView: View {
     }
 }
 
-/// Medium: the shared heading, a data phrase and the next task or latest note.
+/// Medium: a Tasks heading and up to three due-today tasks. No latest-note summary.
 struct JarvisNotesMediumWidgetView: View {
     let entry: JarvisWidgetEntry
 
     var body: some View {
         let language = entry.language
-        JarvisWidgetStateView(state: entry.notes, language: language, emptyCopy: .emptyNotes, skeletonRows: 2) { data, stale in
-            VStack(alignment: .leading, spacing: 10) {
+        JarvisWidgetStateView(state: entry.notes, language: language, emptyCopy: .emptyTasks, skeletonRows: 3) { data, stale in
+            VStack(alignment: .leading, spacing: 6) {
                 JarvisWidgetHeader(
-                    symbol: tasksSymbol, title: JarvisWidgetCopy.notes.text(language: language),
+                    symbol: tasksSymbol, title: JarvisWidgetCopy.tasks.text(language: language),
                     staleText: freshness(data.generatedAt, stale: stale, language: language)
                 )
-                Text(JarvisWidgetPhrase.notes(data, language: language))
-                    .font(.footnote)
-                    .lineLimit(2)
-                    .accessibilityIdentifier("widget.notes.summary")
-                if let task = data.tasks.first {
-                    data.taskRow(task, language: language)
-                        .accessibilityIdentifier("widget.notes.next")
-                } else if let note = data.notes.first {
-                    data.noteRow(note, now: entry.date, language: language)
-                        .accessibilityIdentifier("widget.notes.next")
+                if data.tasks.isEmpty {
+                    JarvisWidgetNoTasksPhrase(language: language)
+                }
+                ForEach(data.tasks.prefix(3)) { task in
+                    JarvisWidgetCompactTaskRow(task: task, language: language)
                 }
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .opacity(stale ? 0.55 : 1)
+            .jarvisWidgetStaleAppearance(stale)
         }
         .jarvisWidgetSurface()
     }
 }
 
-/// Large: the glyph and phrase in the header, today's tasks, then the latest notes, in one outlined list.
+/// Large: the same Tasks heading and up to five due-today tasks.
 struct JarvisNotesLargeWidgetView: View {
     let entry: JarvisWidgetEntry
 
@@ -190,38 +197,22 @@ struct JarvisNotesLargeWidgetView: View {
 
     var body: some View {
         let language = entry.language
-        JarvisWidgetStateView(state: entry.notes, language: language, emptyCopy: .emptyNotes, skeletonRows: 6) { data, stale in
-            let tasks = Array(data.tasks.prefix(3))
-            let notes = Array(data.notes.prefix(Self.rowLimit - tasks.count))
+        JarvisWidgetStateView(state: entry.notes, language: language, emptyCopy: .emptyTasks, skeletonRows: 5) { data, stale in
+            let tasks = Array(data.tasks.prefix(Self.rowLimit))
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: tasksSymbol)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.orange)
-                        .widgetAccentable()
-                        .accessibilityHidden(true)
-                    Text(JarvisWidgetPhrase.notes(data, language: language))
-                        .font(.footnote.weight(.semibold))
-                        .lineLimit(2)
-                }
+                JarvisWidgetHeader(symbol: tasksSymbol, title: JarvisWidgetCopy.tasks.text(language: language))
                 JarvisWidgetOutlinedList {
                     if tasks.isEmpty {
                         Text(JarvisWidgetPhrase.noTasksToday(language: language))
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.caption).foregroundStyle(JarvisWidgetPalette.secondaryText)
                     }
                     ForEach(tasks) { data.taskRow($0, language: language) }
-                    if !notes.isEmpty {
-                        Text(JarvisWidgetCopy.latestNotes.text(language: language))
-                            .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                            .padding(.top, tasks.isEmpty ? 0 : 2)
-                    }
-                    ForEach(notes) { data.noteRow($0, now: entry.date, language: language) }
                 }
                 Spacer(minLength: 0)
                 JarvisWidgetFreshnessLine(text: freshness(data.generatedAt, stale: stale, language: language))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .opacity(stale ? 0.55 : 1)
+            .jarvisWidgetStaleAppearance(stale)
         }
         .jarvisWidgetSurface()
     }

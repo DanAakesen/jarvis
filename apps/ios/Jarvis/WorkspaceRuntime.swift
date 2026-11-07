@@ -88,7 +88,7 @@ final class WorkspaceRuntime: ObservableObject {
                     await handle(command, expiresAtMilliseconds: expiresAtMilliseconds, trustedBlobHost: host)
                 case .connectionInterrupted:
                     connectionStatus = .reconnecting
-                case .pendingConfirmationsChanged, .activityChanged, .workspaceCancel, .unknown:
+                case .pendingConfirmationsChanged, .activityChanged, .chatToolActivity, .workspaceCancel, .unknown:
                     break
                 }
             }

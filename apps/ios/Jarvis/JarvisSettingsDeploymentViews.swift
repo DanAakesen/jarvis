@@ -176,20 +176,17 @@ struct JarvisNewDeploymentView: View {
             if let notice {
                 Text(notice).foregroundStyle(.secondary)
             }
-            TextField(copy(.deploymentModel), text: $model)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+            JarvisSettingsTextField(title: copy(.deploymentModel), text: $model,
+                                    identifier: "settings.deployment.model")
                 .disabled(readOnly || saving || submitted)
-            TextField(copy(.deploymentVersion), text: $version)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+            JarvisSettingsTextField(title: copy(.deploymentVersion), text: $version,
+                                    identifier: "settings.deployment.version")
                 .disabled(readOnly || saving || submitted)
-            TextField(copy(.deploymentSku), text: $sku)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
+            JarvisSettingsTextField(title: copy(.deploymentSku), text: $sku,
+                                    identifier: "settings.deployment.sku")
                 .disabled(readOnly || saving || submitted)
-            TextField(copy(.deploymentCapacity), text: $capacity)
-                .keyboardType(.numberPad)
+            JarvisSettingsTextField(title: copy(.deploymentCapacity), text: $capacity,
+                                    identifier: "settings.deployment.capacity", keyboard: .numberPad)
                 .disabled(readOnly || saving || submitted)
         }
         .navigationTitle(copy(.addDeployment))

@@ -321,10 +321,10 @@ final class TodayUITests: XCTestCase {
         XCTAssertTrue(send.waitForExistence(timeout: 5), "Voice becomes send while typing")
         send.tap()
         XCTAssertTrue(screen("chat").waitForExistence(timeout: 10), "Send continues in Chat")
-        let reply = app.descendants(matching: .any)["chat-markdown-block-431-0"]
+        let reply = app.descendants(matching: .any)["chat.reply.431"]
         XCTAssertTrue(reply.waitForExistence(timeout: 10),
                       "Home must send the turn and receive a reply, not only navigate")
-        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "chat-markdown-block-431-0").count, 1)
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "chat.reply.431").count, 1)
         let home = app.buttons["chat.backToToday"].firstMatch
         XCTAssertTrue(home.waitForExistence(timeout: 10))
         home.tap()

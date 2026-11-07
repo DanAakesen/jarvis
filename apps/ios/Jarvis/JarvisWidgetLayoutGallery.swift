@@ -7,7 +7,13 @@ import WidgetKit
 /// WidgetKit's Xcode previews/device checks still own host margins, tinting and Home Screen rendering.
 struct JarvisWidgetLayoutGallery: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var language = "en"
+    @State private var language: String
+
+    init() {
+        let requested = ProcessInfo.processInfo.arguments.first { $0.hasPrefix("--widget-language=") }
+            .map { String($0.dropFirst("--widget-language=".count)) }
+        _language = State(initialValue: ["en", "da", "en-light"].contains(requested ?? "") ? requested! : "en")
+    }
 
     private var appLanguage: JarvisAppLanguage { language == "da" ? .da : .en }
 
@@ -16,7 +22,11 @@ struct JarvisWidgetLayoutGallery: View {
             VStack(spacing: 16) {
                 JarvisTabStrip(
                     title: "Widget samples", identifierPrefix: "gallery.widgetLanguage",
-                    items: [JarvisTabItem(tag: "en", title: "English · Dark"), JarvisTabItem(tag: "da", title: "Dansk · Lys")],
+                    items: [
+                        JarvisTabItem(tag: "en", title: "EN · Dark"),
+                        JarvisTabItem(tag: "da", title: "DA · Light"),
+                        JarvisTabItem(tag: "en-light", title: "EN · Light"),
+                    ],
                     selection: $language
                 )
                 ScrollView {
@@ -37,7 +47,7 @@ struct JarvisWidgetLayoutGallery: View {
                 }
             }
         }
-        .preferredColorScheme(language == "da" ? .light : .dark)
+        .preferredColorScheme(language == "en" ? .dark : .light)
         .environment(\.dynamicTypeSize, .large)
         .presentationDetents([.large])
     }

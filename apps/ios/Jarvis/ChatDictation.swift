@@ -15,7 +15,7 @@ final class ChatDictation: ObservableObject {
     private let engine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
-    private var transcript = DictationTranscript(base: "")
+    private var recognition = DictationSession()
 
     static func requestAccess() async -> Bool {
         let speech = await withCheckedContinuation { continuation in
@@ -44,8 +44,12 @@ final class ChatDictation: ObservableObject {
 
         let input = engine.inputNode
         input.removeTap(onBus: 0)
+        let recognitionID = recognition.start(base: base)
         let meter = LevelMeter { [weak self] level in
-            Task { @MainActor in self?.push(level) }
+            Task { @MainActor in
+                guard let self, self.recognition.isActive(recognitionID) else { return }
+                self.push(level)
+            }
         }
         input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in
             request.append(buffer)
@@ -53,16 +57,21 @@ final class ChatDictation: ObservableObject {
         }
         levels = [Float](repeating: 0, count: Self.levelCount)
         engine.prepare()
-        try engine.start()
+        do { try engine.start() } catch {
+            stop()
+            throw error
+        }
         isListening = true
 
-        transcript = DictationTranscript(base: base)
         task = recognizer.recognitionTask(with: request) { [weak self] result, error in
             let text = result?.bestTranscription.formattedString
             let finished = result?.isFinal == true || error != nil
             Task { @MainActor in
-                if let text, let self { update(self.transcript.update(text)) }
-                if finished { self?.stop() }
+                guard let self, self.recognition.isActive(recognitionID) else { return }
+                if let text, let value = self.recognition.update(text, sessionID: recognitionID) {
+                    update(value)
+                }
+                if finished { self.stop() }
             }
         }
     }
@@ -74,6 +83,8 @@ final class ChatDictation: ObservableObject {
     }
 
     func stop() {
+        // Invalidate first: cancellation/endAudio can enqueue one final recognition callback.
+        recognition.stop()
         guard isListening || request != nil else { return }
         if engine.isRunning { engine.stop() }
         engine.inputNode.removeTap(onBus: 0)
