@@ -1,3 +1,11 @@
+## Recoverable own-code proposals (7 November 2026)
+
+Jarvis can recover the original staged issue proposal in the current conversation
+before acting on a later approval. A create retry after approval must preserve that
+reviewed scope. Missing or expired proposal state may produce a clearly identified
+replacement for Jarvis's own active repository, but requires fresh later approval
+before any write. Never infer that lost state was approved or already executed.
+
 ## Suggestions and change approval (P15-46 / #1494)
 
 Jarvis stages a state-changing proposal before offering it. A clear instruction

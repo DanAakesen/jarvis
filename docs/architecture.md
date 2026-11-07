@@ -1,3 +1,17 @@
+## Scaffold proposal recovery (7 November 2026)
+
+Factory exposes sensitive read-only `get_pending_issue` through normal tool
+discovery. It verifies the current owner message and returns only that session's
+original pending proposal, scope, confirmation code and expiry. Staging replaces
+only same-session state. Bare approval recovers a live draft unchanged; with no
+draft, a fresh active Jarvis-repository replacement can be staged against the
+current message and cannot execute until a later approval. Explicit new own-code
+requests can supersede stale project clarification. External project selection,
+permission/repository revalidation and single consumption retain existing guards.
+Proposals remain process-local with a ten-minute TTL; no persistence migration is
+included. Work-status checking before replacement is model guidance, not a durable
+cross-request duplicate guarantee. See [verification](scaffold-approval-recovery.md).
+
 ## Health module (renamed from Daily; P15-78 / #1571; 4 November 2026)
 
 - Backend `apps/backend/src/health`, web `apps/web/src/health`, contracts `packages/contracts/src/health.js`. Routes are `/health/*`; `/daily/*` is a temporary alias (`health/legacy-alias.ts`) for builds ≤67. Switches: `JARVIS_HEALTH_ENABLED`, `VITE_HEALTH_ENABLED` (old `*_DAILY_ENABLED` read as fallback).
