@@ -8,7 +8,8 @@ Steps: integrate the npm workspace/lockfile; implement and test window/security
 behavior; inspect the actual renderer and reduced-motion interactions; document
 Windows setup and verification limits. Commit and push each meaningful step.
 Windows runtime acceptance remains pending until tested on a Windows desktop.
-Next: add the workspace and secure native shell. No product-discovery interview
+Workspace, secure native shell and geometry/renderer unit checks are implemented.
+Next: verify native IPC boundaries, integrate CI and inspect the rendered shell. No product-discovery interview
 or release/installer is included; feature discovery follows separately with Dan.
 
 ## Current release — build 80 (7 November 2026)

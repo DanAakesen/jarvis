@@ -1,0 +1,58 @@
+/* Desktop equivalents of Jarvis control roles; no web-app stylesheet is modified. */
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color-scheme: light dark;
+  --surface: #fffaf1;
+  --rail: #f0e9df;
+  --text: #17202a;
+  --text-muted: #5c564f;
+  --hover: #e9e2d7;
+  --pressed: #dcd3c4;
+  --focus: #a65300;
+  --error: #951f25;
+  --radius-control: 10px;
+  color: var(--text);
+  background: var(--surface);
+  font-synthesis: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #101721;
+    --rail: #19222d;
+    --text: #f3fff9;
+    --text-muted: #b8c2c9;
+    --hover: #2b3541;
+    --pressed: #394755;
+    --focus: #ffad56;
+    --error: #ffa6a6;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+button { font: inherit; }
+.widget { display: flex; min-height: 100dvh; overflow: hidden; }
+.rail { width: 72px; flex: 0 0 72px; display: flex; align-items: center; flex-direction: column; padding: 8px; gap: 8px; background: var(--rail); }
+.drag-handle { width: 100%; height: 40px; display: grid; place-items: center; color: var(--text-muted); app-region: drag; user-select: none; }
+.drag-handle svg { width: 24px; height: 24px; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.ghost-button { display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px; padding: 10px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text); cursor: pointer; app-region: no-drag; transition: background-color 100ms ease; }
+.ghost-button:hover:enabled { background: var(--hover); }
+.ghost-button:active:enabled { background: var(--pressed); }
+.ghost-button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.ghost-button:disabled { opacity: 0.45; cursor: not-allowed; }
+.ghost-button svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.dock-controls { display: grid; gap: 4px; margin-top: auto; }
+.close-button { margin-top: 8px; }
+.sidebar { width: 280px; min-width: 0; flex: 1 1 280px; padding: 0 20px 20px; }
+.drag-title { min-height: 64px; display: flex; align-items: center; app-region: drag; user-select: none; }
+h1 { margin: 0; font-size: 22px; line-height: 1.3; font-weight: 600; letter-spacing: -0.5px; }
+p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.placeholder { margin-top: 12px; }
+.placeholder > p:not(.connection-state), .window-hint, .feedback { color: var(--text-muted); }
+.connection-state { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.window-hint { margin-top: 24px; font-size: 13px; }
+.feedback { font-size: 13px; }
+.action-error { position: fixed; bottom: 0; left: 4px; right: 4px; padding: 8px; background: var(--surface); color: var(--error); font-size: 12px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .ghost-button { transition: none; } }
+@media (max-width: 100px) { .sidebar { visibility: hidden; } }

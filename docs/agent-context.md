@@ -1,3 +1,15 @@
+## Windows widget scaffold — P11-13 / #1634 (7 November 2026)
+
+Use `npm ci`, `npm run dev:winwidget`, `npm run build:winwidget`,
+`npm run start:winwidget` and `npm run test:winwidget` from the repository root.
+Workspace lint: `npm run lint --workspace @jarvis/winwidget`. Development requires
+fixed loopback port 5183 and restarts for main/preload changes. First Electron
+launch downloads its pinned binary from GitHub releases. Do not disable sandboxing.
+Windows source-run and manual acceptance instructions are in
+[apps/winwidget/README.md](../apps/winwidget/README.md). Linux builds and browser
+inspection do not verify native Windows drag, DPI or always-on-top behavior.
+No secrets, backend configuration, installer or deployment action is needed.
+
 ## Notes and Home widgets (P15-89 / #1593; 5 November 2026)
 
 - The new widgets live in `apps/ios/Widgets/JarvisNotesWidgetViews.swift` and `JarvisHomeWidgetViews.swift`; the snapshot types, builders, phrases and `JarvisWidgetLink` are in `Packages/JarvisCore/Sources/JarvisCore/Widgets/`. Check them with `swift test` in `apps/ios/Packages/JarvisCore`; the widget views compile only in the iOS CI Simulator job.

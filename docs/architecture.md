@@ -1,3 +1,17 @@
+## Windows widget scaffold — P11-13 / #1634 (7 November 2026)
+
+`apps/winwidget` adds an npm workspace using Electron 45.2.3, React 19.3.0,
+TypeScript 6.0.3, Vite 8.3.4 and Motion 14.10.1 through the root lockfile.
+Main owns window geometry in Electron DIP work-area coordinates; native dragging
+settles into a 24-DIP left/right snap. Display changes clamp the current window.
+The isolated sandboxed renderer can only expand, dock or close via a standalone
+CJS preload. Main verifies exact sender, top frame, entry URL and argument types.
+Production serves allowlisted bundled assets through a secure custom protocol;
+CSP and a session request gate prohibit external requests. Permissions, downloads,
+webviews, popups and navigation are denied. Development permits only the fixed
+loopback Vite origin. No backend, authentication, persistence or PC bridge flow
+is added. See [workspace instructions](../apps/winwidget/README.md).
+
 ## Scaffold proposal recovery (7 November 2026)
 
 Factory exposes sensitive read-only `get_pending_issue` through normal tool

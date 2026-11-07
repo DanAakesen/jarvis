@@ -1,3 +1,12 @@
+## Windows desktop scaffold — P11-13 / #1634 (7 November 2026)
+
+`apps/winwidget` is the first Windows desktop companion scaffold in this repository:
+a compact always-on-top Electron window with native dragging, edge snapping and a
+collapsible Motion sidebar that respects reduced motion. Its content explicitly
+states that no live backend connection exists. No companion features, sign-in,
+chat/voice, PC bridge integration or installer are included. Feature discovery
+and prioritization follow separately with Dan; existing web behavior is unchanged.
+
 ## Recoverable own-code proposals (7 November 2026)
 
 Jarvis can recover the original staged issue proposal in the current conversation

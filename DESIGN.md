@@ -1,3 +1,18 @@
+## Windows widget scaffold — P11-13 / #1634 (7 November 2026)
+
+Reuse Jarvis's existing system typography, warm neutral light surface, dark
+surface, orange focus treatment and 10px control geometry. `apps/winwidget/src/styles.css`
+is the desktop shell's canonical token source; the web stylesheet is untouched.
+A 72px rail contains native dragging, sidebar toggle, two edge actions and Close.
+The 280px panel has one Jarvis heading, explicit disconnected scaffold copy and
+brief movement instructions. No feature navigation, orb, metrics or invented
+backend activity. The existing SwiftUI controls remain the iOS implementation;
+Electron uses semantic HTML controls with the same control roles and 44px targets.
+Motion explains panel reveal (160ms opacity/translation); reduced motion makes
+it immediate. Native bounds changes are immediate. All control states retain
+keyboard focus; collapsed panel content is inert. Browser preview disables native
+actions with an explanation. Actual Windows rendering/drag acceptance is pending.
+
 ## Approved runtime test entry (#1350; 29 October 2026)
 
 On iOS, Test agent runtime follows Voice language in the shared Home/Chat Plus

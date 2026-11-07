@@ -1,3 +1,15 @@
+## 7 November 2026 — P11-13 Windows scaffold (#1634)
+
+Confirmed scope: keep the first Windows companion in `apps/winwidget` in the
+existing npm monorepo and root lockfile. Use Electron/React/TypeScript and Motion
+as requested, reusing Jarvis's established visual roles. Main owns native drag,
+snap and bounds; the sandboxed preload grants only three window operations.
+Use a secure local custom protocol, deny external requests and show explicit
+unconnected placeholder content. Do not add backend auth, features or an installer
+before separate discovery with Dan. Linux checks do not qualify Windows behavior.
+Security choices follow [Electron's guidance](https://www.electronjs.org/docs/latest/tutorial/security);
+reduced motion follows [Motion's hook](https://motion.dev/docs/react-use-reduced-motion).
+
 ## 7 November 2026 — Recover approval state before recreating work
 
 Later model turns do not retain private tool results. Add a session-bound read of

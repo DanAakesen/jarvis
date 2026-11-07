@@ -13,7 +13,8 @@
     "packages/contracts",
     "apps/web",
     "apps/backend",
-    "apps/vault-mirror"
+    "apps/vault-mirror",
+    "apps/winwidget"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
@@ -23,7 +24,11 @@
     "build:vault-mirror": "npm run build --workspace @jarvis/vault-mirror",
     "typecheck:vault-mirror": "npm run typecheck --workspace @jarvis/vault-mirror",
     "lint:vault-mirror": "npm run lint --workspace @jarvis/vault-mirror",
-    "test:vault-mirror": "npm test --workspace @jarvis/vault-mirror"
+    "test:vault-mirror": "npm test --workspace @jarvis/vault-mirror",
+    "dev:winwidget": "npm run dev --workspace @jarvis/winwidget",
+    "build:winwidget": "npm run build --workspace @jarvis/winwidget",
+    "start:winwidget": "npm start --workspace @jarvis/winwidget",
+    "test:winwidget": "npm test --workspace @jarvis/winwidget"
   },
   "devDependencies": {
     "typescript": "6.0.3"
