@@ -7539,3 +7539,26 @@ items tracked at the top of PLAN.md. Notes/Ember implementation uses the native
 shared controls and account-bound cache, with lossless document and native workflow
 coverage. Do not confuse a source implementation, a CI pass, a live deployment and
 owner acceptance. Factory and Copilot still require their own live evidence.
+## Provisioning the approved Factory workspace
+
+Run Runner deploy on main with provision_workspace=true after qualified backend
+deployment. It builds immutable images, provisions infra/factory-worker.bicep,
+checks usable disk capacity and both provider credentials, and observes idle ARM
+deallocation before enabling JARVIS_FACTORY_WORKER_ENABLED. Main Bicep preserves
+that setting and resource identity on later deploys. Never delete/reformat the
+workspace to recover capacity; recover the existing Factory task and branch.
+
+Worker image updates require disabled new-task routing and an already-idle, deallocated VM. Provisioning keeps
+the disk and rewrites only non-secret launcher configuration. On failure, leave
+new-task routing disabled and inspect controlled deployment evidence; do not claim
+the migration succeeded based on a template or a local unit test.
+
+
+### Inspecting the persistent Factory worker
+
+After provisioning, dispatch Runner deploy from qualified main with
+`inspect_workspace=true` (and `provision_workspace=false`) to record real disk
+capacity and sanitized retained task outcomes. This wakes a deallocated worker
+for read-only inspection; it submits no Factory work. Normal idle deallocation
+then stops compute again. The evidence artifact contains no prompts or credentials.
+The mailbox polls every 20 seconds when idle and every second around active work.

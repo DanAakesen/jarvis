@@ -1,3 +1,5 @@
+import sql from 'mssql';
+import { FactoryWorkerMailbox } from './factory/worker-mailbox.js';
 import { createBackendLogAuthorizationProbe } from './operations/backend-log-authorization.js';
 import { handleIssueLabel } from './factory/issue-label.js';
 import { randomUUID } from 'node:crypto';
@@ -585,6 +587,7 @@ try {
       retentionDays: attachmentRetentionDays(),
     })
     : undefined;
+  let factoryWorker: FactoryWorkerMailbox | undefined;
   const clientFor = (agentName: string) => {
     if (!config.foundryEndpoints || !credential) throw new Error('Foundry runner is not configured');
     let client = foundryClients.get(agentName);
@@ -593,6 +596,7 @@ try {
         runtimeEndpoint: config.foundryEndpoints.runtime,
         adminEndpoint: config.foundryEndpoints.admin,
         agentName,
+        runtimeTransport: (request) => factoryWorker?.transport(request) ?? Promise.resolve(undefined),
         getToken: async (scope, signal) => {
           const token = await credential.getToken(scope, { abortSignal: signal });
           if (!token) throw new Error('Foundry identity unavailable');
@@ -640,6 +644,30 @@ try {
     : null;
   const projectStore = database ? createProjectStore(database.pool, trackedRepositories) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
+  const factoryWorkerResourceId = process.env['JARVIS_FACTORY_WORKER_RESOURCE_ID'];
+  if (factoryWorkerResourceId && database && taskStore && workspaceArtifactServiceClient && credential && githubAppTokenIssuer) {
+    factoryWorker = new FactoryWorkerMailbox({
+      container: workspaceArtifactServiceClient.getContainerClient('factory-worker'), credential,
+      resourceId: factoryWorkerResourceId, enabled: process.env['JARVIS_FACTORY_WORKER_ENABLED'] === 'true',
+      tasks: taskStore, issueToken: (repository) => githubAppTokenIssuer.issue(repository),
+      ownsInvocation: async (taskId, sessionId, invocationId) => {
+        const result = await database.pool.request()
+          .input('taskId', sql.BigInt, BigInt(taskId))
+          .input('sessionId', sql.NVarChar(255), sessionId)
+          .input('invocationId', sql.NVarChar(255), invocationId)
+          .query(`SELECT TOP (1) s.id FROM dbo.sandbox_sessions s
+            JOIN dbo.sandbox_turns t ON t.sandbox_session_id = s.id
+            WHERE s.task_id = @taskId AND s.foundry_session_id = @sessionId AND t.invocation_id = @invocationId;`);
+        return result.recordset.length === 1;
+      },
+      onError: (error) => logger.warn(safeErrorFields(error), 'factory_worker.mailbox_failed'),
+    });
+  }
+
+  if (process.env['JARVIS_FACTORY_WORKER_ENABLED'] === 'true' && !factoryWorker) {
+    throw new Error('Factory worker routing is enabled without its required dependencies');
+  }
+
   const taskStatusNotificationStore = database ? createTaskStatusNotificationStore(database.pool) : undefined;
   const ownerInteractions = database && nowFeedStore
     ? createOwnerInteractionService({
@@ -1337,6 +1365,10 @@ try {
     logger,
   });
   runtime.app = app;
+  if (factoryWorker) {
+    app.addHook('onReady', async () => { factoryWorker?.start(); });
+    app.addHook('onClose', async () => { await factoryWorker?.stop(); });
+  }
   if (checksLoop || projectPolicyEvaluator) {
     app.addHook('onClose', async () => {
       await checksLoop?.stop();

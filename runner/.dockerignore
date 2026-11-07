@@ -6,3 +6,6 @@
 !tools/
 !tools/package.json
 !tools/package-lock.json
+
+!worker.py
+!worker_storage.py

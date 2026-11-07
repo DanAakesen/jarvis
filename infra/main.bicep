@@ -27,6 +27,10 @@ param foundryCopilotPolicyCompatibility string = ''
 @description('The non-secret GitHub App ID used by the backend to mint installation tokens.')
 param githubAppId string = ''
 
+@description('Separately provisioned and probed 128 GiB Factory worker. Empty retains Foundry.')
+param factoryWorkerResourceId string = ''
+param factoryWorkerEnabled bool = false
+
 @description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')
 param pcBridgeClientId string = ''
 @description('Dan’s IANA time zone used for Google Calendar day boundaries. Empty disables Google mail and calendar tools.')
@@ -939,6 +943,14 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'SQL_DATABASE'
               value: sqlDatabase.name
+            }
+            {
+              name: 'JARVIS_FACTORY_WORKER_RESOURCE_ID'
+              value: factoryWorkerResourceId
+            }
+            {
+              name: 'JARVIS_FACTORY_WORKER_ENABLED'
+              value: string(factoryWorkerEnabled)
             }
             {
               name: 'TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT'

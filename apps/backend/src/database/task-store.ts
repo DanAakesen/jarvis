@@ -1082,6 +1082,27 @@ export function createTaskStore(
             return toTaskEvent(previous, event.taskId);
           }
         }
+        // The Blob mailbox can redeliver after SQL commits but before deletion.
+        // Serialize runner event identities on the task row and return the original.
+        const runnerPayload = record(event.payload);
+        if (event.source === 'runner' && typeof runnerPayload?.['invocationId'] === 'string' &&
+            Number.isSafeInteger(runnerPayload['eventIndex']) && Number(runnerPayload['eventIndex']) >= 0) {
+          await new sql.Request(transaction).input('taskId', sql.BigInt, BigInt(event.taskId))
+            .query('SELECT id FROM dbo.tasks WITH (UPDLOCK, ROWLOCK) WHERE id = @taskId;');
+          const duplicate = await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(event.taskId))
+            .input('invocationId', sql.NVarChar(255), runnerPayload['invocationId'])
+            .input('eventIndex', sql.NVarChar(20), String(runnerPayload['eventIndex']))
+            .query<InsertedEventRow>(`SELECT TOP (1) CAST(id AS varchar(19)) AS id, type,
+              summary, payload, source, at FROM dbo.task_events
+              WHERE task_id = @taskId AND source = N'runner' AND ISJSON(payload) = 1
+                AND JSON_VALUE(payload, N'$.invocationId') = @invocationId
+                AND JSON_VALUE(payload, N'$.eventIndex') = @eventIndex;`);
+          if (duplicate.recordset[0]) {
+            await transaction.commit();
+            return toTaskEvent(duplicate.recordset[0], event.taskId);
+          }
+        }
         const publishedEvent = await insertTaskEvent(transaction, event, payload);
         await recordRunnerUsage(transaction, event, event.payload);
         const invocationId = completedRunnerInvocation(event);

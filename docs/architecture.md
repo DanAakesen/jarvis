@@ -8964,3 +8964,24 @@ The local account-bound cache stores pinned paths separately from note response
 cache invalidation. No vault schema changes or synthetic live content are added.
 JarvisScreenBackground loads EmberBackground for dark mode; all routes continue
 using the common transparent chrome and background renderer.
+## 128 GiB Factory worker
+
+A separate Standard_D2as_v5 Ubuntu VM hosts the existing runner in a pinned Docker
+image with a 128 GiB Standard SSD data disk. There is no inbound application or
+SSH access. A private Azure Blob container transports commands, status and events
+using managed identities. Foundry continues to serve existing sessions and Codex
+research/login tools; only new Factory tasks switch when the worker is enabled.
+
+The backend validates each token request against the active SQL task/session and
+each event against its recorded invocation. GitHub tokens remain repository scoped
+and short lived. SQL deduplicates runner invocation/event-index pairs before any
+state transitions. Commands acquire durable claims before execution; restart or
+uncertain acknowledgement produces an interrupted/recoverable task, never replay.
+
+The worker has ACR pull, mailbox data access and access only to the Copilot/Codex
+secrets it needs. Backend wake and worker deallocation permissions use the built-in
+VM Contributor role scoped to this single VM (custom role definitions require
+bootstrap privileges). Data disk access is not included. After 120 idle seconds it
+requests ARM deallocation. Deployment verifies the actual deallocated state before
+activation. Disk, OS disk and outbound IP costs remain while compute is deallocated.
+This provisions one worker; automatic expansion into a fleet is not implemented.

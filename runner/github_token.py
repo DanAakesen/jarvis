@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import os
 import time
 from urllib.parse import urlsplit
 
@@ -31,6 +32,10 @@ def get_installation_token(
             or not TASK_ID_PATTERN.fullmatch(task_id) or int(task_id) > MAX_SQL_BIGINT
             or not SESSION_ID_PATTERN.fullmatch(foundry_session_id)):
         raise RuntimeError("Invalid backend token configuration")
+
+    if os.environ.get("JARVIS_FACTORY_WORKER_BLOB_URL"):
+        from worker_storage import installation_token
+        return installation_token(task_id, foundry_session_id)
 
     credential = DefaultAzureCredential(
         exclude_interactive_browser_credential=True,
