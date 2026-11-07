@@ -11627,3 +11627,15 @@ The script omitted the underlying Azure error identities; add bounded code-only
 diagnostics and read-only failed-deployment inspection. Reuse the already-built
 image only with source qualification and unchanged build-context checks. The 128
 GiB workspace is not yet confirmed provisioned, and task 23 has not been recovered.
+
+
+### 7 November 2026 — Preserve Azure CLI inner error identities
+
+Read-only inspection 42425496166 confirms no Factory VM exists. Reusing the qualified
+image in 42425613824 again failed validation before activation. Azure CLI can emit
+its general InvalidTemplateDeployment error separately from the detailed inner
+errors; diagnostics now collect every bounded code-only JSON segment and embedded
+Code field. The workspace remains unprovisioned until live capacity and idle checks
+pass. Owner Copilot comparison instructions now include changing a conversational
+format rule while retaining note/task context; this supplements the passed live
+application-policy canary without claiming they are the same test.

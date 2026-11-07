@@ -14,7 +14,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23; stopped with disk_low | Diagnose session storage, recover existing task, finish validation and obtain delivery PR |
-| 128 GiB worker workspace | Merged as a59ed107; CI 42421336106 and backend deployment 42422162191 passed; Azure worker provisioning 42422208795 failed before activation | Expose Azure failure codes, complete provisioning, then verify capacity, real task execution and idle deallocation |
+| 128 GiB worker workspace | Merged as a59ed107; CI 42421336106 and backend deployment 42422162191 passed; Azure worker provisioning 42422208795 failed before activation | Retry with complete inner-error diagnostics: 42425613824 returned InvalidTemplateDeployment; inspection confirms no worker exists. Then verify capacity, real task execution and idle deallocation |
 | Copilot harness | #1639 deployed; refreshed definition and live two-turn canary passed in 42418951594; enabled | Owner multi-turn/tool comparison; Current remains the default |
 | Current vs Copilot comparison | Ready to start; live compatibility passed | Follow docs/runtime-comparison-owner-test.md in fresh matched conversations |
 | Notes redesign | #1638 merged as a55e7350; CI 42418217434 and final native 42417916004 passed; captures inspected | Build 82 uploaded in 42419435807; owner editing/navigation acceptance pending |
@@ -38,9 +38,9 @@ dependence on cleanup. Foundry documents up to 20 GiB per session at 1 vCPU or
 larger; the current deployment does not expose a disk-size setting. Evaluate
 separate build workers with configurable managed disks and queue-based scaling;
 The owner has now authorized 128 GiB workspaces at the discussed indicative
-pricing. This is not yet a provisioned or qualified configuration. Automatic
+pricing. The implementation is qualified and merged, but the worker is not yet provisioned. Automatic
 compute shutdown after work, while retaining the disk, is part of the requirement.
-No infrastructure change or task recovery has been performed. The current Factory
+The backend integration is deployed; worker provisioning failed before activation and task recovery has not been performed. The current Factory
 workers are Foundry hosted sessions with a 120-second idle timeout; the separate
 backend Container App has minReplicas=1. Do not describe the backend as automatically
 paused when a Factory task ends. A new VM-based worker must explicitly deallocate;

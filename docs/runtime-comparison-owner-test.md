@@ -1,6 +1,7 @@
 # Compare Current and Copilot
 
-Run this after live Copilot compatibility passes. This compares the text runtime
+Live Copilot compatibility passed in run 42418951594 on 7 November 2026;
+the test runtime is enabled. Current remains the default. This compares the text runtime
 in the Plus → Test agent runtime flow; it does not switch the main conversation
 or test Voice. Both test conversations still use the real backend and can create
 real notes/tasks, so use the test labels below and clean up only those items.
@@ -37,6 +38,26 @@ Use a fresh suffix for later rounds so existing items cannot confuse the compari
 
 A wrong write, duplicate task, invented success or unauthorized coding action is a
 failure even if the response sounds good. Stop that case and keep the transcript.
+
+## Changing instructions without losing history
+
+In the same test conversation after the note/task cases, send these separately:
+
+1. “For this comparison, end your replies with the word MAPLE. Tell me the title
+   of the Personal note we created.”
+2. “Replace the MAPLE ending rule with RIVER from now on. What time is the reminder
+   we just moved? Do not change the reminder.”
+3. “What are the current contents of that Personal note?”
+
+Verify the reply ending changes to RIVER, the reminder remains at 19:00 in the
+same local date/time zone, and the note content survives. This tests visible
+multi-turn instruction changes and context; the automated production canary
+separately verifies the actual application-policy refresh.
+
+For the current scaffold, use this read-only prompt in either runtime:
+“Check the current status of Factory task 23. Tell me what has actually completed
+and what is blocked. Do not start, recover, or create anything.” Do not repeat
+Prepare while the existing task is awaiting storage recovery.
 
 ## Deeper comparison
 
