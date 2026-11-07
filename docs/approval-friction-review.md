@@ -28,6 +28,8 @@ Clear polite requests are instructions; plan-first, changed target/scope, quoted
 instructions, negation and uncertainty are not. The existing bounded interpreter
 fails closed; an unavailable decision leaves a reviewable proposal.
 
+Shared instructions distinguish issue creation from verified running work and require fresh work status before progress or completion claims.
+
 Both paths reuse the existing permission checks, fresh active project/repository
 validation, single consumption and issue execution. No merge/deploy capability,
 role grant, public file publication or new tool argument is added. Repeated direct
@@ -50,3 +52,5 @@ Live follow-up: Factory posted `Needs attention: disk_low` on issue #1634 at
 headroom. Do not report it as running or complete. The recorded task reason does
 not identify current free bytes or whether the stop occurred before checkout or
 while building; investigate separately from approval policy.
+
+Read-only branch verification found `jarvis/task-23` at `3ace0ad86092026e99a52f5f791c9fdb376afcc1`, with the Electron/React scaffold committed at 17:30:31 UTC before the disk stop. This proves coding began and work was retained. No delivery PR or completed validation is confirmed.
