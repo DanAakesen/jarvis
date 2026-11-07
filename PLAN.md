@@ -1,3 +1,14 @@
+## Active — scaffold approval recovery (7 November 2026)
+
+The owner still cannot prepare/approve the Jarvis widget scaffold. A backend-only
+candidate now recovers real pending proposals and safely stages an explicitly new
+own-code replacement when state is missing. Its three backend files exactly match
+independently reviewed candidate 91c23fc8: 89 focused tests, 7,397 full backend tests
+(one skipped), lint/build and CodeQL passed there. This separate branch requires
+fresh CI/CodeQL and normal live deployment acceptance before asking the owner to
+retry. iOS build 79 feedback and Notes design exploration remain separate active
+work. See [the recovery record](docs/scaffold-approval-recovery.md).
+
 ## Current release — Settings, Chat and scaffold follow-up, build 79
 
 Build **79 uploaded successfully at 14:18:29 UTC / 15:18:29 Copenhagen on 7 November 2026** in unchanged
