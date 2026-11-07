@@ -93,11 +93,17 @@ class Worker:
         if claimed is not None:
             # Another process may still be executing. Do not race it or replay it.
             health = await self.io("get", "health.json")
-            if (claimed.get("instance") == self.instance_id or
-                    (health and health.get("instance") == claimed.get("instance") and
-                     time.time() - health.get("at", 0) < 180)):
+            if claimed.get("instance") == self.instance_id:
+                # This loop is sequential. An earlier attempt failed while publishing
+                # its acknowledgement; reconcile known state, never execute again.
+                if invocation in runner.tasks:
+                    await self.snapshot(invocation)
+                    self.pending_responses[key] = {"status": "accepted"}
+                    return
+            elif (health and health.get("instance") == claimed.get("instance") and
+                  time.time() - health.get("at", 0) < 180):
                 return
-            if time.time() - claimed.get("at", time.time()) < 180:
+            if claimed.get("instance") != self.instance_id and time.time() - claimed.get("at", time.time()) < 180:
                 return
             old = await self.io("get", f"invocations/{invocation}.json")
             if old and old.get("status") not in TERMINAL:

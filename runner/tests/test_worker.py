@@ -134,3 +134,12 @@ def test_probe_rejects_small_disk(monkeypatch):
 def test_rejects_commands_outside_factory_contract(value):
     with pytest.raises(ValueError):
         validate_command(value)
+
+
+def test_owned_claim_without_result_is_interrupted_not_replayed():
+    mailbox = Mailbox()
+    item = command()
+    mailbox.data['claims/1.json'] = {'instance': 'same-process', 'at': time.time()}
+    mailbox.data[f"invocations/{item['invocationId']}.json"] = {'status': 'queued'}
+    asyncio.run(Worker(mailbox, instance_id='same-process').process('commands/1.json', item))
+    assert mailbox.data[f"invocations/{item['invocationId']}.json"]['status'] == 'interrupted'
