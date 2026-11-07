@@ -123,6 +123,10 @@ asyncio.run(main())
         time.sleep(20)
     if not evidence.get('idleDeallocationVerified'):
         raise RuntimeError('Worker did not deallocate after idle')
+    # Once traffic may reach this worker, a later deployment error must never
+    # deallocate a newly accepted user task. Idle deallocation is already proven.
+    evidence['safeToDeallocateOnFailure'] = False
+    args.state.write_text(json.dumps(evidence))
     # Main Bicep preserves these reviewed settings on all later deployments.
     az(args.subscription, 'containerapp', 'update', '--resource-group', resource_group,
        '--name', outputs['backendAppName']['value'], '--set-env-vars',
