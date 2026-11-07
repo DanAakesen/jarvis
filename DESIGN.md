@@ -5,6 +5,14 @@ messages. Neither failure proves the phone is offline. Ask the user to check the
 conversation before sending again because server work may have been accepted.
 No additional dialog or approval step is introduced.
 
+## Factory approval friction (7 November 2026)
+
+A direct coding instruction should produce an acknowledgment and visible work
+progress rather than another approval question. Show a proposal when Dan asks to
+review a plan or when the intended scope is unclear. Reuse the existing proposal
+and activity surfaces; no new confirmation dialog or forced wording. Distinguish
+task creation/queueing from observed runner execution and completed delivery.
+
 ## Approved runtime test entry (#1350; 29 October 2026)
 
 On iOS, Test agent runtime follows Voice language in the shared Home/Chat Plus

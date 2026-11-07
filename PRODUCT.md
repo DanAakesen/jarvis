@@ -6,6 +6,16 @@ must not be reported as phone connectivity loss. Reconnect only to the accepted
 turn identity and never automatically resubmit the original message. Distinguish
 request timeout from an interrupted connection and retain conversation context.
 
+## Direct instructions for Factory work (7 November 2026)
+
+A clear owner request to build, fix, scaffold, prepare or start own-repository
+coding work should proceed without requiring a second yes. The server verifies
+that the actual owner instruction authorizes the repository and proposed scope.
+Requests to discuss or review a plan first remain proposals. Existing active tasks
+are reused without another approval. A bare yes can approve an actual earlier
+proposal but cannot invent scope after state is lost. This supersedes the earlier
+blanket later-reply requirement for own-code requests, not other action families.
+
 ## Recoverable own-code proposals (7 November 2026)
 
 Jarvis can recover the original staged issue proposal in the current conversation

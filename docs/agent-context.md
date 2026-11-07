@@ -1,3 +1,14 @@
+## Current qualification checkpoint (7 November 2026)
+
+Approval #1636 merged at 93a0f629 after CI 42397991835 / CodeQL; Deploy 42398836350
+is pending. Native 42396567474 passed the two URLSession cases and Home handoff;
+Chat failed a multi-query empty-editor observation despite retained empty values
+and captures. Run 42398644148 qualifies the single-query Chat assertion without
+changing the deadline or production composer. Retain passed cases only with
+source/call-site identity; inspect actual summary counts, not intermediate step
+conclusions. Widget task 23 saved scaffold 3ace0ad8 before disk_low; no completed
+validation or delivery PR is confirmed. Do not repeat the create request.
+
 ## 7 November 2026 — Home send reports offline after thinking
 
 Owner reported that sending the widget prepare request from Home showed thinking,
@@ -29,6 +40,17 @@ Apple documentation actually read: URLSession.AsyncBytes and
 URLRequest.timeoutInterval (developer.apple.com documentation JSON). The latter
 defines timeout as inactivity and recommends cancellation for long operations;
 this keeps the existing explicit cancellation and bounded recovery.
+
+## Direct Factory instruction qualification (7 November 2026)
+
+Scope and limits: `approval-friction-review.md`. Run backend tests for
+approval-interpreter, pending-action, factory/tools, capability-instructions and
+Google natural-approval, then lint/typecheck and exact-head CI. Existing natural
+approval and provenance checks remain required. Current-message Factory mode is
+server-selected and separate from later approval; do not expose it as a tool flag.
+Issue #1634 / task 23 was created after the owner's yes; that comment only proves
+handoff. Do not replay the owner's scaffold request or claim live direct-request
+acceptance from synthetic interpreter fixtures. PR #1635 owns iOS stream recovery.
 
 ## Notes and Home widgets (P15-89 / #1593; 5 November 2026)
 

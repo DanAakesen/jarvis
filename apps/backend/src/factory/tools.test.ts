@@ -13,6 +13,7 @@ import type { TokenVerifier } from '../auth/verify.js';
 import type { GitHubIssueClient } from '../github/issues.js';
 import sharp from 'sharp';
 import type { ConversationAttachmentStore } from '../database/conversation-attachment-store.js';
+import type { ApprovalInterpreter } from '../core/approval-interpreter.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -71,7 +72,7 @@ const detail: TaskDetail = {
   usage: [],
 };
 
-function fixture(registeredProjects: readonly Project[] = [project]) {
+function fixture(registeredProjects: readonly Project[] = [project], approvalInterpreter?: ApprovalInterpreter) {
   const attachment = {
     id: '7b96c6a9-9f80-4a8b-8a73-51517fe37512', name: 'broken.png',
     contentType: 'image/png', size: 100, status: 'ready' as const,
@@ -139,6 +140,7 @@ function fixture(registeredProjects: readonly Project[] = [project]) {
     readInstallationPermissions: vi.fn(async () => ({ issues: 'write' as const, contents: 'write' as const })),
   };
   const app = buildApp(config, undefined, {
+    ...(approvalInterpreter ? { approvalInterpreter } : {}),
     modules: [coreModule, factoryModule],
     auth: (async () => ({
       kind: 'jarvis-agent',
@@ -1226,7 +1228,7 @@ describe('Software Factory Jarvis tools', () => {
     const test = fixture();
     const response = await test.app.inject({ method: 'POST', url: '/tools/create_task', headers,
       payload: { projectId: '7', prompt: 'Add a new feature', agent: 'codex' } });
-    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('requires a reviewed proposal') } });
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Use create_issue for my own Factory work') } });
     expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
     expect(test.taskStore.create).not.toHaveBeenCalled();
   });
@@ -1365,4 +1367,76 @@ it('does not use bare approval to select or write an external repository when no
   expect(result.json().outcome).toBe('refused');
   expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
   expect(test.githubIssueClient.addLabels).not.toHaveBeenCalled();
+});
+
+it('executes one verified direct scaffold instruction without a second yes, including concurrent tool repeats', async () => {
+  const interpret = vi.fn<ApprovalInterpreter>(async () => ({ verdict: 'approve', path: 'model' }));
+  const test = fixture([project], interpret);
+  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', model: null,
+    text: 'Prepare the widget in Jarvis now', at: new Date() });
+  const payload = { title: 'Scaffold the widget', body: 'Create the requested desktop scaffold.', executor: 'jarvis' };
+  const send = () => test.app.inject({ method: 'POST', url: '/tools/create_issue', headers, payload });
+  const responses = await Promise.all([send(), send()]);
+  expect(responses.map((response) => response.json().outcome)).toEqual(['ok', 'ok']);
+  expect(responses[0]!.json().result).toEqual(responses[1]!.json().result);
+  expect(responses[0]!.json().result.confirmationCode).toBeUndefined();
+  expect(test.githubIssueClient.createIssue).toHaveBeenCalledTimes(1);
+  expect(interpret).toHaveBeenCalledTimes(1);
+  expect(interpret.mock.calls[0]?.[0]).toMatchObject({ family: 'factory', intent: 'factory_request',
+    reply: 'Prepare the widget in Jarvis now', messageId: '42', sessionId: 'session' });
+  expect(interpret.mock.calls[0]?.[0].summary).toContain(payload.body);
+  expect(interpret.mock.calls[0]?.[0].summary).toContain(project.repo);
+  const changed = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
+    payload: { ...payload, body: 'A different scope' } });
+  expect(changed.json().outcome).toBe('refused');
+  expect(test.githubIssueClient.createIssue).toHaveBeenCalledTimes(1);
+});
+
+it('keeps a plan-only request staged and accepts a later yes against that same scope', async () => {
+  const interpret: ApprovalInterpreter = async (question) => ({
+    verdict: question.intent === 'factory_request' ? 'neither' : 'approve', path: 'model',
+  });
+  const test = fixture([project], interpret);
+  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', model: null,
+    text: 'Show me your plan for the widget first; do not start.', at: new Date() });
+  const staged = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
+    payload: { title: 'Scaffold the widget', body: 'Create the requested desktop scaffold.' } });
+  expect(staged.json().result.status).toBe('awaiting_confirmation');
+  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+  test.setLatestMessage({ id: '43', sessionId: 'session', role: 'dan', model: null,
+    text: 'Yes', at: new Date(Date.now() + 2_000) });
+  const confirmed = await test.app.inject({ method: 'POST', url: '/tools/confirm_create_issue',
+    headers: { ...headers, 'x-jarvis-message-id': '43' },
+    payload: { confirmationCode: staged.json().result.confirmationCode } });
+  expect(confirmed.json().outcome).toBe('ok');
+  expect(test.githubIssueClient.createIssue).toHaveBeenCalledTimes(1);
+});
+
+it('does not retry a direct issue write with an uncertain result', async () => {
+  const test = fixture([project], async () => ({ verdict: 'approve', path: 'model' }));
+  test.githubIssueClient.createIssue.mockRejectedValue(new Error('Synthetic transport failure'));
+  const send = () => test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
+    payload: { title: 'Fix the widget', body: 'Repair the requested widget.' } });
+  expect((await send()).json().outcome).toBe('error');
+  expect((await send()).json().outcome).toBe('error');
+  expect(test.githubIssueClient.createIssue).toHaveBeenCalledTimes(1);
+});
+
+it('still checks write permission for a verified direct coding request', async () => {
+  const test = fixture([project], async () => ({ verdict: 'approve', path: 'model' }));
+  test.githubAppTokenIssuer.readInstallationPermissions.mockResolvedValue({ issues: 'read', contents: 'write' } as never);
+  const response = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
+    payload: { title: 'Fix the widget', body: 'Repair the requested widget.' } });
+  expect(response.json().outcome).toBe('refused');
+  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+});
+
+it('reuses an already active own-repository issue without another approval', async () => {
+  const interpret = vi.fn<ApprovalInterpreter>(async () => ({ verdict: 'neither', path: 'model' }));
+  const test = fixture([project], interpret);
+  vi.mocked(test.taskStore.findActiveByIssue!).mockResolvedValue(task);
+  const response = await test.app.inject({ method: 'POST', url: '/tools/start_issue', headers, payload: { issue: 8 } });
+  expect(response.json()).toMatchObject({ outcome: 'ok', result: { task: { id: '42' } } });
+  expect(test.taskStore.create).not.toHaveBeenCalled();
+  expect(interpret).not.toHaveBeenCalled();
 });

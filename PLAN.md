@@ -1,12 +1,19 @@
-## Active: Home stream failure and approval friction (7 November 2026)
+## Active: Home stream recovery and direct Factory instructions (7 November 2026)
 
-- Home prepare reported offline after thinking. Shared SSE buffering/idle-budget
-  correction implemented; native URLSession regression and CI qualification pending.
-  See `docs/ios/design/p15-home-stream-recovery.md`.
-- Direct Chat later created issue #1634 and Factory task 23. The created-event
-  comment proves handoff, not current worker execution or completion.
-- Owner requests fewer repeated approvals. Review direct Factory instructions
-  separately; do not lose the active iOS transport correction or Notes design target.
+- Approval correction #1636 merged as 93a0f629 after CI 42397991835 and CodeQL.
+  Production Deploy 42398836350 is pending. Explicit own-code requests can proceed
+  without a second yes; plan-first proposals and permission checks remain.
+- Home/Chat transport fix #1635 flushes small SSE events and gives streams their
+  own idle budget. Native 42396567474 passed both transport cases and Home handoff.
+  Its Chat observation failed; retained values/captures show an empty editor.
+  Requalification 42398644148 covers the improved single-query assertion with
+  the same deadline and unchanged production composer. CI/release remain pending.
+- Widget issue #1634 / task 23 committed scaffold 3ace0ad8 to jarvis/task-23 at
+  17:30:31 UTC, then reported disk_low at 17:32:28. Work began and is retained;
+  completed validation and a delivery PR are not confirmed. Do not create a duplicate.
+
+See `docs/approval-friction-review.md` and
+`docs/ios/design/p15-home-stream-recovery.md` for evidence and limitations.
 
 ## Current release — build 80 (7 November 2026)
 
