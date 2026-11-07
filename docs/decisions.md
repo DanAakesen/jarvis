@@ -11596,3 +11596,12 @@ This supersedes the earlier next-build hold. Notes and Ember implementation is o
 the delivery branch; native qualification and release remain to be established.
 Local account-bound pins avoid modifying vault metadata. A lossless Markdown
 projection keeps Raw as an exact escape hatch and preserves existing conflicts.
+## 2026-11-07 — Provision a persistent 128 GiB Factory worker
+
+The owner explicitly authorized this migration and asked for working end-to-end
+delivery now. Foundry sessions expose no supported 128 GiB storage setting, so
+Factory coding uses a separate disk-backed worker. The backend remains available;
+worker compute deallocates when idle and its disk remains. A private identity-based
+mailbox avoids public ingress and additional API application-role bootstrapping.
+Qualification must prove capacity, provider access, idle deallocation and the
+existing task-23 recovery path. Source implementation is not live acceptance.

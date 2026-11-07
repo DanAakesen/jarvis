@@ -23,7 +23,14 @@ export class FoundryClientError extends Error {
   }
 }
 
+export type RunnerTransport = (request: {
+  operation: string; path: string; method: string; body: JsonObject | undefined;
+  sessionId: string | undefined; options: RequestOptions;
+}) => Promise<unknown | undefined>;
+
 export interface FoundryClientOptions {
+  /** Optional private worker transport. Undefined delegates legacy sessions to Foundry. */
+  runtimeTransport?: RunnerTransport;
   runtimeEndpoint: string;
   adminEndpoint: string;
   agentName: string;
@@ -254,6 +261,7 @@ export class FoundryClient {
   private readonly fetch: typeof globalThis.fetch;
   private readonly timeoutMs: number;
   private readonly maxBytes: number;
+  private readonly runtimeTransport: RunnerTransport | undefined;
 
   constructor(options: FoundryClientOptions) {
     this.runtime = endpoint(options.runtimeEndpoint, ".cognitiveservices.azure.com", "runtimeEndpoint");
@@ -267,6 +275,7 @@ export class FoundryClient {
     this.agentName = identifier(options.agentName, "agentName");
     this.apiVersion = identifier(options.apiVersion ?? "v1", "apiVersion");
     this.getToken = options.getToken;
+    this.runtimeTransport = options.runtimeTransport;
     this.fetch = options.fetch ?? globalThis.fetch;
     this.timeoutMs = positiveInteger(options.requestTimeoutMs ?? 30_000, "requestTimeoutMs", 120_000);
     this.maxBytes = positiveInteger(options.maxResponseBytes ?? 1_048_576, "maxResponseBytes", 16_777_216);
@@ -424,7 +433,11 @@ export class FoundryClient {
     return url.href;
   }
 
-  private runtimeRequest(operation: string, path: string, method: string, body: JsonObject | undefined, sessionId: string | undefined, options: RequestOptions, ignoreBody = false): Promise<unknown> {
+  private async runtimeRequest(operation: string, path: string, method: string, body: JsonObject | undefined, sessionId: string | undefined, options: RequestOptions, ignoreBody = false): Promise<unknown> {
+    if (this.runtimeTransport) {
+      const result = await this.runtimeTransport({ operation, path, method, body, sessionId, options });
+      if (result !== undefined) return result;
+    }
     return this.request(operation, this.url(`${this.runtime}/agents/${encodeURIComponent(this.agentName)}/endpoint`, path, sessionId), method, body, options, ignoreBody);
   }
 

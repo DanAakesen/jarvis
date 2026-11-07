@@ -1283,8 +1283,25 @@ describe('dispatcher SQL coordination', () => {
     expect(delivered[1]?.payload).toEqual({ from: state, to: 'NeedsAttention', reason: 'session_question' });
     expect((await taskStore.get(task.id, 10, 0))?.state).toBe('NeedsAttention');
     await taskStore.recordEvent(question);
-    expect(delivered.map(({ type }) => type)).toEqual(['session_question', 'state_changed', 'session_question']);
+    expect(delivered.map(({ type }) => type)).toEqual(['session_question', 'state_changed']);
     unsubscribe();
+  });
+
+  it('deduplicates concurrent delivery of a worker event identity', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const store = createTaskStore(pool, events);
+    const task = await createTask(events, 'Worker redelivery');
+    const event = {taskId: task.id, type: 'progress', source: 'runner' as const,
+      summary: 'Working', payload: {invocationId: 'vm128-worker-turn', eventIndex: 3}};
+    const published: TaskEventMessage[] = [];
+    const unsubscribe = events.subscribe((value) => published.push(value));
+    try {
+      const results = await Promise.all([store.recordEvent(event), store.recordEvent(event)]);
+      expect(results[0]?.id).toBe(results[1]?.id);
+      expect(published).toHaveLength(1);
+      const next = await store.recordEvent({...event, payload: {...event.payload, eventIndex: 4}});
+      expect(next.id).not.toBe(results[0]?.id);
+    } finally { unsubscribe(); }
   });
 
   it('does not restart or change a cancelled task on a late runner question', async () => {

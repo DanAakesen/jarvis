@@ -2114,7 +2114,11 @@ async def _run_task(
             api_scope = os.environ.get("JARVIS_API_SCOPE")
             if not backend_url or not api_scope:
                 raise RuntimeError("Runner event delivery is not configured")
-            state.event_publisher = RunnerEventPublisher(backend_url, api_scope)
+            if os.environ.get("JARVIS_FACTORY_WORKER_BLOB_URL"):
+                from worker_storage import WorkerEventPublisher
+                state.event_publisher = WorkerEventPublisher(state.session_id)
+            else:
+                state.event_publisher = RunnerEventPublisher(backend_url, api_scope)
         if emit_steer_after:
             state.event("steer_after", stopped_invocation=stopped_invocation)
         state.event("started", agent=state.agent)

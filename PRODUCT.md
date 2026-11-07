@@ -2600,3 +2600,9 @@ Formatted editing supports headings, paragraphs and checklists; Raw exposes the
 complete original Markdown including frontmatter. Saving retains optimistic SHA
 conflict checks and must never silently overwrite another edit. Done saves changed
 content before returning to the library. Dark pages share the approved Ember background.
+## Disk-backed Factory workspace
+
+Coding tasks use a persistent 128 GiB workspace after provisioning qualification.
+The backend remains available while the separate worker deallocates after 120
+seconds with no queued or active work. New tasks wake it automatically. Recovery
+retains the existing task and branch; uncertain actions must never replay.
