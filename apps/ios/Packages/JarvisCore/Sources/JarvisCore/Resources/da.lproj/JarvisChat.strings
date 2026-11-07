@@ -92,7 +92,8 @@
 "chat.activity.errNotOwner" = "Denne konto har ikke adgang til Jarvis.";
 "chat.activity.errRateLimited" = "Jarvis har travlt. Prøv igen senere.";
 "chat.activity.errUnavailable" = "Jarvis er ikke tilgængelig. Prøv igen.";
-"chat.activity.errOffline" = "Du er offline. Tjek din forbindelse.";
+"chat.activity.errOffline" = "Forbindelsen til Jarvis blev afbrudt. Tjek samtalen, før du sender igen.";
+"chat.activity.errTimedOut" = "Anmodningen fik ikke svar i tide. Tjek samtalen, før du sender igen.";
 "chat.activity.errGeneric" = "Jarvis kunne ikke gennemføre anmodningen.";
 "chat.activity.errInvalidUpload" = "Denne vedhæftning understøttes ikke på grund af type eller størrelse.";
 "chat.activity.errTooMany" = "Du kan vedhæfte op til fem filer.";

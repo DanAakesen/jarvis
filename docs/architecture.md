@@ -1697,6 +1697,14 @@ owner-session HTTP request retains its existing bounded transport timeout.
 
 ### iOS chat streaming (P15-04)
 
+The native URLSession adapter flushes CR/LF-delimited bytes before EOF while
+retaining a 16 KB cap for unbroken data. Streaming requests use a 240-second idle
+budget; ordinary authenticated requests retain their configured timeout (30 seconds
+by default). This exposes accepted IDs to existing GET-only reconnection before a
+transport interruption; no new endpoint, automatic POST replay or backend work
+cancellation is introduced. Native adapter qualification is pending in the Home
+stream recovery record.
+
 `JarvisCore` parses server-sent events incrementally from bytes and keeps the
 stream transport replaceable; its default adapter preserves existing HTTP
 transport fakes. The chat client calls the web application's conversation

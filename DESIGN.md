@@ -1,3 +1,10 @@
+## Chat connection failure copy (7 November 2026)
+
+Use the existing error surface for distinct timeout and interrupted-connection
+messages. Neither failure proves the phone is offline. Ask the user to check the
+conversation before sending again because server work may have been accepted.
+No additional dialog or approval step is introduced.
+
 ## Factory approval friction (7 November 2026)
 
 A direct coding instruction should produce an acknowledgment and visible work

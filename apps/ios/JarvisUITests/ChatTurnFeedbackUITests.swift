@@ -16,7 +16,7 @@ final class ChatTurnFeedbackUITests: XCTestCase {
         let status = app.descendants(matching: .any)["chat.turn.status"]
         XCTAssertTrue(status.waitForExistence(timeout: 5))
         XCTAssertTrue(status.isHittable)
-        assertEmpty(input)
+        assertEmpty(app)
         XCTAssertTrue(app.keyboards.firstMatch.exists, "Sending keeps the editor focused for a follow-up")
         assertSingleProgress(app)
         XCTAssertFalse(app.textViews["chat.reply.streaming"].exists)
@@ -38,7 +38,7 @@ final class ChatTurnFeedbackUITests: XCTestCase {
         XCTAssertTrue(question.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(question.count, 1)
         XCTAssertLessThan(question.firstMatch.frame.width, 120, "Short bubbles should fit their text")
-        assertEmpty(input)
+        assertEmpty(app)
         attach(app, "chat-keyboard-send-empty-editor-single-follow-up")
         XCTAssertTrue(app.keyboards.firstMatch.exists, "Sending keeps the editor focused for a follow-up")
         assertSingleProgress(app)
@@ -62,21 +62,22 @@ final class ChatTurnFeedbackUITests: XCTestCase {
         attach(app, "chat-single-follow-up-compact-bubble-final-tools-and-next-draft")
     }
 
-    private func assertEmpty(_ input: XCUIElement) {
-        // UIKit may expose an empty UITextView value as nil. Resolve a visible
-        // native editor on each poll so a missing accessibility snapshot cannot pass.
-        let empty = NSPredicate { _, _ in
-            guard input.exists, input.isHittable else { return false }
-            guard let value = input.value else { return true }
-            guard let text = value as? String else { return false }
-            return text.isEmpty || text == "Ask Jarvis"
-        }
-        let result = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: empty, object: input)], timeout: 3)
+    private func assertEmpty(_ app: XCUIApplication) {
+        // Match the native editor and its value in one accessibility query. Three
+        // remote reads per predicate poll can exhaust the 3s deadline on the hosted
+        // Simulator even when the editor is already empty. Missing views cannot match.
+        let emptyInput = app.textViews.matching(NSPredicate(
+            format: "identifier == %@ AND (value == nil OR value == '' OR value == %@)",
+            "chat.input", "Ask Jarvis"
+        )).firstMatch
+        XCTAssertTrue(emptyInput.waitForExistence(timeout: 3),
+                      "The native composer must be empty after submission")
+        XCTAssertTrue(emptyInput.isHittable, "The empty native composer must remain visible")
+        let input = app.textViews["chat.input"]
         let evidence = XCTAttachment(string: "exists=\(input.exists); hittable=\(input.isHittable); value=\(String(describing: input.value))")
         evidence.name = "native-composer-empty-state"
         evidence.lifetime = .keepAlways
         add(evidence)
-        XCTAssertEqual(result, .completed, "The visible native composer must be empty after submission")
     }
 
     private func assertSingleProgress(_ app: XCUIApplication) {

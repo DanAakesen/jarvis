@@ -876,7 +876,8 @@ final class JarvisChatModel: ObservableObject {
             case .notOwner: chatCopy(.errNotOwner)
             case .rateLimited: chatCopy(.errRateLimited)
             case .serviceUnavailable: chatCopy(.errUnavailable)
-            case .networkFailure, .timedOut: chatCopy(.errOffline)
+            case .networkFailure: chatCopy(.errOffline)
+            case .timedOut: chatCopy(.errTimedOut)
             default: chatCopy(.errGeneric)
             }
         } else if let error = error as? JarvisChatClientError {

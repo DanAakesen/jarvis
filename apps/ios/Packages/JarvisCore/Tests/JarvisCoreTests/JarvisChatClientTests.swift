@@ -216,6 +216,20 @@ final class JarvisChatClientTests: XCTestCase {
         XCTAssertEqual(sleeps, [.seconds(2)])
     }
 
+    func testChatStreamBudgetDoesNotExtendOrdinaryHistoryRequests() async throws {
+        let transport = FakeChatTransport([
+            .stream(streamResponse(events: "")),
+            .response(jsonResponse(status: 200, body: ["messages": [], "nextCursor": NSNull()])),
+        ])
+        let chat = makeChatClient(transport: transport)
+        let stream = try await chat.sendTurn(sessionId: "12", text: "Prepare the widget")
+        _ = try? await collect(stream)
+        _ = try await chat.history()
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.timeout), [.seconds(240), .seconds(30)])
+        XCTAssertEqual(requests.map(\.method), [.post, .get])
+    }
+
     func testRejectsInvalidTurnInputWithoutSending() async throws {
         let transport = FakeChatTransport([])
         let chat = makeChatClient(transport: transport)

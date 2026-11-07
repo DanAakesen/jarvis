@@ -1,3 +1,11 @@
+## Direct Home send recovery (7 November 2026)
+
+Home and Chat share streaming acceptance and recovery. Small accepted/progress
+events must arrive while the response remains open; a quiet reasoning interval
+must not be reported as phone connectivity loss. Reconnect only to the accepted
+turn identity and never automatically resubmit the original message. Distinguish
+request timeout from an interrupted connection and retain conversation context.
+
 ## Direct instructions for Factory work (7 November 2026)
 
 A clear owner request to build, fix, scaffold, prepare or start own-repository

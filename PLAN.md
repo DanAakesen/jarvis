@@ -1,13 +1,19 @@
-## Active: direct Factory instructions (7 November 2026)
+## Active: Home stream recovery and direct Factory instructions (7 November 2026)
 
-The owner requested fewer approvals after a direct scaffold command still asked
-for yes. Candidate server verification permits explicit own-code requests without
-that second message, reuses active tasks, and retains plan-first proposals and
-operation-specific permission checks. See `docs/approval-friction-review.md`.
-Targeted checks, CI and deployment are being completed; no new live widget write
-is authorized by this verification work. Existing issue #1634 / task 23 confirms
-the previous later-yes handoff, not runner execution or a finished scaffold.
-The separate Home/iOS stream correction remains active in PR #1635.
+- Approval correction #1636 merged as 93a0f629 after CI 42397991835 and CodeQL.
+  Production Deploy 42398836350 is pending. Explicit own-code requests can proceed
+  without a second yes; plan-first proposals and permission checks remain.
+- Home/Chat transport fix #1635 flushes small SSE events and gives streams their
+  own idle budget. Native 42396567474 passed both transport cases and Home handoff.
+  Its Chat observation failed; retained values/captures show an empty editor.
+  Requalification 42398644148 covers the improved single-query assertion with
+  the same deadline and unchanged production composer. CI/release remain pending.
+- Widget issue #1634 / task 23 committed scaffold 3ace0ad8 to jarvis/task-23 at
+  17:30:31 UTC, then reported disk_low at 17:32:28. Work began and is retained;
+  completed validation and a delivery PR are not confirmed. Do not create a duplicate.
+
+See `docs/approval-friction-review.md` and
+`docs/ios/design/p15-home-stream-recovery.md` for evidence and limitations.
 
 ## Current release — build 80 (7 November 2026)
 

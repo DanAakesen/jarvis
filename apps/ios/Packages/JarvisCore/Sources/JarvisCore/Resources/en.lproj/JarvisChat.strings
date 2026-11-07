@@ -92,7 +92,8 @@
 "chat.activity.errNotOwner" = "This account cannot access Jarvis.";
 "chat.activity.errRateLimited" = "Jarvis is busy. Try again later.";
 "chat.activity.errUnavailable" = "Jarvis is unavailable. Try again.";
-"chat.activity.errOffline" = "You're offline. Check your connection.";
+"chat.activity.errOffline" = "The connection to Jarvis was interrupted. Check the conversation before sending again.";
+"chat.activity.errTimedOut" = "The request timed out. Check the conversation before sending again.";
 "chat.activity.errGeneric" = "Jarvis could not complete the request.";
 "chat.activity.errInvalidUpload" = "This attachment type or size is not supported.";
 "chat.activity.errTooMany" = "You can attach up to five files.";

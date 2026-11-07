@@ -121,6 +121,7 @@ public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case errRateLimited = "chat.activity.errRateLimited"
     case errUnavailable = "chat.activity.errUnavailable"
     case errOffline = "chat.activity.errOffline"
+    case errTimedOut = "chat.activity.errTimedOut"
     case errGeneric = "chat.activity.errGeneric"
     case errInvalidUpload = "chat.activity.errInvalidUpload"
     case errTooMany = "chat.activity.errTooMany"
