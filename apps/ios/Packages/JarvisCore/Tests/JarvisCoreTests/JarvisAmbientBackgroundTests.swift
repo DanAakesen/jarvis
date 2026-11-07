@@ -21,13 +21,16 @@ final class JarvisAmbientBackgroundTests: XCTestCase {
         }
     }
 
-    func testSharedGateRendererKeepsMainPaletteAndGlowPositions() throws {
+    func testSharedRendererUsesEmberAssetAndRetainsLightPalette() throws {
         let design = try source("apps/ios/Jarvis/JarvisDesignSystem.swift")
         let geometry = try matches(
-            #"JarvisDesignTokens\.ambient(\w+),\s+opacity: colorScheme == \.dark \? ([0-9.]+) : ([0-9.]+),\s+size: size,\s+x: ([0-9.]+),\s+y: ([0-9.]+)"#,
+            #"JarvisDesignTokens\.ambient(\w+),\s+opacity: ([0-9.]+),\s+size: size,\s+x: ([0-9.]+),\s+y: ([0-9.]+)"#,
             in: design
         )
         XCTAssertEqual(geometry.count, 4)
+        XCTAssertTrue(design.contains("Image(\"EmberBackground\")"))
+        let asset = repository.appendingPathComponent("apps/ios/Jarvis/Assets.xcassets/EmberBackground.imageset/ember-background.png")
+        XCTAssertEqual(Array(try Data(contentsOf: asset).prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
         XCTAssertTrue(design.contains("struct JarvisScreenBackground: View"))
         XCTAssertTrue(design.contains("endRadius: max(size.width * 0.6, size.height * 0.36)"))
         XCTAssertTrue(design.contains("colors: [color.opacity(opacity), color.opacity(opacity * 0.3), .clear]"))
@@ -52,7 +55,7 @@ final class JarvisAmbientBackgroundTests: XCTestCase {
                 )
                 XCTAssertEqual(components.count, 2)
                 guard components.count == 2 else { continue }
-                for theme in 0..<2 {
+                for theme in 0..<1 {
                     let reference = glows[index + theme * 4]
                     for component in 0..<3 {
                         let expression = components[theme][component].components(separatedBy: " / ")
@@ -60,8 +63,8 @@ final class JarvisAmbientBackgroundTests: XCTestCase {
                         let value = expression.count == 2 ? numerator / 255 : numerator
                         XCTAssertEqual(value, Double(reference[component + 4])! / 255, accuracy: 0.0001)
                     }
-                    for (actual, expected) in [(glow[3], reference[2]), (glow[4], reference[3]),
-                                               (glow[theme == 0 ? 2 : 1], reference[7])] {
+                    for (actual, expected) in [(glow[2], reference[2]), (glow[3], reference[3]),
+                                               (glow[1], reference[7])] {
                         XCTAssertEqual(Double(actual)!, Double(expected)! / 100, accuracy: 0.0001)
                     }
                 }

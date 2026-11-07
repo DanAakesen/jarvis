@@ -8955,3 +8955,12 @@ helper and includes the earlier assistant answer in the second request.
 Focused local agent tests: 116 passed. Backend route/store/compatibility tests:
 39 passed before adding the additional compare-and-swap test. Type checking passed.
 Full CI, SQL integration and live activation remain required before availability.
+### Native Notes editing and Ember (7 November 2026)
+
+JarvisNoteDocument projects Markdown into editable lines without normalizing
+frontmatter, unknown syntax, whitespace or line endings. The formatted and raw
+editors share the same draft and existing SHA-checked write/reload conflict flow.
+The local account-bound cache stores pinned paths separately from note response
+cache invalidation. No vault schema changes or synthetic live content are added.
+JarvisScreenBackground loads EmberBackground for dark mode; all routes continue
+using the common transparent chrome and background renderer.

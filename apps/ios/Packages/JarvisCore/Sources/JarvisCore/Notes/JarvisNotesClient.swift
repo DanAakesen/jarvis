@@ -7,6 +7,14 @@ public struct VaultNoteSummary: Codable, Equatable, Sendable, Identifiable {
     public let directory: String
     public let updatedAt: String
 
+    public init(path: String, title: String, folder: String, directory: String, updatedAt: String) {
+        self.path = path
+        self.title = title
+        self.folder = folder
+        self.directory = directory
+        self.updatedAt = updatedAt
+    }
+
     public var id: String { path }
 }
 

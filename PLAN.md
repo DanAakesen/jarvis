@@ -1,3 +1,67 @@
+## Active delivery — Factory capacity, Copilot and iOS bundle (7 November 2026)
+
+### Owner status ledger
+
+Keep this ledger current when work changes state. Distinguish design approval,
+implementation, automated/native verification, deployment and owner acceptance.
+Do not report queued work as implementation in progress or a passed test as owner
+acceptance. The owner explicitly requested updates across all discussed items.
+
+| Item | Current state | Next evidence needed |
+| --- | --- | --- |
+| Build 81 Home/Chat streaming and recovery | Implemented, qualified and uploaded to TestFlight | Owner device send/network/dictation checks in docs/ios/design/p15-build81-release.md |
+| Header/footer transparency, one progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |
+| Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
+| Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
+| Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23; stopped with disk_low | Diagnose session storage, recover existing task, finish validation and obtain delivery PR |
+| 128 GiB worker workspace | Owner approved implementation and cost; investigation only, not provisioned | Implement worker migration and verify 128 GiB usable workspace, real task execution and automatic compute shutdown |
+| Copilot harness | Blocked and disabled: turn 2 retained previous policy | Supported policy replacement, two-turn compatibility pass, then owner comparison |
+| Current vs Copilot comparison | Test guide prepared | Copilot compatibility must pass first |
+| Notes redesign | Implemented on the delivery branch; native qualification pending | Pinned carousel, recents, folder sheet/New folder right, rendered editor/Raw, persistence and native qualification |
+| Background 3 / Ember | Shared dark raster background implemented; native qualification pending | Shared dark-mode background implementation and native comparison |
+| Next TestFlight bundle | Owner now requests completion and release of the full agreed scope | Complete qualification, release and owner test checklist |
+
+The owner now explicitly requests implementation and delivery of all five items.
+This supersedes the earlier hold while collecting additions. Notes and Ember are
+implemented on the delivery branch; do not call them released before qualification.
+Preserve the selected title-only pinned carousel, recents, folder sheet with
+New folder on the bottom right, and rendered editor with Raw/Done.
+
+Three dark background concepts were shown on the same Notes layout: Graphite,
+Midnight, then Ember, in displayed order. The owner selected background 3 (Ember):
+warm near-black charcoal with soft amber illumination. Use the replacement image
+/tmp/jarvis-backgrounds/3-ember.png as the target. The approved raster is integrated into the shared dark background on the delivery branch; release is pending. Keep orange accents, readable secondary
+text and transparent page header/footer areas.
+
+For Factory disk capacity, the owner requires scalable storage rather than
+dependence on cleanup. Foundry documents up to 20 GiB per session at 1 vCPU or
+larger; the current deployment does not expose a disk-size setting. Evaluate
+separate build workers with configurable managed disks and queue-based scaling;
+The owner has now authorized 128 GiB workspaces at the discussed indicative
+pricing. This is not yet a provisioned or qualified configuration. Automatic
+compute shutdown after work, while retaining the disk, is part of the requirement.
+No infrastructure change or task recovery has been performed. The current Factory
+workers are Foundry hosted sessions with a 120-second idle timeout; the separate
+backend Container App has minReplicas=1. Do not describe the backend as automatically
+paused when a Factory task ends. A new VM-based worker must explicitly deallocate;
+stopping its container alone does not establish that compute billing stopped.
+
+Follow-up measurements on 7 November: the tracked checkout is 279,635,450 bytes
+(about 267 MiB), including 256,401,556 bytes under docs. GitHub reports repository
+size 259,470 KiB; this is a different measure, not an additional checked-out copy.
+One local installed dependency tree is about 870 MiB and local Playwright browsers
+about 656 MiB. These are development-environment measurements, not task 23 disk
+attribution. Obtain the failed session's free/total bytes and directory breakdown
+before choosing a migration. Azure Retail Prices API, Sweden Central, lists
+Standard SSD LRS capacity at DKK 64.4112 / 128.8224 / 257.6448 per month for
+128 / 256 / 512 GiB respectively. D2as v5 Linux compute is DKK 0.6173 per hour;
+OS disks, disk operations, networking and taxes are additional. This is indicative
+pricing, not a provisioned configuration or a complete service-cost quote.
+
+The owner did not receive the inline background images. Three replacement PNGs
+and a ZIP were saved under /tmp/jarvis-backgrounds with direct file links. The
+owner subsequently selected background 3 and then requested completion of the whole bundle.
+
 ## Current release — build 81 (7 November 2026)
 
 Approval correction #1636 is live from 93a0f629 after CI 42397991835, CodeQL and
@@ -14,7 +78,7 @@ See [the release record](docs/ios/design/p15-build81-release.md).
 Issue #1634 / task 23 committed scaffold 3ace0ad8 to jarvis/task-23 at 17:30:31 UTC,
 then reported disk_low at 17:32:28. Work began and is retained; completed validation
 and a delivery PR are unconfirmed. Investigate disk headroom before recovering
-that task; do not duplicate the create request. Notes redesign remains image-only;
+that task; do not duplicate the create request. Notes implementation is tracked above;
 Copilot requires trusted compatibility evidence. Physical dictation and device
 network recovery still need owner acceptance.
 

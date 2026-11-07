@@ -2590,3 +2590,13 @@ A Copilot test keeps one durable Jarvis session while provider conversations can
 rotate to apply updated instructions. Verified history must survive this rotation;
 it must never replay a completed action. Current remains the default and Copilot
 is unavailable until the exact deployed transport passes its live policy canary.
+## Notes library and editor (7 November 2026)
+
+Notes retains the Notes / Tasks / Graph entry control. Its default library shows a
+horizontal pinned-note carousel with full-width titles, followed by recent notes.
+Folders are browsed in a sheet with New folder at the bottom right. Pins are local
+preferences tied to the signed-in account, independent of vault note refreshes.
+Formatted editing supports headings, paragraphs and checklists; Raw exposes the
+complete original Markdown including frontmatter. Saving retains optimistic SHA
+conflict checks and must never silently overwrite another edit. Done saves changed
+content before returning to the library. Dark pages share the approved Ember background.

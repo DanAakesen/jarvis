@@ -29,6 +29,21 @@ struct JarvisNotesCopy {
     var overview: String { text(.overview) }
     var links: String { text(.links) }
     var recent: String { text(.recent) }
+    var pinned: String { text(.pinned) }
+    var pin: String { text(.pin) }
+    var unpin: String { text(.unpin) }
+    var browseFolders: String { text(.browseFolders) }
+    var raw: String { text(.raw) }
+    var formatted: String { text(.formatted) }
+    var done: String { text(.done) }
+    var yesterday: String { text(.yesterday) }
+    var earlier: String { text(.earlier) }
+    var heading: String { text(.heading) }
+    var checklist: String { text(.checklist) }
+    var addLink: String { text(.addLink) }
+    var undo: String { text(.undo) }
+    var emptyPinned: String { text(.emptyPinned) }
+
     var openTasks: String { text(.openTasks) }
     var folderCount: String { text(.folderCount) }
     var rootNotes: String { text(.rootNotes) }
@@ -140,6 +155,9 @@ struct JarvisNotesArea: View {
     @State private var searchText = ""
     @State private var refreshVersion = 0
     @State private var tree: VaultNoteTree?
+    @State private var pinnedPaths: [String] = []
+    @State private var browserPresented = false
+    @State private var pendingBrowserNote: String?
     @State private var recentVisits: [JarvisNoteVisit] = []
     @State private var directoryNotes: [String: [VaultNoteSummary]] = [:]
     @State private var directoryHasMore: [String: Bool] = [:]
@@ -235,6 +253,13 @@ struct JarvisNotesArea: View {
                 .presentationDragIndicator(.visible)
             }
         }
+        .sheet(isPresented: $browserPresented, onDismiss: {
+            if let path = pendingBrowserNote {
+                pendingBrowserNote = nil
+                Task { await openNote(path: path) }
+            }
+        }) {
+            folderBrowser
         .sheet(isPresented: $newFolderPresented) {
             if let client {
                 JarvisNewFolderSheet(client: client, copy: copy, initialFolder: selectedFolder) { path in
@@ -248,6 +273,9 @@ struct JarvisNotesArea: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
+        }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(item: $openedTask) { task in
             taskDetail(task, today: taskList?.today ?? "")
@@ -278,6 +306,8 @@ struct JarvisNotesArea: View {
                         editor = refreshed
                         refreshVersion += 1
                     },
+                    isPinned: pinnedPaths.contains(current.path),
+                    onPin: { pinned in Task { await setPinned(current.path, pinned: pinned) } },
                     onClose: { editorPresented = false }
                 )
             }
@@ -309,7 +339,7 @@ struct JarvisNotesArea: View {
                 Label(copy.newNote, systemImage: "note.text")
             }
             .accessibilityIdentifier("notes.newNote")
-            Button { newFolderPresented = true } label: {
+            Button { browserPresented = true } label: {
                 Label(copy.newFolderTitle, systemImage: "folder.badge.plus")
             }
             .accessibilityIdentifier("notes.newFolder")
@@ -329,22 +359,14 @@ struct JarvisNotesArea: View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
             if selectedTab == .graph, let graph {
                 JarvisPageHeadline(phrase: JarvisNotesPagePhrase.graph(graph, language: language))
-            } else if let taskList {
+            } else if selectedTab == .tasks, let taskList {
                 JarvisPageHeadline(phrase: JarvisNotesPagePhrase.tasks(taskList, language: language))
             }
-            if selectedTab != .graph, taskList != nil || tree != nil {
+            if selectedTab == .tasks, taskList != nil || tree != nil {
                 overviewHero
             }
             tabSwitcher
-            if selectedTab == .notes, selectedFolder.isEmpty, let graph {
-                JarvisNotesRecentStrip(
-                    title: copy.recent,
-                    notes: JarvisNotesPresentation.recentlyOpenedNotes(graph, visits: recentVisits),
-                    visits: recentVisits,
-                    language: language,
-                    onOpen: { node in Task { await openNote(path: node.path) } }
-                )
-            }
+
         }
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
         .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
@@ -424,8 +446,111 @@ struct JarvisNotesArea: View {
 
     private var notesContent: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+            VStack(alignment: .leading, spacing: 24) {
                 pageHead
+                pinnedSection
+                VStack(alignment: .leading, spacing: 16) {
+                    JarvisSectionHeadline(copy.recent) {
+                        JarvisTextButton(title: copy.browseFolders, identifier: "notes.browseFolders") {
+                            browserPresented = true
+                        }
+                    }
+                    if let loadError {
+                        stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
+                    }
+                    if libraryNodes.isEmpty {
+                        Text(copy.emptyNotes).foregroundStyle(.secondary)
+                    } else {
+                        ForEach(recentGroups, id: \.title) { group in
+                            Text(group.title).font(.subheadline).foregroundStyle(.secondary)
+                            JarvisRowGroup {
+                                ForEach(group.notes) { node in
+                                    noteRow(VaultNoteSummary(path: node.path, title: node.title,
+                                        folder: node.folder, directory: node.directory, updatedAt: node.updatedAt))
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+            }
+            .padding(.bottom, 20)
+        }
+        .refreshable { await loadSelectedTab(force: true) }
+        .accessibilityIdentifier("notes.scroll")
+    }
+
+    private var libraryNodes: [KnowledgeGraphNode] {
+        let visits = Dictionary(recentVisits.map { ($0.path, $0.openedAt) }, uniquingKeysWith: max)
+        return (graph?.nodes ?? []).sorted {
+            let left = max(visits[$0.path] ?? .distantPast, libraryDate($0.updatedAt))
+            let right = max(visits[$1.path] ?? .distantPast, libraryDate($1.updatedAt))
+            return left == right ? $0.path < $1.path : left > right
+        }
+    }
+
+    private func libraryDate(_ value: String) -> Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value) ?? .distantPast
+    }
+
+    private var recentGroups: [(title: String, notes: [KnowledgeGraphNode])] {
+        let calendar = Calendar.current
+        let visits = Dictionary(recentVisits.map { ($0.path, $0.openedAt) }, uniquingKeysWith: max)
+        var today: [KnowledgeGraphNode] = [], yesterday: [KnowledgeGraphNode] = [], earlier: [KnowledgeGraphNode] = []
+        for node in libraryNodes {
+            let date = max(visits[node.path] ?? .distantPast, libraryDate(node.updatedAt))
+            if calendar.isDateInToday(date) { today.append(node) }
+            else if calendar.isDateInYesterday(date) { yesterday.append(node) }
+            else { earlier.append(node) }
+        }
+        return [(copy.today, today), (copy.yesterday, yesterday), (copy.earlier, earlier)].filter { !$0.1.isEmpty }
+    }
+
+    private var pinnedSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(copy.pinned, systemImage: "pin.fill")
+                .font(.title3.weight(.semibold))
+                .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+            let pinned = pinnedPaths.compactMap { path in graph?.nodes.first { $0.path == path } }
+            if pinned.isEmpty {
+                Text(copy.emptyPinned).font(.subheadline).foregroundStyle(.secondary)
+                    .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+            } else {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 12) {
+                        ForEach(pinned) { node in
+                            JarvisRowButton(identifier: "notes.pinned.\(node.path)", action: {
+                                Task { await openNote(path: node.path) }
+                            }) {
+                                Text(node.title)
+                                    .font(.headline).foregroundStyle(.primary)
+                                    .lineLimit(3).frame(width: 168, alignment: .leading)
+                                    .frame(minHeight: 68, alignment: .leading)
+                                    .padding(14)
+                            }
+                            .jarvisGlassSurface(cornerRadius: 18)
+                            .disabled(openingNotePaths.contains(node.path))
+                        }
+                    }.scrollTargetLayout()
+                }
+                .contentMargins(.horizontal, JarvisDesignTokens.notesHorizontalInset, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned)
+                .scrollIndicators(.hidden)
+                .accessibilityIdentifier("notes.pinned.carousel")
+            }
+        }
+    }
+
+    private func setPinned(_ path: String, pinned: Bool) async {
+        await JarvisAppCache.shared.setNotePinned(path: path, pinned: pinned)
+        pinnedPaths = await JarvisAppCache.shared.pinnedNotePaths()
+    }
+
+    private var folderBrowser: some View {
+        NavigationStack {
+            ScrollView {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
                     if let parent = JarvisNotesPresentation.parentFolder(of: selectedFolder) {
                         JarvisTextButton(title: copy.back, identifier: "notes.folder.back") { navigateToFolder(parent) }
@@ -456,7 +581,9 @@ struct JarvisNotesArea: View {
                                 Text(copy.emptyNotes).font(.subheadline).foregroundStyle(.secondary)
                             } else {
                                 JarvisRowGroup {
-                                    ForEach(currentDirectoryNotes) { note in noteRow(note) }
+                                    ForEach(currentDirectoryNotes) { note in
+                                        noteRow(note, inBrowser: true)
+                                    }
                                 }
                             }
                         }
@@ -467,11 +594,26 @@ struct JarvisNotesArea: View {
                         }
                     }
                 }
-                .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                .padding(JarvisDesignTokens.notesHorizontalInset)
+            }
+            .safeAreaInset(edge: .bottom) {
+                HStack {
+                    Spacer()
+                    JarvisLabelledButton(title: copy.newFolderTitle, systemImage: "folder.badge.plus",
+                                         identifier: "notes.browser.newFolder", isDisabled: client == nil) {
+                        newFolderPresented = true
+                    }
+                }.padding(JarvisDesignTokens.notesHorizontalInset)
+            }
+            .jarvisAmbientBackground()
+            .navigationTitle(copy.browseFolders)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    JarvisTextButton(title: copy.done, identifier: "notes.browser.done") { browserPresented = false }
+                }.sharedBackgroundVisibility(.hidden)
             }
         }
-        .refreshable { await loadSelectedTab(force: true) }
-        .accessibilityIdentifier("notes.scroll")
     }
 
     private func navigateToFolder(_ folder: String) {
@@ -607,9 +749,14 @@ struct JarvisNotesArea: View {
         "\(searchText.trimmingCharacters(in: .whitespacesAndNewlines))|\(selectedScope.rawValue)|\(selectedTab.rawValue)|\(refreshVersion)"
     }
 
-    private func noteRow(_ note: VaultNoteSummary) -> some View {
+    private func noteRow(_ note: VaultNoteSummary, inBrowser: Bool = false) -> some View {
         Button {
-            Task { await openNote(path: note.path) }
+            if inBrowser {
+                pendingBrowserNote = note.path
+                browserPresented = false
+            } else {
+                Task { await openNote(path: note.path) }
+            }
         } label: {
             HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
                 if openingNotePaths.contains(note.path) {
@@ -618,10 +765,12 @@ struct JarvisNotesArea: View {
                 } else {
                     Image(systemName: "note.text")
                         .font(.system(size: JarvisDesignTokens.notesIconSize))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(JarvisDesignTokens.primaryAccent)
                 }
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                    Text(note.title).foregroundStyle(.primary)
+                    Text(note.title).font(.headline).lineLimit(2).foregroundStyle(.primary)
+                    Text(note.directory.isEmpty ? copy.vaultRoot : note.directory.replacingOccurrences(of: "/", with: " / "))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     Text(JarvisNotesLocalization.formattedUpdatedDate(note.updatedAt, language: copy.language))
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -788,6 +937,7 @@ struct JarvisNotesArea: View {
         }
         await JarvisAppCache.bindIfNeeded()
         recentVisits = await JarvisAppCache.shared.recentNoteVisits()
+        pinnedPaths = await JarvisAppCache.shared.pinnedNotePaths()
         loading = true
         loadError = nil
         loadRetryUnavailable = false

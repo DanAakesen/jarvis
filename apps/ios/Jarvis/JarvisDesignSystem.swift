@@ -343,34 +343,42 @@ struct JarvisScreenBackground: View {
             let size = geometry.size
             ZStack {
                 JarvisDesignTokens.pageBackground
-                glow(
-                    JarvisDesignTokens.ambientCool,
-                    opacity: colorScheme == .dark ? 0.30 : 0.24,
-                    size: size,
-                    x: 0.12,
-                    y: 0.10
-                )
-                glow(
-                    JarvisDesignTokens.ambientWarm,
-                    opacity: colorScheme == .dark ? 0.26 : 0.30,
-                    size: size,
-                    x: 0.94,
-                    y: 0.20
-                )
-                glow(
-                    JarvisDesignTokens.ambientGreen,
-                    opacity: colorScheme == .dark ? 0.16 : 0.18,
-                    size: size,
-                    x: 0.24,
-                    y: 0.98
-                )
-                glow(
-                    JarvisDesignTokens.ambientBlue,
-                    opacity: colorScheme == .dark ? 0.20 : 0.16,
-                    size: size,
-                    x: 0.92,
-                    y: 0.80
-                )
+                if colorScheme == .dark {
+                    Image("EmberBackground")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size.width, height: size.height)
+                        .clipped()
+                } else {
+                    glow(
+                        JarvisDesignTokens.ambientCool,
+                        opacity: 0.24,
+                        size: size,
+                        x: 0.12,
+                        y: 0.10
+                    )
+                    glow(
+                        JarvisDesignTokens.ambientWarm,
+                        opacity: 0.30,
+                        size: size,
+                        x: 0.94,
+                        y: 0.20
+                    )
+                    glow(
+                        JarvisDesignTokens.ambientGreen,
+                        opacity: 0.18,
+                        size: size,
+                        x: 0.24,
+                        y: 0.98
+                    )
+                    glow(
+                        JarvisDesignTokens.ambientBlue,
+                        opacity: 0.16,
+                        size: size,
+                        x: 0.92,
+                        y: 0.80
+                    )
+                }
             }
             .frame(width: size.width, height: size.height)
         }
