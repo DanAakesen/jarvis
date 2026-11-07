@@ -7548,7 +7548,7 @@ deallocation before enabling JARVIS_FACTORY_WORKER_ENABLED. Main Bicep preserves
 that setting and resource identity on later deploys. Never delete/reformat the
 workspace to recover capacity; recover the existing Factory task and branch.
 
-Worker image updates require an already-idle, deallocated VM. Provisioning keeps
+Worker image updates require disabled new-task routing and an already-idle, deallocated VM. Provisioning keeps
 the disk and rewrites only non-secret launcher configuration. On failure, leave
 new-task routing disabled and inspect controlled deployment evidence; do not claim
 the migration succeeded based on a template or a local unit test.

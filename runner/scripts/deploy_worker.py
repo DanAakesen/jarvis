@@ -25,20 +25,13 @@ def power_state(subscription, resource_group):
     return next((x['code'] for x in result['instanceView']['statuses'] if x['code'].startswith('PowerState/')), None)
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--subscription', required=True)
-    parser.add_argument('--outputs', type=Path, required=True)
-    parser.add_argument('--registry', required=True)
-    parser.add_argument('--tag', required=True)
-    parser.add_argument('--state', type=Path, required=True)
-    args = parser.parse_args()
+def provision(args):
     outputs = json.loads(args.outputs.read_text())
     bootstrap = json.loads(Path('infra/bootstrap.output.json').read_text())
     backend_url, scope = backend_settings(outputs, bootstrap)
     resource_group = 'rg-jarvis'
     resource_id = f'/subscriptions/{args.subscription}/resourceGroups/{resource_group}/providers/Microsoft.Compute/virtualMachines/{VM_NAME}'
-    evidence = {'resourceId': resource_id, 'workspaceGiB': 128, 'activated': False}
+    evidence = {'resourceId': resource_id, 'workspaceGiB': 128, 'activated': False, 'safeToDeallocateOnFailure': False}
     args.state.write_text(json.dumps(evidence))
     digest = az(args.subscription, 'acr', 'manifest', 'show-metadata', '--registry', args.registry,
                 '--name', f'jarvis-runner-dotnet:{args.tag}')['digest']
@@ -55,6 +48,11 @@ def main():
     }}
     backend = az(args.subscription, 'containerapp', 'show', '--resource-group', resource_group,
                  '--name', outputs['backendAppName']['value'])
+    environment = backend['properties']['template']['containers'][0].get('env', [])
+    if any(value.get('name') == 'JARVIS_FACTORY_WORKER_ENABLED' and value.get('value') == 'true' for value in environment):
+        raise RuntimeError('Disable new worker routing and drain work before updating its image')
+    evidence['safeToDeallocateOnFailure'] = True
+    args.state.write_text(json.dumps(evidence))
     identities = backend['identity']['userAssignedIdentities']
     if len(identities) != 1:
         raise RuntimeError('Expected one backend managed identity')
@@ -132,6 +130,28 @@ asyncio.run(main())
     evidence['activated'] = True
     args.state.write_text(json.dumps(evidence, indent=2))
     print('Factory worker provisioned: 128 GiB, identity verified, idle deallocation verified.')
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--subscription', required=True)
+    parser.add_argument('--outputs', type=Path, required=True)
+    parser.add_argument('--registry', required=True)
+    parser.add_argument('--tag', required=True)
+    parser.add_argument('--state', type=Path, required=True)
+    args = parser.parse_args()
+    try:
+        provision(args)
+    except Exception:
+        evidence = json.loads(args.state.read_text()) if args.state.exists() else {}
+        if evidence.get('safeToDeallocateOnFailure') and not evidence.get('activated'):
+            try:
+                az(args.subscription, 'vm', 'deallocate', '--resource-group', 'rg-jarvis', '--name', VM_NAME, '--no-wait')
+                evidence['failureDeallocationRequested'] = True
+            except Exception:
+                evidence['failureDeallocationRequested'] = False
+            args.state.write_text(json.dumps(evidence, indent=2))
+        raise
 
 
 if __name__ == '__main__':
