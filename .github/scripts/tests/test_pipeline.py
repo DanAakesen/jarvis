@@ -706,7 +706,10 @@ class SafeFailureTests(unittest.TestCase):
         project = load_workflow(ROOT / "apps/ios/project.yml")
         target = project["targets"]["JarvisUITests"]
         self.assertEqual(target["type"], "bundle.ui-testing")
-        self.assertEqual(target["dependencies"], [{"target": "Jarvis"}])
+        self.assertEqual(target["dependencies"], [
+            {"target": "Jarvis"}, {"package": "JarvisCore", "product": "JarvisCore"},
+        ])
+        self.assertIn({"path": "Jarvis/URLSessionTransport.swift"}, target["sources"])
         self.assertEqual(project["schemes"]["Jarvis"]["test"]["targets"], ["JarvisUITests"])
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         steps = workflow["jobs"]["macos"]["steps"]
@@ -715,6 +718,7 @@ class SafeFailureTests(unittest.TestCase):
         capture = next(step for step in steps if step.get("name") == "Boot iPhone Simulator and capture screenshots")
         self.assertEqual(capture["run"].count("xcodebuild test"), 1)
         self.assertIn("-only-testing:JarvisUITests/SidebarNavigationTests", capture["run"])
+        self.assertIn("-only-testing:JarvisUITests/URLSessionTransportTests", capture["run"])
         self.assertNotIn("-skip-testing", capture["run"])
         self.assertIn("-test-timeouts-enabled YES", capture["run"])
         self.assertIn("-maximum-test-execution-time-allowance 150", capture["run"])
