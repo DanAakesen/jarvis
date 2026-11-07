@@ -1,13 +1,18 @@
-## Current qualification checkpoint (7 November 2026)
+## Build 81 qualification and delivery (7 November 2026)
 
-Approval #1636 merged at 93a0f629 after CI 42397991835 / CodeQL; Deploy 42398836350
-is pending. Native 42396567474 passed the two URLSession cases and Home handoff;
-Chat failed a multi-query empty-editor observation despite retained empty values
-and captures. Run 42398644148 qualifies the single-query Chat assertion without
-changing the deadline or production composer. Retain passed cases only with
-source/call-site identity; inspect actual summary counts, not intermediate step
-conclusions. Widget task 23 saved scaffold 3ace0ad8 before disk_low; no completed
-validation or delivery PR is confirmed. Do not repeat the create request.
+Approval #1636 is live at 93a0f629 after CI 42397991835 / CodeQL and accepted
+Deploy 42398836350. iOS #1635 merged as 185cc067 with exact full-tree identity to
+837deeb6. Final CI 42398890076 and CodeQL passed. Three unchanged cases from
+native 42396567474 plus the corrected Chat case in 42398644148 qualify the final
+iOS source. Retain the original failed observation and inspected captures;
+no timeout was raised and production composer code was unchanged. The final
+iOS tree is 45ba9464; normal Deploy 42399723720 passed. TestFlight 42400008493
+uploaded build 81 at 18:18:15 UTC / 19:18:15 Copenhagen. Apple processing/device availability remain unverified. Details: ios/design/p15-build81-release.md.
+
+Task 23 saved scaffold 3ace0ad8 before disk_low. No completed validation or
+widget delivery PR is confirmed. Do not replay the create request. Notes remains
+an approved design target; do not claim implementation. Copilot compatibility
+remains unqualified. Physical dictation/network transitions need device acceptance.
 
 ## 7 November 2026 — Home send reports offline after thinking
 
@@ -33,8 +38,7 @@ Native URLProtocol tests compile the production adapter into the existing test
 runner and exercise real URLSession AsyncBytes with an open small stream, split
 UTF-8, and timeout after acceptance followed by one GET and one final response.
 The Home handoff and Chat turn tests are also selected. Local Docker execution was
-blocked by daemon disk capacity; no local Swift success is claimed. CI/native
-qualification and release are pending.
+blocked by daemon disk capacity; no local Swift success is claimed. CI/native qualification is complete; use the current release record above for delivery and device limitations.
 
 Apple documentation actually read: URLSession.AsyncBytes and
 URLRequest.timeoutInterval (developer.apple.com documentation JSON). The latter

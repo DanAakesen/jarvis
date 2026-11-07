@@ -11,7 +11,7 @@ No scaffold PR or completed delivery was visible at the initial verification.
 | Operation | Current behavior and decision |
 | --- | --- |
 | Read/search/status and ordinary planning | No approval is needed; do the requested preparation. |
-| Explicit own-repository build/fix/scaffold/start request | Previously always required a separate later reply. Candidate accepts the verified current owner instruction after checking the requested target and full draft scope. |
+| Explicit own-repository build/fix/scaffold/start request | Previously always required a separate later reply. Accepts the verified current owner instruction after checking the requested target and full draft scope. |
 | Discuss an idea or show a plan first | Remains a proposal. Do not execute until the owner actually requests or approves the work. |
 | Start an issue that already has an active task | Reuse the task and report its actual state; do not ask again or create a duplicate. |
 | Later approval of a real pending proposal | Recover the original proposal. A clear directive carrying out exactly that proposal counts; special yes/ja wording is not required. |
@@ -44,8 +44,7 @@ Targeted tests cover current-message direct execution, concurrent duplicate call
 plan-only then later yes, permission refusal, uncertain-write replay prevention,
 active-task reuse, full-scope interpretation, cache-mode isolation, missing-model
 failure, and unchanged calendar/food provenance. 458 targeted backend tests passed; scoped ESLint and TypeScript checks passed.
-CI/release and live direct-request acceptance are pending. Issue #1634 verifies the previous later-yes path only; do
-not create another widget task to test this correction.
+PR #1636 merged as 93a0f629 after CI 42397991835 and CodeQL. All 7,408 backend tests passed (one existing skip). Deploy 42398836350 passed readiness and live acceptance; the policy is live. A new direct Factory write has not been exercised in production: issue #1634 verifies the previous later-yes path. Do not create another widget task merely to test the policy.
 
 Live follow-up: Factory posted `Needs attention: disk_low` on issue #1634 at
 17:32:28 UTC. Handoff succeeded but the scaffold is now blocked by runner disk

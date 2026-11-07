@@ -1,3 +1,18 @@
+## 7 November 2026 — Retain native evidence across a test-observation correction
+
+Run 42396567474 passed transport/recovery and Home, but failed the first Chat
+empty-editor observation. Retained native values and captures were empty/hittable;
+three remote reads consumed the helper's three-second polling budget. Query
+identity/value together and assert visibility separately, keeping the deadline
+and every interaction assertion. No production composer change was justified by
+that evidence. Run 42398644148 then passed the one affected case. Reuse the three
+unchanged passes only with source/call-site identity; preserve the failed artifact.
+
+Approval #1636 is live after 42398836350. iOS #1635 merged with the exact qualified
+tree and Deploy 42399723720 passed. Build 81 upload is tracked in
+`docs/ios/design/p15-build81-release.md`. Do not infer scaffold completion from
+issue creation: task 23 committed code, then stopped with disk_low.
+
 ## 7 November 2026 — Deliver native stream acceptance before waiting
 
 Flush URLSession SSE lines while the connection remains open. A 16 KB-only buffer
