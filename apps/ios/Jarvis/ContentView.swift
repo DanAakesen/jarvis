@@ -20,6 +20,7 @@ struct ContentView: View {
     private let settingsClient: JarvisSettingsClient?
     private let voiceScreenshotLanguage: JarvisAppLanguage?
     @State private var notesClient: JarvisNotesClient?
+    @State private var widgetTasksRequest: UUID?
     @State private var healthClient: JarvisHealthClient?
     @State private var usageClient: JarvisUsageClient?
     @State private var statusClient: JarvisStatusClient?
@@ -162,7 +163,11 @@ struct ContentView: View {
             prepareNavigation(to: request.to, from: request.from)
         }
         .onOpenURL { url in
-            if let destination = JarvisWidgetLink.destination(for: url) { navigate(to: destination) }
+            if let destination = JarvisWidgetLink.destination(for: url) {
+                // Existing installed Notes widgets now present Tasks; keep their URL compatible.
+                if destination == .notes { widgetTasksRequest = UUID() }
+                navigate(to: destination)
+            }
         }
     }
 
@@ -311,7 +316,9 @@ struct ContentView: View {
             JarvisNotesArea(
                 client: notesClient,
                 language: language,
-                onRetryConfiguration: { notesClient = Self.makeNotesClient(fixtureMode: fixtureMode) }
+                onRetryConfiguration: { notesClient = Self.makeNotesClient(fixtureMode: fixtureMode) },
+                taskRequestID: widgetTasksRequest,
+                onTaskRequestHandled: { widgetTasksRequest = nil }
             )
         } else if destination == .health {
             JarvisHealthArea(

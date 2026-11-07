@@ -7352,3 +7352,16 @@ After qualification/deployment, the same explicit handoff can reuse the existing
 matching version for one instrumented check. Do not recreate agents or infer
 compatibility from normal deployment success. Retained evidence and the owner's
 comparison checklist are linked in docs/copilot-runtime-recovery-2026-11-07.md.
+
+## Widget contrast/Tasks continuation (7 November 2026)
+
+Worktree /tmp/p15-widget-contrast, branch codex/widget-text-contrast. Keep the
+Copilot recovery active separately. The owner authorizes darker light widget text
+and converting Notes widgets to Tasks. Existing widget IDs/data contracts stay
+compatible; do not delete note data or change the in-app Notes product. Qualification
+needs actual native widget captures plus cold/warm/repeated task-tab delivery and
+ordinary Notes navigation. Use a validation-only branch for a focused five-case
+run, retain source/tree proof and existing 120/150-second limits; never merge its
+workflow. Cancel duplicate automatic simulator jobs before boot. User release
+authorization persists; upload only after actual native review and normal accepted
+deployment. This new iOS source cannot reuse build 78's rendering evidence alone.

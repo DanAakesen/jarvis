@@ -11418,3 +11418,13 @@ distinguish ignored policy, stale policy, extra text and a streaming discrepancy
 Do not print response text, weaken exact matching or reinterpret normal Current
 acceptance as Copilot compatibility. Reuse the matching agent version; retain this
 failed attempt and require live evidence before changing the transport again.
+
+## 7 November 2026 — Darken widget labels and replace Notes with Tasks
+
+Follow the owner's screenshots: use one darker light-mode supporting text style
+across all Home Screen widget families and preserve accepted layout/accents. Keep
+stale timestamps explicit without fading light-mode content. The Notes widget is
+now Tasks: remove latest-note content from all sizes, show due-today tasks and make
+its tap select the Tasks tab. Retain installed kind IDs/URL compatibility and the
+snapshot format. Drop the publisher's unused Notes fetch so Tasks availability
+cannot depend on it. Existing in-app Notes functionality remains unchanged.

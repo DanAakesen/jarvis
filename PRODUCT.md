@@ -2493,3 +2493,13 @@ input request was accepted but its live policy check failed in 42365966747; no
 available-runtime claim is made. Failure evidence must identify the synthetic turn
 and classify expected/previous/user reply-code behavior without exposing private
 instructions or provider text. The existing approval and activation gates remain.
+
+## Task-focused Home Screen widgets (7 November 2026)
+
+The owner uses the former Notes widget for tasks, not note browsing. Rename its
+picker and headings to Tasks/Opgaver, remove all latest-note summaries/fallbacks,
+and use the space for due-today task titles and times. Keep existing installed
+widget identifiers and cached snapshot compatibility. A tap opens the Tasks tab
+inside Notes; the app's Notes area remains available. Task-widget refresh must not
+depend on an unrelated Notes fetch. Supporting labels on all Home Screen widget
+families must remain readable in light mode, including stale-data timestamps.

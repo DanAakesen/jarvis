@@ -134,6 +134,8 @@ struct JarvisNotesArea: View {
     let client: JarvisNotesClient?
     let language: JarvisAppLanguage
     let onRetryConfiguration: () -> Void
+    var taskRequestID: UUID? = nil
+    var onTaskRequestHandled: () -> Void = {}
 
     @State private var selectedTab: JarvisNotesTab = .notes
     @State private var selectedScope: JarvisNotesSearchScope = .all
@@ -213,6 +215,11 @@ struct JarvisNotesArea: View {
         .jarvisAmbientBackground()
         .toolbarBackground(.hidden, for: .bottomBar)
         .scrollEdgeEffectHidden()
+        .onChange(of: taskRequestID, initial: true) { _, request in
+            guard request != nil else { return }
+            selectedTab = .tasks
+            onTaskRequestHandled()
+        }
         .task(id: "\(selectedTab.rawValue)-\(refreshVersion)") {
             await loadSelectedTab(force: refreshVersion > 0)
         }

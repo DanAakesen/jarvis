@@ -9,6 +9,7 @@ enum JarvisWidgetPalette {
     static let run = Color.blue
     /// The secondary colour of the Notes and Home widgets: a warm grey that sits beside the orange accent.
     static let stone = Color(red: 0.66, green: 0.64, blue: 0.62)
+    static let secondaryText = JarvisWidgetSecondaryTextStyle()
 
     static func status(_ status: JarvisFactoryWidgetData.Status) -> Color {
         switch status {
@@ -17,6 +18,27 @@ enum JarvisWidgetPalette {
         case .review: .green
         case .failed: .red
         }
+    }
+}
+
+/// Small supporting labels need stronger contrast on a light widget surface.
+/// Keep the system's existing secondary treatment in dark and accented appearances.
+struct JarvisWidgetSecondaryTextStyle: ShapeStyle {
+    func resolve(in environment: EnvironmentValues) -> AnyShapeStyle {
+        environment.colorScheme == .light && environment.widgetRenderingMode == .fullColor
+            ? AnyShapeStyle(Color(white: 0.33))
+            : AnyShapeStyle(.secondary)
+    }
+}
+
+private struct JarvisWidgetStaleAppearance: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.widgetRenderingMode) private var renderingMode
+    let isStale: Bool
+
+    func body(content: Content) -> some View {
+        // Updated-time copy carries freshness; fading light-mode text makes it unreadable.
+        content.opacity(isStale && (colorScheme == .dark || renderingMode != .fullColor) ? 0.55 : 1)
     }
 }
 
@@ -42,7 +64,7 @@ struct JarvisWidgetHeader: View {
                 Spacer(minLength: 4)
                 Text(staleText)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(JarvisWidgetPalette.secondaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
@@ -60,11 +82,11 @@ struct JarvisWidgetMessage: View {
         VStack(spacing: 6) {
             Image(systemName: symbol)
                 .font(.title3)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(JarvisWidgetPalette.secondaryText)
                 .accessibilityHidden(true)
             Text(text)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(JarvisWidgetPalette.secondaryText)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -228,7 +250,8 @@ private struct JarvisWidgetLabels: View {
             ForEach(labels.indices, id: \.self) { index in
                 Text(labels[index])
                     .font(.system(size: 9, weight: index == labels.count - 1 ? .bold : .regular))
-                    .foregroundStyle(index == labels.count - 1 ? .primary : .secondary)
+                    .foregroundStyle(index == labels.count - 1
+                        ? AnyShapeStyle(.primary) : AnyShapeStyle(JarvisWidgetPalette.secondaryText))
                     .frame(maxWidth: .infinity)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -287,7 +310,7 @@ struct JarvisWidgetStepsRing: View {
                     .lineLimit(1)
                 Text(JarvisWidgetFormat.ofGoal(goal, language: language))
                     .font(.system(size: 9))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(JarvisWidgetPalette.secondaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
             }
@@ -301,6 +324,10 @@ struct JarvisWidgetStepsRing: View {
 }
 
 extension View {
+    func jarvisWidgetStaleAppearance(_ isStale: Bool) -> some View {
+        modifier(JarvisWidgetStaleAppearance(isStale: isStale))
+    }
+
     /// One shared widget surface: the system background in full colour, removed by Liquid Glass and tinted modes.
     func jarvisWidgetSurface() -> some View {
         containerBackground(for: .widget) { Color(uiColor: .systemBackground) }

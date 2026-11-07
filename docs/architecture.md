@@ -8835,3 +8835,17 @@ change. Live activation 42365966747 failed the policy sentinel after a completed
 response; no compatibility receipt was stamped. The probe now records only its
 turn number and closed streamed/final text classifications on mismatches. These
 fields cannot affect acceptance. See docs/copilot-runtime-recovery-2026-11-07.md.
+
+## Task widgets and secondary text (7 November 2026)
+
+The widget palette owns a resolving ShapeStyle for stronger full-color light text.
+Every secondary text call site in the Home Screen widget views uses it; decorative
+skeleton, ring and border colors retain their original semantics. One shared stale
+modifier preserves light text while retaining dark/tinted opacity treatment.
+
+The existing notes topic/kind IDs and Codable snapshot remain compatible, but
+widgets render Tasks only. The publisher resolves the existing open-task cache and
+passes no notes to the snapshot builder. ContentView converts the compatible Notes
+widget URL into a one-use task-tab request consumed by JarvisNotesArea on initial
+or repeated delivery; ordinary Notes navigation gets no request. No backend/API,
+credential, storage migration or Chat appearance change is required.

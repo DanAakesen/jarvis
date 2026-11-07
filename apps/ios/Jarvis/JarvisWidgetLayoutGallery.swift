@@ -16,7 +16,11 @@ struct JarvisWidgetLayoutGallery: View {
             VStack(spacing: 16) {
                 JarvisTabStrip(
                     title: "Widget samples", identifierPrefix: "gallery.widgetLanguage",
-                    items: [JarvisTabItem(tag: "en", title: "English · Dark"), JarvisTabItem(tag: "da", title: "Dansk · Lys")],
+                    items: [
+                        JarvisTabItem(tag: "en", title: "EN · Dark"),
+                        JarvisTabItem(tag: "da", title: "DA · Light"),
+                        JarvisTabItem(tag: "en-light", title: "EN · Light"),
+                    ],
                     selection: $language
                 )
                 ScrollView {
@@ -37,7 +41,7 @@ struct JarvisWidgetLayoutGallery: View {
                 }
             }
         }
-        .preferredColorScheme(language == "da" ? .light : .dark)
+        .preferredColorScheme(language == "en" ? .dark : .light)
         .environment(\.dynamicTypeSize, .large)
         .presentationDetents([.large])
     }

@@ -6,7 +6,7 @@ public enum JarvisWidgetCopy: String, CaseIterable, Sendable {
     case steps, workouts, ofGoal, thisWeek, lift, run, kilometers, calories, average
     case factory, softwareFactory, running, awaiting, review, failed, done
     case approve, pause, resume, retry
-    case loading, emptyGym, emptyFactory, error, offline, updated, noTasks
+    case loading, emptyGym, emptyFactory, emptyTasks, error, offline, updated, noTasks
     case displayNameGym, displayNameFactory
     case expiresAt, sessionEnded, checksRunning, checksPassed, checksFailed, pullRequest
     case displayNameNotes, displayNameHome, notes, tasks, approvals, health
@@ -43,6 +43,7 @@ public enum JarvisWidgetCopy: String, CaseIterable, Sendable {
         .loading: ("Henter…", "Loading…"),
         .emptyGym: ("Ingen træningsdata endnu", "No training data yet"),
         .emptyFactory: ("Ingen opgaver", "No tasks"),
+        .emptyTasks: ("Ingen opgaver i dag", "No tasks today"),
         .error: ("Kunne ikke hente data", "Couldn't load data"),
         .offline: ("Offline", "Offline"),
         .updated: ("Opdateret %@", "Updated %@"),

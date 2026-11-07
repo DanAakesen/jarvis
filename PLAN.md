@@ -1,3 +1,20 @@
+## 7 November 2026 — Widget contrast and Tasks focus
+
+The owner requests darker supporting widget labels in light mode and a task-only
+replacement for the Notes widget. One shared text style now covers Factory,
+Workouts, Home and Tasks labels, dates, units, chart labels and state copy. Light
+full-color stale content keeps readable text with its explicit Updated timestamp;
+dark/tinted rendering keeps its existing treatment.
+
+The three existing Notes widget identifiers are retained, but their picker/header
+name is Tasks. They show only today's tasks (up to three medium/five large), never
+latest notes. The publisher no longer fetches Notes to refresh task widgets. Taps
+use the compatible installed URL and select the Tasks tab; ordinary Notes
+navigation remains unchanged. Native compilation, bilingual/light/dark captures,
+cold/warm/repeated widget links and standard Notes navigation are pending. Use one
+focused five-case native run and reuse unaffected build-78 evidence with source
+proof; do not repeat the complete simulator suite.
+
 ## 7 November 2026 — Copilot runtime recovery
 
 PR #1627 is merged as `4e06a275`. CI 42363816219 and CodeQL 42363816092 passed;

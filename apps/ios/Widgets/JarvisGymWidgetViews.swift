@@ -33,7 +33,7 @@ struct JarvisGymStepsWidgetView: View {
                         .minimumScaleFactor(0.6)
                     Text(JarvisWidgetFormat.ofGoal(data.stepGoal, language: language))
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(JarvisWidgetPalette.secondaryText)
                         .lineLimit(1)
                 }
                 JarvisWidgetBarChart(
@@ -69,7 +69,7 @@ struct JarvisGymWorkoutsWidgetView: View {
                         .minimumScaleFactor(0.6)
                     Text(JarvisWidgetCopy.thisWeek.text(language: language))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(JarvisWidgetPalette.secondaryText)
                 }
                 Spacer(minLength: 0)
                 JarvisWidgetWeekDots(
@@ -127,7 +127,7 @@ struct JarvisGymMediumWidgetView: View {
     private func cell(_ copy: JarvisWidgetCopy, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(value).font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
-            Text(copy.text(language: entry.language)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            Text(copy.text(language: entry.language)).font(.caption2).foregroundStyle(JarvisWidgetPalette.secondaryText).lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
@@ -153,11 +153,11 @@ struct JarvisGymLargeWidgetView: View {
                             .font(.title.weight(.bold))
                         Text(JarvisWidgetCopy.average.text(language: language))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(JarvisWidgetPalette.secondaryText)
                         Spacer()
                         Text(JarvisWidgetFormat.ofGoal(data.stepGoal, language: language))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(JarvisWidgetPalette.secondaryText)
                     }
                     JarvisWidgetBarChart(
                         values: data.dailySteps,
@@ -190,7 +190,7 @@ struct JarvisGymLargeWidgetView: View {
     private func headline(_ copy: JarvisWidgetCopy, _ value: String, _ color: Color) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             Circle().fill(color).frame(width: 7, height: 7).accessibilityHidden(true)
-            Text(copy.text(language: entry.language)).font(.caption).foregroundStyle(.secondary)
+            Text(copy.text(language: entry.language)).font(.caption).foregroundStyle(JarvisWidgetPalette.secondaryText)
             Text(value).font(.title2.weight(.bold))
         }
         .accessibilityElement(children: .combine)

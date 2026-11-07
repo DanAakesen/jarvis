@@ -36,7 +36,7 @@ private struct JarvisHomeTile: View {
                 .minimumScaleFactor(0.7)
             Text(title)
                 .font(.system(size: 9))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(JarvisWidgetPalette.secondaryText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
@@ -64,7 +64,7 @@ struct JarvisHomeSmallWidgetView: View {
                 JarvisWidgetFreshnessLine(text: freshness(data, stale: stale, language: language))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .opacity(stale ? 0.55 : 1)
+            .jarvisWidgetStaleAppearance(stale)
         }
         .jarvisWidgetSurface()
     }
@@ -100,7 +100,7 @@ struct JarvisHomeMediumWidgetView: View {
                 JarvisWidgetFreshnessLine(text: freshness(data, stale: stale, language: language))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .opacity(stale ? 0.55 : 1)
+            .jarvisWidgetStaleAppearance(stale)
         }
         .jarvisWidgetSurface()
     }
@@ -140,7 +140,7 @@ struct JarvisHomeLargeWidgetView: View {
                 JarvisWidgetFreshnessLine(text: freshness(data, stale: stale, language: language))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .opacity(stale ? 0.55 : 1)
+            .jarvisWidgetStaleAppearance(stale)
         }
         .jarvisWidgetSurface()
     }

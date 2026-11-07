@@ -63,7 +63,7 @@ final class ComponentGalleryUITests: XCTestCase {
             XCTAssertTrue(choice.isSelected)
             for (kind, title) in [
                 ("workouts", language == "en" ? "Workouts" : "Træning"),
-                ("factory", "Factory"), ("notes", language == "en" ? "Notes" : "Noter"),
+                ("factory", "Factory"), ("notes", language == "en" ? "Tasks" : "Opgaver"),
             ] {
                 let card = app.descendants(matching: .any)["widget.preview.\(kind)"]
                 XCTAssertTrue(card.waitForExistence(timeout: 5))
@@ -118,11 +118,18 @@ final class ComponentGalleryUITests: XCTestCase {
                         XCTAssertFalse(button.isEnabled, "Synthetic actions must never write")
                     }
                 } else {
-                    assertWidgetElement(card.staticTexts["widget.notes.summary"], within: inset)
-                    assertWidgetElement(card.descendants(matching: .any)["widget.notes.next"], within: inset)
+                    XCTAssertFalse(card.staticTexts["widget.notes.summary"].exists)
+                    for id in ["k1", "k2", "k3"] {
+                        assertWidgetElement(card.descendants(matching: .any)["widget.tasks.row.\(id)"], within: inset)
+                    }
+                    XCTAssertFalse(card.staticTexts[language == "en" ? "Widget ideas" : "Idéer til widgets"].exists)
                 }
             }
         }
+        let lightEnglish = app.buttons["gallery.widgetLanguage.2"]
+        lightEnglish.tap()
+        XCTAssertTrue(lightEnglish.isSelected)
+        attach(app.screenshot(), named: "P15-widgets-medium-light-en")
     }
 
     @discardableResult

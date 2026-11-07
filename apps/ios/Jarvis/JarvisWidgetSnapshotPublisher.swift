@@ -128,19 +128,14 @@ final class JarvisWidgetSnapshotPublisher {
         }
     }
 
-    /// Today's tasks and the latest notes, read through the same cached repositories the Home and Notes pages use, so
-    /// a fresh cache costs no request.
+    /// Today's tasks from the Home/Tasks cache. Task widgets do not need a Notes request.
     private func loadNotes(now: Date) async -> Result<JarvisNotesWidgetData, Error> {
         guard let notesClient else { return .failure(JarvisTodayDataError.unavailable) }
         let tasks: JarvisResolved<VaultTaskList> = await JarvisAppCache.repository(.tasks, scope: "open") {
             try await notesClient.fetchOpenTasks(validator: $0)
         }.resolve()
-        let notes: JarvisResolved<VaultNotePage> = await JarvisAppCache.repository(.notes, scope: "home") {
-            try await notesClient.fetchNotes(validator: $0)
-        }.resolve()
         guard let list = tasks.value else { return .failure(tasks.error ?? JarvisClientError.networkFailure) }
-        guard let page = notes.value else { return .failure(notes.error ?? JarvisClientError.networkFailure) }
-        return .success(JarvisWidgetBuilder.notes(now: now, calendar: .current, tasks: list, notes: page.notes))
+        return .success(JarvisWidgetBuilder.notes(now: now, calendar: .current, tasks: list, notes: []))
     }
 
     /// Lifts (strength training) and runs from Apple Health, with distance and active energy.
