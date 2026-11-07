@@ -76,6 +76,34 @@ class Worker:
                 await self.io("put", f"invocations/{invocation_id}.json", value)
                 self.snapshots[invocation_id] = serialized
 
+    async def stop_queued(self, command):
+        """Cancel work that has been accepted but has not reached the provider."""
+        stopped = []
+        for key in await self.io("list", "commands/"):
+            queued = await self.io("get", key)
+            if not queued or queued.get("operation") not in {"start", "resume", "steer"}:
+                continue
+            target = "invocationId" if command["operation"] == "cancel" else "sessionId"
+            if queued.get(target) != command[target]:
+                continue
+            claim = key.replace("commands/", "claims/", 1)
+            if await self.io("get", claim) is not None:
+                continue
+            invocation = queued["invocationId"]
+            snapshot_key = f"invocations/{invocation}.json"
+            state = await self.io("get", snapshot_key)
+            if not state or state.get("status") != "queued":
+                continue
+            await self.io("put", claim, {"instance": self.instance_id, "at": time.time()}, create=True)
+            state.update(status="paused" if command["operation"] == "pause" else "cancelled",
+                         finished_at=time.time())
+            await self.io("put", snapshot_key, state)
+            await self.io("put", key.replace("commands/", "responses/", 1), {
+                "invocation_id": invocation, "session_id": queued["sessionId"], "status": state["status"]})
+            await self.io("delete", key)
+            stopped.append(invocation)
+        return stopped
+
     async def process(self, key, command):
         command = validate_command(command)
         operation, invocation = command["operation"], command["invocationId"]
@@ -116,10 +144,13 @@ class Worker:
         active = [state for state in runner.tasks.values() if state.worker and not state.worker.done()]
         if operation in {"start", "resume"} and active:
             return
+        if operation == "steer" and any(state.session_id != command["sessionId"] for state in active):
+            return
         await self.io("put", claim_key, {"instance": self.instance_id, "at": time.time()}, create=True)
         self.last_busy = time.monotonic()
         request = Request(command)
         try:
+            stopped = await self.stop_queued(command) if operation in {"pause", "cancel", "delete-session"} else []
             if operation == "probe":
                 disk = runner._disk_snapshot()
                 result = {"status": "ok", "instance": self.instance_id, **disk}
@@ -134,6 +165,8 @@ class Worker:
                 await runner._stop_running_turn(command["sessionId"], "cancel")
                 await runner._stop_session_client(command["sessionId"])
                 result = {"status": "stopped"}
+            elif operation == "cancel" and invocation in stopped:
+                result = {"invocation_id": invocation, "status": "cancelled"}
             else:
                 response = await (runner.cancel_invocation(request) if operation == "cancel"
                                   else runner.invoke(request))

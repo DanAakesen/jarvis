@@ -143,3 +143,47 @@ def test_owned_claim_without_result_is_interrupted_not_replayed():
     mailbox.data[f"invocations/{item['invocationId']}.json"] = {'status': 'queued'}
     asyncio.run(Worker(mailbox, instance_id='same-process').process('commands/1.json', item))
     assert mailbox.data[f"invocations/{item['invocationId']}.json"]['status'] == 'interrupted'
+
+
+@pytest.mark.parametrize('operation', ['pause', 'cancel', 'delete-session'])
+def test_controls_remove_queued_work_before_it_can_start(operation, monkeypatch):
+    async def run():
+        mailbox = Mailbox()
+        worker = Worker(mailbox)
+        queued = command()
+        other = command()
+        for key, item in [('commands/1.json', queued), ('commands/2.json', other)]:
+            mailbox.data[key] = item
+            mailbox.data[f"invocations/{item['invocationId']}.json"] = {'status': 'queued'}
+        control = dict(queued, operation=operation)
+        if operation != 'cancel':
+            control['invocationId'] = command()['invocationId']
+
+        async def invoke(request):
+            assert request.state.invocation_id == control['invocationId']
+            return JSONResponse({'session_id': queued['sessionId'], 'status': 'idle', 'paused_invocation': None})
+
+        monkeypatch.setattr(app, 'invoke', invoke)
+        monkeypatch.setattr(app, '_stop_running_turn', lambda *args: asyncio.sleep(0))
+        monkeypatch.setattr(app, '_stop_session_client', lambda *args: asyncio.sleep(0))
+        await worker.process('commands/3.json', control)
+        assert 'commands/1.json' not in mailbox.data
+        assert 'commands/2.json' in mailbox.data
+        expected = 'paused' if operation == 'pause' else 'cancelled'
+        assert mailbox.data[f"invocations/{queued['invocationId']}.json"]['status'] == expected
+        assert mailbox.data['responses/1.json']['status'] == expected
+    asyncio.run(run())
+
+
+def test_steering_a_queued_session_waits_for_the_active_session(monkeypatch):
+    async def run():
+        task = asyncio.create_task(asyncio.sleep(60))
+        app.tasks['other'] = SimpleNamespace(session_id='other', worker=task)
+        item = dict(command(), operation='steer')
+        mailbox = Mailbox()
+        await Worker(mailbox).process('commands/1.json', item)
+        assert 'claims/1.json' not in mailbox.data
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    asyncio.run(run())
