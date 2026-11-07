@@ -34,3 +34,18 @@ The owner was told to retry “Prepare the widget in Jarvis”, inspect the prop
 and approve it once. No TestFlight update is needed for this backend correction.
 The actual owner scaffold write still requires owner confirmation; the synthetic
 handler tests and service smoke checks do not establish that end-to-end result.
+
+## Owner retest and subsequent policy change
+
+On 7 November at 17:22 UTC, direct Chat followed by yes created issue #1634 and
+Factory task 23. The public Factory comment is emitted on task creation; runner
+execution and completed delivery are not established by it. The owner then asked
+to reduce repeated approvals. `approval-friction-review.md` records the new direct
+instruction path, which supersedes the blanket own-code later-reply policy while
+preserving missing-state recovery and verified request scope.
+
+Live follow-up: Factory posted `Needs attention: disk_low` on issue #1634 at
+17:32:28 UTC. Handoff succeeded but the scaffold is now blocked by runner disk
+headroom. Do not report it as running or complete. The recorded task reason does
+not identify current free bytes or whether the stop occurred before checkout or
+while building; investigate separately from approval policy.

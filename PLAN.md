@@ -1,3 +1,14 @@
+## Active: direct Factory instructions (7 November 2026)
+
+The owner requested fewer approvals after a direct scaffold command still asked
+for yes. Candidate server verification permits explicit own-code requests without
+that second message, reuses active tasks, and retains plan-first proposals and
+operation-specific permission checks. See `docs/approval-friction-review.md`.
+Targeted checks, CI and deployment are being completed; no new live widget write
+is authorized by this verification work. Existing issue #1634 / task 23 confirms
+the previous later-yes handoff, not runner execution or a finished scaffold.
+The separate Home/iOS stream correction remains active in PR #1635.
+
 ## Current release — build 80 (7 November 2026)
 
 PR #1631 merged as 294a7929 with exact source-tree identity. CI 42392412036,

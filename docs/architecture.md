@@ -1,3 +1,15 @@
+## Direct owner instructions for Factory (7 November 2026)
+
+Factory create/start first verifies the current stored owner message. Its internal
+`factory_request` interpretation compares repository, operation and full scope,
+uses a distinct cache key/prompt, and never accepts a bare approval as a new task.
+The mode is not a public tool input. An affirmative decision consumes the staged
+action through the same permission/revalidation/execution path; otherwise the real
+proposal remains available for later approval. Active tasks are reused. Direct
+issue requests share a process-local ten-minute result keyed to session/message
+and scope, including uncertain writes; this is not restart-safe global deduplication.
+Other approval families retain their existing operation boundaries.
+
 ## Scaffold proposal recovery (7 November 2026)
 
 Factory exposes sensitive read-only `get_pending_issue` through normal tool

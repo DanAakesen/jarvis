@@ -47,7 +47,7 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('completed confirmation proves a write');
     expect(instructions).toContain('Before approval: each subject/time/attendees');
     expect(instructions).toContain('Stage approval before state-changing offers');
-    expect(instructions).toContain('Direct commands: stage without questions; clarify missing details only');
+    expect(instructions).toContain('Direct commands authorize their scope; clarify only missing details');
     expect(instructions).toContain('Never bypass the write gate');
     const voice = readFileSync(new URL('../../../../agents/jarvis/jarvis_tools.py', import.meta.url), 'utf8');
     expect(voice).toContain('after outcome ok and status awaiting_confirmation');
