@@ -41,8 +41,11 @@ final class FixtureTransportTests: XCTestCase {
         let transport = try fixture("dropped-stream", clock: clock)
         let chat = JarvisChatClient(client: try client(transport), clock: clock)
         let events = try await collect(chat.sendTurn(sessionId: "12", text: "Hello fixture"))
-        XCTAssertEqual(events.count, 4)
-        XCTAssertEqual(Array(events[1...2]), [.delta(text: "Recovered"), .delta(text: " safely")])
+        XCTAssertEqual(events.count, 6)
+        XCTAssertEqual(Array(events[1...4]), [
+            .delta(text: "Recovered"), .connectionState(.reconnecting),
+            .connectionState(.connected), .delta(text: " safely"),
+        ])
         guard case .done(let message) = events.last else { return XCTFail("Missing recovered done") }
         XCTAssertEqual(message.text, "Recovered safely")
         let requests = await transport.recordedRequests()

@@ -42,3 +42,10 @@ Normal backend deploy/acceptance must precede TestFlight. Keep the owner's curre
 E2E project test undisturbed. Copilot remains disabled after its second policy
 canary used the previous turn's policy; docs/runtime-comparison-owner-test.md is the
 comparison guide once compatible activation is possible.
+
+The first follow-up CI (42373384283, source 872f3503) built JarvisCore and ran
+509 tests with three failed assertions: the older transport-fixture expectation
+omitted the two newly surfaced connection-state events, and the UI guard rejected
+an inline ad-hoc spinner. The fixture now asserts all six events explicitly and
+the tool row uses the existing JarvisLoadingView. No native run was dispatched for
+that source. Automatic Simulator 42373384227 was force-cancelled before boot.

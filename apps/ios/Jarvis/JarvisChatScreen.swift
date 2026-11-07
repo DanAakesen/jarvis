@@ -477,7 +477,7 @@ struct JarvisChatScreen: View {
                     .foregroundStyle(outcome == .ok ? Color.secondary : Color.orange)
                     .accessibilityHidden(true)
             } else {
-                ProgressView().controlSize(.mini).accessibilityHidden(true)
+                JarvisLoadingView(size: .inline)
             }
             Text(name.replacingOccurrences(of: "_", with: " "))
             Text(copy(outcome.map { $0 == .ok ? .toolOK : ($0 == .refused ? .toolRefused : .toolError) } ?? .toolRunning))
