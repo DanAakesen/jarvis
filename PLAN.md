@@ -1,21 +1,24 @@
-## Active: Home stream recovery and direct Factory instructions (7 November 2026)
+## Current release — build 81 (7 November 2026)
 
-- Approval correction #1636 merged as 93a0f629 after CI 42397991835 and CodeQL.
-  Production Deploy 42398836350 is pending. Explicit own-code requests can proceed
-  without a second yes; plan-first proposals and permission checks remain.
-- Home/Chat transport fix #1635 flushes small SSE events and gives streams their
-  own idle budget. Native 42396567474 passed both transport cases and Home handoff.
-  Its Chat observation failed; retained values/captures show an empty editor.
-  Requalification 42398644148 covers the improved single-query assertion with
-  the same deadline and unchanged production composer. CI/release remain pending.
-- Widget issue #1634 / task 23 committed scaffold 3ace0ad8 to jarvis/task-23 at
-  17:30:31 UTC, then reported disk_low at 17:32:28. Work began and is retained;
-  completed validation and a delivery PR are not confirmed. Do not create a duplicate.
+Approval correction #1636 is live from 93a0f629 after CI 42397991835, CodeQL and
+Deploy 42398836350. Clear own-code requests no longer require a redundant yes;
+plan-first proposals and server permission checks remain.
 
-See `docs/approval-friction-review.md` and
-`docs/ios/design/p15-home-stream-recovery.md` for evidence and limitations.
+Stream correction #1635 merged as 185cc067 with exact tree identity to 837deeb6.
+CI 42398890076 and CodeQL passed. Three unchanged native cases passed in
+42396567474; the corrected Chat observation passed in 42398644148. The original
+failure and actual captures remain retained. Normal Deploy 42399723720 passed.
+TestFlight 42400008493 uploaded build 81 at 18:18:15 UTC / 19:18:15 Copenhagen. Apple processing/device availability are not independently confirmed.
+See [the release record](docs/ios/design/p15-build81-release.md).
 
-## Current release — build 80 (7 November 2026)
+Issue #1634 / task 23 committed scaffold 3ace0ad8 to jarvis/task-23 at 17:30:31 UTC,
+then reported disk_low at 17:32:28. Work began and is retained; completed validation
+and a delivery PR are unconfirmed. Investigate disk headroom before recovering
+that task; do not duplicate the create request. Notes redesign remains image-only;
+Copilot requires trusted compatibility evidence. Physical dictation and device
+network recovery still need owner acceptance.
+
+## Previous release — build 80 (7 November 2026)
 
 PR #1631 merged as 294a7929 with exact source-tree identity. CI 42392412036,
 CodeQL 42392412015 and independent review passed. All seven selected native cases
@@ -29,8 +32,7 @@ See [the release record](docs/ios/design/p15-build80-release.md) and
 
 Backend scaffold recovery shipped separately in #1632 / ce652a06. The owner was
 told to retry “Prepare the widget in Jarvis”, inspect the proposal and approve
-once. No app update is needed for that correction; the actual owner write remains
-unconfirmed. Physical system-keyboard dictation and safe-area/status-bar behavior
+once. No app update was needed for that correction. The subsequent owner write and disk stop are recorded above. Physical system-keyboard dictation and safe-area/status-bar behavior
 still require device acceptance. Copilot remains unavailable without a trusted
 compatibility receipt; do not weaken its gate or repeat an unchanged activation.
 

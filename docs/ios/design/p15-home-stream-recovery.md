@@ -24,8 +24,7 @@ Native URLProtocol tests compile the production adapter into the existing test
 runner and exercise real URLSession AsyncBytes with an open small stream, split
 UTF-8, and timeout after acceptance followed by one GET and one final response.
 The Home handoff and Chat turn tests are also selected. Local Docker execution was
-blocked by daemon disk capacity; no local Swift success is claimed. CI/native
-qualification and release are pending.
+blocked by daemon disk capacity; no local Swift success is claimed. CI/native qualification is complete; see [the release record](p15-build81-release.md) for exact source, delivery and remaining device checks.
 
 Apple documentation actually read: URLSession.AsyncBytes and
 URLRequest.timeoutInterval (developer.apple.com documentation JSON). The latter
@@ -44,8 +43,7 @@ The failing three-second predicate made separate existence, hittability and valu
 queries; its first poll took over two seconds after the initial polling delay.
 The helper now queries the native editor and empty value together and asserts
 hittability separately. The three-second deadline and all interaction assertions
-remain. Production composer code is unchanged. Requalify only the affected Chat
-case; retain the three passed cases with source/call-site identity evidence.
+remain. Production composer code is unchanged. Run 42398644148 requalified the affected Chat case: one passed, no failures or skips. The three passed cases are retained with source/call-site identity evidence.
 
 Issue #1634's existing task branch contains scaffold commit
 `3ace0ad86092026e99a52f5f791c9fdb376afcc1` at 17:30:31 UTC, before Factory's

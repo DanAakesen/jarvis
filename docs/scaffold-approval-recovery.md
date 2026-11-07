@@ -49,3 +49,12 @@ Live follow-up: Factory posted `Needs attention: disk_low` on issue #1634 at
 headroom. Do not report it as running or complete. The recorded task reason does
 not identify current free bytes or whether the stop occurred before checkout or
 while building; investigate separately from approval policy.
+
+## Verified follow-up
+
+The owner’s later yes created issue #1634 / task 23. Branch `jarvis/task-23`
+contains scaffold commit 3ace0ad86092026e99a52f5f791c9fdb376afcc1 at 17:30:31 UTC;
+Factory stopped with disk_low at 17:32:28. This proves actual coding and retained
+work, not completed validation or delivery. Approval correction #1636 is now
+live after Deploy 42398836350; normal direct own-code requests no longer need the
+blanket later-yes step. See approval-friction-review.md and the build 81 record.

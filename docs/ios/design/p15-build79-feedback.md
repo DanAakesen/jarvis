@@ -12,25 +12,31 @@ retain any failures and rerun only changed or unqualified cases.
 | Two thinking rows appear for one Chat turn | Single row verified in the scoped native turn; Uploaded in build 80; owner device check pending | Exactly one active progress indicator before acknowledgment, during tools, after steering/interruption, and while streaming/reconnecting; it disappears only when the turn ends. |
 | Sent text remains in the composer (“Yes please” screenshot) | Button/Return native checks passed; system dictation needs device acceptance | Test send button and keyboard Return with a focused field; verify clearing, stale input callback rejection and preservation of a newly typed draft. Keep custom/system dictation in scope. |
 | Task titles truncate to one line; source labels such as Inbox remain | Two-line titles and no source metadata visually verified; Uploaded in build 80; owner device check pending | Inspect long titles/date-time combinations in both themes; retain scope and priority, with full provenance only in details. |
-| Scaffold cannot proceed after “Yes please”: create_issue returns Not allowed, earlier proposal cannot be recovered | Recovery deployed in #1632; owner retest pending | Trace actual project selection and approval/proposal persistence across turns; test prepare → inspect → later approve → one issue/task. Do not weaken own-code approval or require repeated rewording. |
+| Scaffold cannot proceed after “Yes please”: create_issue returns Not allowed, earlier proposal cannot be recovered | Owner flow created #1634/task 23 and committed scaffold; blocked by disk_low | Trace actual project selection and approval/proposal persistence across turns; test prepare → inspect → later approve → one issue/task. Keep verified ownership/scope checks; explicit commands need no redundant yes. |
 
-## Current qualification
+## New reports retained in this follow-up
+
+| Report | Current evidence |
+| --- | --- |
+| Home prepare thinks, then incorrectly reports offline | Shared transport buffering and idle budget corrected in #1635; two real URLSession tests, Home handoff and Chat feedback qualified. Build 81 delivery is tracked in its release record. |
+| Direct prepare command asks for another yes | #1636 is deployed after full CI and live service acceptance. Direct verified own-code commands can proceed; plan-first proposals remain. |
+| Jarvis claims the scaffold is running | Branch commit 3ace0ad8 proves coding began. Task 23 subsequently stopped with disk_low; completion must not be claimed. Guidance now requires fresh work status. |
+
+## Build 80 qualification
 
 PR #1631 merged as 294a7929 with exact-tree identity, CI/CodeQL and independent
 review complete. All seven scoped native cases are qualified by six unchanged
 passes in 42390300501 and the corrected Chat pass in 42392408582. All 22 page
 captures and final Chat captures were reviewed. Build 80 uploaded at 17:06:13 UTC in TestFlight 42394179996;
 [the build 80 record](p15-build80-release.md) contains the evidence and limits.
-Backend PR #1632 is deployed and the owner has been told to retry the prepare
-prompt; the actual owner scaffold write is not yet confirmed.
+Backend #1632 recovery was deployed; the owner subsequently created issue #1634/task 23 and scaffold commit 3ace0ad8. Factory then stopped with disk_low. Approval friction was corrected and deployed in #1636. See [build 81](p15-build81-release.md) for the separate Home streaming correction and exact evidence.
 
 ## Separate unresolved work
 
 Copilot remains disabled because trusted dynamic-policy compatibility has not
 passed and there is no valid receipt. Keep the receipt gate intact and do not
 repeat an unchanged live activation probe. The earlier owner scaffold failure
-led to the separately deployed recovery in #1632; only owner confirmation of the
-actual prepare/approve/write flow remains pending after that correction.
+led to recovery #1632. Issue/task creation and committed code are now confirmed; runner disk headroom, completed validation and final delivery remain unresolved.
 
 ## Evidence gaps found during this follow-up
 
