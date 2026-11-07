@@ -5,8 +5,8 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: 9600fc77dcc5f73713565bf795e92151fd801a32
-  TASK_IOS_TREE: 9eeabbcd6391960928f9d3de2f8a77487b4fd528
+  TASK_SOURCE_SHA: 9eec164582d1f01ce67e04d333eb6ab6633e418d
+  TASK_IOS_TREE: 4e79841bff92c93ae5ea8c9938054929a15f9240
 jobs:
   gallery:
     name: Verify Notes editing and shared dark chrome
