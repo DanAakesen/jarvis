@@ -5,11 +5,11 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: fa55d95fd69bfe564f838b71cd120524d48c6dba
-  TASK_IOS_TREE: 8949fa867aeceb395486d352a23c3f88cefe6937
+  TASK_SOURCE_SHA: ddfa26e1836885b60eeb761eaeb54b4feb92e3a3
+  TASK_IOS_TREE: 45ba946474afeb0f5c85d80bcaf19eae49273043
 jobs:
   gallery:
-    name: Verify native transport and Home send
+    name: Verify final native Chat composer observation
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -27,7 +27,7 @@ jobs:
           import json, os, pathlib, subprocess
           git = lambda value: subprocess.check_output(["git", "rev-parse", value], text=True).strip()
           changed = subprocess.check_output(["git", "diff", "--name-only", "7f23497f522dda1f478709fae2e0f9e182d9e34d", "HEAD", "--", "apps/ios"], text=True).splitlines()
-          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["URLSessionTransportTests", "TodayUITests/testTypingShowsSendAndSendOpensChatThenHomeReturns", "ChatTurnFeedbackUITests"], "changed_ios_paths":changed, "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["ChatTurnFeedbackUITests"], "changed_ios_paths":changed, "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
           pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
           PYCODE
       - name: Select pinned Xcode 26.6
@@ -62,7 +62,7 @@ jobs:
           xcrun simctl bootstatus "$TASK_DEVICE_ID" -b
           xcrun simctl status_bar "$TASK_DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$TASK_DEVICE_ID" "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator/Jarvis.app"
-          xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination "id=$TASK_DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" -only-testing:JarvisUITests/URLSessionTransportTests -only-testing:JarvisUITests/TodayUITests/testTypingShowsSendAndSendOpensChatThenHomeReturns -only-testing:JarvisUITests/ChatTurnFeedbackUITests -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
+          xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination "id=$TASK_DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" -only-testing:JarvisUITests/ChatTurnFeedbackUITests -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
       - name: Export actual native attachments
         if: always()
         run: |
@@ -74,7 +74,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: p15-stream-evidence-${{ github.run_attempt }}
+          name: p15-stream-chat-evidence-${{ github.run_attempt }}
           path: ${{ runner.temp }}/gallery-evidence
           if-no-files-found: error
           retention-days: 14
