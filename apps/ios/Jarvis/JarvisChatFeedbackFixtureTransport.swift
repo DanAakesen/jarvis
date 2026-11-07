@@ -1,5 +1,5 @@
 import Foundation
-import Darwin
+import CoreFoundation
 import JarvisCore
 
 /// Controlled, synthetic turn for native regression checks. No external request is made.
@@ -18,7 +18,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     private var listeners: [UUID: AsyncThrowingStream<Data, any Error>.Continuation] = [:]
     private var activity: [[String: Any]] = []
     private var language = "en"
-    private var completionNotification: Int32?
+    private var completionObserver: ChatFixtureCompletionObserver?
 
     init(base: any HTTPTransport) { self.base = base }
 
@@ -59,7 +59,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
             return HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: body)
         }
         guard request.url.path == "/api/conversation/sessions/12/turns" else { return try await base.stream(request) }
-        try registerTestCompletion()
+        registerTestCompletion()
         let requestBody = try JSONSerialization.jsonObject(with: request.body!) as! [String: Any]
         var saved = message(id: "42", role: "dan", text: requestBody["text"] as! String)
         saved["toolCalls"] = [["id": "tool-42", "tool": "repo_read", "outcome": "ok"]]
@@ -86,24 +86,16 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
         turn?.yield(event("done", saved))
         turn?.finish()
         turn = nil
-        if let completionNotification { notify_cancel(completionNotification) }
-        completionNotification = nil
+        completionObserver = nil
     }
 
-    private func registerTestCompletion() throws {
-        guard Self.isEnabled, completionNotification == nil else { return }
+    private func registerTestCompletion() {
+        guard Self.isEnabled, completionObserver == nil else { return }
         // The Simulator test explicitly releases the held response after checking
         // the interrupted state. A timer can finish while XCTest is taking snapshots.
-        var token: Int32 = 0
-        let status = notify_register_dispatch("com.jarvis.uitests.finish-chat-feedback", &token, .main) { [weak self] _ in
+        completionObserver = ChatFixtureCompletionObserver { [weak self] in
             Task { await self?.finishTurn() }
         }
-        guard status == 0 else { throw FixtureTransportError.invalidScenario }
-        completionNotification = token
-    }
-
-    deinit {
-        if let completionNotification { notify_cancel(completionNotification) }
     }
 
     private func publishTool(finished: Bool) {
@@ -126,5 +118,33 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     private func event(_ name: String, _ value: [String: Any]) -> Data {
         let data = try! JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
         return Data("event: \(name)\ndata: \(String(decoding: data, as: UTF8.self))\n\n".utf8)
+    }
+}
+
+/// Core Foundation exposes Darwin notifications to Swift without private C symbols.
+private final class ChatFixtureCompletionObserver: Sendable {
+    private static let name = "com.jarvis.uitests.finish-chat-feedback"
+    private let complete: @Sendable () -> Void
+
+    init(complete: @escaping @Sendable () -> Void) {
+        self.complete = complete
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            { _, observer, _, _, _ in
+                guard let observer else { return }
+                Unmanaged<ChatFixtureCompletionObserver>.fromOpaque(observer)
+                    .takeUnretainedValue().complete()
+            },
+            Self.name as CFString, nil, .deliverImmediately
+        )
+    }
+
+    deinit {
+        CFNotificationCenterRemoveObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque(),
+            CFNotificationName(rawValue: Self.name as CFString), nil
+        )
     }
 }

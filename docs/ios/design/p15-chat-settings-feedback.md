@@ -97,3 +97,10 @@ on completion/destruction. It checks progress with the next draft present before
 releasing the response; no timed race remains. Settings taps one point inside the
 trailing edge regardless of field width. Rerun only Chat feedback and Danish target
 editing; reuse the passing English edit and all other unchanged screen evidence.
+
+Native 42377189552 failed during compilation before any Simulator boot: the SDK
+does not import notify_register_dispatch/notify_cancel into Swift. The test-only
+signal now uses the documented CFNotificationCenterAddObserver/PostNotification
+APIs, with an observer owned by the fixture and removed on destruction. Apple’s
+API documentation confirms main-thread delivery; the callback hops to the fixture
+actor. This is another retained build failure, not native verification.
