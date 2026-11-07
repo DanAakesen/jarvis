@@ -11605,3 +11605,14 @@ worker compute deallocates when idle and its disk remains. A private identity-ba
 mailbox avoids public ingress and additional API application-role bootstrapping.
 Qualification must prove capacity, provider access, idle deallocation and the
 existing task-23 recovery path. Source implementation is not live acceptance.
+
+
+### 7 November 2026 — Copilot qualification and Notes/Ember delivery
+
+Copilot PR #1639 deployed; the refreshed production definition passed the live
+two-turn policy canary in run 42418951594 at 22:10 UTC. The comparison option is
+enabled and Current remains default. Owner multi-turn/tool quality comparison is
+still pending. Notes/Ember PR #1638 merged as a55e7350, with full CI 42418217434
+and native verification 42417916004 passed. TestFlight 42419435807 successfully
+uploaded build 82; Apple processing and device acceptance are not inferred from upload.
+The 128 GiB worker remains in PR #1640 until qualification/provisioning passes.

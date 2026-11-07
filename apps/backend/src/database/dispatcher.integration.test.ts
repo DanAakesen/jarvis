@@ -1301,7 +1301,10 @@ describe('dispatcher SQL coordination', () => {
       expect(published).toHaveLength(1);
       const next = await store.recordEvent({...event, payload: {...event.payload, eventIndex: 4}});
       expect(next.id).not.toBe(results[0]?.id);
-    } finally { unsubscribe(); }
+    } finally {
+      unsubscribe();
+      await store.transition(task.id, 'Cancelled');
+    }
   });
 
   it('does not restart or change a cancelled task on a late runner question', async () => {

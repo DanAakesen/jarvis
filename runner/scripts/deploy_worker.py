@@ -51,8 +51,6 @@ def provision(args):
     environment = backend['properties']['template']['containers'][0].get('env', [])
     if any(value.get('name') == 'JARVIS_FACTORY_WORKER_ENABLED' and value.get('value') == 'true' for value in environment):
         raise RuntimeError('Disable new worker routing and drain work before updating its image')
-    evidence['safeToDeallocateOnFailure'] = True
-    args.state.write_text(json.dumps(evidence))
     identities = backend['identity']['userAssignedIdentities']
     if len(identities) != 1:
         raise RuntimeError('Expected one backend managed identity')
@@ -64,6 +62,8 @@ def provision(args):
         # Provisioning reruns require it to be deallocated first.
         if power_state(args.subscription, resource_group) != 'PowerState/deallocated':
             raise RuntimeError('Worker update requires an idle, deallocated VM')
+    evidence['safeToDeallocateOnFailure'] = True
+    args.state.write_text(json.dumps(evidence))
     with tempfile.TemporaryDirectory() as temp:
         key = Path(temp, 'key')
         subprocess.run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', str(key)], check=True)
@@ -127,6 +127,18 @@ asyncio.run(main())
     az(args.subscription, 'containerapp', 'update', '--resource-group', resource_group,
        '--name', outputs['backendAppName']['value'], '--set-env-vars',
        f'JARVIS_FACTORY_WORKER_RESOURCE_ID={resource_id}', 'JARVIS_FACTORY_WORKER_ENABLED=true')
+    ready = False
+    for _ in range(30):
+        backend = az(args.subscription, 'containerapp', 'show', '--resource-group', resource_group,
+                     '--name', outputs['backendAppName']['value'])
+        properties = backend['properties']
+        if properties.get('latestRevisionName') == properties.get('latestReadyRevisionName'):
+            ready = True
+            break
+        time.sleep(10)
+    if not ready:
+        raise RuntimeError('Backend worker-routing revision did not become ready')
+    evidence['backendReadyVerified'] = True
     evidence['activated'] = True
     args.state.write_text(json.dumps(evidence, indent=2))
     print('Factory worker provisioned: 128 GiB, identity verified, idle deallocation verified.')

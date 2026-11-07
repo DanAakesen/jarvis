@@ -18,6 +18,8 @@ export class FactoryWorkerMailbox {
   private polling: Promise<void> | undefined;
   private wakePending: Promise<void> | undefined;
   private lastWake = 0;
+  private nextPollAt = 0;
+  private activeUntil = 0;
 
   constructor(private readonly options: {
     container: ContainerClient;
@@ -95,6 +97,8 @@ export class FactoryWorkerMailbox {
       const snapshot = await this.read(`invocations/${invocationFromPath}.json`);
       if (!object(snapshot)) throw new FoundryClientError('http', 'worker-status', 404);
       if (!terminal.has(String(snapshot['status']))) {
+        this.activeUntil = Date.now() + 60_000;
+        this.nextPollAt = 0;
         await this.wake();
         const health = await this.read('health.json');
         if (snapshot['status'] === 'queued' && typeof snapshot['started_at'] === 'number' &&
@@ -120,6 +124,8 @@ export class FactoryWorkerMailbox {
     if (!idPattern.test(sessionId) || !idPattern.test(invocationId)) throw new FoundryClientError('protocol', 'worker-identity');
     await this.wake();
     if (request.options.signal?.aborted) throw new FoundryClientError('aborted', request.operation);
+    this.activeUntil = Date.now() + 60_000;
+    this.nextPollAt = 0;
     const commandId = `${Date.now()}-${randomUUID()}`;
     if (['start', 'resume', 'steer'].includes(request.operation)) {
       await this.write(`invocations/${invocationId}.json`, {
@@ -149,7 +155,7 @@ export class FactoryWorkerMailbox {
   start(): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
-      if (this.polling) return;
+      if (this.polling || Date.now() < this.nextPollAt) return;
       this.polling = this.poll().catch(this.options.onError).finally(() => { this.polling = undefined; });
     }, 1_000);
     this.timer.unref();
@@ -162,10 +168,12 @@ export class FactoryWorkerMailbox {
   }
 
   async poll(): Promise<void> {
+    let observed = false;
     for (const prefix of ['rpc-requests/', 'events/']) {
       let count = 0;
       for await (const blob of this.options.container.listBlobsFlat({ prefix, abortSignal: AbortSignal.timeout(20_000) })) {
         if (++count > 100) break;
+        observed = true;
         const value = await this.read(blob.name);
         if (!object(value) || !taskId(value['taskId']) || typeof value['sessionId'] !== 'string' || !idPattern.test(value['sessionId'])) {
           await this.options.container.getBlobClient(blob.name).deleteIfExists({abortSignal: AbortSignal.timeout(20_000)});
@@ -197,6 +205,8 @@ export class FactoryWorkerMailbox {
         await this.options.container.getBlobClient(blob.name).deleteIfExists({abortSignal: AbortSignal.timeout(20_000)});
       }
     }
+    if (observed) this.activeUntil = Date.now() + 60_000;
+    this.nextPollAt = Date.now() + (this.activeUntil > Date.now() ? 1_000 : 20_000);
     // Expired scoped GitHub tokens are never kept as a long-lived mailbox history.
     for await (const blob of this.options.container.listBlobsFlat({ prefix: 'rpc-responses/', abortSignal: AbortSignal.timeout(20_000) })) {
       if (Date.now() - (blob.properties.createdOn?.getTime() ?? 0) > 60_000) {

@@ -7552,3 +7552,13 @@ Worker image updates require disabled new-task routing and an already-idle, deal
 the disk and rewrites only non-secret launcher configuration. On failure, leave
 new-task routing disabled and inspect controlled deployment evidence; do not claim
 the migration succeeded based on a template or a local unit test.
+
+
+### Inspecting the persistent Factory worker
+
+After provisioning, dispatch Runner deploy from qualified main with
+`inspect_workspace=true` (and `provision_workspace=false`) to record real disk
+capacity and sanitized retained task outcomes. This wakes a deallocated worker
+for read-only inspection; it submits no Factory work. Normal idle deallocation
+then stops compute again. The evidence artifact contains no prompts or credentials.
+The mailbox polls every 20 seconds when idle and every second around active work.
