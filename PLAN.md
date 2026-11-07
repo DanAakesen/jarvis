@@ -14,23 +14,23 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23; stopped with disk_low | Diagnose session storage, recover existing task, finish validation and obtain delivery PR |
-| 128 GiB worker workspace | Owner approved implementation and cost; investigation only, not provisioned | Implement worker migration and verify 128 GiB usable workspace, real task execution and automatic compute shutdown |
-| Copilot harness | Blocked and disabled: turn 2 retained previous policy | Supported policy replacement, two-turn compatibility pass, then owner comparison |
-| Current vs Copilot comparison | Test guide prepared | Copilot compatibility must pass first |
-| Notes redesign | Implemented on the delivery branch; native qualification pending | Pinned carousel, recents, folder sheet/New folder right, rendered editor/Raw, persistence and native qualification |
-| Background 3 / Ember | Shared dark raster background implemented; native qualification pending | Shared dark-mode background implementation and native comparison |
-| Next TestFlight bundle | Owner now requests completion and release of the full agreed scope | Complete qualification, release and owner test checklist |
+| 128 GiB worker workspace | Implemented in #1640; focused tests and infrastructure compile passed; full CI/provisioning pending | Verify actual disk capacity, real task execution and idle ARM deallocation |
+| Copilot harness | #1639 deployed; refreshed definition and live two-turn canary passed in 42418951594; enabled | Owner multi-turn/tool comparison; Current remains the default |
+| Current vs Copilot comparison | Ready to start; live compatibility passed | Follow docs/runtime-comparison-owner-test.md in fresh matched conversations |
+| Notes redesign | #1638 merged as a55e7350; CI 42418217434 and final native 42417916004 passed; captures inspected | TestFlight 42419435807 running; owner editing/navigation acceptance follows upload |
+| Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
+| Next TestFlight bundle | Notes/Ember build running in 42419435807 from a55e7350 | Confirm upload/build number; backend worker delivery remains separate |
 
 The owner now explicitly requests implementation and delivery of all five items.
 This supersedes the earlier hold while collecting additions. Notes and Ember are
-implemented on the delivery branch; do not call them released before qualification.
+merged and qualified; TestFlight upload remains in progress.
 Preserve the selected title-only pinned carousel, recents, folder sheet with
 New folder on the bottom right, and rendered editor with Raw/Done.
 
 Three dark background concepts were shown on the same Notes layout: Graphite,
 Midnight, then Ember, in displayed order. The owner selected background 3 (Ember):
 warm near-black charcoal with soft amber illumination. Use the replacement image
-/tmp/jarvis-backgrounds/3-ember.png as the target. The approved raster is integrated into the shared dark background on the delivery branch; release is pending. Keep orange accents, readable secondary
+/tmp/jarvis-backgrounds/3-ember.png as the target. The approved raster is merged into the shared dark background; TestFlight upload is pending. Keep orange accents, readable secondary
 text and transparent page header/footer areas.
 
 For Factory disk capacity, the owner requires scalable storage rather than
