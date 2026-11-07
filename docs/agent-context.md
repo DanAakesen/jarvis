@@ -7414,7 +7414,8 @@ release provides no compatibility receipt and does not authorize weakening its g
 
 Use `docs/ios/design/p15-build79-feedback.md` for the six open owner reports.
 Focused native scope: PageChromeUITests, ChatTurnFeedbackUITests, the existing
-runtime-test composer isolation case, plus Core ComposerDraftTests. Inspect
+runtime-test composer isolation case, the Home send-to-Chat handoff case, plus Core
+ComposerDraftTests. Inspect
 captured light/dark headers and floating docks; the
 scroll tests must prove content moved. One hosted Simulator run qualifies the final
 source; retain failures and rerun only affected/unqualified cases. Backend scope:
