@@ -1,3 +1,16 @@
+## Windows widget scaffold — P11-13 / #1634 (7 November 2026)
+
+Active: implement `apps/winwidget` on the existing task branch. Scope is a compact
+Electron/React/TypeScript shell, native dragging/edge snapping, a Motion sidebar,
+and an isolated preload boundary. No backend connection or companion features.
+
+Steps: integrate the npm workspace/lockfile; implement and test window/security
+behavior; inspect the actual renderer and reduced-motion interactions; document
+Windows setup and verification limits. Commit and push each meaningful step.
+Windows runtime acceptance remains pending until tested on a Windows desktop.
+Next: add the workspace and secure native shell. No product-discovery interview
+or release/installer is included; feature discovery follows separately with Dan.
+
 ## Current release — build 80 (7 November 2026)
 
 PR #1631 merged as 294a7929 with exact source-tree identity. CI 42392412036,
