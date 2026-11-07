@@ -3571,6 +3571,20 @@ stays visible while working/reconnecting. It disappears only on completion/failu
 where existing error recovery remains visible. Reduce Motion retains static feedback.
 Native rendering/selection checks for this follow-up are pending.
 
+### Build 79 chrome and Chat correction
+
+Use ordinary reserved layout for shared header/footer regions and explicitly hide
+native scroll-edge/bar backgrounds. Keep glass on individual controls and the
+ambient scene visible between them. Verify real scrolling before accepting a
+scrolled capture; short fixtures are insufficient. Chat has one pinned progress
+row, with real acknowledgments and streamed replies in the transcript. Clear the
+native composer text on submit while retaining the focused editor and next draft.
+Keyboard Send submits outside text composition; pasted line breaks remain content.
+
+The owner's latest task-row feedback supersedes retaining meaningful source context:
+show only scope and priority below the two-line title. Bound the trailing due column
+to preserve title width. Source headings/paths remain accessible in task details.
+
 ## Notes direction selected for refinement (7 November 2026)
 
 The owner chose the Recent Focus concept: preserve Notes / Tasks / Graph above

@@ -7409,3 +7409,15 @@ tree proof. Do not repeat native verification for this unchanged source or merge
 the validation-only workflow. Apple processing/device visibility is unconfirmed.
 Copilot remains disabled after the live second-turn previous-policy result; this
 release provides no compatibility receipt and does not authorize weakening its gate.
+
+## Build 79 follow-up verification (7 November 2026)
+
+Use `docs/ios/design/p15-build79-feedback.md` for the six open owner reports.
+Focused native scope: PageChromeUITests, ChatTurnFeedbackUITests, the existing
+runtime-test composer isolation case, the Home send-to-Chat handoff case, plus Core
+ComposerDraftTests. Inspect
+captured light/dark headers and floating docks; the
+scroll tests must prove content moved. One hosted Simulator run qualifies the final
+source; retain failures and rerun only affected/unqualified cases. Backend scope:
+Factory tools/project-context and capability-instruction budgets, followed by CI.
+Deploy and accept the backend before TestFlight for this mixed correction.

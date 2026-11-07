@@ -16,18 +16,32 @@ final class ChatTurnFeedbackUITests: XCTestCase {
         let status = app.descendants(matching: .any)["chat.turn.status"]
         XCTAssertTrue(status.waitForExistence(timeout: 5))
         XCTAssertTrue(status.isHittable)
-        XCTAssertNotEqual(input.value as? String, "Check the synthetic project")
+        assertEmpty(input)
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "Sending keeps the editor focused for a follow-up")
+        assertSingleProgress(app)
+        XCTAssertFalse(app.textViews["chat.reply.streaming"].exists)
+        attach(app, "build79-single-progress-before-acknowledgment-empty-composer")
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(rawValue: "com.jarvis.uitests.acknowledge-chat-feedback" as CFString),
+            nil, nil, true
+        )
         XCTAssertTrue(app.descendants(matching: .any)["chat.tools.live"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["I’ll check the synthetic project."].exists)
         attach(app, "chat-acknowledgment-live-tools-and-working-state")
         input.tap()
         input.typeText("?")
-        app.buttons["chat.send"].tap()
+        let keyboardSend = app.keyboards.buttons.matching(NSPredicate(format: "label == 'Send' OR label == 'send'")).firstMatch
+        XCTAssertTrue(keyboardSend.waitForExistence(timeout: 3))
+        keyboardSend.tap()
         let question = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == %@ AND label == %@", "chat.message.user", "You: ?"))
         XCTAssertTrue(question.firstMatch.waitForExistence(timeout: 5))
         XCTAssertEqual(question.count, 1)
         XCTAssertLessThan(question.firstMatch.frame.width, 120, "Short bubbles should fit their text")
-        XCTAssertNotEqual(input.value as? String, "?")
+        assertEmpty(input)
+        attach(app, "chat-keyboard-send-empty-editor-single-follow-up")
+        XCTAssertTrue(app.keyboards.firstMatch.exists, "Sending keeps the editor focused for a follow-up")
+        assertSingleProgress(app)
         XCTAssertTrue(status.exists, "An interrupted round must retain the active turn status")
         input.tap()
         input.typeText("Keep my next draft")
@@ -48,8 +62,29 @@ final class ChatTurnFeedbackUITests: XCTestCase {
         attach(app, "chat-single-follow-up-compact-bubble-final-tools-and-next-draft")
     }
 
+    private func assertEmpty(_ input: XCUIElement) {
+        // UIKit may expose an empty UITextView value as nil. Resolve a visible
+        // native editor on each poll so a missing accessibility snapshot cannot pass.
+        let empty = NSPredicate { _, _ in
+            guard input.exists, input.isHittable else { return false }
+            guard let value = input.value else { return true }
+            guard let text = value as? String else { return false }
+            return text.isEmpty || text == "Ask Jarvis"
+        }
+        let result = XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: empty, object: input)], timeout: 3)
+        let evidence = XCTAttachment(string: "exists=\(input.exists); hittable=\(input.isHittable); value=\(String(describing: input.value))")
+        evidence.name = "native-composer-empty-state"
+        evidence.lifetime = .keepAlways
+        add(evidence)
+        XCTAssertEqual(result, .completed, "The visible native composer must be empty after submission")
+    }
+
+    private func assertSingleProgress(_ app: XCUIApplication) {
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "chat.turn.status").count, 1)
+    }
+
     private func attach(_ app: XCUIApplication, _ name: String) {
-        let capture = XCTAttachment(screenshot: app.screenshot())
+        let capture = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         capture.name = name
         capture.lifetime = .keepAlways
         add(capture)

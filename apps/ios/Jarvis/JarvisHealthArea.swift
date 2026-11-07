@@ -339,11 +339,11 @@ struct JarvisHealthArea: View {
                 .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }
             .scrollIndicators(.hidden)
-            .scrollEdgeEffectHidden(for: .bottom)
+            .scrollEdgeEffectHidden()
             .refreshable {
                 await refreshFromPull()
             }
-            .safeAreaInset(edge: .bottom, spacing: 0) {
+            .jarvisPageFooter {
                 if dashboard != nil || trackWorkout {
                     VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
                         segmentSwitcher

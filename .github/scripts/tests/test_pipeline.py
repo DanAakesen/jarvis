@@ -1139,9 +1139,9 @@ class SafeFailureTests(unittest.TestCase):
 
     def test_health_logging_form_is_sheet_only_and_segments_are_in_bottom_bar(self):
         area = (ROOT / "apps/ios/Jarvis/JarvisHealthArea.swift").read_text()
-        header_body = area.split("var body: some View", 1)[1].split(".safeAreaInset", 1)[0]
+        header_body = area.split("var body: some View", 1)[1].split(".jarvisPageFooter", 1)[0]
         self.assertNotIn("segmentSwitcher", header_body)
-        bottom = area.split(".safeAreaInset(edge: .bottom", 1)[1].split(".task(", 1)[0]
+        bottom = area.split(".jarvisPageFooter", 1)[1].split(".jarvisPageHeader", 1)[0]
         self.assertLess(bottom.index("segmentSwitcher"), bottom.index("searchBar"))
         self.assertIn("JarvisSegmentedBar(", area)
         self.assertNotIn(".pickerStyle(.segmented)", area)
