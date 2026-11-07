@@ -54,6 +54,27 @@ class DiagnosticOutputTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertEqual(result.stdout + result.stderr, "")
 
+    def test_policy_mismatch_prints_only_turn_and_closed_text_classifications(self):
+        result = self.run_output("canary", json.dumps({
+            "reason": "managed_probe_policy_not_applied", "probeTurn": 2,
+            "streamTextKind": "previous_policy", "finalTextKind": "expected",
+            "output": "private response", "instructions": "private instructions",
+        }).encode())
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("probe_turn=2 stream_text=previous_policy final_text=expected", result.stdout)
+        self.assertNotIn("private", result.stdout)
+        for turn in [True, 1.0, "1", 0, 3, {"private": 1}]:
+            result = self.run_output("canary", json.dumps({
+                "probeTurn": turn, "streamTextKind": "private", "finalTextKind": "private",
+            }).encode())
+            self.assertNotIn("probe_turn", result.stdout)
+            self.assertNotIn("private", result.stdout)
+        result = self.run_output("canary", json.dumps({
+            "probeTurn": 1, "streamTextKind": "private", "finalTextKind": ["private"],
+        }).encode())
+        self.assertIn("probe_turn=1 stream_text=not_reported final_text=not_reported", result.stdout)
+        self.assertNotIn("private", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

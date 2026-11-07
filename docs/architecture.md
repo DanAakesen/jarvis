@@ -8831,4 +8831,7 @@ reject extra bindings, optional policy, defaults or a mismatched template.
 `jarvis-structured-policy-v1` invalidates earlier compatibility receipts. Discovery
 skips provider readback when no receipt exists, but present evidence still requires
 live selected target/settings readback. Native history and authorization do not
-change. Live qualification is pending; see docs/managed-chat-provisioning.md.
+change. Live activation 42365966747 failed the policy sentinel after a completed
+response; no compatibility receipt was stamped. The probe now records only its
+turn number and closed streamed/final text classifications on mismatches. These
+fields cannot affect acceptance. See docs/copilot-runtime-recovery-2026-11-07.md.

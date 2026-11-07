@@ -11408,3 +11408,13 @@ remains pending; a failed canary must leave Copilot disabled.
 Sources reviewed on 7 November: [Structured inputs](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/structured-inputs),
 [Copilot harness](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/use-tools-skills-copilot-harness)
 and [service limits](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions).
+
+## 7 November 2026 — Classify the failed Copilot policy probe
+
+Structured-input activation 42365966747 returned completed text but failed the
+exact policy sentinel. Keep Copilot disabled. Add only a synthetic turn number
+and closed streamed/final text classifications so the next bounded check can
+distinguish ignored policy, stale policy, extra text and a streaming discrepancy.
+Do not print response text, weaken exact matching or reinterpret normal Current
+acceptance as Copilot compatibility. Reuse the matching agent version; retain this
+failed attempt and require live evidence before changing the transport again.

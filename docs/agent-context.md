@@ -7342,3 +7342,13 @@ instructions against repeating rejected shapes do not block this bounded check.
 The existing agent is versioned, not recreated. Two full-policy turns must pass
 before the handoff grants the new target/transport receipt. No iOS changes or
 Simulator work is needed. User authorization covers fixing and releasing this.
+
+The structured-input source merged as 4e06a275 after CI/CodeQL; normal deployment
+42364576232 is accepted with all 15 Current checks. Manual activation 42365966747
+provisioned the definition but failed the policy sentinel at response_stream.
+Copilot is still disabled. The diagnostic follow-up adds a turn number and closed
+streamed/final text classifications, without logging text or relaxing acceptance.
+After qualification/deployment, the same explicit handoff can reuse the existing
+matching version for one instrumented check. Do not recreate agents or infer
+compatibility from normal deployment success. Retained evidence and the owner's
+comparison checklist are linked in docs/copilot-runtime-recovery-2026-11-07.md.

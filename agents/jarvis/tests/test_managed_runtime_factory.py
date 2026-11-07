@@ -260,8 +260,25 @@ class CanaryFixture(Fixture):
                 expected = ("POLICY_B_5D41" if "POLICY_B_5D41" in policy
                             else "POLICY_A_7F92")
                 output = {"ignored": "Fixture done.", "stale": "POLICY_A_7F92",
+                          "user_override": "USER_OVERRIDE",
+                          "final_disagrees": "USER_OVERRIDE", "final_private": "USER_OVERRIDE",
+                          "extra": "PRIVATE_PREFIX " + expected,
                           "overflow": expected + " " * 300 + "PRIVATE_TRAILING"}.get(
                               self.fault, expected)
+                if self.fault in {"final_disagrees", "final_private"}:
+                    events = [json.loads(line.removeprefix("data: "))
+                              for line in response.text.splitlines() if line.startswith("data: ")]
+                    events[0]["delta"] = output
+                    events[-1]["response"]["output"] = [{
+                        "id": "m", "type": "message", "role": "assistant", "status": "completed",
+                        "content": [{"type": "output_text", "annotations": [],
+                                     "text": expected if self.fault == "final_disagrees"
+                                     else "PRIVATE_RAW_RESPONSE"}],
+                    }]
+                    return httpx.Response(
+                        200, text="".join(f"data: {json.dumps(e)}\n\n" for e in events),
+                        headers={"content-type": "text/event-stream"},
+                    )
                 return httpx.Response(
                     200, content=response.content.replace(b"Fixture done.", output.encode()),
                     headers={"content-type": "text/event-stream"},
@@ -391,13 +408,24 @@ async def test_canary_preserves_policy_when_provider_rejects_top_level_instructi
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("fault,count", [("ignored", 1), ("stale", 2), ("overflow", 1)])
-async def test_full_policy_canary_requires_precedence_and_replacement(fault, count):
+@pytest.mark.parametrize("fault,count,kind,final_kind", [
+    ("ignored", 1, "other", "empty"), ("stale", 2, "previous_policy", "empty"),
+    ("overflow", 1, "overflow", "empty"), ("user_override", 1, "user_override", "empty"),
+    ("extra", 1, "expected_with_extra_text", "empty"),
+    ("final_disagrees", 1, "user_override", "expected"),
+    ("final_private", 1, "user_override", "other"),
+])
+async def test_full_policy_canary_requires_precedence_and_replacement(
+    fault, count, kind, final_kind,
+):
     f = CanaryFixture(fault)
     async with f.runtime() as (runtime, _):
         result = await runtime.probe_target()
     assert result["status"] == "unavailable"
     assert result["reason"] == "managed_probe_policy_not_applied"
+    assert result["probeTurn"] == count
+    assert result["streamTextKind"] == kind
+    assert result["finalTextKind"] == final_kind
     assert "policyCompatibility" not in result
     assert "policyTransportRevision" not in result
     assert "PRIVATE" not in json.dumps(result) and "POLICY_" not in json.dumps(result)

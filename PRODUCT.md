@@ -2489,4 +2489,7 @@ Runtime discovery must return a known unavailable state without unnecessary
 provider calls, leaving Current available. Copilot must receive the full current
 Jarvis policy through a provider-supported trusted instruction channel and pass
 precedence/replacement qualification before it can be selected. The structured
-input implementation is pending live acceptance; no available-runtime claim yet.
+input request was accepted but its live policy check failed in 42365966747; no
+available-runtime claim is made. Failure evidence must identify the synthetic turn
+and classify expected/previous/user reply-code behavior without exposing private
+instructions or provider text. The existing approval and activation gates remain.
