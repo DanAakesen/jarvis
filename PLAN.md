@@ -1,62 +1,28 @@
-## 7 November 2026 — Settings, Chat turn feedback and issue drafting
+## Current release — Settings, Chat and scaffold follow-up, build 79
 
-Active follow-up in PR #1629: persistent Settings field labels; native reply text
-selection; content-sized owner bubbles; exact-ID replacement of saved steering
-messages; invalidation of stopped dictation callbacks; acknowledgment/tool/final
-reply grouping; visible active/reconnecting status throughout an interrupted turn.
-Backend activity now includes an optional validated message ID for safe live tool
-correlation. The existing receipt gate for Copilot stays closed after its second
-policy turn failed. The owner comparison guide remains available.
+Build **79 uploaded successfully at 14:18:29 UTC / 15:18:29 Copenhagen on 7 November 2026** in unchanged
+TestFlight workflow [42380495562](https://github.com/DanAakesen/jarvis/actions/runs/42380495562),
+from main `2504bc6a9b0c99d29c14a96bc261e8417df93fa1` (PR #1629). Apple processing
+and physical device visibility are not independently confirmed.
 
-The reported scaffold failure has a reproducible upstream read cause: repository
-issue page 7 is 1,099,352 bytes, above the 1 MiB GitHub client limit. The new reader
-splits only oversized windows, preserving the response ceiling and full scan
-before task-code allocation. A read-only real-repository check returned all 1,626
-records using 21 GET requests and zero writes. Focused backend tests: 157 passed;
-contract tests: 45 passed; backend no-emit typecheck passed. Native Settings/Chat
-verification and CI are pending; do not mark this candidate released.
+PR #1629 merged as 2504bc6a. CI 42377620992 and CodeQL 42377620945 passed;
+all 20 scoped Settings/Chat/Home cases are qualified using the final two-case pass
+42377707190 and unchanged earlier passes. Ten widget/navigation cases are retained.
+Actual captures confirm persistent field labels, native reply selection, compact
+single follow-ups, preserved next drafts, visible Working state, final collapsed
+tools, readable Tasks widgets and no empty activity bar/Away row.
 
-Widget/Now source e9aa204b passed all 10 automated focused cases in 42370022661.
-The EN-light widget and active Notifications captures were inspected. The empty
-Notifications/Chat attachments exposed a verification gap: the screenshot launch
-omitted the existing chat fixture flag and showed the sign-in cover despite AX
-existence checks. The next focused run adds that flag and visible/hittable checks;
-those captures are not accepted visual evidence. Retain the earlier failed run
-42368114024. Reuse unchanged widget/navigation evidence; do not rerun the gallery.
+The scaffold read failure is fixed: oversized GitHub issue windows are split while
+preserving the 1 MiB ceiling and full scan before task-code allocation. The real
+read returned 1,626 records in 21 GETs with no writes. Backend tests passed 7,391
+with one skipped; Core passed 509. Own-code work still requires later approval.
 
-CI 42374596904 passed. Native 42373705592 passed 17/20 cases; reply text selection,
-collapsed tool history, empty activity and Settings label captures were inspected.
-Three fixture/edit-input failures are corrected with no production UI changes and
-will be rechecked alone. The owner's scaffold test is blocked by the reproduced
-issue-list failure; after qualification, deploy its fix before the TestFlight upload.
-See docs/ios/design/p15-chat-settings-feedback.md for the current evidence.
-
-## 7 November 2026 — Widget contrast and Tasks focus
-
-The owner requests darker supporting widget labels in light mode and a task-only
-replacement for the Notes widget. One shared text style now covers Factory,
-Workouts, Home and Tasks labels, dates, units, chart labels and state copy. Light
-full-color stale content keeps readable text with its explicit Updated timestamp;
-dark/tinted rendering keeps its existing treatment.
-
-The three existing Notes widget identifiers are retained, but their picker/header
-name is Tasks. They show only today's tasks (up to three medium/five large), never
-latest notes. The publisher no longer fetches Notes to refresh task widgets. Taps
-use the compatible installed URL and select the Tasks tab; ordinary Notes
-navigation remains unchanged. The first focused run (42368114024) compiled but
-failed: the combined gallery exceeded its unchanged test deadline, and task-tab
-selection failed on both cold/warm widget delivery. The native English/dark and
-Danish/light captures show the requested text contrast and task-only rows. The
-follow-up gives Notes one root-owned tab binding, checks each widget language in
-its own case using one accessibility snapshot, and retains all geometry checks.
-
-The owner also requests removing Away mode from iOS and hiding an empty Now bar.
-The sheet no longer renders presence state; the bar uses the same visible job
-presentation as the sheet, excluding done/cancelled jobs while retaining running,
-failed, approval and notification items. Backend presence/approval behavior stays
-intact. Native empty/active checks and final qualification are pending. The owner
-is testing a new-project scaffold end to end; do not deploy or change shared runtime
-configuration during that test. Continue implementation and isolated verification.
+Merged full/iOS trees exactly match qualification. Duplicate main Simulator
+42378965945 was stopped before boot. Normal Deploy 42378966004 passed readiness and all 15 Current live checks.
+The single TestFlight run 42380495562 uploaded build 79 from exact main.
+See [the scoped evidence](docs/ios/design/p15-chat-settings-feedback.md) for all
+retained failed attempts and final artifact digests. No duplicate simulator run.
+Copilot remains blocked separately by previous-policy reuse on the second turn.
 
 ## 7 November 2026 — Copilot runtime recovery
 
@@ -79,7 +45,7 @@ path is unresolved; do not repeat activation, relax the canary, or demote policy
 See [the recovery record](docs/copilot-runtime-recovery-2026-11-07.md) and
 [the owner's comparison guide](docs/runtime-comparison-owner-test.md).
 
-## Current release — Home/chrome/widget follow-up, build 78
+## Previous release — Home/chrome/widget follow-up, build 78
 
 Build **78 uploaded successfully at 22:48:32 UTC / 23:48:32 Copenhagen on 6 November 2026**
 in unchanged TestFlight workflow [42306553415](https://github.com/DanAakesen/jarvis/actions/runs/42306553415),

@@ -7394,3 +7394,18 @@ Backend/contracts tests passed locally; native and CI are pending. Normal accept
 backend deployment precedes iOS upload. Keep the owner E2E test undisturbed while
 preparing and verifying these changes. Copilot remains unavailable; no receipt,
 policy weakening or additional live probe is authorized by this UI correction.
+
+## Completed Settings/Chat/scaffold release — 7 November 2026
+
+PR #1629 merged as 2504bc6a; TestFlight 42380495562 uploaded build 79 after normal
+Deploy 42378966004 passed readiness and all 15 Current acceptance checks. This
+supersedes the pending CI/native and E2E-deployment-hold notes above: the owner
+reported the scaffold blocker, and the already authorized fix/release is complete.
+Read docs/ios/design/p15-chat-settings-feedback.md and p15-resume.md for source/tree,
+artifact digests, retained failures, upload time and the owner's retest checklist.
+Final native 42377707190 passed both remaining cases; unchanged earlier cases are
+retained. Main Simulator 42378965945 was cancelled before boot after exact full/iOS
+tree proof. Do not repeat native verification for this unchanged source or merge
+the validation-only workflow. Apple processing/device visibility is unconfirmed.
+Copilot remains disabled after the live second-turn previous-policy result; this
+release provides no compatibility receipt and does not authorize weakening its gate.
