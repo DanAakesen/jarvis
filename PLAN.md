@@ -14,7 +14,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23; stopped with disk_low | Diagnose session storage, recover existing task, finish validation and obtain delivery PR |
-| 128 GiB worker workspace | Implemented in #1640; focused tests and infrastructure compile passed; full CI/provisioning pending | Verify actual disk capacity, real task execution and idle ARM deallocation |
+| 128 GiB worker workspace | Merged as a59ed107; CI 42421336106 and backend deployment 42422162191 passed; Azure worker provisioning 42422208795 failed before activation | Expose Azure failure codes, complete provisioning, then verify capacity, real task execution and idle deallocation |
 | Copilot harness | #1639 deployed; refreshed definition and live two-turn canary passed in 42418951594; enabled | Owner multi-turn/tool comparison; Current remains the default |
 | Current vs Copilot comparison | Ready to start; live compatibility passed | Follow docs/runtime-comparison-owner-test.md in fresh matched conversations |
 | Notes redesign | #1638 merged as a55e7350; CI 42418217434 and final native 42417916004 passed; captures inspected | Build 82 uploaded in 42419435807; owner editing/navigation acceptance pending |

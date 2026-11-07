@@ -11616,3 +11616,14 @@ still pending. Notes/Ember PR #1638 merged as a55e7350, with full CI 42418217434
 and native verification 42417916004 passed. TestFlight 42419435807 successfully
 uploaded build 82; Apple processing and device acceptance are not inferred from upload.
 The 128 GiB worker remains in PR #1640 until qualification/provisioning passes.
+
+
+### 7 November 2026 — Factory worker live provisioning failure
+
+PR #1640 merged as a59ed107 after CI 42421336106 passed. Backend release
+42422162191 passed readiness and live conversation acceptance. Runner workflow
+42422208795 built both images, then failed the Azure deployment before activation.
+The script omitted the underlying Azure error identities; add bounded code-only
+diagnostics and read-only failed-deployment inspection. Reuse the already-built
+image only with source qualification and unchanged build-context checks. The 128
+GiB workspace is not yet confirmed provisioned, and task 23 has not been recovered.
