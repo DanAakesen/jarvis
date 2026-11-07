@@ -135,3 +135,19 @@ The owner clarified the Notes concepts must start with the existing Notes / Task
 Graph selector. Every option must include pins, a recent view, folder browsing and
 Raw, with variations of that same flow. The third displayed set is Compact Library,
 Recent Focus and Folder Shortcuts; earlier sets are superseded. Selection is pending.
+
+Native 42390300501 at source 82fe69ca completed 6/7 cases. Runtime isolation, Home
+handoff and all four light/dark page cases passed. The only failure was the empty
+editor accessibility predicate after keyboard Send. The retained recording at the
+failure shows the empty placeholder, focused keyboard, one follow-up bubble and
+one progress row; the exact next-draft assertion subsequently passed. The test now
+accepts UIKit's nil empty value only for an existing, hittable editor, re-resolves
+that editor per poll, records its actual value and captures the Return boundary.
+Application sources are unchanged; rerun only this unqualified Chat case. Retain
+and visually inspect the six passing cases. Artifact 13581109075 SHA256:
+db62f810da9a91aa88bf50490ab6b811cf068408d124a2f2278aba3112557513.
+
+Backend PR #1632 deployed successfully in 42389927724, with readiness and required
+live acceptance passing at 16:18:52 UTC. The owner was told they can retry the
+prepare prompt without an iOS update. The actual owner scaffold write remains an
+owner confirmation; no Copilot activation is claimed.

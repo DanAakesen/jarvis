@@ -7,8 +7,11 @@ task titles with scope/priority only. PR #1631 remains unreleased. Native run
 42386993715 passed runtime isolation and primary-page assertions, but exposed
 keyboard focus/Return submission failures and a wrong Factory test route. The
 shared input now uses a stable native editor; the Factory route and full-screen
-capture method are corrected. The changed source needs fresh CI/CodeQL and a
-single focused native pass including the shared Home composer handoff.
+capture method are corrected. CI 42390263250 and CodeQL 42390263234 passed. Native 42390300501 passed six
+cases including Home/runtime handoffs and all page-chrome cases. One Chat empty
+accessibility-value assertion failed despite a visibly empty editor and preserved
+next draft. The corrected test now handles UIKit's nil empty value only for a
+visible editor; qualify that case again and inspect the retained six passing cases.
 
 Notes browsing/editing concepts preserve Notes / Tasks / Graph, pins, recents,
 folder browsing and full-source Raw access. The latest three concepts await owner
@@ -19,9 +22,9 @@ selection. Preserve the separate Copilot blocker and all earlier owner reports.
 Backend-only PR #1632 merged as ce652a06 after fresh CI 42389069811 and CodeQL
 42389069717 passed and independent review approved its exact source. It recovers
 real pending proposals and safely stages a fresh own-code replacement when state
-is missing, requiring a later explicit approval. Normal Deploy 42389927724 is
-running. Tell the owner to retry “Prepare the widget in Jarvis” only after live
-readiness and Current-runtime acceptance pass. No iOS update is needed for this
+is missing, requiring a later explicit approval. Normal Deploy 42389927724 passed readiness and required live acceptance at
+16:18:52 UTC. The owner was told to retry “Prepare the widget in Jarvis”; the actual
+owner scaffold write is still unconfirmed. No iOS update is needed for this
 backend correction. See [the recovery record](docs/scaffold-approval-recovery.md).
 
 
