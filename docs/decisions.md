@@ -11500,3 +11500,13 @@ the keyboard, and vertical TextField Return inserted a newline despite its Send
 label. Use one stable UIKit text view in the shared composer, with explicit Return
 handling, ordinary focus ownership and revision reconciliation. Preserve composition,
 paste and the existing size cap. Keep the failed run and verify all three callers.
+
+
+### 7 November 2026 — selected Notes library refinement
+
+The owner selected Recent Focus with pinned notes, recents and optional folder
+browsing, retaining the Notes / Tasks / Graph entry point. The requested revision
+uses title-led pinned tiles in a horizontal carousel, moves their pin icon to the
+section heading, and places New folder at the browse sheet's bottom right. Preserve
+the approved rendered editor and visible Raw access to complete Markdown/metadata.
+The revised image is a design target; build 80 does not implement this redesign.

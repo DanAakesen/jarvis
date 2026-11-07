@@ -2554,3 +2554,14 @@ require checking existing work before a new proposal and later approval.
 Task list titles show up to two lines, with unlimited wrapping at accessibility
 sizes. List metadata contains scope and priority only; remove all source labels,
 including Inbox and meaningful note/project names. Provenance remains in details.
+
+
+### Notes design target selected on 7 November 2026
+
+Preserve the Notes / Tasks / Graph entry point. The Notes library should foreground
+recent notes and a horizontally swipeable pinned carousel. Pinned tile interiors
+use their full width for readable titles; the pin symbol belongs in the section
+heading. Folder browsing is an optional bottom sheet with New folder at its bottom
+right. The reader/editor renders note content with visible Raw access to complete
+Markdown and metadata, while preserving all underlying vault data and existing
+write-conflict handling. This selected visual target is not implemented in build 80.

@@ -1,5 +1,25 @@
 # P15 release checkpoints
 
+## Current checkpoint — build 80
+
+Build **80 uploaded successfully at 17:06:13 UTC / 18:06:13 Copenhagen on 7 November 2026**
+in unchanged TestFlight workflow [42394179996](https://github.com/DanAakesen/jarvis/actions/runs/42394179996),
+from main `294a7929b8a21ef89fa36a8f0b1152461b0c9530` (PR #1631). Apple processing
+and physical-device availability are not independently confirmed.
+
+CI 42392412036, CodeQL 42392412015, independent review and all seven scoped native
+cases qualified the exact merged source. Six unchanged cases are retained from
+42390300501 and the final Chat case passed in 42392408582; actual page and Chat
+captures were reviewed. Normal Deploy 42393878132 passed readiness and required
+live acceptance before upload. Source proofs, artifact hashes, owner checks and
+limits are in [the build 80 record](p15-build80-release.md).
+
+The prepare-prompt backend fix is already live, and the owner was told to retry.
+The Notes carousel/folder/editor image is selected for refinement but is not built
+in this release. Copilot remains unavailable without a trusted compatibility receipt.
+Earlier release outcomes below are historical and do not override new owner feedback.
+
+
 ## Completed Settings/Chat/widget/scaffold follow-up — build 79
 
 Build **79 uploaded successfully at 14:18:29 UTC / 15:18:29 Copenhagen on 7 November 2026** in unchanged
@@ -24,8 +44,8 @@ merged full tree `05557824a3b533ef5a40789830ab1c7adf76b52c` and iOS tree
 42378966004 passed readiness and all 15 Current acceptance checks before upload.
 No duplicate native run is needed for this source.
 
-Copilot remains disabled: the live second-turn policy check reused the first turn's
-policy. Do not weaken the receipt gate or run another unchanged activation attempt.
+Copilot remains disabled: trusted dynamic-policy compatibility has not passed
+and there is no valid receipt. Do not weaken the receipt gate or run another unchanged activation attempt.
 The [scoped record](p15-chat-settings-feedback.md) retains failures, artifact hashes
 and the owner's retest checklist. Physical dictation, haptics and widget-host behavior
 remain owner checks. Earlier pending-state notes below are historical.

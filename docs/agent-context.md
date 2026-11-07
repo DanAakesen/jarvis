@@ -1871,7 +1871,7 @@ Its state is unverified; no replacement CLI/profile or reconnection is claimed.
 reconciliation, physical-device and cutover acceptance remain separate.
 
 Initial pinned CI39038540472 at085ab460 passed all other component jobs and
-3794backend cases, including all22new service/native-confirmation and17schema
+3794backend cases, including all 22new service/native-confirmation and17schema
 cases, but the new dispatcher test failed its non-owner HTTP403 assertion.
 Root auth intentionally admits verified human identities; resource authorisation
 belongs to the tool/service, and the dispatcher returns the normal200/error
@@ -7421,3 +7421,25 @@ scroll tests must prove content moved. One hosted Simulator run qualifies the fi
 source; retain failures and rerun only affected/unqualified cases. Backend scope:
 Factory tools/project-context and capability-instruction budgets, followed by CI.
 Deploy and accept the backend before TestFlight for this mixed correction.
+
+
+## Build 80 qualification and delivery (7 November 2026)
+
+PR #1631 merged as 294a7929, full tree eefc7ccc and iOS tree d1bdee7a, exactly
+matching final qualification source 3857d0ff. CI 42392412036 and CodeQL 42392412015
+passed. Native 42390300501 qualifies six unchanged Home/runtime/page cases;
+42392408582 qualifies the remaining Chat case. Their production app tree is
+identical (dcf84176); only the Chat test and docs changed. Actual captures were
+reviewed, including all 22 page captures. Do not repeat these native checks for
+unchanged source. Main duplicate 42393878123 was cancelled before boot after
+identity verification. Details and failure hashes are in
+[the build 80 release record](ios/design/p15-build80-release.md).
+
+Normal Deploy 42393878132 passed required acceptance. TestFlight 42394179996
+uploaded build 80 at 17:06:13 UTC / 18:06:13 Copenhagen. Apple processing/device
+availability are not independently confirmed. Backend recovery #1632 / ce652a06 is already
+live and the owner was told to retry the prepare prompt. Physical system dictation,
+safe-area/status-bar correctness, and the actual owner scaffold write are not
+established by the synthetic captures/service smoke checks. Notes redesign is
+image-only at this checkpoint; the selected carousel/folder/editor requirements
+are recorded in DESIGN.md. No Copilot receipt or activation is claimed.

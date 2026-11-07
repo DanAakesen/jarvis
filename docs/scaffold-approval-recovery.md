@@ -23,7 +23,14 @@ tests cover prepare → read → later approval → one issue and Factory handof
 concurrent confirms, mistaken restaging, session isolation, expiry, missing-state
 replacement and external-target refusal. These do not prove a live scaffold write.
 
-Release this correction separately from the remaining iOS work. Current-main,
-fresh exact-head CI/CodeQL and normal Deploy readiness/live acceptance remain
-required. Only then tell the owner to retry “Prepare the widget in Jarvis”, inspect
-the resulting scope, and approve it once. No release is claimed yet.
+PR #1632 merged as `ce652a06d801b1ab4c0f01af50dfab985dcc4350` after exact-head
+CI 42389069811, CodeQL 42389069717 and independent review passed. Normal Deploy
+[42389927724](https://github.com/DanAakesen/jarvis/actions/runs/42389927724) succeeded.
+Readiness passed, and live acceptance completed at 16:18:52 UTC on 7 November:
+14 checks were `ok`; the disconnected PC bridge was the existing nonblocking result.
+The plain-approval check passed. No Copilot receipt was issued by this deployment.
+
+The owner was told to retry “Prepare the widget in Jarvis”, inspect the proposal,
+and approve it once. No TestFlight update is needed for this backend correction.
+The actual owner scaffold write still requires owner confirmation; the synthetic
+handler tests and service smoke checks do not establish that end-to-end result.
