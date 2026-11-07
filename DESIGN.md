@@ -3570,3 +3570,16 @@ remain expanded under acknowledgment text; a small orb/status row above the comp
 stays visible while working/reconnecting. It disappears only on completion/failure,
 where existing error recovery remains visible. Reduce Motion retains static feedback.
 Native rendering/selection checks for this follow-up are pending.
+
+## Notes direction selected for refinement (7 November 2026)
+
+The owner chose the Recent Focus concept: preserve Notes / Tasks / Graph above
+pinned notes and recents, open folders in a bottom sheet, and use the rendered
+editor with visible Raw and Done actions. The owner explicitly liked the editor.
+The latest requested image refinement moves the pin icon to the Pinned section
+heading and gives each pinned tile its full width for a title of up to three lines.
+Pinned tiles form a horizontal carousel, with the next tile partly visible as a
+swipe affordance. New folder sits at the bottom right of the Browse folders sheet.
+The separate pin/unpin action remains in the editor. Raw must retain all Markdown
+and frontmatter. An updated three-panel image was shown; this is a design record,
+not a claim that the redesigned Notes UI has been implemented or released.
