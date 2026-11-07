@@ -49,3 +49,13 @@ omitted the two newly surfaced connection-state events, and the UI guard rejecte
 an inline ad-hoc spinner. The fixture now asserts all six events explicitly and
 the tool row uses the existing JarvisLoadingView. No native run was dispatched for
 that source. Automatic Simulator 42373384227 was force-cancelled before boot.
+
+Follow-up CI 42373569801 passed all 509 Core tests and Web checks. Backend ran
+7,392 tests: 7,388 passed, one skipped and three failed because the activity
+privacy allowlist had not included the newly intentional messageId field. The
+corrected check explicitly requires the correlated ID on both events and still
+rejects every unapproved field or private payload. Its three focused cases pass
+locally. Native 42373705592 is the only active Simulator run; the app built and
+interaction checks are running against f8651cda / iOS tree
+ed7db56a1dc12ddf403850f7f62d91b0c22604b1. This backend test-only correction does
+not change that tree or require a duplicate native run.
