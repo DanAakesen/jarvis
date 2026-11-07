@@ -51,7 +51,7 @@ export interface RuntimeSessionStore {
   attachSource(input: ManagedTurnClaim & { readonly additionalSourceMessageId: string }): Promise<boolean>;
   /** Report failed for known terminal failure only. Uncertain/crashed work must retain its active claim. */
   completeTurn(input: ManagedTurnClaim & { readonly outcome: 'succeeded' | 'failed' }): Promise<boolean>;
-  bindNativeConversation(input: ManagedTurnClaim & { readonly nativeConversationId: string }): Promise<boolean>;
+  bindNativeConversation(input: ManagedTurnClaim & { readonly nativeConversationId: string; readonly expectedNativeConversationId?: string | null }): Promise<boolean>;
 }
 
 export function validateRuntimeSessionOwner(ownerObjectId: string): void {

@@ -2583,3 +2583,10 @@ heading. Folder browsing is an optional bottom sheet with New folder at its bott
 right. The reader/editor renders note content with visible Raw access to complete
 Markdown and metadata, while preserving all underlying vault data and existing
 write-conflict handling. This selected visual target is not implemented in build 80.
+
+### Copilot continuity
+
+A Copilot test keeps one durable Jarvis session while provider conversations can
+rotate to apply updated instructions. Verified history must survive this rotation;
+it must never replay a completed action. Current remains the default and Copilot
+is unavailable until the exact deployed transport passes its live policy canary.

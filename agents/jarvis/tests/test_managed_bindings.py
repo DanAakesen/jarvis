@@ -41,12 +41,14 @@ async def test_claim_binding_steering_and_terminal_use_same_private_capability()
             assert await binding.claim_turn("42")
             assert not await binding.claim_turn("42")
             await binding.bind("conv-synthetic")
+            await binding.bind("conv-refreshed")
             assert await binding.attach_source("43")
             await binding.finish_turn("42", True)
             with pytest.raises(ManagedChatError, match="managed_claim_missing"):
                 await binding.bind("another-conversation")
     assert [request.url.path.rsplit("/", 1)[-1] for request in requests] == [
         "claim",
+        "bind",
         "bind",
         "source",
         "finish",
@@ -55,6 +57,8 @@ async def test_claim_binding_steering_and_terminal_use_same_private_capability()
 
     for request in requests[1:]:
         assert json.loads(request.content)["claimId"] == CLAIM
+    assert json.loads(requests[1].content)["expectedNativeConversationId"] is None
+    assert json.loads(requests[2].content)["expectedNativeConversationId"] == "conv-synthetic"
 
 
 @pytest.mark.asyncio

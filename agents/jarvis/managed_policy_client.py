@@ -31,8 +31,8 @@ def managed_response_request(
     Callers still own source verification, claims and input cursors. This builder
     cannot execute tools, create a session or override the registered catalogue.
     Foundry substitutes the required structured input into the pinned agent's
-    instruction template. Send the complete policy on every response, including
-    tool continuations and mode updates; values are request-scoped, not history.
+    instruction template. Supply the full policy on every response; the caller must
+    rotate the provider conversation when the value changes.
     User, reference and tool content remains in its original input channel.
     """
     if not isinstance(instructions, str) or not instructions.strip():
@@ -70,6 +70,7 @@ class NativeInputCursor:
     initial_message_count: int
     current_input_start: int
     sent_count: int | None = None
+    policy: str | None = None
 
     def take(self, inputs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if self.sent_count is None:
@@ -91,6 +92,69 @@ class NativeInputCursor:
         if not result:
             raise ManagedChatError("managed_input_empty")
         return result
+
+
+def managed_seed_inputs(inputs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Carry verified Jarvis history and completed tool exchanges into a fresh native.
+
+    Provider-local IDs/reasoning are not portable. Function call IDs and their exact
+    outputs remain paired, without invoking a tool or elevating input to policy.
+    """
+    result, calls = [], set()
+    for item in inputs:
+        kind = item.get("type")
+        if item.get("role") in {"user", "assistant"}:
+            result.append(copy.deepcopy({key: item[key] for key in
+                                         ("role", "content") if key in item}))
+        elif kind == "function_call":
+            call_id = item.get("call_id")
+            if not isinstance(call_id, str) or not call_id or call_id in calls:
+                raise ManagedChatError("managed_seed_call_invalid")
+            calls.add(call_id)
+            result.append(copy.deepcopy({key: item[key] for key in
+                                        ("type", "name", "arguments", "call_id")}))
+        elif kind == "function_call_output":
+            if item.get("call_id") not in calls:
+                raise ManagedChatError("managed_seed_output_unpaired")
+            calls.remove(item["call_id"])
+            result.append(copy.deepcopy(item))
+        elif kind != "reasoning":
+            raise ManagedChatError("managed_seed_input_invalid")
+    if not result or calls:
+        raise ManagedChatError("managed_seed_input_invalid")
+    return result
+
+
+async def prepare_managed_response(client, binding, cursor, inputs, instructions):
+    """Foundry captures structured policy when a conversation starts.
+
+    Each Jarvis turn begins with a new cursor, so its verified history is seeded
+    into a fresh provider conversation. A mode change during a tool loop rotates
+    again. Unchanged-policy continuations send only new inputs. The durable claim
+    and compare-and-swap binding stay outside model control.
+    """
+    if not isinstance(instructions, str) or not instructions.strip():
+        raise ManagedChatError("managed_definition_instructions_missing")
+    if cursor.policy != instructions:
+        seeded = managed_seed_inputs(inputs)
+        native = await client.conversations.create()
+        if not isinstance(native.id, str) or not native.id:
+            raise ManagedChatError("managed_conversation_missing")
+        try:
+            await binding.bind(native.id)
+        except (Exception, asyncio.CancelledError):
+            try:
+                async with asyncio.timeout(10):
+                    await client.conversations.delete(native.id)
+            except (Exception, asyncio.CancelledError):
+                pass
+            raise
+        cursor.policy = instructions
+        cursor.sent_count = len(inputs)
+        selected = seeded
+    else:
+        selected = cursor.take(inputs)
+    return managed_response_request(binding.conversation_id, selected, instructions)
 
 
 @dataclass
@@ -255,15 +319,6 @@ class ManagedPolicyClient(AzureOpenAIResponsesClient):
                     async with asyncio.timeout(settings.backend_http_timeout_seconds):
                         await binding.finish_turn(context.source_message_id, success)
 
-    async def _ensure_native_conversation(self) -> None:
-        """Create only after shared context preparation; let the seed hook see bind."""
-        turn = self._native_turn.get()
-        if not turn.binding.conversation_id:
-            native = await self._client.conversations.create()
-            if not native.id:
-                raise ManagedChatError("managed_conversation_missing")
-            await turn.binding.bind(native.id)
-
     async def _create_response(self, request: dict[str, Any]) -> Any:
         turn = self._native_turn.get()
         self._target.validate(ModelSettings(request["model"],
@@ -278,10 +333,8 @@ class ManagedPolicyClient(AzureOpenAIResponsesClient):
             if attach is None or not await attach(source):
                 raise ManagedChatError("managed_steering_source_unclaimed")
             turn.sources.append(source)
-        await self._ensure_native_conversation()
-        native_request = managed_response_request(
-            turn.binding.conversation_id, turn.cursor.take(request["input"]),
-            request["instructions"],
+        native_request = await prepare_managed_response(
+            self._client, turn.binding, turn.cursor, request["input"], request["instructions"],
         )
         # Once called, transport outcome may be unknown even if no stream arrives.
         turn.inference_attempted = True

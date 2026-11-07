@@ -135,7 +135,8 @@ class _BackendBinding:
 
     async def bind(self, conversation_id: str) -> None:
         response = await self._post(
-            "bind", {"claimId": self._capability(), "nativeConversationId": conversation_id}
+            "bind", {"claimId": self._capability(), "nativeConversationId": conversation_id,
+                     "expectedNativeConversationId": self.conversation_id}
         )
         if response.status_code != 204:
             raise ManagedChatError("managed_binding_unavailable")

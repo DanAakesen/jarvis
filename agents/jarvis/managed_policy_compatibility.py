@@ -5,7 +5,7 @@ import hashlib
 import json
 import re
 
-POLICY_TRANSPORT_REVISION = "jarvis-structured-policy-v1"
+POLICY_TRANSPORT_REVISION = "jarvis-fresh-policy-v2"
 
 
 def policy_compatibility_receipt(endpoint, agent_name, version, fingerprint, model, effort):

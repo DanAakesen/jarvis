@@ -52,7 +52,7 @@ class StatefulFixture(Fixture):
             assert self.active == source
             assert body["claimId"] == self.ledger[source]["claimId"]
             if operation == "bind":
-                assert self.native is None
+                assert body["expectedNativeConversationId"] == self.native
                 self.native = body["nativeConversationId"]
             elif operation == "finish":
                 self.ledger[source]["status"] = body["outcome"]
@@ -142,7 +142,7 @@ async def test_fresh_real_wrapper_and_followup_complete_stateful_claims(text, mo
         assert fixture.provider_attempts == attempts
     assert fixture.active is None
     assert [row["status"] for row in fixture.ledger.values()] == ["succeeded", "succeeded"]
-    assert sum(request.url.path.endswith("/conversations") for request in fixture.requests) == 1
+    assert sum(request.url.path.endswith("/conversations") for request in fixture.requests) == 2
     assert sum(request.url.path == "/tools/list_jobs" for request in fixture.backend.requests) == (
         1 if mode == "omitted_status" else 0
     )

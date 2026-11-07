@@ -71,9 +71,9 @@ export function registerManagedRuntimeRoutes(app: FastifyInstance): void {
         return reply.code(503).send({ code: 'managed_binding_unavailable', error: 'Managed turn storage is unavailable. Check its status before retrying.' });
       }
     });
-  app.post<{ Params: { sessionId: string }; Body: { claimId: string; nativeConversationId: string } }>(
+  app.post<{ Params: { sessionId: string }; Body: { claimId: string; nativeConversationId: string; expectedNativeConversationId?: string | null } }>(
     '/agent/runtime-tests/:sessionId/bind', { config: { jarvisAgent: true }, schema: { params,
-      body: { type: 'object', properties: { claimId: uuid, nativeConversationId: { type: 'string', minLength: 1, maxLength: 512, pattern: '^[^\\u0000-\\u001f\\u007f]+$' } },
+      body: { type: 'object', properties: { claimId: uuid, expectedNativeConversationId: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 1, maxLength: 512, pattern: '^[^\\u0000-\\u001f\\u007f]+$' }] }, nativeConversationId: { type: 'string', minLength: 1, maxLength: 512, pattern: '^[^\\u0000-\\u001f\\u007f]+$' } },
         required: ['claimId', 'nativeConversationId'], additionalProperties: false } } }, async (request, reply) => {
       reply.header('Cache-Control', 'no-store');
       if (!request.agentPrincipal) return reply.code(403).send({ error: 'Agent identity required.' });
@@ -83,6 +83,7 @@ export function registerManagedRuntimeRoutes(app: FastifyInstance): void {
       try {
         const bound = await app.managedRuntime.sessions.bindNativeConversation({
           ...claims(request.params.sessionId, sourceMessageId, request.body.claimId), nativeConversationId: request.body.nativeConversationId,
+          ...(request.body.expectedNativeConversationId !== undefined ? { expectedNativeConversationId: request.body.expectedNativeConversationId } : {}),
         });
         return bound ? reply.code(204).send() : reply.code(409).send({ code: 'managed_claim_mismatch', error: 'The active managed claim did not match.' });
       } catch {
