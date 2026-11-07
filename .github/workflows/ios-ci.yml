@@ -5,8 +5,8 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: 51ff257dbf66876f1c48cc9aaaf29fbce91fe03f
-  TASK_IOS_TREE: 00ccdd49be107d73c23561472b43dfa484bbfe7d
+  TASK_SOURCE_SHA: 1059c73a1a517170bfb828d07b5a096ea8e4eadb
+  TASK_IOS_TREE: 425b63efe08e41e5ada7e928bf8b935edc5000cf
 jobs:
   gallery:
     name: Verify Chat input and transparent page chrome
@@ -27,7 +27,7 @@ jobs:
           import json, os, pathlib, subprocess
           git = lambda value: subprocess.check_output(["git", "rev-parse", value], text=True).strip()
           changed = subprocess.check_output(["git", "diff", "--name-only", "9b112afccbff9ed4b813b31c2505621aa0181c33", "HEAD", "--", "apps/ios"], text=True).splitlines()
-          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["ChatTurnFeedbackUITests", "PageChromeUITests"], "changed_ios_paths":changed, "owner_reports":5, "prior_acceptance_invalidated_for_changed_states":True}
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["ChatTurnFeedbackUITests", "PageChromeUITests"], "changed_ios_paths":changed, "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
           pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
           PYCODE
       - name: Select pinned Xcode 26.6
