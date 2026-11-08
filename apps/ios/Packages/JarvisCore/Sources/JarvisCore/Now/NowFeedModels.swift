@@ -69,6 +69,13 @@ public struct NowFeedActivityItem: Codable, Equatable, Sendable {
     public let title: String
     public let link: String?
     public let at: String
+
+    /// Navigate only from the typed server link, never from notification text.
+    public var factoryTaskID: String? {
+        guard let link, link.hasPrefix("task:") else { return nil }
+        let id = String(link.dropFirst("task:".count))
+        return isValidFactoryID(id) ? id : nil
+    }
 }
 
 /// Proactive notifications of one category collapsed into one row: the latest update, how many older ones sit

@@ -8988,3 +8988,16 @@ bootstrap privileges). Data disk access is not included. After 120 idle seconds 
 requests ARM deallocation. Deployment verifies the actual deallocated state before
 activation. Disk, OS disk and outbound IP costs remain while compute is deallocated.
 This provisions one worker; automatic expansion into a fleet is not implemented.
+
+
+### iOS notification task routing and history (8 November 2026)
+
+Now-feed task links are validated as task:<positive SQL bigint>; notification titles
+are never parsed as routes. Chat closes its sheet, then sends a root-owned Factory
+task intent. Factory consumes the intent and opens the existing authenticated
+task-detail client. Dismissal and task control are unchanged. Issue-only board cards
+reuse the validated HTTPS GitHub issue URL.
+
+History events follow TaskEventRecord, which omits taskId. The iOS model accepts
+that absence in the task-scoped detail response. Task SSE still requires matching
+taskId and event ID before delivery, as required by TaskEventMessage.

@@ -3636,7 +3636,8 @@ and a folder browser sheet with New folder aligned right. The editor has a large
 title, folder path, pin control, Raw/Formatted toggle, Done, and a formatting toolbar.
 Ember is a generated background-only PNG in the native asset catalogue, scaled to
 fill by the shared screen renderer. Light mode keeps its existing palette. Native
-qualification is pending; these are implementation facts, not device acceptance.
+qualification 42417916004 passed and the actual captures were inspected. Build 82
+was uploaded in 42419435807; owner visual and Notes editing acceptance remains pending.
 
 
 ## Chat reply grouping (8 November 2026)
@@ -3654,3 +3655,12 @@ part of Chat. This supersedes the earlier pinned-progress-row choice: render one
 status inside the scrolling active assistant turn, after live tools and before any
 streamed reply text. It scrolls with the conversation and disappears on completion.
 The composer/Now dock must contain no active-turn progress copy.
+
+
+## Notification and Factory navigation (8 November 2026)
+
+Task-linked notification content is a full touch-target row with a trailing
+chevron; its dismiss/clear control remains separate. This applies to the newest
+item, expanded older items and running work. Close Notifications before opening
+Factory detail. An issue-only board card has a working GitHub destination and an
+external-link symbol; linked tasks keep their in-app detail destination.

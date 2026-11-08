@@ -6,7 +6,8 @@ Automated/native passes and a TestFlight upload are not owner acceptance.
 ## Short next session
 
 Build 82 contains Notes/Ember and the earlier build-81 fixes. The tighter Chat
-reply spacing and progress inside the transcript are being qualified for the next build; do not expect it in 82.
+reply spacing and progress inside the transcript are being qualified with the Factory navigation fixes for replacement build 84;
+build 83 was cancelled before upload. Do not expect these fixes in 82.
 
 - [ ] **Notes:** swipe the title-only pinned carousel, open a recent note, browse
   folders, and use New folder at the bottom right. Create/edit a disposable note,
@@ -24,7 +25,12 @@ reply spacing and progress inside the transcript are being qualified for the nex
   without a duplicate above the Now bar. Open/close tools and select text; keep
   separate messages clear.
 
-- [ ] **PC bridge warning, after backend update:** an online PC should not create
+- [ ] **Factory navigation, replacement build:** tap Task 23 from Notifications,
+  including an expanded older update, and open P11-13 from the board. Confirm the
+  task and history load. An issue-only card should open its GitHub issue. Do not
+  press Recover while the quota/capacity blocker remains.
+
+- [ ] **PC bridge warning, backend deployed:** an online PC should not create
   a Now-bar notification. An offline warning should clear quietly on reconnect.
 
 ## Additional device checks when convenient

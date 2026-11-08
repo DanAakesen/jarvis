@@ -23,12 +23,15 @@ enum JarvisFixtureScenario {
     ) throws -> Data {
         let data = Data(scenario.utf8)
         let voiceHistory: Bool
+        let notificationTasks: Bool
 #if targetEnvironment(simulator)
         voiceHistory = ProcessInfo.processInfo.arguments.contains("--ui-test-voice-history")
+        notificationTasks = ProcessInfo.processInfo.arguments.contains("--ui-test-notification-tasks")
 #else
         voiceHistory = false
+        notificationTasks = false
 #endif
-        guard emptyActivity || calendarChangeLanguage != nil || voiceHistory else { return data }
+        guard emptyActivity || calendarChangeLanguage != nil || voiceHistory || notificationTasks else { return data }
         guard var root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               var interactions = root["interactions"] as? [[String: Any]],
               let index = interactions.firstIndex(where: { $0["path"] as? String == "/api/now" }),
@@ -36,6 +39,13 @@ enum JarvisFixtureScenario {
             throw FixtureTransportError.invalidScenario
         }
 
+        if notificationTasks, var body = response["body"] as? [String: Any],
+           var items = body["items"] as? [[String: Any]] {
+            items.append(["id": "26", "category": "alert", "title": "Synthetic task is now Running",
+                          "link": "task:21", "at": "2026-10-30T09:32:00Z"])
+            body["items"] = items
+            response["body"] = body
+        }
         if emptyActivity || calendarChangeLanguage != nil {
             response["body"] = [
                 "running": [],

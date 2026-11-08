@@ -11692,3 +11692,18 @@ The Now-feed query also hides legacy online entries before any socket reconnect,
 without deleting activity history or suppressing unrelated alerts. Retain serialized
 transactional writes and refresh only after commit. SQL integration covers legacy
 rows, quiet recovery, dismissal persistence and a later outage. Deployment pending.
+
+
+### 8 November 2026 — Open notification tasks and repair Factory history
+
+The owner cannot open Task 23 from Notifications, sees an error opening P11-13,
+and cannot tap issue-only In progress cards. Add task navigation for newest/older
+notifications and running rows, keeping dismiss separate and completing sheet
+dismissal before navigation. Issue-only cards open their existing GitHub issue.
+
+Confirmed contract mismatch: iOS required taskId in history, while the backend
+returns TaskEventRecord without it. Accept task-scoped history and retain strict
+live-event ID matching. Correct fixtures instead of adding an invented field to
+the API. Build 83 was cancelled before upload to bundle these corrections with
+chat spacing/progress; the bridge change is live after Deploy 42477261659.
+New source qualification and replacement TestFlight delivery are pending.

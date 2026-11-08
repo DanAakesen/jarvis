@@ -44,6 +44,7 @@ struct JarvisChatScreen: View {
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @StateObject private var model: JarvisChatModel
     @State private var presentedSheet: ChatSheet?
+    @State private var pendingActivityTaskID: String?
     @StateObject private var dictation = ChatDictation()
     @State private var fileImporterPresented = false
     @State private var photosPickerPresented = false
@@ -216,10 +217,13 @@ struct JarvisChatScreen: View {
             guard !selection.isEmpty else { return }
             Task { await importPhotos(selection) }
         }
-        .sheet(item: $presentedSheet, onDismiss: refreshScreenSharing) { sheet in
+        .sheet(item: $presentedSheet, onDismiss: activitySheetDismissed) { sheet in
             switch sheet {
             case .activity(let kind):
-                JarvisActivitySheet(model: model, kind: kind)
+                JarvisActivitySheet(model: model, kind: kind) { taskID in
+                    pendingActivityTaskID = taskID
+                    presentedSheet = nil
+                }
                     .presentationDetents(
                         model.nowFeed?.confirmations.contains(where: { $0.actionKind == .calendarChange }) == true
                             ? [.large] : [.medium, .large]
@@ -294,6 +298,13 @@ struct JarvisChatScreen: View {
             reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration),
             value: model.messages.count
         )
+    }
+
+    private func activitySheetDismissed() {
+        refreshScreenSharing()
+        guard let taskID = pendingActivityTaskID else { return }
+        pendingActivityTaskID = nil
+        navigation.openFactoryTask(taskID)
     }
 
     @ViewBuilder

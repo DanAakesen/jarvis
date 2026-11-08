@@ -5,6 +5,7 @@ import JarvisCore
 @MainActor
 final class JarvisNavigationModel: ObservableObject {
     @Published private(set) var state: JarvisNavigationState
+    @Published private(set) var requestedFactoryTaskID: String?
     /// Finger-tracked reveal progress (0...1) while a swipe is in flight; nil whenever no swipe is active.
     @Published private(set) var dragProgress: Double?
     /// True while Chat or Voice is open and was reached from Home. Set just before the published state changes.
@@ -76,7 +77,17 @@ final class JarvisNavigationModel: ObservableObject {
         write { $0.voiceSessionStateChanged(voiceState) }
     }
 
+    func openFactoryTask(_ id: String) {
+        requestedFactoryTaskID = id
+        navigate(to: .softwareFactory)
+    }
+
+    func consumeFactoryTaskRequest(_ id: String) {
+        if requestedFactoryTaskID == id { requestedFactoryTaskID = nil }
+    }
+
     func reset() {
+        requestedFactoryTaskID = nil
         dragProgress = nil
         state = JarvisNavigationState()
         cameFromToday = false

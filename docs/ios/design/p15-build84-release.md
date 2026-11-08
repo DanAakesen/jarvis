@@ -1,0 +1,66 @@
+# Build 84 delivery record (candidate)
+
+Updated 8 November 2026. Device acceptance remains separate from automated checks.
+
+## Changes
+
+- Timestamp, Jarvis reply and Tool activity use compact spacing. Existing paragraph
+  spacing, tool touch targets and separation between messages remain.
+- The single Thinking/Working/Writing reply/reconnecting status belongs to the
+  scrolling conversation. The composer and Now bar contain no turn-progress row.
+- The backend shows PC bridge warnings only while offline. Online and control-pause
+  changes stay quiet, recovery clears the warning, and a later outage reopens it.
+  Legacy online feed entries are hidden without deleting activity history.
+- Copilot comparison is saved and deferred at the owner's request. The consolidated
+  [device checklist](p15-owner-test-checklist.md) retains the other outstanding checks.
+
+## Earlier chat/bridge source and verification
+
+PR [#1645](https://github.com/DanAakesen/jarvis/pull/1645) merged as
+`1008ea6758f6fb66d05942c6717cbf736f5ebbda`, with complete tree identity to qualified
+head `b7a0c8e6908a0f643ccffcafde1b8b6ef27d4110`.
+
+- [CI 42476277900](https://github.com/DanAakesen/jarvis/actions/runs/42476277900)
+  passed, including 7,416 backend tests (one skipped), 273 real SQL Server tests,
+  backend build/smoke, web and JarvisCore checks. The runner image job passed on
+  retry after a GitHub CLI download connection failure; no test was weakened.
+- CodeQL passed on the qualified head. Local bridge/feed tests (11 passed) and
+  scoped ESLint also passed.
+- [Native 42475396547](https://github.com/DanAakesen/jarvis/actions/runs/42475396547)
+  passed both existing presentation/turn-feedback cases, with no skipped tests.
+  The status must be a descendant of the conversation ScrollView. Existing
+  composer clearing, single short message, next-draft preservation, final tool
+  collapse and native selection checks remain. Actual captures were reviewed.
+  The tested iOS tree `ee8a42c08c2355ba399576e38be755b567845173` is identical in
+  the final source and merge. The validation-only workflow was not merged.
+- Native artifact `13616050030`, `chat-reply-spacing-evidence-1`, ZIP SHA256:
+  `231c4c2f4895a20421593c91823c7b7121756c0dcc3abbf61f98444685fa88f1`.
+
+## Delivery
+
+Backend deployment 42477261659 passed readiness and live conversation acceptance.
+TestFlight 42477928796 (83) was cancelled during archive, before upload, to bundle
+the subsequent notification/task-detail reports. Replacement build 84 is pending
+fresh qualification. Do not infer Apple processing or physical-device acceptance.
+
+## Separate outstanding work
+
+Notes/Ember were already uploaded in build 82 and remain included. Owner visual,
+editing, dictation and reconnect checks remain in the consolidated checklist.
+Copilot's live policy canary passed; the owner's full comparison is deferred.
+The 128 GiB worker is still unprovisioned because Azure returned QuotaExceeded.
+Factory task 23 remains saved and must be recovered, not recreated, after capacity
+and idle-deallocation verification. This release does not resolve that quota.
+
+## Added Factory navigation correction
+
+Task notifications use the typed task link, including older grouped updates and
+running rows. Dismissal remains a separate action. Close the sheet before root
+navigation opens the matching Factory detail. Cards without a linked task open
+their existing HTTPS GitHub issue; no task is invented or started.
+
+The iOS history model required taskId, but the backend returns TaskEventRecord
+without that field. Live messages add it as TaskEventMessage. Accept its absence
+in task-scoped history while continuing to reject missing/foreign IDs on live
+streams. Correct the fixtures to match the actual contract. Native and Core
+qualification of this addition are pending.

@@ -7586,3 +7586,15 @@ After quota resolution, rerun qualified main provisioning with reusable image ta
 build-context equivalence checks pass. Verify capacity, provider access and real
 idle deallocation, then recover existing task 23 from the authenticated owner app.
 The deploy principal is smoke-only and must not impersonate that owner session.
+
+
+### Notification/Factory follow-up (8 November 2026)
+
+PR #1645 merged as 1008ea67; CI 42476277900, CodeQL, native 42475396547, and
+Deploy 42477261659 passed. Native captures were inspected. TestFlight 83
+(42477928796) was cancelled during archive, before upload, when the owner added
+notification routing and Factory detail/card defects. Replacement qualification
+must cover NotificationTaskNavigationUITests and the existing Chat presentation/
+turn-feedback checks. The history fixture must omit taskId to match the backend
+TaskEventRecord; live stream tests must still reject missing or foreign task IDs.
+The quota blocker above remains; opening a task must not recover or recreate it.

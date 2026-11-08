@@ -12,8 +12,10 @@ acceptance. The owner explicitly requested updates across all discussed items.
 
 | Item | Current state | Next evidence needed |
 | --- | --- | --- |
-| PC bridge notifications | Online/control-state updates made quiet; legacy online feed rows hidden; offline warnings rearm after a recovery | Backend/SQL qualification and live deployment; owner device check |
-| Chat reply grouping and progress placement | Compact metadata spacing and removal of extra reply padding implemented; one active-turn status moved inside the scrolling transcript | Fresh native presentation/turn checks, actual capture review and next TestFlight upload |
+| Notifications → Factory task | Latest, older grouped and running-task rows now route to the matching Factory detail after sheet dismissal | Fresh native navigation checks and replacement TestFlight build |
+| Factory detail and issue-only cards | History decoder aligned with TaskEventRecord (no taskId); live events still require matching taskId. Cards without a task open their GitHub issue | Core contracts, native task-history and board navigation checks; owner retest P11-13 |
+| PC bridge notifications | #1645 merged; online/control-state updates quiet, legacy online feed rows hidden, offline warnings rearm after recovery; backend and SQL checks passed | Deploy 42477261659 passed readiness and live acceptance; owner device check |
+| Chat reply grouping and progress placement | #1645 merged; compact spacing and one status inside the scrolling transcript; both native checks passed and actual captures reviewed | Build 83 cancelled before upload to bundle notification/Factory fixes; fresh native verification and replacement build pending |
 | Build 81 Home/Chat streaming and recovery | Implemented, qualified and uploaded to TestFlight | Owner device send/network/dictation checks in docs/ios/design/p15-build81-release.md |
 | Header/footer transparency, one progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
@@ -24,7 +26,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Current vs Copilot comparison | Saved and deferred by the owner on 8 November; live compatibility passed | Resume docs/runtime-comparison-owner-test.md when convenient; no owner comparison pass claimed |
 | Notes redesign | #1638 merged as a55e7350; CI 42418217434 and final native 42417916004 passed; captures inspected | Build 82 uploaded in 42419435807; owner editing/navigation acceptance pending |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
-| Next TestFlight bundle | Build 82 uploaded successfully in 42419435807 from a55e7350 | Apple processing/device acceptance; backend worker delivery remains separate |
+| Next TestFlight bundle | 83 cancelled before upload to include the latest notification/Factory reports; replacement 84 pending | Qualification, upload and device acceptance; backend worker delivery remains separate |
 
 The owner now explicitly requests implementation and delivery of all five items.
 This supersedes the earlier hold while collecting additions. Notes and Ember are
