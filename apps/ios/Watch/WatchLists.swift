@@ -1,3 +1,4 @@
+import Foundation
 import JarvisCore
 import SwiftUI
 
@@ -47,7 +48,7 @@ struct WatchHealthList: View {
                             Text(row["workout_type"]?.stringValue ?? "Workout").font(.headline)
                             if let start = row["start_at"]?.stringValue ?? row["workout_date"]?.stringValue { Text(start) }
                             if let seconds = row["duration_seconds"]?.numberValue { Text("\(Int(seconds / 60)) min") }
-                            if let kcal = row["active_energy_value"]?.numberValue { Text("\(Int(kcal)) active kcal") }
+                            if let kcal = row["active_energy_value"]?.numberValue { Text("\(Int(kcal)) active \(row["active_energy_unit"]?.stringValue ?? "")") }
                             if let distance = row["distance_value"]?.numberValue { Text("\(distance, specifier: "%.1f") \(row["distance_unit"]?.stringValue ?? "")") }
                         }.navigationTitle("Workout")
                     } label: {
@@ -66,8 +67,11 @@ struct WatchHealthList: View {
     private func liftSummary(_ row: [String: JSONValue]) -> some View {
         VStack(alignment: .leading) {
             Text(row["exerciseName"]?.stringValue ?? "Lift")
-            Text("\(row["weightKg"]?.numberValue ?? 0, specifier: "%g") kg · \(Int(row["reps"]?.numberValue ?? 0)) × \(Int(row["sets"]?.numberValue ?? 0))")
+            Text("\(row["weightKg"]?.numberValue.map { String(format: "%g", $0) } ?? "—") kg · \(row["reps"]?.numberValue.map { String(Int($0)) } ?? "—") × \(row["sets"]?.numberValue.map { String(Int($0)) } ?? "—")")
                 .font(.caption).foregroundStyle(.secondary)
+            if let date = row["performedAt"]?.stringValue {
+                Text(JarvisHealthLocalization.formattedDateTime(date, language: .en)).font(.caption2).foregroundStyle(.secondary)
+            }
         }
     }
     private func load() async {
@@ -101,7 +105,7 @@ struct WatchLiftEditor: View {
             Stepper("\(sets) sets", value: $sets, in: 1...100)
             if let failure { Text(failure).font(.caption) }
             Button(busy ? "Saving…" : "Save") { Task { await save() } }
-                .disabled(busy || !value.isValid || !connection.reachable)
+                .disabled(busy || !value.isValid || !connection.reachable || (!row.isEmpty && id == nil))
             if id != nil { Button("Delete lift", role: .destructive) { confirmDelete = true }.disabled(busy || !connection.reachable) }
         }.navigationTitle(id == nil ? "New lift" : "Edit lift")
         .onAppear {
