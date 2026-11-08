@@ -5,8 +5,8 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: a8720d6dfe44575fb00492cec9a05a90b20f9571
-  TASK_IOS_TREE: c4b8fa2ccbec6ddacdfad32dbb07f3268e24b85f
+  TASK_SOURCE_SHA: e02a3176c610ecefdd9358d36d93328fc0408051
+  TASK_IOS_TREE: c9894fe714af17480a57f38f93696cb7bdb9bf7b
 jobs:
   gallery:
     name: Verify notification tasks, Factory history and Chat
