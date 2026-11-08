@@ -5,47 +5,53 @@ Automated/native passes and a TestFlight upload are not owner acceptance.
 
 ## Short next session
 
-Build 82 contains Notes/Ember and the earlier build-81 fixes. The tighter Chat
-reply spacing and progress inside the transcript are being qualified with the Factory navigation fixes for replacement build 84;
-build 83 was cancelled before upload. Do not expect these fixes in 82.
+Build 84 uploaded successfully in 42503950006 on 8 November at 17:22 UTC. The owner confirmed using build 84 on device. It includes the Chat progress,
+Factory navigation, transparent chrome, native selection and lift-editing fixes,
+alongside Notes/Ember from 82. Build 83 was cancelled before upload.
+
+**New Notes findings are open:** build 84 freezes when opening the right sidebar, and the shared phrase/Overview is missing.
+#1653 now passed CI, 530 Core tests and all four native interaction cases.
+Wait for its TestFlight upload before retesting those two; build 84 still has the reported faults. Preserve the previously approved browsing/editor interactions.
 
 - [ ] **Notes:** swipe the title-only pinned carousel, open a recent note, browse
   folders, and use New folder at the bottom right. Create/edit a disposable note,
   save with Done, reopen it and confirm the edit. Switch Raw on/off and confirm the
   complete original Markdown/frontmatter remains. Check pin/unpin in the editor.
-- [ ] **Background and chrome:** check Ember readability and scroll Notes, Health,
-  Factory and Settings. The background should remain visible around header/footer
-  controls, especially the Notes and Factory footers.
+- [x] **Header/footer transparency:** owner confirmed it works well across pages
+  in build 84 on 8 November, including the previously reported backing/scroll-behind
+  problems. Preserve this accepted behavior during the Notes correction.
+- [ ] **Background readability:** any additional light/dark or accessibility spot
+  checks remain optional; transparency acceptance does not imply all visual checks.
 - [ ] **Chat:** send once from Home and once from Chat. Confirm one message, an
   immediately cleared composer, one progress indicator and a final reply. Type a
   next draft while waiting and confirm it survives. Check short bubbles fit their
   text, final tools collapse under Jarvis, and partial reply text can be selected.
-- [ ] **Reply spacing, next build:** the Working for timer should sit above public progress updates, with
+- [ ] **Reply spacing, build 84:** the Working for timer should sit above public progress updates, with
   thinking/tool activity underneath. Tap a message to show its timestamp and tap
   again to hide it. Long-press selection must still work. All progress scrolls with the conversation,
   without a duplicate above the Now bar. Open/close tools and select text; keep
   separate messages clear.
 
-- [ ] **Factory navigation, replacement build:** tap Task 23 from Notifications,
+- [ ] **Factory navigation, build 84:** tap Task 23 from Notifications,
   including an expanded older update, and open P11-13 from the board. Confirm the
   task and history load. An issue-only card should open its GitHub issue. Do not
   press Recover while the quota/capacity blocker remains.
 
-- [ ] **Jarvis gym logging, after backend delivery:** send one explicit lift/session
+- [ ] **Jarvis gym logging, Current backend deployed:** send one explicit lift/session
   request with exercise, kg, reps, sets, date and session. Verify the returned values
   in Health and the session in Home after refresh, including while a vault copy is
   pending. Ask Jarvis to correct that same test lift, then delete the test entry;
-  verify no extra approval and no duplicate record. Repeat in Copilot only after
-  its tool-definition refresh passes. The earlier failed workout is not replayed
+  verify no extra approval and no duplicate record. Copilot's tool-definition refresh and fresh live canary passed in 42510264543;
+  the same owner logging/readback/edit/delete test is now ready in Copilot. The earlier failed workout is not replayed
   automatically. Historical app vault logs are retained without migration.
 
-- [ ] **Lifts, replacement build:** tap a disposable lift in Last lifts and confirm
+- [ ] **Lifts, build 84:** tap a disposable lift in Last lifts and confirm
   the editor contains its current exercise, weight, reps and sets. Change one
   value, save and reopen it. Short-swipe left to reveal only the pencil; swipe
   farther to reveal trash beside it. Swiping alone must not delete. Tap trash on
   the disposable lift and confirm it stays removed after refresh.
 
-- [ ] **Long replies and test chat, replacement build:** use a read-only request
+- [ ] **Long replies and test chat, build 84:** use a read-only request
   that requires several tools. Expect acknowledgment, actual tool activity and
   one progress row in the conversation until a final result. If the connection
   drops, use Refresh test history and verify the partial acknowledgment stays
@@ -74,13 +80,17 @@ build 83 was cancelled before upload. Do not expect these fixes in 82.
 
 ## Deferred or blocked
 
+- **Apple Watch:** Jarvis2 secondary has draft PR #1652 open; not integrated or released. Wait for primary
+  integration, native checks and a confirmed testable build before owner testing.
+
 - **Copilot comparison — quick smoke test reported good; combined test pending.**
   The actual harness differences, proposed project exercise and optional sample prompt are in [the saved comparison guide](../../runtime-comparison-owner-test.md).
-  Current remains the default; live Copilot compatibility passed, owner quality
-  comparison is pending. The older individual tests are optional diagnostics.
+  Current remains the default. #1651 is merged/deployed; the refreshed gym catalogue
+  passed a new two-turn live canary and acceptance in 42510264543 at 18:34 UTC.
+  Copilot is ready for owner retesting; the full quality comparison remains pending. The older individual tests are optional diagnostics.
 - **Factory end-to-end — blocked, not ready for recovery testing.** Azure returned
-  QuotaExceeded before the 128 GiB worker activated. Subscription quota details are
-  pending. Once provisioned and qualified, recover existing task 23 / issue 1634,
+  QuotaExceeded before the 128 GiB worker activated. The authorized quota request failed with HTTP 403 before a write. Subscription
+  Quota Request Operator access for jarvis-github-deploy is needed. Once provisioned and qualified, recover existing task 23 / issue 1634,
   verify its actual delivery PR/checks, then verify idle deallocation. Do not create
   another scaffold task by repeating Prepare.
 - **Approval friction:** after Factory is ready, confirm a clear authorized coding

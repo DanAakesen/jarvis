@@ -66,6 +66,16 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
     ]]
 
     init(boardTasks: Bool = false) {
+#if targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-large-notes") {
+            // Synthetic inventory: exercise a real, growing library without owner data or network writes.
+            notes += (0..<1_000).map { index in
+                let name = String(format: "note-%04d", index)
+                return Note(path: "Personal/\(name).md", title: "Synthetic library note \(index)",
+                            content: "# Synthetic library note \(index)\n\nNavigation regression fixture.")
+            }
+        }
+#endif
         guard boardTasks else { return }
         // Synthetic long titles and mixed metadata exercise the owner's task-list finding.
         let samples: [(String, String?, String?, String, String, String?)] = [

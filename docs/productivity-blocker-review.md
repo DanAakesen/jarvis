@@ -21,12 +21,13 @@ in his session. The exact cause of that live interruption remains unconfirmed.
   submission, so a first disconnect late in a healthy turn could fail immediately.
   PR #1646 starts that budget at disconnection and reattaches to the same turn
   with GET. It never repeats the write request. Clock-controlled regression
-  coverage simulates a disconnect after twenty minutes; native/Core checks are
-  pending on the final candidate.
+  coverage simulates a disconnect after twenty minutes; final Core/native checks
+  passed. Physical-device reconnect remains an owner check.
 - **Invisible progress and refresh losing output:** the runtime test sheet ignored
   acknowledgment/tool events and cleared partial output during history refresh.
   PR #1646 renders live activity and retains unsaved output until a saved final
-  result or successful reattachment is available. Qualification is pending.
+  result or successful reattachment is available. Final native isolation/progress
+  checks passed in 42500193416 and 42501271718; owner-device testing remains.
 - **Direct Factory requests needing another yes:** PR #1636 already accepts a
   verified direct request for its actual own-repository scope. The deployed
   policy is described in [the earlier review](approval-friction-review.md).
@@ -37,8 +38,7 @@ in his session. The exact cause of that live interruption remains unconfirmed.
   `CIContext.init` → Metal library loading on the main thread. The placeholder
   camera was constructed even when no camera was open. PR #1646 now creates its
   image context lazily on the serial camera frame queue. Native navigation and
-  camera-sheet checks must qualify this change; physical camera encoding remains
-  an owner-device check.
+  camera-sheet checks passed; physical camera encoding remains an owner-device check.
 
 ## Remaining findings, ordered by impact
 
@@ -58,6 +58,18 @@ retained scaffold commit `3ace0ad86092026e99a52f5f791c9fdb376afcc1` before
 `disk_low`. The 128 GiB worker implementation is merged, but provisioning hit Azure
 quota. No approval or timeout change supplies that missing capacity. Do not create
 a second scaffold task to get around the existing stop.
+
+## Release workflow follow-up
+
+The quota-only change #1649 triggered a full normal deployment (42503216228):
+`pipeline_impact.py` treats unrecognized workflow/script paths as inputs to every
+production component. `worker-quota.yml` and `request_worker_quota.py` therefore
+invalidated otherwise unchanged images and infrastructure. The additional deployment
+continues through its normal checks after infrastructure work began.
+Before the next quota-workflow code change, classify these administration-only
+files explicitly and test that CI still runs their contracts while production
+components are not invalidated solely by those files. This improvement is recorded,
+not implemented in build 84.
 
 ## Source references
 
