@@ -5,12 +5,11 @@ Automated/native passes and a TestFlight upload are not owner acceptance.
 
 ## Short next session
 
-Build 84 uploaded successfully in 42503950006 on 8 November at 17:22 UTC. Apple
-processing/device availability remain unverified. It includes the Chat progress,
+Build 84 uploaded successfully in 42503950006 on 8 November at 17:22 UTC. The owner confirmed using build 84 on device. It includes the Chat progress,
 Factory navigation, transparent chrome, native selection and lift-editing fixes,
 alongside Notes/Ember from 82. Build 83 was cancelled before upload.
 
-**New Notes findings are open:** right-sidebar crash and missing phrase/Overview.
+**New Notes findings are open:** build 84 freezes when opening the right sidebar, and the shared phrase/Overview is missing.
 Wait for the qualified correction before retesting those two; #1653 is a candidate,
 not an uploaded fix. Preserve the previously approved browsing/editor interactions.
 
@@ -18,9 +17,11 @@ not an uploaded fix. Preserve the previously approved browsing/editor interactio
   folders, and use New folder at the bottom right. Create/edit a disposable note,
   save with Done, reopen it and confirm the edit. Switch Raw on/off and confirm the
   complete original Markdown/frontmatter remains. Check pin/unpin in the editor.
-- [ ] **Background and chrome:** check Ember readability and scroll Notes, Health,
-  Factory and Settings. The background should remain visible around header/footer
-  controls, especially the Notes and Factory footers.
+- [x] **Header/footer transparency:** owner confirmed it works well across pages
+  in build 84 on 8 November, including the previously reported backing/scroll-behind
+  problems. Preserve this accepted behavior during the Notes correction.
+- [ ] **Background readability:** any additional light/dark or accessibility spot
+  checks remain optional; transparency acceptance does not imply all visual checks.
 - [ ] **Chat:** send once from Home and once from Chat. Confirm one message, an
   immediately cleared composer, one progress indicator and a final reply. Type a
   next draft while waiting and confirm it survives. Check short bubbles fit their

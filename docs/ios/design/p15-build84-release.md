@@ -23,8 +23,7 @@ failure was fixed and separately requalified above, not waived.
 Deploy 42502357217 passed backend/agent deployment, readiness and live conversation
 acceptance. TestFlight run 42503950006 uploaded build 84 from b6b515d9 and completed
 successfully at 17:22 UTC on 8 November. Its app/Core source is unchanged from the
-qualified app candidate. Apple processing and owner-device availability remain
-unverified. Extra deployment 42503216228 also passed. Copilot's gym catalogue
+qualified app candidate. The owner has confirmed testing build 84 on device. Extra deployment 42503216228 also passed. Copilot's gym catalogue
 refresh 42503779972 failed after version creation while reading the inventory;
 read-only inspection 42505663536 failed without writes. PR #1651 corrects pagination
 and exact-version reconciliation. Its 7,445 backend tests passed, but compilation
@@ -40,12 +39,18 @@ is not complete. See [the quota runbook](../../factory-worker-quota.md).
 
 ## New owner findings after the build
 
-The owner reports a Notes right-sidebar crash and missing shared phrase/Overview.
-PR #1653 restores the confirmed missing components; the crash cause is still
-unproven. Native run 42507483140 exercises the exact candidate on a synthetic
-1,003-note library and retains the normal editing/order checks. No repaired build
-is released yet. Keep these as two findings, and retain the approved carousel,
-folder sheet and editor. Exact owner build and crash-versus-freeze are pending.
+The owner confirmed that build 84 freezes when opening the Notes right sidebar;
+the app does not close. The shared phrase/Overview is also missing. PR #1653
+restores those components. Native run 42507483140 passed the page-order test but
+failed the 1,003-note responsiveness test at the unchanged 120-second limit, and
+both editor-entry cases. The actual device cause is not yet proven. Retained
+screenshots/hierarchy show the restored header and the editor-test target below
+the footer. No repaired build is released yet; preserve the approved carousel,
+folder sheet and editor.
+
+The owner separately confirmed that header/footer transparency now works well
+across pages in build 84. Both previously reported chrome regressions are accepted.
+Do not change shared header/footer behavior as part of the Notes repair.
 
 Apple Watch implementation is being handled in Jarvis2 secondary, per the owner.
 Primary remains responsible for integration, qualification and release. That report

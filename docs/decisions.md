@@ -11859,3 +11859,13 @@ version inventory; #1651 must qualify and a new live canary must pass before
 retesting is called ready. Quota run 42503224623 failed during inspection before
 any write; this proves an access failure, not an exact failing API read or a
 submitted quota request. Keep deployed, testable and owner-accepted states separate.
+
+
+## 2026-11-08 — Owner accepts build 84 header/footer transparency
+
+Dan confirmed transparency now works well across pages. Mark the backing and
+scroll-behind reports accepted and preserve shared chrome during Notes repairs.
+The separate Notes report is specifically build 84 freezing on the right sidebar,
+not app termination. The phrase/Overview restoration is a candidate, not released;
+first native qualification passed order and failed three other cases. Do not
+collapse owner acceptance of chrome into acceptance of the unrelated Notes fixes.
