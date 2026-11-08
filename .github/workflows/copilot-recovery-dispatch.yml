@@ -1,6 +1,5 @@
-# Temporary primary-thread recovery runner. Never merge this branch.
-# Dispatches the existing main-only workflow; all qualification/OIDC/acceptance gates remain there.
-name: Copilot inventory recovery dispatch
+# Temporary primary-thread release dispatcher. Never merge.
+name: Dispatch qualified Notes TestFlight
 on:
   push:
     branches: [codex/copilot-recovery-dispatch]
@@ -10,17 +9,17 @@ permissions:
 jobs:
   dispatch:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: DanAakesen/jarvis
     steps:
-      - name: Require the qualified main revision
+      - name: Require the reviewed merge and passing qualification
         run: |
-          test "$(gh api repos/DanAakesen/jarvis/git/ref/heads/main --jq .object.sha)" = "c79371d7f60de63752705f4ab9354f4c4500a2c8"
-      - name: Wait for the successful read-only inspection and acceptance
-        run: gh run watch 42509996653 --interval 20 --exit-status
-      - name: Reuse the uniquely matched Copilot version and require the live canary
-        run: |
-          test "$(gh api repos/DanAakesen/jarvis/git/ref/heads/main --jq .object.sha)" = "c79371d7f60de63752705f4ab9354f4c4500a2c8"
-          gh workflow run deploy.yml --repo DanAakesen/jarvis --ref main -f provision_managed_chat=true -f refresh_managed_chat_definition=true
+          test "$(gh api repos/DanAakesen/jarvis/git/ref/heads/main --jq .object.sha)" = "df813f348eae27961259c691b526eeadced9ea18"
+          test "$(gh api repos/DanAakesen/jarvis/git/commits/df813f348eae27961259c691b526eeadced9ea18 --jq .tree.sha)" = "9cd04755573ea3d0e25c90d7f4157715ebcbe014"
+          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511384320 --jq .head_sha)" = "2f0fd280d6f999dd01459e97e0f43e9e12882c3e"
+          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511384320 --jq .conclusion)" = "success"
+          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42510119801 --jq .conclusion)" = "success"
+      - name: Use the existing signed TestFlight workflow
+        run: gh workflow run ios-testflight.yml --repo DanAakesen/jarvis --ref main -f branch=main
