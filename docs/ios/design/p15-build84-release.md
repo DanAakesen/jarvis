@@ -205,3 +205,11 @@ editor on release. The shared row now uses a discrete tap gesture that fails
 during dragging, with independent sibling action buttons. Qualification also
 presses the revealed pencil, verifies the saved value and checks that revealing
 actions never opens the editor or deletes a record. No limits are relaxed.
+
+Native 42498873982 again passed actual-word selection, both progress cases and
+header navigation. Runtime-test execution reached its input at the 120-second
+limit after slow broad accessibility queries; lift reveal still opened the editor.
+The runtime test now addresses the observed text views and menu button directly,
+retaining every assertion and the same timeout. The lift correction is separate.
+Final candidate 7d59f447 passed full CI 42500153035; native requalification remains
+pending, with the updated runtime selector check included before release.

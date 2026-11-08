@@ -8,14 +8,12 @@ final class ChatComposerUITests: XCTestCase {
     func testRuntimeTestKeepsNormalDraftAndHistorySeparate() {
         let app = launch(language: "en")
         defer { app.terminate() }
-        let input = app.descendants(matching: .any)["chat.input"]
+        let input = app.textViews["chat.input"]
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         input.tap()
         input.typeText("Keep my normal draft")
         app.buttons["chat.plus"].tap()
-        let entry = app.descendants(matching: .any).matching(NSPredicate(
-            format: "identifier == %@ OR label == %@", "chat.plus.testRuntime", "Test agent runtime"
-        )).firstMatch
+        let entry = app.buttons["chat.plus.testRuntime"]
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
         entry.tap()
         let current = app.buttons["runtimeTest.current"]
@@ -31,7 +29,7 @@ final class ChatComposerUITests: XCTestCase {
         selectorCapture.lifetime = .keepAlways
         add(selectorCapture)
         app.buttons["runtimeTest.open"].tap()
-        let testInput = app.descendants(matching: .any)["runtimeTest.input"]
+        let testInput = app.textViews["runtimeTest.input"]
         XCTAssertTrue(testInput.waitForExistence(timeout: 10))
         testInput.tap()
         testInput.typeText("Synthetic test message")
