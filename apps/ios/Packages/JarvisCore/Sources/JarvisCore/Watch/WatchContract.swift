@@ -12,7 +12,7 @@ public enum WatchLimits {
 public enum WatchCodec {
     public static func encode<T: Encodable>(_ value: T) throws -> Data {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.withoutEscapingSlashes]
+        encoder.outputFormatting = [.withoutEscapingSlashes, .sortedKeys]
         let data = try encoder.encode(value)
         guard data.count < WatchLimits.wireBytes else { throw WatchFailure.invalidRequest }
         return data

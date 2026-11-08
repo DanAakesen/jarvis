@@ -121,7 +121,7 @@ struct WatchLiftEditor: View {
         guard !busy, value.isValid else { return }
         busy = true; defer { busy = false }
         do {
-            _ = try await connection.request(.init(action: .saveLift, itemID: id, data: JSONEncoder().encode(value), id: submissionID))
+            _ = try await connection.request(.init(action: .saveLift, itemID: id, data: WatchCodec.encode(value), id: submissionID))
             saved(); dismiss()
         } catch { failure = (error as? WatchFailure)?.message ?? "Save failed. Your entry is kept for retry." }
     }
