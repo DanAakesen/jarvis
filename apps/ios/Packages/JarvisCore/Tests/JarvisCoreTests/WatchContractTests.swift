@@ -51,6 +51,17 @@ final class WatchContractTests: XCTestCase {
         XCTAssertFalse(WatchLiftInput(exercise: "Bench", kilograms: 1.001, reps: 1, sets: 1).isValid)
         XCTAssertFalse(WatchLiftInput(exercise: "Bench", kilograms: 1, reps: 0, sets: 1).isValid)
     }
+    func testEncodedEnvelopesFitWatchConnectivityLimit() throws {
+        let payload = Data(repeating: 255, count: WatchLimits.payloadBytes)
+        let request = WatchRequest(action: .saveLift, text: String(repeating: "a", count: 8_000), itemID: String(repeating: "a", count: 200), data: payload)
+        XCTAssertTrue(request.isValid)
+        XCTAssertLessThan(try JSONEncoder().encode(WatchWire.request(request)).count, WatchLimits.wireBytes)
+        XCTAssertLessThan(try JSONEncoder().encode(WatchReply(id: UUID(), data: payload)).count, WatchLimits.wireBytes)
+        let text = WatchLimits.displayText(String(repeating: "𐐀", count: 10_000))
+        XCTAssertTrue(text.hasSuffix("Full reply on iPhone."))
+        XCTAssertLessThan(try JSONEncoder().encode(WatchWire.event(.init(.chatDone, requestID: UUID(), text: text))).count, WatchLimits.wireBytes)
+    }
+
     func testWireRoundTripAndNoArbitraryBackendCommand() throws {
         let request = WatchRequest(action: .saveLift, itemID: "lift-id", data: Data([1, 2]))
         let wire = try JSONEncoder().encode(WatchWire.request(request))

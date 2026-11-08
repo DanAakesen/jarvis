@@ -1,5 +1,14 @@
 import Foundation
 
+public enum WatchLimits {
+    public static let wireBytes = 64_000
+    // Data is base64-encoded inside JSON, so leave room for envelope expansion.
+    public static let payloadBytes = 40_000
+    public static func displayText(_ text: String) -> String {
+        text.count > 8_000 ? String(text.prefix(8_000)) + "… Full reply on iPhone." : text
+    }
+}
+
 /// Paired-device protocol. No credentials, arbitrary URLs or backend paths cross this boundary.
 public enum WatchAction: String, Codable, Sendable {
     case snapshot, history, sendTurn, tasks, workouts, lifts, saveLift, deleteLift
@@ -19,7 +28,7 @@ public struct WatchRequest: Codable, Equatable, Sendable {
     }
     public var isValid: Bool {
         version == 1 && (text?.utf8.count ?? 0) <= 8_000 && (itemID?.utf8.count ?? 0) <= 200 &&
-        (data?.count ?? 0) <= 40_000 && (action != .sendTurn || !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        (data?.count ?? 0) <= WatchLimits.payloadBytes && (action != .sendTurn || !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 }
 

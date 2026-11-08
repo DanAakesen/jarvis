@@ -141,7 +141,7 @@ final class WatchModel: ObservableObject {
                 switch event.kind {
                 case .chatDelta:
                     if messages[index].text == "Working…" { messages[index].text = "" }
-                    messages[index].text += event.text ?? ""
+                    messages[index].text = String((messages[index].text + (event.text ?? "")).prefix(8_000))
                 case .chatDone: messages[index].text = event.text ?? ""; busy = false; turn = nil
                 case .chatError: error = event.text; busy = false; turn = nil
                 default: break
@@ -160,7 +160,7 @@ final class WatchModel: ObservableObject {
             catch { Task { await endVoice() }; show(error) }
         case .voiceTranscript:
             let id = event.responseID ?? event.requestID.uuidString
-            if messages.last?.id == id { messages[messages.count - 1].text += event.text ?? "" }
+            if messages.last?.id == id { messages[messages.count - 1].text = String((messages[messages.count - 1].text + (event.text ?? "")).prefix(8_000)) }
             else { messages.append(.init(id: id, user: false, text: event.text ?? "")) }
         case .voiceUserTranscript:
             messages.append(.init(id: event.responseID ?? UUID().uuidString, user: true, text: event.text ?? ""))

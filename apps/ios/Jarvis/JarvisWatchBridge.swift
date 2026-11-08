@@ -58,7 +58,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data, replyHandler: @escaping (Data) -> Void) {
         Task { @MainActor in
-            guard messageData.count < 64_000, case .request(let request) = try? JSONDecoder().decode(WatchWire.self, from: messageData) else {
+            guard messageData.count < WatchLimits.wireBytes, case .request(let request) = try? JSONDecoder().decode(WatchWire.self, from: messageData) else {
                 replyHandler(Data()); return
             }
             let reply = await self.handle(request)
@@ -66,7 +66,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         }
     }
     private func encode<T: Encodable>(_ value: T) throws -> Data { try JSONEncoder().encode(value) }
-    private func emit(_ event: WatchEvent) {
+    private func emit(_ original: WatchEvent) {
+        var event = original
+        if event.kind != .voiceAudio, let text = event.text { event.text = WatchLimits.displayText(text) }
         guard WCSession.default.isReachable else { return }
         guard eventQueue.count < 128 else {
             eventQueue.removeAll()
@@ -113,7 +115,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         let reply: WatchReply
         do {
             let data = try await perform(request, client: client)
-            guard (data?.count ?? 0) < 50_000 else { throw WatchFailure.failed }
+            guard (data?.count ?? 0) <= WatchLimits.payloadBytes else { throw WatchFailure.failed }
             guard epoch == generation else { return .init(id: request.id, failure: .signInRequired) }
             reply = .init(id: request.id, data: data)
         } catch {
