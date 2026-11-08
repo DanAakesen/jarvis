@@ -11785,3 +11785,13 @@ lift note version, without another agent confirmation. Reuse shared controls.
 
 Runtime recovery must retain partial output and reconnect by turn ID instead of
 reposting a request. Local reconnect time is an outage budget, not a work deadline.
+
+### 8 November 2026 — Review productivity gates by actual failure
+
+The owner explicitly requests a broader approval/timeout review. Record findings in
+`docs/productivity-blocker-review.md`: distinguish service-unavailable decisions
+from owner ambiguity, retain proposals/receipts durably, and reconcile uncertain
+work without duplicate actions. Existing authorization and resource checks remain.
+These follow-ups are not implemented by the long-running stream fix. Cloud threads
+should use separate branches and task scopes; shared GitHub and deployed services
+still need coordinated integration even when local workspaces are isolated.

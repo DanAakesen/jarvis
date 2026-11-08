@@ -4299,7 +4299,10 @@ Owner requests a code review of approval friction, timeouts and other gates that
 prevent authorized actions from completing. Trace request intent through policy,
 execution limits, retries, progress and recovery. Fix confirmed unnecessary blocks
 with regression checks; retain authorization boundaries and no-replay protections.
-Review is in progress alongside long-running replies and lift editing/deletion.
+Source review is recorded in `docs/productivity-blocker-review.md`, with corrected
+deadlines/progress and eight remaining findings separated from live qualification
+gaps. Durable approval/receipt and interrupted-turn recovery are the highest-priority
+remaining work; the review does not claim these architectural changes are implemented.
 
 ## Latest implementation evidence (8 November 2026)
 

@@ -112,6 +112,9 @@ The owner also reported Current test-chat ending after a partial acknowledgment,
 which disappeared on history refresh. Long-running execution/progress and lift
 edit/delete row actions are now captured in PLAN.md. Neither is implemented yet.
 
+That implementation status describes the earlier failed candidate; the expanded
+bundle below supersedes it.
+
 ## Expanded bundle candidate — 8 November 2026
 
 Adds actual runtime-test progress/acknowledgment/tools, preserves unsaved partial
@@ -122,3 +125,11 @@ Older notification expansion now separates its heading touch target from child
 task links after the native capture showed overlapping accessibility frames.
 Local backend mutation checks pass (68), lint/build pass; native qualification of
 this expanded candidate remains pending. No TestFlight upload has happened.
+
+The first expanded native run (42491318279) stopped at compilation because the
+new lift Core model referenced app-only JSON helpers. The corrected candidate
+5122d147 decodes the enum directly. Its Core CI job passed; native run
+42491913466 is qualifying app interactions. Backend PR #1647 deployed its images
+and passed readiness/chat acceptance, but the full Deploy 42490995273 acceptance
+job failed on `research_runner_transport`; a read-only acceptance retry is running.
+Do not report complete live acceptance or an iOS upload from these partial results.

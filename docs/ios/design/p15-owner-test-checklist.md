@@ -30,6 +30,19 @@ build 83 was cancelled before upload. Do not expect these fixes in 82.
   task and history load. An issue-only card should open its GitHub issue. Do not
   press Recover while the quota/capacity blocker remains.
 
+- [ ] **Lifts, replacement build:** tap a disposable lift in Last lifts and confirm
+  the editor contains its current exercise, weight, reps and sets. Change one
+  value, save and reopen it. Short-swipe left to reveal only the pencil; swipe
+  farther to reveal trash beside it. Swiping alone must not delete. Tap trash on
+  the disposable lift and confirm it stays removed after refresh.
+
+- [ ] **Long replies and test chat, replacement build:** use a read-only request
+  that requires several tools. Expect acknowledgment, actual tool activity and
+  one progress row in the conversation until a final result. If the connection
+  drops, use Refresh test history and verify the partial acknowledgment stays
+  visible or the existing turn resumes. Do not resend an uncertain write. A live
+  run past the former 210-second boundary still needs qualification.
+
 - [ ] **PC bridge warning, backend deployed:** an online PC should not create
   a Now-bar notification. An offline warning should clear quietly on reconnect.
 
@@ -64,6 +77,9 @@ build 83 was cancelled before upload. Do not expect these fixes in 82.
 - **Approval friction:** after Factory is ready, confirm a clear authorized coding
   instruction proceeds without a redundant yes and a plan-only request stays a
   proposal. Backend acceptance passed; owner end-to-end confirmation is pending.
+  The broader [productivity review](../../productivity-blocker-review.md) records
+  remaining proposal expiry, interpretation failure and recovery problems; those
+  follow-ups are not all implemented in this release.
 
 Loading animations and the general widget appearance were already accepted.
 Retain those decisions; the widget checks above cover the later requested changes.
