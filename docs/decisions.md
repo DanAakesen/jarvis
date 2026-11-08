@@ -11837,6 +11837,40 @@ verification are separate states. Unknown quota-write outcomes are inspected,
 not automatically retried. Implementation has eight passing focused tests;
 no live quota request is claimed. See docs/factory-worker-quota.md.
 
+## 8 November 2026 — Keep delivery status visible across workstreams
+
+Dan explicitly requested recurring concise status bullets for gym chat logging;
+chat/navigation/lift editing; Notes/Background 3; Copilot; 128 GiB/Factory; and
+approvals/timeouts. Report implementation, qualification, deployment, readiness
+for owner testing and acceptance separately. A blocked item names its observed
+reason and next action. Keep PLAN.md and the build delivery record current;
+passing automated checks does not establish owner-device acceptance.
+
+
+## 8 November 2026 — Keep all reported work visible in delivery updates
+
+Dan prefers the short parallel delivery-status bullets and reports Apple Watch
+implementation in Jarvis2 secondary. Primary retains SDLC/integration/release
+ownership; secondary does not deploy. Add Watch to the standing status without
+claiming implementation completion. Track the new Notes right-sidebar crash and
+missing phrase/Overview independently: the latter has a source correction in
+#1653, while the crash cause remains unproven. Copilot gym refresh failed during
+version inventory; #1651 must qualify and a new live canary must pass before
+retesting is called ready. Quota run 42503224623 failed during inspection before
+any write; this proves an access failure, not an exact failing API read or a
+submitted quota request. Keep deployed, testable and owner-accepted states separate.
+
+
+## 2026-11-08 — Owner accepts build 84 header/footer transparency
+
+Dan confirmed transparency now works well across pages. Mark the backing and
+scroll-behind reports accepted and preserve shared chrome during Notes repairs.
+The separate Notes report is specifically build 84 freezing on the right sidebar,
+not app termination. The phrase/Overview restoration is a candidate, not released;
+first native qualification passed order and failed three other cases. Do not
+collapse owner acceptance of chrome into acceptance of the unrelated Notes fixes.
+
+
 ## 8 November 2026 — Read the complete Copilot version inventory before retrying
 
 A catalogue refresh failed after its create step when reading Azure's version
@@ -11855,6 +11889,7 @@ qualification and their manual execution gates. Unknown new runtime files remain
 conservative full-deployment inputs.
 
 Reference: https://ai.azure.com/api-reference/agent-versions/list-agent-versions/.
+
 
 
 ## 8 November 2026 — Restore Notes context; investigate navigation separately
@@ -11888,3 +11923,34 @@ Editor tests now scroll the complete target row above the dock before tapping;
 the retained hierarchy placed the former target below the viewport/dock. All
 existing pin/Raw/edit/save/reopen assertions and test limits remain. Fresh native
 qualification is required; neither a repair release nor owner acceptance is claimed.
+
+
+## 2026-11-08 — Copilot gym catalogue ready for owner retesting
+
+PR #1651 merged as c79371d7 after full CI 42506434652 passed on retry. Normal Deploy
+42507969183 passed readiness and acceptance. Read-only inspection 42509996653
+reported one matching version among five and the pin on another version. The
+already authorized refresh 42510264543 then reported managed_chat_provisioned and
+managed_chat_comparison_canary_ok at 18:34 UTC, with live acceptance also green.
+The refreshed catalogue is testable. Current stays the default; this compatibility
+canary does not establish comparative quality or owner acceptance of gym writes.
+
+
+## 2026-11-08 — Notes repair qualified without changing accepted chrome
+
+The Notes correction passed full CI 42509929023, including all 530 Core tests,
+and native run 42510119801 passed all four selected cases with zero failures/skips.
+Qualified source ca107a8b897bdf2eab181ab504cb43bcf1344525 has iOS tree
+545ad8d8c08ed50e9507d71cceadab434537fe1e. Actual restored-order, scrolled-sidebar
+and light/dark editor captures were reviewed. Artifact 13629821155 has SHA256
+9c0a357026019bc40ced7671358d47ed64fe7b120d23b31a969176eb9fff8755.
+The 1,003-note library now passes repeated sidebar open/close, scrolling and
+return-to-Chat checks. Both themes pass pin/Raw/edit/save/reopen. Existing 120/150
+second test limits and every assertion are retained. Physical-device acceptance
+of the freeze correction remains pending; TestFlight upload is the next step.
+
+Temporary run 42509865676 stopped before native testing because a standalone
+macOS SwiftPM invocation used the package's unsupported default macOS target.
+Core was instead qualified through its existing Linux Swift 6.2 CI job. The native
+runner compiled Core for the supported iOS target. No product deployment target,
+test assertion or timeout was changed to bypass that validation setup failure.

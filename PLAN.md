@@ -1,25 +1,19 @@
 ## Current Notes follow-up — 8 November 2026
 
+The Notes correction passed full CI 42509929023, including all 530 Core tests,
+and native run 42510119801 passed all four selected cases with zero failures/skips.
+Qualified source ca107a8b897bdf2eab181ab504cb43bcf1344525 has iOS tree
+545ad8d8c08ed50e9507d71cceadab434537fe1e. Actual restored-order, scrolled-sidebar
+and light/dark editor captures were reviewed. Artifact 13629821155 has SHA256
+9c0a357026019bc40ced7671358d47ed64fe7b120d23b31a969176eb9fff8755.
+The 1,003-note library now passes repeated sidebar open/close, scrolling and
+return-to-Chat checks. Both themes pass pin/Raw/edit/save/reopen. Existing 120/150
+second test limits and every assertion are retained. Physical-device acceptance
+of the freeze correction remains pending; TestFlight upload is the next step.
 
-Owner clarification, 8 November: this is build 84 freezing on the right sidebar,
-not app termination. Header/footer transparency is now owner-accepted across pages
-and must be preserved. First native run 42507483140 passed restored page order,
-but failed the 1,003-note navigation case at the unchanged 120-second limit and
-both editor-entry cases. Artifact 13628313103 (SHA256
-12ab310823ace0806ac39d4664dd256b4d56c2fd8c924d9e99247f56503c3be1)
-retains screenshots, the app/UI-runner spindump and hierarchy. The app main thread
-was predominantly constructing accessibility snapshots; this is synthetic
-large-library evidence, not proof of the exact physical-device failure.
+Owner accepted build 84 header/footer transparency across pages. Preserve it.
 
-The correction computes recency once per inventory/visit/day update off the main
-actor, reuses timestamp parsers and renders individual rows lazily with the shared
-grouped-row appearance. It retains every note and cancels stale projections.
-Editor tests now scroll the complete target row above the dock before tapping;
-the retained hierarchy placed the former target below the viewport/dock. All
-existing pin/Raw/edit/save/reopen assertions and test limits remain. Fresh native
-qualification is required; neither a repair release nor owner acceptance is claimed.
-
-## Active delivery — Factory capacity, Copilot and iOS bundle (7 November 2026)
+## Active delivery — Factory capacity, Copilot and iOS bundle (8 November 2026)
 
 ### Owner status ledger
 
@@ -36,24 +30,26 @@ acceptance. The owner explicitly requested updates across all discussed items.
 
 | Item | Current state | Next evidence needed |
 | --- | --- | --- |
-| Long-running Current/Copilot replies | #1647 deployed and passed service acceptance; total 210s/15-minute execution cutoffs removed, transport keepalives added. Runtime-test progress and partial recovery implemented in #1646 | Native candidate and live duration/reconnect verification; restart-durable execution remains open |
-| Lift edit/delete | Implemented in #1646. Native rerun confirmed 82.5 kg saves but exposed integer rounding in Last lifts; formatter corrected | Native fractional-weight readback, short/farther swipe and deletion; release and owner check pending |
-| Header/footer transparency after Ember | Owner clarified both opaque bands and missing scroll-behind behavior. Shared chrome uses safe-area insets; 12 native cases passed, but capture review required a soft top treatment to prevent title/text collisions. Bottom backing stays hidden | All four chrome cases plus navigation passed in 42492967707; retain actual capture review and qualify changed states before build 84 |
-| Notifications → Factory task | Latest, older grouped and running-task rows now route to the matching Factory detail after sheet dismissal | Fresh native navigation checks and replacement TestFlight build |
-| Factory detail and issue-only cards | History decoder aligned with TaskEventRecord (no taskId); live events still require matching taskId. Cards without a task open their GitHub issue | Core contracts, native task-history and board navigation checks; owner retest P11-13 |
+| Long-running Current/Copilot replies | #1647 deployed; total 210s/15-minute cutoffs removed. #1646 merged with runtime-test progress and partial recovery; native checks passed | Live duration/reconnect and owner-device checks; restart-durable execution remains open |
+| Gym chat logging | #1646 merged: gym_lifts/gym_sessions CRUD with owner authorization, replay protection and app history integration. Full CI passed; backend/agent Deploy 42502357217 passed readiness and live acceptance | Copilot registration/canary now passed; owner logging/readback/edit/delete test in build 84; earlier failed workout is not automatically replayed |
+| Lift edit/delete | #1646 merged. Native checks passed actual tap/edit/save/reopen at 82.5 kg, pencil-only short swipe, farther trash reveal and deletion | Build 84 uploaded; owner-device acceptance pending |
+| Header/footer transparency after Ember | Owner accepted across pages in build 84 on 8 November: both continuous background and scroll-behind behavior now work well. Native checks previously passed | Complete; preserve the shared chrome during Notes repairs |
+| Notifications → Factory task | Latest, older grouped and running-task links route after sheet dismissal; native interactions passed | Build 84 uploaded; owner Task 23 navigation check pending |
+| Factory detail and issue-only cards | TaskEventRecord history decoding repaired; live IDs remain strict. Issue-only cards open GitHub. Core/native checks passed | Build 84 uploaded; owner retest P11-13 and issue-only cards |
 | PC bridge notifications | #1645 merged; online/control-state updates quiet, legacy online feed rows hidden, offline warnings rearm after recovery; backend and SQL checks passed | Deploy 42477261659 passed readiness and live acceptance; owner device check |
-| Chat reply grouping and progress placement | New owner reference: elapsed Working for header, ongoing public updates, thinking/tools below, timestamps only on message tap. Implemented locally across normal/test chat with additive commentary events | Backend/Core/native verification, deployment and TestFlight pending; preserve selection and no Now-bar progress |
+| Chat reply grouping and progress placement | #1646 merged: elapsed Working for header, public updates, tools beneath and tap-only timestamps. Full CI and all focused native checks passed, including selection | Backend acceptance passed and build 84 uploaded; owner check on device |
 | Build 81 Home/Chat streaming and recovery | Implemented, qualified and uploaded to TestFlight | Owner device send/network/dictation checks in docs/ios/design/p15-build81-release.md |
-| Header/footer transparency, one progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |
+| One progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Resolve worker quota, recover this existing task, finish validation and obtain delivery PR; do not duplicate Prepare |
-| 128 GiB worker workspace | Implementation merged and qualified; backend live. Provisioning 42426685636 confirms Azure InvalidTemplateDeployment / QuotaExceeded before activation. Owner explicitly authorized the quota increase on 8 November; bounded request workflow implemented, not yet submitted | Grant the existing deployment identity subscription quota access and register Microsoft.Quota; read actual limits/usage and request two free vCPUs for Standard_D2as_v5 in Sweden Central. Then provision, verify real capacity/idle deallocation, recover task 23 |
-| Copilot harness | Earlier two-turn canary and owner quick test passed. Gym refresh 42503779972 and read-only inspection 42505663536 failed on Azure version inventory; no new canary/activation claimed. Bounded cursor pagination and admin-workflow impact correction are implemented for qualification | Qualify, inspect all versions, reuse the unique exact match, refresh the catalogue and require the two-turn canary. Current stays default; full owner comparison remains deferred |
+| 128 GiB worker workspace | Worker implementation merged; provisioning remains incomplete. Quota request workflow #1649 merged and qualified. Live run 42503224623 failed during quota inspection: HTTP 403 AuthorizationFailed; no quota write submitted | Grant jarvis-github-deploy Quota Request Operator at subscription scope, rerun quota request, then provision and verify disk/idle deallocation; recover existing task 23 |
+| Copilot harness | Pagination repair #1651 merged/deployed. Read-only inspection 42509996653 found one exact matching version. Authorized catalogue refresh 42510264543 passed readiness, fresh two-turn managed_chat_comparison_canary_ok and live acceptance at 18:34 UTC | Ready for owner retesting, including gym tools; broader Current-vs-Copilot comparison pending. Current remains default |
 | Current vs Copilot comparison | Owner-reported quick smoke test worked well. Actual hybrid architecture and test visibility/context limitations documented; controlled project exercise proposed | Select representative source material; prepare equivalent contexts and measurements before claiming a live comparison. Full tool/write comparison pending |
-| Notes redesign | #1638 merged as a55e7350; CI 42418217434 and final native 42417916004 passed; captures inspected | Build 82 uploaded in 42419435807; owner editing/navigation acceptance pending |
+| Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653. Full CI and 530 Core tests passed; native 42510119801 passed all four cases with a 1,003-note library and both editing themes. Captures reviewed | Merge/upload the qualified correction, then owner retest. Header/footer transparency already owner-accepted |
+| Apple Watch | Owner reports implementation in Jarvis2 secondary | Secondary handoff; primary reviews, integrates, tests and releases. Implementation completion and delivery are not verified |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
-| Next TestFlight bundle | 83 cancelled before upload to include the latest notification/Factory reports; replacement 84 pending | Qualification, upload and device acceptance; backend worker delivery remains separate |
+| Next TestFlight bundle | Build 84 uploaded in 42503950006 at 17:22 UTC; backend deployment 42502357217 accepted. Final native follow-up passed. Build 83 was cancelled before upload | Apple processing/device availability, Copilot gym refresh and owner acceptance remain separate |
 
 The owner now explicitly requests implementation and delivery of all five items.
 This supersedes the earlier hold while collecting additions. Notes and Ember are
@@ -4359,15 +4355,3 @@ copies) alongside legacy logs, before HealthKit de-duplication. Manual record ID
 remain distinct from HealthKit IDs. Historical app vault writes remain supported;
 this change does not migrate or rewrite them. Core fixture coverage checks that
 chat-logged sessions appear, retain identity/duration and respect the date range.
-
-
-## Notes regressions reported 8 November 2026
-
-- Missing Notes phrase and overview: confirmed regression in the tab conditions;
-  restored in source with an updated native page-order assertion. Not released.
-- Opening the right navigation crashes Notes: owner report captured separately.
-  Exact build and crash versus freeze are not yet confirmed. Added a synthetic
-  1,003-note navigation case (open, close, scroll, reopen, navigate to Chat).
-  Eager library rendering/date parsing is an investigation lead, not a proven cause.
-- Qualification and actual native review remain pending. The development workspace
-  became unavailable during investigation; GitHub remains the saved source of work.
