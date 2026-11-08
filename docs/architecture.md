@@ -9085,3 +9085,12 @@ chat-logged sessions appear, retain identity/duration and respect the date range
 Manual/HealthKit workout identities carry their source. Distinct IDs from the same
 source remain distinct; cross-source records use the existing kind/time match so
 chat logging does not double-count the corresponding synced workout.
+## Factory quota administration (8 November 2026)
+
+The main-only, manually dispatched Factory worker quota workflow reuses the
+Azure OIDC deployment identity. Its bounded script reads Microsoft.Quota limits
+and usage for Sweden Central's Dasv5 family and total regional cores, optionally
+requests two free vCPUs, and retains sanitized request/readback evidence. It never
+allocates a worker or changes IAM. Subscription-scoped Quota Request Operator and
+Microsoft.Quota registration remain administrator prerequisites. Existing Runner
+deploy still owns provisioning, capacity checks and idle-deallocation proof.

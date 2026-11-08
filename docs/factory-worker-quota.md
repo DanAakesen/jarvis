@@ -1,0 +1,38 @@
+# Factory worker quota request
+
+Dan authorized requesting the quota increase on 8 November 2026. The approved
+worker remains Standard_D2as_v5 in Sweden Central, with a 128 GiB workspace. This
+operation supplies two free standard vCPUs; it does not allocate a VM, change its
+size/region, or grant Azure roles.
+
+The existing `jarvis-github-deploy` application has resource-group-scoped access.
+A subscription administrator must give it **Quota Request Operator** at subscription
+scope, and register `Microsoft.Quota`, before the API can submit requests. There
+is no subscription-admin credential in the current Codex environment. This is an
+access prerequisite; the owner's authorization to increase quota is already given.
+
+After that access is available, run **Factory worker quota** from qualified `main`:
+
+```sh
+gh workflow run worker-quota.yml --repo DanAakesen/jarvis --ref main -f submit=true
+```
+
+The workflow first reads current usage/limits for `standardDASv5Family` and `cores`.
+It requests `max(existing limit, current usage + 2)` only when capacity is missing.
+After a family increase it rereads the regional quota, because Azure may raise it
+automatically. It retains submitted/request status separately from verified
+capacity, performs only bounded read polling, and never retries a PUT after an
+unknown outcome. A pending/denied result must not be called provisioned. Inspect
+the retained status URL and Azure request before a manual resubmission.
+
+The `factory-worker-quota` artifact records limits/usage/status without access
+tokens or provider response bodies. Once both readbacks show at least two free
+vCPUs, use the existing Runner deploy provisioning path, verify real disk capacity
+and idle deallocation, then recover saved task 23. Do not create a duplicate task.
+
+No live quota increase has been submitted by this change. It is ready for
+qualification and the subscription access prerequisite.
+
+References: [quota API prerequisites](https://learn.microsoft.com/en-us/rest/api/quota/),
+[request contract](https://learn.microsoft.com/en-us/rest/api/quota/quota/create-or-update?view=rest-quota-2025-09-01),
+[family and regional quotas](https://learn.microsoft.com/en-us/azure/quotas/per-vm-quota-requests).

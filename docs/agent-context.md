@@ -7575,6 +7575,19 @@ The resolved image is still pinned by digest.
 
 ### Factory quota blocker (7 November 2026, 23:49 UTC)
 
+8 November update: Dan explicitly authorized increasing the quota. The manual
+`Factory worker quota` workflow and `.github/scripts/request_worker_quota.py`
+prepare a bounded request for two free vCPUs for the existing worker. See
+[the quota runbook](factory-worker-quota.md). `jarvis-github-deploy` still needs
+subscription-scoped Quota Request Operator and Microsoft.Quota registration;
+Codex has no connected subscription-admin identity. Do not invent a submitted
+request, grant roles from the deployment workflow or widen the worker allocation.
+
+Dan requests recurring status updates as short parallel bullets: gym chat logging;
+chat/navigation/lift editing and current build; Notes/background; Copilot;
+128 GiB/Factory; approval/timeouts. Carry unresolved items forward and distinguish
+implemented, verified, deployed, available to test and waiting for owner testing.
+
 Provisioning 42426685636 failed with InvalidTemplateDeployment / QuotaExceeded;
 worker routing was never enabled. The main deploy 42426666246 succeeded. Resolve
 the subscription quota before claiming 128 GiB delivery. The reviewed worker is

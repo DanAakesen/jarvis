@@ -11825,3 +11825,14 @@ app/assistant parity requirement, not proof that every historical app action has
 been audited. Keep current-message identity and exact record targeting without
 an extra confirmation or arbitrary long-turn age cutoff. Model-driven session
 selection and real owner device acceptance remain to be verified after deployment.
+## 8 November 2026 — Request the approved worker's compute quota
+
+Dan explicitly asked to increase Azure quota so the approved 128 GiB worker can
+be provisioned. Use the existing deployment identity and a manual main-only
+workflow; request only two free standard vCPUs for Standard_D2as_v5 in Sweden
+Central, based on actual family/regional limits and usage. Do not grant roles or
+change the chosen size/region. Subscription quota access and Microsoft.Quota
+registration are prerequisites. Submission, Azure approval, provisioning and idle
+verification are separate states. Unknown quota-write outcomes are inspected,
+not automatically retried. Implementation has eight passing focused tests;
+no live quota request is claimed. See docs/factory-worker-quota.md.
