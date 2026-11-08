@@ -6,8 +6,8 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: cbd7207b7d86eaf1e4193c9660319e1eb0c11e6d
-  TASK_IOS_TREE: a5bcdc4fe98d872f6f8313d3c2f9edb781d468cf
+  TASK_SOURCE_SHA: ca107a8b897bdf2eab181ab504cb43bcf1344525
+  TASK_IOS_TREE: 545ad8d8c08ed50e9507d71cceadab434537fe1e
 jobs:
   gallery:
     name: Verify Notes overview, editor and large-library sidebar
@@ -28,13 +28,15 @@ jobs:
           import json, os, pathlib, subprocess
           git = lambda value: subprocess.check_output(["git", "rev-parse", value], text=True).strip()
           changed = subprocess.check_output(["git", "diff", "--name-only", "b6b515d942c001376de3168ac31d565fb6107dc1", "HEAD", "--", "apps/ios"], text=True).splitlines()
-          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["NotesRedesignUITests/testLargeLibrarySidebarOpensAfterScrollingAndReturnsToChat","NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingDark","NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingLight","NavigationReliabilityTests/testNotesPageOrderAndNoScopeButton"], "changed_ios_paths":changed, "qualification_scope":"Notes phrase/overview restoration and owner-reported sidebar crash investigation; no crash fix presumed", "owner_reports":2}
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["NotesRedesignUITests/testLargeLibrarySidebarOpensAfterScrollingAndReturnsToChat","NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingDark","NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingLight","NavigationReliabilityTests/testNotesPageOrderAndNoScopeButton"], "changed_ios_paths":changed, "qualification_scope":"Notes phrase/overview restoration, lazy row rendering and cancellable recency projection; build 84 sidebar freeze needs fresh qualification", "owner_reports":2}
           pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
           PYCODE
       - name: Select pinned Xcode 26.6
         run: |
           sudo xcode-select --switch /Applications/Xcode_26.6.app
           xcodebuild -version
+      - name: Test Notes core contracts
+        run: swift test --package-path apps/ios/Packages/JarvisCore --filter 'JarvisNoteLibraryTests|JarvisNotesRecentTests'
       - name: Install pinned XcodeGen 2.46.0
         run: |
           curl --fail --location --silent --show-error https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip --output "$RUNNER_TEMP/xcodegen.zip"
