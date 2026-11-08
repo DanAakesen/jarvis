@@ -9,7 +9,7 @@ struct WatchEntry: TimelineEntry {
 }
 struct WatchHealthView: View {
     let entry: WatchEntry
-    private var health: WatchHealthSnapshot? { entry.health }
+    private var health: WatchHealthSnapshot? { entry.current ? entry.health : nil }
     private func number(_ value: Int?) -> String { value.map { $0.formatted() } ?? "—" }
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -22,6 +22,9 @@ struct WatchHealthView: View {
                     }.font(.system(size: 8)).foregroundStyle(WatchStyle.stone)
                 }
                 WatchStepsChart(values: health?.cumulativeSteps ?? []).frame(maxHeight: .infinity)
+                HStack {
+                    Text("00"); Spacer(minLength: 0); Text("06"); Spacer(minLength: 0); Text("12"); Spacer(minLength: 0); Text("18")
+                }.font(.system(size: 6)).foregroundStyle(WatchStyle.stone).accessibilityHidden(true)
                 HStack(spacing: 2) {
                     Image(systemName: "flame.fill")
                     Text("\(number(health?.dailyKcal)) kcal")
