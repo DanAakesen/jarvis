@@ -11751,3 +11751,17 @@ Only the runtime label differs between fresh Current and Copilot conversations;
 model/settings stay equal. Judge actual saved results, owner intervention and
 time, without treating one successful run as proof of general superiority.
 This supersedes the planning prompt above; the combined owner test is pending.
+
+
+### 2026-11-08 — Compare the implemented harness boundaries before benchmarking
+
+The owner requests actual architectural differences first, then a test design.
+Source inspection confirms the live Copilot adapter reuses the custom application
+loop, tools, context and approvals; the transport, provider conversation/policy
+handling, definition validation and durable claims differ. Built-ins are disabled.
+Document a controlled project exercise with a later instruction change and
+recovery case. Shared internal memory and the test sheet's hidden acknowledgment/
+tool events prevent claiming fully isolated inputs or complete UI measurements.
+The saved guide labels the proposed live driver as unimplemented and retains the
+shopping prompt only as optional smoke coverage. No default/runtime/tool policy
+change or personal-data mutation is made by this investigation.

@@ -11,8 +11,8 @@ Updated 8 November 2026. Device acceptance remains separate from automated check
 - The backend shows PC bridge warnings only while offline. Online and control-pause
   changes stay quiet, recovery clears the warning, and a later outage reopens it.
   Legacy online feed entries are hidden without deleting activity history.
-- The owner reports a good quick Copilot smoke test. A self-contained comparison
-  prompt with expected results is saved; the tool/write comparison is pending. The consolidated
+- The owner reports a good quick Copilot smoke test. The implementation
+  comparison and proposed controlled project test are saved; the tool/write comparison is pending. The consolidated
   [device checklist](p15-owner-test-checklist.md) retains the other outstanding checks.
 
 ## Earlier chat/bridge source and verification

@@ -4,8 +4,9 @@
 
 The consolidated device checklist is [saved here](docs/ios/design/p15-owner-test-checklist.md).
 The owner reported a good quick Copilot smoke test on 8 November and now requests
-one combined comparison prompt; the saved guide now uses fixed sample data and
-explicit expected results, without relying on an agenda.
+an implementation comparison before choosing the owner test. The saved guide now
+separates shared behavior from actual transport/state differences and proposes a
+controlled project exercise. The sample shopping prompt remains optional smoke coverage.
 
 Keep this ledger current when work changes state. Distinguish design approval,
 implementation, automated/native verification, deployment and owner acceptance.
@@ -26,7 +27,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Resolve worker quota, recover this existing task, finish validation and obtain delivery PR; do not duplicate Prepare |
 | 128 GiB worker workspace | Implementation merged and qualified; backend live. Provisioning 42426685636 confirms Azure InvalidTemplateDeployment / QuotaExceeded before activation | Subscription quota investigation: selected Standard_D2as_v5 in Sweden Central needs two free vCPUs. Owner quota limit/usage requested; deployment identity is resource-group scoped. Then provision, verify real capacity/idle deallocation, recover task 23 |
 | Copilot harness | #1639 deployed; refreshed definition and live two-turn canary passed in 42418951594; enabled | Owner multi-turn/tool comparison; Current remains the default |
-| Current vs Copilot comparison | Owner-reported quick Copilot smoke test worked well; one combined prompt and scoring guidance saved | Run the same prompt in fresh Current/Copilot conversations; full tool/write comparison is not yet passed |
+| Current vs Copilot comparison | Owner-reported quick smoke test worked well. Actual hybrid architecture and test visibility/context limitations documented; controlled project exercise proposed | Select representative source material; prepare equivalent contexts and measurements before claiming a live comparison. Full tool/write comparison pending |
 | Notes redesign | #1638 merged as a55e7350; CI 42418217434 and final native 42417916004 passed; captures inspected | Build 82 uploaded in 42419435807; owner editing/navigation acceptance pending |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
 | Next TestFlight bundle | 83 cancelled before upload to include the latest notification/Factory reports; replacement 84 pending | Qualification, upload and device acceptance; backend worker delivery remains separate |
