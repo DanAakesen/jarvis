@@ -62,10 +62,10 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 replyHandler(Data()); return
             }
             let reply = await self.handle(request)
-            replyHandler((try? JSONEncoder().encode(reply)) ?? Data())
+            replyHandler((try? WatchCodec.encode(reply)) ?? Data())
         }
     }
-    private func encode<T: Encodable>(_ value: T) throws -> Data { try JSONEncoder().encode(value) }
+    private func encode<T: Encodable>(_ value: T) throws -> Data { try WatchCodec.encode(value) }
     private func emit(_ original: WatchEvent) {
         var event = original
         if event.kind != .voiceAudio, let text = event.text { event.text = WatchLimits.displayText(text) }

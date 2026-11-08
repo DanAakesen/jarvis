@@ -34,7 +34,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         guard reachable else { throw WatchFailure.unavailable }
         guard request.isValid else { throw WatchFailure.invalidRequest }
         guard pending[request.id] == nil else { throw WatchFailure.busy }
-        let data = try JSONEncoder().encode(WatchWire.request(request))
+        let data = try WatchCodec.encode(WatchWire.request(request))
         return try await withCheckedThrowingContinuation { continuation in
             pending[request.id] = continuation
             deadlines[request.id] = Task { [weak self] in

@@ -55,11 +55,12 @@ final class WatchContractTests: XCTestCase {
         let payload = Data(repeating: 255, count: WatchLimits.payloadBytes)
         let request = WatchRequest(action: .saveLift, text: String(repeating: "a", count: 8_000), itemID: String(repeating: "a", count: 200), data: payload)
         XCTAssertTrue(request.isValid)
-        XCTAssertLessThan(try JSONEncoder().encode(WatchWire.request(request)).count, WatchLimits.wireBytes)
-        XCTAssertLessThan(try JSONEncoder().encode(WatchReply(id: UUID(), data: payload)).count, WatchLimits.wireBytes)
+        XCTAssertThrowsError(try WatchCodec.encode(WatchReply(id: UUID(), data: Data(repeating: 255, count: 80_000))))
+        XCTAssertLessThan(try WatchCodec.encode(WatchWire.request(request)).count, WatchLimits.wireBytes)
+        XCTAssertLessThan(try WatchCodec.encode(WatchReply(id: UUID(), data: payload)).count, WatchLimits.wireBytes)
         let text = WatchLimits.displayText(String(repeating: "𐐀", count: 10_000))
         XCTAssertTrue(text.hasSuffix("Full reply on iPhone."))
-        XCTAssertLessThan(try JSONEncoder().encode(WatchWire.event(.init(.chatDone, requestID: UUID(), text: text))).count, WatchLimits.wireBytes)
+        XCTAssertLessThan(try WatchCodec.encode(WatchWire.event(.init(.chatDone, requestID: UUID(), text: text))).count, WatchLimits.wireBytes)
     }
 
     func testWireRoundTripAndNoArbitraryBackendCommand() throws {

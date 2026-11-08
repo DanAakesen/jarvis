@@ -9,6 +9,16 @@ public enum WatchLimits {
     }
 }
 
+public enum WatchCodec {
+    public static func encode<T: Encodable>(_ value: T) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.withoutEscapingSlashes]
+        let data = try encoder.encode(value)
+        guard data.count < WatchLimits.wireBytes else { throw WatchFailure.invalidRequest }
+        return data
+    }
+}
+
 /// Paired-device protocol. No credentials, arbitrary URLs or backend paths cross this boundary.
 public enum WatchAction: String, Codable, Sendable {
     case snapshot, history, sendTurn, tasks, workouts, lifts, saveLift, deleteLift
