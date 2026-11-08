@@ -1,7 +1,10 @@
 import copy
 import importlib.util
+import json
+import subprocess
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('worker_quota', Path(__file__).parents[1] / 'request_worker_quota.py')
 quota = importlib.util.module_from_spec(spec)
@@ -64,6 +67,19 @@ class WorkerQuotaTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             client.submit(quota.RESOURCES[0], 2)
         self.assertEqual(calls, ['GET'])
+
+    def test_compute_diagnostics_retain_only_approved_numeric_usage(self):
+        client = quota.QuotaClient('00000000-0000-4000-8000-000000000000')
+        client.resource_names = {'cores': 'cores'}
+        response = subprocess.CompletedProcess([], 0, json.dumps([
+            {'name': {'value': 'standardDASv5Family'}, 'limit': 0, 'currentValue': 0,
+             'unrelated': 'must not retain'},
+            {'name': {'value': 'unrelatedFamily'}, 'limit': 100, 'currentValue': 1},
+        ]), '')
+        with patch.object(quota.subprocess, 'run', return_value=response):
+            actual = client.diagnostics()
+        self.assertEqual(actual, {'catalogueResourceNames': ['cores'], 'computeUsage': [
+            {'resource': 'standardDASv5Family', 'limit': 0, 'usage': 0, 'requiredLimit': 2}]})
 
     def test_inspection_never_submits(self):
         client = FakeQuota()

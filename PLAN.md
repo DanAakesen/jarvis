@@ -4427,3 +4427,8 @@ copies) alongside legacy logs, before HealthKit de-duplication. Manual record ID
 remain distinct from HealthKit IDs. Historical app vault writes remain supported;
 this change does not migrate or rewrite them. Core fixture coverage checks that
 chat-logged sessions appear, retain identity/duration and respect the date range.
+
+
+### 8 November — live quota follow-up
+
+GitHub authentication is working again. Provisioning run 42525578592 reached Azure but failed with InvalidTemplateDeployment / QuotaExceeded; worker routing remains inactive. Quota run 42524952522 failed before writes because an approved resource was absent from its catalogue. The quota diagnostic now retains validated catalogue names, the missing requested name, and only the two approved Compute usage/limit records. This read-only evidence is needed to distinguish catalogue coverage from actual capacity; no resource allocation or quota write is added.
