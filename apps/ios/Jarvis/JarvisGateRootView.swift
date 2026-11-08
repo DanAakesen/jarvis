@@ -239,10 +239,10 @@ private final class JarvisGateModel: ObservableObject {
     func signOut() async {
         guard !Self.isNavigationFixture, !isSigningOut else { return }
         isSigningOut = true
-        await JarvisWatchBridge.shared.disconnect()
         defer { isSigningOut = false }
         presentation = .loading
         refreshOverlay()
+        await JarvisWatchBridge.shared.disconnect()
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
         }
