@@ -8976,6 +8976,10 @@ JarvisScreenBackground loads EmberBackground for dark mode; all routes continue
 using the common transparent chrome and background renderer.
 ## 128 GiB Factory worker
 
+Live provisioning and activation passed in run 42530882044 on 8 November 2026.
+The disk/credential probe, actual idle deallocation and backend readiness were
+verified; owner-authenticated task recovery remains a separate end-to-end check.
+
 A separate Standard_D2as_v5 Ubuntu VM hosts the existing runner in a pinned Docker
 image with a 128 GiB Standard SSD data disk. There is no inbound application or
 SSH access. A private Azure Blob container transports commands, status and events
