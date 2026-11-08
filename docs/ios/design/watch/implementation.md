@@ -39,3 +39,17 @@ Branch: `feature/apple-watch-companion`. PR: https://github.com/DanAakesen/jarvi
 ## Primary integration
 
 Review the exact CI revision and approved references, arrange signing and installation using the primary release process, then run owner-device checks. Secondary does not merge, deploy, publish or start/recover live Factory tasks. Visual approval is complete; implementation/device acceptance is separate. Design PR #1648 is superseded for integration by this branch, which preserves its reference assets and requirements.
+
+
+## Primary integration review — 8 November 2026
+
+Primary has taken over PR #1652. The main iOS metadata checks now recognize and
+validate both new Watch targets, their embedding and shared App Group. Review
+found that live WatchConnectivity reachability was incorrectly hiding fresh
+complication snapshots while the Watch app was backgrounded. Cached display data
+now remains usable until its actual age/day deadline; actions still require the
+phone. Timeline expiry also stops yesterday's values exactly at local midnight.
+Apple's WCSession.isReachable, updateApplicationContext and WidgetKit timeline
+documentation were checked for these boundaries. Signing and a combined-main
+build remain pending. Physical voice/background/live-tile checks remain deferred
+until signed installation, as agreed.

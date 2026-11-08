@@ -30,6 +30,9 @@ final class WatchContractTests: XCTestCase {
         let midnight = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))!
         snapshot = .init(now: midnight.addingTimeInterval(-1), calendar: calendar)
         XCTAssertFalse(snapshot.isCurrent(at: midnight, calendar: calendar))
+        XCTAssertEqual(snapshot.expiresAt(calendar: calendar), midnight)
+        let midday = WatchHealthSnapshot(now: now, calendar: calendar)
+        XCTAssertEqual(midday.expiresAt(calendar: calendar), now.addingTimeInterval(900))
     }
     func testMissingHealthIsNotZeroAndHourlyChartIsCumulative() throws {
         var snapshot = WatchHealthSnapshot()

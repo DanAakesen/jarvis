@@ -1,3 +1,12 @@
+## Apple Watch primary integration — 8 November 2026
+
+Secondary handed over #1652 at 4f580d39. Primary is reviewing and integrating the
+companion, four complications, chat/tasks/lifts and read-only Factory. Corrected
+main iOS metadata checks, live-reachability versus snapshot freshness and midnight
+expiry. Combined-main/native qualification, automatic signing and TestFlight
+installation are pending; device voice/background/live-tile acceptance is deferred
+until installation. Do not present the secondary's unsigned build as a release.
+
 ## Current Notes follow-up — 8 November 2026
 
 The Notes correction passed full CI 42509929023, including all 530 Core tests,

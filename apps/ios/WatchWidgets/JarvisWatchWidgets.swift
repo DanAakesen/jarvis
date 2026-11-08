@@ -8,13 +8,13 @@ struct WatchProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<WatchEntry>) -> Void) {
         let value = entry()
         // Expire display data on its actual deadline even if no companion refresh arrives.
-        let expiry = value.health?.generatedAt.addingTimeInterval(900) ?? Date().addingTimeInterval(900)
+        let expiry = value.health?.expiresAt() ?? Date().addingTimeInterval(900)
         completion(Timeline(entries: [value, .init(date: max(expiry, Date().addingTimeInterval(1)), health: nil, current: false)], policy: .after(Date().addingTimeInterval(900))))
     }
     private func entry() -> WatchEntry {
         let defaults = UserDefaults(suiteName: "group.com.danaakesen.jarvis")
         let snapshot = defaults?.data(forKey: "watch.health").flatMap { try? JSONDecoder().decode(WatchHealthSnapshot.self, from: $0) }
-        let current = defaults?.bool(forKey: "watch.reachable") == true && snapshot?.isCurrent(at: Date()) == true
+        let current = snapshot?.isCurrent(at: Date()) == true
         return .init(date: Date(), health: current ? snapshot : nil, current: current)
     }
 }

@@ -11970,3 +11970,12 @@ Apple processing/device availability and owner acceptance of the Notes sidebar
 freeze correction remain unverified. The owner's acceptance of build 84 shared
 header/footer transparency remains valid. Copilot's fresh catalogue/canary is
 ready; the full comparison and gym write checks remain owner tests.
+
+
+## 2026-11-08 — Primary Watch integration keeps cached complication data
+
+Live WatchConnectivity availability controls interactive requests, not whether a
+fresh received snapshot can be displayed. Keep cached complication data through
+brief/background unreachability, expire at the earlier of 15 minutes and local
+midnight, and clear on explicit phone sign-out context. Primary owns signing and
+release after the secondary handoff; physical Watch acceptance stays deferred.

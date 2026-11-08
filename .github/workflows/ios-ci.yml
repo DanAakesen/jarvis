@@ -42,13 +42,17 @@ jobs:
           ruby -ryaml -e '
             project = YAML.safe_load_file("apps/ios/project.yml")
             abort "unexpected iOS target" unless project.dig("targets", "Jarvis", "platform") == "iOS"
-            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisUITests", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
+            abort "unexpected iOS targets" unless project["targets"].keys == ["Jarvis", "JarvisWatch", "JarvisWatchWidgets", "JarvisUITests", "JarvisBroadcast", "JarvisVoiceActivity", "JarvisWidgets"]
             abort "navigation UI test target is required" unless project.dig("targets", "JarvisUITests", "type") == "bundle.ui-testing"
             abort "navigation UI tests must run in the app scheme" unless project.dig("schemes", "Jarvis", "test", "targets") == ["JarvisUITests"]
-            abort "exactly one application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
+            abort "iPhone application target is required" unless project.dig("targets", "Jarvis", "type") == "application"
+            abort "paired Watch app target is required" unless project.dig("targets", "JarvisWatch", "platform") == "watchOS" && project.dig("targets", "JarvisWatch", "type") == "application"
+            abort "Watch complications target is required" unless project.dig("targets", "JarvisWatchWidgets", "platform") == "watchOS" && project.dig("targets", "JarvisWatchWidgets", "type") == "app-extension"
             abort "broadcast extension target is required" unless project.dig("targets", "JarvisBroadcast", "type") == "app-extension"
             abort "WidgetKit extension target is required" unless project.dig("targets", "JarvisWidgets", "type") == "app-extension"
             dependencies = project.dig("targets", "Jarvis", "dependencies") || []
+            abort "Watch app must be embedded in iPhone" unless dependencies.any? { |dependency| dependency["target"] == "JarvisWatch" && dependency["embed"] == true }
+            abort "complications must be embedded in Watch" unless project.dig("targets", "JarvisWatch", "dependencies").any? { |dependency| dependency["target"] == "JarvisWatchWidgets" && dependency["embed"] == true }
             abort "broadcast extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisBroadcast" && dependency["embed"] == true }
             abort "voice activity extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisVoiceActivity" && dependency["embed"] == true }
             abort "voice activity extension target is required" unless project.dig("targets", "JarvisVoiceActivity", "type") == "app-extension"
@@ -86,6 +90,12 @@ jobs:
           assert widget_info["CFBundleIdentifier"] == "$(PRODUCT_BUNDLE_IDENTIFIER)"
           assert widget_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
           app_group = ["group.com.danaakesen.jarvis"]
+          watch_info = plistlib.loads(Path("apps/ios/Watch/Info.plist").read_bytes())
+          assert watch_info["WKCompanionAppBundleIdentifier"] == "com.danaakesen.jarvis"
+          assert watch_info["WKRunsIndependentlyOfCompanionApp"] is False
+          for component in ["Watch", "WatchWidgets"]:
+              watch_entitlements = plistlib.loads(Path(f"apps/ios/{component}/{component}.entitlements").read_bytes())
+              assert watch_entitlements["com.apple.security.application-groups"] == app_group
           entitlements = plistlib.loads(Path("apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
           assert entitlements["aps-environment"] == "$(APS_ENVIRONMENT)"
           assert entitlements["com.apple.developer.healthkit"] is True

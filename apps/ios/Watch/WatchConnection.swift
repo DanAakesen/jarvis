@@ -85,7 +85,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         WidgetCenter.shared.reloadAllTimelines()
         if !reachable {
             for id in Array(pending.keys) { complete(id, .failure(WatchFailure.unavailable)) }
-            snapshot = nil; onDisconnect?()
+            onDisconnect?()
         }
     }
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {

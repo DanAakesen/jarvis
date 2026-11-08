@@ -103,6 +103,11 @@ public struct WatchHealthSnapshot: Codable, Equatable, Sendable {
         generatedAt = now; dayStart = calendar.startOfDay(for: now)
         weekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? dayStart
     }
+    public func expiresAt(calendar: Calendar = .current) -> Date {
+        let ageLimit = generatedAt.addingTimeInterval(900)
+        let midnight = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? ageLimit
+        return min(ageLimit, midnight)
+    }
     public func isCurrent(at now: Date, calendar: Calendar = .current) -> Bool {
         version == 1 && now.timeIntervalSince(generatedAt) >= 0 && now.timeIntervalSince(generatedAt) < 900 && calendar.isDate(now, inSameDayAs: dayStart)
     }
