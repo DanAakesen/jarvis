@@ -155,7 +155,7 @@ struct WatchFactoryView: View {
 struct WatchFactoryTasks: View {
     var project: FactoryProject
     @EnvironmentObject private var connection: WatchConnection
-    @State private var tasks: [FactoryTaskRecord] = []
+    @State private var tasks: [WatchFactoryTask] = []
     @State private var error: String?
     @State private var loading = true
     var body: some View {
@@ -167,15 +167,15 @@ struct WatchFactoryTasks: View {
                 NavigationLink {
                     List {
                         Text(task.title).font(.headline)
-                        Text(task.state.rawValue)
+                        Text(task.state)
                         Text(task.request)
                         if let activity = task.activity { Text(activity).foregroundStyle(.secondary) }
                     }.navigationTitle("Task")
                 } label: {
-                    VStack(alignment: .leading) { Text(task.title); Text(task.state.rawValue).font(.caption).foregroundStyle(WatchStyle.stone) }
+                    VStack(alignment: .leading) { Text(task.title); Text(task.state).font(.caption).foregroundStyle(WatchStyle.stone) }
                 }
             }
-            if tasks.count == 20 { Text("Latest 20 tasks. Full board on iPhone.").font(.caption2) }
+            if tasks.count == 10 { Text("Latest 10 tasks. Full board on iPhone.").font(.caption2) }
         }.navigationTitle(project.name).task { await load() }.refreshable { await load() }
     }
     private func load() async {

@@ -202,7 +202,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         case .projects: return try encode(try await JarvisFactoryClient(client: client).projects())
         case .factoryTasks:
             guard let id = r.itemID else { throw WatchFailure.invalidRequest }
-            return try encode(try await JarvisFactoryClient(client: client).tasks(projectId: id, limit: 20).tasks)
+            return try encode(try await JarvisFactoryClient(client: client).tasks(projectId: id, limit: 10).tasks.map(WatchFactoryTask.init))
         case .startVoice:
             guard !startingVoice else { throw WatchFailure.busy }
             startingVoice = true; defer { startingVoice = false }
