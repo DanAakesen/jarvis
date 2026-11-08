@@ -3654,3 +3654,7 @@ part of Chat. This supersedes the earlier pinned-progress-row choice: render one
 status inside the scrolling active assistant turn, after live tools and before any
 streamed reply text. It scrolls with the conversation and disappears on completion.
 The composer/Now dock must contain no active-turn progress copy.
+
+## Apple Watch complication visual direction (8 November 2026)
+
+The owner selected the large rectangular health concept in [Watch design references](docs/ios/design/watch/README.md). Daily steps and active calories occupy the left; weekly Gym, Run and active calories occupy the right. Preserve the attached amber/stone visual reference and its documented refinements. This is an approved visual direction, not implemented or size-validated watchOS UI. Small Tasks Today, Next Event and Ask Jarvis complications remain proposals.
