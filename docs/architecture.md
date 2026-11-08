@@ -9095,6 +9095,23 @@ allocates a worker or changes IAM. Subscription-scoped Quota Request Operator an
 Microsoft.Quota registration remain administrator prerequisites. Existing Runner
 deploy still owns provisioning, capacity checks and idle-deallocation proof.
 
+## Managed comparison inventory and administration inputs (8 November 2026)
+
+The provisioning reader requests one agent/version record per page, follows the
+Foundry v1 has_more/last_id cursor contract as well as legacy next links, and
+rejects missing, cyclic or foreign continuations. It retains only identifiers;
+full version definitions are read and validated individually. The 2 MiB response
+cap, 1,000-record cap, five-minute provisioning budget, exact-match uniqueness,
+ownership checks and no automatic write retries remain. Fixed diagnostics now
+distinguish excessive response size, malformed JSON and an invalid top-level shape.
+
+Quota administration and the explicit comparison-provisioning helpers are CI
+inputs, but not normal application deployment inputs. Their changes still select
+all qualification consumers. Manual quota/managed-chat gates and canaries remain
+required. Removing the old conservative input classification can cause a one-time
+component fingerprint transition; no prior receipt is rewritten or treated as an
+unexecuted successful deployment.
+
 ## Apple Watch companion boundary (8 November 2026)
 
 XcodeGen JarvisWatch embeds JarvisWatchWidgets and is embedded by the phone app. Both use portable JarvisCore; Watch-native shared controls live under apps/ios/Watch. A Codable WatchConnectivity allow-list connects Watch to the paired phone. JarvisWatchBridge owns authenticated chat/health/lift/Factory reads/writes and VoiceSessionClient; credentials remain on phone. Watch VoiceAudioEngine captures/plays PCM16 through ordered acknowledged messages. Phone expires voice after 15 seconds without Watch heartbeat. Existing VoiceLiveActivityController controls the same session. No backend endpoint, infrastructure or production configuration is added. Display-only Health snapshots cross application context and expire in 15 minutes or date rollover. No offline mutation queue. See docs/ios/design/watch/implementation.md for verification limits.

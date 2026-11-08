@@ -11837,6 +11837,25 @@ verification are separate states. Unknown quota-write outcomes are inspected,
 not automatically retried. Implementation has eight passing focused tests;
 no live quota request is claimed. See docs/factory-worker-quota.md.
 
+## 8 November 2026 — Read the complete Copilot version inventory before retrying
+
+A catalogue refresh failed after its create step when reading Azure's version
+inventory; a separate read-only inspection reproduced the error. The reader did
+not implement Foundry v1 cursor pagination and could request 20 full historical
+definitions in one response. Read bounded single-record pages, follow has_more
+and last_id, and validate every existing version before deciding whether to create
+or reuse. Preserve strict ownership, unique exact matches, response/operation
+bounds and content-free errors. This is a recovery fix, not permission to replay
+an uncertain creation. Live root-cause confirmation and activation remain pending.
+
+The quota workflow also exposed unnecessary full deployments for manual-only
+administration files. Classify the quota workflow/request helper and comparison
+provisioning helpers explicitly as non-application inputs while retaining full CI
+qualification and their manual execution gates. Unknown new runtime files remain
+conservative full-deployment inputs.
+
+Reference: https://ai.azure.com/api-reference/agent-versions/list-agent-versions/.
+
 ## 2026-11-08 — Phone-dependent Apple Watch implementation
 
 Owner-approved: Ultra 2, manual-send dictation, no offline mode, four complications and Home/Chat visuals. Use paired-iPhone WatchConnectivity allow-list with existing clients/authentication/voice protocol; no credentials on Watch or backend routes. Factory is read-only. Watch-specific shared controls adapt UIKit-backed iOS controls. Health boundaries follow phone Calendar.current; display expires in 15 minutes. Owner accepts device voice testing after primary installation; runtime and live-tile acceptance remain unverified. PR #1652 supersedes design PR #1648 for integration and retains its approved assets.
