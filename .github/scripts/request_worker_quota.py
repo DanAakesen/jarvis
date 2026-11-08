@@ -99,8 +99,28 @@ class QuotaClient:
             self.resource_names = names
         name = self.resource_names.get(resource.casefold())
         if name is None:
-            raise RuntimeError('Approved worker resource missing from Azure quota catalogue')
+            raise RuntimeError(f'Approved worker resource missing from Azure quota catalogue: {resource}')
         return name
+
+    def diagnostics(self):
+        result = {'catalogueResourceNames': sorted(self.resource_names or {})}
+        response = subprocess.run([
+            'az', 'vm', 'list-usage', '--location', REGION,
+            '--subscription', self.subscription, '--output', 'json', '--only-show-errors',
+        ], check=False, capture_output=True, text=True, timeout=60)
+        if response.returncode:
+            result['computeUsageRead'] = 'Unavailable'
+            return result
+        wanted = {name.casefold() for name in RESOURCES}
+        rows = []
+        for row in json.loads(response.stdout):
+            name = row.get('name', {}).get('value', '')
+            if isinstance(name, str) and name.casefold() in wanted:
+                limit, used = row['limit'], row['currentValue']
+                rows.append({'resource': name, 'limit': limit, 'usage': used,
+                             'requiredLimit': required_limit(limit, used)})
+        result['computeUsage'] = rows
+        return result
 
     def snapshot(self, resource):
         resource = self.resolve_resource(resource)
@@ -168,6 +188,11 @@ def run(client, submit, save, sleep=time.sleep):
     except (RuntimeError, ValueError, KeyError, TypeError) as error:
         # Only controlled diagnostics are retained, never token/provider response bodies.
         evidence['error'] = str(error) if isinstance(error, RuntimeError) else 'Invalid quota response'
+        if isinstance(client, QuotaClient):
+            try:
+                evidence['diagnostics'] = client.diagnostics()
+            except (RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
+                evidence['diagnostics'] = {'computeUsageRead': 'Unavailable'}
         save(evidence)
         raise
 
