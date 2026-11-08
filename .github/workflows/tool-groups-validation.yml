@@ -1,0 +1,81 @@
+name: Tool groups native qualification
+'on':
+  push:
+    branches:
+    - validation/tool-activity-groups
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+    - name: Select pinned Xcode 26.6
+      run: 'ls -1 /Applications
+
+        sudo xcode-select --switch /Applications/Xcode_26.6.app
+
+        xcodebuild -version
+
+        '
+    - name: Install pinned XcodeGen 2.46.0
+      run: "curl --fail --location --silent --show-error \\\n  https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip\
+        \ \\\n  --output \"$RUNNER_TEMP/xcodegen.zip\"\necho \"4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806\
+        \  $RUNNER_TEMP/xcodegen.zip\" \\\n  | shasum --check\nunzip -q \"$RUNNER_TEMP/xcodegen.zip\"\
+        \ -d \"$RUNNER_TEMP\"\necho \"$RUNNER_TEMP/xcodegen/bin\" >> \"$GITHUB_PATH\"\
+        \n\"$RUNNER_TEMP/xcodegen/bin/xcodegen\" --version\n"
+    - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7
+      with:
+        path: '~/Library/Caches/org.swift.swiftpm
+
+          ~/Library/Developer/Xcode/DerivedData/SourcePackages
+
+          '
+        key: ios-spm-${{ runner.os }}-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/JarvisCore/Package.swift')
+          }}
+    - name: Generate project and build for Simulator
+      working-directory: apps/ios
+      run: "xcodegen generate\nxcodebuild \\\n  -project Jarvis.xcodeproj \\\n  -scheme\
+        \ Jarvis \\\n  -destination 'generic/platform=iOS Simulator' \\\n  -derivedDataPath\
+        \ \"$RUNNER_TEMP/DerivedData\" \\\n  CODE_SIGNING_ALLOWED=NO \\\n  build\n"
+    - name: Run affected chat interactions
+      run: 'set -euo pipefail
+
+        DEVICE_ID="$(xcrun simctl list devices available --json | jq -r ''[.devices[][]
+        | select(.name | startswith("iPhone"))][0].udid // empty'')"
+
+        test -n "$DEVICE_ID"
+
+        xcrun simctl boot "$DEVICE_ID"
+
+        xcrun simctl bootstatus "$DEVICE_ID" -b
+
+        xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork
+        wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4
+        --batteryState charged --batteryLevel 100
+
+        xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination
+        "id=$DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath
+        "$RUNNER_TEMP/tool-groups.xcresult" -only-testing:JarvisUITests/ChatComposerUITests/testRuntimeTestKeepsNormalDraftAndHistorySeparate
+        -only-testing:JarvisUITests/ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge
+        -only-testing:JarvisUITests/ChatTurnFeedbackUITests/testElapsedHeaderAndOngoingUpdatesFollowTheActiveTurn
+        -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance
+        120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
+
+        '
+    - name: Export interaction captures
+      if: always()
+      run: "mkdir -p \"$RUNNER_TEMP/tool-group-captures\"\nif [[ -d \"$RUNNER_TEMP/tool-groups.xcresult\"\
+        \ ]]; then\n  xcrun xcresulttool export attachments --path \"$RUNNER_TEMP/tool-groups.xcresult\"\
+        \ --output-path \"$RUNNER_TEMP/tool-group-captures\"\n  xcrun xcresulttool\
+        \ get test-results summary --path \"$RUNNER_TEMP/tool-groups.xcresult\" >\
+        \ \"$RUNNER_TEMP/tool-group-captures/summary.json\"\nfi\n"
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      if: always()
+      with:
+        name: tool-groups-native
+        path: '${{ runner.temp }}/tool-group-captures
+
+          ${{ runner.temp }}/tool-groups.xcresult'
+        retention-days: 7
