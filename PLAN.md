@@ -4269,3 +4269,18 @@ helper and includes the earlier assistant answer in the second request.
 Focused local agent tests: 116 passed. Backend route/store/compatibility tests:
 39 passed before adding the additional compare-and-swap test. Type checking passed.
 Full CI, SQL integration and live activation remain required before availability.
+
+## 8 November 2026 — Current test interruption and long-running work
+
+Owner's Current comparison produced an acknowledgment and then the generic recovery
+warning; refreshing removed the partial text. The exact live failure is unconfirmed.
+Confirmed code limits were a 210-second invocation deadline and a 15-minute turn
+deadline. The owner explicitly requests removing elapsed-time cancellation and
+ongoing progress, not only the final result.
+
+Implemented locally: connection-only timeout, no total turn deadline, hosted/backend
+15-second keepalives, and turn-scoped tool/phase events in the recoverable reply
+stream. Local backend regression checks pass (166 existing/focused checks plus
+three activity tests); 182 hosted stream/runtime checks, Ruff and backend lint/build
+pass. CI, deployment,
+longer-than-limit live qualification and iOS progress UI remain pending.

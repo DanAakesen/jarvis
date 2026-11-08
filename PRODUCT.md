@@ -2610,3 +2610,11 @@ Coding tasks use a persistent 128 GiB workspace after provisioning qualification
 The backend remains available while the separate worker deallocates after 120
 seconds with no queued or active work. New tasks wake it automatically. Recovery
 retains the existing task and branch; uncertain actions must never replay.
+
+## Long-running conversation progress (8 November 2026)
+
+Established chat and runtime-test turns must continue beyond fixed total elapsed
+time limits. Show generated acknowledgment, actual tool activity and reply progress
+inside the conversation. Reconnect to existing execution; never resend a write to
+recover a dropped stream. Connection setup and individual operations may still
+fail, and an unknown outcome must remain visible.

@@ -98,8 +98,8 @@ export interface ConversationAgentAcknowledgment {
 export type ConversationAgentChunk = string | ConversationAgentAcknowledgment;
 
 const maxStreamBytes = 1024 * 1024;
-// Reuse the food tool's read budget below the 240-second hosting ingress ceiling.
-const requestTimeoutMs = 210_000;
+// Bound connection/setup only. An established stream can contain long-running work.
+const connectionTimeoutMs = 210_000;
 const maxDiagnosticDurationMs = 600_000;
 export const FOUNDRY_AGENT_SCOPE = 'https://ai.azure.com/.default';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
@@ -321,16 +321,23 @@ export function createFoundryInvocationConversationAgent(
       if (agentSessionId !== undefined && !agentSessionIdPattern.test(agentSessionId)) {
         throw new TypeError('Foundry chat session ID is invalid');
       }
-      const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
+      const connecting = new AbortController();
+      const connectionDeadline = setTimeout(() => connecting.abort(
+        new DOMException('Chat agent connection timed out', 'TimeoutError'),
+      ), connectionTimeoutMs);
+      connectionDeadline.unref();
+      const requestSignal = AbortSignal.any([signal, connecting.signal]);
       const authStarted = performance.now();
       let token: string;
       try {
         token = await getToken(FOUNDRY_AGENT_SCOPE, requestSignal);
       } catch (error) {
+        clearTimeout(connectionDeadline);
         throw invocationFailure(error, requestSignal, 'Foundry authentication unavailable', 'agent_auth_unavailable');
       }
       const authMs = performance.now() - authStarted;
       if (typeof token !== 'string' || !token.trim() || /[\r\n]/u.test(token)) {
+        clearTimeout(connectionDeadline);
         throw new ChatAgentInvocationError('Foundry authentication unavailable', 'agent_auth_unavailable');
       }
       const request = (url: URL) => fetcher(url, {
@@ -355,6 +362,8 @@ export function createFoundryInvocationConversationAgent(
         response = await request(invocationUrl);
       } catch (error) {
         throw invocationFailure(error, requestSignal, 'Chat agent request failed', 'agent_request_failed');
+      } finally {
+        clearTimeout(connectionDeadline);
       }
       onAgentSessionTelemetry?.(foundrySessionTelemetry(response.headers, agentSessionId !== undefined));
       if (!response.ok || !response.body ||

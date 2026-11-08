@@ -59,6 +59,51 @@ function fixture(agent: ConversationAgent) {
 }
 
 describe('chat runtime activity events', () => {
+  it('keeps an established turn alive past the old deadline and scopes replayed progress to it', async () => {
+    let finish!: () => void;
+    const waiting = new Promise<void>(resolve => { finish = resolve; });
+    let streamSignal: AbortSignal | undefined;
+    const agent: ConversationAgent = {
+      stream: async function* (_input, _authorization, signal) {
+        streamSignal = signal;
+        yield 'Working';
+        await waiting;
+        yield 'Finished';
+      },
+    };
+    const app = fixture(agent);
+    await app.ready();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    try {
+      const response = app.inject({
+        method: 'POST', url: '/conversation/sessions/41/turns', headers,
+        payload: { text: 'Long running request' },
+      }).then(value => value);
+      await vi.waitFor(() => expect(streamSignal).toBeDefined());
+      await vi.advanceTimersByTimeAsync(16 * 60_000);
+      expect(streamSignal?.aborted).toBe(false);
+      const at = new Date().toISOString();
+      app.jarvisActivityHub.publish({ type: 'tool-call-started', source: 'chat',
+        activityId: 'own-tool', messageId: '1', toolName: 'vault_search', at });
+      app.jarvisActivityHub.publish({ type: 'tool-call-started', source: 'chat',
+        activityId: 'foreign-tool', messageId: '999', toolName: 'repo_read', at });
+      const phase = await app.inject({ method: 'POST',
+        url: '/conversation/sessions/41/turns/1/phase', headers, payload: { phase: 'model' } });
+      expect(phase.statusCode).toBe(204);
+      finish();
+      const completed = await response;
+      expect(completed.statusCode).toBe(200);
+      expect(completed.body).toContain('event: done');
+      expect(completed.body).toContain('own-tool');
+      expect(completed.body).not.toContain('foreign-tool');
+      expect(completed.body).toContain('event: progress');
+      expect(completed.body).toContain('"phase":"model"');
+    } finally {
+      finish();
+      vi.useRealTimers();
+    }
+  });
+
   it('publishes thinking and observed ended or failed transitions without message text', async () => {
     let fail = false;
     const agent: ConversationAgent = {

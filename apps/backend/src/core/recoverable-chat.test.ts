@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { RecoverableChat } from './recoverable-chat.js';
 
 describe('recoverable chat transport', () => {
@@ -49,4 +49,33 @@ describe('recoverable chat transport', () => {
     expect(replay).toContain('recovery limit');
     expect(replay.length).toBeLessThan(300);
   });
+});
+
+
+it('keeps idle subscribers connected without retaining heartbeat comments or cancelling work', async () => {
+  vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  try {
+    const finish = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const turn = new RecoverableChat('41', '42', 'en');
+    const run = turn.run((async function* () {
+      yield 'start'; started.resolve(); await finish.promise; yield 'end';
+    })());
+    await started.promise;
+    const live = turn.stream();
+    const chunks: string[] = [];
+    live.on('data', chunk => chunks.push(String(chunk)));
+    await vi.advanceTimersByTimeAsync(16 * 60_000);
+    expect(chunks.join('')).toContain(': keepalive');
+    expect(turn.finished).toBe(false);
+    expect(turn.controller.signal.aborted).toBe(false);
+    turn.publish('tool progress');
+    finish.resolve();
+    await run;
+    let replay = '';
+    for await (const chunk of turn.stream()) replay += String(chunk);
+    expect(replay).toBe('starttool progressend');
+    expect(turn.publish('late event')).toBe(false);
+    live.destroy();
+  } finally { vi.useRealTimers(); }
 });

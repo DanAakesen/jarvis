@@ -11692,3 +11692,12 @@ The Now-feed query also hides legacy online entries before any socket reconnect,
 without deleting activity history or suppressing unrelated alerts. Retain serialized
 transactional writes and refresh only after commit. SQL integration covers legacy
 rows, quiet recovery, dismissal persistence and a later outage. Deployment pending.
+
+## 8 November 2026 — Long-running replies must not expire by elapsed time
+
+Accepted owner requirement: remove fixed total turn limits and provide ongoing
+progress in normal and test conversations. Keep connection/operation failure handling
+and bounded replay. SSE heartbeat comments establish transport liveness only; the UI
+must not present them as completed work. Reconnection attaches to the original turn
+without repeating actions. The exact owner failure is not diagnosed by these code
+limits alone; live qualification remains required.
