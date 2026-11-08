@@ -1,0 +1,92 @@
+# Validation-only branch: never merge this focused workflow.
+name: Notes regression verification
+on:
+  push:
+    branches: [codex/notes-regression-verification]
+permissions:
+  contents: read
+env:
+  TASK_SOURCE_SHA: cbd7207b7d86eaf1e4193c9660319e1eb0c11e6d
+  TASK_IOS_TREE: a5bcdc4fe98d872f6f8313d3c2f9edb781d468cf
+jobs:
+  gallery:
+    name: Verify Notes overview, editor and large-library sidebar
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.TASK_SOURCE_SHA }}
+          fetch-depth: 0
+      - name: Verify exact candidate source
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TASK_SOURCE_SHA"
+          test "$(git rev-parse HEAD:apps/ios)" = "$TASK_IOS_TREE"
+          mkdir -p "$RUNNER_TEMP/gallery-evidence"
+          python3 - <<'PYCODE'
+          import json, os, pathlib, subprocess
+          git = lambda value: subprocess.check_output(["git", "rev-parse", value], text=True).strip()
+          changed = subprocess.check_output(["git", "diff", "--name-only", "b6b515d942c001376de3168ac31d565fb6107dc1", "HEAD", "--", "apps/ios"], text=True).splitlines()
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["NotesRedesignUITests/testLargeLibrarySidebarOpensAfterScrollingAndReturnsToChat","NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingDark","NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingLight","NavigationReliabilityTests/testNotesPageOrderAndNoScopeButton"], "changed_ios_paths":changed, "qualification_scope":"Notes phrase/overview restoration and owner-reported sidebar crash investigation; no crash fix presumed", "owner_reports":2}
+          pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
+          PYCODE
+      - name: Select pinned Xcode 26.6
+        run: |
+          sudo xcode-select --switch /Applications/Xcode_26.6.app
+          xcodebuild -version
+      - name: Install pinned XcodeGen 2.46.0
+        run: |
+          curl --fail --location --silent --show-error https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip --output "$RUNNER_TEMP/xcodegen.zip"
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum --check
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            ~/Library/Developer/Xcode/DerivedData/SourcePackages
+          key: ios-spm-${{ runner.os }}-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/JarvisCore/Package.swift') }}
+      - name: Generate the exact candidate Xcode project
+        working-directory: apps/ios
+        run: xcodegen generate
+      - name: Run the gallery with unchanged per-test limits
+        id: gallery
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          TASK_DEVICE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid // empty')"
+          test -n "$TASK_DEVICE_ID"
+          xcrun simctl boot "$TASK_DEVICE_ID"
+          xcrun simctl bootstatus "$TASK_DEVICE_ID" -b
+          xcrun simctl status_bar "$TASK_DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
+          xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination "id=$TASK_DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" -only-testing:JarvisUITests/NotesRedesignUITests/testLargeLibrarySidebarOpensAfterScrollingAndReturnsToChat -only-testing:JarvisUITests/NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingDark -only-testing:JarvisUITests/NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingLight -only-testing:JarvisUITests/NavigationReliabilityTests/testNotesPageOrderAndNoScopeButton -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
+      - name: Export actual native attachments
+        if: always()
+        run: |
+          if [[ -d "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" ]]; then
+            xcrun xcresulttool export attachments --path "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" --output-path "$RUNNER_TEMP/gallery-evidence/attachments"
+            xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" > "$RUNNER_TEMP/gallery-evidence/summary.json"
+          fi
+      - name: Preserve app crash reports from this synthetic run
+        if: always()
+        run: |
+          python3 - <<'PYCODE'
+          import os, pathlib, shutil
+          target = pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "crashes")
+          target.mkdir(parents=True, exist_ok=True)
+          source = pathlib.Path.home() / "Library/Logs/DiagnosticReports"
+          for report in source.glob("Jarvis*.ips"):
+              shutil.copy2(report, target / report.name)
+          PYCODE
+      - name: Retain focused results and source proof
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: notes-regression-evidence-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/gallery-evidence
+          if-no-files-found: error
+          retention-days: 14
+      - name: Require the selected test to pass
+        if: always() && steps.gallery.outcome != 'success'
+        run: exit 1
