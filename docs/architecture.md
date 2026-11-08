@@ -9147,3 +9147,12 @@ the existing wire contract and streaming UI. Voice's one-segment contract remain
 Known incomplete-response and coordination failures map to fixed diagnostic codes;
 provider text is never emitted, incomplete function calls never execute, and no
 automatic mutation retry is introduced.
+## iOS tool activity grouping (8 November 2026)
+
+`ChatToolActivityGroup` projects public activity/history metadata into consecutive
+runs of the same tool. Replay IDs coalesce without replacing a terminal outcome
+with a replayed start; distinct attempt IDs remain countable. The shared
+`JarvisChatToolActivityList` renders single calls, grouped outcome summaries and
+numbered attempt disclosure in normal Chat (live/history) and runtime-test Chat.
+No arguments, results or private errors enter the presentation. This changes no
+backend execution, authorization, provider catalogue or audit semantics.

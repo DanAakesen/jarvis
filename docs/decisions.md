@@ -12000,3 +12000,13 @@ the existing wire bound; provide a separate 32,768-token chat budget without
 changing model/effort or the voice budget. Add fixed failure classifications instead
 of raw exception logging. Keep access controls and uncertain-write protection.
 Local regression and 1,310 agent tests pass; production completion is not yet proven.
+## 2026-11-08 — Group consecutive tool attempts, preserve comparison baseline
+
+The owner requests no adjacent repetition of the same tool name. Use one disclosure
+row with count and visible refused/failed totals; expanded rows show numbered
+attempts and their outcomes. Preserve chronology and real call totals. Apply the
+same component to normal and isolated test Chat, and qualify both surfaces.
+Copilot's saved initial/revised note is verified, but 51 displayed attempts and
+refusals remain friction findings. Keep the backend unchanged for the paired
+Current run; do not infer the exact refusal cause from a generic UI label or claim
+that the isolated test establishes normal Chat reliability.

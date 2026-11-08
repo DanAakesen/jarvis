@@ -17,6 +17,23 @@ is automatically replayed. These are verified code defects; the historical gener
 error alone cannot prove which caused the owner's failure. All 1,310 agent tests
 pass locally; backend validation, CI, deployment and live acceptance are pending.
 
+
+## Copilot owner test review and tool grouping — 8 November 2026
+
+The owner's isolated Copilot test saved the labelled plan and revised the same
+note: vault commits 4cb08916 and 7030beb4 verify the requested scope change.
+The screen reports 51 tool attempts, refused reads/write and a failed repo list;
+this is functional completion with friction, not a clean reliability pass.
+The paired Current attempt failed without a final reply or the expected note.
+Owner requests repairing Current first, then repeating the comparison.
+Normal Chat is a separate acceptance surface; do not generalize this test to it.
+
+Consecutive tool grouping is implemented for both iOS chat surfaces, preserving
+attempt counts and refused/error outcomes. Core and focused native qualification
+are in progress; not released. Backend behavior is unchanged for the paired test.
+Exact rejected-write payload/reason and live per-call arguments are unavailable.
+See [the recorded comparison evidence](docs/runtime-comparison-owner-test.md).
+
 ## Home Today workout totals — 8 November 2026
 
 Owner confirmed the Notes page is fixed after build 85. New report: Home's Today
