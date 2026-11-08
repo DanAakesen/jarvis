@@ -5,8 +5,8 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: 29aafa99770115179a0db41b2e9a86ffe30daf80
-  TASK_IOS_TREE: 9faf917fab47af0abc8631a07cd39fb0ab2d3c37
+  TASK_SOURCE_SHA: 3661f1f6115e93179330732a32cc33c8638b413b
+  TASK_IOS_TREE: 596311875b4f59829d2fdcde7bacd02cca486e2f
 jobs:
   gallery:
     name: Verify notification tasks, Factory history and Chat
@@ -27,7 +27,7 @@ jobs:
           import json, os, pathlib, subprocess
           git = lambda value: subprocess.check_output(["git", "rev-parse", value], text=True).strip()
           changed = subprocess.check_output(["git", "diff", "--name-only", "1008ea6758f6fb66d05942c6717cbf736f5ebbda", "HEAD", "--", "apps/ios"], text=True).splitlines()
-          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["LiftEditingUITests", "ChatTurnFeedbackUITests", "ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge", "ChatComposerUITests/testRuntimeTestKeepsNormalDraftAndHistorySeparate", "NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered"], "changed_ios_paths":changed, "prior_run":42496126403, "qualification_scope":"elapsed clock, continuing public updates, tap-only time with native selection, runtime test progress, navigation and lift precision/swipes; unchanged per-test limits", "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge"], "changed_ios_paths":changed, "prior_run":42498089381, "qualification_scope":"press actual reply word, native Copy and timestamp remains hidden; same app source as 29aafa99; unchanged per-test limits", "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
           pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
           PYCODE
       - name: Select pinned Xcode 26.6
@@ -59,7 +59,7 @@ jobs:
           xcrun simctl boot "$TASK_DEVICE_ID"
           xcrun simctl bootstatus "$TASK_DEVICE_ID" -b
           xcrun simctl status_bar "$TASK_DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
-          xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination "id=$TASK_DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" -only-testing:JarvisUITests/LiftEditingUITests -only-testing:JarvisUITests/ChatTurnFeedbackUITests -only-testing:JarvisUITests/ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge -only-testing:JarvisUITests/ChatComposerUITests/testRuntimeTestKeepsNormalDraftAndHistorySeparate -only-testing:JarvisUITests/NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
+          xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination "id=$TASK_DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" -only-testing:JarvisUITests/ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
       - name: Export actual native attachments
         if: always()
         run: |
