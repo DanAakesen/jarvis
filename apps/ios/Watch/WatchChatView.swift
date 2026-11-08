@@ -5,6 +5,7 @@ struct WatchChatView: View {
     @EnvironmentObject private var connection: WatchConnection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var dictate: () -> Void
+    @Binding var pendingDictation: Bool
     var body: some View {
         VStack(spacing: 3) {
             ScrollViewReader { proxy in
@@ -38,7 +39,14 @@ struct WatchChatView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Jarvis").navigationBarTitleDisplayMode(.inline)
-        .task { if model.messages.isEmpty { await model.history() } }
+         .task {
+            if pendingDictation {
+                pendingDictation = false
+                await Task.yield() // Present system input after navigation has attached the chat screen.
+                dictate()
+            }
+            if model.messages.isEmpty { await model.history() }
+        }
         .onChange(of: connection.reachable) { _, reachable in if reachable && !model.busy { Task { await model.history() } } }
     }
     private var composer: some View {

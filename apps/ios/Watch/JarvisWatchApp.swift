@@ -19,6 +19,7 @@ struct WatchRoot: View {
     @EnvironmentObject private var connection: WatchConnection
     @Environment(\.scenePhase) private var scenePhase
     @State private var path: [WatchRoute] = []
+    @State private var pendingDictation = false
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
@@ -33,7 +34,7 @@ struct WatchRoot: View {
                         path.append(.chat); Task { await model.startVoice() }
                     }
                     JarvisWatchAction(title: "Dictate", kind: .dictate) {
-                        path.append(.chat); dictate()
+                        path.append(.chat); pendingDictation = true
                     }
                     JarvisWatchAction(title: "Factory", kind: .factory) { path.append(.factory) }
                     if !connection.reachable { Text("Open Jarvis on your iPhone to connect.").font(.caption).foregroundStyle(.secondary) }
@@ -41,7 +42,7 @@ struct WatchRoot: View {
             }.toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: WatchRoute.self) { route in
                 switch route {
-                case .chat: WatchChatView(dictate: dictate)
+                case .chat: WatchChatView(dictate: dictate, pendingDictation: $pendingDictation)
                 case .menu:
                     List {
                         NavigationLink("Tasks Today", value: WatchRoute.tasks)
@@ -71,7 +72,7 @@ struct WatchRoot: View {
         .onOpenURL { url in
             guard url.scheme == "jarvis-watch" else { return }
             switch url.host {
-            case "dictate": path = [.chat]; dictate()
+            case "dictate": path = [.chat]; pendingDictation = true
             case "voice": path = [.chat]; Task { await model.startVoice() }
             case "tasks": path = [.tasks]
             case "health": path = [.health]
