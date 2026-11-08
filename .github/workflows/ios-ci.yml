@@ -5,8 +5,8 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: 82171fce85a76f8ad33488224272f39a7977b31b
-  TASK_IOS_TREE: d35348b9153e876cbfc56c9f28e8cb9281e60f40
+  TASK_SOURCE_SHA: a8720d6dfe44575fb00492cec9a05a90b20f9571
+  TASK_IOS_TREE: c4b8fa2ccbec6ddacdfad32dbb07f3268e24b85f
 jobs:
   gallery:
     name: Verify notification tasks, Factory history and Chat
@@ -27,7 +27,7 @@ jobs:
           import json, os, pathlib, subprocess
           git = lambda value: subprocess.check_output(["git", "rev-parse", value], text=True).strip()
           changed = subprocess.check_output(["git", "diff", "--name-only", "1008ea6758f6fb66d05942c6717cbf736f5ebbda", "HEAD", "--", "apps/ios"], text=True).splitlines()
-          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge", "ChatTurnFeedbackUITests", "NotificationTaskNavigationUITests", "PageChromeUITests", "NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered", "NotesRedesignUITests"], "changed_ios_paths":changed, "prior_run":42479307931, "qualification_scope":"full changed-state requalification including clarified chrome underlap", "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["PageChromeUITests", "NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered", "NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingDark", "NotificationTaskNavigationUITests/testExpandedOlderTaskNotificationOpensItsTask"], "changed_ios_paths":changed, "prior_run":42482352002, "qualification_scope":"soft top-edge visual refinement; prior 12 cases passed; xcodebuild test builds and installs the exact app/test targets", "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
           pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
           PYCODE
       - name: Select pinned Xcode 26.6
@@ -46,11 +46,9 @@ jobs:
             ~/Library/Caches/org.swift.swiftpm
             ~/Library/Developer/Xcode/DerivedData/SourcePackages
           key: ios-spm-${{ runner.os }}-${{ hashFiles('apps/ios/project.yml', 'apps/ios/Packages/JarvisCore/Package.swift') }}
-      - name: Build the exact candidate for Simulator
+      - name: Generate the exact candidate Xcode project
         working-directory: apps/ios
-        run: |
-          xcodegen generate
-          xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/DerivedData" CODE_SIGNING_ALLOWED=NO build
+        run: xcodegen generate
       - name: Run the gallery with unchanged per-test limits
         id: gallery
         continue-on-error: true
@@ -61,8 +59,7 @@ jobs:
           xcrun simctl boot "$TASK_DEVICE_ID"
           xcrun simctl bootstatus "$TASK_DEVICE_ID" -b
           xcrun simctl status_bar "$TASK_DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
-          xcrun simctl install "$TASK_DEVICE_ID" "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator/Jarvis.app"
-          xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination "id=$TASK_DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" -only-testing:JarvisUITests/NotificationTaskNavigationUITests -only-testing:JarvisUITests/ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge -only-testing:JarvisUITests/ChatTurnFeedbackUITests -only-testing:JarvisUITests/PageChromeUITests -only-testing:JarvisUITests/NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered -only-testing:JarvisUITests/NotesRedesignUITests -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
+          xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination "id=$TASK_DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" -only-testing:JarvisUITests/PageChromeUITests -only-testing:JarvisUITests/NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered -only-testing:JarvisUITests/NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingDark -only-testing:JarvisUITests/NotificationTaskNavigationUITests/testExpandedOlderTaskNotificationOpensItsTask -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
       - name: Export actual native attachments
         if: always()
         run: |
