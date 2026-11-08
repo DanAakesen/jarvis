@@ -7836,3 +7836,12 @@ Source: apps/ios/Watch, apps/ios/WatchWidgets and iPhone JarvisWatchBridge.swift
 ### 8 November: subscription access corrected
 
 The owner corrected the Quota Request Operator assignment from resource-group to subscription scope. Live run 42523978403 passed the previous authorization boundary but returned HTTP 400 InvalidResourceName before any quota write. The client now discovers canonical quota resource names from Azure’s catalogue, matches only the two approved resources case-insensitively, and uses returned casing for reads/writes. Missing/ambiguous resources stop without a write; catalogue pagination is bounded and confined to the same scope. Live retry and 128 GiB provisioning remain pending.
+
+
+## Approved quota and provider prerequisite (8 November)
+
+The owner registered Microsoft.Compute and obtained the DASv5 quota increase to 2 in Sweden Central. Read-only run 42530362925 verifies family usage 0 / limit 2 and regional usage 0 / limit 12, with ready=true. No additional regional quota request is needed. Earlier unknown usage/counter failures are superseded by this successful live read; do not claim a confirmed cause for those transient values.
+
+Provisioning 42530295512 reached deployment but failed DeploymentFailed / MissingSubscriptionRegistration and did not activate routing. The owner was asked to check/register Microsoft.Network, which the template requires for its network, NSG, NIC and outbound IP. The retained error does not name the missing provider, so confirm registration rather than treating that inference as proof.
+
+Before first worker provisioning, verify subscription registration of Microsoft.Compute and Microsoft.Network, plus Microsoft.Quota for quota automation. The template also uses existing ManagedIdentity, ContainerRegistry, Storage and KeyVault providers and Authorization role assignments. Quota authorization is separate from provider-registration permissions. Registration and quota approval do not themselves prove a working 128 GiB workspace.
