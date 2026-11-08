@@ -10,7 +10,7 @@ permissions:
 jobs:
   dispatch:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: DanAakesen/jarvis
@@ -18,9 +18,9 @@ jobs:
       - name: Require the qualified main revision
         run: |
           test "$(gh api repos/DanAakesen/jarvis/git/ref/heads/main --jq .object.sha)" = "c79371d7f60de63752705f4ab9354f4c4500a2c8"
-      - name: Wait for its normal deployment and acceptance
-        run: gh run watch 42507969183 --interval 20 --exit-status
-      - name: Inspect existing Copilot versions without provisioning
+      - name: Wait for the successful read-only inspection and acceptance
+        run: gh run watch 42509996653 --interval 20 --exit-status
+      - name: Reuse the uniquely matched Copilot version and require the live canary
         run: |
           test "$(gh api repos/DanAakesen/jarvis/git/ref/heads/main --jq .object.sha)" = "c79371d7f60de63752705f4ab9354f4c4500a2c8"
-          gh workflow run deploy.yml --repo DanAakesen/jarvis --ref main -f inspect_managed_chat=true
+          gh workflow run deploy.yml --repo DanAakesen/jarvis --ref main -f provision_managed_chat=true -f refresh_managed_chat_definition=true
