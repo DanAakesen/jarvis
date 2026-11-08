@@ -1,24 +1,35 @@
-# Temporary validation cleanup; never merge.
-name: Keep qualified Notes native evidence
+# Temporary evidence reader, never merge.
+name: Read Notes native and TestFlight evidence
 on:
   push:
     branches: [codex/notes-capture-review]
 permissions:
   contents: read
-  actions: write
+  actions: read
 jobs:
-  stop:
+  evidence:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: DanAakesen/jarvis
     steps:
-      - name: Stop only the duplicate post-merge simulator sweep
+      - name: Wait for the existing upload
+        run: gh run watch 42511641193 --interval 15 --exit-status
+      - name: Read bounded qualification and upload proof
         run: |
-          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42510119801 --jq .conclusion)" = "success"
-          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511593064 --jq .head_sha)" = "df813f348eae27961259c691b526eeadced9ea18"
-          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511593064 --jq .name)" = "iOS Simulator"
-          if test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511593064 --jq .status)" != "completed"; then
-            gh api --method POST repos/DanAakesen/jarvis/actions/runs/42511593064/force-cancel
-          fi
+          gh run view 42510119801 --job 128821154254 --log > "$RUNNER_TEMP/notes-native.log"
+          gh run view 42511641193 --job 128825780031 --log > "$RUNNER_TEMP/notes-upload.log"
+          gh run view 42511641193 --json headSha,status,conclusion,number,url
+          python3 - <<'PY'
+          import os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"])
+          native = (root / "notes-native.log").read_text()
+          for line in native.splitlines():
+              if ("Test Case" in line and ("passed" in line or "failed" in line)) or re.search(r"Executed \d+ tests", line):
+                  print(line)
+          upload = (root / "notes-upload.log").read_text()
+          for line in upload.splitlines():
+              if any(s in line for s in ["HEAD is now at", "ARCHIVE SUCCEEDED", "EXPORT SUCCEEDED", "Upload succeeded", "UPLOAD SUCCEEDED", "Uploaded", "df813f348eae27961259c691b526eeadced9ea18"]):
+                  print(line[:1000])
+          PY
