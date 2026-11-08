@@ -5,13 +5,13 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: e02a3176c610ecefdd9358d36d93328fc0408051
-  TASK_IOS_TREE: c9894fe714af17480a57f38f93696cb7bdb9bf7b
+  TASK_SOURCE_SHA: e7e8470c1291308d5d31da75c30ad837c6dddbd2
+  TASK_IOS_TREE: 6add078e708c609ceec556d93933d6daa2480c50
 jobs:
   gallery:
     name: Verify notification tasks, Factory history and Chat
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -27,7 +27,7 @@ jobs:
           import json, os, pathlib, subprocess
           git = lambda value: subprocess.check_output(["git", "rev-parse", value], text=True).strip()
           changed = subprocess.check_output(["git", "diff", "--name-only", "1008ea6758f6fb66d05942c6717cbf736f5ebbda", "HEAD", "--", "apps/ios"], text=True).splitlines()
-          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["PageChromeUITests", "NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered", "NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingDark", "NotificationTaskNavigationUITests/testExpandedOlderTaskNotificationOpensItsTask"], "changed_ios_paths":changed, "prior_run":42482352002, "qualification_scope":"soft top-edge visual refinement; prior 12 cases passed; xcodebuild test builds and installs the exact app/test targets", "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":['PageChromeUITests', 'NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered', 'NotesRedesignUITests', 'NotificationTaskNavigationUITests', 'ChatComposerUITests/testRuntimeTestKeepsNormalDraftAndHistorySeparate', 'LiftEditingUITests'], "changed_ios_paths":changed, "prior_run":42482352002, "qualification_scope":"expanded bundle: lift persistence and staged gestures, runtime progress, task navigation, Notes and transparent chrome; unchanged per-test limits", "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
           pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
           PYCODE
       - name: Select pinned Xcode 26.6
@@ -59,7 +59,7 @@ jobs:
           xcrun simctl boot "$TASK_DEVICE_ID"
           xcrun simctl bootstatus "$TASK_DEVICE_ID" -b
           xcrun simctl status_bar "$TASK_DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
-          xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination "id=$TASK_DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" -only-testing:JarvisUITests/PageChromeUITests -only-testing:JarvisUITests/NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered -only-testing:JarvisUITests/NotesRedesignUITests/testLibraryPinsFoldersRawAndEditingDark -only-testing:JarvisUITests/NotificationTaskNavigationUITests/testExpandedOlderTaskNotificationOpensItsTask -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
+          xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination "id=$TASK_DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" -only-testing:JarvisUITests/PageChromeUITests -only-testing:JarvisUITests/NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered -only-testing:JarvisUITests/NotesRedesignUITests -only-testing:JarvisUITests/NotificationTaskNavigationUITests -only-testing:JarvisUITests/ChatComposerUITests/testRuntimeTestKeepsNormalDraftAndHistorySeparate -only-testing:JarvisUITests/LiftEditingUITests -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
       - name: Export actual native attachments
         if: always()
         run: |
