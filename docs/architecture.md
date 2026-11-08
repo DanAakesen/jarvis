@@ -9130,6 +9130,23 @@ keeps individual note rows lazy, with shared per-row grouped material corners.
 Neither the shared page chrome nor the complete underlying inventory is changed.
 
 
+## Current chat progress and output budget (8 November 2026)
+
+Current's production constructor separates written chat/acceptance output budget
+from voice: JARVIS_CHAT_MAX_OUTPUT_TOKENS defaults to 32,768 (1–65,536 accepted);
+AZURE_OPENAI_MAX_OUTPUT_TOKENS retains the existing voice default 512 and 4,096
+configuration ceiling. The budget includes reasoning and tool arguments, and is
+not a required answer length or a turn deadline. Copilot still uses its provider
+configuration without this request field; comparison evidence must record that
+difference. The model and selected reasoning effort are unchanged.
+
+Public chat pre-tool text is segmented losslessly at 500 UTF-16 units. The first
+segment retains acknowledgment semantics; later segments are commentary. Backend
+prefix consumption removes each segment before saving the final reply, preserving
+the existing wire contract and streaming UI. Voice's one-segment contract remains.
+Known incomplete-response and coordination failures map to fixed diagnostic codes;
+provider text is never emitted, incomplete function calls never execute, and no
+automatic mutation retry is introduced.
 ## iOS tool activity grouping (8 November 2026)
 
 `ChatToolActivityGroup` projects public activity/history metadata into consecutive

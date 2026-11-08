@@ -310,6 +310,15 @@ their reminders through Jarvis's ordinary confirmed flows. Keep any useful trans
 for comparison. A good test result does not automatically change the main runtime.
 
 
+## Current repair gate — 8 November 2026
+
+Pause owner comparison until Current's repaired runtime is deployed and checked.
+The latest server code was error_runtimeerror; the old log cannot establish its
+precise cause. A fatal 500-character progress boundary is reproduced and fixed;
+21 synthetic tool rounds now complete. Current production written chat gets a
+32,768-token budget instead of the old default 512. Copilot omits that request
+field, so record the budget difference alongside identical model/effort. These
+repairs and short live canaries do not prove the full owner exercise has completed.
 ## Owner Copilot run — 8 November 2026, build 85 test chat
 
 This is the isolated **Copilot · Test conversation**, not normal Chat. The owner
