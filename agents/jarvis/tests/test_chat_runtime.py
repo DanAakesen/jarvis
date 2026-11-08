@@ -1696,3 +1696,17 @@ def test_managed_stream_error_retains_code_without_provider_content(code) -> Non
     else:
         assert "providerCause" not in response.text
     assert "private provider body" not in response.text
+
+
+@pytest.mark.parametrize("message,code", [
+    ("Model output token budget exhausted", "model_output_limit"),
+    ("Model response content filtered", "model_content_filter"),
+    ("Foundry model response did not complete", "model_response_incomplete"),
+    ("Foundry model response stream ended before completion", "model_stream_incomplete"),
+    ("Chat phase update is unavailable", "chat_phase_unavailable"),
+    ("Chat steering is invalid", "chat_steering_invalid"),
+    ("Model acknowledgment exceeded the size limit", "progress_update_too_large"),
+    ("PRIVATE_PROVIDER_MESSAGE", "error_runtimeerror"),
+])
+def test_current_failure_codes_do_not_collapse_known_causes_or_expose_content(message, code):
+    assert chat_runtime.chat_failure_code(RuntimeError(message)) == code

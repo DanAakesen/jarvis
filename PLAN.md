@@ -1,22 +1,36 @@
 ## Apple Watch primary integration — 8 November 2026
 
-Secondary handed over #1652 at 4f580d39. Primary is reviewing and integrating the
-companion, four complications, chat/tasks/lifts and read-only Factory. Corrected
-main iOS metadata checks, live-reachability versus snapshot freshness and midnight
-expiry. Combined-main/native qualification, automatic signing and TestFlight
-installation are pending; device voice/background/live-tile acceptance is deferred
-until installation. Do not present the secondary's unsigned build as a release.
+Primary reviewed #1652 and corrected target/embedding checks, cached complication
+freshness during background unreachability, local-midnight expiry and chat-task
+ownership after account reset. Combined source fa6da450 passes 544 Core tests and
+full CI 42520574348. Native Watch/four widgets/paired iPhone build 42520572882 passed;
+primary inspected fresh Home/Chat/Health captures. Artifact 13633820543 has SHA256
+ed2755edb65aa10cd2c0b2328c066e3c964e1bb649ebdac151e31a21815e2b8a.
+Focused chat interaction qualification with Watch included is running on identical
+iOS tree fd5467327a30ac926c91ec055a06d8f940092c8c in validation run 42521342696.
+Signing and TestFlight remain pending. Physical voice/background/live-tile checks
+remain deferred until installation, as agreed. Secondary's unsigned build is not
+a release. Current repair #1658 is now merged and deploying separately.
 
+## Current test-chat repair — 8 November 2026
 
+The owner requires Current completion before comparing harnesses. The latest server
+failure at 20:03:46 UTC is error_runtimeerror, not a timeout code; the old log
+cannot distinguish its underlying cause. The expected CURRENT-85 note is absent.
+Do not ask the owner to repeat a write test until the repaired runtime is deployed
+and its live checks pass. Do not declare a harness winner.
 
-## Current test-chat failure investigation — 8 November 2026
-
-The same combined owner test ends in generic recovery text after 20 displayed
-tool attempts; the expected Personal/HARNESS-CHECK-CURRENT-85.md is absent on
-readback. Copilot saved both revisions. Treat Current as failed completion for
-this case; do not ask the owner to rerun it or infer a timeout from the UI text.
-A bounded, read-only failure-code diagnostic is prepared to obtain server evidence
-without replaying mutations or exposing raw logs. Live cause remains unverified.
+Reproduced a fatal 500-character public progress limit. Chat now segments long
+updates into compatible 500 UTF-16-unit events and continues work; a 21-tool-round
+regression completes with all updates and a final answer. Production Current also
+defaulted to 512 output tokens per call; written chat now has a separate 32,768-token
+budget for reasoning/tool arguments/final text, while voice retains its existing
+budget. Specific allowlisted failure codes distinguish token exhaustion, content
+filtering, incomplete streams and coordination failures. No uncertain tool or write
+is automatically replayed. These are verified code defects; the historical generic
+error alone cannot prove which caused the owner's failure. All 1,310 agent tests
+pass locally; 356 backend tests and TypeScript build pass. Full CI 42521183807
+and CodeQL pass. #1658 merged as a231e7ec; deployment/live acceptance are pending.
 
 
 ## Copilot owner test review and tool grouping — 8 November 2026
@@ -30,8 +44,9 @@ Owner requests repairing Current first, then repeating the comparison.
 Normal Chat is a separate acceptance surface; do not generalize this test to it.
 
 Consecutive tool grouping is implemented for both iOS chat surfaces, preserving
-attempt counts and refused/error outcomes. Core and focused native qualification
-are in progress; not released. Backend behavior is unchanged for the paired test.
+attempt counts and refused/error outcomes. 537 Core tests and three native checks
+passed in 42518328386; #1656 merged. Included in the next signed app bundle.
+Current runtime completion is repaired separately in #1658.
 Exact rejected-write payload/reason and live per-call arguments are unavailable.
 See [the recorded comparison evidence](docs/runtime-comparison-owner-test.md).
 
@@ -4410,7 +4425,3 @@ copies) alongside legacy logs, before HealthKit de-duplication. Manual record ID
 remain distinct from HealthKit IDs. Historical app vault writes remain supported;
 this change does not migrate or rewrite them. Core fixture coverage checks that
 chat-logged sessions appear, retain identity/duration and respect the date range.
-
-## Apple Watch companion implementation (8 November 2026)
-
-Active secondary scope: feature/apple-watch-companion, PR #1652. Watch targets, four complications, phone-authenticated bridge, voice relay, Chat/manual-send dictation, task/workout/lift screens and read-only Factory are implemented; six approved references preserved. All 537 JarvisCore tests and 15 pipeline impact tests passed locally. Native build/preview evidence and owner-device checks are tracked in docs/ios/design/watch/implementation.md. Native CI 42512941709 passed Watch/widget and paired iPhone builds on 67d85cf9; raw simulator captures are saved. Ready for Jarvis2 primary review, integration, signing and installation; owner-device acceptance remains pending. No deployment or live Factory execution in this thread.

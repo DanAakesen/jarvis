@@ -9119,6 +9119,44 @@ required. Removing the old conservative input classification can cause a one-tim
 component fingerprint transition; no prior receipt is rewritten or treated as an
 unexecuted successful deployment.
 
+
+### Notes recent-library projection
+
+JarvisNotesArea keys its cancellable projection by graph nodes, local visit history
+and calendar day. JarvisCore parses each distinct timestamp once, sorts on Date
+values and groups against the caller's calendar. A detached task builds the value;
+only its noncancelled result is published on the main actor. LazyVStack/Section
+keeps individual note rows lazy, with shared per-row grouped material corners.
+Neither the shared page chrome nor the complete underlying inventory is changed.
+
+
+## Current chat progress and output budget (8 November 2026)
+
+Current's production constructor separates written chat/acceptance output budget
+from voice: JARVIS_CHAT_MAX_OUTPUT_TOKENS defaults to 32,768 (1–65,536 accepted);
+AZURE_OPENAI_MAX_OUTPUT_TOKENS retains the existing voice default 512 and 4,096
+configuration ceiling. The budget includes reasoning and tool arguments, and is
+not a required answer length or a turn deadline. Copilot still uses its provider
+configuration without this request field; comparison evidence must record that
+difference. The model and selected reasoning effort are unchanged.
+
+Public chat pre-tool text is segmented losslessly at 500 UTF-16 units. The first
+segment retains acknowledgment semantics; later segments are commentary. Backend
+prefix consumption removes each segment before saving the final reply, preserving
+the existing wire contract and streaming UI. Voice's one-segment contract remains.
+Known incomplete-response and coordination failures map to fixed diagnostic codes;
+provider text is never emitted, incomplete function calls never execute, and no
+automatic mutation retry is introduced.
+## iOS tool activity grouping (8 November 2026)
+
+`ChatToolActivityGroup` projects public activity/history metadata into consecutive
+runs of the same tool. Replay IDs coalesce without replacing a terminal outcome
+with a replayed start; distinct attempt IDs remain countable. The shared
+`JarvisChatToolActivityList` renders single calls, grouped outcome summaries and
+numbered attempt disclosure in normal Chat (live/history) and runtime-test Chat.
+No arguments, results or private errors enter the presentation. This changes no
+backend execution, authorization, provider catalogue or audit semantics.
+
 ## Apple Watch companion boundary (8 November 2026)
 
 XcodeGen JarvisWatch embeds JarvisWatchWidgets and is embedded by the phone app. Both use portable JarvisCore; Watch-native shared controls live under apps/ios/Watch. A Codable WatchConnectivity allow-list connects Watch to the paired phone. JarvisWatchBridge owns authenticated chat/health/lift/Factory reads/writes and VoiceSessionClient; credentials remain on phone. Watch VoiceAudioEngine captures/plays PCM16 through ordered acknowledged messages. Phone expires voice after 15 seconds without Watch heartbeat. Existing VoiceLiveActivityController controls the same session. No backend endpoint, infrastructure or production configuration is added. Display-only Health snapshots cross application context and expire in 15 minutes or date rollover. No offline mutation queue. See docs/ios/design/watch/implementation.md for verification limits.
@@ -9131,14 +9169,3 @@ values and groups against the caller's calendar. A detached task builds the valu
 only its noncancelled result is published on the main actor. LazyVStack/Section
 keeps individual note rows lazy, with shared per-row grouped material corners.
 Neither the shared page chrome nor the complete underlying inventory is changed.
-
-
-## iOS tool activity grouping (8 November 2026)
-
-`ChatToolActivityGroup` projects public activity/history metadata into consecutive
-runs of the same tool. Replay IDs coalesce without replacing a terminal outcome
-with a replayed start; distinct attempt IDs remain countable. The shared
-`JarvisChatToolActivityList` renders single calls, grouped outcome summaries and
-numbered attempt disclosure in normal Chat (live/history) and runtime-test Chat.
-No arguments, results or private errors enter the presentation. This changes no
-backend execution, authorization, provider catalogue or audit semantics.

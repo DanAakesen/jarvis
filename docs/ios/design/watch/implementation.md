@@ -53,3 +53,13 @@ Apple's WCSession.isReachable, updateApplicationContext and WidgetKit timeline
 documentation were checked for these boundaries. Signing and a combined-main
 build remain pending. Physical voice/background/live-tile checks remain deferred
 until signed installation, as agreed.
+
+
+Primary combined-source evidence: fa6da450 passed full CI 42520574348 and all
+544 Core tests. Native build 42520572882 passed Watch, four complications and
+paired iPhone; primary inspected all three fresh captures. Artifact 13633820543
+SHA256 ed2755edb65aa10cd2c0b2328c066e3c964e1bb649ebdac151e31a21815e2b8a.
+A follow-up generation guard prevents an old cancelled chat from clearing the
+new account's chat-task ownership. Current repair #1658 is integrated without
+changing the qualified iOS tree fd5467327a30ac926c91ec055a06d8f940092c8c.
+Focused native interaction run 42521342696, signing and upload remain pending.

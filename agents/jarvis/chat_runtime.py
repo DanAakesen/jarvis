@@ -202,8 +202,22 @@ def chat_failure_code(exc: BaseException) -> str:
     code = getattr(exc, "code", None) if isinstance(exc, BackendUnavailable) else None
     if isinstance(code, str) and re.fullmatch(r"[a-z0-9_]{1,64}", code):
         return code
-    if isinstance(exc, RuntimeError) and str(exc) == "Chat response exceeded the size limit":
-        return "response_too_large"
+    if isinstance(exc, RuntimeError):
+        known = {
+            "Chat response exceeded the size limit": "response_too_large",
+            "Model output token budget exhausted": "model_output_limit",
+            "Model response content filtered": "model_content_filter",
+            "Foundry model response did not complete": "model_response_incomplete",
+            "Foundry Claude model response did not complete": "model_response_incomplete",
+            "Foundry model response stream ended before completion": "model_stream_incomplete",
+            "Model acknowledgment exceeded the size limit": "progress_update_too_large",
+            "Chat acknowledgment exceeded the size limit": "progress_update_too_large",
+            "Chat steering is unavailable": "chat_steering_unavailable",
+            "Chat steering is invalid": "chat_steering_invalid",
+            "Chat phase update is unavailable": "chat_phase_unavailable",
+        }.get(str(exc))
+        if known is not None:
+            return known
     name = re.sub(r"[^a-z0-9]+", "_", type(exc).__name__.lower()).strip("_")[:40]
     return f"error_{name or 'unknown'}"
 MAX_HISTORY_MESSAGES = 100

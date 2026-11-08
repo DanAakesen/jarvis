@@ -70,6 +70,7 @@ from model_contract import (
     StreamingModelClient,
     SummaryCompletion,
     ToolLoopStalled,
+    public_update_boundaries,
 )
 from state import DEFAULT_MODEL_SETTINGS, ModelMessage, ModelSettings
 from visual_context import (
@@ -83,6 +84,8 @@ FOUNDRY_TOKEN_SCOPE = "https://ai.azure.com/.default"
 DEFAULT_SYSTEM_PROMPT = INSTRUCTIONS
 DEFAULT_MAX_OUTPUT_TOKENS = 512
 MAX_OUTPUT_TOKENS = 4096
+DEFAULT_CHAT_MAX_OUTPUT_TOKENS = 32_768
+MAX_CHAT_OUTPUT_TOKENS = 65_536
 SMOKE_MAX_TOOL_ROUNDS = 2
 # Headroom for a summary call: the answer is capped at ~9k characters by the parser, and a
 # model that reasons by default needs room before its first visible word.
@@ -530,6 +533,19 @@ def parse_max_output_tokens(value: str | None) -> int:
     return parsed
 
 
+def parse_chat_max_output_tokens(value: str | None) -> int:
+    """Chat needs room for reasoning, tool arguments and a complete final answer."""
+    if value is None or not value.strip():
+        return DEFAULT_CHAT_MAX_OUTPUT_TOKENS
+    try:
+        parsed = int(value)
+    except ValueError:
+        raise ValueError("JARVIS_CHAT_MAX_OUTPUT_TOKENS must be between 1 and 65536") from None
+    if not 1 <= parsed <= MAX_CHAT_OUTPUT_TOKENS:
+        raise ValueError("JARVIS_CHAT_MAX_OUTPUT_TOKENS must be between 1 and 65536")
+    return parsed
+
+
 class AzureOpenAIResponsesClient(StreamingModelClient):
     """Streaming Responses client whose tools are the backend's registered tools."""
 
@@ -545,12 +561,14 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         max_output_tokens: int,
         tools: BackendToolClient,
         reasoning_effort: str | None = None,
+        chat_max_output_tokens: int | None = None,
     ) -> None:
         self._client = client
         self._anthropic_client = anthropic_client
         self._credential = credential
         self._system_prompt = system_prompt
         self._max_output_tokens = max_output_tokens
+        self._chat_max_output_tokens = chat_max_output_tokens
         self._reasoning_effort = reasoning_effort or None
         self._tools = tools
         self.model_name = model_name
@@ -602,6 +620,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 os.getenv("AZURE_OPENAI_MAX_OUTPUT_TOKENS")
             ),
             reasoning_effort=os.getenv("JARVIS_REASONING_EFFORT", "").strip() or None,
+            chat_max_output_tokens=parse_chat_max_output_tokens(
+                os.getenv("JARVIS_CHAT_MAX_OUTPUT_TOKENS")
+            ),
         )
 
     async def _create_response(self, request: dict[str, Any]) -> Any:
@@ -978,7 +999,11 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 )
                 # Smoke must exercise the selected model settings. A separate
                 # effort or token cap can reject/starve an otherwise valid chat.
-                max_output_tokens = self._max_output_tokens
+                max_output_tokens = (
+                    self._chat_max_output_tokens
+                    if role in {"chat", "smoke"} and self._chat_max_output_tokens is not None
+                    else self._max_output_tokens
+                )
                 span.set_attribute(
                     "gen_ai.request.reasoning_effort",
                     reasoning_effort if reasoning_effort in {
@@ -1329,6 +1354,18 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                             }
                                         ):
                                             raise ImageInputRejected(model=model_name) from None
+                                        if event.type == "response.incomplete":
+                                            reason = getattr(getattr(getattr(
+                                                event, "response", None,
+                                            ), "incomplete_details", None), "reason", None)
+                                            if reason == "max_output_tokens":
+                                                raise RuntimeError(
+                                                    "Model output token budget exhausted"
+                                                )
+                                            if reason == "content_filter":
+                                                raise RuntimeError(
+                                                    "Model response content filtered"
+                                                )
                                         raise RuntimeError(
                                             "Foundry model response did not complete"
                                         )
@@ -1513,13 +1550,17 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         and role in {"chat", "voice"}
                         and acknowledgment.strip()
                     ):
-                        if len(acknowledgment) > MAX_ACKNOWLEDGMENT_CHARACTERS:
-                            raise RuntimeError("Model acknowledgment exceeded the size limit")
-                        yield AcknowledgmentBoundary(
-                            acknowledgment,
-                            kind=("acknowledgment" if not acknowledgment_emitted
-                                  and current_chat_acknowledgment_enabled.get() else "commentary"),
+                        kind = (
+                            "acknowledgment" if not acknowledgment_emitted
+                            and current_chat_acknowledgment_enabled.get() else "commentary"
                         )
+                        if role == "chat":
+                            for boundary in public_update_boundaries(acknowledgment, kind):
+                                yield boundary
+                        else:
+                            if len(acknowledgment) > MAX_ACKNOWLEDGMENT_CHARACTERS:
+                                raise RuntimeError("Model acknowledgment exceeded the size limit")
+                            yield AcknowledgmentBoundary(acknowledgment, kind=kind)
                         acknowledgment_emitted = True
                     if emitted_text:
                         yield "\n\n"

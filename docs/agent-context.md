@@ -7720,9 +7720,6 @@ pipeline suite needs hosted CI's Ruby and complete checkout; local sparse-checko
 failures are not claimed as passing tests. pipeline_impact.py has three unchanged
 Ruff findings in the base revision; no unrelated cleanup is included.
 
-## Apple Watch companion work (8 November 2026)
-
-Source: apps/ios/Watch, apps/ios/WatchWidgets and iPhone JarvisWatchBridge.swift. Build: apps/ios/project.yml. Tests: `swift test --package-path apps/ios/Packages/JarvisCore --filter WatchContractTests` or full swift test. Native check after xcodegen generate in apps/ios: `xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build`. PR-only watch-build.yml builds Watch and phone unsigned and captures isolated DEBUG --watch-fixture views on an available Ultra simulator. Fixtures are not real health or successful connectivity. Primary owns signing, installation, integration and deployment. References, decisions and unverified checks: docs/ios/design/watch/.
 
 ## Notes regression validation (8 November 2026)
 
@@ -7808,6 +7805,18 @@ Unknown causes stay unclassified. Permission/query failure is explicit; no role
 grant or broader log query is automatic. Script and workflow are check-only inputs.
 
 
+## 2026-11-08 — Current completion repair qualification
+
+Run the agent suite from agents/jarvis (not the repository root, which collects
+archived prototype/runner suites with different dependencies). A 21-round fixture
+with long public updates reproduced RuntimeError before the fix and completes
+after it. 1,310 agent tests pass locally. Backend conversation tests verify that
+segmented progress remains streamed while only final text is persisted.
+JARVIS_CHAT_MAX_OUTPUT_TOKENS controls written chat and its acceptance calls;
+default 32,768, allowed 1–65,536. Voice retains AZURE_OPENAI_MAX_OUTPUT_TOKENS.
+Deploy backend plus agent together for the new fixed failure-code vocabulary.
+Require live acceptance before inviting the owner to repeat the comparison; a
+short canary is not proof of the complete owner exercise.
 ## Tool activity grouping qualification (8 November 2026)
 
 Read Apple SwiftUI DisclosureGroup documentation and HIG Disclosure controls.
@@ -7818,3 +7827,7 @@ live elapsed/progress checks. Focused validation may use a disposable workflow
 branch with identical app/test tree and unchanged 120/150-second test limits;
 never merge the validation workflow. Keep normal Chat versus isolated harness
 results separate and retain actual native captures before claiming UI acceptance.
+
+## Apple Watch companion work (8 November 2026)
+
+Source: apps/ios/Watch, apps/ios/WatchWidgets and iPhone JarvisWatchBridge.swift. Build: apps/ios/project.yml. Tests: `swift test --package-path apps/ios/Packages/JarvisCore --filter WatchContractTests` or full swift test. Native check after xcodegen generate in apps/ios: `xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build`. PR-only watch-build.yml builds Watch and phone unsigned and captures isolated DEBUG --watch-fixture views on an available Ultra simulator. Fixtures are not real health or successful connectivity. Primary owns signing, installation, integration and deployment. References, decisions and unverified checks: docs/ios/design/watch/.

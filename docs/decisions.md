@@ -11902,9 +11902,6 @@ conservative full-deployment inputs.
 
 Reference: https://ai.azure.com/api-reference/agent-versions/list-agent-versions/.
 
-## 2026-11-08 — Phone-dependent Apple Watch implementation
-
-Owner-approved: Ultra 2, manual-send dictation, no offline mode, four complications and Home/Chat visuals. Use paired-iPhone WatchConnectivity allow-list with existing clients/authentication/voice protocol; no credentials on Watch or backend routes. Factory is read-only. Watch-specific shared controls adapt UIKit-backed iOS controls. Health boundaries follow phone Calendar.current; display expires in 15 minutes. Owner accepts device voice testing after primary installation; runtime and live-tile acceptance remain unverified. PR #1652 supersedes design PR #1648 for integration and retains its approved assets.
 
 
 ## 8 November 2026 — Restore Notes context; investigate navigation separately
@@ -11984,15 +11981,6 @@ header/footer transparency remains valid. Copilot's fresh catalogue/canary is
 ready; the full comparison and gym write checks remain owner tests.
 
 
-## 2026-11-08 — Primary Watch integration keeps cached complication data
-
-Live WatchConnectivity availability controls interactive requests, not whether a
-fresh received snapshot can be displayed. Keep cached complication data through
-brief/background unreachability, expire at the earlier of 15 minutes and local
-midnight, and clear on explicit phone sign-out context. Primary owns signing and
-release after the secondary handoff; physical Watch acceptance stays deferred.
-
-
 ## 2026-11-08 — Diagnose the failed Current comparison without replay
 
 Use existing deploy identity access for a fixed, main-only read of recent backend
@@ -12002,6 +11990,16 @@ test delivered no final answer and its expected note is absent; this is a valid
 failed comparison result, not a reason to issue another mutation test blindly.
 
 
+## 2026-11-08 — Repair Current before comparing it with Copilot
+
+The owner explicitly requires Current to work before drawing a quality comparison.
+The latest fixed-scope server diagnostic identifies error_runtimeerror at 20:03:46
+UTC, not a timeout. Repair two concrete code defects: fatal oversized public updates
+and the 512-token default for written reasoning/tool work. Segment updates within
+the existing wire bound; provide a separate 32,768-token chat budget without
+changing model/effort or the voice budget. Add fixed failure classifications instead
+of raw exception logging. Keep access controls and uncertain-write protection.
+Local regression and 1,310 agent tests pass; production completion is not yet proven.
 ## 2026-11-08 — Group consecutive tool attempts, preserve comparison baseline
 
 The owner requests no adjacent repetition of the same tool name. Use one disclosure
@@ -12012,3 +12010,15 @@ Copilot's saved initial/revised note is verified, but 51 displayed attempts and
 refusals remain friction findings. Keep the backend unchanged for the paired
 Current run; do not infer the exact refusal cause from a generic UI label or claim
 that the isolated test establishes normal Chat reliability.
+
+## 2026-11-08 — Phone-dependent Apple Watch implementation
+
+Owner-approved: Ultra 2, manual-send dictation, no offline mode, four complications and Home/Chat visuals. Use paired-iPhone WatchConnectivity allow-list with existing clients/authentication/voice protocol; no credentials on Watch or backend routes. Factory is read-only. Watch-specific shared controls adapt UIKit-backed iOS controls. Health boundaries follow phone Calendar.current; display expires in 15 minutes. Owner accepts device voice testing after primary installation; runtime and live-tile acceptance remain unverified. PR #1652 supersedes design PR #1648 for integration and retains its approved assets.
+
+## 2026-11-08 — Primary Watch integration keeps cached complication data
+
+Live WatchConnectivity availability controls interactive requests, not whether a
+fresh received snapshot can be displayed. Keep cached complication data through
+brief/background unreachability, expire at the earlier of 15 minutes and local
+midnight, and clear on explicit phone sign-out context. Primary owns signing and
+release after the secondary handoff; physical Watch acceptance stays deferred.
