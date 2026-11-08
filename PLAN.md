@@ -4437,3 +4437,8 @@ GitHub authentication is working again. Provisioning run 42525578592 reached Azu
 ### 8 November — Compute registered, quota response handling
 
 The owner registered Microsoft.Compute (Microsoft.Quota was already registered). Run 42527062741 now fails local quota response validation rather than the prior missing catalogue error; direct provisioning 42527158192 still returns QuotaExceeded. Treat integral JSON numeric values as integer counts, preserve rejection of fractions/booleans/unknowns, and resolve approved resource names using properties.name.value as documented by Azure. Ignore unrelated catalogue rows rather than allowing their metadata shape to abort the approved lookup. The precise triggering response field remains unverified; no quota submission or provisioning success is claimed.
+
+
+### 8 November — quota usage value investigation
+
+Run 42529215408 resolves both approved resource names but fails at usage_decode with ValueError before writes. Retain only numeric counter values/types (including negative sentinels) from the two approved quota resources; arbitrary provider text and structured bodies are excluded. The unknown usage remains rejected rather than assumed zero. This is diagnostic evidence only, not a quota increase or workspace activation.

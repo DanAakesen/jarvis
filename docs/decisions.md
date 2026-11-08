@@ -12058,3 +12058,8 @@ The owner registered Microsoft.Compute (Microsoft.Quota was already registered).
 ### Backend CI budget correction
 
 Run 42527387309 completed backend tests but cancelled the final build at the job’s 10-minute limit (GitHub annotation confirms timeout). Increase this job allowance to 15 minutes, matching the neighboring bridge/container jobs. All lint, tests and build steps remain unchanged; this is CI execution capacity, not an application/chat timeout.
+
+
+### 8 November — quota usage value investigation
+
+Run 42529215408 resolves both approved resource names but fails at usage_decode with ValueError before writes. Retain only numeric counter values/types (including negative sentinels) from the two approved quota resources; arbitrary provider text and structured bodies are excluded. The unknown usage remains rejected rather than assumed zero. This is diagnostic evidence only, not a quota increase or workspace activation.
