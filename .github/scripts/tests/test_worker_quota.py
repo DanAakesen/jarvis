@@ -1,10 +1,10 @@
 import copy
 import importlib.util
-import unittest
-from unittest.mock import patch
 import json
 import subprocess
+import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('worker_quota', Path(__file__).parents[1] / 'request_worker_quota.py')
 quota = importlib.util.module_from_spec(spec)
