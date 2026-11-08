@@ -84,7 +84,14 @@ jobs:
               if path.exists():
                   value = path.read_text()
                   print("NOTES_DIAGNOSTIC " + filename + " characters=" + str(len(value)))
-                  print(value[:120000])
+                  if "80BCC66F" in filename:
+                      sections = re.split(r"(?m)^Process:", value)
+                      selected = [p for p in sections[1:] if re.match(r"\s+Jarvis\s+\[", p)]
+                      print("NOTES_APP_STACKS " + str(len(selected)))
+                      for part in selected:
+                          print("Process:" + part[:70000])
+                  else:
+                      print(value[:30000])
           for path in sorted((root / "crashes").glob("*.ips")):
               print("NOTES_CRASH " + path.name)
               print(path.read_text()[:100000])
