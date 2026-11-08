@@ -7,7 +7,50 @@ expiry. Combined-main/native qualification, automatic signing and TestFlight
 installation are pending; device voice/background/live-tile acceptance is deferred
 until installation. Do not present the secondary's unsigned build as a release.
 
-## Current Notes follow-up — 8 November 2026
+
+
+## Current test-chat failure investigation — 8 November 2026
+
+The same combined owner test ends in generic recovery text after 20 displayed
+tool attempts; the expected Personal/HARNESS-CHECK-CURRENT-85.md is absent on
+readback. Copilot saved both revisions. Treat Current as failed completion for
+this case; do not ask the owner to rerun it or infer a timeout from the UI text.
+A bounded, read-only failure-code diagnostic is prepared to obtain server evidence
+without replaying mutations or exposing raw logs. Live cause remains unverified.
+
+
+## Copilot owner test review and tool grouping — 8 November 2026
+
+The owner's isolated Copilot test saved the labelled plan and revised the same
+note: vault commits 4cb08916 and 7030beb4 verify the requested scope change.
+The screen reports 51 tool attempts, refused reads/write and a failed repo list;
+this is functional completion with friction, not a clean reliability pass.
+The paired Current attempt failed without a final reply or the expected note.
+Owner requests repairing Current first, then repeating the comparison.
+Normal Chat is a separate acceptance surface; do not generalize this test to it.
+
+Consecutive tool grouping is implemented for both iOS chat surfaces, preserving
+attempt counts and refused/error outcomes. Core and focused native qualification
+are in progress; not released. Backend behavior is unchanged for the paired test.
+Exact rejected-write payload/reason and live per-call arguments are unavailable.
+See [the recorded comparison evidence](docs/runtime-comparison-owner-test.md).
+
+## Home Today workout totals — 8 November 2026
+
+Owner confirmed the Notes page is fixed after build 85. New report: Home's Today
+workout count is populated, but active time and active kcal show zero; 7/14/30-day
+ranges and Health work. Home's combined store drops the measured HealthKit row
+when a matching vault/manual log exists, losing its metrics. Preserve the primary
+log and fill missing metrics from its match, counting each source record once.
+The new regression reproduced Today at 0 minutes/0 kcal before the correction.
+All 533 Core tests pass locally and in CI 42515170283 after it, including all four
+periods, retained manual values/identities and distinct nearby workouts. CodeQL
+42515170223 and native Simulator compilation passed. #1654 merged as ef783da2 with
+the exact qualified iOS tree. TestFlight 86 uploaded successfully in 42515467682;
+Apple processing/device availability and owner acceptance remain pending.
+See [the release record](docs/ios/design/p15-build86-release.md).
+
+## Notes follow-up — 8 November 2026
 
 The Notes correction passed full CI 42509929023, including all 530 Core tests,
 and native run 42510119801 passed all four selected cases with zero failures/skips.
@@ -19,8 +62,8 @@ The 1,003-note library now passes repeated sidebar open/close, scrolling and
 return-to-Chat checks. Both themes pass pin/Raw/edit/save/reopen. Existing 120/150
 second test limits and every assertion are retained. PR #1653 merged as df813f348eae27961259c691b526eeadced9ea18 with complete tree
 identity to qualified head 2f0fd280d6f999dd01459e97e0f43e9e12882c3e. Final CI
-42511384320 passed. TestFlight 85 uploaded successfully in 42511641193. Apple processing/device
-availability and owner acceptance of the Notes freeze correction remain pending.
+42511384320 passed. TestFlight 85 uploaded successfully in 42511641193. The owner
+subsequently confirmed the Notes page is fixed on 8 November.
 
 Owner accepted build 84 header/footer transparency across pages. Preserve it.
 
@@ -57,10 +100,11 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | 128 GiB worker workspace | Worker implementation merged; provisioning remains incomplete. Quota request workflow #1649 merged and qualified. Live run 42503224623 failed during quota inspection: HTTP 403 AuthorizationFailed; no quota write submitted | Grant jarvis-github-deploy Quota Request Operator at subscription scope, rerun quota request, then provision and verify disk/idle deallocation; recover existing task 23 |
 | Copilot harness | Pagination repair #1651 merged/deployed. Read-only inspection 42509996653 found one exact matching version. Authorized catalogue refresh 42510264543 passed readiness, fresh two-turn managed_chat_comparison_canary_ok and live acceptance at 18:34 UTC | Ready for owner retesting, including gym tools; broader Current-vs-Copilot comparison pending. Current remains default |
 | Current vs Copilot comparison | Owner-reported quick smoke test worked well. Actual hybrid architecture and test visibility/context limitations documented; controlled project exercise proposed | Select representative source material; prepare equivalent contexts and measurements before claiming a live comparison. Full tool/write comparison pending |
-| Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653. Full CI and 530 Core tests passed; native 42510119801 passed all four cases with a 1,003-note library and both editing themes. Captures reviewed | Merged; TestFlight 85 uploaded successfully in 42511641193. Owner retest when Apple makes it available. Header/footer transparency already owner-accepted |
+| Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653; qualified and delivered in build 85 | Owner confirmed Notes fixed on 8 November. Preserve this and accepted header/footer transparency |
+| Home Today workout totals | #1654 merged as ef783da2; all 533 Core tests, CI, CodeQL and native compilation passed, including Today/7d/14d/30d and no duplicated measurements | Build 86 uploaded successfully in 42515467682; owner retest Today against Health once it appears in TestFlight |
 | Apple Watch | Owner reports implementation in Jarvis2 secondary | Secondary handoff; primary reviews, integrates, tests and releases. Implementation completion and delivery are not verified |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
-| Next TestFlight bundle | Build 84 uploaded in 42503950006 at 17:22 UTC; backend deployment 42502357217 accepted. Final native follow-up passed. Build 83 was cancelled before upload | Apple processing/device availability, Copilot gym refresh and owner acceptance remain separate |
+| Latest TestFlight bundle | Build 86 uploaded in 42515467682 with Home workout totals corrected. Build 85 Notes correction is owner-accepted; earlier build 84 chat/navigation/lift changes remain included | Apple processing/device availability and Home device acceptance pending; other unexercised owner checks remain on the saved checklist |
 
 The owner now explicitly requests implementation and delivery of all five items.
 This supersedes the earlier hold while collecting additions. Notes and Ember are

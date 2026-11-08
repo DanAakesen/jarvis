@@ -1,3 +1,15 @@
+## 8 November 2026 — Retain workout measurements when combining Home sources
+
+Home's vault/manual/HealthKit merge must retain the primary session, date and
+recorded values while filling missing duration, active energy and source IDs from
+the matched source. A duplicate representation is not a reason to discard its
+measurements. Retain the existing compatible-session/two-hour match window;
+choose the nearest unmatched primary row once per source so metrics are neither
+copied across several logs nor lost for a distinct unmatched workout. This only
+changes the read projection; it does not write or migrate health/vault records.
+The nested-source regression reproduces zero Today totals before the fix and all
+533 Core tests pass after it. App delivery/device verification remain separate.
+
 ## 7 November 2026 — Authorize 128 GiB workspaces with automatic compute shutdown
 
 The owner approved proceeding with 128 GiB workspaces at the discussed indicative
@@ -11979,3 +11991,24 @@ fresh received snapshot can be displayed. Keep cached complication data through
 brief/background unreachability, expire at the earlier of 15 minutes and local
 midnight, and clear on explicit phone sign-out context. Primary owns signing and
 release after the secondary handoff; physical Watch acceptance stays deferred.
+
+
+## 2026-11-08 — Diagnose the failed Current comparison without replay
+
+Use existing deploy identity access for a fixed, main-only read of recent backend
+failure classifications. No permissions or service configuration change; retain
+only timestamps and existing safe codes in workflow output. The isolated Current
+test delivered no final answer and its expected note is absent; this is a valid
+failed comparison result, not a reason to issue another mutation test blindly.
+
+
+## 2026-11-08 — Group consecutive tool attempts, preserve comparison baseline
+
+The owner requests no adjacent repetition of the same tool name. Use one disclosure
+row with count and visible refused/failed totals; expanded rows show numbered
+attempts and their outcomes. Preserve chronology and real call totals. Apply the
+same component to normal and isolated test Chat, and qualify both surfaces.
+Copilot's saved initial/revised note is verified, but 51 displayed attempts and
+refusals remain friction findings. Keep the backend unchanged for the paired
+Current run; do not infer the exact refusal cause from a generic UI label or claim
+that the isolated test establishes normal Chat reliability.

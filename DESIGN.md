@@ -3714,6 +3714,11 @@ the final reply. All elements scroll with Chat. Reconnecting retains elapsed tim
 and names the connection state. A single message tap toggles its compact timestamp;
 long-press selection and links retain their native behavior. No private reasoning
 is rendered and heartbeats are not presented as newly completed work.
+Adjacent tool calls share a disclosure row, for example “repo list ×10”. Its
+summary shows outcome counts, with refused/failed attempts first and a warning
+icon. Details use “Call 1”, “Call 2” and their outcomes, without repeating the
+tool name. Preserve chronological groups and the total number of actual calls.
+This shared presentation applies to live, completed and runtime-test tool lists.
 
 Native follow-up: timestamp taps yield to UIKit long-press selection and cannot
 reflow a reply at the end of a selection gesture. Revealed lift actions overlay

@@ -1,3 +1,22 @@
+## Home Today workout totals and Notes acceptance (8 November 2026)
+
+Owner confirmed Notes fixed after build 85. Home Today still counted workouts but
+showed zero time/energy when matching vault/manual sessions replaced HealthKit
+measurements. `JarvisCombinedGymLogStore` now enriches the primary row instead of
+discarding those measurements. The original code fails the new nested-source
+regression; `swift test -j 2` in `apps/ios/Packages/JarvisCore` passes all 533 tests
+after the correction in the official Swift 6.2 container and CI 42515170283.
+CodeQL 42515170223 and native Simulator compilation passed. #1654 merged as
+ef783da2 with the exact qualified iOS tree; TestFlight 86 uploaded successfully
+in 42515467682. The shared UI and period filter are unchanged. Apple processing
+and owner verification remain pending; see ios/design/p15-build86-release.md.
+
+Apple documentation actually read: [HKWorkout.duration](https://developer.apple.com/documentation/healthkit/hkworkout/duration),
+[HKWorkout.statistics(for:)](https://developer.apple.com/documentation/healthkit/hkworkout/statistics(for:))
+and [HIG HealthKit](https://developer.apple.com/design/human-interface-guidelines/healthkit).
+Preserve the existing read permissions and reported workout statistics; no
+HealthKit write, new permission or custom platform behavior is introduced.
+
 ## Owner tracking and next bundle (7 November 2026)
 
 Use PLAN.md's owner status ledger for all discussed work, including items not yet
@@ -7775,3 +7794,27 @@ Apple processing/device availability and owner acceptance of the Notes sidebar
 freeze correction remain unverified. The owner's acceptance of build 84 shared
 header/footer transparency remains valid. Copilot's fresh catalogue/canary is
 ready; the full comparison and gym write checks remain owner tests.
+
+
+## Read-only chat failure diagnostics (8 November 2026)
+
+The owner reports Current failing in isolated test Chat while Copilot completes.
+Use manual main-only Chat failure diagnostics to read the configured Jarvis
+backend's conversation.reply_failed records from the existing workspace for the
+last 12 hours (maximum 50). It publishes only timestamps and allowlisted failure
+codes, never user content, raw errors, provider payloads or credentials. It does
+not change RBAC/configuration, replay a turn, create notes or deploy a service.
+Unknown causes stay unclassified. Permission/query failure is explicit; no role
+grant or broader log query is automatic. Script and workflow are check-only inputs.
+
+
+## Tool activity grouping qualification (8 November 2026)
+
+Read Apple SwiftUI DisclosureGroup documentation and HIG Disclosure controls.
+Use the shared row control, descriptive expandable label, retained outcome text,
+44-point target and Reduce Motion handling. Run Core grouping/replay tests and
+native runtime-test grouped/expanded attempts, ordinary saved tool disclosure and
+live elapsed/progress checks. Focused validation may use a disposable workflow
+branch with identical app/test tree and unchanged 120/150-second test limits;
+never merge the validation workflow. Keep normal Chat versus isolated harness
+results separate and retain actual native captures before claiming UI acceptance.

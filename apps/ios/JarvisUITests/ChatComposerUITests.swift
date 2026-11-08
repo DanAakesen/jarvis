@@ -42,6 +42,32 @@ final class ChatComposerUITests: XCTestCase {
         progressCapture.lifetime = .keepAlways
         add(progressCapture)
         XCTAssertTrue(app.descendants(matching: .any)["runtimeTest.message.991"].waitForExistence(timeout: 10))
+        let tools = app.buttons["runtimeTest.tools"]
+        XCTAssertTrue(tools.waitForExistence(timeout: 5))
+        XCTAssertTrue(tools.label.contains("11"), "Replayed finishes must not inflate the call total.")
+        tools.tap()
+        let group = app.buttons["runtimeTest.toolGroup.00000000-0000-4000-8000-000000000002"]
+        XCTAssertTrue(group.waitForExistence(timeout: 5))
+        XCTAssertTrue(group.label.contains("repo list ×10"))
+        XCTAssertTrue(group.label.contains("Not allowed 1"), "A later success must not hide the refusal.")
+        XCTAssertTrue(group.label.contains("Done 9"))
+        let refusedCall = app.descendants(matching: .any)["runtimeTest.toolCall.00000000-0000-4000-8000-000000000003"]
+        XCTAssertFalse(refusedCall.exists)
+        let groupedCapture = XCTAttachment(screenshot: app.screenshot())
+        groupedCapture.name = "runtime-test-grouped-tools"
+        groupedCapture.lifetime = .keepAlways
+        add(groupedCapture)
+        group.tap()
+        XCTAssertTrue(refusedCall.waitForExistence(timeout: 5))
+        XCTAssertTrue(refusedCall.label.contains("Call 2"))
+        XCTAssertTrue(refusedCall.label.contains("Not allowed"))
+        XCTAssertFalse(refusedCall.label.contains("repo list"))
+        let expandedCapture = XCTAttachment(screenshot: app.screenshot())
+        expandedCapture.name = "runtime-test-expanded-tool-attempts"
+        expandedCapture.lifetime = .keepAlways
+        add(expandedCapture)
+        group.tap()
+        XCTAssertFalse(refusedCall.exists)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "runtime-test-isolated-chat"
         screenshot.lifetime = .keepAlways

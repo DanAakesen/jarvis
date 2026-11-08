@@ -153,6 +153,7 @@
 
 "chat.turn.working" = "Working…";
 "chat.turn.writing" = "Writing reply…";
+"chat.turn.toolCall" = "Call";
 "chat.turn.tools" = "Tool activity";
 "chat.turn.toolRunning" = "Running";
 "chat.turn.toolOK" = "Done";

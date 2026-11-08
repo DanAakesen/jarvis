@@ -7,6 +7,7 @@ public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case turnShowTime = "chat.turn.showTime"
     case turnWorking = "chat.turn.working"
     case turnWriting = "chat.turn.writing"
+    case toolCall = "chat.turn.toolCall"
     case toolActivity = "chat.turn.tools"
     case toolRunning = "chat.turn.toolRunning"
     case toolOK = "chat.turn.toolOK"

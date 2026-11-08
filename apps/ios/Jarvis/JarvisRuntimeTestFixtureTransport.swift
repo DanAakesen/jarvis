@@ -48,13 +48,25 @@ actor JarvisRuntimeTestFixtureTransport: HTTPTransport {
         let tool = ["type": "tool-call-started", "source": "chat", "activityId": "00000000-0000-4000-8000-000000000001", "messageId": "990", "toolName": "vault_search"]
         let started = try event("tool_activity", tool)
         let finished = try event("tool_activity", tool.merging(["type": "tool-call-finished", "outcome": "ok"]) { _, new in new })
+        var groupedEvents = ""
+        for index in 2...11 {
+            let call = ["type": "tool-call-started", "source": "chat",
+                        "activityId": String(format: "00000000-0000-4000-8000-%012d", index),
+                        "messageId": "990", "toolName": "repo_list"]
+            groupedEvents += try event("tool_activity", call)
+            let completed = try event("tool_activity", call.merging([
+                "type": "tool-call-finished", "outcome": index == 3 ? "refused" : "ok",
+            ]) { _, new in new })
+            groupedEvents += completed + completed // Replay must not inflate the count.
+        }
+        let capturedGroups = groupedEvents
         let phase = try event("progress", ["phase": "tools"])
         return HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: AsyncThrowingStream { continuation in
             let task = Task {
                 continuation.yield(Data((user + acknowledgment + started + phase).utf8))
                 do { try await Task.sleep(for: .seconds(6)) }
                 catch { continuation.finish(throwing: error); return }
-                continuation.yield(Data((finished + done).utf8))
+                continuation.yield(Data((finished + capturedGroups + done).utf8))
                 continuation.finish()
             }
             continuation.onTermination = { _ in task.cancel() }
