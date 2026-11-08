@@ -21,6 +21,7 @@ final class WatchModel: ObservableObject {
     private let audio = VoiceAudioEngine()
     private var capture: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?
+    private var historyRequest = UUID()
     private var turn: UUID?
     private var replyID: String?
     private var voiceGeneration = UUID()
@@ -47,14 +48,20 @@ final class WatchModel: ObservableObject {
         }
     }
     func history() async {
-        guard !busy else { return }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
+        #endif
+        guard !busy, voiceID == nil else { return }
+        let read = UUID(); historyRequest = read
         do {
             let history: [ChatHistoryMessage] = try await connection.load(.history)
+            guard read == historyRequest, !busy, voiceID == nil else { return }
             messages = history.map { Message(id: $0.id, user: $0.role == .dan, text: $0.text) }
         } catch { show(error) }
     }
     func send() async {
         guard !busy, voiceID == nil, let text = composer.beginSend() else { return }
+        historyRequest = UUID()
         let request = WatchRequest(action: .sendTurn, text: text)
         busy = true; error = nil; turn = request.id
         let responseID = UUID().uuidString; replyID = responseID

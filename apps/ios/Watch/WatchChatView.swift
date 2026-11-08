@@ -4,6 +4,7 @@ struct WatchChatView: View {
     @EnvironmentObject private var model: WatchModel
     @EnvironmentObject private var connection: WatchConnection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     var dictate: () -> Void
     @Binding var pendingDictation: Bool
     var body: some View {
@@ -40,14 +41,17 @@ struct WatchChatView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Jarvis").navigationBarTitleDisplayMode(.inline)
          .task {
-            if pendingDictation {
-                pendingDictation = false
-                await Task.yield() // Present system input after navigation has attached the chat screen.
-                dictate()
-            }
-            if model.messages.isEmpty { await model.history() }
+            beginPendingDictation()
+            await model.history()
         }
+        .onChange(of: pendingDictation) { _, pending in if pending { beginPendingDictation() } }
+        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await model.history() } } }
         .onChange(of: connection.reachable) { _, reachable in if reachable && !model.busy { Task { await model.history() } } }
+    }
+    private func beginPendingDictation() {
+        guard pendingDictation else { return }
+        pendingDictation = false
+        Task { await Task.yield(); dictate() }
     }
     private var composer: some View {
         VStack(spacing: 3) {
