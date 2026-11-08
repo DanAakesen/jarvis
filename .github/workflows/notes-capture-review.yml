@@ -1,5 +1,5 @@
-# Validation-only artifact inspection; never merge. No deployment or application writes.
-name: Notes capture review
+# Temporary exact-source validation cleanup. Never merge.
+name: Stop duplicate Notes native sweep
 on:
   push:
     branches: [codex/notes-capture-review]
@@ -7,78 +7,18 @@ permissions:
   contents: read
   actions: write
 jobs:
-  inspect:
+  stop:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: DanAakesen/jarvis
     steps:
-      - name: Finish cancelling the redundant broad simulator run
+      - name: Preserve passed focused evidence and stop only the redundant sweep
         run: |
-          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42509929012 --jq .head_sha)" = "ca107a8b897bdf2eab181ab504cb43bcf1344525"
-          if test "$(gh api repos/DanAakesen/jarvis/actions/runs/42509929012 --jq .status)" != "completed"; then
-            gh api --method POST repos/DanAakesen/jarvis/actions/runs/42509929012/force-cancel
+          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42510119801 --jq .conclusion)" = "success"
+          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511384290 --jq .head_sha)" = "2f0fd280d6f999dd01459e97e0f43e9e12882c3e"
+          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511384290 --jq .name)" = "iOS Simulator"
+          if test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511384290 --jq .status)" != "completed"; then
+            gh api --method POST repos/DanAakesen/jarvis/actions/runs/42511384290/force-cancel
           fi
-      - name: Wait for the existing native run
-        continue-on-error: true
-        run: gh run watch 42510119801 --interval 15 --exit-status
-      - name: Download retained evidence
-        run: gh run download 42510119801 --name notes-regression-evidence-1 --dir "$RUNNER_TEMP/notes-evidence"
-      - name: Prepare small review copies of retained screenshots
-        run: python3 -m pip install --quiet Pillow==11.3.0
-      - name: Read source proof, results, crash diagnostics and selected screenshots
-        run: |
-          python3 - <<'PYCODE'
-          import base64, io, json, os, pathlib, re, shutil, subprocess
-          from PIL import Image
-          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "notes-evidence"
-          proof = json.loads((root / "provenance.json").read_text())
-          assert proof["source"] == "ca107a8b897bdf2eab181ab504cb43bcf1344525"
-          assert proof["ios_tree"] == "545ad8d8c08ed50e9507d71cceadab434537fe1e"
-          print("NOTES_SOURCE " + json.dumps(proof))
-          summary = root / "summary.json"
-          if summary.exists():
-              print("NOTES_SUMMARY " + summary.read_text())
-          manifest_file = root / "attachments/manifest.json"
-          manifest = json.loads(manifest_file.read_text()) if manifest_file.exists() else []
-          print("NOTES_MANIFEST " + json.dumps(manifest)[:100000])
-          candidates = []
-          def visit(value):
-              if isinstance(value, dict):
-                  text = " ".join(str(v) for v in value.values() if isinstance(v, str))
-                  if re.search(r"notes-large-library-sidebar-1|Notes page order|notes-editor-dark|notes-editor-light", text):
-                      for v in value.values():
-                          if isinstance(v, str) and v.endswith(".png"):
-                              candidates.extend((root / "attachments").rglob(pathlib.Path(v).name))
-                  for item in value.values():
-                      visit(item)
-              elif isinstance(value, list):
-                  for item in value:
-                      visit(item)
-          visit(manifest)
-          if not candidates:
-              candidates = sorted((root / "attachments").rglob("*.png"))
-          seen = set()
-          for path in candidates:
-              if path.name in seen:
-                  continue
-              seen.add(path.name)
-              if len(seen) > 4:
-                  break
-              im = Image.open(path).convert("RGB")
-              im.thumbnail((720, 1560))
-              buffer = io.BytesIO()
-              im.save(buffer, format="JPEG", quality=85)
-              raw = buffer.getvalue()
-              if len(raw) > 4000000:
-                  continue
-              print("NOTES_IMAGE_BEGIN " + path.name)
-              data = base64.b64encode(raw).decode()
-              for start in range(0, len(data), 6000):
-                  print("NOTES_IMAGE_DATA " + data[start:start+6000])
-              print("NOTES_IMAGE_END " + path.name)
-          for path in sorted((root / "crashes").glob("*.ips")):
-              print("NOTES_CRASH " + path.name)
-              print(path.read_text()[:100000])
-          PYCODE
