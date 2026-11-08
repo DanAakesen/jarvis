@@ -180,16 +180,19 @@ public enum JarvisHealthLogic {
 /// Identifies the same HealthKit workout on the phone and in retained sync data.
 /// A legacy manual gym log has no HealthKit id; it follows Home's two-hour gym-session match.
 public struct JarvisHealthWorkoutIdentity: Sendable {
+    public enum Source: Sendable { case healthKit, manual }
+    public let source: Source
     public let id: String?
     public let start: Date
     public let kind: JarvisHealthLogic.WorkoutKind
 
-    public init(id: String?, start: Date, kind: JarvisHealthLogic.WorkoutKind) {
+    public init(id: String?, start: Date, kind: JarvisHealthLogic.WorkoutKind, source: Source = .healthKit) {
+        self.source = source
         self.id = id; self.start = start; self.kind = kind
     }
 
     public func matches(_ other: Self) -> Bool {
-        if let id, let otherID = other.id { return id.lowercased() == otherID.lowercased() }
+        if source == other.source, let id, let otherID = other.id { return id.lowercased() == otherID.lowercased() }
         guard kind == other.kind else { return false }
         return abs(start.timeIntervalSince(other.start)) < (kind == .gym ? 7200 : 90)
     }

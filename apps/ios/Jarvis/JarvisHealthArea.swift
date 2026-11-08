@@ -674,7 +674,7 @@ struct JarvisHealthArea: View {
         for entry in deviceWorkouts {
             let raw = entry.healthActivity ?? ([JarvisGymSessionType.chest, .back, .arms, .legs, .strength].contains(entry.session) ? "gym" : "other")
             let identity = JarvisHealthWorkoutIdentity(id: entry.healthKitID ?? entry.manualWorkoutID, start: entry.performedAt,
-                kind: JarvisHealthLogic.workoutKind(raw))
+                kind: JarvisHealthLogic.workoutKind(raw), source: entry.manualWorkoutID == nil ? .healthKit : .manual)
             guard !identities.contains(where: { $0.matches(identity) }) else { continue }
             formatter.formatOptions = [.withInternetDateTime]
             let stamp = formatter.string(from: entry.performedAt)

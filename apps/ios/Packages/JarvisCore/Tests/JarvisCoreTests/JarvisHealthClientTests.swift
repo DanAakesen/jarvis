@@ -55,6 +55,10 @@ final class JarvisHealthClientTests: XCTestCase {
         XCTAssertTrue(stored.matches(.init(id: nil, start: start + 1800, kind: .gym)))
         XCTAssertFalse(stored.matches(.init(id: nil, start: start + 1800, kind: .run)))
         XCTAssertFalse(stored.matches(.init(id: nil, start: start + 8000, kind: .gym)))
+        let manual = JarvisHealthWorkoutIdentity(id: "manual-1", start: start, kind: .gym, source: .manual)
+        XCTAssertTrue(stored.matches(manual), "A manual log and its HealthKit workout must count once")
+        XCTAssertFalse(manual.matches(.init(id: "manual-2", start: start + 60, kind: .gym, source: .manual)),
+                       "Distinct saved manual sessions must remain distinct")
     }
 
     func testRingProgressAndNutritionBalanceDoNotInventTargets() {

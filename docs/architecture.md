@@ -9081,3 +9081,7 @@ copies) alongside legacy logs, before HealthKit de-duplication. Manual record ID
 remain distinct from HealthKit IDs. Historical app vault writes remain supported;
 this change does not migrate or rewrite them. Core fixture coverage checks that
 chat-logged sessions appear, retain identity/duration and respect the date range.
+
+Manual/HealthKit workout identities carry their source. Distinct IDs from the same
+source remain distinct; cross-source records use the existing kind/time match so
+chat logging does not double-count the corresponding synced workout.
