@@ -1,5 +1,5 @@
-# Temporary exact-source validation cleanup. Never merge.
-name: Stop duplicate Notes native sweep
+# Temporary validation cleanup; never merge.
+name: Keep qualified Notes native evidence
 on:
   push:
     branches: [codex/notes-capture-review]
@@ -14,11 +14,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: DanAakesen/jarvis
     steps:
-      - name: Preserve passed focused evidence and stop only the redundant sweep
+      - name: Stop only the duplicate post-merge simulator sweep
         run: |
           test "$(gh api repos/DanAakesen/jarvis/actions/runs/42510119801 --jq .conclusion)" = "success"
-          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511384290 --jq .head_sha)" = "2f0fd280d6f999dd01459e97e0f43e9e12882c3e"
-          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511384290 --jq .name)" = "iOS Simulator"
-          if test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511384290 --jq .status)" != "completed"; then
-            gh api --method POST repos/DanAakesen/jarvis/actions/runs/42511384290/force-cancel
+          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511593064 --jq .head_sha)" = "df813f348eae27961259c691b526eeadced9ea18"
+          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511593064 --jq .name)" = "iOS Simulator"
+          if test "$(gh api repos/DanAakesen/jarvis/actions/runs/42511593064 --jq .status)" != "completed"; then
+            gh api --method POST repos/DanAakesen/jarvis/actions/runs/42511593064/force-cancel
           fi
