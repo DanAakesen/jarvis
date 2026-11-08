@@ -12,7 +12,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 
 | Item | Current state | Next evidence needed |
 | --- | --- | --- |
-| Header/footer transparency after Ember | Owner reports recurrence on 8 November; investigation added to the current bundle | Inspect shared background/chrome composition and qualify actual scrolling page captures; do not mark resolved from prior builds |
+| Header/footer transparency after Ember | Owner clarified both opaque bands and missing scroll-behind behavior. Shared chrome now uses transparent safe-area insets; Chat hides the remaining bottom scroll-edge backing | Fresh native underlap geometry and actual resting/scrolled captures in both themes; include in build 84 |
 | Notifications → Factory task | Latest, older grouped and running-task rows now route to the matching Factory detail after sheet dismissal | Fresh native navigation checks and replacement TestFlight build |
 | Factory detail and issue-only cards | History decoder aligned with TaskEventRecord (no taskId); live events still require matching taskId. Cards without a task open their GitHub issue | Core contracts, native task-history and board navigation checks; owner retest P11-13 |
 | PC bridge notifications | #1645 merged; online/control-state updates quiet, legacy online feed rows hidden, offline warnings rearm after recovery; backend and SQL checks passed | Deploy 42477261659 passed readiness and live acceptance; owner device check |

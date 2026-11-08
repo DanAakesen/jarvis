@@ -70,29 +70,23 @@ private struct JarvisPageHeaderModifier<Header: View>: ViewModifier {
     let header: Header
 
     func body(content: Content) -> some View {
-        VStack(spacing: 0) {
-            header
-            // Reserve the header's real height, including Dynamic Type wrapping.
-            // Rows stop at this boundary instead of needing a material bar to cover them.
-            content.clipped()
-        }
+        // Insets keep the first/last row reachable while the scroller still draws
+        // behind the floating controls. A clipped VStack creates an opaque-looking band.
+        content.safeAreaInset(edge: .top, spacing: 0) { header }
         .scrollEdgeEffectHidden()
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar, .bottomBar)
     }
 }
 
 extension View {
-    /// A transparent, structurally reserved header. Scrolling content cannot overlap its title or actions.
+    /// Transparent floating header; content scrolls underneath with resting safe-area clearance.
     func jarvisPageHeader<Header: View>(@ViewBuilder _ header: () -> Header) -> some View {
         modifier(JarvisPageHeaderModifier(header: header()))
     }
 
-    /// Floating controls reserve their own space without creating a native bar backdrop.
+    /// Floating controls inset the scroll content without clipping it at the footer boundary.
     func jarvisPageFooter<Footer: View>(@ViewBuilder _ footer: () -> Footer) -> some View {
-        VStack(spacing: 0) {
-            self.clipped()
-            footer()
-        }
+        self.safeAreaInset(edge: .bottom, spacing: 0, content: footer)
         .scrollEdgeEffectHidden()
         .toolbarBackgroundVisibility(.hidden, for: .bottomBar)
     }

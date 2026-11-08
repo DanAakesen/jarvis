@@ -11707,3 +11707,19 @@ live-event ID matching. Correct fixtures instead of adding an invented field to
 the API. Build 83 was cancelled before upload to bundle these corrections with
 chat spacing/progress; the bridge change is live after Deploy 42477261659.
 New source qualification and replacement TestFlight delivery are pending.
+
+
+### 2026-11-08 — Transparent chrome includes scrolling behind controls
+
+The owner answered Both when asked whether the regression concerned a rectangular
+backing or missing content behind controls. Replace reserved/clipped header/footer
+stacks with safe-area insets and hide Chat's bottom scroll-edge backing. Preserve
+the selected Ember background and control-level glass/accessibility behavior.
+Native scrolling captures and viewport-underlap checks are required before build
+84; older chrome passes do not establish this newly clarified behavior.
+
+Native 42480914532 confirmed the older task link and board/history path after the
+accessibility containment fix. The attention test still failed: its retained
+hierarchy exposes the correct button at y=360.6 above the medium sheet viewport
+(y=476.5). Replace fast one-way swipes with bounded, directed drags; keep the same
+navigation assertions and timeout. Requalify alongside the shared chrome change.

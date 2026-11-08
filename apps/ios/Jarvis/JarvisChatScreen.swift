@@ -390,8 +390,7 @@ struct JarvisChatScreen: View {
                 .accessibilityIdentifier("chat.transcript")
                 .scrollDismissesKeyboard(.interactively)
                 .defaultScrollAnchor(.bottom)
-                .scrollEdgeEffectHidden(true, for: .top)
-                .scrollEdgeEffectStyle(.soft, for: .bottom)
+                .scrollEdgeEffectHidden()
                 .onChange(of: model.messages.last?.id) { _, _ in
                     scrollToBottom(proxy, animated: !reduceMotion)
                 }

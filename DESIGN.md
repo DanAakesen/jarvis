@@ -3666,3 +3666,15 @@ the task navigation and dismiss actions. This applies to the newest
 item, expanded older items and running work. Close Notifications before opening
 Factory detail. An issue-only board card has a working GitHub destination and an
 external-link symbol; linked tasks keep their in-app detail destination.
+
+
+## Header/footer clarification (8 November 2026)
+
+The owner reports both rectangular backing and content not scrolling behind the
+controls. This explicitly supersedes the build 76/79 reserved-and-clipped layout.
+Use transparent top/bottom safe-area insets so first/last content remains reachable
+at rest and scrolls underneath the individual glass controls. Hide system toolbar
+and scroll-edge backdrops, including Chat's former soft bottom edge. Keep Ember
+and the light palette unchanged. Control-level Reduce Transparency remains intact.
+Fresh native checks must verify the scroll viewport crosses both control regions,
+actual content moves, and controls remain usable; inspect the scrolled captures.

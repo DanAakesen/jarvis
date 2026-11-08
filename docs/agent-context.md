@@ -7598,3 +7598,12 @@ must cover NotificationTaskNavigationUITests and the existing Chat presentation/
 turn-feedback checks. The history fixture must omit taskId to match the backend
 TaskEventRecord; live stream tests must still reject missing or foreign task IDs.
 The quota blocker above remains; opening a task must not recover or recreate it.
+
+
+For the 8 November chrome follow-up, the owner explicitly requires both no full
+rectangular backing and content scrolling behind header/footer controls. The old
+reserved/clipped layout is superseded. Qualify shared safe-area insets in light
+and dark native scrolling captures; keep notification navigation and Chat checks
+in the same release bundle. 42480914532's retained accessibility hierarchy proves
+its remaining attention-row failure was a test scroll overshoot; no app failure
+or native pass should be invented from that result.

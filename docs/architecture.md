@@ -9001,3 +9001,10 @@ reuse the validated HTTPS GitHub issue URL.
 History events follow TaskEventRecord, which omits taskId. The iOS model accepts
 that absence in the task-scoped detail response. Task SSE still requires matching
 taskId and event ID before delivery, as required by TaskEventMessage.
+
+
+Native page chrome uses top/bottom safe-area insets with no container backdrop.
+The scroll viewport spans the header/footer, while content insets keep its first
+and last rows reachable. This replaces the clipped VStack arrangement following
+the owner's 8 November clarification. The shared ambient renderer still owns the
+continuous background; individual controls own their glass.

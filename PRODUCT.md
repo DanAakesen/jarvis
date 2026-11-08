@@ -2503,7 +2503,10 @@ icons without a surrounding surface. Tasks complete through native trailing swip
 and an accessible named action; writes must succeed before removing a task or
 showing success. Period controls align right and hero titles align left with equal
 top/leading inset. All page headers and the Notes/Factory footer containers remain
-transparent while their individual glass controls remain visible. The owner accepts
+transparent while their individual glass controls remain visible. On 8 November
+the owner clarified that content must also scroll behind both the header and footer
+controls; clipping the scroller below/above those regions does not satisfy this.
+The first and last content still need safe-area clearance at rest. The owner accepts
 the current loading animations; this correction preserves them.
 
 The owner accepts the widget layouts. Every widget size must open its matching

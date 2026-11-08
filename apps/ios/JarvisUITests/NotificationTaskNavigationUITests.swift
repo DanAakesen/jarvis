@@ -79,9 +79,18 @@ final class NotificationTaskNavigationUITests: XCTestCase {
 
     private func reveal(_ identifier: String) -> XCUIElement {
         let row = app.buttons[identifier]
+        let list = app.scrollViews["activity.list"]
         for _ in 0..<7 {
-            if row.isHittable { return row }
-            app.scrollViews["activity.list"].swipeUp()
+            let visibleTop = max(list.frame.minY, app.staticTexts["page.title"].frame.maxY + 8)
+            if row.isHittable, row.frame.minY >= visibleTop, row.frame.maxY <= list.frame.maxY {
+                return row
+            }
+            // A full fast swipe can skip a short row in the medium-height sheet.
+            // Move toward its actual position, including back down after overshooting.
+            let downward = row.exists && row.frame.minY < visibleTop
+            let start = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: downward ? 0.4 : 0.75))
+            let end = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: downward ? 0.75 : 0.4))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
         }
         capture("missing-\(identifier)")
         captureHierarchy("missing-\(identifier)-hierarchy")

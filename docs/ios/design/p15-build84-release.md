@@ -71,3 +71,13 @@ than coalescing them. Notification requalification is pending; no failed check i
 reported as passing. Header/footer device feedback remains open: these captures
 show continuous Ember around controls, but do not establish the owner's expected
 scroll-behind behavior.
+
+
+## Clarified chrome behavior included in this candidate
+
+The owner confirmed both rectangular backing and missing scroll-behind content.
+Replace the clipped shared header/footer stacks with transparent safe-area insets
+and hide Chat's remaining bottom scroll-edge effect. Keep the first/last rows
+reachable and retain individual glass controls. Native underlap geometry, actual
+scrolling captures, Chat and notification navigation require fresh qualification.
+The earlier open ambiguity is resolved; implementation is not yet native-accepted.
