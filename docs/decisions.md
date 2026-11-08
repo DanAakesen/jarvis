@@ -11981,6 +11981,15 @@ header/footer transparency remains valid. Copilot's fresh catalogue/canary is
 ready; the full comparison and gym write checks remain owner tests.
 
 
+## 2026-11-08 — Diagnose the failed Current comparison without replay
+
+Use existing deploy identity access for a fixed, main-only read of recent backend
+failure classifications. No permissions or service configuration change; retain
+only timestamps and existing safe codes in workflow output. The isolated Current
+test delivered no final answer and its expected note is absent; this is a valid
+failed comparison result, not a reason to issue another mutation test blindly.
+
+
 ## 2026-11-08 — Group consecutive tool attempts, preserve comparison baseline
 
 The owner requests no adjacent repetition of the same tool name. Use one disclosure

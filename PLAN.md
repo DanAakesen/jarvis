@@ -1,11 +1,21 @@
+## Current test-chat failure investigation — 8 November 2026
+
+The same combined owner test ends in generic recovery text after 20 displayed
+tool attempts; the expected Personal/HARNESS-CHECK-CURRENT-85.md is absent on
+readback. Copilot saved both revisions. Treat Current as failed completion for
+this case; do not ask the owner to rerun it or infer a timeout from the UI text.
+A bounded, read-only failure-code diagnostic is prepared to obtain server evidence
+without replaying mutations or exposing raw logs. Live cause remains unverified.
+
+
 ## Copilot owner test review and tool grouping — 8 November 2026
 
 The owner's isolated Copilot test saved the labelled plan and revised the same
 note: vault commits 4cb08916 and 7030beb4 verify the requested scope change.
 The screen reports 51 tool attempts, refused reads/write and a failed repo list;
 this is functional completion with friction, not a clean reliability pass.
-Current comparison remains pending. Use the identical prompt/settings in a fresh
-Current test conversation, changing only the note name to HARNESS-CHECK-CURRENT-85.
+The paired Current attempt failed without a final reply or the expected note.
+Owner requests repairing Current first, then repeating the comparison.
 Normal Chat is a separate acceptance surface; do not generalize this test to it.
 
 Consecutive tool grouping is implemented for both iOS chat surfaces, preserving

@@ -347,3 +347,13 @@ vault changes; this is a practical comparison, not an isolated performance trial
 Do not change the prompt halfway through the pair. A same-message revision does
 not replace the separate two-turn carryover/policy tests, and test-chat success
 does not qualify normal Chat, voice or Home entry.
+
+
+### Current follow-up and comparison gate
+
+The owner ran Current and received only generic recovery text after 20 displayed
+tool attempts. Readback of `Personal/HARNESS-CHECK-CURRENT-85.md` returned not found.
+This confirms no delivered final reply/no note at the expected path; it does not
+prove no tools ran. The owner explicitly requests Current be repaired before
+comparing the harnesses. Do not select a winner or substitute a simpler prompt.
+After the repair, repeat the matched exercise and preserve these failure records.
