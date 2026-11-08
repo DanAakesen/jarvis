@@ -1,3 +1,4 @@
+import Combine
 import AVFoundation
 import Foundation
 import JarvisCore
@@ -20,6 +21,11 @@ final class WatchModel: ObservableObject {
     private var replyID: String?
     private var voiceGeneration = UUID()
     init() {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--watch-fixture") {
+            messages = [.init(user: true, text: "What should I train today?"), .init(user: false, text: "Upper body: bench press, rows and shoulder press."), .init(user: true, text: "What weight for bench?"), .init(user: false, text: "Your last entry was 60 kg for 8 reps.")]
+        }
+        #endif
         connection.onEvent = { [weak self] in self?.receive($0) }
         connection.onDisconnect = { [weak self] in self?.stopLocalVoice(state: "Disconnected") }
         audio.setPlaybackFinishedHandler { [weak self] responseID, audible in

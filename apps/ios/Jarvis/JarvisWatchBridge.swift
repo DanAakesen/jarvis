@@ -10,6 +10,8 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var client: JarvisClient?
     private var chatSession: String?
     private var chatTask: Task<Void, Never>?
+    private var startingChat = false
+    private var startingVoice = false
     private var voice: VoiceSessionClient?
     private var voiceID: UUID?
     private var lastVoiceContact = Date.distantPast
@@ -104,12 +106,14 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         case .history:
             return try encode(try await JarvisChatClient(client: client).history(limit: 20).messages)
         case .sendTurn:
-            guard chatTask == nil else { throw WatchFailure.busy }
+            guard chatTask == nil, !startingChat else { throw WatchFailure.busy }
+            startingChat = true; defer { startingChat = false }
+            let epoch = generation
             let chat = JarvisChatClient(client: client)
             if chatSession == nil { chatSession = try await chat.createSession(language: language).id }
             guard let sessionID = chatSession else { throw WatchFailure.failed }
             let stream = try await chat.sendTurn(sessionId: sessionID, text: r.text ?? "")
-            let epoch = generation
+            guard epoch == generation else { throw WatchFailure.signInRequired }
             chatTask = Task {
                 defer { self.chatTask = nil }
                 do {
@@ -149,9 +153,13 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             guard let id = r.itemID else { throw WatchFailure.invalidRequest }
             return try encode(try await JarvisFactoryClient(client: client).tasks(projectId: id, limit: 20).tasks)
         case .startVoice:
+            guard !startingVoice else { throw WatchFailure.busy }
+            startingVoice = true; defer { startingVoice = false }
+            let voiceEpoch = generation
             if let voiceID { return try encode(voiceID) }
             guard VoiceLiveActivityActions.session == nil else { throw WatchFailure.busy }
             guard let token = try await KeychainTokenStore().read() else { throw WatchFailure.signInRequired }
+            guard voiceEpoch == generation else { throw WatchFailure.signInRequired }
             let id = r.id; voiceID = id; lastVoiceContact = Date()
             voiceWatchdog = Task { [weak self] in
                 while !Task.isCancelled {
@@ -183,6 +191,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             voice = session; voiceMuted = false
             VoiceLiveActivityActions.session = self
             do { try await session.start(accessToken: token, language: language)
+                guard voiceEpoch == generation, voiceID == id else {
+                    try? await session.end(); throw WatchFailure.unavailable
+                }
                 try? liveActivity.start(sessionID: id, language: language == .en ? .en : .da)
             }
             catch { await stopVoice(); throw error }
@@ -243,7 +254,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         var result = WatchHealthSnapshot(now: now, calendar: calendar)
         if let tasks = try? await todayTasks(client: client) { result.tasksToday = tasks.count }
         if let targets = try? await JarvisHealthClient(client: client).trainingTargets().targets {
-            result.stepGoal = Int(targets.dailySteps ?? 0); result.gymGoal = Int(targets.gymSessionsPerWeek ?? 0); result.runGoal = Int(targets.runSessionsPerWeek ?? 0)
+            result.stepGoal = positiveTarget(targets.dailySteps)
+            result.gymGoal = positiveTarget(targets.gymSessionsPerWeek)
+            result.runGoal = positiveTarget(targets.runSessionsPerWeek)
         }
         // No permission prompts in a background companion request. Missing Health data stays nil.
         let store = HKHealthStore()
@@ -252,17 +265,27 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         }
         result.dailyKcal = try? await healthSum(store, type: .activeEnergyBurned, start: result.dayStart, end: now).reduce(0, +)
         result.weeklyKcal = try? await healthSum(store, type: .activeEnergyBurned, start: result.weekStart, end: now).reduce(0, +)
-        let workouts: [HKWorkout] = try await withCheckedThrowingContinuation { continuation in
+        let workouts: [HKWorkout]? = try? await withCheckedThrowingContinuation { continuation in
             store.execute(HKSampleQuery(sampleType: .workoutType(), predicate: HKQuery.predicateForSamples(withStart: result.weekStart, end: now), limit: 500, sortDescriptors: nil) { _, samples, error in
                 if let error { continuation.resume(throwing: error) } else { continuation.resume(returning: samples as? [HKWorkout] ?? []) }
             })
         }
         // Empty HealthKit reads cannot distinguish permission denial from no samples.
-        if !workouts.isEmpty {
+        if let workouts, !workouts.isEmpty {
             result.gym = workouts.filter { [.traditionalStrengthTraining, .functionalStrengthTraining].contains($0.workoutActivityType) }.count
             result.runs = workouts.filter { $0.workoutActivityType == .running }.count
         }
         return result
+    }
+    func publishSnapshotIfReachable() async {
+        let epoch = generation
+        guard let client, WCSession.default.activationState == .activated, WCSession.default.isPaired, WCSession.default.isWatchAppInstalled,
+              let snapshot = try? await snapshot(client: client), let data = try? encode(snapshot), epoch == generation else { return }
+        try? WCSession.default.updateApplicationContext(["health": data])
+    }
+    private func positiveTarget(_ value: Double?) -> Int? {
+        guard let value, value.isFinite, value > 0, value < 1_000_000 else { return nil }
+        return Int(value)
     }
     private func healthSum(_ store: HKHealthStore, type identifier: HKQuantityTypeIdentifier, start: Date, end: Date, interval: DateComponents = .init(day: 1)) async throws -> [Int] {
         guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { throw WatchFailure.failed }

@@ -45,10 +45,10 @@ struct WatchHealthList: View {
                     NavigationLink {
                         List {
                             Text(row["workout_type"]?.stringValue ?? "Workout").font(.headline)
-                            if let start = row["start"]?.stringValue ?? row["started_at"]?.stringValue { Text(start) }
+                            if let start = row["start_at"]?.stringValue ?? row["workout_date"]?.stringValue { Text(start) }
                             if let seconds = row["duration_seconds"]?.numberValue { Text("\(Int(seconds / 60)) min") }
-                            if let kcal = row["active_energy_kcal"]?.numberValue { Text("\(Int(kcal)) active kcal") }
-                            if let distance = row["distance_meters"]?.numberValue { Text("\(distance / 1000, specifier: "%.1f") km") }
+                            if let kcal = row["active_energy_value"]?.numberValue { Text("\(Int(kcal)) active kcal") }
+                            if let distance = row["distance_value"]?.numberValue { Text("\(distance, specifier: "%.1f") \(row["distance_unit"]?.stringValue ?? "")") }
                         }.navigationTitle("Workout")
                     } label: {
                         VStack(alignment: .leading) {

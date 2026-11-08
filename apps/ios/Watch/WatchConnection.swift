@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import JarvisCore
 import WatchConnectivity
@@ -13,11 +14,25 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     private var deadlines: [UUID: Task<Void, Never>] = [:]
     override init() {
         super.init()
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--watch-fixture") {
+            reachable = true
+            var sample = WatchHealthSnapshot()
+            sample.steps = 6420; sample.stepGoal = 8000
+            sample.hourlySteps = [0, 0, 0, 0, 0, 100, 500, 600, 300, 100, 200, 400, 700, 500, 400, 300, 600, 700, 420, 600]
+            sample.gym = 3; sample.gymGoal = 4; sample.runs = 1; sample.runGoal = 2
+            sample.dailyKcal = 480; sample.weeklyKcal = 2860; sample.tasksToday = 3
+            snapshot = sample
+            return
+        }
+        #endif
         guard WCSession.isSupported() else { return }
         WCSession.default.delegate = self; WCSession.default.activate()
     }
     func request(_ request: WatchRequest) async throws -> WatchReply {
-        guard reachable, request.isValid else { throw WatchFailure.unavailable }
+        guard reachable else { throw WatchFailure.unavailable }
+        guard request.isValid else { throw WatchFailure.invalidRequest }
+        guard pending[request.id] == nil else { throw WatchFailure.busy }
         let data = try JSONEncoder().encode(WatchWire.request(request))
         return try await withCheckedThrowingContinuation { continuation in
             pending[request.id] = continuation
@@ -45,6 +60,9 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         return try JSONDecoder().decode(T.self, from: data)
     }
     func refresh() async {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
+        #endif
         do {
             let value: WatchHealthSnapshot = try await load(.snapshot)
             save(value)
@@ -83,7 +101,11 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         let data = applicationContext["health"] as? Data
         Task { @MainActor in
             if let data, let value = try? JSONDecoder().decode(WatchHealthSnapshot.self, from: data) { self.save(value) }
-            else { self.snapshot = nil }
+            else {
+                self.snapshot = nil
+                UserDefaults(suiteName: "group.com.danaakesen.jarvis")?.removeObject(forKey: "watch.health")
+                WidgetCenter.shared.reloadAllTimelines()
+            }
         }
     }
 }

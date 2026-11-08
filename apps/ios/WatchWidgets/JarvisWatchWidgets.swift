@@ -22,7 +22,7 @@ struct WatchProvider: TimelineProvider {
 struct JarvisWatchHealthWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.health", provider: WatchProvider()) { entry in
-            WatchHealthView(entry: entry).containerBackground(.black, for: .widget).widgetURL(URL(string: "jarvis-watch://health"))
+            WatchHealthView(entry: entry).privacySensitive().containerBackground(.black, for: .widget).widgetURL(URL(string: "jarvis-watch://health"))
         }.configurationDisplayName("Daily and weekly health").description("Steps, workouts and active calories from iPhone.")
             .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
     }
@@ -33,8 +33,8 @@ struct JarvisWatchTasksWidget: Widget {
             HStack(spacing: 5) {
                 WatchGlyph(kind: .tasks).frame(width: 16, height: 20)
                 Text(entry.health?.tasksToday.map(String.init) ?? "—").font(.system(size: 25, weight: .semibold, design: .rounded)).minimumScaleFactor(0.5)
-            }.modifier(WatchSurface(radius: 50)).containerBackground(.black, for: .widget)
-                .widgetURL(URL(string: "jarvis-watch://tasks"))
+            }.frame(maxWidth: .infinity, maxHeight: .infinity).modifier(WatchSurface(radius: 50)).clipShape(Circle()).containerBackground(.black, for: .widget)
+                .privacySensitive().widgetURL(URL(string: "jarvis-watch://tasks"))
                 .accessibilityLabel(entry.health?.tasksToday.map { "\($0) tasks due today" } ?? "Today's tasks unavailable")
         }.configurationDisplayName("Tasks Today").description("Remaining tasks due today.").supportedFamilies([.accessoryCircular])
     }
@@ -42,7 +42,7 @@ struct JarvisWatchTasksWidget: Widget {
 struct JarvisWatchDictateWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.dictate", provider: WatchProvider()) { _ in
-            WatchGlyph(kind: .dictate).padding(5).modifier(WatchSurface(radius: 50))
+            WatchGlyph(kind: .dictate).padding(5).frame(maxWidth: .infinity, maxHeight: .infinity).modifier(WatchSurface(radius: 50)).clipShape(Circle())
                 .containerBackground(.black, for: .widget).widgetURL(URL(string: "jarvis-watch://dictate"))
                 .accessibilityLabel("Dictate a message")
         }.configurationDisplayName("Dictate").description("Dictate into a draft, then send manually.").supportedFamilies([.accessoryCircular])
@@ -51,7 +51,7 @@ struct JarvisWatchDictateWidget: Widget {
 struct JarvisWatchVoiceWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.voice", provider: WatchProvider()) { _ in
-            WatchGlyph(kind: .voice).padding(5).modifier(WatchSurface(radius: 50))
+            WatchGlyph(kind: .voice).padding(5).frame(maxWidth: .infinity, maxHeight: .infinity).modifier(WatchSurface(radius: 50)).clipShape(Circle())
                 .containerBackground(.black, for: .widget).widgetURL(URL(string: "jarvis-watch://voice"))
                 .accessibilityLabel("Start or resume voice")
         }.configurationDisplayName("Voice Session").description("Start or resume a spoken conversation.").supportedFamilies([.accessoryCircular])
