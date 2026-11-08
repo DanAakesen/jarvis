@@ -5,6 +5,7 @@ struct WatchChatView: View {
     @EnvironmentObject private var connection: WatchConnection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @State private var editingDraft = false
     var dictate: () -> Void
     @Binding var pendingDictation: Bool
     var body: some View {
@@ -40,6 +41,13 @@ struct WatchChatView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Jarvis").navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $editingDraft) {
+            VStack {
+                TextField("Message", text: $model.draft)
+                    .accessibilityLabel("Message draft")
+                Button("Done") { editingDraft = false }
+            }.navigationTitle("Message")
+        }
          .task {
             beginPendingDictation()
             await model.history()
@@ -66,9 +74,16 @@ struct WatchChatView: View {
                 }.buttonStyle(.plain)
             }
             HStack(spacing: 2) {
-                TextField("Message", text: $model.draft)
-                    .textFieldStyle(.plain).font(.caption).frame(height: 36)
-                    .disabled(model.voiceID != nil || model.busy).accessibilityLabel("Message draft")
+                Button { editingDraft = true } label: {
+                    Text(model.draft.isEmpty ? "Message" : model.draft)
+                        .foregroundStyle(model.draft.isEmpty ? Color.secondary : Color.primary)
+                        .font(.caption).lineLimit(1)
+                        .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .disabled(model.voiceID != nil || model.busy)
+                .accessibilityLabel("Message draft")
+                .accessibilityValue(model.draft.isEmpty ? "Empty" : model.draft)
                 if !model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button { Task { await model.send() } } label: { Image(systemName: "arrow.up.circle.fill") }
                         .foregroundStyle(WatchStyle.amber)
