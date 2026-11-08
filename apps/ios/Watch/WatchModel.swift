@@ -17,7 +17,7 @@ final class WatchModel: ObservableObject {
     @Published var voiceID: UUID?
     @Published var voiceState = ""
     @Published var muted = false
-    let connection = WatchConnection()
+    let connection = WatchConnection.shared
     private let audio = VoiceAudioEngine()
     private var capture: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?

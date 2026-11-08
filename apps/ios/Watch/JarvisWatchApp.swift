@@ -4,6 +4,7 @@ import WatchKit
 
 @main
 struct JarvisWatchApp: App {
+    @WKApplicationDelegateAdaptor(WatchAppDelegate.self) private var delegate
     @StateObject private var model = WatchModel()
     var body: some Scene {
         WindowGroup {

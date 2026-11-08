@@ -6,6 +6,7 @@ import WidgetKit
 
 @MainActor
 final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
+    static let shared = WatchConnection()
     @Published private(set) var reachable = false
     @Published private(set) var snapshot: WatchHealthSnapshot?
     var onEvent: ((WatchEvent) -> Void)?
