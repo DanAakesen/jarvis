@@ -11988,3 +11988,15 @@ failure classifications. No permissions or service configuration change; retain
 only timestamps and existing safe codes in workflow output. The isolated Current
 test delivered no final answer and its expected note is absent; this is a valid
 failed comparison result, not a reason to issue another mutation test blindly.
+
+
+## 2026-11-08 — Repair Current before comparing it with Copilot
+
+The owner explicitly requires Current to work before drawing a quality comparison.
+The latest fixed-scope server diagnostic identifies error_runtimeerror at 20:03:46
+UTC, not a timeout. Repair two concrete code defects: fatal oversized public updates
+and the 512-token default for written reasoning/tool work. Segment updates within
+the existing wire bound; provide a separate 32,768-token chat budget without
+changing model/effort or the voice budget. Add fixed failure classifications instead
+of raw exception logging. Keep access controls and uncertain-write protection.
+Local regression and 1,310 agent tests pass; production completion is not yet proven.

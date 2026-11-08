@@ -2660,3 +2660,12 @@ session association. Clear owner logging/edit/delete requests authorize that
 operation without another yes or a special remember phrase. Unknown values and
 ambiguous targets require clarification; only persisted results count as success.
 Retries must not create duplicate entries.
+
+
+## Current completion before harness comparison (8 November 2026)
+
+The same owner exercise must complete in Current before assessing comparative
+quality. Long public progress updates must not abort useful work. Written chat
+needs a model budget that accommodates reasoning and complete results, independent
+of short voice responses. Preserve ordered progress and explicit partial failure;
+never recover an uncertain write by blind replay.

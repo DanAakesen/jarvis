@@ -1261,6 +1261,8 @@ async def test_configures_foundry_claude_with_managed_identity(monkeypatch) -> N
 
     client = AzureOpenAIResponsesClient.from_environment()
 
+    assert client._max_output_tokens == 512
+    assert client._chat_max_output_tokens == 32_768
     assert captured["resource"] == "jarvis"
     assert "api_key" not in captured
     assert await captured["azure_ad_token_provider"]() == "managed-token"
@@ -3257,3 +3259,73 @@ async def test_usage_the_provider_did_not_report_is_not_invented(default_summary
 
     assert (completion.input_tokens, completion.output_tokens) == (None, None)
     assert summary_usage(backend) == []
+
+
+@pytest.mark.asyncio
+async def test_long_public_updates_do_not_abort_a_twenty_one_round_task() -> None:
+    # Includes astral characters: the backend's 500-unit bound is UTF-16.
+    update = "I am checking the next source. " + ("Evidence 🔎 " * 80)
+    backend = FakeBackend(catalogue=[CREATE_TASK])
+    rounds = [[SimpleNamespace(type="response.output_text.delta", delta=update), completed(
+        FakeItem(type="function_call", call_id=f"item-{i}", name="create_task",
+                 arguments=json.dumps({"text": f"Distinct item {i}"})),
+    )] for i in range(21)]
+    rounds.append([SimpleNamespace(type="response.output_text.delta", delta="All verified."),
+                   completed()])
+    model, transport = client([], rounds=rounds, backend=backend)
+    token = current_message_id.set("42")
+    try:
+        chunks = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Check the 21 distinct items")], "en"
+        )]
+    finally:
+        current_message_id.reset(token)
+    boundaries = [chunk for chunk in chunks if isinstance(chunk, AcknowledgmentBoundary)]
+    assert "".join(chunk.text for chunk in boundaries) == update * 21
+    assert sum(chunk.kind == "acknowledgment" for chunk in boundaries) == 1
+    assert all(len(chunk.text.encode("utf-16-le")) // 2 <= 500 for chunk in boundaries)
+    assert chunks[-1] == "All verified."
+    assert len(transport.responses.requests) == 22
+
+
+@pytest.mark.parametrize("value,expected", [(None, 32768), ("", 32768), ("8192", 8192),
+                                           ("65536", 65536)])
+def test_chat_output_budget_has_separate_reasoning_headroom(value, expected):
+    assert model_client.parse_chat_max_output_tokens(value) == expected
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "65537", "nan", "private-value"])
+def test_chat_output_budget_rejects_invalid_configuration_without_echoing(value):
+    with pytest.raises(ValueError, match="JARVIS_CHAT_MAX_OUTPUT_TOKENS") as error:
+        model_client.parse_chat_max_output_tokens(value)
+    assert "private-value" not in str(error.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("smoke", [False, True])
+async def test_chat_and_smoke_use_chat_budget_without_changing_voice(smoke):
+    model, transport = client([completed()])
+    model._chat_max_output_tokens = 32768
+    _ = [chunk async for chunk in model.complete_chat(
+        [ModelMessage("user", "What can you do?")], "en", smoke=smoke
+    )]
+    assert transport.responses.requests[0]["max_output_tokens"] == 32768
+    assert model._max_output_tokens == 32
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason,message", [
+    ("max_output_tokens", "Model output token budget exhausted"),
+    ("content_filter", "Model response content filtered"),
+    ("PRIVATE_PROVIDER_VALUE", "Foundry model response did not complete"),
+])
+async def test_incomplete_response_is_classified_without_executing_partial_tools(reason, message):
+    model, transport = client([SimpleNamespace(type="response.incomplete", response=SimpleNamespace(
+        incomplete_details=SimpleNamespace(reason=reason),
+        output=[FakeItem(type="function_call", call_id="partial", name="create_task",
+                         arguments='{"text":')],
+    ))])
+    with pytest.raises(RuntimeError) as error:
+        _ = [chunk async for chunk in model.complete_chat([ModelMessage("user", "Check")], "en")]
+    assert str(error.value) == message
+    assert len(transport.responses.requests) == 1  # Never replay an uncertain action.

@@ -1,11 +1,21 @@
-## Current test-chat failure investigation — 8 November 2026
+## Current test-chat repair — 8 November 2026
 
-The same combined owner test ends in generic recovery text after 20 displayed
-tool attempts; the expected Personal/HARNESS-CHECK-CURRENT-85.md is absent on
-readback. Copilot saved both revisions. Treat Current as failed completion for
-this case; do not ask the owner to rerun it or infer a timeout from the UI text.
-A bounded, read-only failure-code diagnostic is prepared to obtain server evidence
-without replaying mutations or exposing raw logs. Live cause remains unverified.
+The owner requires Current completion before comparing harnesses. The latest server
+failure at 20:03:46 UTC is error_runtimeerror, not a timeout code; the old log
+cannot distinguish its underlying cause. The expected CURRENT-85 note is absent.
+Do not ask the owner to repeat a write test until the repaired runtime is deployed
+and its live checks pass. Do not declare a harness winner.
+
+Reproduced a fatal 500-character public progress limit. Chat now segments long
+updates into compatible 500 UTF-16-unit events and continues work; a 21-tool-round
+regression completes with all updates and a final answer. Production Current also
+defaulted to 512 output tokens per call; written chat now has a separate 32,768-token
+budget for reasoning/tool arguments/final text, while voice retains its existing
+budget. Specific allowlisted failure codes distinguish token exhaustion, content
+filtering, incomplete streams and coordination failures. No uncertain tool or write
+is automatically replayed. These are verified code defects; the historical generic
+error alone cannot prove which caused the owner's failure. All 1,310 agent tests
+pass locally; backend validation, CI, deployment and live acceptance are pending.
 
 ## Home Today workout totals — 8 November 2026
 

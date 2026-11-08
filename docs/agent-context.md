@@ -7803,3 +7803,17 @@ codes, never user content, raw errors, provider payloads or credentials. It does
 not change RBAC/configuration, replay a turn, create notes or deploy a service.
 Unknown causes stay unclassified. Permission/query failure is explicit; no role
 grant or broader log query is automatic. Script and workflow are check-only inputs.
+
+
+## 2026-11-08 — Current completion repair qualification
+
+Run the agent suite from agents/jarvis (not the repository root, which collects
+archived prototype/runner suites with different dependencies). A 21-round fixture
+with long public updates reproduced RuntimeError before the fix and completes
+after it. 1,310 agent tests pass locally. Backend conversation tests verify that
+segmented progress remains streamed while only final text is persisted.
+JARVIS_CHAT_MAX_OUTPUT_TOKENS controls written chat and its acceptance calls;
+default 32,768, allowed 1–65,536. Voice retains AZURE_OPENAI_MAX_OUTPUT_TOKENS.
+Deploy backend plus agent together for the new fixed failure-code vocabulary.
+Require live acceptance before inviting the owner to repeat the comparison; a
+short canary is not proof of the complete owner exercise.

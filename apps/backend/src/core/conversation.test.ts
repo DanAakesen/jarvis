@@ -442,6 +442,30 @@ describe('conversation routes', () => {
       { role: 'jarvis', text: 'The targets match.' },
     ]);
   });
+  it('retains segmented long progress while persisting only the final result', async () => {
+    const stored: { role: string; text: string }[] = [];
+    const store = storeFixture({ addMessage: vi.fn(async (input) => {
+      stored.push({ role: input.role, text: input.text });
+      return { ...message, role: input.role, text: input.text };
+    }) });
+    const parts = ['First source checked. '.repeat(20), 'Next source verified. '.repeat(20),
+      'All requirements preserved.'];
+    const agent = { stream: vi.fn(async function* () {
+      yield parts.join('');
+      for (const [index, text] of parts.entries()) {
+        yield { type: index === 0 ? 'acknowledgment' as const : 'commentary' as const, text };
+      }
+      yield 'Final verified result.';
+    }) };
+    const app = createApp(store, { conversationAgent: agent });
+    const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+      headers, payload: { text: 'Check the sources.' } });
+    expect(response.statusCode).toBe(200);
+    expect(response.body.match(/event: commentary/g)).toHaveLength(2);
+    expect(response.body).not.toContain('event: error');
+    expect(stored).toEqual([{ role: 'dan', text: 'Check the sources.' },
+      { role: 'jarvis', text: 'Final verified result.' }]);
+  });
   it('persists camera provenance, forwards it unchanged, and exposes additive history metadata', async () => {
     const visualContext = {
       source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.',

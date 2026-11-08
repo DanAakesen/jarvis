@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Iterator, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
@@ -22,6 +22,24 @@ class AcknowledgmentBoundary:
 
 
 ModelStreamChunk = str | AcknowledgmentBoundary
+
+
+def public_update_boundaries(
+    text: str, kind: Literal["acknowledgment", "commentary"],
+) -> Iterator[AcknowledgmentBoundary]:
+    """Keep a public update intact across bounded UTF-16 wire segments."""
+    start = units = 0
+    for index, character in enumerate(text):
+        size = 2 if ord(character) > 0xFFFF else 1
+        if units + size > MAX_ACKNOWLEDGMENT_CHARACTERS:
+            segment = text[start:index]
+            if segment.strip():
+                yield AcknowledgmentBoundary(segment, kind=kind)
+                kind = "commentary"
+            start, units = index, 0
+        units += size
+    if text[start:].strip():
+        yield AcknowledgmentBoundary(text[start:], kind=kind)
 
 
 class ToolLoopStalled(RuntimeError):
