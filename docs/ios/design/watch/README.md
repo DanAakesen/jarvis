@@ -1,5 +1,18 @@
 # Apple Watch complication design references
 
+## Approved reference set
+
+All four visual directions were approved by the owner on 8 November 2026. These are generated design references with sample values, not screenshots of working complications. Use them for implementation comparison.
+
+| Complication | Approved reference | Visual contract |
+| --- | --- | --- |
+| Health (large rectangular) | [Health](health-rectangular-approved-concept.png) | Daily steps/chart/active kcal left; weekly Gym/Run/active kcal right. |
+| Tasks Today (small circular) | [Tasks Today](tasks-today-approved-concept.png) | Amber checklist before white count in one horizontal row, with the final increased gap. |
+| Dictation (small circular) | [Dictation](dictation-approved-concept.png) | Sculpted amber microphone with waveform clusters on both sides, following the owner's supplied reference. |
+| Voice Session (small circular) | [Voice Session](voice-session-approved-concept.png) | Uneven amber speech waveform, tallest left of center and tapering right; no bubble or microphone. |
+
+The three small complications share a shaded charcoal circular surface, subtle amber light on the upper-left rim, and restrained sculpted amber symbols. No visible text labels; Tasks retains its numeric count. Supply accessible names in implementation. The surfaces and fine wave bars still require actual-size, tinted and Always On validation. Earlier flat icons, speaker/headset alternatives and flowing ribbon concepts are superseded.
+
 ## Large health complication
 
 [Approved visual direction](health-rectangular-approved-concept.png), selected by the owner on 8 November 2026. This is a generated concept with illustrative values, not a screenshot of implemented watchOS UI.
@@ -19,7 +32,7 @@ The reference PNG is 1925 × 817 pixels (ratio 2.3562), within 0.11% of 193:82 (
 
 ## Selected small complication requirements
 
-The owner selected this set on 8 November 2026, superseding Next Event and the combined Ask Jarvis proposal. Visual designs for the two distinct voice entry points remain pending.
+The owner selected this set on 8 November 2026, superseding Next Event and the combined Ask Jarvis proposal. The final visual references above are approved; implementation and platform feasibility remain unverified.
 
 1. **Tasks Today:** checklist icon and remaining incomplete tasks due today. Tap opens today's tasks. Keep overdue tasks separate unless requested. Zero means no remaining tasks; unavailable data must not show zero.
 2. **Dictate:** dedicated single-message entry point. Tap should start dictation with as few steps as watchOS permits, either by opening the Watch app or through a supported system surface. Capture speech as a message to Jarvis, distinct from an ongoing spoken conversation. Recording from the complication/watch face itself is not established. First-use permissions and locked/authentication states may add steps. Submission/confirmation behavior remains to be selected.
@@ -43,6 +56,6 @@ Investigate native Watch Smart Stack controls versus a paired-iPhone Live Activi
 
 No Watch app target or complication code was added. No build, simulator, device, tint, Always On or VoiceOver testing was run. No deployment, release or merge is authorized in this secondary thread.
 
-Before implementation: confirm owner Watch model and watch face; approve the revised Dictate and Voice Session visuals; add a Watch target and assess JarvisCore watchOS compatibility; define HealthKit snapshot refresh, timezone/week boundaries and source deduplication; verify all layouts at actual bounds including small models, missing/stale data, large numbers and localized labels; verify tinted/Always On rendering and tap destinations. WidgetKit refresh is system-budgeted, not continuously live.
+Before implementation: confirm owner Watch model and watch face; add a Watch target and assess JarvisCore watchOS compatibility; define HealthKit snapshot refresh, timezone/week boundaries and source deduplication; verify all layouts at actual bounds including small models, missing/stale data, large numbers and localized labels; verify tinted/Always On rendering and tap destinations. WidgetKit refresh is system-budgeted, not continuously live.
 
-Primary thread retains implementation coordination, integration, deployment and final acceptance. Open PRs #1646 and #1532 touch iOS navigation/health; this branch only adds design documentation and the reference image.
+Primary thread retains implementation coordination, integration, deployment and final acceptance. Open PRs #1646 and #1532 touch iOS navigation/health; this branch only adds design documentation and the four reference images.
