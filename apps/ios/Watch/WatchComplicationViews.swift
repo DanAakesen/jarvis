@@ -17,7 +17,7 @@ struct WatchHealthView: View {
                 HStack(alignment: .top, spacing: 3) {
                     Text(number(health?.steps)).font(.system(size: 24, weight: .semibold, design: .rounded)).minimumScaleFactor(0.65).lineLimit(1)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("/ \(number(health?.stepGoal))")
+                        Text("/ \(health?.stepGoal.map { String($0) } ?? "—")")
                         Text("steps")
                     }.font(.system(size: 8)).foregroundStyle(WatchStyle.stone)
                 }
