@@ -469,27 +469,39 @@ struct JarvisEditableSwipeRow<Content: View>: View {
     private var width: CGFloat { min(max(revealed - drag, 0), actionWidth * 2) }
 
     var body: some View {
-        JarvisRowButton(identifier: identifier, action: { revealed = 0; onEdit() }, content: content)
-            .disabled(isBusy)
-            .offset(x: -width)
-            .overlay(alignment: .trailing) {
-                HStack(spacing: 0) {
-                    JarvisIconButton(title: editTitle, systemImage: "pencil", identifier: identifier + ".edit", isDisabled: isBusy) {
-                        revealed = 0; onEdit()
-                    }
-                    .frame(width: actionWidth)
-                    JarvisIconButton(title: deleteTitle, systemImage: "trash", identifier: identifier + ".delete", isBusy: isBusy, tint: .red) {
-                        revealed = 0; onDelete()
-                    }
-                    .frame(width: actionWidth)
-                    .allowsHitTesting(width >= actionWidth * 1.5)
-                    .accessibilityHidden(width < actionWidth * 1.5)
-                }
-                .frame(width: width, alignment: .leading).clipped()
+        ZStack(alignment: .trailing) {
+            content()
+                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .leading)
                 .contentShape(Rectangle())
-                .allowsHitTesting(width >= actionWidth)
-                .accessibilityHidden(width < actionWidth)
+                // A tap must fail when this touch becomes a drag. A Button with
+                // a simultaneous drag could still open the editor on release.
+                .onTapGesture { if !isBusy { revealed = 0; onEdit() } }
+                .allowsHitTesting(!isBusy)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier(identifier)
+                .accessibilityAction { if !isBusy { revealed = 0; onEdit() } }
+                .offset(x: -width)
+
+            // Sibling controls keep their hit regions independent of the row.
+            HStack(spacing: 0) {
+                JarvisIconButton(title: editTitle, systemImage: "pencil", identifier: identifier + ".edit", isDisabled: isBusy) {
+                    revealed = 0; onEdit()
+                }
+                .frame(width: actionWidth)
+                JarvisIconButton(title: deleteTitle, systemImage: "trash", identifier: identifier + ".delete", isBusy: isBusy, tint: .red) {
+                    revealed = 0; onDelete()
+                }
+                .frame(width: actionWidth)
+                .allowsHitTesting(width >= actionWidth * 1.5)
+                .accessibilityHidden(width < actionWidth * 1.5)
             }
+            .fixedSize(horizontal: true, vertical: false)
+            .frame(width: width, alignment: .leading).clipped()
+            .contentShape(Rectangle())
+            .allowsHitTesting(width >= actionWidth)
+            .accessibilityHidden(width < actionWidth)
+        }
             .clipped()
             .simultaneousGesture(
                 DragGesture(minimumDistance: 20)

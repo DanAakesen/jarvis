@@ -47,9 +47,16 @@ final class LiftEditingUITests: XCTestCase {
         drag(row, distance: 65)
         let edit = app.buttons[id + ".edit"]
         let delete = app.buttons[id + ".delete"]
+        capture(app, "lift-short-swipe-edit")
+        XCTAssertFalse(app.staticTexts["Edit lift"].exists, "A swipe must only reveal actions")
         XCTAssertTrue(edit.isHittable)
         XCTAssertFalse(delete.isHittable)
-        capture(app, "lift-short-swipe-edit")
+        edit.tap()
+        XCTAssertTrue(weight.waitForExistence(timeout: 5))
+        XCTAssertEqual(weight.value as? String, "82.5")
+        app.buttons["sheet.cancel"].tap()
+        XCTAssertTrue(app.staticTexts["Edit lift"].waitForNonExistence(timeout: 5))
+        drag(row, distance: 65)
         drag(row, distance: 65)
         XCTAssertTrue(delete.isHittable)
         XCTAssertTrue(row.exists, "Revealing Delete must not perform deletion")

@@ -198,3 +198,10 @@ The focused catalogue, composition, gym, parity and instruction checks pass (64)
 No runtime code or iOS source changes in that correction. After normal deployment,
 refresh the existing Copilot definition with both authorized managed-chat inputs
 and require its two-turn canary before claiming parity there.
+
+Native 42498089381 passed selection and the two progress cases, but runtime launch
+timed out and the lift swipe failed. Its recording shows the swipe opening the
+editor on release. The shared row now uses a discrete tap gesture that fails
+during dragging, with independent sibling action buttons. Qualification also
+presses the revealed pencil, verifies the saved value and checks that revealing
+actions never opens the editor or deletes a record. No limits are relaxed.
