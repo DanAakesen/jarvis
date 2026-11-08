@@ -10,8 +10,9 @@ Factory navigation, transparent chrome, native selection and lift-editing fixes,
 alongside Notes/Ember from 82. Build 83 was cancelled before upload.
 
 **New Notes findings are open:** build 84 freezes when opening the right sidebar, and the shared phrase/Overview is missing.
-#1653 now passed CI, 530 Core tests and all four native interaction cases.
-Wait for its TestFlight upload before retesting those two; build 84 still has the reported faults. Preserve the previously approved browsing/editor interactions.
+#1653 is merged after CI, 530 Core tests and all four native interaction cases passed.
+Build 85 uploaded successfully in 42511641193. Wait for it to appear in TestFlight before retesting
+those two; build 84 still has the reported faults. Preserve the previously approved browsing/editor interactions.
 
 - [ ] **Notes:** swipe the title-only pinned carousel, open a recent note, browse
   folders, and use New folder at the bottom right. Create/edit a disposable note,

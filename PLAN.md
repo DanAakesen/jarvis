@@ -8,8 +8,10 @@ and light/dark editor captures were reviewed. Artifact 13629821155 has SHA256
 9c0a357026019bc40ced7671358d47ed64fe7b120d23b31a969176eb9fff8755.
 The 1,003-note library now passes repeated sidebar open/close, scrolling and
 return-to-Chat checks. Both themes pass pin/Raw/edit/save/reopen. Existing 120/150
-second test limits and every assertion are retained. Physical-device acceptance
-of the freeze correction remains pending; TestFlight upload is the next step.
+second test limits and every assertion are retained. PR #1653 merged as df813f348eae27961259c691b526eeadced9ea18 with complete tree
+identity to qualified head 2f0fd280d6f999dd01459e97e0f43e9e12882c3e. Final CI
+42511384320 passed. TestFlight 85 uploaded successfully in 42511641193. Apple processing/device
+availability and owner acceptance of the Notes freeze correction remain pending.
 
 Owner accepted build 84 header/footer transparency across pages. Preserve it.
 
@@ -46,7 +48,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | 128 GiB worker workspace | Worker implementation merged; provisioning remains incomplete. Quota request workflow #1649 merged and qualified. Live run 42503224623 failed during quota inspection: HTTP 403 AuthorizationFailed; no quota write submitted | Grant jarvis-github-deploy Quota Request Operator at subscription scope, rerun quota request, then provision and verify disk/idle deallocation; recover existing task 23 |
 | Copilot harness | Pagination repair #1651 merged/deployed. Read-only inspection 42509996653 found one exact matching version. Authorized catalogue refresh 42510264543 passed readiness, fresh two-turn managed_chat_comparison_canary_ok and live acceptance at 18:34 UTC | Ready for owner retesting, including gym tools; broader Current-vs-Copilot comparison pending. Current remains default |
 | Current vs Copilot comparison | Owner-reported quick smoke test worked well. Actual hybrid architecture and test visibility/context limitations documented; controlled project exercise proposed | Select representative source material; prepare equivalent contexts and measurements before claiming a live comparison. Full tool/write comparison pending |
-| Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653. Full CI and 530 Core tests passed; native 42510119801 passed all four cases with a 1,003-note library and both editing themes. Captures reviewed | Merge/upload the qualified correction, then owner retest. Header/footer transparency already owner-accepted |
+| Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653. Full CI and 530 Core tests passed; native 42510119801 passed all four cases with a 1,003-note library and both editing themes. Captures reviewed | Merged; TestFlight 85 uploaded successfully in 42511641193. Owner retest when Apple makes it available. Header/footer transparency already owner-accepted |
 | Apple Watch | Owner reports implementation in Jarvis2 secondary | Secondary handoff; primary reviews, integrates, tests and releases. Implementation completion and delivery are not verified |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
 | Next TestFlight bundle | Build 84 uploaded in 42503950006 at 17:22 UTC; backend deployment 42502357217 accepted. Final native follow-up passed. Build 83 was cancelled before upload | Apple processing/device availability, Copilot gym refresh and owner acceptance remain separate |

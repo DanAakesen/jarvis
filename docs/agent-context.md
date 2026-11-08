@@ -7759,3 +7759,16 @@ The 1,003-note library now passes repeated sidebar open/close, scrolling and
 return-to-Chat checks. Both themes pass pin/Raw/edit/save/reopen. Existing 120/150
 second test limits and every assertion are retained. Physical-device acceptance
 of the freeze correction remains pending; TestFlight upload is the next step.
+
+
+## 2026-11-08 — Notes correction uploaded as TestFlight 85
+
+PR #1653 merged as df813f348eae27961259c691b526eeadced9ea18 with complete tree
+identity to qualified head 2f0fd280d6f999dd01459e97e0f43e9e12882c3e (tree
+9cd04755573ea3d0e25c90d7f4157715ebcbe014). Final CI 42511384320 passed; native
+42510119801 passed all four cases and 530 Core tests passed. TestFlight run
+42511641193 successfully archived, signed and uploaded build 85 from this source.
+Apple processing/device availability and owner acceptance of the Notes sidebar
+freeze correction remain unverified. The owner's acceptance of build 84 shared
+header/footer transparency remains valid. Copilot's fresh catalogue/canary is
+ready; the full comparison and gym write checks remain owner tests.

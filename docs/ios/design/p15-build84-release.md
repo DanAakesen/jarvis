@@ -48,7 +48,8 @@ failed the 1,003-note responsiveness test at the unchanged 120-second limit, and
 both editor-entry cases. The actual device cause is not yet proven. Retained
 screenshots/hierarchy show the restored header and the editor-test target below
 the footer. The corrected candidate then passed native run 42510119801 (four tests, no failures/skips)
-and all 530 Core tests. Actual captures were reviewed. TestFlight upload is pending;
+and all 530 Core tests. Actual captures were reviewed. The repair merged as #1653
+and TestFlight 85 uploaded successfully in 42511641193; owner retesting is pending;
 preserve the approved carousel, folder sheet and editor.
 
 The owner separately confirmed that header/footer transparency now works well
