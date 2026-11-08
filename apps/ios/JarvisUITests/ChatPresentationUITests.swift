@@ -147,7 +147,11 @@ final class ChatPresentationUITests: XCTestCase {
         layout.name = "chat-reply-time-and-tools-spacing"
         layout.lifetime = .keepAlways
         add(layout)
-        reply.press(forDuration: 1.2)
+        // The whole-view center lands after the short "Product review" line.
+        // Press a word in the first heading, as an owner selecting text would.
+        reply.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0))
+            .withOffset(CGVector(dx: 0, dy: 12)).press(forDuration: 1.2)
+        XCTAssertFalse(timestamp.exists, "A selection gesture must not reveal the timestamp")
         XCTAssertTrue(app.menuItems["Copy"].waitForExistence(timeout: 5), "Native text selection must expose Copy")
         let capture = XCTAttachment(screenshot: app.screenshot())
         capture.name = "chat-native-reply-selection-and-collapsed-tools"

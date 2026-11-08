@@ -177,3 +177,8 @@ Actual captures were inspected: the timestamp appeared after long press without
 selection, and the pencil was visible but not hittable. Native precedence and
 overlay corrections require fresh evidence; no TestFlight upload is claimed.
 The bundle also adds missing gym assistant tools using shared app persistence.
+
+The retained synthesized selection event pressed (196, 453.17), after the short
+Product review line rather than on a word. The selection test now presses a word
+in the first heading and also asserts that long press does not reveal the timestamp.
+Copy and native selection remain required; this does not waive either behavior.
