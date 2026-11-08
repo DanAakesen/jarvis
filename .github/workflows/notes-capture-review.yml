@@ -1,5 +1,5 @@
-# Temporary evidence reader, never merge.
-name: Read Notes native and TestFlight evidence
+# Temporary diagnostic reader; never merge.
+name: Inspect Notes navigation timing
 on:
   push:
     branches: [codex/notes-capture-review]
@@ -7,29 +7,25 @@ permissions:
   contents: read
   actions: read
 jobs:
-  evidence:
+  timing:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: DanAakesen/jarvis
     steps:
-      - name: Wait for the existing upload
-        run: gh run watch 42511641193 --interval 15 --exit-status
-      - name: Read bounded qualification and upload proof
+      - name: Read the passed large-library interaction timing
         run: |
-          gh run view 42510119801 --job 128821154254 --log > "$RUNNER_TEMP/notes-native.log"
-          gh run view 42511641193 --job 128825780031 --log > "$RUNNER_TEMP/notes-upload.log"
-          gh run view 42511641193 --json headSha,status,conclusion,number,url
+          gh run view 42510119801 --job 128821154254 --log > "$RUNNER_TEMP/native.log"
           python3 - <<'PY'
-          import os, pathlib, re
-          root = pathlib.Path(os.environ["RUNNER_TEMP"])
-          native = (root / "notes-native.log").read_text()
-          for line in native.splitlines():
-              if ("Test Case" in line and ("passed" in line or "failed" in line)) or re.search(r"Executed \d+ tests", line):
-                  print(line)
-          upload = (root / "notes-upload.log").read_text()
-          for line in upload.splitlines():
-              if any(s in line for s in ["HEAD is now at", "ARCHIVE SUCCEEDED", "EXPORT SUCCEEDED", "Upload succeeded", "UPLOAD SUCCEEDED", "Uploaded", "df813f348eae27961259c691b526eeadced9ea18"]):
-                  print(line[:1000])
+          import os, pathlib
+          lines = pathlib.Path(os.environ["RUNNER_TEMP"], "native.log").read_text().splitlines()
+          inside = False
+          for line in lines:
+              if "Test Case" in line and "testLargeLibrarySidebarOpensAfterScrollingAndReturnsToChat" in line and "started" in line:
+                  inside = True
+              if inside:
+                  print(line[:1600])
+              if inside and "Test Case" in line and "passed" in line:
+                  break
           PY
