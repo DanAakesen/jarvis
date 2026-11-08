@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "JarvisCore",
     defaultLocalization: "da",
-    platforms: [.iOS(.v26)],
+    platforms: [.iOS(.v26), .watchOS(.v26)],
     products: [
         .library(name: "JarvisCore", targets: ["JarvisCore"]),
     ],

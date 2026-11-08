@@ -1,0 +1,44 @@
+name: Apple Watch build
+on:
+  pull_request:
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/watch-build.yml'
+permissions:
+  contents: read
+concurrency:
+  group: watch-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  watch:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Select Xcode
+        run: sudo xcode-select --switch /Applications/Xcode_26.6.app
+      - name: Install pinned XcodeGen
+        run: |
+          curl -fsSL https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip -o "$RUNNER_TEMP/xcodegen.zip"
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum --check
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Build watch app and complications without signing
+        working-directory: apps/ios
+        run: |
+          set -o pipefail
+          xcodegen generate
+          xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' -derivedDataPath "$RUNNER_TEMP/WatchBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/watch-build.log"
+      - name: Build paired iPhone bridge without signing
+        working-directory: apps/ios
+        run: |
+          set -o pipefail
+          xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/PhoneBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/phone-build.log"
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: watch-build-logs
+          path: |
+            ${{ runner.temp }}/watch-build.log
+            ${{ runner.temp }}/phone-build.log

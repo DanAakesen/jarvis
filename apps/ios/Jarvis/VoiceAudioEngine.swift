@@ -149,7 +149,11 @@ final class VoiceAudioEngine: @unchecked Sendable {
 
     private func configureSession() throws {
         let session = AVAudioSession.sharedInstance()
+        #if os(watchOS)
+        try session.setCategory(.playAndRecord, mode: .voiceChat)
+        #else
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
+        #endif
         try session.setActive(true)
         ownsActiveSession = true
     }

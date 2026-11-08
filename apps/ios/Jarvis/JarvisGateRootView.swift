@@ -126,6 +126,7 @@ private final class JarvisGateModel: ObservableObject {
             )
             JarvisApprovalNotificationCoordinator.shared.configure(client: notificationClient ?? client)
             JarvisWidgetSnapshotPublisher.shared.configure(client: client)
+            JarvisWatchBridge.shared.configure(client: client)
             provider.onSignInRequired = { [weak self] in
                 self?.clientRequestedSignIn()
             }
@@ -238,6 +239,7 @@ private final class JarvisGateModel: ObservableObject {
     func signOut() async {
         guard !Self.isNavigationFixture, !isSigningOut else { return }
         isSigningOut = true
+        await JarvisWatchBridge.shared.disconnect()
         defer { isSigningOut = false }
         presentation = .loading
         refreshOverlay()

@@ -10,6 +10,7 @@ final class JarvisAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         JarvisTaskActivityBackgroundRefresh.shared.register()
+        JarvisWatchBridge.shared.activate()
         return true
     }
 
