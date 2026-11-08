@@ -12043,3 +12043,8 @@ The owner corrected the Quota Request Operator assignment from resource-group to
 ### 8 November — live quota follow-up
 
 GitHub authentication is working again. Provisioning run 42525578592 reached Azure but failed with InvalidTemplateDeployment / QuotaExceeded; worker routing remains inactive. Quota run 42524952522 failed before writes because an approved resource was absent from its catalogue. The quota diagnostic now retains validated catalogue names, the missing requested name, and only the two approved Compute usage/limit records. This read-only evidence is needed to distinguish catalogue coverage from actual capacity; no resource allocation or quota write is added.
+
+
+## 2026-11-08 — Authentication restored; quota service remains unresolved
+
+GitHub API access and workflow dispatch work again. Actual worker provisioning 42525578592 failed QuotaExceeded and did not activate routing. Diagnostic run 42526613341 returned an empty Sweden Central quota catalogue and no matching Compute usage records. No quota increase has been submitted. Subscription access is fixed, but provider registration/regional availability still needs verification; do not label this as an authentication blocker or invent a numerical quota limit.
