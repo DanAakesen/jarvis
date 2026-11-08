@@ -11866,3 +11866,25 @@ approved carousel, folder browser and editor. Add native coverage for the restor
 order and navigation through a 1,003-note synthetic library. The crash cause is
 not yet proven; eager rendering/date parsing is only a lead. Qualification and
 native capture review remain pending, so no released fix is claimed.
+
+
+## 2026-11-08 — Keep Notes inventory work out of navigation redraws
+
+
+Owner clarification, 8 November: this is build 84 freezing on the right sidebar,
+not app termination. Header/footer transparency is now owner-accepted across pages
+and must be preserved. First native run 42507483140 passed restored page order,
+but failed the 1,003-note navigation case at the unchanged 120-second limit and
+both editor-entry cases. Artifact 13628313103 (SHA256
+12ab310823ace0806ac39d4664dd256b4d56c2fd8c924d9e99247f56503c3be1)
+retains screenshots, the app/UI-runner spindump and hierarchy. The app main thread
+was predominantly constructing accessibility snapshots; this is synthetic
+large-library evidence, not proof of the exact physical-device failure.
+
+The correction computes recency once per inventory/visit/day update off the main
+actor, reuses timestamp parsers and renders individual rows lazily with the shared
+grouped-row appearance. It retains every note and cancels stale projections.
+Editor tests now scroll the complete target row above the dock before tapping;
+the retained hierarchy placed the former target below the viewport/dock. All
+existing pin/Raw/edit/save/reopen assertions and test limits remain. Fresh native
+qualification is required; neither a repair release nor owner acceptance is claimed.

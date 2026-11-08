@@ -3730,3 +3730,12 @@ tiles, Browse folders sheet with New folder on the right, and rendered editor wi
 Raw and Done. This corrects the earlier tabs-first implementation record; it does
 not replace the approved browsing and editing design. The right sidebar crash is
 a separate open finding, not resolved by restoring the header.
+
+
+## Notes library responsiveness and accepted chrome — 8 November 2026
+
+The shared phrase and Overview remain above Notes/Tasks/Graph. Preserve the
+owner-accepted build 84 header/footer transparency and scroll-behind behavior.
+Recent notes keep their grouped appearance while each row is created lazily;
+the full inventory remains reachable. The title-only pinned carousel, right-aligned
+New folder action and approved formatted/Raw editor remain unchanged.

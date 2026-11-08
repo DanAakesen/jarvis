@@ -57,8 +57,17 @@ final class NotesRedesignUITests: XCTestCase {
         capture("notes-folders-\(theme)")
         tap("notes.browser.done")
         let note = app.buttons["notes.note.welcome.md"]
-        for _ in 0..<4 { if note.isHittable { break }; app.swipeUp() }
+        // The restored Overview moves this row below the transparent dock.
+        // AX may call a partially covered row hittable; require its full frame
+        // above the dock before a real tap, without bypassing hit testing.
+        let dock = app.buttons["notes.plus"]
+        for _ in 0..<4 {
+            if note.isHittable && note.frame.maxY < dock.frame.minY - 8 { break }
+            app.scrollViews["notes.scroll"].swipeUp()
+        }
         XCTAssertTrue(note.isHittable)
+        XCTAssertLessThan(note.frame.maxY, dock.frame.minY - 8)
+        capture("notes-editor-target-\(theme)")
         note.tap()
         XCTAssertTrue(app.buttons["note.raw"].waitForExistence(timeout: 8))
         capture("notes-editor-\(theme)")

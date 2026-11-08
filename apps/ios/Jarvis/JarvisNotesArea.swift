@@ -159,6 +159,18 @@ struct JarvisNotesArea: View {
     @State private var browserPresented = false
     @State private var pendingBrowserNote: String?
     @State private var recentVisits: [JarvisNoteVisit] = []
+    @State private var libraryGroups: [JarvisNoteLibraryGroup] = []
+
+    private struct LibraryInput: Equatable, Sendable {
+        let nodes: [KnowledgeGraphNode]
+        let visits: [JarvisNoteVisit]
+        let day: Date
+    }
+
+    private var libraryInput: LibraryInput {
+        LibraryInput(nodes: graph?.nodes ?? [], visits: recentVisits,
+                     day: Calendar.current.startOfDay(for: Date()))
+    }
     @State private var directoryNotes: [String: [VaultNoteSummary]] = [:]
     @State private var directoryHasMore: [String: Bool] = [:]
     @State private var directoryLoading = Set<String>()
@@ -232,6 +244,9 @@ struct JarvisNotesArea: View {
         .scrollEdgeEffectHidden(true, for: .bottom)
         .task(id: "\(selectedTab.rawValue)-\(refreshVersion)") {
             await loadSelectedTab(force: refreshVersion > 0)
+        }
+        .task(id: libraryInput) {
+            await updateLibrary()
         }
         .task(id: searchKey) {
             await search()
@@ -446,33 +461,46 @@ struct JarvisNotesArea: View {
 
     private var notesContent: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                pageHead
-                pinnedSection
-                VStack(alignment: .leading, spacing: 16) {
-                    JarvisSectionHeadline(copy.recent) {
-                        JarvisTextButton(title: copy.browseFolders, identifier: "notes.browseFolders") {
-                            browserPresented = true
-                        }
-                    }
-                    if let loadError {
-                        stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
-                    }
-                    if libraryNodes.isEmpty {
-                        Text(copy.emptyNotes).foregroundStyle(.secondary)
-                    } else {
-                        ForEach(recentGroups, id: \.title) { group in
-                            Text(group.title).font(.subheadline).foregroundStyle(.secondary)
-                            JarvisRowGroup {
-                                ForEach(group.notes) { node in
-                                    noteRow(VaultNoteSummary(path: node.path, title: node.title,
-                                        folder: node.folder, directory: node.directory, updatedAt: node.updatedAt))
-                                }
-                            }
-                        }
+            LazyVStack(alignment: .leading, spacing: 0) {
+                pageHead.padding(.bottom, 24)
+                pinnedSection.padding(.bottom, 24)
+                JarvisSectionHeadline(copy.recent) {
+                    JarvisTextButton(title: copy.browseFolders, identifier: "notes.browseFolders") {
+                        browserPresented = true
                     }
                 }
                 .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                .padding(.bottom, 16)
+                if let loadError {
+                    stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
+                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                }
+                if libraryGroups.isEmpty {
+                    Text((graph?.nodes.isEmpty ?? true) ? copy.emptyNotes : copy.loading)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                }
+                // Keep every row a direct lazy child. Wrapping the complete inventory
+                // in an eager VStack/material group stalls navigation and AX snapshots.
+                ForEach(libraryGroups) { group in
+                    Section {
+                        ForEach(group.notes) { node in
+                            noteRow(VaultNoteSummary(path: node.path, title: node.title,
+                                folder: node.folder, directory: node.directory, updatedAt: node.updatedAt))
+                                .jarvisLazyRowSurface(
+                                    first: node.id == group.notes.first?.id,
+                                    last: node.id == group.notes.last?.id
+                                )
+                                .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                        }
+                    } header: {
+                        Text(title(for: group.period))
+                            .font(.subheadline).foregroundStyle(.secondary)
+                            .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                            .padding(.top, group.id == libraryGroups.first?.id ? 0 : 16)
+                            .padding(.bottom, 16)
+                    }
+                }
             }
             .padding(.bottom, 20)
         }
@@ -480,32 +508,31 @@ struct JarvisNotesArea: View {
         .accessibilityIdentifier("notes.scroll")
     }
 
-    private var libraryNodes: [KnowledgeGraphNode] {
-        let visits = Dictionary(recentVisits.map { ($0.path, $0.openedAt) }, uniquingKeysWith: max)
-        return (graph?.nodes ?? []).sorted {
-            let left = max(visits[$0.path] ?? .distantPast, libraryDate($0.updatedAt))
-            let right = max(visits[$1.path] ?? .distantPast, libraryDate($1.updatedAt))
-            return left == right ? $0.path < $1.path : left > right
-        }
-    }
-
-    private func libraryDate(_ value: String) -> Date {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value) ?? .distantPast
-    }
-
-    private var recentGroups: [(title: String, notes: [KnowledgeGraphNode])] {
+    @MainActor
+    private func updateLibrary() async {
+        let input = libraryInput
+        let now = Date()
         let calendar = Calendar.current
-        let visits = Dictionary(recentVisits.map { ($0.path, $0.openedAt) }, uniquingKeysWith: max)
-        var today: [KnowledgeGraphNode] = [], yesterday: [KnowledgeGraphNode] = [], earlier: [KnowledgeGraphNode] = []
-        for node in libraryNodes {
-            let date = max(visits[node.path] ?? .distantPast, libraryDate(node.updatedAt))
-            if calendar.isDateInToday(date) { today.append(node) }
-            else if calendar.isDateInYesterday(date) { yesterday.append(node) }
-            else { earlier.append(node) }
+        let work = Task.detached(priority: .userInitiated) {
+            JarvisNotesPresentation.libraryGroups(
+                nodes: input.nodes, visits: input.visits, now: now, calendar: calendar
+            )
         }
-        return [(copy.today, today), (copy.yesterday, yesterday), (copy.earlier, earlier)].filter { !$0.1.isEmpty }
+        let groups = await withTaskCancellationHandler {
+            await work.value
+        } onCancel: {
+            work.cancel()
+        }
+        guard !Task.isCancelled else { return }
+        libraryGroups = groups
+    }
+
+    private func title(for period: JarvisNoteLibraryGroup.Period) -> String {
+        switch period {
+        case .today: copy.today
+        case .yesterday: copy.yesterday
+        case .earlier: copy.earlier
+        }
     }
 
     private var pinnedSection: some View {
