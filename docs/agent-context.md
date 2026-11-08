@@ -5,8 +5,11 @@ showed zero time/energy when matching vault/manual sessions replaced HealthKit
 measurements. `JarvisCombinedGymLogStore` now enriches the primary row instead of
 discarding those measurements. The original code fails the new nested-source
 regression; `swift test -j 2` in `apps/ios/Packages/JarvisCore` passes all 533 tests
-after the correction in the official Swift 6.2 container. The shared UI and period
-filter are unchanged. CI/app delivery and owner verification remain pending.
+after the correction in the official Swift 6.2 container and CI 42515170283.
+CodeQL 42515170223 and native Simulator compilation passed. #1654 merged as
+ef783da2 with the exact qualified iOS tree; TestFlight 86 uploaded successfully
+in 42515467682. The shared UI and period filter are unchanged. Apple processing
+and owner verification remain pending; see ios/design/p15-build86-release.md.
 
 Apple documentation actually read: [HKWorkout.duration](https://developer.apple.com/documentation/healthkit/hkworkout/duration),
 [HKWorkout.statistics(for:)](https://developer.apple.com/documentation/healthkit/hkworkout/statistics(for:))

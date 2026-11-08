@@ -6,9 +6,12 @@ ranges and Health work. Home's combined store drops the measured HealthKit row
 when a matching vault/manual log exists, losing its metrics. Preserve the primary
 log and fill missing metrics from its match, counting each source record once.
 The new regression reproduced Today at 0 minutes/0 kcal before the correction.
-All 533 Core tests pass locally after it, including all four periods, retained
-manual values/identities and distinct nearby workouts. CI/app delivery and device
-acceptance are pending.
+All 533 Core tests pass locally and in CI 42515170283 after it, including all four
+periods, retained manual values/identities and distinct nearby workouts. CodeQL
+42515170223 and native Simulator compilation passed. #1654 merged as ef783da2 with
+the exact qualified iOS tree. TestFlight 86 uploaded successfully in 42515467682;
+Apple processing/device availability and owner acceptance remain pending.
+See [the release record](docs/ios/design/p15-build86-release.md).
 
 ## Notes follow-up — 8 November 2026
 
@@ -61,10 +64,10 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Copilot harness | Pagination repair #1651 merged/deployed. Read-only inspection 42509996653 found one exact matching version. Authorized catalogue refresh 42510264543 passed readiness, fresh two-turn managed_chat_comparison_canary_ok and live acceptance at 18:34 UTC | Ready for owner retesting, including gym tools; broader Current-vs-Copilot comparison pending. Current remains default |
 | Current vs Copilot comparison | Owner-reported quick smoke test worked well. Actual hybrid architecture and test visibility/context limitations documented; controlled project exercise proposed | Select representative source material; prepare equivalent contexts and measurements before claiming a live comparison. Full tool/write comparison pending |
 | Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653; qualified and delivered in build 85 | Owner confirmed Notes fixed on 8 November. Preserve this and accepted header/footer transparency |
-| Home Today workout totals | Combined-store metric loss reproduced and corrected; all 533 Core tests pass locally, including Today/7d/14d/30d and no duplicated measurements | CI and next app delivery pending; owner retest Today against Health afterward |
+| Home Today workout totals | #1654 merged as ef783da2; all 533 Core tests, CI, CodeQL and native compilation passed, including Today/7d/14d/30d and no duplicated measurements | Build 86 uploaded successfully in 42515467682; owner retest Today against Health once it appears in TestFlight |
 | Apple Watch | Owner reports implementation in Jarvis2 secondary | Secondary handoff; primary reviews, integrates, tests and releases. Implementation completion and delivery are not verified |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
-| Next TestFlight bundle | Build 84 uploaded in 42503950006 at 17:22 UTC; backend deployment 42502357217 accepted. Final native follow-up passed. Build 83 was cancelled before upload | Apple processing/device availability, Copilot gym refresh and owner acceptance remain separate |
+| Latest TestFlight bundle | Build 86 uploaded in 42515467682 with Home workout totals corrected. Build 85 Notes correction is owner-accepted; earlier build 84 chat/navigation/lift changes remain included | Apple processing/device availability and Home device acceptance pending; other unexercised owner checks remain on the saved checklist |
 
 The owner now explicitly requests implementation and delivery of all five items.
 This supersedes the earlier hold while collecting additions. Notes and Ember are
