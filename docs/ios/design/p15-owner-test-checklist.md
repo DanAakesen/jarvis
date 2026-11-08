@@ -5,6 +5,10 @@ Automated/native passes and a TestFlight upload are not owner acceptance.
 
 ## Short next session
 
+Build 86 uploaded successfully in 42515467682 with the Home Today workout totals
+correction. Once it appears in TestFlight, perform the Home check below. The owner
+has already confirmed the Notes correction is fixed after build 85.
+
 Build 84 uploaded successfully in 42503950006 on 8 November at 17:22 UTC. The owner confirmed using build 84 on device. It includes the Chat progress,
 Factory navigation, transparent chrome, native selection and lift-editing fixes,
 alongside Notes/Ember from 82. Build 83 was cancelled before upload.
@@ -16,7 +20,7 @@ every additional optional Notes check below was separately exercised.
 
 - [x] **Notes sidebar and phrase/Overview:** owner confirmed fixed after build 85.
 - [ ] **Home Today workout totals:** new report shows two workouts but zero active
-  time and kcal; longer periods and Health work. After the correction ships,
+  time and kcal; longer periods and Health work. In build 86,
   compare Today against the same workouts in Health, then switch 7d → Today and
   refresh. Counts must not duplicate and recorded time/calories must remain.
 

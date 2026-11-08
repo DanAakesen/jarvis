@@ -34,7 +34,7 @@ accessibility snapshots; the editor hierarchy showed its target below the dock.
 The product now bounds the visible row tree, and the test scrolls the complete
 row above the dock before a physical tap. Pin, Raw, saved-content and navigation
 assertions remain. The exact physical-device freeze cause is not proven solely
-by synthetic data; owner retesting is still required.
+by synthetic data; the owner subsequently confirmed the correction works.
 
 ## Owner retest after upload
 
