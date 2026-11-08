@@ -4,7 +4,8 @@
 
 The consolidated device checklist is [saved here](docs/ios/design/p15-owner-test-checklist.md).
 The owner reported a good quick Copilot smoke test on 8 November and now requests
-one combined comparison prompt; it is saved in the guide below.
+one combined comparison prompt; the saved guide now uses fixed sample data and
+explicit expected results, without relying on an agenda.
 
 Keep this ledger current when work changes state. Distinguish design approval,
 implementation, automated/native verification, deployment and owner acceptance.

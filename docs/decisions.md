@@ -11739,3 +11739,15 @@ leads with one real-data planning, read-only Factory status and isolated test-it
 write/update/readback task. Exclude labelled test items from planning inputs and
 keep model/settings equal. This does not establish multi-turn policy or voice
 quality; the former automated canary and extended guide remain separate evidence.
+
+
+### 2026-11-08 — Make the harness comparison self-contained
+
+The owner has no appointments tomorrow and rejected the agenda-based prompt.
+Replace it with a fixed-budget sample shopping task: save/read a Personal note,
+update the same note after a price correction, create one undated Personal task,
+and verify both. The expected final total is 1,450 DKK with 50 DKK remaining.
+Only the runtime label differs between fresh Current and Copilot conversations;
+model/settings stay equal. Judge actual saved results, owner intervention and
+time, without treating one successful run as proof of general superiority.
+This supersedes the planning prompt above; the combined owner test is pending.

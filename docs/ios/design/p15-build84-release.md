@@ -11,7 +11,8 @@ Updated 8 November 2026. Device acceptance remains separate from automated check
 - The backend shows PC bridge warnings only while offline. Online and control-pause
   changes stay quiet, recovery clears the warning, and a later outage reopens it.
   Legacy online feed entries are hidden without deleting activity history.
-- Copilot comparison is saved and deferred at the owner's request. The consolidated
+- The owner reports a good quick Copilot smoke test. A self-contained comparison
+  prompt with expected results is saved; the tool/write comparison is pending. The consolidated
   [device checklist](p15-owner-test-checklist.md) retains the other outstanding checks.
 
 ## Earlier chat/bridge source and verification
@@ -47,7 +48,8 @@ fresh qualification. Do not infer Apple processing or physical-device acceptance
 
 Notes/Ember were already uploaded in build 82 and remain included. Owner visual,
 editing, dictation and reconnect checks remain in the consolidated checklist.
-Copilot's live policy canary passed; the owner's full comparison is deferred.
+Copilot's live policy canary passed; the owner reports a good quick smoke test,
+and the full comparison remains pending.
 The 128 GiB worker is still unprovisioned because Azure returned QuotaExceeded.
 Factory task 23 remains saved and must be recovered, not recreated, after capacity
 and idle-deallocation verification. This release does not resolve that quota.

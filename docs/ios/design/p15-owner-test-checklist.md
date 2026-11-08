@@ -53,7 +53,7 @@ build 83 was cancelled before upload. Do not expect these fixes in 82.
 ## Deferred or blocked
 
 - **Copilot comparison — quick smoke test reported good; combined test pending.**
-  The single combined prompt and comparison criteria are in [the saved comparison guide](../../runtime-comparison-owner-test.md).
+  The self-contained sample prompt, expected result and comparison criteria are in [the saved comparison guide](../../runtime-comparison-owner-test.md).
   Current remains the default; live Copilot compatibility passed, owner quality
   comparison is pending. The older individual tests are optional diagnostics.
 - **Factory end-to-end — blocked, not ready for recovery testing.** Azure returned

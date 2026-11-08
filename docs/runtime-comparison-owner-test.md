@@ -1,79 +1,94 @@
 # Compare Current and Copilot
 
 On 8 November the owner reported that a quick Copilot conversation worked well.
-This is a successful owner-reported smoke test, not yet a tool/write comparison.
-The owner now prefers one combined prompt. Use the short round below; the older
-individual cases remain saved as optional diagnostics. Current remains the default.
+This is an owner-reported smoke test, not yet a tool/write comparison. The owner
+wants one combined prompt with a clear expected result. The earlier agenda-based
+prompt was unsuitable because the owner has no appointments tomorrow. Use the
+self-contained sample below. Current remains the default.
 
 ## One-prompt comparison
 
-Open one fresh Current test and one fresh Copilot test. Keep the same model,
-reasoning effort, account, language and mode. Run them close together. Paste this
-once into each, changing only CURRENT-A to COPILOT-A for the second run. This
-creates one clearly labelled Personal note and one reminder per runtime.
+Open a fresh Current test conversation, then a fresh Copilot test conversation
+through Plus → Test agent runtime. Keep the same model, reasoning effort, account,
+language and mode. Run them close together. Paste this once into each, changing
+only CURRENT-A to COPILOT-A for the second run.
+
+The shopping data is fictional. The test creates a real, clearly labelled Personal
+note and task in Jarvis; it needs no appointments or existing personal data.
 
 ```text
-Help me prepare for tomorrow using my real Jarvis data. Use Europe/Copenhagen
-for dates and times. Briefly acknowledge, then do the work with your tools.
+Run this test using the sample shopping data below. This is a pretend purchase;
+do not buy anything. Briefly acknowledge, then use your Jarvis tools.
 
-Read tomorrow's calendar and my overdue/due tasks across Work and Personal.
-Choose my three most useful priorities, fit them around existing appointments,
-and explain the choices briefly. Exclude all HARNESS-CHECK items from the planning
-inputs. Look for a relevant note for the top Work
-priority; use it if found, otherwise say that you found none. Do not invent
-appointments, task details or note content.
+My budget is 1,500 DKK. I need a monitor costing 900 DKK and a cable costing
+100 DKK. I would also like a keyboard costing 400 DKK and a stand costing
+250 DKK. The required items come first; prefer the keyboard over the stand
+when both optional items will not fit.
 
-Also check existing Factory task 23. Distinguish work actually completed from
-work merely started, and name its current blocker and next action. Do not start,
-recover or create any coding work.
+Use the label HARNESS-CHECK-CURRENT-A.
 
-Use test label HARNESS-CHECK-CURRENT-A. Save your proposed plan in one Personal
-note with that exact title, then read it back. Create one Personal reminder to
-review that note tomorrow at 18:30, then move that same reminder to 19:00. Use
-Jarvis's normal task/reminder process. Read it back and verify the final date,
-time, timezone and item ID. Do not create a second reminder when changing it.
-If those exact test items already exist, reuse them rather than duplicating them.
+Choose what fits the budget. Save the chosen items, prices, total, remaining
+budget and excluded item in one Personal note with that exact title. Read it
+back to confirm it was saved.
 
-Only write those labelled test items. Do not alter my calendar, other notes or
-tasks, send messages, or start Factory work. If a tool fails, check whether a
-write succeeded before retrying; report missing access or data honestly.
+Then apply this price correction: the keyboard costs 450 DKK. Update that same
+note, recalculate the total and remaining budget, and preserve the other details.
 
-Finish with a concise plan, Task 23's verified status, the test note/reminder IDs
-and final reminder time, and anything you could not verify. Report success only
-for results confirmed by tools. Do not ask me to choose priorities or approve
-these explicitly requested test-item writes unless an actual permission gate
-requires it.
+Create one Personal task titled "Review HARNESS-CHECK-CURRENT-A", with no due
+date or reminder. Include the note title in its description. Read back the final
+note and task using your tools, then report their IDs and the verified result.
+
+Only change these labelled test items. If they already exist, reuse them without
+creating duplicates. If a write fails, check whether it succeeded before retrying.
+Do not change my calendar or other notes/tasks, send messages, or start Factory
+work. Report missing tools, permissions or failures honestly; do not claim success
+unless verified. These test-item writes are explicitly requested; do not ask for
+an extra confirmation unless an actual permission gate requires it.
 ```
 
-### How to judge it
+## Expected result
 
-Open the actual calendar/tasks/Notes to check key claims and the two test items;
-do not grade from the runtime's own success report alone. Save both transcripts
-before closing the test conversations.
+For each runtime there should be exactly one Personal note and one Personal task
+with its corresponding label. The task has no due date or reminder.
 
-| Check | What better looks like |
+| Check | Expected evidence |
 | --- | --- |
-| Accuracy | Uses real appointments, tasks and note content; distinguishes Task 23's saved work from completion; admits gaps. |
-| Completion | Produces the plan plus exactly one correct Personal note and reminder, with the same reminder moved to 19:00 on the right Copenhagen date. |
-| Tool reliability | Reads back writes; handles missing data or failures without loops, duplicates, or extra work outside the request. |
-| Effort and usefulness | Needs fewer corrections or redundant approval turns; the priorities are useful and the final result easy to check. |
-| Speed | Less time to the first useful information and to verified completion. A filler acknowledgment is not useful information. |
+| Initial choice | Monitor 900 + cable 100 + keyboard 400 = 1,400 DKK; 100 DKK left; stand excluded. |
+| Price correction | The same note is updated: monitor 900 + cable 100 + keyboard 450 = 1,450 DKK; 50 DKK left; stand still excluded. |
+| Saved result | Reopen the note and task in the app; contents match the final result, IDs remain consistent, no duplicates. |
+| Verified completion | Tool activity shows the initial save/readback, update and final reads. The answer accurately reports any incomplete step. |
+| Scope | No purchase, calendar change, notification, unrelated edit or coding work. |
 
-Correctness and scope come first. If only one completes the requested work
-correctly, that is the stronger result. If both do, compare usefulness, time and
-how much intervention was needed. A shared backend outage or missing permission
-is not evidence that one harness is worse; compare how accurately each handles it.
-A small timing difference in one pair can be
-noise: current data, tool/network latency and model sampling vary. For confidence,
-repeat the same prompt later in the opposite order with fresh labels CURRENT-B
-and COPILOT-B. Compare the same work and note any backend data changes.
+## Why this compares the harnesses
 
-One combined turn does not establish long-conversation memory, changing application
-instructions between turns, voice, or Factory execution reliability. The live
-two-turn policy canary separately verifies instruction refresh; the multi-turn
-checks below remain optional deeper tests. Keep the quick smoke test, combined
-comparison and production readiness as separate statuses. Complete/delete only
-the labelled test items afterwards through normal Jarvis flows.
+The harness manages tools, their results and the conversation around the model.
+Keeping the model and input equal gives both runtimes the same reasoning problem
+and save → read → update → read sequence. It tests tool selection, preserving
+identity across edits, following dependencies, handling failures and reporting
+verified completion. The arithmetic alone is not a harness evaluation.
+
+Use correctness first, then owner effort, then speed:
+
+- If only one completes the requested workflow correctly without help, it wins
+  this test. A fluent answer without the actual saved items does not pass.
+- If both pass, compare unnecessary approval questions, corrections, failed/repeated
+  calls and time to verified completion. Necessary readbacks are not wasted calls.
+- If both are similarly reliable and quick, this test has not shown a useful
+  difference. Do not declare Copilot better just because it works.
+
+Save both transcripts before closing the test conversations. Check the actual
+items in Notes/Tasks rather than trusting the final reply. A shared backend outage
+or missing permission is not proof that one harness is worse; compare whether it
+identifies the blocker accurately and leaves no duplicates or false success.
+
+One pair is a practical screen, not a general superiority claim. For more
+confidence, repeat this same prompt later in reverse order with fresh labels
+COPILOT-B and CURRENT-B. Small timing differences can be network/model noise.
+This single-turn test does not verify long-conversation memory, instruction
+changes between user turns, Voice, or Factory end-to-end execution. The live
+two-turn policy canary is separate evidence; the older cases below are optional
+diagnostics. Complete/delete only the labelled test items afterwards through
+normal Jarvis flows. A passing result does not switch the default runtime.
 
 ## Extended tests (optional reference)
 
