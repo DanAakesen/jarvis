@@ -5,8 +5,8 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: 445bf1d4adbdfe49c6da11e1eaba441ff61526bf
-  TASK_IOS_TREE: dded18f9c3aab4f21286c86aaa88ea2df018ac2e
+  TASK_SOURCE_SHA: c2cef935f4337dc5852333ef60a42760d7c930f7
+  TASK_IOS_TREE: ee8a42c08c2355ba399576e38be755b567845173
 jobs:
   gallery:
     name: Verify Chat reply layout and turn feedback
@@ -27,7 +27,7 @@ jobs:
           import json, os, pathlib, subprocess
           git = lambda value: subprocess.check_output(["git", "rev-parse", value], text=True).strip()
           changed = subprocess.check_output(["git", "diff", "--name-only", "8e354c03b762d54ca32558e1121d206a64d6eb2f", "HEAD", "--", "apps/ios"], text=True).splitlines()
-          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge", "ChatTurnFeedbackUITests"], "changed_ios_paths":changed, "owner_reports":1, "prior_acceptance_invalidated_for_changed_states":True}
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge", "ChatTurnFeedbackUITests"], "changed_ios_paths":changed, "owner_reports":2, "prior_acceptance_invalidated_for_changed_states":True}
           pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
           PYCODE
       - name: Select pinned Xcode 26.6
