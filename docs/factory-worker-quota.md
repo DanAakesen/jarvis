@@ -57,3 +57,12 @@ The owner corrected the Quota Request Operator assignment from resource-group to
 ### 8 November — live quota follow-up
 
 GitHub authentication is working again. Provisioning run 42525578592 reached Azure but failed with InvalidTemplateDeployment / QuotaExceeded; worker routing remains inactive. Quota run 42524952522 failed before writes because an approved resource was absent from its catalogue. The quota diagnostic now retains validated catalogue names, the missing requested name, and only the two approved Compute usage/limit records. This read-only evidence is needed to distinguish catalogue coverage from actual capacity; no resource allocation or quota write is added.
+
+
+## Latest live evidence: 8 November, 21:44 UTC
+
+- GitHub authentication works again; provisioning dispatch succeeded. Do not carry the earlier expired-token blocker forward.
+- Runner deploy 42525578592 reached Azure and failed InvalidTemplateDeployment / QuotaExceeded. Activation remains false; no completed 128 GiB workspace is claimed.
+- Read-only quota run 42526613341 reports the missing requested resource as standardDASv5Family. Its quota catalogue contains zero entries, and the filtered Compute usage result is empty. This is not evidence of a numerical zero quota or approved capacity. No quota write was submitted.
+- Provider registration/region availability remains unverified. The owner was asked to check Microsoft.Compute and Microsoft.Quota under subscription Resource providers and register either if NotRegistered. Do not assert registration is the cause until verified.
+- Both code changes (#1660 and #1661) passed full CI and CodeQL; the diagnostic retains only validated resource names and approved usage/limit fields.
