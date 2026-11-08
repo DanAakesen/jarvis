@@ -254,9 +254,14 @@ final class NavigationReliabilityTests: XCTestCase {
         let browse = app.buttons["notes.browseFolders"]
         waitFor(browse, key: "exists", value: true)
         waitFor(tabs, key: "exists", value: true)
-        XCTAssertLessThan(title.frame.maxY, tabs.frame.minY, "Header, then Notes / Tasks / Graph")
+        let phrase = app.descendants(matching: .any)["page.headline"]
+        let overview = app.descendants(matching: .any)["notes.hero"]
+        XCTAssertTrue(phrase.exists, "Notes retains the shared data phrase")
+        XCTAssertTrue(overview.exists, "Notes retains its overview components")
+        XCTAssertLessThan(title.frame.maxY, phrase.frame.minY, "Header, then the data phrase")
+        XCTAssertLessThan(phrase.frame.maxY, overview.frame.minY, "Phrase, then overview")
+        XCTAssertLessThan(overview.frame.maxY, tabs.frame.minY, "Overview, then Notes / Tasks / Graph")
         XCTAssertLessThan(tabs.frame.maxY, browse.frame.minY, "Library follows the segmented bar")
-        XCTAssertFalse(app.descendants(matching: .any)["notes.hero"].exists)
         XCTAssertFalse(app.buttons["notes.scope"].exists, "The extra button between search and plus stays removed")
         XCTAssertTrue(app.buttons["notes.plus"].exists)
         attachScreenshot("Notes page order")

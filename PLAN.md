@@ -4338,3 +4338,15 @@ copies) alongside legacy logs, before HealthKit de-duplication. Manual record ID
 remain distinct from HealthKit IDs. Historical app vault writes remain supported;
 this change does not migrate or rewrite them. Core fixture coverage checks that
 chat-logged sessions appear, retain identity/duration and respect the date range.
+
+
+## Notes regressions reported 8 November 2026
+
+- Missing Notes phrase and overview: confirmed regression in the tab conditions;
+  restored in source with an updated native page-order assertion. Not released.
+- Opening the right navigation crashes Notes: owner report captured separately.
+  Exact build and crash versus freeze are not yet confirmed. Added a synthetic
+  1,003-note navigation case (open, close, scroll, reopen, navigate to Chat).
+  Eager library rendering/date parsing is an investigation lead, not a proven cause.
+- Qualification and actual native review remain pending. The development workspace
+  became unavailable during investigation; GitHub remains the saved source of work.

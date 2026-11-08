@@ -7682,3 +7682,15 @@ replays its saved record and retains dumbbell weight, reps, sets, date/session I
 No live owner workout is logged by synthetic checks. Native 42496126403 passed
 timer/progress, runtime isolation and navigation; selection and the exposed Edit
 touch target failed and require a new native run after the interaction fixes.
+
+
+## Notes regression validation (8 November 2026)
+
+`--ui-test-large-notes` adds 1,000 synthetic notes to the existing Notes preview
+transport on Simulator only. `NotesRedesignUITests/testLargeLibrarySidebarOpensAfterScrollingAndReturnsToChat`
+physically opens/closes the right sidebar before and after scrolling, then returns
+to Chat. It retains the two-second drawer visibility requirement and existing test
+limits. `NavigationReliabilityTests/testNotesPageOrderAndNoScopeButton` now requires
+the restored data phrase and Overview ahead of the tabs. Run both plus existing
+Notes dark/light editing cases and inspect retained native captures. Do not claim
+the reported owner crash fixed solely from source inspection or a small fixture.

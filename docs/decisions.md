@@ -11836,3 +11836,14 @@ registration are prerequisites. Submission, Azure approval, provisioning and idl
 verification are separate states. Unknown quota-write outcomes are inspected,
 not automatically retried. Implementation has eight passing focused tests;
 no live quota request is claimed. See docs/factory-worker-quota.md.
+
+
+## 8 November 2026 — Restore Notes context; investigate navigation separately
+
+Dan reports two independent Notes regressions: opening the right sidebar crashes
+the page, and the shared phrase/overview is absent. Restore the original data
+phrase and Overview before the Notes / Tasks / Graph tabs while retaining the
+approved carousel, folder browser and editor. Add native coverage for the restored
+order and navigation through a 1,003-note synthetic library. The crash cause is
+not yet proven; eager rendering/date parsing is only a lead. Qualification and
+native capture review remain pending, so no released fix is claimed.

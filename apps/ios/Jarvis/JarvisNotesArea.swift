@@ -353,16 +353,16 @@ struct JarvisNotesArea: View {
     }
 
     /// The page head, as the first scrolling row: data phrase, Overview hero, then the Notes / Tasks / Graph
-    /// segmented bar and, on Notes, the Recent strip. The shared skeleton is shown until the first data arrives.
+    /// segmented bar. Pinned and Recent follow on Notes. The shared skeleton is shown until the first data arrives.
     @ViewBuilder
     private var pageHead: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
             if selectedTab == .graph, let graph {
                 JarvisPageHeadline(phrase: JarvisNotesPagePhrase.graph(graph, language: language))
-            } else if selectedTab == .tasks, let taskList {
+            } else if let taskList {
                 JarvisPageHeadline(phrase: JarvisNotesPagePhrase.tasks(taskList, language: language))
             }
-            if selectedTab == .tasks, taskList != nil || tree != nil {
+            if selectedTab != .graph, taskList != nil || tree != nil {
                 overviewHero
             }
             tabSwitcher
