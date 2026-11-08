@@ -7587,6 +7587,15 @@ build-context equivalence checks pass. Verify capacity, provider access and real
 idle deallocation, then recover existing task 23 from the authenticated owner app.
 The deploy principal is smoke-only and must not impersonate that owner session.
 
+## 8 November 2026 — Long-running stream checks
+
+Run backend chat-agent, recoverable-chat, conversation and conversation-activity tests,
+plus backend lint/build. Hosted checks include tests/test_stream_keepalive.py and
+tests/test_chat_runtime.py with Ruff. Use controlled clocks to verify work past
+210 seconds and 15 minutes, scoped progress, cancellation, reconnect without writes,
+context preservation, bounded buffering and producer cleanup. Qualify the deployed
+transport separately; local clock tests do not prove hosting limits.
+
 
 ### Notification/Factory follow-up (8 November 2026)
 

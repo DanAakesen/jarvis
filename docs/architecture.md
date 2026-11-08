@@ -8989,6 +8989,19 @@ requests ARM deallocation. Deployment verifies the actual deallocated state befo
 activation. Disk, OS disk and outbound IP costs remain while compute is deallocated.
 This provisions one worker; automatic expansion into a fleet is not implemented.
 
+## Established chat stream lifetime (8 November 2026)
+
+The Foundry invocation adapter bounds authentication/connection setup at 210 seconds
+and clears that timer when response headers arrive. Caller cancellation still flows
+through the established stream. Conversation execution no longer has a 15-minute
+wall-clock abort; it is owned by RecoverableChat rather than the HTTP subscriber.
+Hosted streaming runs its producer in one task/context, with bounded buffering and
+15-second SSE comments during silence. Backend subscribers receive the same liveness
+comments without retaining them in replay storage. Tool activity is filtered to the
+turn's message IDs and published as `tool_activity`; phase callbacks emit `progress`.
+Existing replay byte limits, authorization, explicit cancellation and completed-reply
+persistence remain. In-memory recovery is not restart-durable execution.
+
 
 ### iOS notification task routing and history (8 November 2026)
 

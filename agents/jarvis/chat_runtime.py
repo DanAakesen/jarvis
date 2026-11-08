@@ -64,6 +64,7 @@ from model_contract import (
     ToolLoopStalled,
 )
 from state import ModelMessage
+from stream_keepalive import with_keepalive
 from visual_context import (
     MAX_JPEG_BYTES,
     current_image_reservation,
@@ -1137,7 +1138,7 @@ def register_chat_invocation(
                 current_chat_started_at.reset(started_token)
 
         return StreamingResponse(
-            events(),
+            with_keepalive(events()),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
         )
