@@ -11979,3 +11979,15 @@ Apple processing/device availability and owner acceptance of the Notes sidebar
 freeze correction remain unverified. The owner's acceptance of build 84 shared
 header/footer transparency remains valid. Copilot's fresh catalogue/canary is
 ready; the full comparison and gym write checks remain owner tests.
+
+
+## 2026-11-08 — Group consecutive tool attempts, preserve comparison baseline
+
+The owner requests no adjacent repetition of the same tool name. Use one disclosure
+row with count and visible refused/failed totals; expanded rows show numbered
+attempts and their outcomes. Preserve chronology and real call totals. Apply the
+same component to normal and isolated test Chat, and qualify both surfaces.
+Copilot's saved initial/revised note is verified, but 51 displayed attempts and
+refusals remain friction findings. Keep the backend unchanged for the paired
+Current run; do not infer the exact refusal cause from a generic UI label or claim
+that the isolated test establishes normal Chat reliability.

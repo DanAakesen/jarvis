@@ -7791,3 +7791,15 @@ Apple processing/device availability and owner acceptance of the Notes sidebar
 freeze correction remain unverified. The owner's acceptance of build 84 shared
 header/footer transparency remains valid. Copilot's fresh catalogue/canary is
 ready; the full comparison and gym write checks remain owner tests.
+
+
+## Tool activity grouping qualification (8 November 2026)
+
+Read Apple SwiftUI DisclosureGroup documentation and HIG Disclosure controls.
+Use the shared row control, descriptive expandable label, retained outcome text,
+44-point target and Reduce Motion handling. Run Core grouping/replay tests and
+native runtime-test grouped/expanded attempts, ordinary saved tool disclosure and
+live elapsed/progress checks. Focused validation may use a disposable workflow
+branch with identical app/test tree and unchanged 120/150-second test limits;
+never merge the validation workflow. Keep normal Chat versus isolated harness
+results separate and retain actual native captures before claiming UI acceptance.

@@ -372,18 +372,8 @@ struct JarvisRuntimeTestSheet: View {
                     .font(.footnote).foregroundStyle(.secondary)
                 }
                 if toolsExpanded {
-                    ForEach(model.tools) { tool in
-                        HStack {
-                            Image(systemName: tool.outcome == nil ? "ellipsis" : (tool.outcome == .ok ? "checkmark.circle" : "exclamationmark.circle"))
-                                .accessibilityHidden(true)
-                            Text(tool.toolName.replacingOccurrences(of: "_", with: " "))
-                            Text(copy(tool.outcome.map { $0 == .ok ? .toolOK : ($0 == .refused ? .toolRefused : .toolError) } ?? .toolRunning))
-                                .foregroundStyle(.secondary)
-                        }
-                        .font(.caption)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("runtimeTest.tool.\(tool.id)")
-                    }
+                    JarvisChatToolActivityList(groups: ChatToolActivityGroup.grouping(model.tools),
+                                              language: appLanguage, identifierPrefix: "runtimeTest")
                 }
             }
             .onChange(of: model.sending, initial: true) { _, sending in toolsExpanded = sending }
