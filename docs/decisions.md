@@ -11845,3 +11845,17 @@ approvals/timeouts. Report implementation, qualification, deployment, readiness
 for owner testing and acceptance separately. A blocked item names its observed
 reason and next action. Keep PLAN.md and the build delivery record current;
 passing automated checks does not establish owner-device acceptance.
+
+
+## 8 November 2026 — Keep all reported work visible in delivery updates
+
+Dan prefers the short parallel delivery-status bullets and reports Apple Watch
+implementation in Jarvis2 secondary. Primary retains SDLC/integration/release
+ownership; secondary does not deploy. Add Watch to the standing status without
+claiming implementation completion. Track the new Notes right-sidebar crash and
+missing phrase/Overview independently: the latter has a source correction in
+#1653, while the crash cause remains unproven. Copilot gym refresh failed during
+version inventory; #1651 must qualify and a new live canary must pass before
+retesting is called ready. Quota run 42503224623 failed during inspection before
+any write; this proves an access failure, not an exact failing API read or a
+submitted quota request. Keep deployed, testable and owner-accepted states separate.

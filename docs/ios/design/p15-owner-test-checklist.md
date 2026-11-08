@@ -10,6 +10,10 @@ processing/device availability remain unverified. It includes the Chat progress,
 Factory navigation, transparent chrome, native selection and lift-editing fixes,
 alongside Notes/Ember from 82. Build 83 was cancelled before upload.
 
+**New Notes findings are open:** right-sidebar crash and missing phrase/Overview.
+Wait for the qualified correction before retesting those two; #1653 is a candidate,
+not an uploaded fix. Preserve the previously approved browsing/editor interactions.
+
 - [ ] **Notes:** swipe the title-only pinned carousel, open a recent note, browse
   folders, and use New folder at the bottom right. Create/edit a disposable note,
   save with Done, reopen it and confirm the edit. Switch Raw on/off and confirm the
@@ -75,10 +79,14 @@ alongside Notes/Ember from 82. Build 83 was cancelled before upload.
 
 ## Deferred or blocked
 
+- **Apple Watch:** implementation is in Jarvis2 secondary. Wait for primary
+  integration, native checks and a confirmed testable build before owner testing.
+
 - **Copilot comparison — quick smoke test reported good; combined test pending.**
   The actual harness differences, proposed project exercise and optional sample prompt are in [the saved comparison guide](../../runtime-comparison-owner-test.md).
-  Current remains the default; live Copilot compatibility passed, owner quality
-  comparison is pending. The older individual tests are optional diagnostics.
+  Current remains the default. Earlier live compatibility passed, but the gym
+  catalogue refresh failed and #1651 is under qualification. Wait for the new
+  live canary before the comparison; owner quality comparison remains pending. The older individual tests are optional diagnostics.
 - **Factory end-to-end — blocked, not ready for recovery testing.** Azure returned
   QuotaExceeded before the 128 GiB worker activated. The authorized quota request failed with HTTP 403 before a write. Subscription
   Quota Request Operator access for jarvis-github-deploy is needed. Once provisioned and qualified, recover existing task 23 / issue 1634,

@@ -32,7 +32,7 @@ and idle deallocation, then recover saved task 23. Do not create a duplicate tas
 
 PR #1649 passed full CI 42502476758 and merged as `b6b515d9`. The authorized
 live attempt [42503224623](https://github.com/DanAakesen/jarvis/actions/runs/42503224623)
-failed on its first quota read with `Quota API HTTP 403: AuthorizationFailed`.
+failed during quota inspection with `Quota API HTTP 403: AuthorizationFailed`.
 No quota request was submitted and no capacity was changed. Artifact 13625869545
 retains the sanitized result, SHA256
 `3dedf9ac7c88aa3955fa16b7afce24fd7dd17968644b87b30642fa046badf076`.

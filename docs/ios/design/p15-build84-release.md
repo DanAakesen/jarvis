@@ -24,14 +24,32 @@ Deploy 42502357217 passed backend/agent deployment, readiness and live conversat
 acceptance. TestFlight run 42503950006 uploaded build 84 from b6b515d9 and completed
 successfully at 17:22 UTC on 8 November. Its app/Core source is unchanged from the
 qualified app candidate. Apple processing and owner-device availability remain
-unverified. Copilot's gym catalogue refresh is queued in 42503779972 behind the
-quota-workflow-triggered deployment 42503216228. Later entries below preserve the investigation history;
-this section is the current qualification state.
+unverified. Extra deployment 42503216228 also passed. Copilot's gym catalogue
+refresh 42503779972 failed after version creation while reading the inventory;
+read-only inspection 42505663536 failed without writes. PR #1651 corrects pagination
+and exact-version reconciliation. Its 7,445 backend tests passed, but compilation
+hit the CI job limit; the incomplete checks are being retried. A fresh managed
+canary is required before claiming the new catalogue ready. Later entries below
+preserve investigation history; this section is the current qualification state.
 
 Factory quota is separate: #1649 merged as `b6b515d9` after full CI 42502476758.
-Live quota run 42503224623 received HTTP 403 AuthorizationFailed at its first
-read, before any quota write. The 128 GiB worker is not provisioned and Task 23
+Live quota run 42503224623 received HTTP 403 AuthorizationFailed during quota
+inspection, before any quota write. The 128 GiB worker is not provisioned and Task 23
 is not complete. See [the quota runbook](../../factory-worker-quota.md).
+
+
+## New owner findings after the build
+
+The owner reports a Notes right-sidebar crash and missing shared phrase/Overview.
+PR #1653 restores the confirmed missing components; the crash cause is still
+unproven. Native run 42507483140 exercises the exact candidate on a synthetic
+1,003-note library and retains the normal editing/order checks. No repaired build
+is released yet. Keep these as two findings, and retain the approved carousel,
+folder sheet and editor. Exact owner build and crash-versus-freeze are pending.
+
+Apple Watch implementation is being handled in Jarvis2 secondary, per the owner.
+Primary remains responsible for integration, qualification and release. That report
+does not establish completed implementation or a Watch build.
 
 ## Changes
 
