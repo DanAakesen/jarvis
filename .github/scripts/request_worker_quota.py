@@ -38,6 +38,7 @@ class QuotaClient:
         self.scope = f'/subscriptions/{self.subscription}/providers/Microsoft.Compute/locations/{REGION}'
         self.base = f'https://management.azure.com{self.scope}/providers/Microsoft.Quota/'
         self.token = None
+        self.resource_names = None
         self.opener = urllib.request.build_opener(NoRedirect())
 
     def request(self, method, url, payload=None):
@@ -74,7 +75,35 @@ class QuotaClient:
     def url(self, operation, resource):
         return f'{self.base}{operation}/{resource}?api-version={API_VERSION}'
 
+    def resolve_resource(self, resource):
+        if resource.casefold() not in {name.casefold() for name in RESOURCES}:
+            raise ValueError('Quota resource is outside the approved worker scope')
+        if self.resource_names is None:
+            names = {}
+            url = f'{self.base}quotas?api-version={API_VERSION}'
+            for _ in range(20):
+                page, _ = self.request('GET', url)
+                for row in page['value']:
+                    name = row['name']
+                    if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,120}', name):
+                        raise ValueError('Invalid quota resource name')
+                    key = name.casefold()
+                    if key in names and names[key] != name:
+                        raise ValueError('Ambiguous quota resource name')
+                    names[key] = name
+                url = page.get('nextLink')
+                if not url:
+                    break
+            else:
+                raise RuntimeError('Quota catalogue pagination exceeded its bound')
+            self.resource_names = names
+        name = self.resource_names.get(resource.casefold())
+        if name is None:
+            raise RuntimeError('Approved worker resource missing from Azure quota catalogue')
+        return name
+
     def snapshot(self, resource):
+        resource = self.resolve_resource(resource)
         quota, _ = self.request('GET', self.url('quotas', resource))
         usage, _ = self.request('GET', self.url('usages', resource))
         limit = quota['properties']['limit']['value']
@@ -83,6 +112,7 @@ class QuotaClient:
                 'requiredLimit': required_limit(limit, used)}
 
     def submit(self, resource, target):
+        resource = self.resolve_resource(resource)
         _, location = self.request('PUT', self.url('quotas', resource), {
             'properties': {'name': {'value': resource},
                            'limit': {'limitObjectType': 'LimitValue', 'value': target}},

@@ -7831,3 +7831,8 @@ results separate and retain actual native captures before claiming UI acceptance
 ## Apple Watch companion work (8 November 2026)
 
 Source: apps/ios/Watch, apps/ios/WatchWidgets and iPhone JarvisWatchBridge.swift. Build: apps/ios/project.yml. Tests: `swift test --package-path apps/ios/Packages/JarvisCore --filter WatchContractTests` or full swift test. Native check after xcodegen generate in apps/ios: `xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build`. PR-only watch-build.yml builds Watch and phone unsigned and captures isolated DEBUG --watch-fixture views on an available Ultra simulator. Fixtures are not real health or successful connectivity. Primary owns signing, installation, integration and deployment. References, decisions and unverified checks: docs/ios/design/watch/.
+
+
+### 8 November: subscription access corrected
+
+The owner corrected the Quota Request Operator assignment from resource-group to subscription scope. Live run 42523978403 passed the previous authorization boundary but returned HTTP 400 InvalidResourceName before any quota write. The client now discovers canonical quota resource names from Azure’s catalogue, matches only the two approved resources case-insensitively, and uses returned casing for reads/writes. Missing/ambiguous resources stop without a write; catalogue pagination is bounded and confined to the same scope. Live retry and 128 GiB provisioning remain pending.

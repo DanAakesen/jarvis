@@ -35,6 +35,36 @@ class WorkerQuotaTests(unittest.TestCase):
         self.saved = []
         return quota.run(client, submit, lambda value: self.saved.append(copy.deepcopy(value)), sleep=lambda _: None)
 
+    def test_uses_azure_catalogue_casing_for_reads_and_writes(self):
+        client = quota.QuotaClient('00000000-0000-4000-8000-000000000000')
+        calls = []
+        def request(method, url, payload=None):
+            calls.append((method, url, payload))
+            if '/quotas?' in url:
+                return {'value': [{'name': 'standardDASv5Family'}, {'name': 'cores'}]}, None
+            if method == 'PUT':
+                return {}, None
+            if '/usages/' in url:
+                return {'properties': {'usages': {'value': 0}}}, None
+            return {'properties': {'limit': {'value': 0}}}, None
+        client.request = request
+        self.assertEqual(client.snapshot('standarddasv5family')['limit'], 0)
+        client.submit('standarddasv5family', 2)
+        self.assertIn('/quotas/standardDASv5Family?', calls[-1][1])
+        self.assertEqual(calls[-1][2]['properties']['name']['value'], 'standardDASv5Family')
+        self.assertEqual(sum('/quotas?' in call[1] for call in calls), 1)
+
+    def test_missing_catalogue_resource_prevents_writes(self):
+        client = quota.QuotaClient('00000000-0000-4000-8000-000000000000')
+        calls = []
+        def request(method, url, payload=None):
+            calls.append(method)
+            return {'value': [{'name': 'unrelatedFamily'}]}, None
+        client.request = request
+        with self.assertRaises(RuntimeError):
+            client.submit(quota.RESOURCES[0], 2)
+        self.assertEqual(calls, ['GET'])
+
     def test_inspection_never_submits(self):
         client = FakeQuota()
         result = self.run_request(client, False)

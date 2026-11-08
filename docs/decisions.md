@@ -12033,3 +12033,8 @@ Current repair #1658 is deployed. Acceptance evidence from 42522064440 confirms 
 The owner reports adding Azure access, but fresh-login quota runs 42522536383 and 42523572142 still return 403 AuthorizationFailed before submitting a request. No 128 GiB worker provisioning or Task 23 recovery is claimed.
 
 The owner has requested the CarPlay entitlement from Apple. Await Apple’s reply; entitlement approval, activation and CarPlay device acceptance are not established.
+
+
+### 8 November: subscription access corrected
+
+The owner corrected the Quota Request Operator assignment from resource-group to subscription scope. Live run 42523978403 passed the previous authorization boundary but returned HTTP 400 InvalidResourceName before any quota write. The client now discovers canonical quota resource names from Azure’s catalogue, matches only the two approved resources case-insensitively, and uses returned casing for reads/writes. Missing/ambiguous resources stop without a write; catalogue pagination is bounded and confined to the same scope. Live retry and 128 GiB provisioning remain pending.
