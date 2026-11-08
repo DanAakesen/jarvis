@@ -187,6 +187,88 @@ final class JarvisCombinedGymLogStoreTests: XCTestCase {
         XCTAssertEqual(entries, [run, vault])
     }
 
+    func testHomeTodayKeepsHealthMetricsWhenVaultAndChatLogsDescribeTheSameWorkouts() async throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Copenhagen")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 8, hour: 20))!
+        let morning = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: now)!
+        let evening = calendar.date(bySettingHour: 18, minute: 0, second: 0, of: now)!
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: morning)!
+        let vault = [
+            JarvisGymLogEntry(performedAt: morning, session: .chest),
+            JarvisGymLogEntry(performedAt: evening, session: .cardio),
+        ]
+        let manual = [
+            JarvisGymLogEntry(performedAt: morning, session: .chest, manualWorkoutID: "manual-strength"),
+            JarvisGymLogEntry(performedAt: evening, session: .cardio, manualWorkoutID: "manual-cardio"),
+        ]
+        let health = [
+            JarvisGymLogEntry(performedAt: morning - 60, session: .strength,
+                durationMinutes: 60, activeKilocalories: 350, healthKitID: "health-strength"),
+            JarvisGymLogEntry(performedAt: evening + 60, session: .cardio,
+                durationMinutes: 30, activeKilocalories: 250, healthKitID: "health-cardio"),
+            JarvisGymLogEntry(performedAt: yesterday, session: .cardio,
+                durationMinutes: 20, activeKilocalories: 120, healthKitID: "health-yesterday"),
+        ]
+        // Use the same nested source composition as ContentView, not pre-enriched display fixtures.
+        let store = JarvisCombinedGymLogStore(
+            primary: JarvisCombinedGymLogStore(
+                primary: Stub(result: .success(vault)), others: [Stub(result: .success(manual))]
+            ),
+            others: [Stub(result: .success(health))]
+        )
+        let entries = try await store.entries(since: yesterday)
+        XCTAssertEqual(entries.count, 3)
+        XCTAssertEqual(entries.first?.manualWorkoutID, "manual-cardio")
+        XCTAssertEqual(entries.first?.healthKitID, "health-cardio")
+        XCTAssertEqual(entries.first?.performedAt, evening)
+        XCTAssertEqual(entries[1].session, .chest)
+        for range in JarvisTodayRange.allCases {
+            let display = JarvisTodayActivityDisplay(
+                state: JarvisTodayActivityState(range: range), workouts: entries,
+                steps: .empty, now: now, language: .en, calendar: calendar
+            )
+            XCTAssertEqual(display.totalWorkouts, range == .today ? 2 : 3, "\(range)")
+            XCTAssertEqual(display.activeMinutes, range == .today ? 90 : 110, "\(range)")
+            XCTAssertEqual(display.activeKilocalories, range == .today ? 600 : 720, "\(range)")
+        }
+    }
+
+    func testMatchingWorkoutsPreserveRecordedValuesAndAssignHealthMetricsOnlyOnce() async throws {
+        let lift = JarvisGymLift(exercise: "Bench press", weightKg: 70, reps: 6, sets: 3)
+        let earlier = JarvisGymLogEntry(performedAt: day, session: .chest,
+            durationMinutes: 45, manualWorkoutID: "earlier")
+        let nearest = JarvisGymLogEntry(performedAt: day + 3600, session: .arms, lift: lift,
+            durationMinutes: 35, activeKilocalories: 200, manualWorkoutID: "nearest")
+        let health = JarvisGymLogEntry(performedAt: day + 3660, session: .strength,
+            durationMinutes: 40, activeKilocalories: 220, healthKitID: "strength", healthActivity: "Strength")
+        let store = JarvisCombinedGymLogStore(primary: Stub(result: .success([earlier, nearest])),
+            others: [Stub(result: .success([health]))])
+        let entries = try await store.entries(since: day)
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(entries.first?.durationMinutes, 35)
+        XCTAssertEqual(entries.first?.activeKilocalories, 200)
+        XCTAssertEqual(entries.first?.lift, lift)
+        XCTAssertEqual(entries.first?.manualWorkoutID, "nearest")
+        XCTAssertEqual(entries.first?.healthKitID, "strength")
+        XCTAssertEqual(entries.first?.healthActivity, "Strength")
+        XCTAssertEqual(entries.last, earlier)
+    }
+
+    func testTwoDistinctHealthWorkoutsAreNotLostAgainstOneManualLog() async throws {
+        let manual = JarvisGymLogEntry(performedAt: day, session: .chest)
+        let first = JarvisGymLogEntry(performedAt: day + 60, session: .strength,
+            durationMinutes: 30, activeKilocalories: 180, healthKitID: "first")
+        let second = JarvisGymLogEntry(performedAt: day + 3600, session: .strength,
+            durationMinutes: 20, activeKilocalories: 120, healthKitID: "second")
+        let store = JarvisCombinedGymLogStore(primary: Stub(result: .success([manual])),
+            others: [Stub(result: .success([first, second]))])
+        let entries = try await store.entries(since: day)
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(entries.reduce(0) { $0 + $1.durationMinutes }, 50)
+        XCTAssertEqual(entries.reduce(0) { $0 + $1.activeKilocalories }, 300)
+    }
+
     func testOneFailingSourceDoesNotHideTheOther() async throws {
         let run = JarvisGymLogEntry(performedAt: day, session: .cardio)
         let store = JarvisCombinedGymLogStore(

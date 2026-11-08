@@ -1501,8 +1501,15 @@ that lists calendar entries for the phone, so Next up shows "Calendar unavailabl
 registered by the Google module, reads the primary calendar with the `calendar.events` scope and returns the
 `eventSummary` shape; the phone reads it through `JarvisBackendCalendarSource`, wired through `JarvisNotesClient.calendarSource`.)
 HealthKit (P15-77): `JarvisHealthKitAccess` requests read access to every readable type once (steps, workouts, sleep,
-nutrition, heart, body and activity types); workouts on Home combine the vault gym log with Health cardio workouts
-(`JarvisCombinedGymLogStore`). Only steps and cardio workouts are shown today; the other types are authorized but not yet displayed.
+nutrition, heart, body and activity types). Home combines vault gym logs with
+backend manual sessions, then all supported HealthKit workouts through nested
+`JarvisCombinedGymLogStore` instances. Matching logs retain the primary date,
+session and recorded values, filling missing duration/energy and source identities
+from the matching source. The existing session compatibility/two-hour window
+remains, with the nearest unmatched primary row chosen once per source; distinct
+unmatched workouts remain visible. This prevents deduplication from removing the
+measurements used by Home's Today and longer-period totals. Nothing is written
+back to HealthKit or the vault by this read-time merge.
 
 Home layout (P15-65): no title; the data-phrase headline is first, then the activity hero (workouts and steps), then
 Next up, tasks and the two log buttons, with the Chat composer pinned below (voice while empty, send while typing).
