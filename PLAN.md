@@ -15,7 +15,8 @@ budget. Specific allowlisted failure codes distinguish token exhaustion, content
 filtering, incomplete streams and coordination failures. No uncertain tool or write
 is automatically replayed. These are verified code defects; the historical generic
 error alone cannot prove which caused the owner's failure. All 1,310 agent tests
-pass locally; backend validation, CI, deployment and live acceptance are pending.
+pass locally; 356 backend tests and TypeScript build pass. CI, deployment and
+live acceptance are pending.
 
 
 ## Copilot owner test review and tool grouping — 8 November 2026
