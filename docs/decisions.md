@@ -11655,3 +11655,13 @@ No migration, worker execution or idle billing proof is claimed. Task 23 still h
 its saved branch commit and no delivery PR; do not duplicate its Prepare request.
 Copilot remains enabled after its passed live policy canary, and build 82 remains
 uploaded with Notes/Ember. Their owner acceptance is pending independently.
+
+
+### 8 November 2026 — Keep reply metadata close to its message
+
+The owner reports that the timestamp, Jarvis reply and Tool activity look detached.
+Use compact message-detail spacing and remove padding intended for a bubble from
+the unboxed Jarvis reply. Retain the shared 44-point tool disclosure, paragraph
+layout and inter-message spacing. The normal and Current/Copilot test conversations
+share the correction. This changes presentation only, not runtime/tool behavior.
+Native qualification and TestFlight delivery are pending.

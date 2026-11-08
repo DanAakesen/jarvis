@@ -410,7 +410,7 @@ struct JarvisChatScreen: View {
 
     @ViewBuilder
     private func messageRow(_ row: RenderedChatRow) -> some View {
-        VStack(alignment: row.message.role == .dan ? .trailing : .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+        VStack(alignment: row.message.role == .dan ? .trailing : .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
             if row.showsTimestamp {
                 Text(timeString(row.message.at))
                     .font(.caption2)
@@ -537,7 +537,6 @@ struct JarvisChatScreen: View {
                     .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .trailing)
             } else {
                 content
-                    .padding(.vertical, JarvisDesignTokens.chatGlassInset)
                     .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
                     .accessibilityElement(children: .contain)
             }

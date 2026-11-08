@@ -3637,3 +3637,13 @@ title, folder path, pin control, Raw/Formatted toggle, Done, and a formatting to
 Ember is a generated background-only PNG in the native asset catalogue, scaled to
 fill by the shared screen renderer. Light mode keeps its existing palette. Native
 qualification is pending; these are implementation facts, not device acceptance.
+
+
+## Chat reply grouping (8 November 2026)
+
+Treat each message's timestamp, reply and completed tool disclosure as one compact
+vertical group. Jarvis's unboxed reply has no bubble padding; the message-detail
+spacing token supplies the gaps around it. Keep the tool disclosure's full touch
+target, leading alignment and expansion behavior, readable paragraph spacing and
+the existing separation between conversation messages. Applies to normal Chat and
+both test runtimes through their shared screen.
