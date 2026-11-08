@@ -360,6 +360,9 @@ struct JarvisChatScreen: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .accessibilityIdentifier("chat.tools.live")
                             }
+                            if model.isSending {
+                                turnStatus
+                            }
                             if !model.streamingText.isEmpty {
                                 messageBubble(text: model.streamingText, role: .jarvis,
                                               interrupted: !model.isSending, messageID: "streaming")
@@ -373,6 +376,7 @@ struct JarvisChatScreen: View {
                     .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                     .padding(.vertical, JarvisDesignTokens.chatVerticalInset)
                 }
+                .accessibilityIdentifier("chat.transcript")
                 .scrollDismissesKeyboard(.interactively)
                 .defaultScrollAnchor(.bottom)
                 .scrollEdgeEffectHidden(true, for: .top)
@@ -410,7 +414,7 @@ struct JarvisChatScreen: View {
 
     @ViewBuilder
     private func messageRow(_ row: RenderedChatRow) -> some View {
-        VStack(alignment: row.message.role == .dan ? .trailing : .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+        VStack(alignment: row.message.role == .dan ? .trailing : .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
             if row.showsTimestamp {
                 Text(timeString(row.message.at))
                     .font(.caption2)
@@ -537,7 +541,6 @@ struct JarvisChatScreen: View {
                     .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .trailing)
             } else {
                 content
-                    .padding(.vertical, JarvisDesignTokens.chatGlassInset)
                     .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .leading)
                     .accessibilityElement(children: .contain)
             }
@@ -600,6 +603,21 @@ struct JarvisChatScreen: View {
         }
     }
 
+    private var turnStatus: some View {
+        HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+            JarvisOrb(activity: .thinking, size: JarvisDesignTokens.chatMiniCoreSize,
+                      isStatic: model.fixtureMode || reduceMotion)
+            Text(model.isReconnecting ? copy(.thinkingReconnecting) :
+                    (!model.streamingText.isEmpty ? copy(.turnWriting) :
+                        (model.statusLine ?? copy(.turnWorking))))
+                .font(.footnote)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("chat.turn.status")
+    }
+
     private var composer: some View {
         VStack(spacing: JarvisDesignTokens.chatComposerSpacing) {
             if let confirmation = model.activeConfirmation {
@@ -628,21 +646,6 @@ struct JarvisChatScreen: View {
                 }
                 .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
                 .accessibilityElement(children: .contain)
-            }
-            if model.isSending {
-                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    JarvisOrb(activity: .thinking, size: JarvisDesignTokens.chatMiniCoreSize,
-                              isStatic: model.fixtureMode || reduceMotion)
-                    Text(model.isReconnecting ? copy(.thinkingReconnecting) :
-                            (!model.streamingText.isEmpty ? copy(.turnWriting) :
-                                (model.statusLine ?? copy(.turnWorking))))
-                        .font(.footnote)
-                        .foregroundStyle(.primary)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("chat.turn.status")
             }
             if model.shouldShowNowBar {
                 nowBar

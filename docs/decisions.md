@@ -11655,3 +11655,40 @@ No migration, worker execution or idle billing proof is claimed. Task 23 still h
 its saved branch commit and no delivery PR; do not duplicate its Prepare request.
 Copilot remains enabled after its passed live policy canary, and build 82 remains
 uploaded with Notes/Ember. Their owner acceptance is pending independently.
+
+
+### 8 November 2026 — Keep reply metadata close to its message
+
+The owner reports that the timestamp, Jarvis reply and Tool activity look detached.
+Use compact message-detail spacing and remove padding intended for a bubble from
+the unboxed Jarvis reply. Retain the shared 44-point tool disclosure, paragraph
+layout and inter-message spacing. The normal and Current/Copilot test conversations
+share the correction. This changes presentation only, not runtime/tool behavior.
+Native qualification and TestFlight delivery are pending.
+
+
+### 8 November 2026 — Defer owner Copilot comparison and save testing scope
+
+The owner has no time for the full comparison now and asks to save it. Preserve
+all prompts and steps in docs/runtime-comparison-owner-test.md and mark owner
+comparison deferred, separate from the passed automated compatibility canary.
+Consolidate unverified device behavior, accepted appearance decisions and the
+blocked Factory recovery in docs/ios/design/p15-owner-test-checklist.md.
+
+
+The owner also repeats that Writing reply is part of Chat, not the Now bar. Move
+the single status from the composer dock into the transcript between live tools
+and streamed text. This supersedes the previous pinned-row choice. Extend the
+existing turn-feedback check to require the status inside the actual ScrollView;
+retain its single-row, cleared-editor, next-draft and final tool-collapse checks.
+
+
+### 8 November 2026 — Notify only when the PC bridge is offline
+
+The owner explicitly rejects online bridge notifications. Persist online/control
+changes as dismissed state, quietly clearing any offline warning; a later offline
+transition reopens it. Identical dismissed offline observations remain dismissed.
+The Now-feed query also hides legacy online entries before any socket reconnect,
+without deleting activity history or suppressing unrelated alerts. Retain serialized
+transactional writes and refresh only after commit. SQL integration covers legacy
+rows, quiet recovery, dismissal persistence and a later outage. Deployment pending.

@@ -114,7 +114,7 @@ final class ChatPresentationUITests: XCTestCase {
 
     func testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge() {
         let app = XCUIApplication()
-        app.launchArguments = ["--screenshot-chat-fixture"]
+        app.launchArguments = ["--screenshot-chat-fixture", "-jarvis.appTheme", "dark"]
         app.launch()
 
         let reply = app.textViews["chat.reply.413"]
@@ -137,6 +137,10 @@ final class ChatPresentationUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["get calendar events"].waitForExistence(timeout: 3))
         tools.tap()
         XCTAssertFalse(app.staticTexts["get calendar events"].exists)
+        let layout = XCTAttachment(screenshot: app.screenshot())
+        layout.name = "chat-reply-time-and-tools-spacing"
+        layout.lifetime = .keepAlways
+        add(layout)
         reply.press(forDuration: 1.2)
         XCTAssertTrue(app.menuItems["Copy"].waitForExistence(timeout: 5), "Native text selection must expose Copy")
         let capture = XCTAttachment(screenshot: app.screenshot())

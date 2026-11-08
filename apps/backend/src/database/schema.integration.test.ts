@@ -1510,36 +1510,53 @@ describe('committed domain schema (groups 1-8)', () => {
     }
   });
 
-  it('preserves dismissed bridge status on identical concurrent writes and raises real changes', async () => {
+  it('shows only offline bridge warnings, clears legacy online items, and rearms after recovery', async () => {
     const changed = vi.fn();
     const first = createPcBridgeStatusStore(pool, changed);
     const restarted = createPcBridgeStatusStore(pool, changed);
-    await first.setStatus(false);
     const status = async () => (await pool.request().query(`SELECT
       CONVERT(varchar(19), id) AS id, title, at, dismissed_at
       FROM dbo.activity WHERE alert_key = N'pc_bridge_status';`)).recordset[0];
-    const initial = await status();
     const feed = createNowFeedStore(pool);
+    await first.setStatus(true);
+    const initial = await status();
+    expect(initial.dismissed_at).toBeInstanceOf(Date);
+    expect((await feed.read()).items.some((item) => item.id === initial.id)).toBe(false);
+
+    // An online item written by the previous version is hidden immediately,
+    // even before the bridge reconnects and refreshes its persisted status.
+    await pool.request().query(`UPDATE dbo.activity SET dismissed_at = NULL
+      WHERE alert_key = N'pc_bridge_status';`);
+    expect((await feed.read()).items.some((item) => item.id === initial.id)).toBe(false);
+    await restarted.setStatus(true);
+    expect((await status()).dismissed_at).toBeInstanceOf(Date);
+
+    await first.setStatus(false);
+    expect((await feed.read()).items).toContainEqual(expect.objectContaining({
+      id: initial.id, title: 'Local PC bridge is offline',
+    }));
     expect(await feed.dismiss(initial.id)).toBe(true);
     const dismissed = await status();
     await Promise.all([first.setStatus(false), restarted.setStatus(false)]);
     expect(await status()).toEqual(dismissed);
     expect((await feed.read()).items.some((item) => item.id === initial.id)).toBe(false);
+
     await restarted.setStatus(true);
-    expect(await status()).toMatchObject({
-      id: initial.id, title: 'Local PC bridge is online — Jarvis control is active', dismissed_at: null,
-    });
-    expect((await feed.read()).items.some((item) => item.id === initial.id)).toBe(true);
-    await feed.dismiss(initial.id);
     await first.setStatus(true, true);
     expect(await status()).toMatchObject({
-      id: initial.id, title: 'Local PC bridge is online — Jarvis control is paused', dismissed_at: null,
+      id: initial.id, title: 'Local PC bridge is online — Jarvis control is paused',
+      dismissed_at: expect.any(Date),
     });
-    await feed.dismiss(initial.id);
+    expect((await feed.read()).items.some((item) => item.id === initial.id)).toBe(false);
     await restarted.setStatus(false);
     expect(await status()).toMatchObject({
       id: initial.id, title: 'Local PC bridge is offline', dismissed_at: null,
     });
+    expect((await feed.read()).items.some((item) => item.id === initial.id)).toBe(true);
+    const count = await pool.request().query(`SELECT COUNT(*) AS count FROM dbo.activity
+      WHERE alert_key = N'pc_bridge_status';`);
+    expect(count.recordset[0]?.count).toBe(1);
+    await first.setStatus(true);
   });
 
   it('records each alert condition once and returns it in the Now feed', async () => {

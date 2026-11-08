@@ -3223,9 +3223,9 @@ unverified.
 P9-123 keeps dismissed attention stable across backend restarts without changing
 the feed query or dismissal route. Policy-blocked events are persisted only when
 the reason changes or a task state-change event follows the previous blocked
-reason. Identical PC bridge status titles leave the existing activity timestamp
-and dismissal untouched; a real online/offline or control-state change raises
-the alert again. Bridge startup waits two minutes before persisting offline if
+reason. Identical offline PC bridge status titles leave the existing activity timestamp
+and dismissal untouched. A return online quietly dismisses the warning; only a
+later offline transition raises it again. Online control-state changes stay quiet. Bridge startup waits two minutes before persisting offline if
 no client attaches, and shutdown does not persist offline. Live bridge status
 still reflects the socket immediately, independently of this persistence grace.
 
@@ -4464,9 +4464,12 @@ points; invalid, missing, traversing or linked-out paths are refused. This
 reuses the P7-31 `open_app`/`InstalledAppMatcher` implementation for app
 launching and adds no second launcher.
 
-Online/offline changes update one existing Now-feed activity row keyed by
-`pc_bridge_status`; the same row reports whether Jarvis control is active or
-paused. Status writes are serialized and the feed refresh happens after commit.
+Online/offline changes update one activity row keyed by `pc_bridge_status`. Online
+rows, including control-paused status, are persisted dismissed and excluded from
+the Now feed. The read query also hides legacy online rows before a reconnect.
+Offline transitions reopen the warning; identical dismissed offline observations
+stay dismissed. Status writes are serialized and the feed refresh happens after
+commit. Live control state remains available independently through the bridge.
 The tray's persisted **Pause Jarvis control** toggle reports its state over the
 authenticated WebSocket, and the bridge refuses app opening, navigation, focus,
 UI Automation actions, and browser actions while paused. Read-only window/tab
