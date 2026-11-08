@@ -19,10 +19,13 @@ jobs:
         run: gh run watch 42507483140 --interval 15 --exit-status
       - name: Download retained evidence
         run: gh run download 42507483140 --name notes-regression-evidence-1 --dir "$RUNNER_TEMP/notes-evidence"
+      - name: Prepare small review copies of retained screenshots
+        run: python3 -m pip install --quiet Pillow==11.3.0
       - name: Read source proof, results, crash diagnostics and selected screenshots
         run: |
           python3 - <<'PYCODE'
-          import base64, json, os, pathlib, re
+          import base64, io, json, os, pathlib, re, shutil, subprocess
+          from PIL import Image
           root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "notes-evidence"
           proof = json.loads((root / "provenance.json").read_text())
           assert proof["source"] == "cbd7207b7d86eaf1e4193c9660319e1eb0c11e6d"
@@ -38,7 +41,7 @@ jobs:
           def visit(value):
               if isinstance(value, dict):
                   text = " ".join(str(v) for v in value.values() if isinstance(v, str))
-                  if re.search(r"notes-large-library|Notes page order|notes-library-dark|notes-editor-dark", text):
+                  if re.search(r"notes-large-library|Notes page order|notes-folders-dark", text):
                       for v in value.values():
                           if isinstance(v, str) and v.endswith(".png"):
                               candidates.extend((root / "attachments").rglob(pathlib.Path(v).name))
@@ -50,6 +53,12 @@ jobs:
           visit(manifest)
           if not candidates:
               candidates = sorted((root / "attachments").rglob("*.png"))
+          movie = root / "attachments/14F2D757-7C99-49A3-AA3B-C109854E3C32.mp4"
+          frame = root / "editor-tap-frame.png"
+          if movie.exists() and shutil.which("ffmpeg"):
+              subprocess.run(["ffmpeg", "-loglevel", "error", "-ss", "30", "-i", str(movie),
+                              "-frames:v", "1", str(frame)], check=True)
+              candidates.insert(0, frame)
           seen = set()
           for path in candidates:
               if path.name in seen:
@@ -57,7 +66,11 @@ jobs:
               seen.add(path.name)
               if len(seen) > 4:
                   break
-              raw = path.read_bytes()
+              im = Image.open(path).convert("RGB")
+              im.thumbnail((720, 1560))
+              buffer = io.BytesIO()
+              im.save(buffer, format="JPEG", quality=85)
+              raw = buffer.getvalue()
               if len(raw) > 4000000:
                   continue
               print("NOTES_IMAGE_BEGIN " + path.name)
@@ -65,6 +78,13 @@ jobs:
               for start in range(0, len(data), 6000):
                   print("NOTES_IMAGE_DATA " + data[start:start+6000])
               print("NOTES_IMAGE_END " + path.name)
+          for filename in ["80BCC66F-F5FB-4CB1-BF49-CD3D8EDBD42E.txt",
+                           "3CEC75A0-622C-499B-8647-47914189008B.txt"]:
+              path = root / "attachments" / filename
+              if path.exists():
+                  value = path.read_text()
+                  print("NOTES_DIAGNOSTIC " + filename + " characters=" + str(len(value)))
+                  print(value[:120000])
           for path in sorted((root / "crashes").glob("*.ips")):
               print("NOTES_CRASH " + path.name)
               print(path.read_text()[:100000])
