@@ -4330,3 +4330,11 @@ is not uploaded.
   action overlay, then requalify without relaxing checks. Build 84 not uploaded.
 - Global app/assistant action parity is now an explicit requirement; this gym
   repair does not close the remaining productivity-review findings.
+
+Gym parity follow-through: Home/Health had not wired the existing manual workout
+read endpoint, and the backend's daily vault format differs from legacy app log
+filenames. A read adapter now includes saved SQL sessions (including pending vault
+copies) alongside legacy logs, before HealthKit de-duplication. Manual record IDs
+remain distinct from HealthKit IDs. Historical app vault writes remain supported;
+this change does not migrate or rewrite them. Core fixture coverage checks that
+chat-logged sessions appear, retain identity/duration and respect the date range.

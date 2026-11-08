@@ -673,14 +673,14 @@ struct JarvisHealthArea: View {
         }
         for entry in deviceWorkouts {
             let raw = entry.healthActivity ?? ([JarvisGymSessionType.chest, .back, .arms, .legs, .strength].contains(entry.session) ? "gym" : "other")
-            let identity = JarvisHealthWorkoutIdentity(id: entry.healthKitID, start: entry.performedAt,
+            let identity = JarvisHealthWorkoutIdentity(id: entry.healthKitID ?? entry.manualWorkoutID, start: entry.performedAt,
                 kind: JarvisHealthLogic.workoutKind(raw))
             guard !identities.contains(where: { $0.matches(identity) }) else { continue }
             formatter.formatOptions = [.withInternetDateTime]
             let stamp = formatter.string(from: entry.performedAt)
             var row: [String: JSONValue] = ["workout_type": .string(raw), "start_at": .string(stamp),
                 "workout_date": .string(JarvisHealthLogic.day(stamp)!), "device_only": .bool(true)]
-            if let id = entry.healthKitID { row["id"] = .string(id) }
+            if let id = entry.healthKitID ?? entry.manualWorkoutID { row["id"] = .string(id) }
             if entry.durationMinutes > 0 { row["duration_seconds"] = .number(entry.durationMinutes * 60) }
             data.workouts.items.append(row)
             identities.append(identity)

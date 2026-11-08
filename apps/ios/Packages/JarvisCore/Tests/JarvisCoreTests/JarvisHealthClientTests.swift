@@ -421,6 +421,34 @@ final class JarvisHealthClientTests: XCTestCase {
         }
     }
 
+    func testChatLoggedSessionsReachGymHistoryBeforeVaultSyncAndKeepDistinctIdentities() async throws {
+        let items: [[String: Any]] = [
+            ["id": "00000000-0000-4000-8000-000000000043", "sessionType": "chest_triceps_core",
+             "startedAt": "2026-11-08T15:49:00.000Z", "durationMinutes": 45, "vault": "pending"],
+            ["id": "00000000-0000-4000-8000-000000000044", "sessionType": "chest_triceps_core",
+             "startedAt": "2026-11-08T16:49:00.000Z", "durationMinutes": NSNull(), "vault": "synced"],
+            ["id": "00000000-0000-4000-8000-000000000045", "sessionType": "cardio",
+             "startedAt": "2026-10-08T15:49:00.000Z", "vault": "synced"],
+        ]
+        let fixture = try FixtureTransport(scenario: JSONSerialization.data(withJSONObject: [
+            "version": 1, "interactions": [[
+                "method": "GET", "path": "/api/health/workouts", "query": ["limit": "100"],
+                "response": ["statusCode": 200, "body": ["items": items]],
+            ]],
+        ]))
+        let source = JarvisManualWorkoutSource(client: JarvisHealthClient(client: try makeClient(fixture)))
+        let entries = try await source.entries(since: ISO8601DateFormatter().date(from: "2026-11-08T00:00:00Z")!)
+        XCTAssertEqual(entries.count, 2)
+        XCTAssertEqual(entries.map(\.session), [.chest, .chest])
+        XCTAssertEqual(entries.map(\.durationMinutes), [45, 0])
+        XCTAssertEqual(Set(entries.compactMap(\.manualWorkoutID)).count, 2)
+        XCTAssertTrue(entries.allSatisfy { $0.healthKitID == nil })
+        do {
+            try await source.save(entries[0])
+            XCTFail("The read adapter must not report a save")
+        } catch { XCTAssertEqual(error as? JarvisGymLogError, .unavailable) }
+    }
+
     private func makeClient(_ transport: any HTTPTransport, maximumRetries: Int = 0) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(

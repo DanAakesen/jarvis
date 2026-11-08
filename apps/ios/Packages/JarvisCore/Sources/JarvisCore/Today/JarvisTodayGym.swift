@@ -114,6 +114,7 @@ public struct JarvisGymLogEntry: Equatable, Sendable {
     /// Workout length in minutes and active energy in kilocalories; zero when the source does not know them.
     public let durationMinutes: Double
     public let activeKilocalories: Double
+    public let manualWorkoutID: String?
     public let healthKitID: String?
     public let healthActivity: String?
 
@@ -123,6 +124,7 @@ public struct JarvisGymLogEntry: Equatable, Sendable {
         lift: JarvisGymLift? = nil,
         durationMinutes: Double = 0,
         activeKilocalories: Double = 0,
+        manualWorkoutID: String? = nil,
         healthKitID: String? = nil,
         healthActivity: String? = nil,
         vaultNote: VaultNote? = nil
@@ -132,6 +134,7 @@ public struct JarvisGymLogEntry: Equatable, Sendable {
         self.lift = lift
         self.durationMinutes = durationMinutes
         self.activeKilocalories = activeKilocalories
+        self.manualWorkoutID = manualWorkoutID
         self.healthKitID = healthKitID
         self.healthActivity = healthActivity
         self.vaultNote = vaultNote

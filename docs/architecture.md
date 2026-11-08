@@ -9073,3 +9073,11 @@ The server derives create UUIDs from owner/session/message/kind/entryIndex, so
 retries return the original record. Tool schemas accept neither owner nor approval
 nor idempotency flags. Sensitive auditing omits private arguments/results. A pending
 vault copy is distinct from the committed database save. No migration is needed.
+
+Gym parity follow-through: Home/Health had not wired the existing manual workout
+read endpoint, and the backend's daily vault format differs from legacy app log
+filenames. A read adapter now includes saved SQL sessions (including pending vault
+copies) alongside legacy logs, before HealthKit de-duplication. Manual record IDs
+remain distinct from HealthKit IDs. Historical app vault writes remain supported;
+this change does not migrate or rewrite them. Core fixture coverage checks that
+chat-logged sessions appear, retain identity/duration and respect the date range.
