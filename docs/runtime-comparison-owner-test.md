@@ -1,7 +1,8 @@
 # Compare Current and Copilot
 
 Updated 8 November 2026. The owner reports that a quick Copilot conversation works
-well. A live owner tool/write comparison has not passed. Current remains the default.
+well. The first combined Copilot write test completed with friction; a paired Current
+result is pending. Current remains the default.
 The owner now requests an implementation comparison first, then a meaningful test
 design and any needed data/setup. The agenda prompt was unsuitable; the shopping
 exercise below is only an optional tool smoke test, not the recommended benchmark.
@@ -307,3 +308,52 @@ failure. Do not paste tokens or private provider logs into the scorecard.
 Afterwards, delete or complete only the clearly labelled test notes/tasks and cancel
 their reminders through Jarvis's ordinary confirmed flows. Keep any useful transcripts
 for comparison. A good test result does not automatically change the main runtime.
+
+
+## Owner Copilot run — 8 November 2026, build 85 test chat
+
+This is the isolated **Copilot · Test conversation**, not normal Chat. The owner
+reports repeated tool names, refused reads/write and a successful final reply.
+The stored note was independently read and its two commit diffs inspected:
+
+| Evidence | Result |
+| --- | --- |
+| Initial save | Vault commit `4cb08916dd5ea88becb61bab33ef32004e7003b0`, 19:25:50 UTC (20:25:50 Copenhagen) adds only `Personal/HARNESS-CHECK-COPILOT-85.md` |
+| Revision | `7030beb442bbd1147d70e168beaafe5a9043653b`, 19:26:07 UTC (20:26:07 Copenhagen) modifies only that same note |
+| Requested change | Work status moves from v1 to phase 2; tasks, Electron/React/TypeScript, always-on-top, dragging/snapping, full-app link and exclusions remain |
+| Claim discipline | The saved plan separates default-branch facts, another branch's scaffold and unverified sign-in/Windows behavior |
+| Friction | Screenshots report 51 tool calls, at least two refused reads, one refused write and a failed repo list followed by successful calls |
+| Missing evidence | Actual rejected payload/reason, every call's arguments, exact total elapsed time/cost and proof of each tool readback are not independently available |
+
+Both runtime-test and normal Chat already replace start/finish events by activity
+UUID. The backend assigns one UUID per invocation, and history reads one audit row
+per call. This argues against simple start/finish double-counting, but the exact
+51 live calls have not been audited. Different calls to `repo_list` may inspect
+different directories; identical visible names do not prove identical arguments.
+Presentation grouping must retain counts/outcomes and does not reduce model calls.
+
+The shared vault capture filter rejects credential keywords even in ordinary
+planning prose, so a false positive is plausible. The exact first refused content
+is unavailable: do not assert this caused the owner's refusal. A missing note is
+also returned as ToolRefusal and shown as “Not allowed”; hidden instruction files
+are allowed for reading (only dot-path writes are barred).
+
+Keep this backend/catalogue unchanged while the owner runs the **same prompt** in
+a fresh **Current test conversation**, changing only the labelled note name to
+`HARNESS-CHECK-CURRENT-85` and retaining model/reasoning settings. Compare saved
+content/revisions, requirement preservation, truthful limitations, actual retries,
+progress and timing. Record source/runtime versions and any intervening repo or
+vault changes; this is a practical comparison, not an isolated performance trial.
+Do not change the prompt halfway through the pair. A same-message revision does
+not replace the separate two-turn carryover/policy tests, and test-chat success
+does not qualify normal Chat, voice or Home entry.
+
+
+### Current follow-up and comparison gate
+
+The owner ran Current and received only generic recovery text after 20 displayed
+tool attempts. Readback of `Personal/HARNESS-CHECK-CURRENT-85.md` returned not found.
+This confirms no delivered final reply/no note at the expected path; it does not
+prove no tools ran. The owner explicitly requests Current be repaired before
+comparing the harnesses. Do not select a winner or substitute a simpler prompt.
+After the repair, repeat the matched exercise and preserve these failure records.

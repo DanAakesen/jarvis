@@ -153,6 +153,7 @@
 
 "chat.turn.working" = "Arbejder…";
 "chat.turn.writing" = "Skriver svar…";
+"chat.turn.toolCall" = "Kald";
 "chat.turn.tools" = "Værktøjsaktivitet";
 "chat.turn.toolRunning" = "Kører";
 "chat.turn.toolOK" = "Færdig";

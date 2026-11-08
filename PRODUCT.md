@@ -2649,6 +2649,9 @@ Keep all of it inside the scrolling conversation, never attached to the Now bar.
 Hide message timestamps until the owner taps a message; keep native text selection.
 Use actual elapsed time and observed progress, with no fabricated ETA or private
 reasoning. Apply to normal Chat and Current/Copilot test conversations.
+Group consecutive calls to the same tool into one expandable row with the actual
+attempt count. Keep refusals/failures visible even when a later attempt succeeds.
+Expanding shows numbered attempts; never repeat the tool name in adjacent rows.
 
 ## App and assistant capability parity (8 November 2026)
 

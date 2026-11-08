@@ -11988,3 +11988,15 @@ failure classifications. No permissions or service configuration change; retain
 only timestamps and existing safe codes in workflow output. The isolated Current
 test delivered no final answer and its expected note is absent; this is a valid
 failed comparison result, not a reason to issue another mutation test blindly.
+
+
+## 2026-11-08 — Group consecutive tool attempts, preserve comparison baseline
+
+The owner requests no adjacent repetition of the same tool name. Use one disclosure
+row with count and visible refused/failed totals; expanded rows show numbered
+attempts and their outcomes. Preserve chronology and real call totals. Apply the
+same component to normal and isolated test Chat, and qualify both surfaces.
+Copilot's saved initial/revised note is verified, but 51 displayed attempts and
+refusals remain friction findings. Keep the backend unchanged for the paired
+Current run; do not infer the exact refusal cause from a generic UI label or claim
+that the isolated test establishes normal Chat reliability.

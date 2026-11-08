@@ -371,11 +371,8 @@ struct JarvisChatScreen: View {
                                 }
                                 if model.isSending { turnStatus }
                                 if model.isSending && liveToolsExpanded && !model.liveTools.isEmpty {
-                                    VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
-                                        ForEach(model.liveTools) { tool in
-                                            toolRow(name: tool.toolName, outcome: tool.outcome)
-                                        }
-                                    }
+                                    JarvisChatToolActivityList(groups: ChatToolActivityGroup.grouping(model.liveTools),
+                                                              language: appLanguage, identifierPrefix: "chat.live")
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .accessibilityIdentifier("chat.tools.live")
                                 }
@@ -486,27 +483,11 @@ struct JarvisChatScreen: View {
             }
             .accessibilityValue(copy(expanded ? .menuExpanded : .menuCollapsed))
             if expanded {
-                ForEach(tools, id: \.id) { tool in toolRow(name: tool.tool, outcome: tool.outcome) }
+                JarvisChatToolActivityList(groups: ChatToolActivityGroup.grouping(tools),
+                                          language: appLanguage, identifierPrefix: "chat.\(messageID)")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func toolRow(name: String, outcome: ChatToolOutcome?) -> some View {
-        HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-            if let outcome {
-                Image(systemName: outcome == .ok ? "checkmark.circle" : "exclamationmark.circle")
-                    .foregroundStyle(outcome == .ok ? Color.secondary : Color.orange)
-                    .accessibilityHidden(true)
-            } else {
-                JarvisLoadingView(size: .inline)
-            }
-            Text(name.replacingOccurrences(of: "_", with: " "))
-            Text(copy(outcome.map { $0 == .ok ? .toolOK : ($0 == .refused ? .toolRefused : .toolError) } ?? .toolRunning))
-                .foregroundStyle(.secondary)
-        }
-        .font(.caption)
-        .accessibilityElement(children: .combine)
     }
 
     private func messageBubble(
