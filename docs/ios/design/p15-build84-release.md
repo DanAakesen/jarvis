@@ -1,6 +1,65 @@
-# Build 84 delivery record (candidate)
+# Build 84 delivery record
 
 Updated 8 November 2026. Device acceptance remains separate from automated checks.
+
+## Latest verified state
+
+PR #1646 merged as `4c60ba94a35c0eb81ec998cd5225bfb567ed305b`, with complete tree
+identity to qualified head `737c6bcc1fc81b1f26e065b69641cbce6282a2f3`.
+CI 42501191916 and CodeQL passed, including all 526 Core tests. Native 42500193416
+passed all six changed interaction cases on 7d59f447 (identical app/Core source):
+runtime isolation, real word selection, live progress, steering, staged lift edit/
+save/reopen/delete and header navigation. Actual captures were inspected.
+The selector-only follow-up 42501271718 passed on the final head with zero failures
+or skips in 104.578 seconds, under unchanged test limits.
+
+Retained native evidence: artifact 13625149636, SHA256
+`83b3491aa38a3039f58b9c28cd2c1ef7614ae5bdf41061ed1010de13b4612d0e`;
+final-selector artifact 13626545673, SHA256
+`ff09cc651ff7c6ebf3cc695e2cccaaf4498e563c8f34c6323ebae062b1c57436`.
+Unchanged Notes, notification and chrome cases passed in 42492967707; its old lift
+failure was fixed and separately requalified above, not waived.
+
+Deploy 42502357217 passed backend/agent deployment, readiness and live conversation
+acceptance. TestFlight run 42503950006 uploaded build 84 from b6b515d9 and completed
+successfully at 17:22 UTC on 8 November. Its app/Core source is unchanged from the
+qualified app candidate. The owner has confirmed testing build 84 on device. Extra deployment 42503216228 also passed. Copilot's gym catalogue
+refresh 42503779972 failed after version creation while reading the inventory;
+read-only inspection 42505663536 failed without writes. PR #1651 corrected pagination
+and exact-version reconciliation and merged after full CI passed on retry. Deploy
+42507969183 passed normal acceptance. Read-only inspection 42509996653 then found
+one matching version, and refresh 42510264543 passed the fresh managed two-turn
+canary plus live acceptance at 18:34 UTC. Copilot is now ready for owner retesting;
+full Current/Copilot quality comparison is still pending. Later entries below
+preserve investigation history; this section is the current qualification state.
+
+Factory quota is separate: #1649 merged as `b6b515d9` after full CI 42502476758.
+Live quota run 42503224623 received HTTP 403 AuthorizationFailed during quota
+inspection, before any quota write. The 128 GiB worker is not provisioned and Task 23
+is not complete. See [the quota runbook](../../factory-worker-quota.md).
+
+
+## New owner findings after the build
+
+The owner confirmed that build 84 freezes when opening the Notes right sidebar;
+the app does not close. The shared phrase/Overview is also missing. PR #1653
+restores those components. Native run 42507483140 passed the page-order test but
+failed the 1,003-note responsiveness test at the unchanged 120-second limit, and
+both editor-entry cases. The actual device cause is not yet proven. Retained
+screenshots/hierarchy show the restored header and the editor-test target below
+the footer. The corrected candidate then passed native run 42510119801 (four tests, no failures/skips)
+and all 530 Core tests. Actual captures were reviewed. The repair merged as #1653
+and TestFlight 85 uploaded successfully in 42511641193; owner retesting is pending;
+preserve the approved carousel, folder sheet and editor.
+
+The owner separately confirmed that header/footer transparency now works well
+across pages in build 84. Both previously reported chrome regressions are accepted.
+Do not change shared header/footer behavior as part of the Notes repair.
+
+Apple Watch implementation is in Jarvis2 secondary's draft PR #1652, still open
+at head f903bf11 on 8 November.
+Primary remains responsible for integration, qualification and release. That report
+does not establish completed implementation or a Watch build.
 
 ## Changes
 

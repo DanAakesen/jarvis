@@ -9115,3 +9115,12 @@ unexecuted successful deployment.
 ## Apple Watch companion boundary (8 November 2026)
 
 XcodeGen JarvisWatch embeds JarvisWatchWidgets and is embedded by the phone app. Both use portable JarvisCore; Watch-native shared controls live under apps/ios/Watch. A Codable WatchConnectivity allow-list connects Watch to the paired phone. JarvisWatchBridge owns authenticated chat/health/lift/Factory reads/writes and VoiceSessionClient; credentials remain on phone. Watch VoiceAudioEngine captures/plays PCM16 through ordered acknowledged messages. Phone expires voice after 15 seconds without Watch heartbeat. Existing VoiceLiveActivityController controls the same session. No backend endpoint, infrastructure or production configuration is added. Display-only Health snapshots cross application context and expire in 15 minutes or date rollover. No offline mutation queue. See docs/ios/design/watch/implementation.md for verification limits.
+
+### Notes recent-library projection
+
+JarvisNotesArea keys its cancellable projection by graph nodes, local visit history
+and calendar day. JarvisCore parses each distinct timestamp once, sorts on Date
+values and groups against the caller's calendar. A detached task builds the value;
+only its noncancelled result is published on the main actor. LazyVStack/Section
+keeps individual note rows lazy, with shared per-row grouped material corners.
+Neither the shared page chrome nor the complete underlying inventory is changed.

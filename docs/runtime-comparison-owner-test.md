@@ -6,6 +6,18 @@ The owner now requests an implementation comparison first, then a meaningful tes
 design and any needed data/setup. The agenda prompt was unsuitable; the shopping
 exercise below is only an optional tool smoke test, not the recommended benchmark.
 
+## Current readiness
+
+Copilot is ready for owner retesting after the catalogue refresh and fresh live
+two-turn canary passed in Deploy 42510264543 at 18:34 UTC on 8 November. Read-only
+inspection 42509996653 first verified one matching version. Start a fresh Copilot
+test conversation for the updated catalogue, including the new gym tools.
+
+This verifies compatibility and current instructions/tool registration. It does
+not demonstrate better answer quality, successful owner gym writes, lower cost or
+better latency. The controlled comparison below is still pending. Current remains
+the default, and the full owner test is saved here for a later session.
+
 ## What is actually different today
 
 This comparison concerns the Foundry Microsoft Copilot chat harness. Factory's

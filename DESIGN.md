@@ -3723,3 +3723,22 @@ visual design is unchanged; repeat the real interaction checks.
 ## Apple Watch implementation (8 November 2026)
 
 The six owner-approved [Watch references](docs/ios/design/watch/README.md) define Home, Chat and four complications. Home has compact Voice, Dictate and Factory rows with left icons, menu top right and Jarvis top left. Chat uses iOS-style amber user bubbles and plain assistant replies, small mic/voice controls inside the message input, and manual Send. WatchDesign.swift adapts shared controls to watchOS because iOS JarvisControls depends on UIKit. Native-size/accessibility and device acceptance are tracked in the implementation handoff.
+
+## Notes regression correction (8 November 2026)
+
+The owner reports that the shared phrase and overview disappeared from Notes.
+Restore the original scrolling order: data phrase, Overview, Notes / Tasks / Graph,
+then the approved Pinned carousel and Recent library. Keep the title-only pinned
+tiles, Browse folders sheet with New folder on the right, and rendered editor with
+Raw and Done. This corrects the earlier tabs-first implementation record; it does
+not replace the approved browsing and editing design. The right sidebar crash is
+a separate open finding, not resolved by restoring the header.
+
+
+## Notes library responsiveness and accepted chrome — 8 November 2026
+
+The shared phrase and Overview remain above Notes/Tasks/Graph. Preserve the
+owner-accepted build 84 header/footer transparency and scroll-behind behavior.
+Recent notes keep their grouped appearance while each row is created lazily;
+the full inventory remains reachable. The title-only pinned carousel, right-aligned
+New folder action and approved formatted/Raw editor remain unchanged.
