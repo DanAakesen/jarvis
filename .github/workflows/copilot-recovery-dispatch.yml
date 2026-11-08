@@ -1,0 +1,26 @@
+# Temporary primary-thread recovery runner. Never merge this branch.
+# Dispatches the existing main-only workflow; all qualification/OIDC/acceptance gates remain there.
+name: Copilot inventory recovery dispatch
+on:
+  push:
+    branches: [codex/copilot-recovery-dispatch]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: DanAakesen/jarvis
+    steps:
+      - name: Require the qualified main revision
+        run: |
+          test "$(gh api repos/DanAakesen/jarvis/git/ref/heads/main --jq .object.sha)" = "c79371d7f60de63752705f4ab9354f4c4500a2c8"
+      - name: Wait for its normal deployment and acceptance
+        run: gh run watch 42507969183 --interval 20 --exit-status
+      - name: Inspect existing Copilot versions without provisioning
+        run: |
+          test "$(gh api repos/DanAakesen/jarvis/git/ref/heads/main --jq .object.sha)" = "c79371d7f60de63752705f4ab9354f4c4500a2c8"
+          gh workflow run deploy.yml --repo DanAakesen/jarvis --ref main -f inspect_managed_chat=true
