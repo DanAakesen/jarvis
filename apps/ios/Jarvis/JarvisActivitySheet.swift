@@ -442,6 +442,8 @@ private struct JarvisSwipeToDismiss: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // Keep task links and dismiss buttons individually reachable inside the swipe group.
+            .accessibilityElement(children: .contain)
             .offset(x: offset)
             .opacity(1 - min(abs(offset) / (threshold * 3), 0.4))
             .simultaneousGesture(

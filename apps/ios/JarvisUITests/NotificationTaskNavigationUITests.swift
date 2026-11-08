@@ -74,6 +74,7 @@ final class NotificationTaskNavigationUITests: XCTestCase {
         XCTAssertTrue(bell.waitForExistence(timeout: 10))
         bell.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(app.scrollViews["activity.list"].waitForExistence(timeout: 10))
+        captureHierarchy("notification-controls")
     }
 
     private func reveal(_ identifier: String) -> XCUIElement {
@@ -83,6 +84,7 @@ final class NotificationTaskNavigationUITests: XCTestCase {
             app.scrollViews["activity.list"].swipeUp()
         }
         capture("missing-\(identifier)")
+        captureHierarchy("missing-\(identifier)-hierarchy")
         XCTFail("Notification control is not reachable: \(identifier)")
         return row
     }
@@ -95,6 +97,13 @@ final class NotificationTaskNavigationUITests: XCTestCase {
 
     private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    private func captureHierarchy(_ name: String) {
+        let attachment = XCTAttachment(string: app.debugDescription)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
