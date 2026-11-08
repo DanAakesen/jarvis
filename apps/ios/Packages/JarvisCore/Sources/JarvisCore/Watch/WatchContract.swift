@@ -45,13 +45,14 @@ public struct WatchReply: Codable, Sendable {
 }
 
 public struct WatchEvent: Codable, Sendable {
-    public enum Kind: String, Codable, Sendable { case chatDelta, chatDone, chatError, voiceState, voiceAudio, voiceTranscript, interrupt }
+    public enum Kind: String, Codable, Sendable { case chatDelta, chatDone, chatError, voiceState, voiceAudio, voiceTranscript, voiceUserTranscript, interrupt }
     public var kind: Kind
     public var requestID: UUID
     public var text: String?
     public var responseID: String?
-    public init(_ kind: Kind, requestID: UUID, text: String? = nil, responseID: String? = nil) {
-        self.kind = kind; self.requestID = requestID; self.text = text; self.responseID = responseID
+    public var muted: Bool?
+    public init(_ kind: Kind, requestID: UUID, text: String? = nil, responseID: String? = nil, muted: Bool? = nil) {
+        self.kind = kind; self.requestID = requestID; self.text = text; self.responseID = responseID; self.muted = muted
     }
 }
 

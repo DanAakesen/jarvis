@@ -56,5 +56,6 @@ struct WatchChatView: View {
             }.background(.black)
         }
         .task { if model.messages.isEmpty { await model.history() } }
+        .onChange(of: connection.reachable) { _, reachable in if reachable && !model.busy { Task { await model.history() } } }
     }
 }

@@ -7,7 +7,11 @@ import JarvisCore
 final class WatchModel: ObservableObject {
     struct Message: Identifiable { var id = UUID().uuidString; var user: Bool; var text: String }
     @Published var messages: [Message] = []
-    @Published var draft = ""
+    @Published private var composer = WatchComposer()
+    var draft: String {
+        get { composer.draft }
+        set { composer.draft = newValue }
+    }
     @Published var busy = false
     @Published var error: String?
     @Published var voiceID: UUID?
@@ -27,7 +31,14 @@ final class WatchModel: ObservableObject {
         }
         #endif
         connection.onEvent = { [weak self] in self?.receive($0) }
-        connection.onDisconnect = { [weak self] in self?.stopLocalVoice(state: "Disconnected") }
+        connection.onDisconnect = { [weak self] in
+            guard let self else { return }
+            self.stopLocalVoice(state: "Disconnected")
+            self.busy = false; self.turn = nil; self.composer.finishSend(success: false)
+            self.error = "iPhone unavailable. Reconnect and check history before sending again."
+        }
+    }
+    private func configurePlaybackCompletion() {
         audio.setPlaybackFinishedHandler { [weak self] responseID, audible in
             Task { @MainActor in
                 guard let self, let id = self.voiceID else { return }
@@ -43,17 +54,16 @@ final class WatchModel: ObservableObject {
         } catch { show(error) }
     }
     func send() async {
-        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !busy, !text.isEmpty, voiceID == nil else { return }
+        guard !busy, voiceID == nil, let text = composer.beginSend() else { return }
         let request = WatchRequest(action: .sendTurn, text: text)
         busy = true; error = nil; turn = request.id
         let responseID = UUID().uuidString; replyID = responseID
         messages.append(.init(user: true, text: text)); messages.append(.init(id: responseID, user: false, text: "Working…"))
         do {
             _ = try await connection.request(request)
-            draft = ""
+            composer.finishSend(success: true)
         } catch {
-            busy = false; turn = nil
+            busy = false; turn = nil; composer.finishSend(success: false)
             messages.removeAll { $0.id == responseID }
             show(error)
         }
@@ -73,6 +83,7 @@ final class WatchModel: ObservableObject {
             guard epoch == voiceGeneration else { return }
             guard let data = result.data else { throw WatchFailure.failed }
             voiceID = try JSONDecoder().decode(UUID.self, from: data)
+            configurePlaybackCompletion()
             let stream = try audio.startCapture()
             capture = Task { [weak self] in
                 for await bytes in stream {
@@ -94,7 +105,8 @@ final class WatchModel: ObservableObject {
     }
     func setMuted() async {
         guard let id = voiceID else { return }
-        do { _ = try await connection.request(.init(action: .muteVoice, itemID: id.uuidString, flag: !muted)); muted.toggle() }
+        let next = !muted
+        do { _ = try await connection.request(.init(action: .muteVoice, itemID: id.uuidString, flag: next)); muted = next }
         catch { show(error) }
     }
     func endVoice() async {
@@ -124,15 +136,19 @@ final class WatchModel: ObservableObject {
         guard event.requestID == voiceID else { return }
         switch event.kind {
         case .voiceState:
+            if let muted = event.muted { self.muted = muted }
             if event.text == "Ended" || event.text == "Disconnected" { stopLocalVoice(state: event.text ?? "Ended") }
             else if event.text == "Playback finished" { audio.finishPlayback(responseID: event.responseID) }
-            else { voiceState = event.text ?? ""; if event.text == "Muted" { muted = true }; if event.text == "Listening" { muted = false } }
+            else { voiceState = event.text ?? "" }
         case .voiceAudio:
             do { try audio.enqueuePlayback(event.text ?? "", responseID: event.responseID) }
             catch { Task { await endVoice() }; show(error) }
         case .voiceTranscript:
-            if messages.last?.id == event.requestID.uuidString { messages[messages.count - 1].text += event.text ?? "" }
-            else { messages.append(.init(id: event.requestID.uuidString, user: false, text: event.text ?? "")) }
+            let id = event.responseID ?? event.requestID.uuidString
+            if messages.last?.id == id { messages[messages.count - 1].text += event.text ?? "" }
+            else { messages.append(.init(id: id, user: false, text: event.text ?? "")) }
+        case .voiceUserTranscript:
+            messages.append(.init(id: event.responseID ?? UUID().uuidString, user: true, text: event.text ?? ""))
         case .interrupt: audio.stopPlayback()
         default: break
         }

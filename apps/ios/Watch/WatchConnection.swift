@@ -97,6 +97,10 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData) else { return }
         Task { @MainActor in self.onEvent?(event) }
     }
+    nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data, replyHandler: @escaping (Data) -> Void) {
+        guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData) else { replyHandler(Data()); return }
+        Task { @MainActor in self.onEvent?(event); replyHandler(Data([1])) }
+    }
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         let data = applicationContext["health"] as? Data
         Task { @MainActor in
