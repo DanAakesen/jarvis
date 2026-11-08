@@ -1,3 +1,12 @@
+## Current test-chat failure investigation — 8 November 2026
+
+The same combined owner test ends in generic recovery text after 20 displayed
+tool attempts; the expected Personal/HARNESS-CHECK-CURRENT-85.md is absent on
+readback. Copilot saved both revisions. Treat Current as failed completion for
+this case; do not ask the owner to rerun it or infer a timeout from the UI text.
+A bounded, read-only failure-code diagnostic is prepared to obtain server evidence
+without replaying mutations or exposing raw logs. Live cause remains unverified.
+
 ## Home Today workout totals — 8 November 2026
 
 Owner confirmed the Notes page is fixed after build 85. New report: Home's Today

@@ -11979,3 +11979,12 @@ Apple processing/device availability and owner acceptance of the Notes sidebar
 freeze correction remain unverified. The owner's acceptance of build 84 shared
 header/footer transparency remains valid. Copilot's fresh catalogue/canary is
 ready; the full comparison and gym write checks remain owner tests.
+
+
+## 2026-11-08 — Diagnose the failed Current comparison without replay
+
+Use existing deploy identity access for a fixed, main-only read of recent backend
+failure classifications. No permissions or service configuration change; retain
+only timestamps and existing safe codes in workflow output. The isolated Current
+test delivered no final answer and its expected note is absent; this is a valid
+failed comparison result, not a reason to issue another mutation test blindly.

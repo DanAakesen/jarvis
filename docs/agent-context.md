@@ -7791,3 +7791,15 @@ Apple processing/device availability and owner acceptance of the Notes sidebar
 freeze correction remain unverified. The owner's acceptance of build 84 shared
 header/footer transparency remains valid. Copilot's fresh catalogue/canary is
 ready; the full comparison and gym write checks remain owner tests.
+
+
+## Read-only chat failure diagnostics (8 November 2026)
+
+The owner reports Current failing in isolated test Chat while Copilot completes.
+Use manual main-only Chat failure diagnostics to read the configured Jarvis
+backend's conversation.reply_failed records from the existing workspace for the
+last 12 hours (maximum 50). It publishes only timestamps and allowlisted failure
+codes, never user content, raw errors, provider payloads or credentials. It does
+not change RBAC/configuration, replay a turn, create notes or deploy a service.
+Unknown causes stay unclassified. Permission/query failure is explicit; no role
+grant or broader log query is automatic. Script and workflow are check-only inputs.
