@@ -5,8 +5,8 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: 6c80ca481e7cdc3add0d2a631aa5677d45c3143b
-  TASK_IOS_TREE: d240fb0ee7a48fc34b47a04b434e076fb33b8db6
+  TASK_SOURCE_SHA: 29aafa99770115179a0db41b2e9a86ffe30daf80
+  TASK_IOS_TREE: 9faf917fab47af0abc8631a07cd39fb0ab2d3c37
 jobs:
   gallery:
     name: Verify notification tasks, Factory history and Chat
@@ -27,7 +27,7 @@ jobs:
           import json, os, pathlib, subprocess
           git = lambda value: subprocess.check_output(["git", "rev-parse", value], text=True).strip()
           changed = subprocess.check_output(["git", "diff", "--name-only", "1008ea6758f6fb66d05942c6717cbf736f5ebbda", "HEAD", "--", "apps/ios"], text=True).splitlines()
-          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["LiftEditingUITests", "ChatTurnFeedbackUITests", "ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge", "ChatComposerUITests/testRuntimeTestKeepsNormalDraftAndHistorySeparate", "NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered"], "changed_ios_paths":changed, "prior_run":42492967707, "qualification_scope":"elapsed clock, continuing public updates, tap-only time with native selection, runtime test progress, navigation and lift precision/swipes; unchanged per-test limits", "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["LiftEditingUITests", "ChatTurnFeedbackUITests", "ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge", "ChatComposerUITests/testRuntimeTestKeepsNormalDraftAndHistorySeparate", "NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered"], "changed_ios_paths":changed, "prior_run":42496126403, "qualification_scope":"elapsed clock, continuing public updates, tap-only time with native selection, runtime test progress, navigation and lift precision/swipes; unchanged per-test limits", "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
           pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
           PYCODE
       - name: Select pinned Xcode 26.6
