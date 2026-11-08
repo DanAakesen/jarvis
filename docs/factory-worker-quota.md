@@ -30,8 +30,19 @@ tokens or provider response bodies. Once both readbacks show at least two free
 vCPUs, use the existing Runner deploy provisioning path, verify real disk capacity
 and idle deallocation, then recover saved task 23. Do not create a duplicate task.
 
-No live quota increase has been submitted by this change. It is ready for
-qualification and the subscription access prerequisite.
+PR #1649 passed full CI 42502476758 and merged as `b6b515d9`. The authorized
+live attempt [42503224623](https://github.com/DanAakesen/jarvis/actions/runs/42503224623)
+failed on its first quota read with `Quota API HTTP 403: AuthorizationFailed`.
+No quota request was submitted and no capacity was changed. Artifact 13625869545
+retains the sanitized result, SHA256
+`3dedf9ac7c88aa3955fa16b7afce24fd7dd17968644b87b30642fa046badf076`.
+
+To supply the missing access, a subscription administrator can open Azure Portal
+→ Subscriptions → the Jarvis subscription → Access control (IAM) → Add role
+assignment, select **Quota Request Operator**, and select the service principal
+**jarvis-github-deploy**. Once the role is effective, rerun the existing workflow;
+the failed attempt made no write to reconcile. Provider registration remains a
+prerequisite if it has not already been done.
 
 References: [quota API prerequisites](https://learn.microsoft.com/en-us/rest/api/quota/),
 [request contract](https://learn.microsoft.com/en-us/rest/api/quota/quota/create-or-update?view=rest-quota-2025-09-01),

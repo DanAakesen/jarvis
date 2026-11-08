@@ -11836,3 +11836,12 @@ registration are prerequisites. Submission, Azure approval, provisioning and idl
 verification are separate states. Unknown quota-write outcomes are inspected,
 not automatically retried. Implementation has eight passing focused tests;
 no live quota request is claimed. See docs/factory-worker-quota.md.
+
+## 8 November 2026 — Keep delivery status visible across workstreams
+
+Dan explicitly requested recurring concise status bullets for gym chat logging;
+chat/navigation/lift editing; Notes/Background 3; Copilot; 128 GiB/Factory; and
+approvals/timeouts. Report implementation, qualification, deployment, readiness
+for owner testing and acceptance separately. A blocked item names its observed
+reason and next action. Keep PLAN.md and the build delivery record current;
+passing automated checks does not establish owner-device acceptance.
