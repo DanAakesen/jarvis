@@ -35,7 +35,7 @@ struct WatchHealthList: View {
             if loading { ProgressView() }
             if let failure { Text(failure); Button("Retry") { Task { await load() } } }
             else if !loading && rows.isEmpty { Text(lifts ? "No lifts recorded" : "No workouts in the last 7 days") }
-            ForEach(rows.indices, id: \.self) { index in
+            ForEach(0..<rows.count, id: \.self) { index in
                 let row = rows[index]
                 if lifts {
                     NavigationLink {
@@ -179,4 +179,9 @@ struct WatchFactoryTasks: View {
         do { tasks = try await connection.load(.factoryTasks, id: project.id) }
         catch { self.error = (error as? WatchFailure)?.message ?? "Tasks unavailable" }
     }
+}
+
+private extension JSONValue {
+    var stringValue: String? { if case .string(let value) = self { return value }; return nil }
+    var numberValue: Double? { if case .number(let value) = self { return value }; return nil }
 }
