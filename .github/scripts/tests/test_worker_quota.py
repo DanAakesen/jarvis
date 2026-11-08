@@ -81,6 +81,21 @@ class WorkerQuotaTests(unittest.TestCase):
         self.assertEqual(actual, {'catalogueResourceNames': ['cores'], 'computeUsage': [
             {'resource': 'standardDASv5Family', 'limit': 0, 'usage': 0, 'requiredLimit': 2}]})
 
+    def test_integral_json_numbers_are_counts_but_fractional_values_are_not(self):
+        self.assertEqual(quota.required_limit(0.0, 0.0), 2)
+        self.assertEqual(quota.required_limit(20.0, 1.0), 20)
+        for value in [True, -1.0, 0.5, float('nan'), float('inf'), '0', None]:
+            with self.assertRaises(ValueError):
+                quota.required_limit(value, 0)
+
+    def test_unrelated_catalogue_rows_do_not_block_approved_name(self):
+        client = quota.QuotaClient('00000000-0000-4000-8000-000000000000')
+        client.request = lambda *args: ({'value': [
+            {'name': None}, {'name': 'unrelated quota'},
+            {'name': 'resource-id', 'properties': {'name': {'value': 'standardDASv5Family'}}},
+        ]}, None)
+        self.assertEqual(client.resolve_resource('standardDASv5Family'), 'standardDASv5Family')
+
     def test_inspection_never_submits(self):
         client = FakeQuota()
         result = self.run_request(client, False)

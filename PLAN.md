@@ -4432,3 +4432,8 @@ chat-logged sessions appear, retain identity/duration and respect the date range
 ### 8 November — live quota follow-up
 
 GitHub authentication is working again. Provisioning run 42525578592 reached Azure but failed with InvalidTemplateDeployment / QuotaExceeded; worker routing remains inactive. Quota run 42524952522 failed before writes because an approved resource was absent from its catalogue. The quota diagnostic now retains validated catalogue names, the missing requested name, and only the two approved Compute usage/limit records. This read-only evidence is needed to distinguish catalogue coverage from actual capacity; no resource allocation or quota write is added.
+
+
+### 8 November — Compute registered, quota response handling
+
+The owner registered Microsoft.Compute (Microsoft.Quota was already registered). Run 42527062741 now fails local quota response validation rather than the prior missing catalogue error; direct provisioning 42527158192 still returns QuotaExceeded. Treat integral JSON numeric values as integer counts, preserve rejection of fractions/booleans/unknowns, and resolve approved resource names using properties.name.value as documented by Azure. Ignore unrelated catalogue rows rather than allowing their metadata shape to abort the approved lookup. The precise triggering response field remains unverified; no quota submission or provisioning success is claimed.

@@ -12048,3 +12048,13 @@ GitHub authentication is working again. Provisioning run 42525578592 reached Azu
 ## 2026-11-08 — Authentication restored; quota service remains unresolved
 
 GitHub API access and workflow dispatch work again. Actual worker provisioning 42525578592 failed QuotaExceeded and did not activate routing. Diagnostic run 42526613341 returned an empty Sweden Central quota catalogue and no matching Compute usage records. No quota increase has been submitted. Subscription access is fixed, but provider registration/regional availability still needs verification; do not label this as an authentication blocker or invent a numerical quota limit.
+
+
+### 8 November — Compute registered, quota response handling
+
+The owner registered Microsoft.Compute (Microsoft.Quota was already registered). Run 42527062741 now fails local quota response validation rather than the prior missing catalogue error; direct provisioning 42527158192 still returns QuotaExceeded. Treat integral JSON numeric values as integer counts, preserve rejection of fractions/booleans/unknowns, and resolve approved resource names using properties.name.value as documented by Azure. Ignore unrelated catalogue rows rather than allowing their metadata shape to abort the approved lookup. The precise triggering response field remains unverified; no quota submission or provisioning success is claimed.
+
+
+### Backend CI budget correction
+
+Run 42527387309 completed backend tests but cancelled the final build at the job’s 10-minute limit (GitHub annotation confirms timeout). Increase this job allowance to 15 minutes, matching the neighboring bridge/container jobs. All lint, tests and build steps remain unchanged; this is CI execution capacity, not an application/chat timeout.

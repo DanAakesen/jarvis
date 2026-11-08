@@ -21,10 +21,16 @@ RESOURCES = ('standardDASv5Family', 'cores')
 API_VERSION = '2025-09-01'
 
 
+def quota_count(value):
+    if type(value) is int and value >= 0:
+        return value
+    if type(value) is float and value.is_integer() and 0 <= value <= 2**53:
+        return int(value)
+    raise ValueError('Invalid quota limit or usage')
+
+
 def required_limit(limit, usage):
-    if any(type(value) is not int or value < 0 for value in (limit, usage)):
-        raise ValueError('Invalid quota limit or usage')
-    return max(limit, usage + 2)
+    return max(quota_count(limit), quota_count(usage) + 2)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -39,6 +45,7 @@ class QuotaClient:
         self.base = f'https://management.azure.com{self.scope}/providers/Microsoft.Quota/'
         self.token = None
         self.resource_names = None
+        self.response_stage = 'not_started'
         self.opener = urllib.request.build_opener(NoRedirect())
 
     def request(self, method, url, payload=None):
@@ -82,11 +89,12 @@ class QuotaClient:
             names = {}
             url = f'{self.base}quotas?api-version={API_VERSION}'
             for _ in range(20):
+                self.response_stage = 'catalogue_read'
                 page, _ = self.request('GET', url)
                 for row in page['value']:
-                    name = row['name']
-                    if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,120}', name):
-                        raise ValueError('Invalid quota resource name')
+                    name = row.get('properties', {}).get('name', {}).get('value') or row.get('name')
+                    if not isinstance(name, str) or name.casefold() not in {x.casefold() for x in RESOURCES}:
+                        continue
                     key = name.casefold()
                     if key in names and names[key] != name:
                         raise ValueError('Ambiguous quota resource name')
@@ -116,7 +124,7 @@ class QuotaClient:
         for row in json.loads(response.stdout):
             name = row.get('name', {}).get('value', '')
             if isinstance(name, str) and name.casefold() in wanted:
-                limit, used = row['limit'], row['currentValue']
+                limit, used = quota_count(row['limit']), quota_count(row['currentValue'])
                 rows.append({'resource': name, 'limit': limit, 'usage': used,
                              'requiredLimit': required_limit(limit, used)})
         result['computeUsage'] = rows
@@ -124,10 +132,14 @@ class QuotaClient:
 
     def snapshot(self, resource):
         resource = self.resolve_resource(resource)
+        self.response_stage = 'quota_read'
         quota, _ = self.request('GET', self.url('quotas', resource))
+        self.response_stage = 'usage_read'
         usage, _ = self.request('GET', self.url('usages', resource))
-        limit = quota['properties']['limit']['value']
-        used = usage['properties']['usages']['value']
+        self.response_stage = 'limit_decode'
+        limit = quota_count(quota['properties']['limit']['value'])
+        self.response_stage = 'usage_decode'
+        used = quota_count(usage['properties']['usages']['value'])
         return {'resource': resource, 'limit': limit, 'usage': used,
                 'requiredLimit': required_limit(limit, used)}
 
@@ -189,6 +201,9 @@ def run(client, submit, save, sleep=time.sleep):
         # Only controlled diagnostics are retained, never token/provider response bodies.
         evidence['error'] = str(error) if isinstance(error, RuntimeError) else 'Invalid quota response'
         if isinstance(client, QuotaClient):
+            evidence['catalogueNames'] = sorted(client.resource_names or {})
+            evidence['responseFailureType'] = type(error).__name__
+            evidence['responseStage'] = client.response_stage
             try:
                 evidence['diagnostics'] = client.diagnostics()
             except (RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):

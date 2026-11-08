@@ -66,3 +66,8 @@ GitHub authentication is working again. Provisioning run 42525578592 reached Azu
 - Read-only quota run 42526613341 reports the missing requested resource as standardDASv5Family. Its quota catalogue contains zero entries, and the filtered Compute usage result is empty. This is not evidence of a numerical zero quota or approved capacity. No quota write was submitted.
 - Provider registration/region availability remains unverified. The owner was asked to check Microsoft.Compute and Microsoft.Quota under subscription Resource providers and register either if NotRegistered. Do not assert registration is the cause until verified.
 - Both code changes (#1660 and #1661) passed full CI and CodeQL; the diagnostic retains only validated resource names and approved usage/limit fields.
+
+
+### 8 November — Compute registered, quota response handling
+
+The owner registered Microsoft.Compute (Microsoft.Quota was already registered). Run 42527062741 now fails local quota response validation rather than the prior missing catalogue error; direct provisioning 42527158192 still returns QuotaExceeded. Treat integral JSON numeric values as integer counts, preserve rejection of fractions/booleans/unknowns, and resolve approved resource names using properties.name.value as documented by Azure. Ignore unrelated catalogue rows rather than allowing their metadata shape to abort the approved lookup. The precise triggering response field remains unverified; no quota submission or provisioning success is claimed.
