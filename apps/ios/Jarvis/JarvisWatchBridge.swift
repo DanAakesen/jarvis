@@ -161,7 +161,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             let stream = try await chat.sendTurn(sessionId: sessionID, text: r.text ?? "")
             guard epoch == generation else { throw WatchFailure.signInRequired }
             chatTask = Task {
-                defer { self.chatTask = nil }
+                defer { if self.generation == epoch { self.chatTask = nil } }
                 do {
                     for try await event in stream {
                         guard !Task.isCancelled, self.generation == epoch else { return }
