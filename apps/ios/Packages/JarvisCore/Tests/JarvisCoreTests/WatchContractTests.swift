@@ -60,6 +60,10 @@ final class WatchContractTests: XCTestCase {
         XCTAssertLessThan(try WatchCodec.encode(WatchReply(id: UUID(), data: payload)).count, WatchLimits.wireBytes)
         let text = WatchLimits.displayText(String(repeating: "𐐀", count: 10_000))
         XCTAssertTrue(text.hasSuffix("Full reply on iPhone."))
+        let history = (0..<6).map { WatchHistoryMessage(id: String($0), user: false, text: String(repeating: "𐐀", count: 10_000)) }
+        let historyData = try WatchCodec.encode(history)
+        XCTAssertLessThan(historyData.count, WatchLimits.payloadBytes)
+        XCTAssertFalse(history[0].text.contains("�"))
         XCTAssertLessThan(try WatchCodec.encode(WatchWire.event(.init(.chatDone, requestID: UUID(), text: text))).count, WatchLimits.wireBytes)
     }
 

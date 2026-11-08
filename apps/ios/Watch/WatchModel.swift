@@ -54,9 +54,9 @@ final class WatchModel: ObservableObject {
         guard !busy, voiceID == nil else { return }
         let read = UUID(); historyRequest = read
         do {
-            let history: [ChatHistoryMessage] = try await connection.load(.history)
+            let history: [WatchHistoryMessage] = try await connection.load(.history)
             guard read == historyRequest, !busy, voiceID == nil else { return }
-            messages = history.map { Message(id: $0.id, user: $0.role == .dan, text: $0.text) }
+            messages = history.map { Message(id: $0.id, user: $0.user, text: $0.text) }
         } catch { show(error) }
     }
     func send() async {

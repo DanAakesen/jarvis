@@ -4,8 +4,11 @@ public enum WatchLimits {
     public static let wireBytes = 64_000
     // Data is base64-encoded inside JSON, so leave room for envelope expansion.
     public static let payloadBytes = 40_000
-    public static func displayText(_ text: String) -> String {
-        text.count > 8_000 ? String(text.prefix(8_000)) + "… Full reply on iPhone." : text
+    public static func displayText(_ text: String, maximumBytes: Int = 16_000) -> String {
+        guard text.utf8.count > maximumBytes else { return text }
+        var bytes = Array(text.utf8.prefix(maximumBytes))
+        while !bytes.isEmpty, String(bytes: bytes, encoding: .utf8) == nil { bytes.removeLast() }
+        return (String(bytes: bytes, encoding: .utf8) ?? "") + "… Full reply on iPhone."
     }
 }
 
@@ -138,4 +141,13 @@ public struct WatchComposer: Equatable, Sendable {
         sending = true; return text
     }
     public mutating func finishSend(success: Bool) { sending = false; if success { draft = "" } }
+}
+
+public struct WatchHistoryMessage: Codable, Sendable {
+    public var id: String
+    public var user: Bool
+    public var text: String
+    public init(id: String, user: Bool, text: String) {
+        self.id = id; self.user = user; self.text = WatchLimits.displayText(text, maximumBytes: 3_000)
+    }
 }

@@ -141,7 +141,16 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             try? WCSession.default.updateApplicationContext(["health": data])
             return data
         case .history:
-            return try encode(try await JarvisChatClient(client: client).history(limit: 20).messages)
+            let history = try await JarvisChatClient(client: client).history(limit: 20).messages
+            var compact = history.sorted { $0.at < $1.at }.suffix(6).map {
+                WatchHistoryMessage(id: $0.id, user: $0.role == .dan, text: $0.text)
+            }
+            while !compact.isEmpty {
+                let data = try encode(compact)
+                if data.count <= WatchLimits.payloadBytes { return data }
+                compact.removeFirst()
+            }
+            return try encode([WatchHistoryMessage]())
         case .sendTurn:
             guard chatTask == nil, !startingChat else { throw WatchFailure.busy }
             startingChat = true; defer { startingChat = false }
