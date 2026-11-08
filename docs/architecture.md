@@ -9094,3 +9094,20 @@ requests two free vCPUs, and retains sanitized request/readback evidence. It nev
 allocates a worker or changes IAM. Subscription-scoped Quota Request Operator and
 Microsoft.Quota registration remain administrator prerequisites. Existing Runner
 deploy still owns provisioning, capacity checks and idle-deallocation proof.
+
+## Managed comparison inventory and administration inputs (8 November 2026)
+
+The provisioning reader requests one agent/version record per page, follows the
+Foundry v1 has_more/last_id cursor contract as well as legacy next links, and
+rejects missing, cyclic or foreign continuations. It retains only identifiers;
+full version definitions are read and validated individually. The 2 MiB response
+cap, 1,000-record cap, five-minute provisioning budget, exact-match uniqueness,
+ownership checks and no automatic write retries remain. Fixed diagnostics now
+distinguish excessive response size, malformed JSON and an invalid top-level shape.
+
+Quota administration and the explicit comparison-provisioning helpers are CI
+inputs, but not normal application deployment inputs. Their changes still select
+all qualification consumers. Manual quota/managed-chat gates and canaries remain
+required. Removing the old conservative input classification can cause a one-time
+component fingerprint transition; no prior receipt is rewritten or treated as an
+unexecuted successful deployment.

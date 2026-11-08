@@ -148,6 +148,13 @@ class ImpactTests(unittest.TestCase):
                      ".github/scripts/smoke_reasons.py"):
             self.assertEqual(deploy_parts(path), set())
 
+    def test_explicit_admin_workflows_still_qualify_without_application_redeployment(self):
+        for path in (".github/workflows/worker-quota.yml", ".github/scripts/request_worker_quota.py",
+                     ".github/scripts/provision_managed_chat.py", ".github/scripts/provision_managed_chat_handoff.sh"):
+            with self.subTest(path=path):
+                self.assertEqual(deploy_parts(path), set())
+                self.assertEqual(checks_for(path), set(CHECKS))
+
     def test_exact_fingerprints_cover_blob_paths_modes_and_runtime_config(self):
         recipe = "\n".join(["name: Deploy", "env:", "  APP: prod", "", "jobs:"] +
                            [f"  {part}:\n    run: {part}" for part in PARTS])

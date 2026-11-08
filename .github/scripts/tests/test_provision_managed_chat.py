@@ -8,6 +8,7 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 import provision_managed_chat as script
 
@@ -419,6 +420,77 @@ class ProvisionTests(unittest.TestCase):
             azure.inventory("/agents")
         with patch.object(azure, "request", return_value={"data": [], "nextLink": next_url}), self.assertRaisesRegex(script.Blocked, "inventory_incomplete"):
             azure.inventory("/agents")
+
+    def test_cursor_inventory_finds_existing_match_after_ten_pages_without_creating_again(self):
+        azure = VersionedAzure()
+        previous = copy.deepcopy(azure.versions[0])
+        azure.versions = [{**copy.deepcopy(previous), "version": str(i), "id": f"version/{i}"}
+                          for i in range(1, 12)]
+        azure.versions.append({**copy.deepcopy(azure.version), "version": "12", "id": "version/12"})
+        reader = script.Azure(script.PROJECT_ENDPOINT, script.PROJECT_ID, read_only=True)
+        requests = []
+
+        def page(method, url):
+            requests.append((method, url))
+            self.assertEqual(method, "GET")
+            query = parse_qs(urlsplit(url).query)
+            self.assertEqual(query["limit"], ["1"])
+            if urlsplit(url).path.endswith("/agents"):
+                return {"data": [{"name": script.AGENT_NAME}], "has_more": False}
+            self.assertEqual(query["include_drafts"], ["true"])
+            after = query.get("after", [None])[0]
+            index = int(after.split("/")[-1]) if after else 0
+            item = copy.deepcopy(azure.versions[index])
+            return {"data": [item], "has_more": index < 11, "last_id": item["id"]}
+
+        reader.request = page
+        azure.inventory = reader.inventory
+        report = script.inspect_comparison(azure, script.definition(MANIFEST))
+        self.assertEqual(report, {"state": "present", "version_count": 12,
+                                  "matching_version_count": 1, "pin": "other_version"})
+        self.assertFalse(any(call[0] != "GET" for call in azure.calls))
+        references = reader.inventory("/agents/" + script.AGENT_NAME + "/versions?include_drafts=true")
+        self.assertTrue(all("definition" not in item for item in references))
+        azure.calls.clear()
+        self.assertEqual(script.provision(azure, script.definition(MANIFEST), refresh_definition=True)["version"], "12")
+        self.assertEqual([call[0] for call in azure.calls if call[0] != "GET"], ["PATCH"])
+        self.assertIn("after=version%2F11", requests[-1][1])
+
+    def test_cursor_pages_cannot_silently_end_or_loop(self):
+        azure = script.Azure(script.PROJECT_ENDPOINT, script.PROJECT_ID)
+        for page in [
+            {"data": [], "has_more": True, "last_id": "v1"},
+            {"data": [{"id": "v1"}], "has_more": True},
+            {"data": [{"id": "v1"}], "has_more": True, "last_id": "other"},
+            {"data": [{"id": "v1"}], "has_more": "false"},
+            {"data": [{"id": "v1"}], "has_more": False, "nextLink": "https://foreign.test"},
+        ]:
+            with self.subTest(page=page), patch.object(azure, "request", return_value=page), self.assertRaises(script.Blocked):
+                azure.inventory("/agents")
+        with patch.object(azure, "request", return_value={
+            "data": [{"id": "v1"}], "has_more": True, "last_id": "v1",
+        }) as request, self.assertRaisesRegex(script.Blocked, "inventory_incomplete"):
+            azure.inventory("/agents")
+        self.assertEqual(request.call_count, 2)
+        for suffix in ["/other?api-version=v1", "-foreign?api-version=v1", "?api-version=v1#fragment"]:
+            with patch.object(azure, "request", return_value={
+                "data": [], "nextLink": script.PROJECT_ENDPOINT + "/agents" + suffix,
+            }), self.assertRaisesRegex(script.Blocked, "inventory_invalid"):
+                azure.inventory("/agents")
+
+    def test_response_bounds_and_shape_failures_have_content_free_reasons(self):
+        azure = script.Azure(script.PROJECT_ENDPOINT, script.PROJECT_ID)
+        for raw, code in [(b"x" * (script.MAX_BYTES + 1), "azure_response_too_large"),
+                          (b"PRIVATE invalid", "azure_response_invalid_json"),
+                          (b'["PRIVATE"]', "azure_response_invalid_shape")]:
+            with self.subTest(code=code), patch.object(script.subprocess, "run", return_value=(
+                subprocess.CompletedProcess([], 0, raw, b"")
+            )) as request, self.assertRaises(script.Blocked) as caught:
+                azure.data("/agents/" + script.AGENT_NAME + "/versions")
+            request.assert_called_once()
+            self.assertEqual(str(caught.exception), code)
+            self.assertNotIn("PRIVATE", caught.exception.diagnostic)
+            self.assertIn("mutation_attempted=false", caught.exception.diagnostic)
 
     def test_failed_or_incomplete_activation_never_pins(self):
         for state in ["failed", "creating"]:
