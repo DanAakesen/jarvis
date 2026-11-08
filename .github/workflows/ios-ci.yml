@@ -5,8 +5,8 @@ on:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: 04735515f416190c9a39dc6a618a394b0f269d8e
-  TASK_IOS_TREE: 316424a8207616b4940779cff0f6a3752c56f90c
+  TASK_SOURCE_SHA: 7d59f4472cc0808b3e59cfa0a55a9db92ba6266e
+  TASK_IOS_TREE: 596ccb0ac45bff64395e4d24126afff08f5f4824
 jobs:
   gallery:
     name: Verify notification tasks, Factory history and Chat
@@ -27,7 +27,7 @@ jobs:
           import json, os, pathlib, subprocess
           git = lambda value: subprocess.check_output(["git", "rev-parse", value], text=True).strip()
           changed = subprocess.check_output(["git", "diff", "--name-only", "1008ea6758f6fb66d05942c6717cbf736f5ebbda", "HEAD", "--", "apps/ios"], text=True).splitlines()
-          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["LiftEditingUITests", "ChatTurnFeedbackUITests", "ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge", "ChatComposerUITests/testRuntimeTestKeepsNormalDraftAndHistorySeparate", "NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered"], "changed_ios_paths":changed, "prior_run":42498089381, "qualification_scope":"gym history wiring, lift swipe, actual reply word selection, timer/progress, runtime and navigation; unchanged per-test limits", "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["LiftEditingUITests", "ChatTurnFeedbackUITests", "ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge", "ChatComposerUITests/testRuntimeTestKeepsNormalDraftAndHistorySeparate", "NavigationReliabilityTests/testPageHeaderIsTransparentAndOrdered"], "changed_ios_paths":changed, "prior_run":42498873982, "qualification_scope":"separate row tap/swipe and sibling action hit regions, gym history, reply selection/progress and runtime/navigation; unchanged per-test limits", "owner_reports":6, "prior_acceptance_invalidated_for_changed_states":True}
           pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
           PYCODE
       - name: Select pinned Xcode 26.6
