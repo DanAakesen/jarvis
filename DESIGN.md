@@ -3625,8 +3625,8 @@ controls. The owner subsequently selected background 3, Ember, from the replacem
 PNG set (/tmp/jarvis-backgrounds/3-ember.png). Warm near-black charcoal, broad soft
 amber illumination toward the upper right and a restrained warm wash at the lower
 left replace the cool multi-colour atmosphere in dark mode. Preserve white and
-readable secondary text and orange actions. This selection is for the next bundle;
-the background and Notes redesign remain pending implementation and qualification.
+readable secondary text and orange actions. The implementation and build 82
+qualification are recorded below; owner acceptance remains pending.
 
 ### Approved Notes / Ember implementation (7 November 2026)
 
@@ -3660,7 +3660,9 @@ The composer/Now dock must contain no active-turn progress copy.
 ## Notification and Factory navigation (8 November 2026)
 
 Task-linked notification content is a full touch-target row with a trailing
-chevron; its dismiss/clear control remains separate. This applies to the newest
+chevron; its dismiss/clear control remains separate, including in the accessibility
+tree. The outer swipe container must contain its children instead of combining
+the task navigation and dismiss actions. This applies to the newest
 item, expanded older items and running work. Close Notifications before opening
 Factory detail. An issue-only board card has a working GitHub destination and an
 external-link symbol; linked tasks keep their in-app detail destination.

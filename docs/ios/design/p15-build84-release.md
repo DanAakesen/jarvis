@@ -62,5 +62,12 @@ their existing HTTPS GitHub issue; no task is invented or started.
 The iOS history model required taskId, but the backend returns TaskEventRecord
 without that field. Live messages add it as TaskEventMessage. Accept its absence
 in task-scoped history while continuing to reject missing/foreign IDs on live
-streams. Correct the fixtures to match the actual contract. Native and Core
-qualification of this addition are pending.
+streams. Correct the fixtures to match the actual contract. CI 42479297200 and
+all 518 Core tests passed on 0dcf5a3. Native 42479307931 passed eight cases,
+including board links/history, Chat and light/dark page chrome, but both notification
+cases failed to reach task buttons. Retained captures show the links rendered;
+the swipe group now explicitly contains its child accessibility controls rather
+than coalescing them. Notification requalification is pending; no failed check is
+reported as passing. Header/footer device feedback remains open: these captures
+show continuous Ember around controls, but do not establish the owner's expected
+scroll-behind behavior.
