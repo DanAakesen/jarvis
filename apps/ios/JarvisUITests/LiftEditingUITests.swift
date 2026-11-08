@@ -22,13 +22,27 @@ final class LiftEditingUITests: XCTestCase {
         let weight = app.textFields["health.lift.edit.weight"]
         XCTAssertTrue(weight.waitForExistence(timeout: 5))
         XCTAssertEqual(weight.value as? String, "80")
-        weight.tap()
+        // Trailing-aligned values need an end-of-text tap, as in SettingsFieldUITests.
+        // A center tap put the cursor before 80 and the previous attempt entered 82.580.
+        weight.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5))
+            .withOffset(CGVector(dx: -1, dy: 0)).tap()
         weight.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 2) + "82.5")
+        XCTAssertEqual(weight.value as? String, "82.5")
         capture(app, "lift-populated-editor")
         app.buttons["sheet.confirm"].tap()
-        XCTAssertTrue(weight.waitForNonExistence(timeout: 10))
+        // Disabled fields can disappear from AX while Save is still running.
+        XCTAssertTrue(app.staticTexts["Edit lift"].waitForNonExistence(timeout: 10))
         XCTAssertTrue(row.waitForExistence(timeout: 5))
-        XCTAssertTrue(row.label.contains("82.5"), "Updated value must come back from the fixture store")
+        let updated = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in row.label.contains("82.5") }, object: row
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [updated], timeout: 5), .completed,
+                       "Updated value must come back from the fixture store")
+        row.tap()
+        XCTAssertTrue(weight.waitForExistence(timeout: 5))
+        XCTAssertEqual(weight.value as? String, "82.5", "Reopening must load the saved lift")
+        app.buttons["sheet.cancel"].tap()
+        XCTAssertTrue(app.staticTexts["Edit lift"].waitForNonExistence(timeout: 5))
         // First detent exposes only Edit; a second short drag exposes Delete.
         drag(row, distance: 65)
         let edit = app.buttons[id + ".edit"]

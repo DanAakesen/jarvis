@@ -139,3 +139,14 @@ Reviewing the retained earlier navigation stackshot identified eager Core Image 
 Metal setup in the unused Chat camera placeholder on the main thread. The image
 context is now initialized lazily on the serial camera frame queue. Requalify
 navigation and camera-sheet controls without increasing per-test time limits.
+
+Native 42491913466 on 5122d147 passed ten of twelve tests: runtime-test progress,
+both Notes themes, all three notification/Factory cases and all four chrome cases.
+The initial Chat hit test and lift readback assertion failed. Artifact 13622955274
+SHA256 `6998c7b031a4ab95a5463bdd8e7ff367dcf19ac1c8e2f782cd1449145bc5f7b9`.
+The retained lift editor capture shows the test inserted `82.5` before the existing
+`80` (result `82.580`), and the recording shows disabled fields during Save. Correct
+the physical input coordinate, assert the edited value before saving, wait for the
+sheet title to disappear, then assert the refreshed value and reopen it. Keep all
+save/swipe/delete assertions. This is a test correction, not a claimed persistence
+fix. Camera/navigation refinement is qualifying separately on unchanged limits.
