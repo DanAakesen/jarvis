@@ -158,3 +158,11 @@
 "chat.turn.toolOK" = "Færdig";
 "chat.turn.toolRefused" = "Ikke tilladt";
 "chat.turn.toolError" = "Mislykkedes";
+
+"chat.turn.workingFor" = "Arbejder i";
+
+"chat.turn.reconnectingFor" = "Genopretter forbindelsen · gået tid";
+
+"chat.turn.thinking" = "Tænker";
+
+"chat.turn.showTime" = "Vis beskedens tidspunkt";

@@ -1,8 +1,190 @@
 # Compare Current and Copilot
 
-Owner testing deferred on 8 November 2026 because there is not enough time now.
-Keep this guide for later; the live automated compatibility check has passed, but
-the owner comparison has not. Current remains the default.
+Updated 8 November 2026. The owner reports that a quick Copilot conversation works
+well. A live owner tool/write comparison has not passed. Current remains the default.
+The owner now requests an implementation comparison first, then a meaningful test
+design and any needed data/setup. The agenda prompt was unsuitable; the shopping
+exercise below is only an optional tool smoke test, not the recommended benchmark.
+
+## What is actually different today
+
+This comparison concerns the Foundry Microsoft Copilot chat harness. Factory's
+Copilot CLI coding worker is a separate system.
+
+The current Copilot integration is a hybrid. `ManagedPolicyClient` subclasses
+`AzureOpenAIResponsesClient` and delegates to the same `complete_chat` / `_complete`
+application loop. Both retain Jarvis identity, language, context composition,
+backend functions, authorization/approvals, tool execution, steering and action
+receipt logic. SQL memory, notes/tasks, iOS presentation and Factory infrastructure
+are shared. Copilot's label does not establish better reasoning or fewer approvals.
+
+| Area | Current custom path | Current Copilot integration |
+| --- | --- | --- |
+| Model requests | Jarvis calls the Responses model endpoint directly. | The same application loop calls a versioned Foundry Copilot agent endpoint. |
+| Conversation state | Jarvis supplies the prepared context and response/tool history on requests (`store: false`). | Provider conversations hold continuations inside a turn. A fresh provider conversation is seeded from verified Jarvis history at each new turn or policy change. This preserves the November policy-refresh repair; it is not a new personal-memory system. |
+| Instructions | Full composed instructions are request fields. | Full policy is a structured input to the pinned agent template. The provider's prior sticky-policy behavior made fresh-conversation rotation necessary. |
+| Tool configuration | The current Jarvis catalogue is supplied with model requests. | The same functions are registered on an immutable agent version and checked against provider readback. Built-in shell, filesystem, web and subagents are disabled; no extra skills are installed. Catalogue/model/effort drift refuses the turn. |
+| Recovery | Shared application turn recovery and tool duplicate/uncertain-result handling. | Adds durable native-conversation/source claims and binding checks. SDK automatic retries are disabled; uncertain work can leave the session blocked for reconciliation rather than replaying a write. |
+| Supported inputs | Existing text, image/caption paths and separate voice integrations. | This selected comparison path supports text. Direct image requests and direct voice completion are rejected; normal voice and the existing summarizer remain on their existing paths. |
+| Settings and maintenance | Existing model/settings resolution and direct transport. | Model and reasoning must match the verified agent version. Additional target/version validation, bindings and provider conversation setup are required. The custom application loop has not been retired. |
+| Performance and cost | Baseline to measure. | Extra setup and different provider execution can affect latency/usage. Neither lower latency nor lower cost is established by the smoke test. |
+
+Source: `agents/jarvis/managed_policy_client.py`, `model_client.py`,
+`managed_runtime_factory.py`, `managed_copilot_definition.py`, and
+`apps/backend/src/core/runtime-session.ts`. This describes the active production
+adapter; the older `ManagedCopilotClient` protocol prototype has a simpler loop
+and is not the active production path.
+
+## Recommended comparison — proposed, not yet run
+
+Use one realistic project exercise with fixed source material and known expected
+facts. A small Jarvis widget brief is a good candidate. It should require reading
+several sources, resolving an explicitly superseded requirement, preserving
+constraints, proposing useful next actions and saving/updating one labelled plan.
+No calendar or Factory execution is needed for this comparison.
+
+1. **Read and plan.** Give each runtime the same brief and source snapshots. Request
+   a plan only. Verify its cited facts, required constraints, treatment of outdated
+   information, and that it does not start work or write prematurely.
+2. **Continue and change.** In the same conversation, change one requirement and
+   explicitly request saving the revised plan. Verify it uses the new requirement,
+   retains the other facts, creates/updates only the intended item and reads it back.
+   A later user turn is necessary to exercise conversational carryover; putting
+   both instructions in one message does not test that. The automated two-turn
+   trusted-policy canary remains separate from this user-instruction case.
+3. **Exercise recovery.** In an isolated test setup, introduce a controlled read
+   failure or a lost response after a confirmed test write. Verify accurate status,
+   no duplicate write or fabricated success, and useful recovery. Test client
+   disconnect separately from actual server/tool cancellation; they are different.
+
+A proposed automated driver can launch the complete exercise once, deliver the
+continuation and controlled failures, and capture results for both runtimes. The
+existing offline comparison runner is not this live benchmark: it uses synthetic
+provider events and the older protocol adapter in some cases. A live driver must
+exercise `LazyManagedRuntime` / `ManagedPolicyClient` and the real Current path,
+with equivalent isolated test data/context and bounded side effects. This wiring
+and fault injection have not been implemented by this documentation change.
+
+The owner need only supply or choose a representative brief and a few facts that
+must survive the conversation. We can prepare the sample source pack and expected
+results from it. A useful example is a task where current Jarvis needed repeated
+corrections. Do not change personal memory or production permissions to make a
+benchmark easier, and do not enable Copilot built-ins as part of this comparison.
+
+## Fair measurement and current visibility limits
+
+Use the same verified model/effort, policy, source snapshots and tool permissions.
+Test conversations have separate visible history, but internal context/search and
+rolling summaries retain existing shared behavior. Fresh chats alone therefore
+do not establish isolated inputs. Use controlled contexts in the test driver for
+rigorous comparison; ordinary app tests remain useful owner acceptance evidence.
+
+The current iOS test sheet renders replies and generic sending state but ignores
+acknowledgment events and does not render tool activity. It cannot itself show
+first-ack latency, tool sequence or retry counts. Use recorded backend/provider
+events where available, adding test-only measurement at missing boundaries;
+verify effective settings and saved items independently of the assistant's report.
+A small result summary in the test sheet is an optional product improvement, not
+implemented here.
+
+Compare task/fact accuracy and scope first, then duplicate/incorrect writes,
+owner corrections or redundant approvals, recovery outcome, first useful response
+and total verified completion time. Record observed usage and attributable charges
+only when available; missing cost stays unknown. Fewer calls are not automatically
+better when reads are needed to verify results. Separate shared backend failures
+from provider/adapter failures.
+
+Start with three paired runs in alternating order. A consistent improvement on
+these workflows, without regressions, supports choosing Copilot for them. Equal
+results are a tie; one fluent answer or one faster run is insufficient. Text parity
+does not establish image/voice parity, Factory delivery or long-term reliability.
+The 128 GiB quota block remains an independent Factory prerequisite.
+
+## Optional self-contained tool smoke test
+
+Open a fresh Current test conversation, then a fresh Copilot test conversation
+through Plus → Test agent runtime. Keep the same model, reasoning effort, account,
+language and mode. Run them close together. Paste this once into each, changing
+only CURRENT-A to COPILOT-A for the second run.
+
+The shopping data is fictional. The test creates a real, clearly labelled Personal
+note and task in Jarvis; it needs no appointments or existing personal data.
+
+```text
+Run this test using the sample shopping data below. This is a pretend purchase;
+do not buy anything. Briefly acknowledge, then use your Jarvis tools.
+
+My budget is 1,500 DKK. I need a monitor costing 900 DKK and a cable costing
+100 DKK. I would also like a keyboard costing 400 DKK and a stand costing
+250 DKK. The required items come first; prefer the keyboard over the stand
+when both optional items will not fit.
+
+Use the label HARNESS-CHECK-CURRENT-A.
+
+Choose what fits the budget. Save the chosen items, prices, total, remaining
+budget and excluded item in one Personal note with that exact title. Read it
+back to confirm it was saved.
+
+Then apply this price correction: the keyboard costs 450 DKK. Update that same
+note, recalculate the total and remaining budget, and preserve the other details.
+
+Create one Personal task titled "Review HARNESS-CHECK-CURRENT-A", with no due
+date or reminder. Include the note title in its description. Read back the final
+note and task using your tools, then report their IDs and the verified result.
+
+Only change these labelled test items. If they already exist, reuse them without
+creating duplicates. If a write fails, check whether it succeeded before retrying.
+Do not change my calendar or other notes/tasks, send messages, or start Factory
+work. Report missing tools, permissions or failures honestly; do not claim success
+unless verified. These test-item writes are explicitly requested; do not ask for
+an extra confirmation unless an actual permission gate requires it.
+```
+
+## Expected result
+
+For each runtime there should be exactly one Personal note and one Personal task
+with its corresponding label. The task has no due date or reminder.
+
+| Check | Expected evidence |
+| --- | --- |
+| Initial choice | Monitor 900 + cable 100 + keyboard 400 = 1,400 DKK; 100 DKK left; stand excluded. |
+| Price correction | The same note is updated: monitor 900 + cable 100 + keyboard 450 = 1,450 DKK; 50 DKK left; stand still excluded. |
+| Saved result | Reopen the note and task in the app; contents match the final result, IDs remain consistent, no duplicates. |
+| Verified completion | Tool activity shows the initial save/readback, update and final reads. The answer accurately reports any incomplete step. |
+| Scope | No purchase, calendar change, notification, unrelated edit or coding work. |
+
+## Why this compares the harnesses
+
+The harness manages tools, their results and the conversation around the model.
+Keeping the model and input equal gives both runtimes the same reasoning problem
+and save → read → update → read sequence. It tests tool selection, preserving
+identity across edits, following dependencies, handling failures and reporting
+verified completion. The arithmetic alone is not a harness evaluation.
+
+Use correctness first, then owner effort, then speed:
+
+- If only one completes the requested workflow correctly without help, it wins
+  this test. A fluent answer without the actual saved items does not pass.
+- If both pass, compare unnecessary approval questions, corrections, failed/repeated
+  calls and time to verified completion. Necessary readbacks are not wasted calls.
+- If both are similarly reliable and quick, this test has not shown a useful
+  difference. Do not declare Copilot better just because it works.
+
+Save both transcripts before closing the test conversations. Check the actual
+items in Notes/Tasks rather than trusting the final reply. A shared backend outage
+or missing permission is not proof that one harness is worse; compare whether it
+identifies the blocker accurately and leaves no duplicates or false success.
+
+One pair is a practical screen, not a general superiority claim. For more
+confidence, repeat this same prompt later in reverse order with fresh labels
+COPILOT-B and CURRENT-B. Small timing differences can be network/model noise.
+This single-turn test does not verify long-conversation memory, instruction
+changes between user turns, Voice, or Factory end-to-end execution. The live
+two-turn policy canary is separate evidence; the older cases below are optional
+diagnostics. Complete/delete only the labelled test items afterwards through
+normal Jarvis flows. A passing result does not switch the default runtime.
+
+## Extended tests (optional reference)
 
 Live Copilot compatibility passed in run 42418951594 on 7 November 2026;
 the test runtime is enabled. Current remains the default. This compares the text runtime

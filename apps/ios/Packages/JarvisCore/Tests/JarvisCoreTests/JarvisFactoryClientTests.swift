@@ -41,6 +41,7 @@ final class JarvisFactoryClientTests: XCTestCase {
         let detail = try await client.task(id: "41", eventLimit: 20, eventOffset: 2)
         XCTAssertEqual(detail.task.request, "Synthetic request")
         XCTAssertEqual(detail.events.first?.id, "5")
+        XCTAssertNil(detail.events.first?.taskId, "Task history uses TaskEventRecord, not the live envelope")
         XCTAssertEqual(detail.usage.first?.quantity, 7)
         XCTAssertEqual(
             JarvisFactoryPresentation.availableControls(
@@ -140,6 +141,23 @@ final class JarvisFactoryClientTests: XCTestCase {
 
         XCTAssertEqual(order.first, "connected")
         XCTAssertTrue(order.contains("update"))
+    }
+
+    func testLiveEventsStillRequireTheRequestedTaskID() async throws {
+        for replacement in ["", #"\"taskId\":\"42\","#] {
+            let scenario = streamScenario.replacingOccurrences(of: #"\"taskId\":\"41\","#, with: replacement)
+            let transport = try FixtureTransport(scenario: Data(scenario.utf8))
+            let client = JarvisFactoryClient(client: try makeClient(transport))
+            try await client.listenForBoardUpdates { _ in }
+            do {
+                try await client.listenForTaskEvents(taskId: "41") { _ in
+                    XCTFail("A missing or foreign task ID must not be delivered")
+                }
+                XCTFail("Expected the live envelope to be rejected")
+            } catch {
+                XCTAssertEqual(error as? JarvisFactoryClientError, .invalidResponse)
+            }
+        }
     }
 
     func testIssueNumberFormatsTakeIntegersNotObjects() {
@@ -294,7 +312,7 @@ private let factoryScenario = #"""
           "usageSummary": null, "latestSessionEndReason": "crashed",
           "createdAt": "2026-10-31T07:00:00Z", "startedAt": "2026-10-31T08:00:00Z", "finishedAt": null,
           "events": [{
-            "id": "5", "taskId": "41", "type": "disk", "summary": "Synthetic disk sample",
+            "id": "5", "type": "disk", "summary": "Synthetic disk sample",
             "payload": {"freeBytes": 100}, "payloadTruncated": false, "source": "runner",
             "at": "2026-10-31T08:30:00Z"
           }],

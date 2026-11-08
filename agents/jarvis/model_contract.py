@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 
 from state import ModelMessage, ModelSettings
 
@@ -18,6 +18,7 @@ class AcknowledgmentBoundary:
     """Marks the streamed pre-tool intent sentence as an interim response segment."""
 
     text: str
+    kind: Literal["acknowledgment", "commentary"] = "acknowledgment"
 
 
 ModelStreamChunk = str | AcknowledgmentBoundary

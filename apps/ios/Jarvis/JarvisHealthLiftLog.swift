@@ -12,6 +12,9 @@ struct JarvisHealthLiftLog: View {
     let exercisesPartial: Bool
     let language: JarvisAppLanguage
     let loadMore: () -> Void
+    let deletingID: String?
+    let onEdit: (JarvisEditableLift) -> Void
+    let onDelete: (JarvisEditableLift) -> Void
 
     private var copy: JarvisHealthCopy { JarvisHealthCopy(language: language) }
     private func matches(_ lift: [String: JSONValue]) -> Bool {
@@ -54,7 +57,20 @@ struct JarvisHealthLiftLog: View {
         }
     }
 
-    private func liftRow(_ lift: [String: JSONValue], date: Bool) -> some View {
+    @ViewBuilder private func liftRow(_ lift: [String: JSONValue], date: Bool) -> some View {
+        if let editable = JarvisEditableLift(row: lift) {
+            JarvisEditableSwipeRow(
+                identifier: "health.lift." + (date ? "history." : "exercise.") + editable.id,
+                editTitle: language == .da ? "Rediger" : "Edit",
+                deleteTitle: language == .da ? "Slet" : "Delete",
+                isBusy: deletingID == editable.id,
+                onEdit: { onEdit(editable) }, onDelete: { onDelete(editable) }
+            ) { liftContent(lift, date: date) }
+            .id(editable.id)
+        } else { liftContent(lift, date: date) }
+    }
+
+    private func liftContent(_ lift: [String: JSONValue], date: Bool) -> some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
             Text(lift["exerciseName"]?.stringValue ?? "").font(.body.weight(.medium))
             HStack {

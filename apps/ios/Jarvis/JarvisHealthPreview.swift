@@ -409,6 +409,10 @@ private struct JarvisHealthPreviewTokenProvider: AccessTokenProvider {
 
 /// Reusable synthetic reads allow period changes and concurrent lift/dashboard loads in simulator tests.
 private actor JarvisHealthPreviewTransport: HTTPTransport {
+    private var lifts: [[String: Any]] = ["Squat", "Deadlift", "Bench press"].enumerated().map { index, name in
+        ["id": "00000000-0000-4000-8000-00000000000\(index)", "exerciseName": name,
+         "weightKg": [80, 120, 60][index], "reps": 5, "sets": 3, "performedAt": "2026-10-30T09:00:00Z"]
+    }
     private let interactions: [[String: Any]]
 
     init(scenario: Data) throws {
@@ -422,12 +426,20 @@ private actor JarvisHealthPreviewTransport: HTTPTransport {
         let body = try request.body.map { try JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? nil
         let source = body?["source"] as? String
         if request.method == .post, request.url.path == "/api/health/query", source == "daily.health.lifts" {
-            let items: [[String: Any]] = ["Squat", "Deadlift", "Bench press"].enumerated().map { index, name in
-                ["id": "synthetic-lift-\(index)", "exerciseName": name, "weightKg": [80, 120, 60][index],
-                 "reps": 5, "sets": 3, "performedAt": "2026-10-30T09:00:00Z"]
-            }
+            let items = lifts
             return try response(["source": source!, "items": items, "status": "available",
                                  "coverage": ["returned": items.count, "hasMore": false, "next": NSNull()]])
+        }
+        if request.url.path.hasPrefix("/api/health/lifts/"),
+           let index = lifts.firstIndex(where: { $0["id"] as? String == request.url.lastPathComponent }) {
+            if request.method == .patch, let body {
+                lifts[index].merge(body) { _, new in new }
+                return try response(["entry": lifts[index]])
+            }
+            if request.method == .delete {
+                let removed = lifts.remove(at: index)
+                return try response(["entry": removed])
+            }
         }
         guard let interaction = interactions.first(where: { item in
             guard item["method"] as? String == request.method.rawValue,

@@ -3,7 +3,10 @@
 ### Owner status ledger
 
 The consolidated device checklist is [saved here](docs/ios/design/p15-owner-test-checklist.md).
-The owner deferred Copilot comparison on 8 November; preserve the prompts for later.
+The owner reported a good quick Copilot smoke test on 8 November and now requests
+an implementation comparison before choosing the owner test. The saved guide now
+separates shared behavior from actual transport/state differences and proposes a
+controlled project exercise. The sample shopping prompt remains optional smoke coverage.
 
 Keep this ledger current when work changes state. Distinguish design approval,
 implementation, automated/native verification, deployment and owner acceptance.
@@ -12,8 +15,13 @@ acceptance. The owner explicitly requested updates across all discussed items.
 
 | Item | Current state | Next evidence needed |
 | --- | --- | --- |
-| PC bridge notifications | Online/control-state updates made quiet; legacy online feed rows hidden; offline warnings rearm after a recovery | Backend/SQL qualification and live deployment; owner device check |
-| Chat reply grouping and progress placement | Compact metadata spacing and removal of extra reply padding implemented; one active-turn status moved inside the scrolling transcript | Fresh native presentation/turn checks, actual capture review and next TestFlight upload |
+| Long-running Current/Copilot replies | #1647 deployed and passed service acceptance; total 210s/15-minute execution cutoffs removed, transport keepalives added. Runtime-test progress and partial recovery implemented in #1646 | Native candidate and live duration/reconnect verification; restart-durable execution remains open |
+| Lift edit/delete | Implemented in #1646. Native rerun confirmed 82.5 kg saves but exposed integer rounding in Last lifts; formatter corrected | Native fractional-weight readback, short/farther swipe and deletion; release and owner check pending |
+| Header/footer transparency after Ember | Owner clarified both opaque bands and missing scroll-behind behavior. Shared chrome uses safe-area insets; 12 native cases passed, but capture review required a soft top treatment to prevent title/text collisions. Bottom backing stays hidden | All four chrome cases plus navigation passed in 42492967707; retain actual capture review and qualify changed states before build 84 |
+| Notifications → Factory task | Latest, older grouped and running-task rows now route to the matching Factory detail after sheet dismissal | Fresh native navigation checks and replacement TestFlight build |
+| Factory detail and issue-only cards | History decoder aligned with TaskEventRecord (no taskId); live events still require matching taskId. Cards without a task open their GitHub issue | Core contracts, native task-history and board navigation checks; owner retest P11-13 |
+| PC bridge notifications | #1645 merged; online/control-state updates quiet, legacy online feed rows hidden, offline warnings rearm after recovery; backend and SQL checks passed | Deploy 42477261659 passed readiness and live acceptance; owner device check |
+| Chat reply grouping and progress placement | New owner reference: elapsed Working for header, ongoing public updates, thinking/tools below, timestamps only on message tap. Implemented locally across normal/test chat with additive commentary events | Backend/Core/native verification, deployment and TestFlight pending; preserve selection and no Now-bar progress |
 | Build 81 Home/Chat streaming and recovery | Implemented, qualified and uploaded to TestFlight | Owner device send/network/dictation checks in docs/ios/design/p15-build81-release.md |
 | Header/footer transparency, one progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
@@ -21,10 +29,10 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Resolve worker quota, recover this existing task, finish validation and obtain delivery PR; do not duplicate Prepare |
 | 128 GiB worker workspace | Implementation merged and qualified; backend live. Provisioning 42426685636 confirms Azure InvalidTemplateDeployment / QuotaExceeded before activation | Subscription quota investigation: selected Standard_D2as_v5 in Sweden Central needs two free vCPUs. Owner quota limit/usage requested; deployment identity is resource-group scoped. Then provision, verify real capacity/idle deallocation, recover task 23 |
 | Copilot harness | #1639 deployed; refreshed definition and live two-turn canary passed in 42418951594; enabled | Owner multi-turn/tool comparison; Current remains the default |
-| Current vs Copilot comparison | Saved and deferred by the owner on 8 November; live compatibility passed | Resume docs/runtime-comparison-owner-test.md when convenient; no owner comparison pass claimed |
+| Current vs Copilot comparison | Owner-reported quick smoke test worked well. Actual hybrid architecture and test visibility/context limitations documented; controlled project exercise proposed | Select representative source material; prepare equivalent contexts and measurements before claiming a live comparison. Full tool/write comparison pending |
 | Notes redesign | #1638 merged as a55e7350; CI 42418217434 and final native 42417916004 passed; captures inspected | Build 82 uploaded in 42419435807; owner editing/navigation acceptance pending |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
-| Next TestFlight bundle | Build 82 uploaded successfully in 42419435807 from a55e7350 | Apple processing/device acceptance; backend worker delivery remains separate |
+| Next TestFlight bundle | 83 cancelled before upload to include the latest notification/Factory reports; replacement 84 pending | Qualification, upload and device acceptance; backend worker delivery remains separate |
 
 The owner now explicitly requests implementation and delivery of all five items.
 This supersedes the earlier hold while collecting additions. Notes and Ember are
@@ -4284,3 +4292,49 @@ stream. Local backend regression checks pass (166 existing/focused checks plus
 three activity tests); 182 hosted stream/runtime checks, Ruff and backend lint/build
 pass. CI, deployment,
 longer-than-limit live qualification and iOS progress UI remain pending.
+
+## 8 November 2026 — Productivity blocker review
+
+Owner requests a code review of approval friction, timeouts and other gates that
+prevent authorized actions from completing. Trace request intent through policy,
+execution limits, retries, progress and recovery. Fix confirmed unnecessary blocks
+with regression checks; retain authorization boundaries and no-replay protections.
+Source review is recorded in `docs/productivity-blocker-review.md`, with corrected
+deadlines/progress and eight remaining findings separated from live qualification
+gaps. Durable approval/receipt and interrupted-turn recovery are the highest-priority
+remaining work; the review does not claim these architectural changes are implemented.
+
+## Latest implementation evidence (8 November 2026)
+
+Long-running backend PR #1647 passed CI 42490162058 and CodeQL; merged as
+0e1767edd21d94d9682fcd6e25fb555c83003564. Deploy 42490995273 passed readiness and
+live acceptance after retrying a research transport failure. A real turn beyond
+the old cutoff remains unverified. iOS progress rendering, refresh retention, reconnect-budget fix,
+lift tap/edit/delete and progressive icon swipes are implemented locally. Backend
+vault/lift regression tests: 68 pass; scoped ESLint/TypeScript pass. JarvisCore/native
+Core checks passed (522 tests) on 5122d147. Native checks pending for the expanded
+UI bundle. Retained diagnostics identified eager camera CIContext initialization
+blocking Chat navigation; it now waits for the first camera frame. TestFlight 84
+is not uploaded.
+
+## 8 November follow-up — Gym assistant parity and native qualification
+
+- Gym logging refusal reproduced in code: app stores/routes existed, assistant
+  tools did not. Shared gym_lifts/gym_sessions implemented for read/create/update/
+  delete using the same SQL and vault synchronization; direct instructions need
+  no second approval. Focused local tests pass; final CI/deploy/live acceptance pending.
+- Candidate b7e9c4e passed CI (42496364016), including 525 Core checks. Native
+  42496126403 on identical app source passed 4/6 tests: timer/public updates,
+  send/steering, isolated runtime chat and navigation. Long-press Copy and the
+  first swipe action touch target failed. Refine native gesture precedence and
+  action overlay, then requalify without relaxing checks. Build 84 not uploaded.
+- Global app/assistant action parity is now an explicit requirement; this gym
+  repair does not close the remaining productivity-review findings.
+
+Gym parity follow-through: Home/Health had not wired the existing manual workout
+read endpoint, and the backend's daily vault format differs from legacy app log
+filenames. A read adapter now includes saved SQL sessions (including pending vault
+copies) alongside legacy logs, before HealthKit de-duplication. Manual record IDs
+remain distinct from HealthKit IDs. Historical app vault writes remain supported;
+this change does not migrate or rewrite them. Core fixture coverage checks that
+chat-logged sessions appear, retain identity/duration and respect the date range.

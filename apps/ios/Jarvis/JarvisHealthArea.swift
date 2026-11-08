@@ -215,6 +215,9 @@ struct JarvisHealthArea: View {
     @State private var dashboard: JarvisHealthDashboardData?
     @State private var isLoading = false
     @State private var trackWorkout = false
+    @State private var editedLift: JarvisEditableLift?
+    @State private var deletingLiftID: String?
+    @State private var liftWriteFailed = false
     @State private var newLiftPresented = false
     @State private var newWorkoutPresented = false
     @State private var lifts: [[String: JSONValue]] = []
@@ -272,6 +275,11 @@ struct JarvisHealthArea: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
                     JarvisHealthSyncIssue(state: healthSyncState, language: language)
+                    if liftWriteFailed {
+                        Text(language == .da ? "Ændringen kunne ikke bekræftes. Opdater løftene før du prøver igen." : "The change could not be confirmed. Refresh lifts before trying again.")
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("health.lift.writeError")
+                    }
                     if trackWorkout {
                         if let liftFailure { failureRow(liftFailure) }
                         JarvisHealthLiftLog(
@@ -283,7 +291,10 @@ struct JarvisHealthArea: View {
                             hasMore: liftCursor != nil,
                             exercisesPartial: exercisesPartial || vaultLiftsPartial || vaultLiftsFailed,
                             language: language,
-                            loadMore: { Task { await loadLifts(more: true) } }
+                            loadMore: { Task { await loadLifts(more: true) } },
+                            deletingID: deletingLiftID,
+                            onEdit: { editedLift = $0 },
+                            onDelete: { lift in Task { await deleteLift(lift) } }
                         )
                     } else {
                         if let headline { JarvisPageHeadline(phrase: headline) }
@@ -339,7 +350,7 @@ struct JarvisHealthArea: View {
                 .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }
             .scrollIndicators(.hidden)
-            .scrollEdgeEffectHidden()
+            .scrollEdgeEffectHidden(true, for: .bottom)
             .refreshable {
                 await refreshFromPull()
             }
@@ -373,6 +384,11 @@ struct JarvisHealthArea: View {
         .task(id: refreshVersion) { await loadVaultLifts() }
         .task(id: refreshVersion) { await loadDeviceWorkouts() }
         .task(id: refreshVersion) { await loadDeviceSteps() }
+        .sheet(item: $editedLift, onDismiss: { refreshVersion += 1 }) { lift in
+            JarvisLiftEditorSheet(lift: lift, language: language) { edit in
+                try await saveLift(lift, edit: edit)
+            }
+        }
         .sheet(isPresented: $newLiftPresented, onDismiss: { refreshVersion += 1 }) {
             if let gymModel {
                 JarvisTodayGymSheet(model: gymModel, language: language, kind: .lift)
@@ -494,28 +510,92 @@ struct JarvisHealthArea: View {
                     }
                     ForEach(recent.indices, id: \.self) { index in
                         let lift = recent[index]
-                        HStack(spacing: JarvisDesignTokens.healthRowSpacing) {
-                            Image(systemName: "dumbbell").foregroundStyle(JarvisDesignTokens.healthAccent)
-                                .accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                                Text(lift["exerciseName"]?.stringValue ?? copy.text(.workout)).font(.body)
-                                Text("\(lift["weightKg"]?.numberValue.map { formatNumber($0, language: language) } ?? "—") kg × \(lift["reps"]?.numberValue.map { formatNumber($0, language: language) } ?? "—")")
-                                    .font(.footnote).foregroundStyle(.secondary)
-                            }
-                            Spacer(minLength: 0)
-                            if let date = lift["performedAt"]?.stringValue {
-                                Text(JarvisHealthLocalization.formattedDateTime(date, language: language))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
+                        if let editable = JarvisEditableLift(row: lift) {
+                            JarvisEditableSwipeRow(
+                                identifier: "health.lift." + editable.id,
+                                editTitle: language == .da ? "Rediger" : "Edit",
+                                deleteTitle: language == .da ? "Slet" : "Delete",
+                                isBusy: deletingLiftID == editable.id,
+                                onEdit: { editedLift = editable },
+                                onDelete: { Task { await deleteLift(editable) } }
+                            ) { lastLiftContent(lift) }
+                            .id(editable.id)
+                            .jarvisListRow(separator: index < recent.count - 1)
+                        } else {
+                            lastLiftContent(lift)
+                                .jarvisListRow(separator: index < recent.count - 1)
                         }
-                        .accessibilityElement(children: .combine)
-                        .jarvisListRow(separator: index < recent.count - 1)
                     }
                 }
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("health.lastLifts")
+    }
+
+    private func lastLiftContent(_ lift: [String: JSONValue]) -> some View {
+            HStack(spacing: JarvisDesignTokens.healthRowSpacing) {
+                Image(systemName: "dumbbell").foregroundStyle(JarvisDesignTokens.healthAccent)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                    Text(lift["exerciseName"]?.stringValue ?? copy.text(.workout)).font(.body)
+                    Text("\(lift["weightKg"]?.numberValue.map { $0.formatted(.number.locale(language.locale).grouping(.never)) } ?? "—") kg × \(lift["reps"]?.numberValue.map { formatNumber($0, language: language) } ?? "—")")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                if let date = lift["performedAt"]?.stringValue {
+                    Text(JarvisHealthLocalization.formattedDateTime(date, language: language))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
+    }
+
+    @MainActor
+    private func saveLift(_ lift: JarvisEditableLift, edit: JarvisLiftEdit) async throws {
+        do {
+            switch lift.source {
+            case .health(let id):
+                guard let client else { throw JarvisClientError.invalidRequest }
+                try await client.updateLift(id: id, edit: edit)
+            case .vault(let path, let sha, _):
+                guard let notes = gymModel?.notesClient else { throw JarvisClientError.invalidRequest }
+                _ = try await notes.saveNote(path: path, content: lift.replacingLift(with: edit), sha: sha)
+            }
+            liftWriteFailed = false
+            await JarvisAppCache.invalidateAll(.notes)
+            await JarvisAppCache.invalidateAll(.health)
+            await gymModel?.refreshWorkouts()
+            refreshVersion += 1
+        } catch {
+            liftWriteFailed = true
+            throw error
+        }
+    }
+
+    @MainActor
+    private func deleteLift(_ lift: JarvisEditableLift) async {
+        guard deletingLiftID == nil else { return }
+        deletingLiftID = lift.id
+        defer { deletingLiftID = nil }
+        do {
+            switch lift.source {
+            case .health(let id):
+                guard let client else { throw JarvisClientError.invalidRequest }
+                try await client.deleteLift(id: id)
+            case .vault(let path, let sha, _):
+                guard let notes = gymModel?.notesClient else { throw JarvisClientError.invalidRequest }
+                try await notes.deleteGymLift(path: path, sha: sha)
+            }
+            lifts.removeAll { JarvisEditableLift(row: $0)?.id == lift.id }
+            vaultLifts.removeAll { JarvisEditableLift(row: $0)?.id == lift.id }
+            pastExercises.removeAll { JarvisEditableLift(row: $0)?.id == lift.id }
+            liftWriteFailed = false
+            await JarvisAppCache.invalidateAll(.notes)
+            await JarvisAppCache.invalidateAll(.health)
+            await gymModel?.refreshWorkouts()
+        } catch { liftWriteFailed = true }
+        refreshVersion += 1
     }
 
     private var periodMenu: some View {
@@ -593,14 +673,14 @@ struct JarvisHealthArea: View {
         }
         for entry in deviceWorkouts {
             let raw = entry.healthActivity ?? ([JarvisGymSessionType.chest, .back, .arms, .legs, .strength].contains(entry.session) ? "gym" : "other")
-            let identity = JarvisHealthWorkoutIdentity(id: entry.healthKitID, start: entry.performedAt,
-                kind: JarvisHealthLogic.workoutKind(raw))
+            let identity = JarvisHealthWorkoutIdentity(id: entry.healthKitID ?? entry.manualWorkoutID, start: entry.performedAt,
+                kind: JarvisHealthLogic.workoutKind(raw), source: entry.manualWorkoutID == nil ? .healthKit : .manual)
             guard !identities.contains(where: { $0.matches(identity) }) else { continue }
             formatter.formatOptions = [.withInternetDateTime]
             let stamp = formatter.string(from: entry.performedAt)
             var row: [String: JSONValue] = ["workout_type": .string(raw), "start_at": .string(stamp),
                 "workout_date": .string(JarvisHealthLogic.day(stamp)!), "device_only": .bool(true)]
-            if let id = entry.healthKitID { row["id"] = .string(id) }
+            if let id = entry.healthKitID ?? entry.manualWorkoutID { row["id"] = .string(id) }
             if entry.durationMinutes > 0 { row["duration_seconds"] = .number(entry.durationMinutes * 60) }
             data.workouts.items.append(row)
             identities.append(identity)
@@ -641,9 +721,15 @@ struct JarvisHealthArea: View {
             let formatter = ISO8601DateFormatter()
             vaultLifts = history.entries.compactMap { entry in
                 guard let lift = entry.lift else { return nil }
-                return ["exerciseName": .string(lift.exercise), "weightKg": .number(lift.weightKg),
+                var row: [String: JSONValue] = ["exerciseName": .string(lift.exercise), "weightKg": .number(lift.weightKg),
                         "reps": .number(Double(lift.reps)), "sets": .number(Double(lift.sets)),
                         "performedAt": .string(formatter.string(from: entry.performedAt))]
+                if let note = entry.vaultNote {
+                    row["notePath"] = .string(note.path)
+                    row["noteSha"] = .string(note.sha)
+                    row["noteContent"] = .string(note.content)
+                }
+                return row
             }
             vaultLiftsPartial = history.partial
             vaultLiftsFailed = false

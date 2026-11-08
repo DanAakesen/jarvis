@@ -3,9 +3,12 @@ import SwiftUI
 
 struct JarvisActivitySheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var expandedGroups = Set<String>()
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @ObservedObject var model: JarvisChatModel
     let kind: ActivitySheetKind
+    let onOpenTask: (String) -> Void
 
     private var appLanguage: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -84,6 +87,7 @@ struct JarvisActivitySheet: View {
                 .padding(JarvisDesignTokens.chatHorizontalInset)
             }
             .scrollIndicators(.visible)
+            .accessibilityIdentifier("activity.list")
             .refreshable { await model.refreshActivity() }
             .jarvisPageHeader { header }
             }
@@ -287,10 +291,12 @@ struct JarvisActivitySheet: View {
             JarvisSectionHeadline(copy(.activityRunning))
             JarvisRowGroup {
                 ForEach(tasks, id: \.id) { task in
-                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                        Text(task.title).font(.body.weight(.medium))
-                        Text(task.activity).font(.subheadline).foregroundStyle(.secondary)
-                        Text("\(task.project) · \(task.agent.capitalized)").font(.caption).foregroundStyle(.secondary)
+                    taskLink(task.id, identifier: "activity.running.open.\(task.id)") {
+                        VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                            Text(task.title).font(.body.weight(.medium))
+                            Text(task.activity).font(.subheadline).foregroundStyle(.secondary)
+                            Text("\(task.project) · \(task.agent.capitalized)").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     .jarvisListRow(separator: task.id != tasks.last?.id)
                 }
@@ -315,16 +321,18 @@ struct JarvisActivitySheet: View {
         let busy = group.items.contains { model.dismissingActivityIDs.contains($0.id) }
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             HStack(alignment: .center, spacing: JarvisDesignTokens.chatComposerSpacing) {
-                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                    Text(group.latest.title).font(.body)
-                    HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                        Text(timeString(group.latest.at))
-                        if group.olderCount > 0 {
-                            Text(String(format: copy(.groupMore), group.olderCount))
+                taskLink(group.latest.factoryTaskID, identifier: "activity.open.\(group.latest.id)") {
+                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                        Text(group.latest.title).font(.body)
+                        HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                            Text(timeString(group.latest.at))
+                            if group.olderCount > 0 {
+                                Text(String(format: copy(.groupMore), group.olderCount))
+                            }
                         }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)
                 if busy {
@@ -344,13 +352,27 @@ struct JarvisActivitySheet: View {
                 }
             }
             if group.olderCount > 0 {
-                DisclosureGroup {
+                JarvisRowButton(identifier: "activity.older.\(group.id)") {
+                    withAnimation(reduceMotion ? nil : .snappy) {
+                        if !expandedGroups.insert(group.id).inserted { expandedGroups.remove(group.id) }
+                    }
+                } content: {
+                    HStack {
+                        Text(String(format: copy(.groupMore), group.olderCount))
+                        Spacer()
+                        Image(systemName: expandedGroups.contains(group.id) ? "chevron.up" : "chevron.down")
+                            .accessibilityHidden(true)
+                    }
+                }
+                if expandedGroups.contains(group.id) {
                     LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
                         ForEach(group.items.dropFirst(), id: \.id) { item in
                             HStack(alignment: .center) {
-                                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                                    Text(item.title).font(.callout)
-                                    Text(timeString(item.at)).font(.caption).foregroundStyle(.secondary)
+                                taskLink(item.factoryTaskID, identifier: "activity.open.\(item.id)") {
+                                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                                        Text(item.title).font(.callout)
+                                        Text(timeString(item.at)).font(.caption).foregroundStyle(.secondary)
+                                    }
                                 }
                                 Spacer(minLength: 0)
                                 JarvisIconButton(
@@ -363,8 +385,6 @@ struct JarvisActivitySheet: View {
                         }
                     }
                     .padding(.top, JarvisDesignTokens.chatMessageSpacing)
-                } label: {
-                    Text(String(format: copy(.groupMore), group.olderCount))
                 }
             }
         }
@@ -379,6 +399,26 @@ struct JarvisActivitySheet: View {
             } else {
                 Task { await model.dismissActivity(group.latest) }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func taskLink<Content: View>(
+        _ taskID: String?, identifier: String, @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        if let taskID {
+            JarvisRowButton(identifier: identifier) { onOpenTask(taskID) } content: {
+                HStack {
+                    content()
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+            }
+        } else {
+            content()
         }
     }
 
@@ -413,6 +453,8 @@ private struct JarvisSwipeToDismiss: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // Keep task links and dismiss buttons individually reachable inside the swipe group.
+            .accessibilityElement(children: .contain)
             .offset(x: offset)
             .opacity(1 - min(abs(offset) / (threshold * 3), 0.4))
             .simultaneousGesture(

@@ -31,6 +31,9 @@ final class PageChromeUITests: XCTestCase {
             }
             let content = app.descendants(matching: .any).matching(identifier: marker).firstMatch
             XCTAssertTrue(content.waitForExistence(timeout: 10), marker)
+            assertScrollViewportUnderlapsChrome(marker: marker, footer: [
+                "notes": "notes.plus", "health": "health.mode.0", "settings": "settings.addDeployment"
+            ][page])
             if page == "notes" {
                 XCTAssertGreaterThan(content.frame.height, 70, "The long task title must wrap to two lines")
                 let metadata = content.buttons["notes.task.open"].value as? String ?? ""
@@ -68,6 +71,7 @@ final class PageChromeUITests: XCTestCase {
         column.tap()
         let first = app.staticTexts["Synthetic scrolling task 1"]
         XCTAssertTrue(first.waitForExistence(timeout: 5))
+        assertViewport(app.scrollViews["factory.board"], footer: "factory.plus")
         capture("build79-factory-resting-\(theme)")
         scrollAndCapture(marker: first, name: "build79-factory-scrolled-\(theme)")
         XCTAssertTrue(app.buttons["factory.segment.board"].isHittable)
@@ -86,6 +90,25 @@ final class PageChromeUITests: XCTestCase {
         let target = app.buttons["navigation.\(destination)"]
         XCTAssertTrue(target.waitForExistence(timeout: 5))
         target.tap()
+    }
+
+    private func assertScrollViewportUnderlapsChrome(marker: String, footer: String?) {
+        let scroll = app.scrollViews.containing(.any, identifier: marker).firstMatch
+        let list = app.collectionViews.containing(.any, identifier: marker).firstMatch
+        assertViewport(scroll.exists ? scroll : list, footer: footer)
+    }
+
+    private func assertViewport(_ viewport: XCUIElement, footer: String?) {
+        XCTAssertTrue(viewport.exists, "The content needs a real scroll viewport")
+        let title = app.staticTexts["page.title"]
+        XCTAssertLessThan(viewport.frame.minY, title.frame.midY,
+                          "Content must scroll behind the header, not stop at a clipped boundary")
+        if let footer {
+            let control = app.buttons[footer]
+            XCTAssertTrue(control.exists)
+            XCTAssertGreaterThan(viewport.frame.maxY, control.frame.midY,
+                                 "Content must scroll behind the footer controls")
+        }
     }
 
     private func scrollAndCapture(marker: XCUIElement, name: String) {

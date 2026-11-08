@@ -79,13 +79,12 @@ public final class JarvisChatClient: Sendable {
             screenContext: screenContext,
             visualContext: visualContext
         ))
-        let recoveryStart = await clock.now()
         let response = try await client.performChatStream(
             method: .post,
             path: ["conversation", "sessions", sessionId, "turns"],
             body: body
         )
-        return eventStream(from: response, sessionId: sessionId, recoveryStart: recoveryStart)
+        return eventStream(from: response, sessionId: sessionId)
     }
 
     /// Uploads one live frame for the next turn and returns the reference the turn carries. The model receives the
@@ -140,7 +139,6 @@ public final class JarvisChatClient: Sendable {
         return eventStream(
             from: response,
             sessionId: sessionId,
-            recoveryStart: start,
             messageId: messageId
         )
     }
@@ -263,7 +261,6 @@ public final class JarvisChatClient: Sendable {
     private func eventStream(
         from response: HTTPStreamResponse,
         sessionId: String,
-        recoveryStart: Duration,
         messageId initialMessageId: String? = nil
     ) -> AsyncThrowingStream<ChatEvent, any Error> {
         AsyncThrowingStream { continuation in
@@ -274,6 +271,7 @@ public final class JarvisChatClient: Sendable {
                 var replayIndex = 0
                 var isReplayConnection = false
                 var receivedDone = false
+                var disconnectedSince: Duration?
 
                 func emit(_ event: ServerSentEvent) throws -> Bool {
                     if isReplayConnection {
@@ -299,6 +297,7 @@ public final class JarvisChatClient: Sendable {
                         throw JarvisChatClientError.serverEvent(code: failure.code, message: failure.message)
                     }
                     if case .user(let message) = chatEvent, acceptedMessageId == nil { acceptedMessageId = message.id }
+                    disconnectedSince = nil
                     previouslyReceived.append(event)
                     continuation.yield(chatEvent)
                     if case .done = chatEvent { return true }
@@ -340,6 +339,8 @@ public final class JarvisChatClient: Sendable {
                             }
                             try Task.checkCancellation()
                             continuation.yield(.connectionState(.reconnecting))
+                            if disconnectedSince == nil { disconnectedSince = await clock.now() }
+                            let recoveryStart = disconnectedSince!
                             try await waitForNextAttempt(since: recoveryStart)
                             response = try await openReattachResponse(
                                 sessionId: sessionId,
@@ -431,13 +432,17 @@ public final class JarvisChatClient: Sendable {
             let payload = try JSONDecoder().decode(TextPayload.self, from: data)
             guard !payload.text.isEmpty else { throw JarvisChatClientError.invalidResponse }
             return .delta(text: payload.text)
-        case "acknowledgment":
+        case "acknowledgment", "commentary":
             let payload = try JSONDecoder().decode(TextPayload.self, from: data)
             guard !payload.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   payload.text.unicodeScalars.count <= 500 else {
                 throw JarvisChatClientError.invalidResponse
             }
-            return .acknowledgment(text: payload.text)
+            return event.name == "commentary" ? .commentary(text: payload.text) : .acknowledgment(text: payload.text)
+        case "tool_activity":
+            return .toolActivity(try JSONDecoder().decode(ChatToolActivity.self, from: data))
+        case "progress":
+            return .progress(try JSONDecoder().decode(ChatProgress.self, from: data))
         case "food_invitation":
             let value = try JSONDecoder().decode(JSONValue.self, from: data)
             if case .null = value { return .foodInvitation(nil) }

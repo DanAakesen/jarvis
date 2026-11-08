@@ -214,7 +214,9 @@ public enum FactoryTaskEventSource: String, Codable, Sendable {
 
 public struct FactoryTaskEvent: Codable, Equatable, Identifiable, Sendable {
     public let id: String
-    public let taskId: String
+    /// History is scoped by the task-detail response; only live event envelopes carry this ID.
+    /// The stream client still requires it to match the requested task before delivering an event.
+    public let taskId: String?
     public let type: String
     public let summary: String?
     public let payload: FactoryJSONValue

@@ -104,6 +104,8 @@ final class JarvisChatModel: ObservableObject {
     @Published var statusLine: String?
     @Published var streamingText = ""
     @Published private(set) var acknowledgment: String?
+    @Published private(set) var progressUpdates: [String] = []
+    @Published private(set) var turnStartedAt: Date?
     @Published private(set) var isReconnecting = false
     @Published private var toolActivities: [ChatToolActivity] = []
     private var turnMessageIDs = Set<String>()
@@ -345,6 +347,8 @@ final class JarvisChatModel: ObservableObject {
         }
         if fixtureMode { fixtureTurnUsed = true }
         isSending = true
+        turnStartedAt = Date()
+        progressUpdates = []
         isCancelling = false
         actionError = nil
         streamingText = ""
@@ -486,13 +490,7 @@ final class JarvisChatModel: ObservableObject {
                 switch event {
                 case .chatToolActivity(let tool):
                     guard isSending else { continue }
-                    if let index = toolActivities.firstIndex(where: { $0.id == tool.id }) {
-                        // A replayed start must not replace a completed outcome.
-                        if toolActivities[index].outcome == nil || tool.outcome != nil { toolActivities[index] = tool }
-                    } else {
-                        toolActivities.append(tool)
-                        if toolActivities.count > 128 { toolActivities.removeFirst() }
-                    }
+                    recordToolActivity(tool)
                 case .pendingConfirmationsChanged:
                     await refreshActivity()
                     if !isSending { await refreshHistory() }
@@ -773,11 +771,22 @@ final class JarvisChatModel: ObservableObject {
             activeMessageID = turn.messageId
             turnMessageIDs.insert(turn.messageId)
             isSending = true
+            turnStartedAt = nil
+            progressUpdates = []
             statusLine = JarvisChatLocalization.string(.thinkingReconnecting, language: appLanguage)
             sendTask = Task { await reattach(turn) }
             actionError = nil
         } catch {
             actionError = message(for: error)
+        }
+    }
+
+    private func recordToolActivity(_ tool: ChatToolActivity) {
+        if let index = toolActivities.firstIndex(where: { $0.id == tool.id }) {
+            if toolActivities[index].outcome == nil || tool.outcome != nil { toolActivities[index] = tool }
+        } else {
+            toolActivities.append(tool)
+            if toolActivities.count > 128 { toolActivities.removeFirst() }
         }
     }
 
@@ -788,6 +797,7 @@ final class JarvisChatModel: ObservableObject {
             case .connectionState(let state):
                 isReconnecting = state == .reconnecting
             case .user(let message):
+                if turnStartedAt == nil { turnStartedAt = ChatWorkProgress.startDate(message.at) ?? Date() }
                 turnMessageIDs.insert(message.id)
                 if activeMessageID == nil { activeMessageID = message.id }
                 sessionID = message.sessionId
@@ -797,13 +807,16 @@ final class JarvisChatModel: ObservableObject {
                 streamingText += text
             case .acknowledgment(let text):
                 acknowledgment = text
-                if streamingText.hasPrefix(text) { streamingText.removeFirst(text.count) }
+                streamingText = ChatWorkProgress.removingUpdate(text, from: streamingText)
+            case .commentary(let text):
+                progressUpdates.append(text)
+                streamingText = ChatWorkProgress.removingUpdate(text, from: streamingText)
             case .interrupted(let message):
                 var row = JarvisChatRow(message)
                 row.interrupted = true
                 addOrReplace(row)
                 streamingText = ""
-                acknowledgment = nil
+                // Preserve interim updates across steering within the same turn.
                 // An interrupted round can continue with a steering message on the same turn.
             case .done(let message):
                 addOrReplace(JarvisChatRow(message))
@@ -811,7 +824,14 @@ final class JarvisChatModel: ObservableObject {
                 streamingText = ""
                 statusLine = nil
                 acknowledgment = nil
+                progressUpdates = []
                 isReconnecting = false
+            case .toolActivity(let tool):
+                recordToolActivity(tool)
+            case .progress(let progress):
+                statusLine = JarvisChatLocalization.string(
+                    progress.phase == .tools ? .turnWorking : .turnWriting, language: appLanguage
+                )
             case .foodInvitation, .error, .unknown:
                 break
             }

@@ -860,12 +860,13 @@ return {
                 if (chunk.done) break;
                 const delta = chunk.value;
                 if (typeof delta !== 'string') {
-                  if (acknowledgmentSent || !partial.startsWith(delta.text)) {
-                    throw new Error('Chat acknowledgment did not match the streamed reply');
+                  const interim = partial.trimStart();
+                  if ((delta.type === 'acknowledgment' && acknowledgmentSent) || !interim.startsWith(delta.text.trimStart())) {
+                    throw new Error('Chat progress update did not match the streamed reply');
                   }
-                  acknowledgmentSent = true;
-                  partial = partial.slice(delta.text.length);
-                  yield streamEvent('acknowledgment', { text: delta.text });
+                  if (delta.type === 'acknowledgment') acknowledgmentSent = true;
+                  partial = interim.slice(delta.text.trimStart().length);
+                  yield streamEvent(delta.type, { text: delta.text });
                   next = agentIterator.next();
                   continue;
                 }

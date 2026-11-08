@@ -29,4 +29,16 @@ final class NowFeedActivityGroupingTests: XCTestCase {
     func testEmptyFeedHasNoGroups() {
         XCTAssertTrue(NowFeedActivityGrouping.groups([]).isEmpty)
     }
+
+    func testTaskNavigationUsesOnlyAValidTypedLink() {
+        for (link, expected) in [("task:23", "23"), ("task:9223372036854775807", "9223372036854775807"),
+                                 ("task:0", nil), ("task:23/controls", nil), ("task:9223372036854775808", nil),
+                                 ("https://example.invalid/task:23", nil), ("release:23", nil), ("task:023", nil)] {
+            let notification = NowFeedActivityItem(
+                id: "1", category: .alert, title: "Task 23 is running", link: link, at: "2026-11-08T12:00:00Z"
+            )
+            XCTAssertEqual(notification.factoryTaskID, expected, link)
+        }
+        XCTAssertNil(item("1", .alert, "2026-11-08T12:00:00Z").factoryTaskID)
+    }
 }

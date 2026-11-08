@@ -15,6 +15,12 @@ export function resolveHealthOwner(request: FastifyRequest): string {
   throw new AuthenticationDenied(403);
 }
 
+/** Owner chat/voice tools share app records; external connectors keep their separate boundary. */
+export function resolveHealthConversationOwner(request: FastifyRequest): string {
+  if (request.healthConnectorPrincipal) throw new AuthenticationDenied(403);
+  return resolveHealthOwner(request);
+}
+
 export function resolveHealthBrowserOwner(request: FastifyRequest): string {
   if (!request.principal || request.agentPrincipal) throw new AuthenticationDenied(403);
   if (request.healthConnectorPrincipal) throw new AuthenticationDenied(403);

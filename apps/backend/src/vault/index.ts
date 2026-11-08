@@ -2213,6 +2213,39 @@ export function createVaultModule(options: {
         }
       });
 
+      // A direct owner swipe action on a legacy iOS lift log. Agent delete tools
+      // retain their existing approval flow; this route cannot delete other notes.
+      app.delete<{ Body: { path: string; sha: string } }>('/notes/gym-lift', {
+        bodyLimit: 1024,
+        schema: { body: {
+          type: 'object', additionalProperties: false, required: ['path', 'sha'],
+          properties: { path: { type: 'string', maxLength: 180 }, sha: { type: 'string', pattern: '^[a-fA-F0-9]{40}$' } },
+        } },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        const signal = AbortSignal.timeout(30_000);
+        try {
+          const path = validatePath(request.body.path);
+          if (!/^Personal\/Gym log\/\d{4}-\d{2}-\d{2}-\d{4}-(chest|back|arms|legs|cardio)\.md$/u.test(path)) {
+            return reply.code(400).send({ error: 'Invalid lift note' });
+          }
+          const note = await options.client.read(path, signal);
+          if (!note) return reply.code(404).send({ error: 'Lift note not found' });
+          if (!/^type: gym-log$/mu.test(note.content) || !/^- Lift: .+ · [0-9.]+ kg × \d+ × \d+$/mu.test(note.content)) {
+            return reply.code(400).send({ error: 'This note is not a lift log' });
+          }
+          if (note.sha !== request.body.sha.toLowerCase()) {
+            return reply.code(409).send({ error: 'The lift changed since it was loaded', currentSha: note.sha, content: note.content });
+          }
+          await deleteNote(path, note.sha, signal);
+          return reply.code(204).send();
+        } catch (error) {
+          if (error instanceof VaultWriteConflictError) return reply.code(409).send({ error: 'The lift changed since it was loaded', currentSha: null, content: null });
+          if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
+          return reply.code(503).send({ error: 'Lift deletion could not be verified. Refresh before retrying.' });
+        }
+      });
+
       app.post<{
         Body: { path: string; content: string; reason?: string };
       }>('/notes', {

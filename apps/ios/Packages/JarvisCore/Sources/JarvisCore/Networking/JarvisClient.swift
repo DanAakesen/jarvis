@@ -305,8 +305,9 @@ public final class JarvisClient: Sendable {
             queryItems: [],
             accept: accept,
             contentType: "application/json",
-            // Match the existing ingress stream ceiling and allow the hosted
-            // agent's 210-second invocation budget. Ordinary reads remain 30s.
+            // URLSession uses this as a network inactivity limit. Established
+            // work sends keepalives and reconnects by turn ID; it has no total
+            // elapsed-time deadline. Ordinary reads remain 30s.
             timeout: .seconds(240)
         )
         try Task.checkCancellation()

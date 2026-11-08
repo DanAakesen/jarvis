@@ -6,7 +6,8 @@ Automated/native passes and a TestFlight upload are not owner acceptance.
 ## Short next session
 
 Build 82 contains Notes/Ember and the earlier build-81 fixes. The tighter Chat
-reply spacing and progress inside the transcript are being qualified for the next build; do not expect it in 82.
+reply spacing and progress inside the transcript are being qualified with the Factory navigation fixes for replacement build 84;
+build 83 was cancelled before upload. Do not expect these fixes in 82.
 
 - [ ] **Notes:** swipe the title-only pinned carousel, open a recent note, browse
   folders, and use New folder at the bottom right. Create/edit a disposable note,
@@ -19,12 +20,39 @@ reply spacing and progress inside the transcript are being qualified for the nex
   immediately cleared composer, one progress indicator and a final reply. Type a
   next draft while waiting and confirm it survives. Check short bubbles fit their
   text, final tools collapse under Jarvis, and partial reply text can be selected.
-- [ ] **Reply spacing, next build:** the timestamp, reply and Tool activity should
-  read as one group. Working/Writing reply should scroll with the conversation,
+- [ ] **Reply spacing, next build:** the Working for timer should sit above public progress updates, with
+  thinking/tool activity underneath. Tap a message to show its timestamp and tap
+  again to hide it. Long-press selection must still work. All progress scrolls with the conversation,
   without a duplicate above the Now bar. Open/close tools and select text; keep
   separate messages clear.
 
-- [ ] **PC bridge warning, after backend update:** an online PC should not create
+- [ ] **Factory navigation, replacement build:** tap Task 23 from Notifications,
+  including an expanded older update, and open P11-13 from the board. Confirm the
+  task and history load. An issue-only card should open its GitHub issue. Do not
+  press Recover while the quota/capacity blocker remains.
+
+- [ ] **Jarvis gym logging, after backend delivery:** send one explicit lift/session
+  request with exercise, kg, reps, sets, date and session. Verify the returned values
+  in Health and the session in Home after refresh, including while a vault copy is
+  pending. Ask Jarvis to correct that same test lift, then delete the test entry;
+  verify no extra approval and no duplicate record. Repeat in Copilot only after
+  its tool-definition refresh passes. The earlier failed workout is not replayed
+  automatically. Historical app vault logs are retained without migration.
+
+- [ ] **Lifts, replacement build:** tap a disposable lift in Last lifts and confirm
+  the editor contains its current exercise, weight, reps and sets. Change one
+  value, save and reopen it. Short-swipe left to reveal only the pencil; swipe
+  farther to reveal trash beside it. Swiping alone must not delete. Tap trash on
+  the disposable lift and confirm it stays removed after refresh.
+
+- [ ] **Long replies and test chat, replacement build:** use a read-only request
+  that requires several tools. Expect acknowledgment, actual tool activity and
+  one progress row in the conversation until a final result. If the connection
+  drops, use Refresh test history and verify the partial acknowledgment stays
+  visible or the existing turn resumes. Do not resend an uncertain write. A live
+  run past the former 210-second boundary still needs qualification.
+
+- [ ] **PC bridge warning, backend deployed:** an online PC should not create
   a Now-bar notification. An offline warning should clear quietly on reconnect.
 
 ## Additional device checks when convenient
@@ -46,10 +74,10 @@ reply spacing and progress inside the transcript are being qualified for the nex
 
 ## Deferred or blocked
 
-- **Copilot comparison — deferred by the owner.** The complete prompts, steps and
-  scorecard are in [the saved comparison guide](../../runtime-comparison-owner-test.md).
+- **Copilot comparison — quick smoke test reported good; combined test pending.**
+  The actual harness differences, proposed project exercise and optional sample prompt are in [the saved comparison guide](../../runtime-comparison-owner-test.md).
   Current remains the default; live Copilot compatibility passed, owner quality
-  comparison is pending. No need to repeat the full comparison now.
+  comparison is pending. The older individual tests are optional diagnostics.
 - **Factory end-to-end — blocked, not ready for recovery testing.** Azure returned
   QuotaExceeded before the 128 GiB worker activated. Subscription quota details are
   pending. Once provisioned and qualified, recover existing task 23 / issue 1634,
@@ -58,6 +86,9 @@ reply spacing and progress inside the transcript are being qualified for the nex
 - **Approval friction:** after Factory is ready, confirm a clear authorized coding
   instruction proceeds without a redundant yes and a plan-only request stays a
   proposal. Backend acceptance passed; owner end-to-end confirmation is pending.
+  The broader [productivity review](../../productivity-blocker-review.md) records
+  remaining proposal expiry, interpretation failure and recovery problems; those
+  follow-ups are not all implemented in this release.
 
 Loading animations and the general widget appearance were already accepted.
 Retain those decisions; the widget checks above cover the later requested changes.

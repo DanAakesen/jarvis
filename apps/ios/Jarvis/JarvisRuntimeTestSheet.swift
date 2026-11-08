@@ -14,6 +14,12 @@ private final class JarvisRuntimeTestModel: ObservableObject {
         set { composerDraft.replace(with: newValue) }
     }
     @Published var partial = ""
+    @Published var acknowledgment = ""
+    @Published var progressUpdates: [String] = []
+    @Published var turnStartedAt: Date?
+    @Published var tools: [ChatToolActivity] = []
+    @Published var isReconnecting = false
+    @Published var phase: ChatProgress.Phase = .model
     @Published var loading = false
     @Published var creating = false
     @Published var sending = false
@@ -79,9 +85,23 @@ private final class JarvisRuntimeTestModel: ObservableObject {
             let incoming = page.messages.map(JarvisChatRow.init)
             messages = older ? incoming + messages.filter { row in !incoming.contains { $0.id == row.id } } : incoming
             nextCursor = page.nextCursor
-            partial = ""
-            recovery.historyReviewed()
-            error = recovery.sessionBlocked ? .runtimeBlocked : nil
+            // A refresh must not erase an acknowledgment/partial result that was never saved.
+            let hasFinal = activeMessageID.flatMap(Int64.init).map { source in
+                incoming.contains { $0.role == .jarvis && (Int64($0.id) ?? 0) > source }
+            } ?? false
+            if hasFinal {
+                partial = ""
+                acknowledgment = ""
+                tools = []
+                progressUpdates = []
+                activeMessageID = nil
+            }
+            if activeMessageID == nil || hasFinal {
+                recovery.historyReviewed()
+                error = recovery.sessionBlocked ? .runtimeBlocked : nil
+            } else {
+                reconnect()
+            }
         } catch {
             guard !Task.isCancelled else { return }
             recovery.failed(code: nil)
@@ -96,35 +116,88 @@ private final class JarvisRuntimeTestModel: ObservableObject {
         error = nil
         partial = ""
         activeMessageID = nil
+        acknowledgment = ""
+        tools = []
+        isReconnecting = false
+        phase = .model
+        turnStartedAt = Date()
+        progressUpdates = []
         turn = Task {
             defer {
                 sending = false
                 stopping = false
-                activeMessageID = nil
+                isReconnecting = false
                 turn = nil
             }
             do {
                 let events = try await client.sendTurn(sessionId: session.id, text: text)
-                for try await event in events {
-                    switch event {
-                    case .user(let message):
-                        activeMessageID = message.id
-                        append(JarvisChatRow(message))
-                    case .delta(let text): partial += text
-                    case .done(let message):
-                        append(JarvisChatRow(message))
-                        partial = ""
-                    case .interrupted(let message): append(JarvisChatRow(message))
-                    case .error(let failure): throw JarvisChatClientError.serverEvent(code: failure.code, message: nil)
-                    case .acknowledgment, .foodInvitation, .unknown, .connectionState: break
-                    }
-                }
+                try await consume(events)
             } catch {
                 if activeMessageID == nil { draft = text }
                 let code: String?
                 if let failure = error as? JarvisChatClientError, case .serverEvent(let value, _) = failure { code = value } else { code = nil }
                 recovery.failed(code: code)
                 self.error = recovery.sessionBlocked ? .runtimeBlocked : .runtimeUncertain
+            }
+        }
+    }
+
+    private func reconnect() {
+        guard !sending, let client, let session, let activeMessageID else { return }
+        sending = true
+        isReconnecting = true
+        turn = Task {
+            defer { sending = false; isReconnecting = false; turn = nil }
+            do {
+                let events = try await client.reattachTurn(sessionId: session.id, messageId: activeMessageID)
+                // The GET replays the same turn from the beginning; never POST it again.
+                partial = ""
+                acknowledgment = ""
+                tools = []
+                progressUpdates = []
+                isReconnecting = false
+                error = nil
+                try await consume(events)
+                recovery.historyReviewed()
+            } catch {
+                recovery.failed(code: nil)
+                self.error = recovery.sessionBlocked ? .runtimeBlocked : .runtimeUncertain
+            }
+        }
+    }
+
+    private func consume(_ events: AsyncThrowingStream<ChatEvent, any Error>) async throws {
+        for try await event in events {
+            switch event {
+            case .user(let message):
+                if turnStartedAt == nil { turnStartedAt = ChatWorkProgress.startDate(message.at) ?? Date() }
+                activeMessageID = message.id
+                append(JarvisChatRow(message))
+            case .delta(let text): partial += text
+            case .acknowledgment(let text):
+                acknowledgment = text
+                partial = ChatWorkProgress.removingUpdate(text, from: partial)
+            case .commentary(let text):
+                progressUpdates.append(text)
+                partial = ChatWorkProgress.removingUpdate(text, from: partial)
+            case .toolActivity(let tool):
+                guard tool.messageId == activeMessageID else { continue }
+                if let index = tools.firstIndex(where: { $0.id == tool.id }) {
+                    if tools[index].outcome == nil || tool.outcome != nil { tools[index] = tool }
+                } else { tools.append(tool) }
+            case .progress(let progress): phase = progress.phase
+            case .connectionState(let state): isReconnecting = state == .reconnecting
+            case .done(let message):
+                append(JarvisChatRow(message))
+                partial = ""
+                acknowledgment = ""
+                progressUpdates = []
+                activeMessageID = nil
+            case .interrupted(let message):
+                append(JarvisChatRow(message))
+                partial = ""
+            case .error(let failure): throw JarvisChatClientError.serverEvent(code: failure.code, message: nil)
+            case .foodInvitation, .unknown: break
             }
         }
     }
@@ -149,6 +222,8 @@ struct JarvisRuntimeTestSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var model: JarvisRuntimeTestModel
+    @State private var toolsExpanded = true
+    @State private var selectedTimestampID: String?
     @State private var inputFocused = false
     @State private var requestTask: Task<Void, Never>?
     private let appLanguage: JarvisAppLanguage
@@ -253,15 +328,66 @@ struct JarvisRuntimeTestSheet: View {
             Text(copy(.runtimeEmpty)).foregroundStyle(.secondary)
         }
         ForEach(model.messages) { message in
-            VStack(alignment: .leading, spacing: JarvisDesignTokens.compactSpacing) {
+            VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
                 Text(message.role == .dan ? copy(.runtimeYou) : "Jarvis").font(.headline)
-                Text(.init(message.text)).textSelection(.enabled)
+                if selectedTimestampID == message.id, let date = ChatWorkProgress.startDate(message.at) {
+                    Text(date, format: .dateTime.hour().minute())
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("runtimeTest.timestamp.\(message.id)")
+                }
+                JarvisSelectableReply(text: message.text, identifier: "runtimeTest.reply.\(message.id)") {
+                    selectedTimestampID = selectedTimestampID == message.id ? nil : message.id
+                }
+                .accessibilityAction(named: copy(.turnShowTime)) {
+                    selectedTimestampID = selectedTimestampID == message.id ? nil : message.id
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("runtimeTest.message.\(message.id)")
         }
+        if model.sending, let startedAt = model.turnStartedAt {
+            JarvisChatWorkHeader(startedAt: startedAt, isReconnecting: model.isReconnecting,
+                                language: appLanguage, identifier: "runtimeTest.elapsed")
+        }
+        if !model.acknowledgment.isEmpty {
+            Text(.init(model.acknowledgment)).textSelection(.enabled)
+                .accessibilityIdentifier("runtimeTest.acknowledgment")
+        }
+        ForEach(Array(model.progressUpdates.enumerated()), id: \.offset) { index, text in
+            Text(.init(text)).textSelection(.enabled)
+                .accessibilityIdentifier("runtimeTest.update.\(index)")
+        }
         if !model.partial.isEmpty { Text(.init(model.partial)).textSelection(.enabled) }
-        if model.sending { JarvisLoadingView(title: copy(.runtimeSending)) }
+        if model.sending || !model.tools.isEmpty {
+            VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
+                JarvisRowButton(identifier: model.sending ? "runtimeTest.progress" : "runtimeTest.tools",
+                                action: { toolsExpanded.toggle() }) {
+                    HStack(spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
+                        Text(copy(model.sending ? (model.isReconnecting ? .thinkingReconnecting :
+                                (model.phase == .tools ? .turnWorking : .turnThinking)) : .toolActivity))
+                        if !model.tools.isEmpty { Text("\(model.tools.count)") }
+                        Image(systemName: toolsExpanded ? "chevron.down" : "chevron.right")
+                            .accessibilityHidden(true)
+                    }
+                    .font(.footnote).foregroundStyle(.secondary)
+                }
+                if toolsExpanded {
+                    ForEach(model.tools) { tool in
+                        HStack {
+                            Image(systemName: tool.outcome == nil ? "ellipsis" : (tool.outcome == .ok ? "checkmark.circle" : "exclamationmark.circle"))
+                                .accessibilityHidden(true)
+                            Text(tool.toolName.replacingOccurrences(of: "_", with: " "))
+                            Text(copy(tool.outcome.map { $0 == .ok ? .toolOK : ($0 == .refused ? .toolRefused : .toolError) } ?? .toolRunning))
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.caption)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("runtimeTest.tool.\(tool.id)")
+                    }
+                }
+            }
+            .onChange(of: model.sending, initial: true) { _, sending in toolsExpanded = sending }
+        }
     }
 
     private var composer: some View {

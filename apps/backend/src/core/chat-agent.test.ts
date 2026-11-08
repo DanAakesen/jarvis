@@ -154,11 +154,11 @@ describe('Foundry Invocations chat agent', () => {
     expect(JSON.parse(fetcher.mock.calls[0]![1]!.body as string).visualContext).toEqual(visualContext);
   });
 
-  it('preserves the acknowledgment boundary after its streamed text', async () => {
+  it.each(['acknowledgment', 'commentary'] as const)('preserves the %s boundary after its streamed text', async (kind) => {
     const acknowledgment = "I'll compare your saved targets.";
     const { agent } = createAgent(vi.fn(async () => streamedResponse([
       `event: delta\ndata: ${JSON.stringify({ text: acknowledgment })}\n\n`,
-      `event: acknowledgment\ndata: ${JSON.stringify({ text: acknowledgment })}\n\n`,
+      `event: ${kind}\ndata: ${JSON.stringify({ text: acknowledgment })}\n\n`,
       'event: delta\ndata: {"text":"The targets match."}\n\n',
       'event: done\ndata: {}\n\n',
     ])));
@@ -170,7 +170,7 @@ describe('Foundry Invocations chat agent', () => {
 
     expect(chunks).toEqual([
       acknowledgment,
-      { type: 'acknowledgment', text: acknowledgment },
+      { type: kind, text: acknowledgment },
       'The targets match.',
     ]);
   });

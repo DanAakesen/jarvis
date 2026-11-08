@@ -9001,3 +9001,87 @@ comments without retaining them in replay storage. Tool activity is filtered to 
 turn's message IDs and published as `tool_activity`; phase callbacks emit `progress`.
 Existing replay byte limits, authorization, explicit cancellation and completed-reply
 persistence remain. In-memory recovery is not restart-durable execution.
+
+
+### iOS notification task routing and history (8 November 2026)
+
+Now-feed task links are validated as task:<positive SQL bigint>; notification titles
+are never parsed as routes. Chat closes its sheet, then sends a root-owned Factory
+task intent. Factory consumes the intent and opens the existing authenticated
+task-detail client. Dismissal and task control are unchanged. Issue-only board cards
+reuse the validated HTTPS GitHub issue URL.
+
+History events follow TaskEventRecord, which omits taskId. The iOS model accepts
+that absence in the task-scoped detail response. Task SSE still requires matching
+taskId and event ID before delivery, as required by TaskEventMessage.
+
+
+Native page chrome uses top/bottom safe-area insets with no container backdrop.
+The scroll viewport spans the header/footer, while content insets keep its first
+and last rows reachable. This replaces the clipped VStack arrangement following
+the owner's 8 November clarification. The shared ambient renderer still owns the
+continuous background; individual controls own their glass.
+
+The shared inset header retains the native soft top scroll-edge treatment for
+legibility over moving content. Bottom edges stay unbacked. Screen-level flags
+only hide bottom effects so they do not suppress the shared top treatment.
+
+The top uses `safeAreaBar(edge: .top)` rather than `safeAreaInset`: it also extends
+the native scroll edge through the custom header, per the [Apple API contract](https://developer.apple.com/documentation/swiftui/view/safeareabar(edge:alignment:spacing:content:)-9hwgb).
+This API is available from the existing iOS 26 minimum.
+
+## 8 November 2026 — Lift mutation and conversation progress
+
+Health rows retain UUIDs for database lifts or original path/SHA/content for legacy
+iOS Gym log notes. Edits use PATCH /health/lifts/:id or SHA-checked PUT /notes/note,
+changing only the legacy lift line. Deletion uses the existing health DELETE route
+or the new owner-only DELETE /notes/gym-lift with original SHA. The latter is
+restricted to legacy Personal/Gym log filenames and lift-note content; tool-level
+vault deletion approvals are unchanged. Successful writes refresh summaries and
+invalidate Notes/Health caches. Failed writes are shown without optimistic removal.
+
+Chat SSE now decodes tool_activity and progress. Normal Chat deduplicates shared
+workspace/SSE tool events by activity ID; runtime tests render acknowledgment,
+expanded live tools and one inline progress indicator. A failed runtime refresh
+retains partial output, and recovery uses GET for the existing turn. Reconnect
+budgets begin at disconnection rather than at original message submission.
+
+The camera image-processing context initializes on the serial frame callback queue
+when a frame actually needs encoding. Creating the Chat camera placeholder no
+longer initializes Core Image/Metal on the main thread. The context remains reused
+for subsequent frames of that capture object.
+
+## Ongoing public chat updates (8 November 2026)
+
+The model loop marks later pre-tool text with a commentary boundary; the initial
+acknowledgment remains backward compatible. The hosted stream forwards bounded
+commentary text, and the backend verifies it against streamed text before removing
+it from the final reply buffer. Replay retains these events. iOS separates updates
+from the final text and shows an elapsed turn clock in normal and runtime-test chat.
+Only public output text is used; encrypted reasoning is never exposed. Message taps
+toggle timestamps without replacing the native selection/linked-text view.
+
+## Gym conversation parity (8 November 2026)
+
+Health composition registers gym_lifts and gym_sessions in the shared backend
+registry for chat, Current/Copilot and owner voice. Their list/create/update/delete
+operations use the existing SQL stores and Gym vault synchronization. Dedicated
+conversation access resolves the configured owner; the existing browser routes
+and external connector boundaries remain unchanged. Mutations require a verified
+current owner message and active non-phone session without an elapsed-turn expiry.
+The server derives create UUIDs from owner/session/message/kind/entryIndex, so
+retries return the original record. Tool schemas accept neither owner nor approval
+nor idempotency flags. Sensitive auditing omits private arguments/results. A pending
+vault copy is distinct from the committed database save. No migration is needed.
+
+Gym parity follow-through: Home/Health had not wired the existing manual workout
+read endpoint, and the backend's daily vault format differs from legacy app log
+filenames. A read adapter now includes saved SQL sessions (including pending vault
+copies) alongside legacy logs, before HealthKit de-duplication. Manual record IDs
+remain distinct from HealthKit IDs. Historical app vault writes remain supported;
+this change does not migrate or rewrite them. Core fixture coverage checks that
+chat-logged sessions appear, retain identity/duration and respect the date range.
+
+Manual/HealthKit workout identities carry their source. Distinct IDs from the same
+source remain distinct; cross-source records use the existing kind/time match so
+chat logging does not double-count the corresponding synced workout.

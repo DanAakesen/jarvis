@@ -22,7 +22,10 @@ struct JarvisFactoryScreenshotConfiguration {
 enum JarvisFactoryFixtureScenario {
     static func makeClient(state: JarvisFactoryPreviewState) throws -> JarvisFactoryClient {
         let scenario = Data(scenario(for: state).utf8)
-        let transport = try FixtureTransport(scenario: scenario)
+        let transport = try TaskHistoryFixtureTransport(
+            base: FixtureTransport(scenario: scenario),
+            history: Data(#"{"version":1,"interactions":[\#(taskDetailResponse)]}"#.utf8)
+        )
         let client = try JarvisClient(
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!,
@@ -90,9 +93,6 @@ enum JarvisFactoryFixtureScenario {
             interactions.append(releasesResponse)
         } else {
             interactions.append(boardResponse)
-            if state == .detail || state == .steer {
-                interactions.append(taskDetailResponse)
-            }
         }
         let encodedInteractions = interactions.joined(separator: ",")
         return #"{"version":1,"interactions":[\#(encodedInteractions)]}"#
@@ -168,6 +168,16 @@ enum JarvisFactoryFixtureScenario {
               let value = try? JSONSerialization.jsonObject(with: data) as? [String: [Any]],
               var cards = value[key] else { return "[]" }
 #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-notification-tasks"), key == "in_progress",
+           var issueCard = cards.first as? [String: Any], var issue = issueCard["issue"] as? [String: Any] {
+            issue["number"] = 11
+            issue["title"] = "Synthetic issue without a task"
+            issue["url"] = "https://github.com/example/example/issues/11"
+            issueCard["issue"] = issue
+            issueCard["task"] = NSNull()
+            issueCard["pr"] = NSNull()
+            cards.append(issueCard)
+        }
         if ProcessInfo.processInfo.arguments.contains("--ui-test-page-chrome"), key == "in_progress",
            let original = cards.first as? [String: Any] {
             cards = (0..<16).map { offset -> [String: Any] in
@@ -205,11 +215,11 @@ enum JarvisFactoryFixtureScenario {
         "latestSessionEndReason":null,"createdAt":"2026-10-30T07:30:00Z",
         "startedAt":"2026-10-30T08:00:00Z","finishedAt":null,
         "events":[{
-          "id":"5","taskId":"21","type":"disk_snapshot","summary":"Synthetic workspace disk snapshot",
+          "id":"5","type":"disk_snapshot","summary":"Synthetic workspace disk snapshot",
           "payload":{"data":{"freeBytes":1073741824,"usedBytes":2147483648,"totalBytes":3221225472}},
           "payloadTruncated":false,"source":"runner","at":"2026-10-30T09:00:00Z"
         },{
-          "id":"6","taskId":"21","type":"artifact_created","summary":"Synthetic test report",
+          "id":"6","type":"artifact_created","summary":"Synthetic test report",
           "payload":{"name":"fixture-report.xml"},"payloadTruncated":false,"source":"runner",
           "at":"2026-10-30T09:15:00Z"
         }],
@@ -220,6 +230,23 @@ enum JarvisFactoryFixtureScenario {
       }}
     }
     """#
+}
+
+/// Task detail and the board can load independently when a notification opens a task.
+private struct TaskHistoryFixtureTransport: HTTPTransport {
+    let base: FixtureTransport
+    let history: Data
+
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        if request.url.path == "/api/factory/tasks/21" {
+            return try await FixtureTransport(scenario: history).send(request)
+        }
+        return try await base.send(request)
+    }
+
+    func stream(_ request: HTTPRequest) async throws -> HTTPStreamResponse {
+        try await base.stream(request)
+    }
 }
 
 private actor FactoryScreenshotTokenStore: TokenStore {

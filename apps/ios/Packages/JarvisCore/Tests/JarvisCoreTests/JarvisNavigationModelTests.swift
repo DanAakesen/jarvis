@@ -3,6 +3,25 @@ import JarvisCore
 import XCTest
 
 final class JarvisNavigationModelTests: XCTestCase {
+    func testFactoryTaskIntentIsConsumedOnceAndClearedOnNavigationOrReset() {
+        var state = JarvisNavigationState()
+        state.requestFactoryTask("23")
+        state.navigate(to: .softwareFactory)
+        XCTAssertEqual(state.requestedFactoryTaskID, "23")
+        state.consumeFactoryTaskRequest("24")
+        XCTAssertEqual(state.requestedFactoryTaskID, "23")
+        state.consumeFactoryTaskRequest("23")
+        XCTAssertNil(state.requestedFactoryTaskID)
+        state.requestFactoryTask("23")
+        state.navigate(to: .chat)
+        XCTAssertNil(state.requestedFactoryTaskID)
+        state.requestFactoryTask("23")
+        state = JarvisNavigationState()
+        XCTAssertNil(state.requestedFactoryTaskID)
+        state.requestFactoryTask("23/controls")
+        XCTAssertNil(state.requestedFactoryTaskID)
+    }
+
     private var repository: URL {
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<7 { root.deleteLastPathComponent() }

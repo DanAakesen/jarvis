@@ -100,6 +100,7 @@ struct JarvisFactoryArea: View {
     @State private var selectedTaskID: String?
     @State private var releasePresented = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @EnvironmentObject private var navigation: JarvisNavigationModel
 
     private var copy: JarvisFactoryCopy { JarvisFactoryCopy(language: language) }
     private var project: FactoryProject? { projects.first { $0.id == selectedProjectID } }
@@ -184,9 +185,17 @@ struct JarvisFactoryArea: View {
         }
         .jarvisAmbientBackground()
         .toolbarBackground(.hidden, for: .bottomBar)
-        .scrollEdgeEffectHidden()
+        .scrollEdgeEffectHidden(true, for: .bottom)
         .task {
             await loadProjects()
+        }
+        .task(id: navigation.requestedFactoryTaskID) {
+            guard let taskID = navigation.requestedFactoryTaskID else { return }
+            selectedTaskID = taskID
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            taskPresented = true
+            navigation.consumeFactoryTaskRequest(taskID)
         }
         .task(id: boardTaskID) {
             await loadSelectedContent()
@@ -733,6 +742,7 @@ private struct JarvisFactoryBoardRow: View {
     let card: FactoryBoardCard
     let copy: JarvisFactoryCopy
     let openTask: () -> Void
+    @Environment(\.openURL) private var openURL
 
     private var task: FactoryBoardTask? { card.task }
     private var issueURL: URL? {
@@ -763,11 +773,14 @@ private struct JarvisFactoryBoardRow: View {
 
     @ViewBuilder
     private var rowButton: some View {
-        if task != nil {
-            Button(action: openTask) {
+        if task != nil || issueURL != nil {
+            JarvisRowButton(identifier: "factory.row.open.\(card.issue.number)") {
+                if task != nil { openTask() }
+                else if let issueURL { openURL(issueURL) }
+            } content: {
                 rowContent
             }
-            .buttonStyle(.plain)
+            .accessibilityHint(task == nil ? copy.text(.openInGitHub) : "")
         } else {
             rowContent
         }
@@ -814,8 +827,8 @@ private struct JarvisFactoryBoardRow: View {
                 .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            if task != nil {
-                Image(systemName: "chevron.right")
+            if task != nil || issueURL != nil {
+                Image(systemName: task == nil ? "arrow.up.right" : "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
                     .padding(.top, 4)

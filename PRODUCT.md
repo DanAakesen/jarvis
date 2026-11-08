@@ -286,6 +286,10 @@ outcomes. The Now bar and Needs you sheet reuse the web app's `/now` snapshot,
 activity dismissal, confirmation decisions and event stream. No iOS-specific
 backend path is part of the screen.
 
+Task-linked notifications, including older grouped updates and running tasks, open
+the matching Factory task after closing Notifications. Opening does not dismiss,
+recover or restart work. Issue-only Factory cards open their GitHub issue.
+
 Active-turn progress belongs inside the scrolling chat with the acknowledgment,
 tools and streamed reply. Show one progress row; it must not be pinned to the
 Now bar or composer.
@@ -2499,7 +2503,10 @@ icons without a surrounding surface. Tasks complete through native trailing swip
 and an accessible named action; writes must succeed before removing a task or
 showing success. Period controls align right and hero titles align left with equal
 top/leading inset. All page headers and the Notes/Factory footer containers remain
-transparent while their individual glass controls remain visible. The owner accepts
+transparent while their individual glass controls remain visible. On 8 November
+the owner clarified that content must also scroll behind both the header and footer
+controls; clipping the scroller below/above those regions does not satisfy this.
+The first and last content still need safe-area clearance at rest. The owner accepts
 the current loading animations; this correction preserves them.
 
 The owner accepts the widget layouts. Every widget size must open its matching
@@ -2618,3 +2625,38 @@ time limits. Show generated acknowledgment, actual tool activity and reply progr
 inside the conversation. Reconnect to existing execution; never resend a write to
 recover a dropped stream. Connection setup and individual operations may still
 fail, and an unknown outcome must remain visible.
+
+
+## Owner follow-up: long-running replies and lift editing (8 November 2026)
+
+Chat work must not be cancelled solely because total elapsed time crosses a fixed
+210-second or 15-minute boundary. Normal and test conversations need ongoing
+acknowledgment, actual tool/progress updates and a final result, with reconnection
+to existing work rather than repeating a write. Individual failed network/tool
+operations still need clear failure handling; an unknown outcome is not success.
+
+In Health's Last lifts, tapping a row opens its populated editor and saves changes
+to that same lift. A short left swipe reveals an icon-only Edit action; farther
+swiping reveals an icon-only Delete action beside it. Retain accessibility names.
+Swiping reveals actions; it must not itself delete the lift. Persist edits/deletes
+and refresh the displayed lift history and dependent summaries.
+
+## Codex-style active conversation turn (8 November 2026)
+
+The owner requests an elapsed working timer above the active assistant turn, useful
+public progress updates throughout tool work, and thinking/tool activity underneath.
+Keep all of it inside the scrolling conversation, never attached to the Now bar.
+Hide message timestamps until the owner taps a message; keep native text selection.
+Use actual elapsed time and observed progress, with no fabricated ETA or private
+reasoning. Apply to normal Chat and Current/Copilot test conversations.
+
+## App and assistant capability parity (8 November 2026)
+
+Owner-facing actions must also be available to Jarvis through the same validated
+services and records. App-only implementation is incomplete unless a platform
+restriction is explicitly documented. The reported gym gap requires chat/voice
+logging of lifts and sessions, including exercise, weight, reps, sets, date and
+session association. Clear owner logging/edit/delete requests authorize that
+operation without another yes or a special remember phrase. Unknown values and
+ambiguous targets require clarification; only persisted results count as success.
+Retries must not create duplicate entries.

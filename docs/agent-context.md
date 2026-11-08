@@ -7595,3 +7595,77 @@ tests/test_chat_runtime.py with Ruff. Use controlled clocks to verify work past
 210 seconds and 15 minutes, scoped progress, cancellation, reconnect without writes,
 context preservation, bounded buffering and producer cleanup. Qualify the deployed
 transport separately; local clock tests do not prove hosting limits.
+
+
+### Notification/Factory follow-up (8 November 2026)
+
+PR #1645 merged as 1008ea67; CI 42476277900, CodeQL, native 42475396547, and
+Deploy 42477261659 passed. Native captures were inspected. TestFlight 83
+(42477928796) was cancelled during archive, before upload, when the owner added
+notification routing and Factory detail/card defects. Replacement qualification
+must cover NotificationTaskNavigationUITests and the existing Chat presentation/
+turn-feedback checks. The history fixture must omit taskId to match the backend
+TaskEventRecord; live stream tests must still reject missing or foreign task IDs.
+The quota blocker above remains; opening a task must not recover or recreate it.
+
+
+For the 8 November chrome follow-up, the owner explicitly requires both no full
+rectangular backing and content scrolling behind header/footer controls. The old
+reserved/clipped layout is superseded. Qualify shared safe-area insets in light
+and dark native scrolling captures; keep notification navigation and Chat checks
+in the same release bundle. 42480914532's retained accessibility hierarchy proves
+its remaining attention-row failure was a test scroll overshoot; no app failure
+or native pass should be invented from that result.
+
+Native 42482352002 passed all 12 cases, but actual scrolled chrome needed a soft
+top-edge treatment to prevent text collisions. Qualify this visual refinement;
+do not upload solely from the earlier geometry pass. The shared bottom edge
+remains hidden and the scroller still extends behind both regions.
+
+## 8 November 2026 — Lift and runtime progress qualification
+
+Apple documentation read: SwiftUI swipeActions(edge:allowsFullSwipe:content:) and
+DragGesture (Markdown documentation). A shared staged gesture is used because
+List-only swipeActions cannot supply the owner's first-pencil/then-trash detents
+in the existing ScrollView rows. Never auto-delete on full swipe.
+
+Validate backend vault and lift routes; JarvisCore editable-lift, Health/Notes and
+chat client tests; native LiftEditingUITests plus runtime test chat. The fixture
+transport persists edit/delete changes and streams observable acknowledgment/tool
+progress. Native screenshots and owner-device acceptance remain separate evidence.
+
+### Jarvis2 thread ownership (8 November 2026)
+
+The owner names primary session `01a1adc7-aebe-76f2-b63d-a852c887204f` **Jarvis2
+primary**, responsible for the entire SDLC including integration, deployment and
+verification. **Jarvis2 secondary** may implement, build, test, design, research
+and answer assigned questions on an independent feature branch. It must never
+deploy, release, merge, change production or provision infrastructure. The reusable
+handoff prompt is `docs/secondary-thread-starter.md`. Separate cloud instances do
+not imply separate GitHub or deployment targets; coordinate integration centrally.
+
+Native 42485644758's navigation timeout stackshot locates main-thread work in
+VoiceCameraCapture.init → CIContext.init → Metal library loading. Apple CIContext
+documentation was read before deferring this context to the serial frame queue.
+Requalify normal Chat navigation and the existing camera-sheet case; simulator
+navigation cannot establish physical camera encoding quality.
+
+## Active reply qualification (8 November 2026)
+
+Qualify commentary boundaries with Python model/hosted-stream tests, backend
+agent/conversation persistence tests and Core decoding/elapsed-time tests. Native
+ChatTurnFeedback checks ongoing updates and clock placement; ChatPresentation checks
+tap-only time plus long-press selection. Recheck runtime-test chat and lift gestures.
+The unchanged notification/chrome/navigation/camera cases passed in 42492967707
+(12/13 overall; the old lift assertion failed). Do not call that full run green.
+The new chat/lift candidate requires fresh native evidence.
+
+## Gym parity qualification (8 November 2026)
+
+Run backend gym tool/store/route, health module, shared tool parity and capability
+instruction tests; preserve the shared instruction budget. Python jarvis_tools
+checks cover hosted instruction composition. Verify the same create request/index
+replays its saved record and retains dumbbell weight, reps, sets, date/session ID.
+No live owner workout is logged by synthetic checks. Native 42496126403 passed
+timer/progress, runtime isolation and navigation; selection and the exposed Edit
+touch target failed and require a new native run after the interaction fixes.

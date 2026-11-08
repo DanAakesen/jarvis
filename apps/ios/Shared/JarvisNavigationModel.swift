@@ -22,6 +22,7 @@ final class JarvisNavigationModel: ObservableObject {
     var path: [JarvisDestination] { state.path }
     var isSidebarOpen: Bool { state.isSidebarOpen }
     var currentDestination: JarvisDestination { state.currentDestination }
+    var requestedFactoryTaskID: String? { state.requestedFactoryTaskID }
 
     /// What the page offset and the drawer render from: the live swipe if there is one, else the committed state.
     var revealProgress: Double { dragProgress ?? (state.isSidebarOpen ? 1 : 0) }
@@ -74,6 +75,16 @@ final class JarvisNavigationModel: ObservableObject {
 
     func voiceSessionStateChanged(_ voiceState: VoiceSessionState) {
         write { $0.voiceSessionStateChanged(voiceState) }
+    }
+
+    func openFactoryTask(_ id: String) {
+        write { $0.requestFactoryTask(id) }
+        guard requestedFactoryTaskID == id else { return }
+        navigate(to: .softwareFactory)
+    }
+
+    func consumeFactoryTaskRequest(_ id: String) {
+        write { $0.consumeFactoryTaskRequest(id) }
     }
 
     func reset() {

@@ -44,9 +44,20 @@ actor JarvisRuntimeTestFixtureTransport: HTTPTransport {
         let text = try JSONSerialization.jsonObject(with: request.body ?? Data()) as? [String: String]
         let user = try event("user", message("990", role: "dan", text: text?["text"] ?? "Synthetic test message"))
         let done = try event("done", message("991", role: "jarvis", text: "Synthetic isolated runtime reply"))
-        return HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: AsyncThrowingStream {
-            $0.yield(Data((user + done).utf8))
-            $0.finish()
+        let acknowledgment = try event("acknowledgment", ["text": "I’ll inspect the fixture and verify the result."])
+        let tool = ["type": "tool-call-started", "source": "chat", "activityId": "00000000-0000-4000-8000-000000000001", "messageId": "990", "toolName": "vault_search"]
+        let started = try event("tool_activity", tool)
+        let finished = try event("tool_activity", tool.merging(["type": "tool-call-finished", "outcome": "ok"]) { _, new in new })
+        let phase = try event("progress", ["phase": "tools"])
+        return HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: AsyncThrowingStream { continuation in
+            let task = Task {
+                continuation.yield(Data((user + acknowledgment + started + phase).utf8))
+                do { try await Task.sleep(for: .seconds(6)) }
+                catch { continuation.finish(throwing: error); return }
+                continuation.yield(Data((finished + done).utf8))
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
         })
     }
 

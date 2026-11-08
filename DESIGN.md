@@ -3625,8 +3625,8 @@ controls. The owner subsequently selected background 3, Ember, from the replacem
 PNG set (/tmp/jarvis-backgrounds/3-ember.png). Warm near-black charcoal, broad soft
 amber illumination toward the upper right and a restrained warm wash at the lower
 left replace the cool multi-colour atmosphere in dark mode. Preserve white and
-readable secondary text and orange actions. This selection is for the next bundle;
-the background and Notes redesign remain pending implementation and qualification.
+readable secondary text and orange actions. The implementation and build 82
+qualification are recorded below; owner acceptance remains pending.
 
 ### Approved Notes / Ember implementation (7 November 2026)
 
@@ -3636,7 +3636,8 @@ and a folder browser sheet with New folder aligned right. The editor has a large
 title, folder path, pin control, Raw/Formatted toggle, Done, and a formatting toolbar.
 Ember is a generated background-only PNG in the native asset catalogue, scaled to
 fill by the shared screen renderer. Light mode keeps its existing palette. Native
-qualification is pending; these are implementation facts, not device acceptance.
+qualification 42417916004 passed and the actual captures were inspected. Build 82
+was uploaded in 42419435807; owner visual and Notes editing acceptance remains pending.
 
 
 ## Chat reply grouping (8 November 2026)
@@ -3654,3 +3655,67 @@ part of Chat. This supersedes the earlier pinned-progress-row choice: render one
 status inside the scrolling active assistant turn, after live tools and before any
 streamed reply text. It scrolls with the conversation and disappears on completion.
 The composer/Now dock must contain no active-turn progress copy.
+
+
+## Notification and Factory navigation (8 November 2026)
+
+Task-linked notification content is a full touch-target row with a trailing
+chevron; its dismiss/clear control remains separate, including in the accessibility
+tree. The outer swipe container must contain its children instead of combining
+the task navigation and dismiss actions. This applies to the newest
+item, expanded older items and running work. Close Notifications before opening
+Factory detail. An issue-only board card has a working GitHub destination and an
+external-link symbol; linked tasks keep their in-app detail destination.
+
+
+## Header/footer clarification (8 November 2026)
+
+The owner reports both rectangular backing and content not scrolling behind the
+controls. This explicitly supersedes the build 76/79 reserved-and-clipped layout.
+Use transparent top/bottom safe-area insets so first/last content remains reachable
+at rest and scrolls underneath the individual glass controls. Hide system toolbar
+and bottom scroll-edge backdrops, including Chat's former soft bottom edge. Use
+the native soft top-edge treatment so moving text does not collide with the fixed
+title; this must blend without a hard rectangular plate. Keep Ember
+and the light palette unchanged. Control-level Reduce Transparency remains intact.
+Fresh native checks must verify the scroll viewport crosses both control regions,
+actual content moves, and controls remain usable; inspect the scrolled captures.
+
+Use iOS 26 `safeAreaBar` for the top inset: Apple documents that it extends the
+scroll-edge effect through custom bar content. The bottom remains `safeAreaInset`
+with its edge effect hidden. No separate rectangular material is added.
+
+
+## 8 November 2026 — Last lifts row actions
+
+The owner requests tap-to-edit and progressive left-swipe actions: first a pencil
+icon for Edit, then a trash icon for Delete. No visible text labels; accessible
+action names remain. Keep the shared row/sheet styling and use the populated lift
+editor. Swiping reveals the Delete control rather than executing deletion.
+Implementation and native validation are pending.
+
+Lift row implementation now uses the shared two-stage swipe row because iOS 26
+List swipeActions does not expose a one-action detent for the existing ScrollView
+groups. It reveals pencil then trash, never commits by full swipe, provides named
+accessibility actions and honors Reduce Motion. The populated editor keeps field
+labels visible. Native interaction and screenshot qualification is pending.
+
+The expanded notification heading and its older task rows are separate sibling
+controls. The prior DisclosureGroup accessibility frame overlapped its child task
+link in failed native evidence. The task-navigation assertion remains unchanged.
+
+## Active reply reference — elapsed work and updates (8 November 2026)
+
+The latest Codex screenshot supersedes the always-visible timestamp and orb/status
+layout. One secondary-text “Working for 58s” line and structural divider lead the
+active assistant turn. Public acknowledgment and useful later updates follow;
+thinking/tool disclosure sits underneath, expanded during work and collapsed under
+the final reply. All elements scroll with Chat. Reconnecting retains elapsed time
+and names the connection state. A single message tap toggles its compact timestamp;
+long-press selection and links retain their native behavior. No private reasoning
+is rendered and heartbeats are not presented as newly completed work.
+
+Native follow-up: timestamp taps yield to UIKit long-press selection and cannot
+reflow a reply at the end of a selection gesture. Revealed lift actions overlay
+the shifted row so visible pencil/trash controls receive touches. The selected
+visual design is unchanged; repeat the real interaction checks.

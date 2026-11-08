@@ -11701,3 +11701,127 @@ and bounded replay. SSE heartbeat comments establish transport liveness only; th
 must not present them as completed work. Reconnection attaches to the original turn
 without repeating actions. The exact owner failure is not diagnosed by these code
 limits alone; live qualification remains required.
+
+
+### 8 November 2026 — Open notification tasks and repair Factory history
+
+The owner cannot open Task 23 from Notifications, sees an error opening P11-13,
+and cannot tap issue-only In progress cards. Add task navigation for newest/older
+notifications and running rows, keeping dismiss separate and completing sheet
+dismissal before navigation. Issue-only cards open their existing GitHub issue.
+
+Confirmed contract mismatch: iOS required taskId in history, while the backend
+returns TaskEventRecord without it. Accept task-scoped history and retain strict
+live-event ID matching. Correct fixtures instead of adding an invented field to
+the API. Build 83 was cancelled before upload to bundle these corrections with
+chat spacing/progress; the bridge change is live after Deploy 42477261659.
+New source qualification and replacement TestFlight delivery are pending.
+
+
+### 2026-11-08 — Transparent chrome includes scrolling behind controls
+
+The owner answered Both when asked whether the regression concerned a rectangular
+backing or missing content behind controls. Replace reserved/clipped header/footer
+stacks with safe-area insets and hide Chat's bottom scroll-edge backing. Preserve
+the selected Ember background and control-level glass/accessibility behavior.
+Native scrolling captures and viewport-underlap checks are required before build
+84; older chrome passes do not establish this newly clarified behavior.
+
+Native 42480914532 confirmed the older task link and board/history path after the
+accessibility containment fix. The attention test still failed: its retained
+hierarchy exposes the correct button at y=360.6 above the medium sheet viewport
+(y=476.5). Replace fast one-way swipes with bounded, directed drags; keep the same
+navigation assertions and timeout. Requalify alongside the shared chrome change.
+
+
+### 2026-11-08 — Inspect chrome after passing geometry checks
+
+Native 42482352002 passed all 12 cases on 82171fce, but the actual scrolled Factory
+capture shows readable row text colliding with the fixed title when every edge
+effect is hidden. Retain underlap and restore only the native soft top treatment;
+keep bottom controls floating. Recheck the refined chrome in actual captures
+before upload. Passing viewport geometry alone is not visual acceptance.
+
+The owner reported a good quick Copilot smoke test and requested one combined
+prompt plus an explanation of how to compare it with Current. The saved guide now
+leads with one real-data planning, read-only Factory status and isolated test-item
+write/update/readback task. Exclude labelled test items from planning inputs and
+keep model/settings equal. This does not establish multi-turn policy or voice
+quality; the former automated canary and extended guide remain separate evidence.
+
+
+### 2026-11-08 — Make the harness comparison self-contained
+
+The owner has no appointments tomorrow and rejected the agenda-based prompt.
+Replace it with a fixed-budget sample shopping task: save/read a Personal note,
+update the same note after a price correction, create one undated Personal task,
+and verify both. The expected final total is 1,450 DKK with 50 DKK remaining.
+Only the runtime label differs between fresh Current and Copilot conversations;
+model/settings stay equal. Judge actual saved results, owner intervention and
+time, without treating one successful run as proof of general superiority.
+This supersedes the planning prompt above; the combined owner test is pending.
+
+
+### 2026-11-08 — Compare the implemented harness boundaries before benchmarking
+
+The owner requests actual architectural differences first, then a test design.
+Source inspection confirms the live Copilot adapter reuses the custom application
+loop, tools, context and approvals; the transport, provider conversation/policy
+handling, definition validation and durable claims differ. Built-ins are disabled.
+Document a controlled project exercise with a later instruction change and
+recovery case. Shared internal memory and the test sheet's hidden acknowledgment/
+tool events prevent claiming fully isolated inputs or complete UI measurements.
+The saved guide labels the proposed live driver as unimplemented and retains the
+shopping prompt only as optional smoke coverage. No default/runtime/tool policy
+change or personal-data mutation is made by this investigation.
+
+## 8 November 2026 — Lift edits and progressive actions
+
+Owner-approved behavior: tap to edit an existing lift; short left swipe exposes an
+icon-only pencil and farther swipe exposes trash beside it. No full-swipe deletion.
+Retain the backing entry identity and legacy-note SHA; preserve unrelated note
+content when editing. A direct owner Delete tap authorizes deletion of that exact
+lift note version, without another agent confirmation. Reuse shared controls.
+
+Runtime recovery must retain partial output and reconnect by turn ID instead of
+reposting a request. Local reconnect time is an outage budget, not a work deadline.
+
+### 8 November 2026 — Review productivity gates by actual failure
+
+The owner explicitly requests a broader approval/timeout review. Record findings in
+`docs/productivity-blocker-review.md`: distinguish service-unavailable decisions
+from owner ambiguity, retain proposals/receipts durably, and reconcile uncertain
+work without duplicate actions. Existing authorization and resource checks remain.
+These follow-ups are not implemented by the long-running stream fix. Cloud threads
+should use separate branches and task scopes; shared GitHub and deployed services
+still need coordinated integration even when local workspaces are isolated.
+
+The owner explicitly assigns full SDLC ownership to Jarvis2 primary, session
+`01a1adc7-aebe-76f2-b63d-a852c887204f`. Jarvis2 secondary is development/research
+only and must never deploy; integration and delivery stay with the primary. Save
+the scope and handoff instructions in `docs/secondary-thread-starter.md`.
+
+## 8 November 2026 — Active reply timer and ongoing progress
+
+Dan selects the Codex active-turn layout: elapsed work above the reply, continuing
+public progress updates and thinking/tools below. Timestamps appear only on tap.
+This replaces the persistent timestamp/orb treatment, preserves transcript ownership
+and native text selection, and applies to both runtime testers. Later pre-tool text
+uses additive commentary events, not model-private reasoning. Implementation is
+local; native qualification and deployment remain pending.
+
+The corrected lift test in 42494078211 reached the saved row: AX showed 83 kg after
+a verified 82.5 input. Last lifts used a whole-number formatter. Preserve decimals
+and requalify the unchanged save/reopen/swipe/delete assertions. Artifact 13622798399
+SHA256: 33737f4f61e37d05e4b4927c6c3979657e488424af9b19586d946479b3a0afaf.
+
+## 8 November 2026 — App actions must be available to Jarvis
+
+The owner reported Jarvis refusing a fully specified dumbbell shoulder-press log.
+The app save routes existed but gym actions were absent from the tool registry.
+Implement shared gym tools for reads and explicit logging/edit/delete requests;
+reuse persistence and vault sync rather than generic memory writes. This is an
+app/assistant parity requirement, not proof that every historical app action has
+been audited. Keep current-message identity and exact record targeting without
+an extra confirmation or arbitrary long-turn age cutoff. Model-driven session
+selection and real owner device acceptance remain to be verified after deployment.

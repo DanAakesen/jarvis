@@ -26,6 +26,7 @@ from jarvis_tools import (
     INSTRUCTIONS,
     BackendToolClient,
     BackendUnavailable,
+    current_chat_acknowledgment_enabled,
     current_chat_phase_setter,
     current_chat_turn_id,
     current_message_id,
@@ -385,6 +386,39 @@ async def test_tool_turn_streams_one_acknowledgment_before_tool_execution() -> N
     assert order == ["text", "acknowledgment", "tool"]
     assert len(transport.responses.requests) == 2
     assert PRE_TOOL_ACKNOWLEDGMENT["en"] in transport.responses.requests[0]["instructions"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("steering", [False, True])
+async def test_later_tool_rounds_emit_public_progress_without_extra_model_calls(
+    steering: bool,
+) -> None:
+    def call(key: str) -> FakeItem:
+        return FakeItem(type="function_call", call_id=key, name="create_task",
+                        arguments=json.dumps({"text": key}))
+
+    first = "I'll check the two requested items."
+    update = "The first item is ready; I will check the second."
+    model, transport = client([], rounds=[
+        [SimpleNamespace(type="response.output_text.delta", delta=first), completed(call("first"))],
+        [SimpleNamespace(type="response.output_text.delta", delta=update),
+         completed(call("second"))],
+        [SimpleNamespace(type="response.output_text.delta", delta="Both items are ready."),
+         completed()],
+    ], backend=FakeBackend(catalogue=[CREATE_TASK]))
+    token = current_message_id.set("42")
+    ack_token = current_chat_acknowledgment_enabled.set(not steering)
+    try:
+        chunks = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Check both items")], "en"
+        )]
+    finally:
+        current_message_id.reset(token)
+        current_chat_acknowledgment_enabled.reset(ack_token)
+    first_kind = "commentary" if steering else "acknowledgment"
+    assert chunks == [first, AcknowledgmentBoundary(first, kind=first_kind), update,
+                      AcknowledgmentBoundary(update, kind="commentary"), "Both items are ready."]
+    assert len(transport.responses.requests) == 3
 
 
 @pytest.mark.asyncio

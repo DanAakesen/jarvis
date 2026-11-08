@@ -79,6 +79,7 @@ public enum JarvisDestination: String, CaseIterable, Hashable, Identifiable, Sen
 public struct JarvisNavigationState: Equatable {
     public private(set) var path: [JarvisDestination] = []
     public private(set) var isSidebarOpen = false
+    public private(set) var requestedFactoryTaskID: String?
 
     public init() {}
 
@@ -97,6 +98,7 @@ public struct JarvisNavigationState: Equatable {
 
     public mutating func navigate(to destination: JarvisDestination) {
         guard destination.isNavigable else { return }
+        if destination != .softwareFactory { requestedFactoryTaskID = nil }
 
         if destination == .chat {
             path = []
@@ -106,6 +108,15 @@ public struct JarvisNavigationState: Equatable {
             path.append(destination)
         }
         closeSidebar()
+    }
+
+    public mutating func requestFactoryTask(_ id: String) {
+        guard isValidFactoryID(id) else { return }
+        requestedFactoryTaskID = id
+    }
+
+    public mutating func consumeFactoryTaskRequest(_ id: String) {
+        if requestedFactoryTaskID == id { requestedFactoryTaskID = nil }
     }
 
     public mutating func goBack() {

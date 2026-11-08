@@ -131,6 +131,7 @@ struct ContentView: View {
         _todayModel = StateObject(wrappedValue: JarvisTodayModel(
             dependencies: Self.makeTodayDependencies(
                 notes: todayNotesClient,
+                health: resolvedClient.map { JarvisHealthClient(client: $0) },
                 fixtureMode: fixtureMode,
                 fixtureData: navigationFixtureMode && arguments.contains("--ui-test-today")
             )
@@ -516,6 +517,7 @@ struct ContentView: View {
 
     private static func makeTodayDependencies(
         notes: JarvisNotesClient?,
+        health: JarvisHealthClient?,
         fixtureMode: Bool,
         fixtureData: Bool
     ) -> JarvisTodayDependencies {
@@ -530,7 +532,10 @@ struct ContentView: View {
             dependencies.steps = JarvisHealthKitStepsSource()
             if let notes {
                 dependencies.gym = JarvisCombinedGymLogStore(
-                    primary: JarvisVaultGymLogStore(client: notes),
+                    primary: JarvisCombinedGymLogStore(
+                        primary: JarvisVaultGymLogStore(client: notes),
+                        others: health.map { [JarvisManualWorkoutSource(client: $0)] } ?? []
+                    ),
                     others: [JarvisHealthKitWorkoutSource()]
                 )
                 dependencies.calendar = notes.calendarSource
