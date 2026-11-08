@@ -11723,3 +11723,19 @@ accessibility containment fix. The attention test still failed: its retained
 hierarchy exposes the correct button at y=360.6 above the medium sheet viewport
 (y=476.5). Replace fast one-way swipes with bounded, directed drags; keep the same
 navigation assertions and timeout. Requalify alongside the shared chrome change.
+
+
+### 2026-11-08 — Inspect chrome after passing geometry checks
+
+Native 42482352002 passed all 12 cases on 82171fce, but the actual scrolled Factory
+capture shows readable row text colliding with the fixed title when every edge
+effect is hidden. Retain underlap and restore only the native soft top treatment;
+keep bottom controls floating. Recheck the refined chrome in actual captures
+before upload. Passing viewport geometry alone is not visual acceptance.
+
+The owner reported a good quick Copilot smoke test and requested one combined
+prompt plus an explanation of how to compare it with Current. The saved guide now
+leads with one real-data planning, read-only Factory status and isolated test-item
+write/update/readback task. Exclude labelled test items from planning inputs and
+keep model/settings equal. This does not establish multi-turn policy or voice
+quality; the former automated canary and extended guide remain separate evidence.

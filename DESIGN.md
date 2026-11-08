@@ -3674,7 +3674,9 @@ The owner reports both rectangular backing and content not scrolling behind the
 controls. This explicitly supersedes the build 76/79 reserved-and-clipped layout.
 Use transparent top/bottom safe-area insets so first/last content remains reachable
 at rest and scrolls underneath the individual glass controls. Hide system toolbar
-and scroll-edge backdrops, including Chat's former soft bottom edge. Keep Ember
+and bottom scroll-edge backdrops, including Chat's former soft bottom edge. Use
+the native soft top-edge treatment so moving text does not collide with the fixed
+title; this must blend without a hard rectangular plate. Keep Ember
 and the light palette unchanged. Control-level Reduce Transparency remains intact.
 Fresh native checks must verify the scroll viewport crosses both control regions,
 actual content moves, and controls remain usable; inspect the scrolled captures.

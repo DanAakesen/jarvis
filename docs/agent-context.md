@@ -7607,3 +7607,8 @@ and dark native scrolling captures; keep notification navigation and Chat checks
 in the same release bundle. 42480914532's retained accessibility hierarchy proves
 its remaining attention-row failure was a test scroll overshoot; no app failure
 or native pass should be invented from that result.
+
+Native 42482352002 passed all 12 cases, but actual scrolled chrome needed a soft
+top-edge treatment to prevent text collisions. Qualify this visual refinement;
+do not upload solely from the earlier geometry pass. The shared bottom edge
+remains hidden and the scroller still extends behind both regions.

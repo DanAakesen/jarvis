@@ -52,10 +52,10 @@ build 83 was cancelled before upload. Do not expect these fixes in 82.
 
 ## Deferred or blocked
 
-- **Copilot comparison — deferred by the owner.** The complete prompts, steps and
-  scorecard are in [the saved comparison guide](../../runtime-comparison-owner-test.md).
+- **Copilot comparison — quick smoke test reported good; combined test pending.**
+  The single combined prompt and comparison criteria are in [the saved comparison guide](../../runtime-comparison-owner-test.md).
   Current remains the default; live Copilot compatibility passed, owner quality
-  comparison is pending. No need to repeat the full comparison now.
+  comparison is pending. The older individual tests are optional diagnostics.
 - **Factory end-to-end — blocked, not ready for recovery testing.** Azure returned
   QuotaExceeded before the 128 GiB worker activated. Subscription quota details are
   pending. Once provisioned and qualified, recover existing task 23 / issue 1634,

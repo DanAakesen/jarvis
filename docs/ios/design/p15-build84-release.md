@@ -81,3 +81,11 @@ and hide Chat's remaining bottom scroll-edge effect. Keep the first/last rows
 reachable and retain individual glass controls. Native underlap geometry, actual
 scrolling captures, Chat and notification navigation require fresh qualification.
 The earlier open ambiguity is resolved; implementation is not yet native-accepted.
+
+
+Native 42482352002 passed all 12 cases on source 82171fce (iOS tree
+`d35348b9153e876cbfc56c9f28e8cb9281e60f40`). Artifact 13619290700 has ZIP SHA256
+`18d928817db827d37e70a3a927ea6950154c7234c900a80a4910374860ae205e`.
+Actual scrolled captures exposed title/text collisions despite the geometry pass.
+A native soft top scroll-edge treatment is being qualified; bottom edges remain
+unbacked. No release is accepted from the pre-refinement captures alone.

@@ -3,7 +3,8 @@
 ### Owner status ledger
 
 The consolidated device checklist is [saved here](docs/ios/design/p15-owner-test-checklist.md).
-The owner deferred Copilot comparison on 8 November; preserve the prompts for later.
+The owner reported a good quick Copilot smoke test on 8 November and now requests
+one combined comparison prompt; it is saved in the guide below.
 
 Keep this ledger current when work changes state. Distinguish design approval,
 implementation, automated/native verification, deployment and owner acceptance.
@@ -12,7 +13,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 
 | Item | Current state | Next evidence needed |
 | --- | --- | --- |
-| Header/footer transparency after Ember | Owner clarified both opaque bands and missing scroll-behind behavior. Shared chrome now uses transparent safe-area insets; Chat hides the remaining bottom scroll-edge backing | Fresh native underlap geometry and actual resting/scrolled captures in both themes; include in build 84 |
+| Header/footer transparency after Ember | Owner clarified both opaque bands and missing scroll-behind behavior. Shared chrome uses safe-area insets; 12 native cases passed, but capture review required a soft top treatment to prevent title/text collisions. Bottom backing stays hidden | Qualify the top-edge visual refinement in both themes before build 84 |
 | Notifications → Factory task | Latest, older grouped and running-task rows now route to the matching Factory detail after sheet dismissal | Fresh native navigation checks and replacement TestFlight build |
 | Factory detail and issue-only cards | History decoder aligned with TaskEventRecord (no taskId); live events still require matching taskId. Cards without a task open their GitHub issue | Core contracts, native task-history and board navigation checks; owner retest P11-13 |
 | PC bridge notifications | #1645 merged; online/control-state updates quiet, legacy online feed rows hidden, offline warnings rearm after recovery; backend and SQL checks passed | Deploy 42477261659 passed readiness and live acceptance; owner device check |
@@ -24,7 +25,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Resolve worker quota, recover this existing task, finish validation and obtain delivery PR; do not duplicate Prepare |
 | 128 GiB worker workspace | Implementation merged and qualified; backend live. Provisioning 42426685636 confirms Azure InvalidTemplateDeployment / QuotaExceeded before activation | Subscription quota investigation: selected Standard_D2as_v5 in Sweden Central needs two free vCPUs. Owner quota limit/usage requested; deployment identity is resource-group scoped. Then provision, verify real capacity/idle deallocation, recover task 23 |
 | Copilot harness | #1639 deployed; refreshed definition and live two-turn canary passed in 42418951594; enabled | Owner multi-turn/tool comparison; Current remains the default |
-| Current vs Copilot comparison | Saved and deferred by the owner on 8 November; live compatibility passed | Resume docs/runtime-comparison-owner-test.md when convenient; no owner comparison pass claimed |
+| Current vs Copilot comparison | Owner-reported quick Copilot smoke test worked well; one combined prompt and scoring guidance saved | Run the same prompt in fresh Current/Copilot conversations; full tool/write comparison is not yet passed |
 | Notes redesign | #1638 merged as a55e7350; CI 42418217434 and final native 42417916004 passed; captures inspected | Build 82 uploaded in 42419435807; owner editing/navigation acceptance pending |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
 | Next TestFlight bundle | 83 cancelled before upload to include the latest notification/Factory reports; replacement 84 pending | Qualification, upload and device acceptance; backend worker delivery remains separate |

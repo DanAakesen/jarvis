@@ -185,7 +185,7 @@ struct JarvisFactoryArea: View {
         }
         .jarvisAmbientBackground()
         .toolbarBackground(.hidden, for: .bottomBar)
-        .scrollEdgeEffectHidden()
+        .scrollEdgeEffectHidden(true, for: .bottom)
         .task {
             await loadProjects()
         }

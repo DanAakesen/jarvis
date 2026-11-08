@@ -73,7 +73,9 @@ private struct JarvisPageHeaderModifier<Header: View>: ViewModifier {
         // Insets keep the first/last row reachable while the scroller still draws
         // behind the floating controls. A clipped VStack creates an opaque-looking band.
         content.safeAreaInset(edge: .top, spacing: 0) { header }
-        .scrollEdgeEffectHidden()
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectHidden(false, for: .top)
+        .scrollEdgeEffectHidden(true, for: .bottom)
         .toolbarBackgroundVisibility(.hidden, for: .navigationBar, .bottomBar)
     }
 }
@@ -87,7 +89,7 @@ extension View {
     /// Floating controls inset the scroll content without clipping it at the footer boundary.
     func jarvisPageFooter<Footer: View>(@ViewBuilder _ footer: () -> Footer) -> some View {
         self.safeAreaInset(edge: .bottom, spacing: 0, content: footer)
-        .scrollEdgeEffectHidden()
+        .scrollEdgeEffectHidden(true, for: .bottom)
         .toolbarBackgroundVisibility(.hidden, for: .bottomBar)
     }
 }

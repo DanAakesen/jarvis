@@ -229,7 +229,7 @@ struct JarvisNotesArea: View {
         }
         .jarvisAmbientBackground()
         .toolbarBackground(.hidden, for: .bottomBar)
-        .scrollEdgeEffectHidden()
+        .scrollEdgeEffectHidden(true, for: .bottom)
         .task(id: "\(selectedTab.rawValue)-\(refreshVersion)") {
             await loadSelectedTab(force: refreshVersion > 0)
         }

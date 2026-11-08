@@ -339,7 +339,7 @@ struct JarvisHealthArea: View {
                 .padding(.bottom, JarvisDesignTokens.healthSectionSpacing)
             }
             .scrollIndicators(.hidden)
-            .scrollEdgeEffectHidden()
+            .scrollEdgeEffectHidden(true, for: .bottom)
             .refreshable {
                 await refreshFromPull()
             }

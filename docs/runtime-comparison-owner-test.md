@@ -1,8 +1,81 @@
 # Compare Current and Copilot
 
-Owner testing deferred on 8 November 2026 because there is not enough time now.
-Keep this guide for later; the live automated compatibility check has passed, but
-the owner comparison has not. Current remains the default.
+On 8 November the owner reported that a quick Copilot conversation worked well.
+This is a successful owner-reported smoke test, not yet a tool/write comparison.
+The owner now prefers one combined prompt. Use the short round below; the older
+individual cases remain saved as optional diagnostics. Current remains the default.
+
+## One-prompt comparison
+
+Open one fresh Current test and one fresh Copilot test. Keep the same model,
+reasoning effort, account, language and mode. Run them close together. Paste this
+once into each, changing only CURRENT-A to COPILOT-A for the second run. This
+creates one clearly labelled Personal note and one reminder per runtime.
+
+```text
+Help me prepare for tomorrow using my real Jarvis data. Use Europe/Copenhagen
+for dates and times. Briefly acknowledge, then do the work with your tools.
+
+Read tomorrow's calendar and my overdue/due tasks across Work and Personal.
+Choose my three most useful priorities, fit them around existing appointments,
+and explain the choices briefly. Exclude all HARNESS-CHECK items from the planning
+inputs. Look for a relevant note for the top Work
+priority; use it if found, otherwise say that you found none. Do not invent
+appointments, task details or note content.
+
+Also check existing Factory task 23. Distinguish work actually completed from
+work merely started, and name its current blocker and next action. Do not start,
+recover or create any coding work.
+
+Use test label HARNESS-CHECK-CURRENT-A. Save your proposed plan in one Personal
+note with that exact title, then read it back. Create one Personal reminder to
+review that note tomorrow at 18:30, then move that same reminder to 19:00. Use
+Jarvis's normal task/reminder process. Read it back and verify the final date,
+time, timezone and item ID. Do not create a second reminder when changing it.
+If those exact test items already exist, reuse them rather than duplicating them.
+
+Only write those labelled test items. Do not alter my calendar, other notes or
+tasks, send messages, or start Factory work. If a tool fails, check whether a
+write succeeded before retrying; report missing access or data honestly.
+
+Finish with a concise plan, Task 23's verified status, the test note/reminder IDs
+and final reminder time, and anything you could not verify. Report success only
+for results confirmed by tools. Do not ask me to choose priorities or approve
+these explicitly requested test-item writes unless an actual permission gate
+requires it.
+```
+
+### How to judge it
+
+Open the actual calendar/tasks/Notes to check key claims and the two test items;
+do not grade from the runtime's own success report alone. Save both transcripts
+before closing the test conversations.
+
+| Check | What better looks like |
+| --- | --- |
+| Accuracy | Uses real appointments, tasks and note content; distinguishes Task 23's saved work from completion; admits gaps. |
+| Completion | Produces the plan plus exactly one correct Personal note and reminder, with the same reminder moved to 19:00 on the right Copenhagen date. |
+| Tool reliability | Reads back writes; handles missing data or failures without loops, duplicates, or extra work outside the request. |
+| Effort and usefulness | Needs fewer corrections or redundant approval turns; the priorities are useful and the final result easy to check. |
+| Speed | Less time to the first useful information and to verified completion. A filler acknowledgment is not useful information. |
+
+Correctness and scope come first. If only one completes the requested work
+correctly, that is the stronger result. If both do, compare usefulness, time and
+how much intervention was needed. A shared backend outage or missing permission
+is not evidence that one harness is worse; compare how accurately each handles it.
+A small timing difference in one pair can be
+noise: current data, tool/network latency and model sampling vary. For confidence,
+repeat the same prompt later in the opposite order with fresh labels CURRENT-B
+and COPILOT-B. Compare the same work and note any backend data changes.
+
+One combined turn does not establish long-conversation memory, changing application
+instructions between turns, voice, or Factory execution reliability. The live
+two-turn policy canary separately verifies instruction refresh; the multi-turn
+checks below remain optional deeper tests. Keep the quick smoke test, combined
+comparison and production readiness as separate statuses. Complete/delete only
+the labelled test items afterwards through normal Jarvis flows.
+
+## Extended tests (optional reference)
 
 Live Copilot compatibility passed in run 42418951594 on 7 November 2026;
 the test runtime is enabled. Current remains the default. This compares the text runtime

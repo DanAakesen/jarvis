@@ -9008,3 +9008,7 @@ The scroll viewport spans the header/footer, while content insets keep its first
 and last rows reachable. This replaces the clipped VStack arrangement following
 the owner's 8 November clarification. The shared ambient renderer still owns the
 continuous background; individual controls own their glass.
+
+The shared inset header retains the native soft top scroll-edge treatment for
+legibility over moving content. Bottom edges stay unbacked. Screen-level flags
+only hide bottom effects so they do not suppress the shared top treatment.
