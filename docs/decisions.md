@@ -11681,3 +11681,14 @@ the single status from the composer dock into the transcript between live tools
 and streamed text. This supersedes the previous pinned-row choice. Extend the
 existing turn-feedback check to require the status inside the actual ScrollView;
 retain its single-row, cleared-editor, next-draft and final tool-collapse checks.
+
+
+### 8 November 2026 — Notify only when the PC bridge is offline
+
+The owner explicitly rejects online bridge notifications. Persist online/control
+changes as dismissed state, quietly clearing any offline warning; a later offline
+transition reopens it. Identical dismissed offline observations remain dismissed.
+The Now-feed query also hides legacy online entries before any socket reconnect,
+without deleting activity history or suppressing unrelated alerts. Retain serialized
+transactional writes and refresh only after commit. SQL integration covers legacy
+rows, quiet recovery, dismissal persistence and a later outage. Deployment pending.

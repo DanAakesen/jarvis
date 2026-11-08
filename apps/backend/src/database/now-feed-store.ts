@@ -16,6 +16,8 @@ function iso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
+// Apply the offline-only bridge rule on reads too, including undismissed rows
+// persisted by older versions before the bridge reconnects.
 const visibleActivityCte = `WITH attention AS (
           SELECT a.id, a.title, a.link, a.at, a.dismissed_at,
             ROW_NUMBER() OVER (PARTITION BY t.id ORDER BY a.at DESC, a.id DESC) AS item_order
@@ -39,6 +41,7 @@ const visibleActivityCte = `WITH attention AS (
           SELECT id, N'alert' AS category, title, link, at
           FROM dbo.activity
           WHERE dismissed_at IS NULL AND alert_key IS NOT NULL
+            AND (alert_key <> N'pc_bridge_status' OR title = N'Local PC bridge is offline')
             AND (alert_key NOT LIKE N'credential:github-app:failed:%' OR recovered_at IS NULL)
             AND (alert_key NOT LIKE N'notification:%' OR
               (kind <> N'success' AND at > DATEADD(day, -${notificationExpiryDays}, SYSUTCDATETIME())))

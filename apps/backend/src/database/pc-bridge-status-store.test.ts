@@ -31,7 +31,7 @@ vi.mock('mssql', async (importOriginal) => {
 });
 
 describe('PC bridge status store', () => {
-  it('reports whether Jarvis control is active or paused in the existing activity row', async () => {
+  it('retains online control status as a quiet persisted row', async () => {
     transactionEvents.values.length = 0;
     const query = vi.fn().mockResolvedValue({ rowsAffected: [1] });
     const store = createPcBridgeStatusStore({ query } as unknown as sql.ConnectionPool, vi.fn());
@@ -39,6 +39,7 @@ describe('PC bridge status store', () => {
     await store.setStatus(true, true);
 
     expect(JSON.stringify(query.mock.calls[0]?.[1])).toContain('Local PC bridge is online — Jarvis control is paused');
+    expect(query.mock.calls[0]?.[1]).toContainEqual(['online', sql.Bit, true]);
   });
 
   it('serializes status writes and publishes only after each commit', async () => {
@@ -74,7 +75,8 @@ describe('PC bridge status store', () => {
     expect(query).toHaveBeenCalledTimes(2);
     for (const [statement] of query.mock.calls) {
       expect(statement).toMatch(/IF EXISTS \(\s*SELECT 1 FROM dbo\.activity WITH \(UPDLOCK, HOLDLOCK\)/u);
-      expect(statement).toContain("WHERE alert_key = N'pc_bridge_status' AND title <> @title;");
+      expect(statement).toContain("WHERE alert_key = N'pc_bridge_status'");
+      expect(statement).toContain('title <> @title OR (@online = 1 AND dismissed_at IS NULL)');
       expect(statement).toMatch(/ELSE\s*INSERT dbo\.activity/u);
       expect(statement).not.toContain('@@ROWCOUNT');
     }
@@ -97,7 +99,7 @@ describe('PC bridge status store', () => {
     await store.setStatus(true);
     expect(onChanged).not.toHaveBeenCalled();
     await store.setStatus(true, true);
-    expect(query.mock.calls[1]?.[0]).toContain('SET title = @title, at = SYSUTCDATETIME(), dismissed_at = NULL');
+    expect(query.mock.calls[1]?.[1]).toContainEqual(['online', sql.Bit, true]);
     expect(JSON.stringify(query.mock.calls[1]?.[1])).toContain('Jarvis control is paused');
     expect(onChanged).toHaveBeenCalledOnce();
   });

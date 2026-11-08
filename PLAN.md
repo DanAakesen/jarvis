@@ -12,6 +12,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 
 | Item | Current state | Next evidence needed |
 | --- | --- | --- |
+| PC bridge notifications | Online/control-state updates made quiet; legacy online feed rows hidden; offline warnings rearm after a recovery | Backend/SQL qualification and live deployment; owner device check |
 | Chat reply grouping and progress placement | Compact metadata spacing and removal of extra reply padding implemented; one active-turn status moved inside the scrolling transcript | Fresh native presentation/turn checks, actual capture review and next TestFlight upload |
 | Build 81 Home/Chat streaming and recovery | Implemented, qualified and uploaded to TestFlight | Owner device send/network/dictation checks in docs/ios/design/p15-build81-release.md |
 | Header/footer transparency, one progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |

@@ -24,6 +24,9 @@ reply spacing and progress inside the transcript are being qualified for the nex
   without a duplicate above the Now bar. Open/close tools and select text; keep
   separate messages clear.
 
+- [ ] **PC bridge warning, after backend update:** an online PC should not create
+  a Now-bar notification. An offline warning should clear quietly on reconnect.
+
 ## Additional device checks when convenient
 
 - [ ] **Dictation and keyboard Send:** each sends once and clears the editor;
