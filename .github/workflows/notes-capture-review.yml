@@ -1,0 +1,71 @@
+# Validation-only artifact inspection; never merge. No deployment or application writes.
+name: Notes capture review
+on:
+  push:
+    branches: [codex/notes-capture-review]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: DanAakesen/jarvis
+    steps:
+      - name: Wait for the existing native run
+        continue-on-error: true
+        run: gh run watch 42507483140 --interval 15 --exit-status
+      - name: Download retained evidence
+        run: gh run download 42507483140 --name notes-regression-evidence-1 --dir "$RUNNER_TEMP/notes-evidence"
+      - name: Read source proof, results, crash diagnostics and selected screenshots
+        run: |
+          python3 - <<'PYCODE'
+          import base64, json, os, pathlib, re
+          root = pathlib.Path(os.environ["RUNNER_TEMP"]) / "notes-evidence"
+          proof = json.loads((root / "provenance.json").read_text())
+          assert proof["source"] == "cbd7207b7d86eaf1e4193c9660319e1eb0c11e6d"
+          assert proof["ios_tree"] == "a5bcdc4fe98d872f6f8313d3c2f9edb781d468cf"
+          print("NOTES_SOURCE " + json.dumps(proof))
+          summary = root / "summary.json"
+          if summary.exists():
+              print("NOTES_SUMMARY " + summary.read_text())
+          manifest_file = root / "attachments/manifest.json"
+          manifest = json.loads(manifest_file.read_text()) if manifest_file.exists() else []
+          print("NOTES_MANIFEST " + json.dumps(manifest)[:100000])
+          candidates = []
+          def visit(value):
+              if isinstance(value, dict):
+                  text = " ".join(str(v) for v in value.values() if isinstance(v, str))
+                  if re.search(r"notes-large-library|Notes page order|notes-library-dark|notes-editor-dark", text):
+                      for v in value.values():
+                          if isinstance(v, str) and v.endswith(".png"):
+                              candidates.extend((root / "attachments").rglob(pathlib.Path(v).name))
+                  for item in value.values():
+                      visit(item)
+              elif isinstance(value, list):
+                  for item in value:
+                      visit(item)
+          visit(manifest)
+          if not candidates:
+              candidates = sorted((root / "attachments").rglob("*.png"))
+          seen = set()
+          for path in candidates:
+              if path.name in seen:
+                  continue
+              seen.add(path.name)
+              if len(seen) > 4:
+                  break
+              raw = path.read_bytes()
+              if len(raw) > 4000000:
+                  continue
+              print("NOTES_IMAGE_BEGIN " + path.name)
+              data = base64.b64encode(raw).decode()
+              for start in range(0, len(data), 6000):
+                  print("NOTES_IMAGE_DATA " + data[start:start+6000])
+              print("NOTES_IMAGE_END " + path.name)
+          for path in sorted((root / "crashes").glob("*.ips")):
+              print("NOTES_CRASH " + path.name)
+              print(path.read_text()[:100000])
+          PYCODE
