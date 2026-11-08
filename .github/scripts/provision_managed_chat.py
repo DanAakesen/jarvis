@@ -15,7 +15,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 AGENT_NAME = "jarvis-main-copilot-preview"
 MARKER = {"jarvis_migration": "managed-chat-1350"}
@@ -184,33 +184,66 @@ class Azure:
         if result.returncode != 0:
             raise self.blocked_request("azure_request_failed", method, url, result.stderr)
         if len(result.stdout) > MAX_BYTES:
-            raise self.blocked_request("azure_response_invalid", method, url)
+            raise self.blocked_request("azure_response_too_large", method, url)
         try:
             parsed = json.loads(result.stdout)
         except (ValueError, UnicodeError):
-            raise self.blocked_request("azure_response_invalid", method, url) from None
+            raise self.blocked_request("azure_response_invalid_json", method, url) from None
         if not isinstance(parsed, dict):
-            raise self.blocked_request("azure_response_invalid", method, url)
+            raise self.blocked_request("azure_response_invalid_shape", method, url)
         return parsed
 
     def data(self, path: str, method: str = "GET", body: dict | None = None) -> dict:
         return self.request(method, self.endpoint + path + ("&" if "?" in path else "?") + "api-version=v1", body)
 
     def inventory(self, path: str) -> list[dict]:
-        url = self.endpoint + path + ("&" if "?" in path else "?") + "api-version=v1"
+        base = urlsplit(self.endpoint + path)
+        query = dict(parse_qsl(base.query, keep_blank_values=True))
+        # Version records contain complete tool schemas. One record per page keeps
+        # history growth from exceeding the existing per-response byte limit.
+        query.update({"api-version": "v1", "limit": "1"})
+
+        def page_url(parameters: dict) -> str:
+            return urlunsplit(base._replace(query=urlencode(sorted(parameters.items()))))
+
+        url = page_url(query)
         records = []
-        for _ in range(10):
+        visited = set()
+        for _ in range(1000):
+            require(url not in visited, "inventory_incomplete")
+            visited.add(url)
             page = self.request("GET", url)
             items = page.get("data", page.get("value"))
             require(isinstance(items, list) and all(isinstance(item, dict) for item in items), "inventory_invalid")
-            records.extend(items)
+            for item in items:
+                reference = {key: item[key] for key in ("id", "name", "version") if key in item}
+                require(all(isinstance(value, str) and 0 < len(value) <= 512
+                            for value in reference.values()), "inventory_invalid")
+                # Read/validate full versions individually below; do not retain
+                # every historical copy of the private function catalogue.
+                records.append(reference)
             require(len(records) <= 1000, "inventory_incomplete")
             next_url = page.get("nextLink", page.get("next_link"))
+            if "has_more" in page:
+                require(type(page["has_more"]) is bool, "inventory_invalid")
+                if not page["has_more"]:
+                    require(not next_url, "inventory_invalid")
+                    return records
+                cursor = page.get("last_id")
+                require(bool(items) and isinstance(cursor, str) and 0 < len(cursor) <= 512
+                        and items[-1].get("id") == cursor, "inventory_incomplete")
+                url = page_url({**query, "after": cursor})
+                continue
             if not next_url:
                 return records
-            require(isinstance(next_url, str) and next_url.startswith(self.endpoint + path.split("?")[0]),
-                    "inventory_invalid")
-            url = next_url
+            require(isinstance(next_url, str) and len(next_url) <= 4096, "inventory_invalid")
+            target = urlsplit(next_url)
+            require((target.scheme, target.netloc, target.path) == (base.scheme, base.netloc, base.path)
+                    and not target.fragment, "inventory_invalid")
+            next_query = dict(parse_qsl(target.query, keep_blank_values=True))
+            require(next_query.get("api-version") == "v1", "inventory_invalid")
+            next_query["limit"] = "1"
+            url = page_url(next_query)
         raise Blocked("inventory_incomplete")
 
 

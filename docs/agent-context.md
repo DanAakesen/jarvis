@@ -7683,6 +7683,24 @@ No live owner workout is logged by synthetic checks. Native 42496126403 passed
 timer/progress, runtime isolation and navigation; selection and the exposed Edit
 touch target failed and require a new native run after the interaction fixes.
 
+## Recover the gym catalogue refresh (8 November 2026)
+
+Deploy 42502357217 and subsequent 42503216228 passed normal live acceptance.
+Build 84 uploaded in 42503950006. Copilot refresh 42503779972 reached the version
+creation step then failed on version_inventory GET / azure_response_invalid;
+read-only inspection 42505663536 reproduced that inventory failure without writes.
+Do not issue another blind create. After qualifying the paginated reader, dispatch
+Deploy with inspect_managed_chat=true, verify a single matching version, then use
+the already authorized provision_managed_chat=true and
+refresh_managed_chat_definition=true path. Require managed_chat_comparison_canary_ok
+before marking the new gym catalogue testable. Current remains default.
+
+Local provisioning/recovery tests pass (28), handoff tests pass (20), and focused
+impact/fingerprint checks pass (4). Provisioning source/tests pass Ruff. The full
+pipeline suite needs hosted CI's Ruby and complete checkout; local sparse-checkout
+failures are not claimed as passing tests. pipeline_impact.py has three unchanged
+Ruff findings in the base revision; no unrelated cleanup is included.
+
 
 ## Notes regression validation (8 November 2026)
 

@@ -16,12 +16,13 @@ CHECK_ONLY_WORKFLOWS = {
     "database-ci.yml", "foundry-contract.yml", "jarvis-agent-ci.yml", "plan-status.yml",
     "pr-title.yml", "project-board.yml", "runner-ci.yml", "runner-deploy.yml", "web-ci.yml",
     "worker-label.yml", "voice-probe.yml", "danish-voice-agent.yml", "vault-mirror-ci.yml",
-    "ios-ci.yml", "ios-simulator.yml", "ios-testflight.yml",
+    "ios-ci.yml", "ios-simulator.yml", "ios-testflight.yml", "worker-quota.yml",
 }
 CHECK_ONLY_SCRIPTS = {
     "deploy_plan.py", "deploy_smoke.py", "smoke_reasons.py", "pipeline_impact.py",
     "pipeline_evidence.py", "release_state.py", "project_board.py", "plan_status.py",
     "worker_label.py", "ci_timing.py", "python-ci.sh", "normalize-pr-title.sh", "validate-pr-title.sh",
+    "request_worker_quota.py", "provision_managed_chat.py", "provision_managed_chat_handoff.sh",
 }
 
 
