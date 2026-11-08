@@ -12022,3 +12022,14 @@ fresh received snapshot can be displayed. Keep cached complication data through
 brief/background unreachability, expire at the earlier of 15 minutes and local
 midnight, and clear on explicit phone sign-out context. Primary owns signing and
 release after the secondary handoff; physical Watch acceptance stays deferred.
+
+
+## 2026-11-08 — Primary integration and entitlement status
+
+Apple Watch PR #1652 is merged after primary integration review, full CI/CodeQL, 544 core tests, native Watch/widget/paired-iPhone builds and three focused native interaction checks. The final app tree matches the native-qualified tree; duplicate cancelled runs are not counted as passes. Signed TestFlight build 87 failed in 42523594128 because both Watch provisioning profiles do not match the shared App Group entitlement; nothing uploaded. Associate group.com.danaakesen.jarvis with com.danaakesen.jarvis.watchkitapp and com.danaakesen.jarvis.watchkitapp.widgets in Apple Developer before retrying. Physical Watch voice/background/live-tile acceptance remains pending.
+
+Current repair #1658 is deployed. Acceptance evidence from 42522064440 confirms all chat probes passed; the overall release failed solely on the separate Codex research usage limit. The full owner comparison exercise remains pending and no failed user action was replayed.
+
+The owner reports adding Azure access, but fresh-login quota runs 42522536383 and 42523572142 still return 403 AuthorizationFailed before submitting a request. No 128 GiB worker provisioning or Task 23 recovery is claimed.
+
+The owner has requested the CarPlay entitlement from Apple. Await Apple’s reply; entitlement approval, activation and CarPlay device acceptance are not established.
