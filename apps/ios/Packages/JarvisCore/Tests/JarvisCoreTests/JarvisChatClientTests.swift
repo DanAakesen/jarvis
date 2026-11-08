@@ -216,6 +216,40 @@ final class JarvisChatClientTests: XCTestCase {
         XCTAssertEqual(sleeps, [.seconds(2)])
     }
 
+    func testLateDisconnectHasItsOwnRecoveryBudgetAndDoesNotRepeatThePost() async throws {
+        let user = event("user", ["id": "42", "sessionId": "12", "role": "dan", "text": "Plan", "at": "2026-11-08T00:00:00Z"])
+        let done = event("done", ["id": "43", "sessionId": "12", "role": "jarvis", "text": "Done", "at": "2026-11-08T00:21:00Z"])
+        let (body, writer) = AsyncThrowingStream<Data, any Error>.makeStream()
+        let transport = FakeChatTransport([
+            .stream(HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: body)),
+            .stream(streamResponse(events: user + done)),
+        ])
+        let clock = FakeChatClock()
+        let chat = makeChatClient(transport: transport, reattachPolicy: ReattachPolicy(maximumDuration: .seconds(10)), clock: clock)
+        let events = try await chat.sendTurn(sessionId: "12", text: "Plan")
+        // Work was healthy for 20 minutes before the connection dropped.
+        try await clock.sleep(for: .seconds(1200))
+        writer.yield(Data(user.utf8))
+        writer.finish()
+        let received = try await collect(events)
+        XCTAssertTrue(received.contains { if case .done = $0 { true } else { false } })
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.method), [.post, .get])
+        XCTAssertEqual(requests.last?.url.path, "/api/conversation/sessions/12/turns/42/events")
+    }
+
+    func testToolAndPhaseProgressTravelWithTheReply() async throws {
+        let activity = event("tool_activity", ["type": "tool-call-finished", "source": "chat", "activityId": "00000000-0000-4000-8000-000000000001", "messageId": "42", "toolName": "vault_search", "outcome": "ok"])
+        let progress = event("progress", ["phase": "model"])
+        let done = event("done", ["id": "43", "sessionId": "12", "role": "jarvis", "text": "Done", "at": "2026-11-08T00:21:00Z"])
+        let chat = makeChatClient(transport: FakeChatTransport([.stream(streamResponse(events: activity + progress + done))]))
+        let received = try await collect(try await chat.sendTurn(sessionId: "12", text: "Plan"))
+        guard case .toolActivity(let tool) = received[0], case .progress(let phase) = received[1] else { return XCTFail("Missing progress") }
+        XCTAssertEqual(tool.outcome, .ok)
+        XCTAssertEqual(tool.toolName, "vault_search")
+        XCTAssertEqual(phase.phase, .model)
+    }
+
     func testChatStreamBudgetDoesNotExtendOrdinaryHistoryRequests() async throws {
         let transport = FakeChatTransport([
             .stream(streamResponse(events: "")),

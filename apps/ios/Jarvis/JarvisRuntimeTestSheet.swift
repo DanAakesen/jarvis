@@ -14,6 +14,10 @@ private final class JarvisRuntimeTestModel: ObservableObject {
         set { composerDraft.replace(with: newValue) }
     }
     @Published var partial = ""
+    @Published var acknowledgment = ""
+    @Published var tools: [ChatToolActivity] = []
+    @Published var isReconnecting = false
+    @Published var phase: ChatProgress.Phase = .model
     @Published var loading = false
     @Published var creating = false
     @Published var sending = false
@@ -79,9 +83,22 @@ private final class JarvisRuntimeTestModel: ObservableObject {
             let incoming = page.messages.map(JarvisChatRow.init)
             messages = older ? incoming + messages.filter { row in !incoming.contains { $0.id == row.id } } : incoming
             nextCursor = page.nextCursor
-            partial = ""
-            recovery.historyReviewed()
-            error = recovery.sessionBlocked ? .runtimeBlocked : nil
+            // A refresh must not erase an acknowledgment/partial result that was never saved.
+            let hasFinal = activeMessageID.flatMap(Int64.init).map { source in
+                incoming.contains { $0.role == .jarvis && (Int64($0.id) ?? 0) > source }
+            } ?? false
+            if hasFinal {
+                partial = ""
+                acknowledgment = ""
+                tools = []
+                activeMessageID = nil
+            }
+            if activeMessageID == nil || hasFinal {
+                recovery.historyReviewed()
+                error = recovery.sessionBlocked ? .runtimeBlocked : nil
+            } else {
+                reconnect()
+            }
         } catch {
             guard !Task.isCancelled else { return }
             recovery.failed(code: nil)
@@ -96,35 +113,80 @@ private final class JarvisRuntimeTestModel: ObservableObject {
         error = nil
         partial = ""
         activeMessageID = nil
+        acknowledgment = ""
+        tools = []
+        isReconnecting = false
+        phase = .model
         turn = Task {
             defer {
                 sending = false
                 stopping = false
-                activeMessageID = nil
+                isReconnecting = false
                 turn = nil
             }
             do {
                 let events = try await client.sendTurn(sessionId: session.id, text: text)
-                for try await event in events {
-                    switch event {
-                    case .user(let message):
-                        activeMessageID = message.id
-                        append(JarvisChatRow(message))
-                    case .delta(let text): partial += text
-                    case .done(let message):
-                        append(JarvisChatRow(message))
-                        partial = ""
-                    case .interrupted(let message): append(JarvisChatRow(message))
-                    case .error(let failure): throw JarvisChatClientError.serverEvent(code: failure.code, message: nil)
-                    case .acknowledgment, .foodInvitation, .unknown, .connectionState: break
-                    }
-                }
+                try await consume(events)
             } catch {
                 if activeMessageID == nil { draft = text }
                 let code: String?
                 if let failure = error as? JarvisChatClientError, case .serverEvent(let value, _) = failure { code = value } else { code = nil }
                 recovery.failed(code: code)
                 self.error = recovery.sessionBlocked ? .runtimeBlocked : .runtimeUncertain
+            }
+        }
+    }
+
+    private func reconnect() {
+        guard !sending, let client, let session, let activeMessageID else { return }
+        sending = true
+        isReconnecting = true
+        turn = Task {
+            defer { sending = false; isReconnecting = false; turn = nil }
+            do {
+                let events = try await client.reattachTurn(sessionId: session.id, messageId: activeMessageID)
+                // The GET replays the same turn from the beginning; never POST it again.
+                partial = ""
+                acknowledgment = ""
+                tools = []
+                isReconnecting = false
+                error = nil
+                try await consume(events)
+                recovery.historyReviewed()
+            } catch {
+                recovery.failed(code: nil)
+                self.error = recovery.sessionBlocked ? .runtimeBlocked : .runtimeUncertain
+            }
+        }
+    }
+
+    private func consume(_ events: AsyncThrowingStream<ChatEvent, any Error>) async throws {
+        for try await event in events {
+            switch event {
+            case .user(let message):
+                activeMessageID = message.id
+                append(JarvisChatRow(message))
+            case .delta(let text): partial += text
+            case .acknowledgment(let text):
+                acknowledgment = text
+                if partial.hasPrefix(text) { partial.removeFirst(text.count) }
+            case .toolActivity(let tool):
+                guard tool.messageId == activeMessageID else { continue }
+                if let index = tools.firstIndex(where: { $0.id == tool.id }) {
+                    if tools[index].outcome == nil || tool.outcome != nil { tools[index] = tool }
+                } else { tools.append(tool) }
+            case .progress(let progress): phase = progress.phase
+            case .connectionState(let state): isReconnecting = state == .reconnecting
+            case .done(let message):
+                append(JarvisChatRow(message))
+                partial = ""
+                acknowledgment = ""
+                activeMessageID = nil
+            case .interrupted(let message):
+                append(JarvisChatRow(message))
+                partial = ""
+            case .error(let failure): throw JarvisChatClientError.serverEvent(code: failure.code, message: nil)
+            case .foodInvitation, .unknown: break
             }
         }
     }
@@ -149,6 +211,7 @@ struct JarvisRuntimeTestSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var model: JarvisRuntimeTestModel
+    @State private var toolsExpanded = false
     @State private var inputFocused = false
     @State private var requestTask: Task<Void, Never>?
     private let appLanguage: JarvisAppLanguage
@@ -260,8 +323,31 @@ struct JarvisRuntimeTestSheet: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("runtimeTest.message.\(message.id)")
         }
+        if !model.acknowledgment.isEmpty {
+            Text(.init(model.acknowledgment)).textSelection(.enabled)
+                .accessibilityIdentifier("runtimeTest.acknowledgment")
+        }
+        if !model.tools.isEmpty {
+            DisclosureGroup(isExpanded: Binding(get: { model.sending || toolsExpanded }, set: { toolsExpanded = $0 })) {
+                ForEach(model.tools) { tool in
+                    HStack {
+                        Image(systemName: tool.outcome == nil ? "ellipsis" : (tool.outcome == .ok ? "checkmark.circle" : "exclamationmark.circle"))
+                            .accessibilityHidden(true)
+                        Text(tool.toolName.replacingOccurrences(of: "_", with: " "))
+                        Text(copy(tool.outcome.map { $0 == .ok ? .toolOK : ($0 == .refused ? .toolRefused : .toolError) } ?? .toolRunning))
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.caption)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("runtimeTest.tool.\(tool.id)")
+                }
+            } label: { Text(copy(.toolActivity) + " \(model.tools.count)") }
+        }
         if !model.partial.isEmpty { Text(.init(model.partial)).textSelection(.enabled) }
-        if model.sending { JarvisLoadingView(title: copy(.runtimeSending)) }
+        if model.sending {
+            JarvisLoadingView(title: copy(model.isReconnecting ? .thinkingReconnecting : (model.phase == .tools ? .turnWorking : .turnWriting)))
+                .accessibilityIdentifier("runtimeTest.progress")
+        }
     }
 
     private var composer: some View {

@@ -36,6 +36,13 @@ final class ChatComposerUITests: XCTestCase {
         testInput.tap()
         testInput.typeText("Synthetic test message")
         app.buttons["runtimeTest.send"].tap()
+        XCTAssertTrue(app.staticTexts["runtimeTest.acknowledgment"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["runtimeTest.tool.00000000-0000-4000-8000-000000000001"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["runtimeTest.progress"].exists)
+        let progressCapture = XCTAttachment(screenshot: app.screenshot())
+        progressCapture.name = "runtime-test-live-progress"
+        progressCapture.lifetime = .keepAlways
+        add(progressCapture)
         XCTAssertTrue(app.descendants(matching: .any)["runtimeTest.message.991"].waitForExistence(timeout: 10))
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "runtime-test-isolated-chat"

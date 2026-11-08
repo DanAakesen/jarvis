@@ -9016,3 +9016,19 @@ only hide bottom effects so they do not suppress the shared top treatment.
 The top uses `safeAreaBar(edge: .top)` rather than `safeAreaInset`: it also extends
 the native scroll edge through the custom header, per the [Apple API contract](https://developer.apple.com/documentation/swiftui/view/safeareabar(edge:alignment:spacing:content:)-9hwgb).
 This API is available from the existing iOS 26 minimum.
+
+## 8 November 2026 — Lift mutation and conversation progress
+
+Health rows retain UUIDs for database lifts or original path/SHA/content for legacy
+iOS Gym log notes. Edits use PATCH /health/lifts/:id or SHA-checked PUT /notes/note,
+changing only the legacy lift line. Deletion uses the existing health DELETE route
+or the new owner-only DELETE /notes/gym-lift with original SHA. The latter is
+restricted to legacy Personal/Gym log filenames and lift-note content; tool-level
+vault deletion approvals are unchanged. Successful writes refresh summaries and
+invalidate Notes/Health caches. Failed writes are shown without optimistic removal.
+
+Chat SSE now decodes tool_activity and progress. Normal Chat deduplicates shared
+workspace/SSE tool events by activity ID; runtime tests render acknowledgment,
+expanded live tools and one inline progress indicator. A failed runtime refresh
+retains partial output, and recovery uses GET for the existing turn. Reconnect
+budgets begin at disconnection rather than at original message submission.

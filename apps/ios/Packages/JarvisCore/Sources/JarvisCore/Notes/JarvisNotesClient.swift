@@ -374,6 +374,20 @@ public final class JarvisNotesClient: Sendable {
         return try await writeNote(path: path, content: content, sha: sha)
     }
 
+    public func deleteGymLift(path: String, sha: String) async throws {
+        guard JarvisGymLogNote.parse(path: path) != nil, Self.validGitSHA(sha) else {
+            throw JarvisNotesClientError.invalidRequest
+        }
+        // Owner action on this exact version; never retry an uncertain deletion.
+        let response = try await request(
+            method: .delete, path: ["notes", "gym-lift"],
+            body: try JSONEncoder().encode(["path": path, "sha": sha]),
+            idempotent: false, additionalSuccessStatuses: [409]
+        )
+        if response.statusCode == 409 { throw conflict(from: response.body) }
+        guard response.statusCode == 204 else { throw JarvisNotesClientError.writeOutcomeUnknown }
+    }
+
     public func createFolder(path: String) async throws -> VaultFolderWrite {
         guard !path.isEmpty, path.utf16.count <= 171, JarvisNotesLogic.validFolder(path) else {
             throw JarvisNotesClientError.invalidRequest

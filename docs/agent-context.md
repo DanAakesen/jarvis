@@ -7612,3 +7612,15 @@ Native 42482352002 passed all 12 cases, but actual scrolled chrome needed a soft
 top-edge treatment to prevent text collisions. Qualify this visual refinement;
 do not upload solely from the earlier geometry pass. The shared bottom edge
 remains hidden and the scroller still extends behind both regions.
+
+## 8 November 2026 — Lift and runtime progress qualification
+
+Apple documentation read: SwiftUI swipeActions(edge:allowsFullSwipe:content:) and
+DragGesture (Markdown documentation). A shared staged gesture is used because
+List-only swipeActions cannot supply the owner's first-pencil/then-trash detents
+in the existing ScrollView rows. Never auto-delete on full swipe.
+
+Validate backend vault and lift routes; JarvisCore editable-lift, Health/Notes and
+chat client tests; native LiftEditingUITests plus runtime test chat. The fixture
+transport persists edit/delete changes and streams observable acknowledgment/tool
+progress. Native screenshots and owner-device acceptance remain separate evidence.

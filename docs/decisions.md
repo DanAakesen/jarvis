@@ -11765,3 +11765,14 @@ tool events prevent claiming fully isolated inputs or complete UI measurements.
 The saved guide labels the proposed live driver as unimplemented and retains the
 shopping prompt only as optional smoke coverage. No default/runtime/tool policy
 change or personal-data mutation is made by this investigation.
+
+## 8 November 2026 — Lift edits and progressive actions
+
+Owner-approved behavior: tap to edit an existing lift; short left swipe exposes an
+icon-only pencil and farther swipe exposes trash beside it. No full-swipe deletion.
+Retain the backing entry identity and legacy-note SHA; preserve unrelated note
+content when editing. A direct owner Delete tap authorizes deletion of that exact
+lift note version, without another agent confirmation. Reuse shared controls.
+
+Runtime recovery must retain partial output and reconnect by turn ID instead of
+reposting a request. Local reconnect time is an outage budget, not a work deadline.

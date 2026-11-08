@@ -3684,3 +3684,22 @@ actual content moves, and controls remain usable; inspect the scrolled captures.
 Use iOS 26 `safeAreaBar` for the top inset: Apple documents that it extends the
 scroll-edge effect through custom bar content. The bottom remains `safeAreaInset`
 with its edge effect hidden. No separate rectangular material is added.
+
+
+## 8 November 2026 — Last lifts row actions
+
+The owner requests tap-to-edit and progressive left-swipe actions: first a pencil
+icon for Edit, then a trash icon for Delete. No visible text labels; accessible
+action names remain. Keep the shared row/sheet styling and use the populated lift
+editor. Swiping reveals the Delete control rather than executing deletion.
+Implementation and native validation are pending.
+
+Lift row implementation now uses the shared two-stage swipe row because iOS 26
+List swipeActions does not expose a one-action detent for the existing ScrollView
+groups. It reveals pencil then trash, never commits by full swipe, provides named
+accessibility actions and honors Reduce Motion. The populated editor keeps field
+labels visible. Native interaction and screenshot qualification is pending.
+
+The expanded notification heading and its older task rows are separate sibling
+controls. The prior DisclosureGroup accessibility frame overlapped its child task
+link in failed native evidence. The task-navigation assertion remains unchanged.

@@ -2617,3 +2617,18 @@ Coding tasks use a persistent 128 GiB workspace after provisioning qualification
 The backend remains available while the separate worker deallocates after 120
 seconds with no queued or active work. New tasks wake it automatically. Recovery
 retains the existing task and branch; uncertain actions must never replay.
+
+
+## Owner follow-up: long-running replies and lift editing (8 November 2026)
+
+Chat work must not be cancelled solely because total elapsed time crosses a fixed
+210-second or 15-minute boundary. Normal and test conversations need ongoing
+acknowledgment, actual tool/progress updates and a final result, with reconnection
+to existing work rather than repeating a write. Individual failed network/tool
+operations still need clear failure handling; an unknown outcome is not success.
+
+In Health's Last lifts, tapping a row opens its populated editor and saves changes
+to that same lift. A short left swipe reveals an icon-only Edit action; farther
+swiping reveals an icon-only Delete action beside it. Retain accessibility names.
+Swiping reveals actions; it must not itself delete the lift. Persist edits/deletes
+and refresh the displayed lift history and dependent summaries.

@@ -486,13 +486,7 @@ final class JarvisChatModel: ObservableObject {
                 switch event {
                 case .chatToolActivity(let tool):
                     guard isSending else { continue }
-                    if let index = toolActivities.firstIndex(where: { $0.id == tool.id }) {
-                        // A replayed start must not replace a completed outcome.
-                        if toolActivities[index].outcome == nil || tool.outcome != nil { toolActivities[index] = tool }
-                    } else {
-                        toolActivities.append(tool)
-                        if toolActivities.count > 128 { toolActivities.removeFirst() }
-                    }
+                    recordToolActivity(tool)
                 case .pendingConfirmationsChanged:
                     await refreshActivity()
                     if !isSending { await refreshHistory() }
@@ -781,6 +775,15 @@ final class JarvisChatModel: ObservableObject {
         }
     }
 
+    private func recordToolActivity(_ tool: ChatToolActivity) {
+        if let index = toolActivities.firstIndex(where: { $0.id == tool.id }) {
+            if toolActivities[index].outcome == nil || tool.outcome != nil { toolActivities[index] = tool }
+        } else {
+            toolActivities.append(tool)
+            if toolActivities.count > 128 { toolActivities.removeFirst() }
+        }
+    }
+
     private func consume(_ events: AsyncThrowingStream<ChatEvent, any Error>) async throws {
         for try await event in events {
             try Task.checkCancellation()
@@ -812,6 +815,12 @@ final class JarvisChatModel: ObservableObject {
                 statusLine = nil
                 acknowledgment = nil
                 isReconnecting = false
+            case .toolActivity(let tool):
+                recordToolActivity(tool)
+            case .progress(let progress):
+                statusLine = JarvisChatLocalization.string(
+                    progress.phase == .tools ? .turnWorking : .turnWriting, language: appLanguage
+                )
             case .foodInvitation, .error, .unknown:
                 break
             }

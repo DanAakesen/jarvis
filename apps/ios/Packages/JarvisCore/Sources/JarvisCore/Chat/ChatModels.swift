@@ -66,6 +66,8 @@ public enum ChatEvent: Equatable, Sendable {
     case user(ChatMessage)
     case delta(text: String)
     case acknowledgment(text: String)
+    case toolActivity(ChatToolActivity)
+    case progress(ChatProgress)
     case foodInvitation(ChatFoodInvitation?)
     case interrupted(ChatMessage)
     case done(ChatMessage)
@@ -222,4 +224,9 @@ public struct ChatVisualContext: Codable, Equatable, Sendable {
         self.turnId = turnId
         self.frameId = frameId
     }
+}
+
+public struct ChatProgress: Decodable, Equatable, Sendable {
+    public enum Phase: String, Decodable, Sendable { case model, tools }
+    public let phase: Phase
 }

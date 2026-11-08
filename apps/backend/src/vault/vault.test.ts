@@ -1458,6 +1458,28 @@ describe('GitHub vault', () => {
     expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(1);
   });
 
+  it('deletes only the owner-selected version of a legacy lift note', async () => {
+    const path = 'Personal/Gym log/2026-11-08-1515-chest.md';
+    const content = '---\ntype: gym-log\nsession: chest\n---\n- Lift: Bench press · 70 kg × 6 × 3\n';
+    const { github, indexStore, module } = moduleFor({ remote: {
+      [path]: { sha: sha('c'), content },
+      'Personal/Keep.md': { sha: sha('d'), content: '# Keep' },
+    } });
+    await module.synchronize(signal());
+    const app = memoryApiApp(module);
+    const send = (payload: object) => app.inject({ method: 'DELETE', url: '/notes/gym-lift', headers: apiAuthorization, payload });
+    expect((await app.inject({ method: 'DELETE', url: '/notes/gym-lift', payload: { path, sha: sha('c') } })).statusCode).toBe(401);
+    const foreign = memoryApiApp(module, { auth: async () => ({ objectId: 'not-dan', tenantId: apiConfig.auth.tenantId, displayName: 'Other' }) });
+    expect((await foreign.inject({ method: 'DELETE', url: '/notes/gym-lift', headers: apiAuthorization, payload: { path, sha: sha('c') } })).statusCode).toBe(403);
+    expect((await send({ path: 'Personal/Keep.md', sha: sha('d') })).statusCode).toBe(400);
+    expect((await send({ path, sha: sha('a') })).statusCode).toBe(409);
+    expect(github.calls.filter(call => call.method === 'DELETE')).toHaveLength(0);
+    expect((await send({ path, sha: sha('c') })).statusCode).toBe(204);
+    expect(indexStore.entry(path)).toBeUndefined();
+    expect((await send({ path, sha: sha('c') })).statusCode).toBe(404);
+    expect(github.calls.filter(call => call.method === 'DELETE')).toHaveLength(1);
+  });
+
   it('lists, reads, creates and edits owner notes, then refreshes the index', async () => {
     const log = vi.fn();
     const { github, indexStore, module } = moduleFor({

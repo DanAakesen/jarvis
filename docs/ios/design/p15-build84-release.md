@@ -95,3 +95,30 @@ unbacked. No release is accepted from the pre-refinement captures alone.
 The refined header uses the iOS 26 safeAreaBar API to extend its soft native edge
 through custom header content; simply changing the style on safeAreaInset is not
 the documented custom-bar integration. The bottom keeps its transparent inset.
+
+
+## Latest qualification and additional owner reports
+
+Native 42485644758 on e02a3176 / iOS tree c9894fe714af17480a57f38f93696cb7bdb9bf7b
+finished with five passing and two failing cases, no skips. PageChrome's four
+light/dark tests and the Notes editor case passed. NavigationReliability timed out;
+the older notification case did not reach the task-history assertion. These
+failures block release. Artifact 13619149415 SHA256:
+`fb236fa1000b2936528010bab4d4891686d1f2f575ec1f4deadb7b0a805d35bd`.
+Reviewed dark Factory/Notes scrolling captures show the soft title treatment and
+footer underlap; full visual/recovery acceptance remains incomplete.
+
+The owner also reported Current test-chat ending after a partial acknowledgment,
+which disappeared on history refresh. Long-running execution/progress and lift
+edit/delete row actions are now captured in PLAN.md. Neither is implemented yet.
+
+## Expanded bundle candidate — 8 November 2026
+
+Adds actual runtime-test progress/acknowledgment/tools, preserves unsaved partial
+replies on history refresh and reattaches by original turn ID. Reconnect budget
+starts on connection loss, not send time. Adds tap-to-edit and two-stage icon
+swipes on Last lifts and history, updating/deleting the same SQL or vault record.
+Older notification expansion now separates its heading touch target from child
+task links after the native capture showed overlapping accessibility frames.
+Local backend mutation checks pass (68), lint/build pass; native qualification of
+this expanded candidate remains pending. No TestFlight upload has happened.

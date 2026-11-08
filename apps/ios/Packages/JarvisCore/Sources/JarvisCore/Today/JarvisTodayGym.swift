@@ -107,6 +107,7 @@ public struct JarvisGymLift: Equatable, Sendable {
 
 /// A gym log as saved to the vault.
 public struct JarvisGymLogEntry: Equatable, Sendable {
+    public let vaultNote: VaultNote?
     public let performedAt: Date
     public let session: JarvisGymSessionType
     public let lift: JarvisGymLift?
@@ -123,7 +124,8 @@ public struct JarvisGymLogEntry: Equatable, Sendable {
         durationMinutes: Double = 0,
         activeKilocalories: Double = 0,
         healthKitID: String? = nil,
-        healthActivity: String? = nil
+        healthActivity: String? = nil,
+        vaultNote: VaultNote? = nil
     ) {
         self.performedAt = performedAt
         self.session = session
@@ -132,6 +134,7 @@ public struct JarvisGymLogEntry: Equatable, Sendable {
         self.activeKilocalories = activeKilocalories
         self.healthKitID = healthKitID
         self.healthActivity = healthActivity
+        self.vaultNote = vaultNote
     }
 }
 
@@ -368,7 +371,7 @@ extension JarvisVaultGymLogStore {
             guard ContinuousClock.now < deadline else { partial = true; break }
             let note = try await client.readNote(path: candidate.path)
             if let lift = JarvisGymLogNote.lift(from: note.content) {
-                entries.append(JarvisGymLogEntry(performedAt: candidate.date, session: candidate.session, lift: lift))
+                entries.append(JarvisGymLogEntry(performedAt: candidate.date, session: candidate.session, lift: lift, vaultNote: note))
             } else if note.content.contains("- Lift:") {
                 partial = true
             }

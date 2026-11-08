@@ -15,7 +15,9 @@ acceptance. The owner explicitly requested updates across all discussed items.
 
 | Item | Current state | Next evidence needed |
 | --- | --- | --- |
-| Header/footer transparency after Ember | Owner clarified both opaque bands and missing scroll-behind behavior. Shared chrome uses safe-area insets; 12 native cases passed, but capture review required a soft top treatment to prevent title/text collisions. Bottom backing stays hidden | Qualify the top-edge visual refinement in both themes before build 84 |
+| Long-running Current/Copilot replies | Owner's Current test stopped after an acknowledgment; refreshing history removed the unsaved partial. Actual cause unverified. Source has a 210s invocation deadline and separate 15-minute turn deadline | Remove turn-duration cancellation, keep recoverable work running, stream useful progress/heartbeats, expose failures clearly and verify beyond former limits; do not blindly repeat the test write |
+| Lift edit/delete | Owner requests tap-to-edit plus a short left swipe for an edit icon, farther swipe for a delete icon; no visible labels and no full-swipe deletion | Implement row actions, persistence and refresh; qualify edit/delete and gesture states in the next bundle |
+| Header/footer transparency after Ember | Owner clarified both opaque bands and missing scroll-behind behavior. Shared chrome uses safe-area insets; 12 native cases passed, but capture review required a soft top treatment to prevent title/text collisions. Bottom backing stays hidden | Native 42485644758: 5/7 passed, navigation timeout and older-notification detail failure remain; inspect/fix before build 84 |
 | Notifications → Factory task | Latest, older grouped and running-task rows now route to the matching Factory detail after sheet dismissal | Fresh native navigation checks and replacement TestFlight build |
 | Factory detail and issue-only cards | History decoder aligned with TaskEventRecord (no taskId); live events still require matching taskId. Cards without a task open their GitHub issue | Core contracts, native task-history and board navigation checks; owner retest P11-13 |
 | PC bridge notifications | #1645 merged; online/control-state updates quiet, legacy online feed rows hidden, offline warnings rearm after recovery; backend and SQL checks passed | Deploy 42477261659 passed readiness and live acceptance; owner device check |
@@ -4275,3 +4277,20 @@ helper and includes the earlier assistant answer in the second request.
 Focused local agent tests: 116 passed. Backend route/store/compatibility tests:
 39 passed before adding the additional compare-and-swap test. Type checking passed.
 Full CI, SQL integration and live activation remain required before availability.
+
+## 8 November 2026 — Productivity blocker review
+
+Owner requests a code review of approval friction, timeouts and other gates that
+prevent authorized actions from completing. Trace request intent through policy,
+execution limits, retries, progress and recovery. Fix confirmed unnecessary blocks
+with regression checks; retain authorization boundaries and no-replay protections.
+Review is in progress alongside long-running replies and lift editing/deletion.
+
+## Latest implementation evidence (8 November 2026)
+
+Long-running backend PR #1647 passed CI 42490162058 and CodeQL; merged as
+0e1767edd21d94d9682fcd6e25fb555c83003564. Deploy 42490995273 is running; not yet
+verified live. iOS live-progress rendering, refresh retention, reconnect-budget fix,
+lift tap/edit/delete and progressive icon swipes are implemented locally. Backend
+vault/lift regression tests: 68 pass; scoped ESLint/TypeScript pass. JarvisCore/native
+checks pending for the expanded UI bundle. TestFlight 84 is not uploaded.

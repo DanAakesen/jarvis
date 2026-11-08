@@ -233,6 +233,25 @@ public final class JarvisHealthClient: JarvisHealthSyncSender, Sendable {
         return result.entry.vault ?? .pending
     }
 
+    public func updateLift(id: String, edit: JarvisLiftEdit) async throws {
+        guard UUID(uuidString: id) != nil, edit.isValid else { throw JarvisClientError.invalidRequest }
+        let response = try await client.performAuthenticatedRequest(
+            method: .patch, path: ["health", "lifts", id],
+            body: try JSONEncoder().encode(edit), idempotent: false
+        )
+        let result: LiftEnvelope = try decode(response.body)
+        guard result.entry.id.lowercased() == id.lowercased() else { throw JarvisHealthClientError.invalidResponse }
+    }
+
+    public func deleteLift(id: String) async throws {
+        guard UUID(uuidString: id) != nil else { throw JarvisClientError.invalidRequest }
+        let response = try await client.performAuthenticatedRequest(
+            method: .delete, path: ["health", "lifts", id], idempotent: false
+        )
+        let result: LiftEnvelope = try decode(response.body)
+        guard result.entry.id.lowercased() == id.lowercased() else { throw JarvisHealthClientError.invalidResponse }
+    }
+
     private struct LiftEnvelope: Decodable {
         let entry: Entry
         struct Entry: Decodable {

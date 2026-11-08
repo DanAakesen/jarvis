@@ -452,6 +452,64 @@ struct JarvisRowButton<Content: View>: View {
     }
 }
 
+/// Two-stage reveal for rows in a ScrollView. Native List swipeActions cannot
+/// provide the requested one-action detent in this existing grouped-card layout.
+struct JarvisEditableSwipeRow<Content: View>: View {
+    let identifier: String
+    let editTitle: String
+    let deleteTitle: String
+    var isBusy = false
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    @ViewBuilder let content: () -> Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var revealed: CGFloat = 0
+    @GestureState private var drag: CGFloat = 0
+    private let actionWidth: CGFloat = 60
+    private var width: CGFloat { min(max(revealed - drag, 0), actionWidth * 2) }
+
+    var body: some View {
+        JarvisRowButton(identifier: identifier, action: { revealed = 0; onEdit() }, content: content)
+            .disabled(isBusy)
+            .offset(x: -width)
+            .background(alignment: .trailing) {
+                HStack(spacing: 0) {
+                    JarvisIconButton(title: editTitle, systemImage: "pencil", identifier: identifier + ".edit", isDisabled: isBusy) {
+                        revealed = 0; onEdit()
+                    }
+                    .frame(width: actionWidth)
+                    JarvisIconButton(title: deleteTitle, systemImage: "trash", identifier: identifier + ".delete", isBusy: isBusy, tint: .red) {
+                        revealed = 0; onDelete()
+                    }
+                    .frame(width: actionWidth)
+                    .accessibilityHidden(width < actionWidth * 1.5)
+                }
+                .frame(width: width, alignment: .leading).clipped()
+                .allowsHitTesting(width >= actionWidth)
+                .accessibilityHidden(width < actionWidth)
+            }
+            .clipped()
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 20)
+                    .updating($drag) { value, state, _ in
+                        if !isBusy && abs(value.translation.width) > abs(value.translation.height) {
+                            state = value.translation.width
+                        }
+                    }
+                    .onEnded { value in
+                        guard !isBusy, abs(value.translation.width) > abs(value.translation.height) else { return }
+                        let distance = min(max(revealed - value.translation.width, 0), actionWidth * 2)
+                        withAnimation(reduceMotion ? nil : .snappy) {
+                            revealed = distance < actionWidth / 2 ? 0 : (distance < actionWidth * 1.5 ? actionWidth : actionWidth * 2)
+                        }
+                    }
+            )
+            .accessibilityElement(children: .contain)
+            .accessibilityAction(named: editTitle) { if !isBusy { onEdit() } }
+            .accessibilityAction(named: deleteTitle) { if !isBusy { onDelete() } }
+    }
+}
+
 /// A horizontally browsable action tile. Surface and geometry belong to the control layer.
 struct JarvisContentTileButton<Content: View>: View {
     let identifier: String

@@ -3,6 +3,8 @@ import SwiftUI
 
 struct JarvisActivitySheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var expandedGroups = Set<String>()
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @ObservedObject var model: JarvisChatModel
     let kind: ActivitySheetKind
@@ -350,7 +352,19 @@ struct JarvisActivitySheet: View {
                 }
             }
             if group.olderCount > 0 {
-                DisclosureGroup {
+                JarvisRowButton(identifier: "activity.older.\(group.id)") {
+                    withAnimation(reduceMotion ? nil : .snappy) {
+                        if !expandedGroups.insert(group.id).inserted { expandedGroups.remove(group.id) }
+                    }
+                } content: {
+                    HStack {
+                        Text(String(format: copy(.groupMore), group.olderCount))
+                        Spacer()
+                        Image(systemName: expandedGroups.contains(group.id) ? "chevron.up" : "chevron.down")
+                            .accessibilityHidden(true)
+                    }
+                }
+                if expandedGroups.contains(group.id) {
                     LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
                         ForEach(group.items.dropFirst(), id: \.id) { item in
                             HStack(alignment: .center) {
@@ -371,10 +385,7 @@ struct JarvisActivitySheet: View {
                         }
                     }
                     .padding(.top, JarvisDesignTokens.chatMessageSpacing)
-                } label: {
-                    Text(String(format: copy(.groupMore), group.olderCount))
                 }
-                .accessibilityIdentifier("activity.older.\(group.id)")
             }
         }
         .jarvisListRow(separator: false)
