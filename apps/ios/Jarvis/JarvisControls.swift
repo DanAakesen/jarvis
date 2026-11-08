@@ -482,9 +482,11 @@ struct JarvisEditableSwipeRow<Content: View>: View {
                         revealed = 0; onDelete()
                     }
                     .frame(width: actionWidth)
+                    .allowsHitTesting(width >= actionWidth * 1.5)
                     .accessibilityHidden(width < actionWidth * 1.5)
                 }
                 .frame(width: width, alignment: .leading).clipped()
+                .contentShape(Rectangle())
                 .allowsHitTesting(width >= actionWidth)
                 .accessibilityHidden(width < actionWidth)
             }

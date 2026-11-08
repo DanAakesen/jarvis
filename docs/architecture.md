@@ -9045,3 +9045,8 @@ workspace/SSE tool events by activity ID; runtime tests render acknowledgment,
 expanded live tools and one inline progress indicator. A failed runtime refresh
 retains partial output, and recovery uses GET for the existing turn. Reconnect
 budgets begin at disconnection rather than at original message submission.
+
+The camera image-processing context initializes on the serial frame callback queue
+when a frame actually needs encoding. Creating the Chat camera placeholder no
+longer initializes Core Image/Metal on the main thread. The context remains reused
+for subsequent frames of that capture object.

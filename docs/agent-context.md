@@ -7633,3 +7633,19 @@ Validate backend vault and lift routes; JarvisCore editable-lift, Health/Notes a
 chat client tests; native LiftEditingUITests plus runtime test chat. The fixture
 transport persists edit/delete changes and streams observable acknowledgment/tool
 progress. Native screenshots and owner-device acceptance remain separate evidence.
+
+### Jarvis2 thread ownership (8 November 2026)
+
+The owner names primary session `01a1adc7-aebe-76f2-b63d-a852c887204f` **Jarvis2
+primary**, responsible for the entire SDLC including integration, deployment and
+verification. **Jarvis2 secondary** may implement, build, test, design, research
+and answer assigned questions on an independent feature branch. It must never
+deploy, release, merge, change production or provision infrastructure. The reusable
+handoff prompt is `docs/secondary-thread-starter.md`. Separate cloud instances do
+not imply separate GitHub or deployment targets; coordinate integration centrally.
+
+Native 42485644758's navigation timeout stackshot locates main-thread work in
+VoiceCameraCapture.init → CIContext.init → Metal library loading. Apple CIContext
+documentation was read before deferring this context to the serial frame queue.
+Requalify normal Chat navigation and the existing camera-sheet case; simulator
+navigation cannot establish physical camera encoding quality.

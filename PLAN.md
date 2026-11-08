@@ -4307,8 +4307,12 @@ remaining work; the review does not claim these architectural changes are implem
 ## Latest implementation evidence (8 November 2026)
 
 Long-running backend PR #1647 passed CI 42490162058 and CodeQL; merged as
-0e1767edd21d94d9682fcd6e25fb555c83003564. Deploy 42490995273 is running; not yet
-verified live. iOS live-progress rendering, refresh retention, reconnect-budget fix,
+0e1767edd21d94d9682fcd6e25fb555c83003564. Deploy 42490995273 passed readiness and
+live acceptance after retrying a research transport failure. A real turn beyond
+the old cutoff remains unverified. iOS progress rendering, refresh retention, reconnect-budget fix,
 lift tap/edit/delete and progressive icon swipes are implemented locally. Backend
 vault/lift regression tests: 68 pass; scoped ESLint/TypeScript pass. JarvisCore/native
-checks pending for the expanded UI bundle. TestFlight 84 is not uploaded.
+Core checks passed (522 tests) on 5122d147. Native checks pending for the expanded
+UI bundle. Retained diagnostics identified eager camera CIContext initialization
+blocking Chat navigation; it now waits for the first camera frame. TestFlight 84
+is not uploaded.

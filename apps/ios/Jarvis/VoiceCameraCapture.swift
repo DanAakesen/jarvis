@@ -40,7 +40,9 @@ final class VoiceCameraCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDe
     let session = AVCaptureSession()
 
     private let queue = DispatchQueue(label: "com.danaakesen.jarvis.voice-camera")
-    private let context = CIContext()
+    // Used only by captureOutput on the serial camera queue. Creating a Metal
+    // context during the placeholder camera's init stalls ordinary Chat navigation.
+    private lazy var context = CIContext()
     private let output = AVCaptureVideoDataOutput()
     private let stillPhotoOutput = AVCapturePhotoOutput()
     private let lock = NSLock()

@@ -14,9 +14,9 @@ in his session. The exact cause of that live interruption remains unconfirmed.
   limit but removes both total execution deadlines. Hosted and backend streams
   send transport keepalives; actual tool and model-phase events accompany replies.
   CI 42490162058 passed. Deploy 42490995273 updated both images and passed
-  readiness/chat checks, but full acceptance failed on `research_runner_transport`.
-  Its read-only acceptance retry is running. A live run beyond the former limit
-  is unverified.
+  readiness/chat checks. Full acceptance initially failed on
+  `research_runner_transport`; its read-only retry then passed. The deployment is
+  qualified. A live run beyond the former limit is unverified.
 - **Late disconnect:** iOS previously spent its reconnect budget from message
   submission, so a first disconnect late in a healthy turn could fail immediately.
   PR #1646 starts that budget at disconnection and reattaches to the same turn
@@ -32,6 +32,13 @@ in his session. The exact cause of that live interruption remains unconfirmed.
   policy is described in [the earlier review](approval-friction-review.md).
   A direct-request production write remains untested; task 23 used the older
   later-yes path and subsequently stopped for disk capacity.
+- **Navigation waiting for unused camera setup:** native 42485644758's retained
+  stackshot shows Chat initialization waiting in `VoiceCameraCapture.init` →
+  `CIContext.init` → Metal library loading on the main thread. The placeholder
+  camera was constructed even when no camera was open. PR #1646 now creates its
+  image context lazily on the serial camera frame queue. Native navigation and
+  camera-sheet checks must qualify this change; physical camera encoding remains
+  an owner-device check.
 
 ## Remaining findings, ordered by impact
 

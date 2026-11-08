@@ -11795,3 +11795,8 @@ work without duplicate actions. Existing authorization and resource checks remai
 These follow-ups are not implemented by the long-running stream fix. Cloud threads
 should use separate branches and task scopes; shared GitHub and deployed services
 still need coordinated integration even when local workspaces are isolated.
+
+The owner explicitly assigns full SDLC ownership to Jarvis2 primary, session
+`01a1adc7-aebe-76f2-b63d-a852c887204f`. Jarvis2 secondary is development/research
+only and must never deploy; integration and delivery stay with the primary. Save
+the scope and handoff instructions in `docs/secondary-thread-starter.md`.

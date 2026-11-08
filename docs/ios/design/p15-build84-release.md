@@ -131,5 +131,11 @@ new lift Core model referenced app-only JSON helpers. The corrected candidate
 5122d147 decodes the enum directly. Its Core CI job passed; native run
 42491913466 is qualifying app interactions. Backend PR #1647 deployed its images
 and passed readiness/chat acceptance, but the full Deploy 42490995273 acceptance
-job failed on `research_runner_transport`; a read-only acceptance retry is running.
-Do not report complete live acceptance or an iOS upload from these partial results.
+job initially failed on `research_runner_transport`; the read-only retry passed.
+Backend deployment is qualified; a live turn beyond the former cutoff is still
+unverified. No iOS upload has occurred.
+
+Reviewing the retained earlier navigation stackshot identified eager Core Image /
+Metal setup in the unused Chat camera placeholder on the main thread. The image
+context is now initialized lazily on the serial camera frame queue. Requalify
+navigation and camera-sheet controls without increasing per-test time limits.
