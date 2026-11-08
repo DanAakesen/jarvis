@@ -92,3 +92,64 @@ extension JarvisCache {
         await write(data: data, validator: nil, key: "pinnedNotePaths")
     }
 }
+
+
+/// A stable, complete library projection. The view renders these rows lazily.
+public struct JarvisNoteLibraryGroup: Identifiable, Equatable, Sendable {
+    public enum Period: String, CaseIterable, Sendable {
+        case today, yesterday, earlier
+    }
+
+    public let period: Period
+    public let notes: [KnowledgeGraphNode]
+    public var id: Period { period }
+}
+
+extension JarvisNotesPresentation {
+    /// Parse each distinct timestamp once, then sort dates rather than constructing
+    /// ISO8601 formatters in a SwiftUI body/sort comparator. No note-count cap.
+    public static func libraryGroups(
+        nodes: [KnowledgeGraphNode],
+        visits: [JarvisNoteVisit],
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> [JarvisNoteLibraryGroup] {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let standard = ISO8601DateFormatter()
+        let opened = Dictionary(visits.map { ($0.path, $0.openedAt) }, uniquingKeysWith: max)
+        var parsed: [String: Date] = [:]
+        var dated: [(node: KnowledgeGraphNode, date: Date)] = []
+        dated.reserveCapacity(nodes.count)
+        for node in nodes {
+            if Task.isCancelled { return [] }
+            let modified: Date
+            if let cached = parsed[node.updatedAt] {
+                modified = cached
+            } else {
+                modified = fractional.date(from: node.updatedAt)
+                    ?? standard.date(from: node.updatedAt) ?? .distantPast
+                parsed[node.updatedAt] = modified
+            }
+            dated.append((node, max(opened[node.path] ?? .distantPast, modified)))
+        }
+        dated.sort { $0.date == $1.date ? $0.node.path < $1.node.path : $0.date > $1.date }
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now)
+        var buckets: [JarvisNoteLibraryGroup.Period: [KnowledgeGraphNode]] = [:]
+        for entry in dated {
+            let period: JarvisNoteLibraryGroup.Period
+            if calendar.isDate(entry.date, inSameDayAs: now) {
+                period = .today
+            } else if let yesterday, calendar.isDate(entry.date, inSameDayAs: yesterday) {
+                period = .yesterday
+            } else {
+                period = .earlier
+            }
+            buckets[period, default: []].append(entry.node)
+        }
+        return JarvisNoteLibraryGroup.Period.allCases.compactMap { period in
+            guard let notes = buckets[period], !notes.isEmpty else { return nil }
+            return JarvisNoteLibraryGroup(period: period, notes: notes)
+        }
+    }
+}

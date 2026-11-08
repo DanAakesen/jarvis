@@ -10,8 +10,9 @@ Factory navigation, transparent chrome, native selection and lift-editing fixes,
 alongside Notes/Ember from 82. Build 83 was cancelled before upload.
 
 **New Notes findings are open:** build 84 freezes when opening the right sidebar, and the shared phrase/Overview is missing.
-Wait for the qualified correction before retesting those two; #1653 is a candidate,
-not an uploaded fix. Preserve the previously approved browsing/editor interactions.
+#1653 is merged after CI, 530 Core tests and all four native interaction cases passed.
+Build 85 uploaded successfully in 42511641193. Wait for it to appear in TestFlight before retesting
+those two; build 84 still has the reported faults. Preserve the previously approved browsing/editor interactions.
 
 - [ ] **Notes:** swipe the title-only pinned carousel, open a recent note, browse
   folders, and use New folder at the bottom right. Create/edit a disposable note,
@@ -41,8 +42,8 @@ not an uploaded fix. Preserve the previously approved browsing/editor interactio
   request with exercise, kg, reps, sets, date and session. Verify the returned values
   in Health and the session in Home after refresh, including while a vault copy is
   pending. Ask Jarvis to correct that same test lift, then delete the test entry;
-  verify no extra approval and no duplicate record. Repeat in Copilot only after
-  its tool-definition refresh passes. The earlier failed workout is not replayed
+  verify no extra approval and no duplicate record. Copilot's tool-definition refresh and fresh live canary passed in 42510264543;
+  the same owner logging/readback/edit/delete test is now ready in Copilot. The earlier failed workout is not replayed
   automatically. Historical app vault logs are retained without migration.
 
 - [ ] **Lifts, build 84:** tap a disposable lift in Last lifts and confirm
@@ -80,14 +81,14 @@ not an uploaded fix. Preserve the previously approved browsing/editor interactio
 
 ## Deferred or blocked
 
-- **Apple Watch:** implementation is in Jarvis2 secondary. Wait for primary
+- **Apple Watch:** Jarvis2 secondary has draft PR #1652 open; not integrated or released. Wait for primary
   integration, native checks and a confirmed testable build before owner testing.
 
 - **Copilot comparison — quick smoke test reported good; combined test pending.**
   The actual harness differences, proposed project exercise and optional sample prompt are in [the saved comparison guide](../../runtime-comparison-owner-test.md).
-  Current remains the default. Earlier live compatibility passed, but the gym
-  catalogue refresh failed and #1651 is under qualification. Wait for the new
-  live canary before the comparison; owner quality comparison remains pending. The older individual tests are optional diagnostics.
+  Current remains the default. #1651 is merged/deployed; the refreshed gym catalogue
+  passed a new two-turn live canary and acceptance in 42510264543 at 18:34 UTC.
+  Copilot is ready for owner retesting; the full quality comparison remains pending. The older individual tests are optional diagnostics.
 - **Factory end-to-end — blocked, not ready for recovery testing.** Azure returned
   QuotaExceeded before the 128 GiB worker activated. The authorized quota request failed with HTTP 403 before a write. Subscription
   Quota Request Operator access for jarvis-github-deploy is needed. Once provisioned and qualified, recover existing task 23 / issue 1634,

@@ -7700,3 +7700,75 @@ impact/fingerprint checks pass (4). Provisioning source/tests pass Ruff. The ful
 pipeline suite needs hosted CI's Ruby and complete checkout; local sparse-checkout
 failures are not claimed as passing tests. pipeline_impact.py has three unchanged
 Ruff findings in the base revision; no unrelated cleanup is included.
+
+
+## Notes regression validation (8 November 2026)
+
+`--ui-test-large-notes` adds 1,000 synthetic notes to the existing Notes preview
+transport on Simulator only. `NotesRedesignUITests/testLargeLibrarySidebarOpensAfterScrollingAndReturnsToChat`
+physically opens/closes the right sidebar before and after scrolling, then returns
+to Chat. It retains the two-second drawer visibility requirement and existing test
+limits. `NavigationReliabilityTests/testNotesPageOrderAndNoScopeButton` now requires
+the restored data phrase and Overview ahead of the tabs. Run both plus existing
+Notes dark/light editing cases and inspect retained native captures. Do not claim
+the reported owner crash fixed solely from source inspection or a small fixture.
+
+
+## Notes follow-up and chrome acceptance — 8 November 2026
+
+
+Owner clarification, 8 November: this is build 84 freezing on the right sidebar,
+not app termination. Header/footer transparency is now owner-accepted across pages
+and must be preserved. First native run 42507483140 passed restored page order,
+but failed the 1,003-note navigation case at the unchanged 120-second limit and
+both editor-entry cases. Artifact 13628313103 (SHA256
+12ab310823ace0806ac39d4664dd256b4d56c2fd8c924d9e99247f56503c3be1)
+retains screenshots, the app/UI-runner spindump and hierarchy. The app main thread
+was predominantly constructing accessibility snapshots; this is synthetic
+large-library evidence, not proof of the exact physical-device failure.
+
+The correction computes recency once per inventory/visit/day update off the main
+actor, reuses timestamp parsers and renders individual rows lazily with the shared
+grouped-row appearance. It retains every note and cancels stale projections.
+Editor tests now scroll the complete target row above the dock before tapping;
+the retained hierarchy placed the former target below the viewport/dock. All
+existing pin/Raw/edit/save/reopen assertions and test limits remain. Fresh native
+qualification is required; neither a repair release nor owner acceptance is claimed.
+
+
+## 2026-11-08 — Copilot gym catalogue ready for owner retesting
+
+PR #1651 merged as c79371d7 after full CI 42506434652 passed on retry. Normal Deploy
+42507969183 passed readiness and acceptance. Read-only inspection 42509996653
+reported one matching version among five and the pin on another version. The
+already authorized refresh 42510264543 then reported managed_chat_provisioned and
+managed_chat_comparison_canary_ok at 18:34 UTC, with live acceptance also green.
+The refreshed catalogue is testable. Current stays the default; this compatibility
+canary does not establish comparative quality or owner acceptance of gym writes.
+
+
+## Notes qualification — 8 November 2026
+
+The Notes correction passed full CI 42509929023, including all 530 Core tests,
+and native run 42510119801 passed all four selected cases with zero failures/skips.
+Qualified source ca107a8b897bdf2eab181ab504cb43bcf1344525 has iOS tree
+545ad8d8c08ed50e9507d71cceadab434537fe1e. Actual restored-order, scrolled-sidebar
+and light/dark editor captures were reviewed. Artifact 13629821155 has SHA256
+9c0a357026019bc40ced7671358d47ed64fe7b120d23b31a969176eb9fff8755.
+The 1,003-note library now passes repeated sidebar open/close, scrolling and
+return-to-Chat checks. Both themes pass pin/Raw/edit/save/reopen. Existing 120/150
+second test limits and every assertion are retained. Physical-device acceptance
+of the freeze correction remains pending; TestFlight upload is the next step.
+
+
+## 2026-11-08 — Notes correction uploaded as TestFlight 85
+
+PR #1653 merged as df813f348eae27961259c691b526eeadced9ea18 with complete tree
+identity to qualified head 2f0fd280d6f999dd01459e97e0f43e9e12882c3e (tree
+9cd04755573ea3d0e25c90d7f4157715ebcbe014). Final CI 42511384320 passed; native
+42510119801 passed all four cases and 530 Core tests passed. TestFlight run
+42511641193 successfully archived, signed and uploaded build 85 from this source.
+Apple processing/device availability and owner acceptance of the Notes sidebar
+freeze correction remain unverified. The owner's acceptance of build 84 shared
+header/footer transparency remains valid. Copilot's fresh catalogue/canary is
+ready; the full comparison and gym write checks remain owner tests.

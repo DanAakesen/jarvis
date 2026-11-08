@@ -9111,3 +9111,13 @@ all qualification consumers. Manual quota/managed-chat gates and canaries remain
 required. Removing the old conservative input classification can cause a one-time
 component fingerprint transition; no prior receipt is rewritten or treated as an
 unexecuted successful deployment.
+
+
+### Notes recent-library projection
+
+JarvisNotesArea keys its cancellable projection by graph nodes, local visit history
+and calendar day. JarvisCore parses each distinct timestamp once, sorts on Date
+values and groups against the caller's calendar. A detached task builds the value;
+only its noncancelled result is published on the main actor. LazyVStack/Section
+keeps individual note rows lazy, with shared per-row grouped material corners.
+Neither the shared page chrome nor the complete underlying inventory is changed.

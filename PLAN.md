@@ -1,3 +1,20 @@
+## Current Notes follow-up — 8 November 2026
+
+The Notes correction passed full CI 42509929023, including all 530 Core tests,
+and native run 42510119801 passed all four selected cases with zero failures/skips.
+Qualified source ca107a8b897bdf2eab181ab504cb43bcf1344525 has iOS tree
+545ad8d8c08ed50e9507d71cceadab434537fe1e. Actual restored-order, scrolled-sidebar
+and light/dark editor captures were reviewed. Artifact 13629821155 has SHA256
+9c0a357026019bc40ced7671358d47ed64fe7b120d23b31a969176eb9fff8755.
+The 1,003-note library now passes repeated sidebar open/close, scrolling and
+return-to-Chat checks. Both themes pass pin/Raw/edit/save/reopen. Existing 120/150
+second test limits and every assertion are retained. PR #1653 merged as df813f348eae27961259c691b526eeadced9ea18 with complete tree
+identity to qualified head 2f0fd280d6f999dd01459e97e0f43e9e12882c3e. Final CI
+42511384320 passed. TestFlight 85 uploaded successfully in 42511641193. Apple processing/device
+availability and owner acceptance of the Notes freeze correction remain pending.
+
+Owner accepted build 84 header/footer transparency across pages. Preserve it.
+
 ## Active delivery — Factory capacity, Copilot and iOS bundle (8 November 2026)
 
 ### Owner status ledger
@@ -16,7 +33,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Item | Current state | Next evidence needed |
 | --- | --- | --- |
 | Long-running Current/Copilot replies | #1647 deployed; total 210s/15-minute cutoffs removed. #1646 merged with runtime-test progress and partial recovery; native checks passed | Live duration/reconnect and owner-device checks; restart-durable execution remains open |
-| Gym chat logging | #1646 merged: gym_lifts/gym_sessions CRUD with owner authorization, replay protection and app history integration. Full CI passed; backend/agent Deploy 42502357217 passed readiness and live acceptance | Copilot registration and owner logging/readback/edit/delete test in build 84; earlier failed workout is not automatically replayed |
+| Gym chat logging | #1646 merged: gym_lifts/gym_sessions CRUD with owner authorization, replay protection and app history integration. Full CI passed; backend/agent Deploy 42502357217 passed readiness and live acceptance | Copilot registration/canary now passed; owner logging/readback/edit/delete test in build 84; earlier failed workout is not automatically replayed |
 | Lift edit/delete | #1646 merged. Native checks passed actual tap/edit/save/reopen at 82.5 kg, pencil-only short swipe, farther trash reveal and deletion | Build 84 uploaded; owner-device acceptance pending |
 | Header/footer transparency after Ember | Owner accepted across pages in build 84 on 8 November: both continuous background and scroll-behind behavior now work well. Native checks previously passed | Complete; preserve the shared chrome during Notes repairs |
 | Notifications → Factory task | Latest, older grouped and running-task links route after sheet dismissal; native interactions passed | Build 84 uploaded; owner Task 23 navigation check pending |
@@ -24,14 +41,14 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | PC bridge notifications | #1645 merged; online/control-state updates quiet, legacy online feed rows hidden, offline warnings rearm after recovery; backend and SQL checks passed | Deploy 42477261659 passed readiness and live acceptance; owner device check |
 | Chat reply grouping and progress placement | #1646 merged: elapsed Working for header, public updates, tools beneath and tap-only timestamps. Full CI and all focused native checks passed, including selection | Backend acceptance passed and build 84 uploaded; owner check on device |
 | Build 81 Home/Chat streaming and recovery | Implemented, qualified and uploaded to TestFlight | Owner device send/network/dictation checks in docs/ios/design/p15-build81-release.md |
-| Header/footer transparency, one progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |
+| One progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Resolve worker quota, recover this existing task, finish validation and obtain delivery PR; do not duplicate Prepare |
 | 128 GiB worker workspace | Worker implementation merged; provisioning remains incomplete. Quota request workflow #1649 merged and qualified. Live run 42503224623 failed during quota inspection: HTTP 403 AuthorizationFailed; no quota write submitted | Grant jarvis-github-deploy Quota Request Operator at subscription scope, rerun quota request, then provision and verify disk/idle deallocation; recover existing task 23 |
-| Copilot harness | Earlier canary and owner quick smoke test passed. Gym catalogue refresh 42503779972 failed after version creation during inventory read; read-only inspection 42505663536 also failed. PR #1651 merged as c79371d7 after full CI passed on retry; normal deployment 42507969183 is running | Inspect and reuse the exact existing version after deployment, then pass a fresh live canary. Not yet ready to retest; Current remains default |
+| Copilot harness | Pagination repair #1651 merged/deployed. Read-only inspection 42509996653 found one exact matching version. Authorized catalogue refresh 42510264543 passed readiness, fresh two-turn managed_chat_comparison_canary_ok and live acceptance at 18:34 UTC | Ready for owner retesting, including gym tools; broader Current-vs-Copilot comparison pending. Current remains default |
 | Current vs Copilot comparison | Owner-reported quick smoke test worked well. Actual hybrid architecture and test visibility/context limitations documented; controlled project exercise proposed | Select representative source material; prepare equivalent contexts and measurements before claiming a live comparison. Full tool/write comparison pending |
-| Notes redesign | Owner confirmed build 84 freezes when opening the right sidebar and lacks the shared phrase/Overview. Candidate #1653 restores the components; first native run 42507483140 passed order but failed large-library responsiveness and both editor-entry cases | Diagnose retained evidence, repair and requalify; no corrected build released yet. Preserve owner-accepted header/footer transparency |
+| Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653. Full CI and 530 Core tests passed; native 42510119801 passed all four cases with a 1,003-note library and both editing themes. Captures reviewed | Merged; TestFlight 85 uploaded successfully in 42511641193. Owner retest when Apple makes it available. Header/footer transparency already owner-accepted |
 | Apple Watch | Owner reports implementation in Jarvis2 secondary | Secondary handoff; primary reviews, integrates, tests and releases. Implementation completion and delivery are not verified |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
 | Next TestFlight bundle | Build 84 uploaded in 42503950006 at 17:22 UTC; backend deployment 42502357217 accepted. Final native follow-up passed. Build 83 was cancelled before upload | Apple processing/device availability, Copilot gym refresh and owner acceptance remain separate |

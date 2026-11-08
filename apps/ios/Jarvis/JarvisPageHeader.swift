@@ -443,3 +443,30 @@ private struct JarvisLoadingShimmer: ViewModifier {
         .onScrollVisibilityChange(threshold: 0.01) { visible = $0 }
     }
 }
+
+
+/// The existing row-group surface, split per row so a LazyVStack can bound the
+/// rendered/accessibility tree. This does not alter page header/footer chrome.
+private struct JarvisLazyRowSurface: ViewModifier {
+    let first: Bool
+    let last: Bool
+
+    func body(content: Content) -> some View {
+        let radius = JarvisDesignTokens.surfaceRadius
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: first ? radius : 0,
+            bottomLeadingRadius: last ? radius : 0,
+            bottomTrailingRadius: last ? radius : 0,
+            topTrailingRadius: first ? radius : 0
+        )
+        content
+            .background(.regularMaterial, in: shape)
+            .clipShape(shape)
+    }
+}
+
+extension View {
+    func jarvisLazyRowSurface(first: Bool, last: Bool) -> some View {
+        modifier(JarvisLazyRowSurface(first: first, last: last))
+    }
+}

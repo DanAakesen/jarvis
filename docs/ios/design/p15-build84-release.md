@@ -25,10 +25,12 @@ acceptance. TestFlight run 42503950006 uploaded build 84 from b6b515d9 and compl
 successfully at 17:22 UTC on 8 November. Its app/Core source is unchanged from the
 qualified app candidate. The owner has confirmed testing build 84 on device. Extra deployment 42503216228 also passed. Copilot's gym catalogue
 refresh 42503779972 failed after version creation while reading the inventory;
-read-only inspection 42505663536 failed without writes. PR #1651 corrects pagination
-and exact-version reconciliation. Its 7,445 backend tests passed, but compilation
-hit the CI job limit; the incomplete checks are being retried. A fresh managed
-canary is required before claiming the new catalogue ready. Later entries below
+read-only inspection 42505663536 failed without writes. PR #1651 corrected pagination
+and exact-version reconciliation and merged after full CI passed on retry. Deploy
+42507969183 passed normal acceptance. Read-only inspection 42509996653 then found
+one matching version, and refresh 42510264543 passed the fresh managed two-turn
+canary plus live acceptance at 18:34 UTC. Copilot is now ready for owner retesting;
+full Current/Copilot quality comparison is still pending. Later entries below
 preserve investigation history; this section is the current qualification state.
 
 Factory quota is separate: #1649 merged as `b6b515d9` after full CI 42502476758.
@@ -45,14 +47,17 @@ restores those components. Native run 42507483140 passed the page-order test but
 failed the 1,003-note responsiveness test at the unchanged 120-second limit, and
 both editor-entry cases. The actual device cause is not yet proven. Retained
 screenshots/hierarchy show the restored header and the editor-test target below
-the footer. No repaired build is released yet; preserve the approved carousel,
-folder sheet and editor.
+the footer. The corrected candidate then passed native run 42510119801 (four tests, no failures/skips)
+and all 530 Core tests. Actual captures were reviewed. The repair merged as #1653
+and TestFlight 85 uploaded successfully in 42511641193; owner retesting is pending;
+preserve the approved carousel, folder sheet and editor.
 
 The owner separately confirmed that header/footer transparency now works well
 across pages in build 84. Both previously reported chrome regressions are accepted.
 Do not change shared header/footer behavior as part of the Notes repair.
 
-Apple Watch implementation is being handled in Jarvis2 secondary, per the owner.
+Apple Watch implementation is in Jarvis2 secondary's draft PR #1652, still open
+at head f903bf11 on 8 November.
 Primary remains responsible for integration, qualification and release. That report
 does not establish completed implementation or a Watch build.
 
