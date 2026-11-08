@@ -1,23 +1,25 @@
 # Compare Current and Copilot
 
-Updated 8 November 2026. The owner reports that a quick Copilot conversation works
-well. The first combined Copilot write test completed with friction; a paired Current
-result is pending. Current remains the default.
-The owner now requests an implementation comparison first, then a meaningful test
-design and any needed data/setup. The agenda prompt was unsuitable; the shopping
-exercise below is only an optional tool smoke test, not the recommended benchmark.
+Updated 9 November 2026 Copenhagen time (8 November UTC). Both isolated owner
+widget-plan tests now completed: Copilot before the repair, Current after #1658.
+The two versions of each labelled note were independently verified in the vault.
+This is a functional pass with friction for both, not evidence of general harness
+superiority. Current remains the default. See the verified results below.
 
 ## Current readiness
 
-Copilot is ready for owner retesting after the catalogue refresh and fresh live
-two-turn canary passed in Deploy 42510264543 at 18:34 UTC on 8 November. Read-only
-inspection 42509996653 first verified one matching version. Start a fresh Copilot
-test conversation for the updated catalogue, including the new gym tools.
+Current repair #1658 deployed in 42522064440; all chat acceptance probes passed.
+The owner then received a final reply, and vault commits verify creation and
+revision of `Personal/HARNESS-CHECK-CIRRENT-85.md`. Preserve that actual spelling;
+do not create another note merely to correct the comparison label. The earlier
+Current failure remains recorded as historical evidence.
 
-This verifies compatibility and current instructions/tool registration. It does
-not demonstrate better answer quality, successful owner gym writes, lower cost or
-better latency. The controlled comparison below is still pending. Current remains
-the default, and the full owner test is saved here for a later session.
+Copilot's refreshed catalogue and fresh two-turn canary passed in 42510264543.
+Its combined owner test also saved and revised the intended note. Both reported
+an initial secret-filter refusal followed by a successful save. The rejected
+payloads and exact causes remain unverified; this review must not disable secret
+protection. Gym writes, broader reliability, timing/cost and other entry points
+remain separate acceptance checks.
 
 ## What is actually different today
 
@@ -48,7 +50,7 @@ Source: `agents/jarvis/managed_policy_client.py`, `model_client.py`,
 adapter; the older `ManagedCopilotClient` protocol prototype has a simpler loop
 and is not the active production path.
 
-## Recommended comparison — proposed, not yet run
+## Extended comparison — proposed follow-up
 
 Use one realistic project exercise with fixed source material and known expected
 facts. A small Jarvis widget brief is a good candidate. It should require reading
@@ -92,13 +94,12 @@ rolling summaries retain existing shared behavior. Fresh chats alone therefore
 do not establish isolated inputs. Use controlled contexts in the test driver for
 rigorous comparison; ordinary app tests remain useful owner acceptance evidence.
 
-The current iOS test sheet renders replies and generic sending state but ignores
-acknowledgment events and does not render tool activity. It cannot itself show
-first-ack latency, tool sequence or retry counts. Use recorded backend/provider
-events where available, adding test-only measurement at missing boundaries;
-verify effective settings and saved items independently of the assistant's report.
-A small result summary in the test sheet is an optional product improvement, not
-implemented here.
+The current iOS test sheet shows progress, elapsed time and tool activity.
+Consecutive tool grouping is merged and native-tested, but awaits a successful
+signed app release after build 87 failed. Visible names/counts do not reveal all
+arguments, rejected payloads or attributable cost. Use recorded backend/provider
+events where available and verify saved items independently. Do not derive a
+performance ranking from incomplete screenshots or note commit timestamps.
 
 Compare task/fact accuracy and scope first, then duplicate/incorrect writes,
 owner corrections or redundant approvals, recovery outcome, first useful response
@@ -111,7 +112,8 @@ Start with three paired runs in alternating order. A consistent improvement on
 these workflows, without regressions, supports choosing Copilot for them. Equal
 results are a tie; one fluent answer or one faster run is insufficient. Text parity
 does not establish image/voice parity, Factory delivery or long-term reliability.
-The 128 GiB quota block remains an independent Factory prerequisite.
+The 128 GiB worker is activated; Factory task completion remains a separate
+end-to-end check.
 
 ## Optional self-contained tool smoke test
 
@@ -312,7 +314,8 @@ for comparison. A good test result does not automatically change the main runtim
 
 ## Current repair gate — 8 November 2026
 
-Pause owner comparison until Current's repaired runtime is deployed and checked.
+Historical gate, now cleared for this owner exercise: Current's repair is deployed
+and the owner's completed rerun is verified below.
 The latest server code was error_runtimeerror; the old log cannot establish its
 precise cause. A fatal 500-character progress boundary is reproduced and fixed;
 21 synthetic tool rounds now complete. Current production written chat gets a
@@ -347,10 +350,10 @@ is unavailable: do not assert this caused the owner's refusal. A missing note is
 also returned as ToolRefusal and shown as “Not allowed”; hidden instruction files
 are allowed for reading (only dot-path writes are barred).
 
-Keep this backend/catalogue unchanged while the owner runs the **same prompt** in
-a fresh **Current test conversation**, changing only the labelled note name to
-`HARNESS-CHECK-CURRENT-85` and retaining model/reasoning settings. Compare saved
-content/revisions, requirement preservation, truthful limitations, actual retries,
+The owner was asked to run the **same prompt** in a fresh **Current test
+conversation**, changing only the labelled note name and retaining model/reasoning
+settings. That rerun has now completed; its actual label is
+`HARNESS-CHECK-CIRRENT-85`. Compare saved content/revisions, requirement preservation, truthful limitations, actual retries,
 progress and timing. Record source/runtime versions and any intervening repo or
 vault changes; this is a practical comparison, not an isolated performance trial.
 Do not change the prompt halfway through the pair. A same-message revision does
@@ -360,9 +363,47 @@ does not qualify normal Chat, voice or Home entry.
 
 ### Current follow-up and comparison gate
 
-The owner ran Current and received only generic recovery text after 20 displayed
+In the earlier failed attempt, the owner ran Current and received only generic
+recovery text after 20 displayed
 tool attempts. Readback of `Personal/HARNESS-CHECK-CURRENT-85.md` returned not found.
 This confirms no delivered final reply/no note at the expected path; it does not
-prove no tools ran. The owner explicitly requests Current be repaired before
-comparing the harnesses. Do not select a winner or substitute a simpler prompt.
-After the repair, repeat the matched exercise and preserve these failure records.
+prove no tools ran. The owner requested Current be repaired before
+comparing the harnesses. The post-repair rerun below clears that completion gate;
+preserve this earlier failure record alongside the successful result.
+
+
+## Verified Current rerun and paired result — 9 November Copenhagen / 8 November UTC
+
+The owner supplied Current's successful final reply. Read-only verification found:
+
+| Evidence | Result |
+| --- | --- |
+| Initial save | Vault commit `26170110bf5eb0a32810a393d073131d9cdd6c5b`, 23:38:01 UTC, adds only `Personal/HARNESS-CHECK-CIRRENT-85.md` |
+| Revision | `a796d675a4e23a561cc5864a2d7f4cd366bd2338`, 23:38:13 UTC, modifies only that same note |
+| Requirement preservation | Work status moves from v1 into phase 2. Tasks, Electron/React/TypeScript, always-on-top, drag/edge snap, full-app link and all exclusions remain |
+| Final reply/readback | Final reply supplied by owner reports both readbacks. Independent commit and content inspection verifies both saved versions; private readback call receipts were not retrieved |
+| Friction | Current reports a first-save secret-filter refusal, a successful retry, unavailable vault routing note and an unlistable instructions directory. Exact failed inputs/reasons are unavailable |
+
+| Dimension | Current after repair | Copilot owner run |
+| --- | --- | --- |
+| Final answer and two versions of one note | Pass | Pass |
+| Revised scope and remaining requirements | Preserved | Preserved |
+| Repository research | Verified default-branch absence and owner-only task route; does not claim other-branch inspection | Also identified the saved scaffold on `jarvis/task-23` |
+| Limitations | Live authentication and Windows behavior explicitly unverified | Same; existing branch functionality also explicitly unverified |
+| Initial save | Reported refusal followed by success | Reported refusal followed by success |
+| Extra owner intervention | No extra intervention reported in completed rerun | No extra intervention reported in completed run |
+| Speed, cost and total calls | Insufficient matched measurements | 51 displayed attempts; insufficient matched measurements |
+
+Conclusion: both complete this practical task. Copilot's repository discovery was
+more complete in this pair; neither result establishes a general reliability,
+speed or cost advantage. Preserve Current's earlier failed attempts and subsequent
+repair as part of its history. Model/effort equality, source snapshots and runtime
+versions were not independently frozen, and Current's repair changed its output
+budget. This is owner acceptance, not a controlled benchmark. No default switch.
+
+The same single-message exercise does not test later-turn instruction replacement,
+restart durability, ordinary Chat/Home, Voice or Factory delivery. No additional
+owner rerun is needed just to prove this completed case. Exact refusal evidence,
+routing-file availability and controlled repeat measurements remain engineering
+follow-ups; do not rewrite the owner's notes or remove protection to manufacture
+a clean pass.

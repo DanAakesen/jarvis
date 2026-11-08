@@ -91,19 +91,9 @@ every additional optional Notes check below was separately exercised.
 
 ## Deferred or blocked
 
-- **Apple Watch:** Jarvis2 secondary has draft PR #1652 open; not integrated or released. Wait for primary
-  integration, native checks and a confirmed testable build before owner testing.
-
-- **Copilot comparison — quick smoke test reported good; combined test pending.**
-  The actual harness differences, proposed project exercise and optional sample prompt are in [the saved comparison guide](../../runtime-comparison-owner-test.md).
-  Current remains the default. #1651 is merged/deployed; the refreshed gym catalogue
-  passed a new two-turn live canary and acceptance in 42510264543 at 18:34 UTC.
-  Copilot is ready for owner retesting; the full quality comparison remains pending. The older individual tests are optional diagnostics.
-- **Factory end-to-end — blocked, not ready for recovery testing.** Azure returned
-  QuotaExceeded before the 128 GiB worker activated. The authorized quota request failed with HTTP 403 before a write. Subscription
-  Quota Request Operator access for jarvis-github-deploy is needed. Once provisioned and qualified, recover existing task 23 / issue 1634,
-  verify its actual delivery PR/checks, then verify idle deallocation. Do not create
-  another scaffold task by repeating Prepare.
+- **Apple Watch:** PR #1652 merged after primary review and native qualification. Build 87 failed signing because both Watch App IDs lack the shared App Group association. Wait for a successful replacement build before physical Watch tests.
+- **Copilot comparison — both combined exercises completed with friction.** The saved [comparison guide](../../runtime-comparison-owner-test.md) records independently verified note creation/revision for both. Current's post-repair rerun now delivers its final reply. Both report an initial save refusal; refusal/routing diagnosis and matched speed/cost evidence remain open. Current stays default; no repeat is needed just to prove this case.
+- **Factory end-to-end — ready for existing-task recovery testing.** The 128 GiB worker is provisioned and activated in 42530882044; disk, credentials, backend readiness and actual idle deallocation passed. Recover existing task 23 / issue 1634 through owner-authenticated Jarvis, verify delivery PR/checks and subsequent idle shutdown. Do not create another scaffold task by repeating Prepare.
 - **Approval friction:** after Factory is ready, confirm a clear authorized coding
   instruction proceeds without a redundant yes and a plan-only request stays a
   proposal. Backend acceptance passed; owner end-to-end confirmation is pending.

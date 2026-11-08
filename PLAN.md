@@ -14,11 +14,13 @@ a release. Current repair #1658 is now merged and deploying separately.
 
 ## Current test-chat repair — 8 November 2026
 
-The owner requires Current completion before comparing harnesses. The latest server
-failure at 20:03:46 UTC is error_runtimeerror, not a timeout code; the old log
-cannot distinguish its underlying cause. The expected CURRENT-85 note is absent.
-Do not ask the owner to repeat a write test until the repaired runtime is deployed
-and its live checks pass. Do not declare a harness winner.
+The owner required Current completion before comparing harnesses; the repaired
+owner rerun is now complete and its two saved note versions independently verified.
+The earlier server failure at 20:03:46 UTC is error_runtimeerror, not a timeout code; the old log
+cannot distinguish its underlying cause. The expected CURRENT-85 note was absent
+in that failed attempt. The successful rerun uses the actual label CIRRENT-85 (initial 26170110, revision a796d675).
+Both harnesses now pass this exercise with first-save refusal friction; no general
+winner or default switch is established.
 
 Reproduced a fatal 500-character public progress limit. Chat now segments long
 updates into compatible 500 UTF-16-unit events and continues work; a 21-tool-round
@@ -30,7 +32,9 @@ filtering, incomplete streams and coordination failures. No uncertain tool or wr
 is automatically replayed. These are verified code defects; the historical generic
 error alone cannot prove which caused the owner's failure. All 1,310 agent tests
 pass locally; 356 backend tests and TypeScript build pass. Full CI 42521183807
-and CodeQL pass. #1658 merged as a231e7ec; deployment/live acceptance are pending.
+and CodeQL pass. #1658 merged as a231e7ec and deployed in 42522064440. All chat
+acceptance probes passed; overall release acceptance failed on research_usage_limit.
+The owner rerun subsequently produced a final reply and the verified saved revision.
 
 
 ## Copilot owner test review and tool grouping — 8 November 2026
@@ -39,8 +43,8 @@ The owner's isolated Copilot test saved the labelled plan and revised the same
 note: vault commits 4cb08916 and 7030beb4 verify the requested scope change.
 The screen reports 51 tool attempts, refused reads/write and a failed repo list;
 this is functional completion with friction, not a clean reliability pass.
-The paired Current attempt failed without a final reply or the expected note.
-Owner requests repairing Current first, then repeating the comparison.
+The first Current attempt failed without a final reply or the expected note.
+Its post-repair rerun now completed, with both versions independently verified.
 Normal Chat is a separate acceptance surface; do not generalize this test to it.
 
 Consecutive tool grouping is implemented for both iOS chat surfaces, preserving
@@ -111,15 +115,15 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | One progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
-| Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Resolve worker quota, recover this existing task, finish validation and obtain delivery PR; do not duplicate Prepare |
+| Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Worker is activated; recover this existing task, finish validation and obtain delivery PR; do not duplicate Prepare |
 | 128 GiB worker workspace | Provisioned and activated in successful run 42530882044. 128 GiB managed disk; 124.93 GiB formatted, 123.64 GiB free. Both credentials accessible, actual idle deallocation and backend readiness verified | Existing Task 23 recovery and a complete Factory task remain owner-authenticated end-to-end checks; fleet autoscaling is not implemented |
 | Copilot harness | Pagination repair #1651 merged/deployed. Read-only inspection 42509996653 found one exact matching version. Authorized catalogue refresh 42510264543 passed readiness, fresh two-turn managed_chat_comparison_canary_ok and live acceptance at 18:34 UTC | Ready for owner retesting, including gym tools; broader Current-vs-Copilot comparison pending. Current remains default |
-| Current vs Copilot comparison | Current repair #1658 deployed in 42522064440; all chat acceptance probes passed. Overall release acceptance failed only on research_usage_limit. Copilot test note creation/revision independently verified | Owner reruns the unchanged saved combined prompt in a fresh Current test conversation; compare only after final reply and note readback succeed |
+| Current vs Copilot comparison | Both owner widget-plan exercises completed. Current CIRRENT-85 commits 26170110/a796d675 and Copilot commits 4cb08916/7030beb4 verify creation and revision of each same note. Both report first-save refusal followed by success | Functional pass with friction for both; Copilot found the scaffold branch. Refusal/routing diagnosis and matched performance evidence remain open. Current stays default; no repeat needed to prove this case |
 | Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653; qualified and delivered in build 85 | Owner confirmed Notes fixed on 8 November. Preserve this and accepted header/footer transparency |
 | Home Today workout totals | #1654 merged as ef783da2; all 533 Core tests, CI, CodeQL and native compilation passed, including Today/7d/14d/30d and no duplicated measurements | Build 86 uploaded successfully in 42515467682; owner retest Today against Health once it appears in TestFlight |
 | Apple Watch | PR #1652 reviewed and merged as 85ddd010. Final CI and CodeQL passed; 544 core tests, native Watch/widgets/paired iPhone builds, and three focused native interactions passed. Signed TestFlight build 87 failed in 42523594128: both Watch provisioning profiles lack the shared App Group | Associate group.com.danaakesen.jarvis with both Watch App IDs in Apple Developer, rerun signing/upload; then installation and physical Watch acceptance |
 | CarPlay | Owner submitted entitlement request to Apple; reply pending (8 November) | Apple decision; entitlement activation and device verification remain pending |
-| Consecutive tool activity | #1656 merged and integrated into build 87. Shared grouping in ordinary and isolated test chat; real call counts and refusals/failures retained. Three focused native interactions passed and captures inspected | Build 87 upload and owner checks on both surfaces |
+| Consecutive tool activity | #1656 merged and integrated into build 87. Shared grouping in ordinary and isolated test chat; real call counts and refusals/failures retained. Three focused native interactions passed and captures inspected | Build 87 failed signing; successful replacement upload and owner checks on both surfaces remain pending |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
 | Latest TestFlight bundle | Build 86 uploaded in 42515467682 with Home workout totals corrected. Build 85 Notes correction is owner-accepted; earlier build 84 chat/navigation/lift changes remain included | Apple processing/device availability and Home device acceptance pending; other unexercised owner checks remain on the saved checklist |
 
