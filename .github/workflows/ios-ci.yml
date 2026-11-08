@@ -1,15 +1,15 @@
 # Validation-only branch: never merge this focused workflow.
-name: Chat reply spacing verification
+name: Notification and Factory verification
 on:
   workflow_dispatch:
 permissions:
   contents: read
 env:
-  TASK_SOURCE_SHA: c2cef935f4337dc5852333ef60a42760d7c930f7
-  TASK_IOS_TREE: ee8a42c08c2355ba399576e38be755b567845173
+  TASK_SOURCE_SHA: ee8116208dfd1222477dd6730c14de104a8370e3
+  TASK_IOS_TREE: f6f797161b480fbce526f53c293e54748bdaf781
 jobs:
   gallery:
-    name: Verify Chat reply layout and turn feedback
+    name: Verify notification tasks, Factory history and Chat
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -26,8 +26,8 @@ jobs:
           python3 - <<'PYCODE'
           import json, os, pathlib, subprocess
           git = lambda value: subprocess.check_output(["git", "rev-parse", value], text=True).strip()
-          changed = subprocess.check_output(["git", "diff", "--name-only", "8e354c03b762d54ca32558e1121d206a64d6eb2f", "HEAD", "--", "apps/ios"], text=True).splitlines()
-          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge", "ChatTurnFeedbackUITests"], "changed_ios_paths":changed, "owner_reports":2, "prior_acceptance_invalidated_for_changed_states":True}
+          changed = subprocess.check_output(["git", "diff", "--name-only", "1008ea6758f6fb66d05942c6717cbf736f5ebbda", "HEAD", "--", "apps/ios"], text=True).splitlines()
+          evidence = {"source":git("HEAD"), "tree":git("HEAD^{tree}"), "ios_tree":git("HEAD:apps/ios"), "run":os.environ["GITHUB_RUN_ID"], "selected_tests":["ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge", "ChatTurnFeedbackUITests", "NotificationTaskNavigationUITests"], "changed_ios_paths":changed, "owner_reports":5, "prior_acceptance_invalidated_for_changed_states":True}
           pathlib.Path(os.environ["RUNNER_TEMP"], "gallery-evidence", "provenance.json").write_text(json.dumps(evidence, indent=2))
           PYCODE
       - name: Select pinned Xcode 26.6
@@ -62,7 +62,7 @@ jobs:
           xcrun simctl bootstatus "$TASK_DEVICE_ID" -b
           xcrun simctl status_bar "$TASK_DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$TASK_DEVICE_ID" "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator/Jarvis.app"
-          xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination "id=$TASK_DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" -only-testing:JarvisUITests/ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge -only-testing:JarvisUITests/ChatTurnFeedbackUITests -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
+          xcodebuild test -project apps/ios/Jarvis.xcodeproj -scheme Jarvis -destination "id=$TASK_DEVICE_ID" -derivedDataPath "$RUNNER_TEMP/DerivedData" -resultBundlePath "$RUNNER_TEMP/gallery-evidence/gallery.xcresult" -only-testing:JarvisUITests/ChatPresentationUITests/testCalendarReplyAndToolStatusShareTheJarvisLeadingEdge -only-testing:JarvisUITests/ChatTurnFeedbackUITests -only-testing:JarvisUITests/NotificationTaskNavigationUITests -parallel-testing-enabled NO -test-timeouts-enabled YES -default-test-execution-time-allowance 120 -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
       - name: Export actual native attachments
         if: always()
         run: |
@@ -74,7 +74,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
-          name: chat-reply-spacing-evidence-${{ github.run_attempt }}
+          name: factory-notification-evidence-${{ github.run_attempt }}
           path: ${{ runner.temp }}/gallery-evidence
           if-no-files-found: error
           retention-days: 14
