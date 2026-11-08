@@ -12063,3 +12063,12 @@ Run 42527387309 completed backend tests but cancelled the final build at the job
 ### 8 November — quota usage value investigation
 
 Run 42529215408 resolves both approved resource names but fails at usage_decode with ValueError before writes. Retain only numeric counter values/types (including negative sentinels) from the two approved quota resources; arbitrary provider text and structured bodies are excluded. The unknown usage remains rejected rather than assumed zero. This is diagnostic evidence only, not a quota increase or workspace activation.
+
+
+## Approved quota and provider prerequisite (8 November)
+
+The owner registered Microsoft.Compute and obtained the DASv5 quota increase to 2 in Sweden Central. Read-only run 42530362925 verifies family usage 0 / limit 2 and regional usage 0 / limit 12, with ready=true. No additional regional quota request is needed. Earlier unknown usage/counter failures are superseded by this successful live read; do not claim a confirmed cause for those transient values.
+
+Provisioning 42530295512 reached deployment but failed DeploymentFailed / MissingSubscriptionRegistration and did not activate routing. The owner was asked to check/register Microsoft.Network, which the template requires for its network, NSG, NIC and outbound IP. The retained error does not name the missing provider, so confirm registration rather than treating that inference as proof.
+
+Before first worker provisioning, verify subscription registration of Microsoft.Compute and Microsoft.Network, plus Microsoft.Quota for quota automation. The template also uses existing ManagedIdentity, ContainerRegistry, Storage and KeyVault providers and Authorization role assignments. Quota authorization is separate from provider-registration permissions. Registration and quota approval do not themselves prove a working 128 GiB workspace.
