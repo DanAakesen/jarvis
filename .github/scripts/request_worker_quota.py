@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import subprocess
 import time
@@ -29,6 +30,13 @@ def quota_count(value):
     raise ValueError('Invalid quota limit or usage')
 
 
+def counter_evidence(value):
+    result = {'type': type(value).__name__}
+    if value is None or type(value) in (int, bool) or type(value) is float and math.isfinite(value) or isinstance(value, str) and re.fullmatch(r'-?[0-9]{1,18}(?:\.[0-9]{1,8})?', value):
+        result['value'] = value
+    return result
+
+
 def required_limit(limit, usage):
     return max(quota_count(limit), quota_count(usage) + 2)
 
@@ -46,6 +54,7 @@ class QuotaClient:
         self.token = None
         self.resource_names = None
         self.response_stage = 'not_started'
+        self.counter_observation = {}
         self.opener = urllib.request.build_opener(NoRedirect())
 
     def request(self, method, url, payload=None):
@@ -124,9 +133,14 @@ class QuotaClient:
         for row in json.loads(response.stdout):
             name = row.get('name', {}).get('value', '')
             if isinstance(name, str) and name.casefold() in wanted:
-                limit, used = quota_count(row['limit']), quota_count(row['currentValue'])
-                rows.append({'resource': name, 'limit': limit, 'usage': used,
-                             'requiredLimit': required_limit(limit, used)})
+                observed = {'resource': name, 'limitObservation': counter_evidence(row.get('limit')),
+                            'usageObservation': counter_evidence(row.get('currentValue'))}
+                try:
+                    limit, used = quota_count(row['limit']), quota_count(row['currentValue'])
+                    observed.update(limit=limit, usage=used, requiredLimit=required_limit(limit, used))
+                except (ValueError, KeyError):
+                    observed['countsValid'] = False
+                rows.append(observed)
         result['computeUsage'] = rows
         return result
 
@@ -136,6 +150,9 @@ class QuotaClient:
         quota, _ = self.request('GET', self.url('quotas', resource))
         self.response_stage = 'usage_read'
         usage, _ = self.request('GET', self.url('usages', resource))
+        self.counter_observation = {'resource': resource,
+            'limit': counter_evidence(quota.get('properties', {}).get('limit', {}).get('value')),
+            'usage': counter_evidence(usage.get('properties', {}).get('usages', {}).get('value'))}
         self.response_stage = 'limit_decode'
         limit = quota_count(quota['properties']['limit']['value'])
         self.response_stage = 'usage_decode'
@@ -204,6 +221,7 @@ def run(client, submit, save, sleep=time.sleep):
             evidence['catalogueNames'] = sorted(client.resource_names or {})
             evidence['responseFailureType'] = type(error).__name__
             evidence['responseStage'] = client.response_stage
+            evidence['counterObservation'] = client.counter_observation
             try:
                 evidence['diagnostics'] = client.diagnostics()
             except (RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):

@@ -79,7 +79,9 @@ class WorkerQuotaTests(unittest.TestCase):
         with patch.object(quota.subprocess, 'run', return_value=response):
             actual = client.diagnostics()
         self.assertEqual(actual, {'catalogueResourceNames': ['cores'], 'computeUsage': [
-            {'resource': 'standardDASv5Family', 'limit': 0, 'usage': 0, 'requiredLimit': 2}]})
+            {'resource': 'standardDASv5Family', 'limit': 0, 'usage': 0, 'requiredLimit': 2,
+             'limitObservation': {'type': 'int', 'value': 0},
+             'usageObservation': {'type': 'int', 'value': 0}}]})
 
     def test_integral_json_numbers_are_counts_but_fractional_values_are_not(self):
         self.assertEqual(quota.required_limit(0.0, 0.0), 2)
@@ -95,6 +97,12 @@ class WorkerQuotaTests(unittest.TestCase):
             {'name': 'resource-id', 'properties': {'name': {'value': 'standardDASv5Family'}}},
         ]}, None)
         self.assertEqual(client.resolve_resource('standardDASv5Family'), 'standardDASv5Family')
+
+    def test_counter_evidence_retains_numeric_sentinels_but_not_arbitrary_text(self):
+        self.assertEqual(quota.counter_evidence(-1), {'type': 'int', 'value': -1})
+        self.assertEqual(quota.counter_evidence('0'), {'type': 'str', 'value': '0'})
+        self.assertEqual(quota.counter_evidence('private-provider-body'), {'type': 'str'})
+        self.assertEqual(quota.counter_evidence({'secret': 'value'}), {'type': 'dict'})
 
     def test_inspection_never_submits(self):
         client = FakeQuota()
