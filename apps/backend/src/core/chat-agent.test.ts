@@ -38,21 +38,49 @@ function streamedResponse(chunks: string[], headers: HeadersInit = { 'content-ty
 }
 
 describe('Foundry Invocations chat agent', () => {
-  it('uses the existing ingress budget for streams and still propagates caller cancellation', async () => {
-    const timeout = vi.spyOn(AbortSignal, 'timeout');
-    const controller = new AbortController();
-    let requestSignal!: AbortSignal;
-    const { agent } = createAgent(vi.fn(async (_url, options) => {
-      requestSignal = options!.signal!;
-      return streamedResponse(['event: done\ndata: {}\n\n']);
-    }));
-    for await (const chunk of agent.stream(input, delegatedAuthorization, controller.signal)) {
-      expect(chunk).toBeUndefined();
-    }
-    expect(timeout).toHaveBeenCalledWith(210_000);
-    expect(requestSignal.aborted).toBe(false);
-    controller.abort();
-    expect(requestSignal.aborted).toBe(true);
+  it('keeps an established stream alive past both former turn deadlines and propagates cancellation', async () => {
+    vi.useFakeTimers();
+    try {
+      const controller = new AbortController();
+      let requestSignal!: AbortSignal;
+      let output!: ReadableStreamDefaultController<Uint8Array>;
+      const encode = (text: string) => new TextEncoder().encode(text);
+      const { agent } = createAgent(vi.fn(async (_url, options) => {
+        requestSignal = options!.signal!;
+        return new Response(new ReadableStream<Uint8Array>({ start(stream) {
+          output = stream;
+          stream.enqueue(encode('event: delta\ndata: {"text":"Working"}\n\n'));
+        } }), { headers: { 'content-type': 'text/event-stream' } });
+      }));
+      const turn = agent.stream(input, delegatedAuthorization, controller.signal)[Symbol.asyncIterator]();
+      expect(await turn.next()).toEqual({ value: 'Working', done: false });
+      await vi.advanceTimersByTimeAsync(16 * 60_000);
+      expect(requestSignal.aborted).toBe(false);
+      output.enqueue(encode('event: done\ndata: {}\n\n'));
+      expect((await turn.next()).done).toBe(true);
+      controller.abort();
+      expect(requestSignal.aborted).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('still bounds a connection that never returns response headers', async () => {
+    vi.useFakeTimers();
+    try {
+      const connecting = Promise.withResolvers<void>();
+      const { agent } = createAgent(vi.fn(async (_url, options) => new Promise<Response>((_resolve, reject) => {
+        options!.signal!.addEventListener('abort', () => reject(options!.signal!.reason), { once: true });
+        connecting.resolve();
+      })));
+      const result = (async () => {
+        for await (const chunk of agent.stream(input, delegatedAuthorization, new AbortController().signal)) {
+          expect(chunk).toBeUndefined();
+        }
+      })();
+      const check = expect(result).rejects.toMatchObject({ name: 'TimeoutError' });
+      await connecting.promise;
+      await vi.advanceTimersByTimeAsync(210_000);
+      await check;
+    } finally { vi.useRealTimers(); }
   });
 
   it.each(['45', new Date(Date.now() + 45_000).toUTCString(), 'private-invalid'])(

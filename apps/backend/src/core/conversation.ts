@@ -743,8 +743,13 @@ return {
       const recovery = new RecoverableChat(sessionId, userMessage.id, session.language);
       recoverableTurns.set(userMessage.id, recovery);
       const controller = recovery.controller;
-      const deadline = setTimeout(() => controller.abort(), 15 * 60_000);
-      deadline.unref();
+      // The execution belongs to the turn, not a subscriber or an elapsed-time cap.
+      const unsubscribeToolProgress = app.jarvisActivityHub.subscribe(event => {
+        if ((event.type !== 'tool-call-started' && event.type !== 'tool-call-finished') ||
+            event.source !== 'chat' || !('messageId' in event) || !event.messageId ||
+            (event.messageId !== userMessage.id && event.messageId !== activeTurn.consumedThrough)) return;
+        recovery.publish(streamEvent('tool_activity', event));
+      });
       const activityId = randomUUID();
       let activityFinished = false;
       const publishActivity = (type: 'thinking' | 'interrupted' | 'failed' | 'ended') => {
@@ -1005,7 +1010,7 @@ return {
       void recovery.run(source).catch(error => {
         request.log.warn({ failure: error instanceof Error ? error.name : 'unknown' }, 'conversation.reply_failed');
       }).finally(() => {
-        clearTimeout(deadline);
+        unsubscribeToolProgress();
         app.shutdownConnections.delete(stop);
         const expiry = setTimeout(() => recoverableTurns.delete(userMessage.id), 10 * 60_000);
         expiry.unref();
@@ -1091,6 +1096,9 @@ return {
         return reply.code(404).send({ error: 'Active chat turn not found' });
       }
       activeTurn.phase = request.body.phase;
+      recoverableTurns.get(activeTurn.rootMessageId)?.publish(streamEvent('progress', {
+        phase: request.body.phase,
+      }));
       return reply.code(204).send();
     });
 

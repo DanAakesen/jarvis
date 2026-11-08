@@ -1229,6 +1229,7 @@ describe('conversation routes', () => {
       expect(response.body).toContain('event: delta');
       expect(response.body).toContain('event: done');
       expect(response.body).toContain('The Now feed shows 0 running tasks');
+      expect(response.body.match(/event: tool_activity/gu)).toHaveLength(2);
       expect(readNowFeed).toHaveBeenCalledOnce();
       expect(recordCall).toHaveBeenCalledWith(expect.objectContaining({
         messageId: '42',
