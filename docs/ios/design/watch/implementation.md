@@ -5,19 +5,27 @@ Branch: `feature/apple-watch-companion`. PR: https://github.com/DanAakesen/jarvi
 ## Implemented
 
 - XcodeGen Watch app and WidgetKit extension, targeting watchOS 26 with the existing iPhone SDK baseline. JarvisCore declares watchOS support. Watch app reuses the Jarvis app icon. Target device is the owner's Ultra 2; reported watchOS 27.2 needs readback.
-- Home: compact Voice, Dictate and Factory rows; Jarvis heading and menu. Chat: iOS-style user bubbles, assistant text, input with mic/voice controls, explicit Send for populated drafts, streamed replies and reconnect history. System dictation appends to an editable draft and never automatically submits.
+- Home: compact Voice, Dictate and Factory rows; Jarvis heading and menu. Chat: iOS-style user bubbles, assistant text, input with mic/voice controls, explicit Send for populated drafts, streamed replies and reconnect history. System dictation appends to an editable draft and never automatically submits. The compact input opens the native draft editor when tapped; mic and voice controls remain inside its bar, avoiding watchOS TextField chrome expanding the row.
 - Menu: today's incomplete due tasks, last seven days of workouts, lift history/add/edit/delete. Lift creation retains a submission UUID for idempotent retry; deletion requires confirmation. Factory provides selected-project task lists/details only, no task execution, approval or release controls.
 - Four complications: rectangular daily steps/active energy and weekly gym/run/active energy; circular Tasks Today, Dictation and Voice launchers. Phone-local HealthKit statistics aggregate steps and active energy; background reads do not prompt. Missing or permission-hidden samples stay unavailable. Snapshots expire after 15 minutes or date rollover. Sensitive complication data uses privacySensitive.
-- WatchConnectivity allow-list with bounded requests, correlation, reply timeout and no offline queue. iPhone authenticates using existing JarvisClient; no account token, backend URL or arbitrary HTTP proxy crosses to Watch. Sign-out stops Watch voice and clears context. Snapshots refresh with existing phone widget refresh and Watch foreground refresh. Health boundaries follow iPhone Calendar.current; cumulative HealthKit statistics avoid manually adding duplicate sources.
+- WatchConnectivity allow-list with 40 KB payload/64 KB wire bounds, deterministic JSON without slash expansion, correlation, reply timeout and no offline queue. iPhone authenticates using existing JarvisClient; no account token, backend URL or arbitrary HTTP proxy crosses to Watch. Sign-out stops Watch voice and clears context. Snapshots refresh with existing phone widget refresh, Watch foreground refresh and budgeted Watch background/connectivity tasks; watchOS controls timing. Health boundaries follow iPhone Calendar.current; cumulative HealthKit statistics avoid manually adding duplicate sources.
 - Duplex voice: Watch captures/plays PCM16 using shared VoiceAudioEngine. Phone connects existing VoiceSessionClient and relays bounded chunks through ordered acknowledged messages. Watch exposes mute/end. Existing iPhone Voice Live Activity controls that same session and is the intended paired-Watch live tile. A phone watchdog ends abandoned sessions after 15 seconds without Watch audio/heartbeat. Disconnect stops local capture.
 - WatchDesign.swift supplies shared Watch-native controls because UIKit-backed iOS JarvisControls cannot link on watchOS. SwiftUI paths/system glyphs approximate the approved art; reference PNGs are not fake functioning UI.
 
 ## Validation
 
-- Linux Swift 6.2: all 532 JarvisCore tests passed, including six new WatchContractTests for manual-send drafts, request bounds, expiry/midnight, unavailable health, cumulative chart, lift validation/retry identity and wire allow-list.
-- Swift frontend parsing and git diff --check passed locally.
-- Unsigned Watch app and all four complications built on Xcode 26.6 at b0e662fd. Later revisions need their own CI evidence; final status belongs in this PR.
+- Linux Swift 6.2: all 537 JarvisCore tests passed, including seven new WatchContractTests for manual-send drafts, request bounds, expiry/midnight, unavailable health, cumulative chart, lift validation/retry identity and wire allow-list.
+- Swift frontend parsing, git diff --check and Watch embed/companion/App Group/audio metadata checks passed locally. All 15 pipeline ImpactTests passed. The full local pipeline suite could not complete because its YAML loader requires Ruby, which is absent here.
+- Xcode 26.6 unsigned Watch app, all four complications and full paired iPhone build passed at `ba5bd815` ([CI run](https://github.com/DanAakesen/jarvis/actions/runs/42511464786)). Final post-main-integration revision is recorded below.
 - PR-only watch-build.yml compiles Watch and iPhone without signing. DEBUG --watch-fixture previews use synthetic data and make no backend requests; captures target an available Ultra simulator. Final native build/screenshot results are recorded separately below.
+
+## Final revision and visual evidence
+
+- Runtime source: `67d85cf980f4cf6a9b4b6f8fef4ab54042b215c1`, including latest main `c2624d67` and the compact draft-editor correction. Documentation/screenshot commits after this do not change runtime source.
+- [Native CI 42512941709](https://github.com/DanAakesen/jarvis/actions/runs/42512941709): unsigned Watch app, all four widgets, isolated simulator captures and full paired iPhone build **passed**. This is build validation, not device voice/connection acceptance.
+- Re-ran all **537** JarvisCore tests and all **15** pipeline ImpactTests on this combined source: **passed**. Seven tests are Watch-specific. Full local pipeline suite remains blocked by missing Ruby.
+- Inspected raw [Home](native/home.png), [Chat](native/chat.png) and [Health](native/health.png) Ultra-family simulator captures. All three Home actions fit; Chat has compact controls with no oversized native TextField background. Health uses the actual shared layout inside the app, not a captured installed watch-face complication. [Capture provenance](native/README.md).
+- Tap/keyboard/dictation, real phone connectivity and voice were not exercised by fixture capture. The approved images remain comparison references; final implementation visual acceptance belongs to the owner.
 
 ## Unverified and remaining
 
@@ -25,7 +33,7 @@ Branch: `feature/apple-watch-companion`. PR: https://github.com/DanAakesen/jarvi
 - End/mute from the mirrored iPhone Live Activity on the actual Watch. Existing Activity behavior is reused; no device verification is claimed.
 - Signing/provisioning new Watch and widget bundle IDs with the existing App Group. No developer portal or production configuration changed here.
 - Full watchOS localization, Dynamic Type/VoiceOver, Always On/tint and owner visual acceptance. Initial Watch copy is English. Native spacing must be checked against references.
-- Lists are bounded to 30 health rows / 20 Factory tasks. Full history stays on iPhone. Oversized responses fail visibly; compact DTOs/paging may be needed for long histories.
+- Health lists are bounded to 30 rows. Factory sends the latest 10 compact task excerpts; Chat loads the latest six compact messages. Long replies/history are Unicode-safe excerpts with a full-content-on-iPhone notice. Full data stays on iPhone. Other oversized responses fail visibly.
 - A cold-start phone must initialize signed-in composition before serving requests; otherwise Watch asks the owner to open/sign in on iPhone. Standalone/offline operations are unsupported.
 
 ## Primary integration

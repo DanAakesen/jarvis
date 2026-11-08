@@ -177,7 +177,7 @@ CarPlay
 
 Apple Watch
 
-- Live Activities appear on the Watch without extra work. A native Watch app is outside version 1 and would add its own App ID and target.
+- Follow-up implementation: PR #1652 adds the native Watch app and complication targets. Primary must provision `com.danaakesen.jarvis.watchkitapp` and `com.danaakesen.jarvis.watchkitapp.widgets` with the existing `group.com.danaakesen.jarvis` App Group before signed installation. The mirrored iPhone Voice Live Activity is reused; actual Watch controls/background behavior still require device verification. See [Watch handoff](design/watch/implementation.md).
 
 Music
 

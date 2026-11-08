@@ -53,7 +53,7 @@ The owner approved [Home](app-home-approved-concept.png) and [Chat](app-chat-app
 
 ## Voice feasibility limits
 
-The behaviors above are product requirements, not implemented or platform-verified features. A live tile is a status/control surface, not permission to keep microphone capture running. Do not promise an uninterrupted wrist-down or background conversation before device testing.
+The behaviors above are product requirements. Implementation and platform-verification status are recorded in [the handoff](implementation.md). A live tile is a status/control surface, not permission to keep microphone capture running. Do not promise an uninterrupted wrist-down or background conversation before device testing.
 
 Apple documentation checked 8 November 2026:
 
@@ -71,4 +71,4 @@ Remaining acceptance work: confirm watch face; verify paired-device audio/runtim
 
 Primary thread retains implementation coordination, integration, deployment and final acceptance. Open PRs #1646 and #1532 touch iOS navigation/health; this implementation branch adds native Watch targets and a phone bridge alongside the six references.
 
-Remaining design work: active voice controls and session states, End Session live tile, dictation capture/review and populated-input Send state, menu, workout list/detail, lift list/add/edit, Factory views, permission/authentication and disconnected/error states. Plan readable layouts and usable touch areas; actual-size previews, builds and physical-device behavior remain unverified. Save these decisions for implementation; this task does not authorize a deployment or starting live Factory tasks.
+Implemented supporting flows include active voice mute/end, draft editing/manual Send, menu, workouts, lift add/edit/delete, read-only Factory and disconnected/error states. They still need owner visual and device acceptance. The mirrored phone Voice Live Activity is reused; physical Watch End/mute and background behavior remain unverified. Native simulator evidence is linked in the handoff. This task does not authorize deployment or starting live Factory tasks.
