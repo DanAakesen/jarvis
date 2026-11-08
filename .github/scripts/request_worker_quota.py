@@ -45,6 +45,7 @@ class QuotaClient:
         self.base = f'https://management.azure.com{self.scope}/providers/Microsoft.Quota/'
         self.token = None
         self.resource_names = None
+        self.response_stage = 'not_started'
         self.opener = urllib.request.build_opener(NoRedirect())
 
     def request(self, method, url, payload=None):
@@ -88,6 +89,7 @@ class QuotaClient:
             names = {}
             url = f'{self.base}quotas?api-version={API_VERSION}'
             for _ in range(20):
+                self.response_stage = 'catalogue_read'
                 page, _ = self.request('GET', url)
                 for row in page['value']:
                     name = row.get('properties', {}).get('name', {}).get('value') or row.get('name')
@@ -130,9 +132,13 @@ class QuotaClient:
 
     def snapshot(self, resource):
         resource = self.resolve_resource(resource)
+        self.response_stage = 'quota_read'
         quota, _ = self.request('GET', self.url('quotas', resource))
+        self.response_stage = 'usage_read'
         usage, _ = self.request('GET', self.url('usages', resource))
+        self.response_stage = 'limit_decode'
         limit = quota_count(quota['properties']['limit']['value'])
+        self.response_stage = 'usage_decode'
         used = quota_count(usage['properties']['usages']['value'])
         return {'resource': resource, 'limit': limit, 'usage': used,
                 'requiredLimit': required_limit(limit, used)}
@@ -197,6 +203,7 @@ def run(client, submit, save, sleep=time.sleep):
         if isinstance(client, QuotaClient):
             evidence['catalogueNames'] = sorted(client.resource_names or {})
             evidence['responseFailureType'] = type(error).__name__
+            evidence['responseStage'] = client.response_stage
             try:
                 evidence['diagnostics'] = client.diagnostics()
             except (RuntimeError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired):
