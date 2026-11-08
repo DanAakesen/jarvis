@@ -17,17 +17,21 @@ and [HIG HealthKit](https://developer.apple.com/design/human-interface-guideline
 Preserve the existing read permissions and reported workout statistics; no
 HealthKit write, new permission or custom platform behavior is introduced.
 
-## Owner tracking and next bundle (7 November 2026)
+## Owner tracking and delivery (8 November 2026)
 
-Use PLAN.md's owner status ledger for all discussed work, including items not yet
-implemented or owner-tested. The next TestFlight build is held while the owner
-bundles changes. Notes redesign and background 3 / Ember are approved visual
-targets, not implemented. The owner authorized 128 GiB workspaces and automatic
-compute shutdown after tasks; migration is not implemented or provisioned. Current
-Factory workers are Foundry sessions (120-second idle timeout), while the separate
-backend Container App keeps one minimum replica. Build 81 owner tests are recorded
-in docs/ios/design/p15-build81-release.md. Copilot remains blocked by stale policy
-on turn 2; its owner comparison must wait for compatibility evidence.
+Use PLAN.md's owner status ledger and preserve confirmed acceptance. Notes and
+Ember shipped in build 82; Notes correction in 85 and shared transparency in 84
+are owner-accepted. Watch integration is merged, but build 87 signing failed on
+its two App Group associations. Copilot canaries and the owner's quick test passed;
+full comparison remains pending after Current's deployed repair.
+
+The 128 GiB worker is provisioned and activated, verified by 42530882044:
+124.93 GiB formatted, 123.64 GiB free, both credentials accessible, actual idle
+VM deallocation and backend readiness passed. Foundry retains existing sessions
+and research/login tools; new Factory routing is enabled for the disk-backed VM.
+The backend Container App still has minReplicas=1. Task 23 recovery needs the
+owner's authenticated app; do not impersonate that session or create a duplicate.
+See factory-worker-delivery-2026-11-08.md for evidence and the remaining check.
 
 ## Build 81 qualification and delivery (7 November 2026)
 

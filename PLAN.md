@@ -112,7 +112,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Resolve worker quota, recover this existing task, finish validation and obtain delivery PR; do not duplicate Prepare |
-| 128 GiB worker workspace | Owner registered Compute and obtained DASv5 quota 2. Live read 42530362925 verifies family 0/2 and regional 0/12; quota ready. Provisioning 42530295512 failed MissingSubscriptionRegistration; worker routing remains inactive | Verify/register Microsoft.Network, then provision and verify actual workspace, credential access and idle deallocation; recover existing task 23 through owner authentication |
+| 128 GiB worker workspace | Provisioned and activated in successful run 42530882044. 128 GiB managed disk; 124.93 GiB formatted, 123.64 GiB free. Both credentials accessible, actual idle deallocation and backend readiness verified | Existing Task 23 recovery and a complete Factory task remain owner-authenticated end-to-end checks; fleet autoscaling is not implemented |
 | Copilot harness | Pagination repair #1651 merged/deployed. Read-only inspection 42509996653 found one exact matching version. Authorized catalogue refresh 42510264543 passed readiness, fresh two-turn managed_chat_comparison_canary_ok and live acceptance at 18:34 UTC | Ready for owner retesting, including gym tools; broader Current-vs-Copilot comparison pending. Current remains default |
 | Current vs Copilot comparison | Current repair #1658 deployed in 42522064440; all chat acceptance probes passed. Overall release acceptance failed only on research_usage_limit. Copilot test note creation/revision independently verified | Owner reruns the unchanged saved combined prompt in a fresh Current test conversation; compare only after final reply and note readback succeed |
 | Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653; qualified and delivered in build 85 | Owner confirmed Notes fixed on 8 November. Preserve this and accepted header/footer transparency |
@@ -135,18 +135,15 @@ warm near-black charcoal with soft amber illumination. Use the replacement image
 /tmp/jarvis-backgrounds/3-ember.png as the target. The approved raster is merged into the shared dark background; build 82 is uploaded. Keep orange accents, readable secondary
 text and transparent page header/footer areas.
 
-For Factory disk capacity, the owner requires scalable storage rather than
-dependence on cleanup. Foundry documents up to 20 GiB per session at 1 vCPU or
-larger; the current deployment does not expose a disk-size setting. Evaluate
-separate build workers with configurable managed disks and queue-based scaling;
-The owner has now authorized 128 GiB workspaces at the discussed indicative
-pricing. The implementation is qualified and merged, but Azure QuotaExceeded prevents worker provisioning. Automatic
-compute shutdown after work, while retaining the disk, is part of the requirement.
-The backend integration is deployed; worker provisioning failed before activation and task recovery has not been performed. Diagnostic PRs #1642/#1643 passed CI and merged; the final backend release 42426666246 passed readiness and live conversation acceptance. The exact limiting quota is not inferred from the code-only Azure error; owner subscription quota details are requested. The current Factory
-workers are Foundry hosted sessions with a 120-second idle timeout; the separate
-backend Container App has minReplicas=1. Do not describe the backend as automatically
-paused when a Factory task ends. A new VM-based worker must explicitly deallocate;
-stopping its container alone does not establish that compute billing stopped.
+For Factory disk capacity, the approved Standard_D2as_v5 worker with a 128 GiB
+Standard SSD workspace is now provisioned and activated. Run 42530882044 verified
+124.93 GiB formatted capacity, 123.64 GiB free, access to both runner credentials,
+actual VM deallocation after idle, and backend routing readiness. Compute charges
+stop when the VM is deallocated; the data disk, OS disk and outbound IP remain
+allocated. The backend Container App remains separate with minReplicas=1.
+This delivers one worker; automatic fleet expansion is not implemented. Existing
+Task 23 recovery and a completed Factory task still require owner-authenticated
+end-to-end acceptance. See docs/factory-worker-delivery-2026-11-08.md.
 
 Follow-up measurements on 7 November: the tracked checkout is 279,635,450 bytes
 (about 267 MiB), including 256,401,556 bytes under docs. GitHub reports repository

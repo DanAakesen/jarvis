@@ -12072,3 +12072,18 @@ The owner registered Microsoft.Compute and obtained the DASv5 quota increase to 
 Provisioning 42530295512 reached deployment but failed DeploymentFailed / MissingSubscriptionRegistration and did not activate routing. The owner was asked to check/register Microsoft.Network, which the template requires for its network, NSG, NIC and outbound IP. The retained error does not name the missing provider, so confirm registration rather than treating that inference as proof.
 
 Before first worker provisioning, verify subscription registration of Microsoft.Compute and Microsoft.Network, plus Microsoft.Quota for quota automation. The template also uses existing ManagedIdentity, ContainerRegistry, Storage and KeyVault providers and Authorization role assignments. Quota authorization is separate from provider-registration permissions. Registration and quota approval do not themselves prove a working 128 GiB workspace.
+
+
+## 2026-11-08 — 128 GiB workspace provisioned and activated
+
+The owner completed subscription quota access, Compute/Network registration and
+the DASv5 increase to 2. Read 42530362925 verified family 0/2 and regional 0/12
+before allocation. Provisioning 42530882044 then passed with 134145380352 workspace
+bytes, 132754182144 free bytes, both credential reads, actual idle deallocation,
+backendReadyVerified=true and activated=true. Artifact 13637845540 retains the proof.
+
+This supersedes the quota/registration/authentication blockers above. One worker
+is delivered; fleet expansion is not implemented. Task 23 has not been replayed
+or declared complete. Owner-authenticated recovery and a complete Factory task
+remain the final end-to-end acceptance; use the saved branch and never a duplicate
+Prepare task. Current release record: docs/factory-worker-delivery-2026-11-08.md.
