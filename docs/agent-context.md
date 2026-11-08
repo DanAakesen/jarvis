@@ -22,8 +22,11 @@ HealthKit write, new permission or custom platform behavior is introduced.
 Use PLAN.md's owner status ledger and preserve confirmed acceptance. Notes and
 Ember shipped in build 82; Notes correction in 85 and shared transparency in 84
 are owner-accepted. Watch integration is merged, but build 87 signing failed on
-its two App Group associations. Copilot canaries and the owner's quick test passed;
-full comparison remains pending after Current's deployed repair.
+its two App Group associations. Both isolated widget-plan tests now completed;
+Current's post-repair CIRRENT-85 note creation/revision is verified at 26170110 and
+a796d675. Both harnesses retain first-save refusal friction. Current remains the
+default; broader performance/reliability comparison is not established. See
+runtime-comparison-owner-test.md for the paired results.
 
 The 128 GiB worker is provisioned and activated, verified by 42530882044:
 124.93 GiB formatted, 123.64 GiB free, both credentials accessible, actual idle

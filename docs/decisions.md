@@ -12087,3 +12087,17 @@ is delivered; fleet expansion is not implemented. Task 23 has not been replayed
 or declared complete. Owner-authenticated recovery and a complete Factory task
 remain the final end-to-end acceptance; use the saved branch and never a duplicate
 Prepare task. Current release record: docs/factory-worker-delivery-2026-11-08.md.
+
+
+## 9 November 2026 Copenhagen — Current owner comparison completed
+
+The owner reports a successful Current final reply after the deployed repair.
+Read-only vault verification confirms creation (26170110) and revision (a796d675)
+of the same Personal/HARNESS-CHECK-CIRRENT-85.md note, preserving the requested
+constraints and moving work status to phase 2. Keep the actual label unchanged.
+Both Current and Copilot now pass this practical exercise with first-save refusal
+friction. Copilot discovered more branch context in this pair; matched latency,
+cost and general superiority are unproven. Current remains the default, and this
+result does not establish normal Chat/Home, Voice, later-turn or Factory parity.
+Preserve earlier failed runs. Do not require another repetition merely to prove
+this completed case. Refusal causes and missing routing instructions remain open.
