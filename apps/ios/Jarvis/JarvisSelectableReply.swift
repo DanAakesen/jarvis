@@ -20,6 +20,8 @@ struct JarvisSelectableReply: UIViewRepresentable {
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped))
         tap.cancelsTouchesInView = false
+        tap.delaysTouchesBegan = false
+        tap.delaysTouchesEnded = false
         tap.delegate = context.coordinator
         view.addGestureRecognizer(tap)
         return view
@@ -29,10 +31,21 @@ struct JarvisSelectableReply: UIViewRepresentable {
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var onTap: (() -> Void)?
-        @objc func tapped() { onTap?() }
+        private var touchBeganAt: TimeInterval = 0
+        @objc func tapped() {
+            // A long press belongs to UIKit text selection. Do not reflow the
+            // reply by revealing its timestamp when the selection touch ends.
+            guard ProcessInfo.processInfo.systemUptime - touchBeganAt < 0.35 else { return }
+            onTap?()
+        }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+            otherGestureRecognizer is UILongPressGestureRecognizer
+        }
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                                shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            touchBeganAt = touch.timestamp
             guard let view = gestureRecognizer.view as? UITextView else { return false }
             if view.selectedRange.length > 0 { return false }
             let point = touch.location(in: view)

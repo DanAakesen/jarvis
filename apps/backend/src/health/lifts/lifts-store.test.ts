@@ -192,3 +192,21 @@ describe('LiftEntriesStore vault copy', () => {
     expect(String(f.request.query.mock.calls[0]?.[0])).toContain('vault_synced_revision < @revision');
   });
 });
+
+
+describe('LiftEntriesStore.forConversation', () => {
+  it('binds the configured owner for hosted tools without opening browser-only routes or external connector access', () => {
+    const changes = createHealthChanges();
+    const pool = {} as sql.ConnectionPool;
+    const hosted = { agentPrincipal: { kind: 'jarvis-agent', objectId: '99999999-9999-4999-8999-999999999999' },
+      server: { ownerObjectId: owner } } as unknown as FastifyRequest;
+    expect(LiftEntriesStore.forConversation(pool, hosted, changes)).toBeInstanceOf(LiftEntriesStore);
+    expect(() => LiftEntriesStore.forRequest(pool, hosted, changes)).toThrow();
+    expect(() => LiftEntriesStore.forConversation(pool, { ...hosted,
+      healthConnectorPrincipal: { kind: 'jarvis-daily-connector', objectId: owner },
+    } as unknown as FastifyRequest, changes)).toThrow();
+    expect(() => LiftEntriesStore.forConversation(pool, { server: { ownerObjectId: owner },
+      principal: { objectId: '99999999-9999-4999-8999-999999999999' },
+    } as unknown as FastifyRequest, changes)).toThrow();
+  });
+});

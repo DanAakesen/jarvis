@@ -472,7 +472,7 @@ struct JarvisEditableSwipeRow<Content: View>: View {
         JarvisRowButton(identifier: identifier, action: { revealed = 0; onEdit() }, content: content)
             .disabled(isBusy)
             .offset(x: -width)
-            .background(alignment: .trailing) {
+            .overlay(alignment: .trailing) {
                 HStack(spacing: 0) {
                     JarvisIconButton(title: editTitle, systemImage: "pencil", identifier: identifier + ".edit", isDisabled: isBusy) {
                         revealed = 0; onEdit()

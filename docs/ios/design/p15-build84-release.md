@@ -167,3 +167,13 @@ source guard requiring an orb in Chat. The selected Codex-style design replaces
 that orb with the elapsed header and text/tool status. The guard now explicitly
 requires the new header/status and forbids an extra Chat orb; all remaining shared
 orb/canvas checks are retained. Native interaction assertions are unchanged.
+
+Native 42496126403 on 6c80ca48 passed 4/6 tests. The elapsed header, continued
+public progress, steering, runtime-test isolation and transparent navigation
+passed. Long-press Copy and first-detent Edit hit testing failed. Artifact
+13623871877 SHA256
+`859818b5a1bd58586baf84dd201143c96d262e0a3d4cc2632341ce73f3c950d2`.
+Actual captures were inspected: the timestamp appeared after long press without
+selection, and the pencil was visible but not hittable. Native precedence and
+overlay corrections require fresh evidence; no TestFlight upload is claimed.
+The bundle also adds missing gym assistant tools using shared app persistence.

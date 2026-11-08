@@ -9060,3 +9060,16 @@ it from the final reply buffer. Replay retains these events. iOS separates updat
 from the final text and shows an elapsed turn clock in normal and runtime-test chat.
 Only public output text is used; encrypted reasoning is never exposed. Message taps
 toggle timestamps without replacing the native selection/linked-text view.
+
+## Gym conversation parity (8 November 2026)
+
+Health composition registers gym_lifts and gym_sessions in the shared backend
+registry for chat, Current/Copilot and owner voice. Their list/create/update/delete
+operations use the existing SQL stores and Gym vault synchronization. Dedicated
+conversation access resolves the configured owner; the existing browser routes
+and external connector boundaries remain unchanged. Mutations require a verified
+current owner message and active non-phone session without an elapsed-turn expiry.
+The server derives create UUIDs from owner/session/message/kind/entryIndex, so
+retries return the original record. Tool schemas accept neither owner nor approval
+nor idempotency flags. Sensitive auditing omits private arguments/results. A pending
+vault copy is distinct from the committed database save. No migration is needed.

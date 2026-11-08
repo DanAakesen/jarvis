@@ -101,3 +101,21 @@ describe('WorkoutEntriesStore', () => {
     expect(String(f.request.query.mock.calls[0]?.[0])).toContain('title = NULL');
   });
 });
+
+
+describe('WorkoutEntriesStore.forConversation', () => {
+  it('binds the configured owner for hosted tools without opening browser-only routes or external connector access', () => {
+    const changes = createHealthChanges();
+    const pool = {} as sql.ConnectionPool;
+    const hosted = { agentPrincipal: { kind: 'jarvis-agent', objectId: '99999999-9999-4999-8999-999999999999' },
+      server: { ownerObjectId: owner } } as unknown as FastifyRequest;
+    expect(WorkoutEntriesStore.forConversation(pool, hosted, changes)).toBeInstanceOf(WorkoutEntriesStore);
+    expect(() => WorkoutEntriesStore.forRequest(pool, hosted, changes)).toThrow();
+    expect(() => WorkoutEntriesStore.forConversation(pool, { ...hosted,
+      healthConnectorPrincipal: { kind: 'jarvis-daily-connector', objectId: owner },
+    } as unknown as FastifyRequest, changes)).toThrow();
+    expect(() => WorkoutEntriesStore.forConversation(pool, { server: { ownerObjectId: owner },
+      principal: { objectId: '99999999-9999-4999-8999-999999999999' },
+    } as unknown as FastifyRequest, changes)).toThrow();
+  });
+});

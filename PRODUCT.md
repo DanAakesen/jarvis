@@ -2649,3 +2649,14 @@ Keep all of it inside the scrolling conversation, never attached to the Now bar.
 Hide message timestamps until the owner taps a message; keep native text selection.
 Use actual elapsed time and observed progress, with no fabricated ETA or private
 reasoning. Apply to normal Chat and Current/Copilot test conversations.
+
+## App and assistant capability parity (8 November 2026)
+
+Owner-facing actions must also be available to Jarvis through the same validated
+services and records. App-only implementation is incomplete unless a platform
+restriction is explicitly documented. The reported gym gap requires chat/voice
+logging of lifts and sessions, including exercise, weight, reps, sets, date and
+session association. Clear owner logging/edit/delete requests authorize that
+operation without another yes or a special remember phrase. Unknown values and
+ambiguous targets require clarification; only persisted results count as success.
+Retries must not create duplicate entries.

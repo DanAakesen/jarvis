@@ -18,6 +18,7 @@ import type { NutritionTargetsAccess } from './nutrition/targets-store.js';
 import type { TrainingTargetsAccess } from './training/targets-store.js';
 import { healthSourceTools } from './tools/source-tools.js';
 import { isLegacyDailyRequest, serveLegacyDailyAlias } from './legacy-alias.js';
+import { gymTools } from './tools/gym.js';
 import { liftRoutes } from './routes/lifts.js';
 import { workoutRoutes } from './routes/workouts.js';
 import { deviceSyncRoutes } from './routes/sync.js';
@@ -33,6 +34,7 @@ export function createHealthModules(enabled = false, data?: HealthData, connecto
   if (trainingTargets && !data) throw new TypeError('Health training targets require shared Health data');
   if (nutritionSuggestions && !nutritionTargets) throw new TypeError('Health nutrition suggestions require nutrition targets');
   const tools = data ? [healthQueryTool(data.query), healthShowTool(data.query),
+    ...(data.gymTools ? gymTools(data.gymTools) : []),
     ...(internalNutrition ? [healthFoodTool(internalNutrition), healthFoodReviewTool(internalNutrition, Date.now, data.foodLookup)] : []),
     ...(savedNutrition ? [healthSavedFoodTool(savedNutrition)] : []),
     ...(nutritionTargets ? [healthNutritionTargetsTool(nutritionTargets)] : []),

@@ -4,7 +4,7 @@ import { healthQuerySources } from '@jarvis/contracts';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { databaseReadRequest } from '../../database/wake-retry.js';
 import { dayKey } from '../../proactive/time.js';
-import { resolveHealthBrowserOwner } from '../owner.js';
+import { resolveHealthBrowserOwner, resolveHealthConversationOwner } from '../owner.js';
 import type { HealthChanges } from '../revisions.js';
 import type { VaultState } from '../gym/workouts.js';
 import { parseLiftPatch, presentLiftEntry, presentLiftWrite, type LiftCreate, type LiftEntry, type LiftPatch } from './lifts.js';
@@ -133,6 +133,13 @@ export class LiftEntriesStore {
 
   static forRequest(pool: sql.ConnectionPool, request: FastifyRequest, changes: HealthChanges, vault?: LiftVaultSync): LiftEntriesStore {
     const owner = resolveHealthBrowserOwner(request);
+    if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(owner)) throw new TypeError('Invalid Health owner');
+    return new LiftEntriesStore(pool, owner.toLowerCase(), changes, vault);
+  }
+
+  /** The tool handler verifies the current owner conversation before mutations. */
+  static forConversation(pool: sql.ConnectionPool, request: FastifyRequest, changes: HealthChanges, vault?: LiftVaultSync): LiftEntriesStore {
+    const owner = resolveHealthConversationOwner(request);
     if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(owner)) throw new TypeError('Invalid Health owner');
     return new LiftEntriesStore(pool, owner.toLowerCase(), changes, vault);
   }

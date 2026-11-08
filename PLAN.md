@@ -4316,3 +4316,17 @@ Core checks passed (522 tests) on 5122d147. Native checks pending for the expand
 UI bundle. Retained diagnostics identified eager camera CIContext initialization
 blocking Chat navigation; it now waits for the first camera frame. TestFlight 84
 is not uploaded.
+
+## 8 November follow-up — Gym assistant parity and native qualification
+
+- Gym logging refusal reproduced in code: app stores/routes existed, assistant
+  tools did not. Shared gym_lifts/gym_sessions implemented for read/create/update/
+  delete using the same SQL and vault synchronization; direct instructions need
+  no second approval. Focused local tests pass; final CI/deploy/live acceptance pending.
+- Candidate b7e9c4e passed CI (42496364016), including 525 Core checks. Native
+  42496126403 on identical app source passed 4/6 tests: timer/public updates,
+  send/steering, isolated runtime chat and navigation. Long-press Copy and the
+  first swipe action touch target failed. Refine native gesture precedence and
+  action overlay, then requalify without relaxing checks. Build 84 not uploaded.
+- Global app/assistant action parity is now an explicit requirement; this gym
+  repair does not close the remaining productivity-review findings.

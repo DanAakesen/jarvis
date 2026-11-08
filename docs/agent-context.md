@@ -7659,3 +7659,13 @@ tap-only time plus long-press selection. Recheck runtime-test chat and lift gest
 The unchanged notification/chrome/navigation/camera cases passed in 42492967707
 (12/13 overall; the old lift assertion failed). Do not call that full run green.
 The new chat/lift candidate requires fresh native evidence.
+
+## Gym parity qualification (8 November 2026)
+
+Run backend gym tool/store/route, health module, shared tool parity and capability
+instruction tests; preserve the shared instruction budget. Python jarvis_tools
+checks cover hosted instruction composition. Verify the same create request/index
+replays its saved record and retains dumbbell weight, reps, sets, date/session ID.
+No live owner workout is logged by synthetic checks. Native 42496126403 passed
+timer/progress, runtime isolation and navigation; selection and the exposed Edit
+touch target failed and require a new native run after the interaction fixes.

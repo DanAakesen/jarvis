@@ -3714,3 +3714,8 @@ the final reply. All elements scroll with Chat. Reconnecting retains elapsed tim
 and names the connection state. A single message tap toggles its compact timestamp;
 long-press selection and links retain their native behavior. No private reasoning
 is rendered and heartbeats are not presented as newly completed work.
+
+Native follow-up: timestamp taps yield to UIKit long-press selection and cannot
+reflow a reply at the end of a selection gesture. Revealed lift actions overlay
+the shifted row so visible pencil/trash controls receive touches. The selected
+visual design is unchanged; repeat the real interaction checks.

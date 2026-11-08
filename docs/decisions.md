@@ -11814,3 +11814,14 @@ The corrected lift test in 42494078211 reached the saved row: AX showed 83 kg af
 a verified 82.5 input. Last lifts used a whole-number formatter. Preserve decimals
 and requalify the unchanged save/reopen/swipe/delete assertions. Artifact 13622798399
 SHA256: 33737f4f61e37d05e4b4927c6c3979657e488424af9b19586d946479b3a0afaf.
+
+## 8 November 2026 — App actions must be available to Jarvis
+
+The owner reported Jarvis refusing a fully specified dumbbell shoulder-press log.
+The app save routes existed but gym actions were absent from the tool registry.
+Implement shared gym tools for reads and explicit logging/edit/delete requests;
+reuse persistence and vault sync rather than generic memory writes. This is an
+app/assistant parity requirement, not proof that every historical app action has
+been audited. Keep current-message identity and exact record targeting without
+an extra confirmation or arbitrary long-turn age cutoff. Model-driven session
+selection and real owner device acceptance remain to be verified after deployment.
