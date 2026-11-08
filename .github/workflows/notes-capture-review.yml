@@ -1,23 +1,25 @@
-# Temporary validation-only operation. Never merge.
-name: Cancel duplicate Notes simulator run
+# Temporary diagnostic runner. Never merge.
+name: Read Notes compilation diagnostics
 on:
   push:
     branches: [codex/notes-capture-review]
 permissions:
   contents: read
-  actions: write
+  actions: read
 jobs:
-  cancel:
+  diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: DanAakesen/jarvis
     steps:
-      - name: Keep focused exact-source native qualification; cancel only the duplicate
+      - name: Read only the existing failed compilation
         run: |
-          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42509929012 --jq .head_sha)" = "ca107a8b897bdf2eab181ab504cb43bcf1344525"
-          test "$(gh api repos/DanAakesen/jarvis/actions/runs/42509929012 --jq .name)" = "iOS Simulator"
-          if test "$(gh api repos/DanAakesen/jarvis/actions/runs/42509929012 --jq .status)" != "completed"; then
-            gh run cancel 42509929012
-          fi
+          gh run view 42509865676 --job 128820367454 --log-failed > "$RUNNER_TEMP/notes-core.log"
+          python3 - <<'PY'
+          import os, pathlib
+          lines = pathlib.Path(os.environ["RUNNER_TEMP"], "notes-core.log").read_text().splitlines()
+          selected = [line for line in lines if "error:" in line or "failed" in line or "Test Case" in line]
+          print("\n".join(selected[:60]))
+          PY
