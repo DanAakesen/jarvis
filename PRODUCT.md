@@ -286,6 +286,10 @@ outcomes. The Now bar and Needs you sheet reuse the web app's `/now` snapshot,
 activity dismissal, confirmation decisions and event stream. No iOS-specific
 backend path is part of the screen.
 
+Active-turn progress belongs inside the scrolling chat with the acknowledgment,
+tools and streamed reply. Show one progress row; it must not be pinned to the
+Now bar or composer.
+
 Jarvis replies render Markdown structure, including headings, emphasis, lists and
 event date/time lines. Persisted tool outcomes stay unboxed and start at the
 Jarvis reply's leading edge; only the user's message has a background. Generated

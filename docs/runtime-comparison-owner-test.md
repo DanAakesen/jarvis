@@ -1,5 +1,9 @@
 # Compare Current and Copilot
 
+Owner testing deferred on 8 November 2026 because there is not enough time now.
+Keep this guide for later; the live automated compatibility check has passed, but
+the owner comparison has not. Current remains the default.
+
 Live Copilot compatibility passed in run 42418951594 on 7 November 2026;
 the test runtime is enabled. Current remains the default. This compares the text runtime
 in the Plus → Test agent runtime flow; it does not switch the main conversation

@@ -2,6 +2,9 @@
 
 ### Owner status ledger
 
+The consolidated device checklist is [saved here](docs/ios/design/p15-owner-test-checklist.md).
+The owner deferred Copilot comparison on 8 November; preserve the prompts for later.
+
 Keep this ledger current when work changes state. Distinguish design approval,
 implementation, automated/native verification, deployment and owner acceptance.
 Do not report queued work as implementation in progress or a passed test as owner
@@ -9,7 +12,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 
 | Item | Current state | Next evidence needed |
 | --- | --- | --- |
-| Chat timestamp/reply/tool spacing | Compact message-detail spacing implemented; extra vertical reply padding removed | Focused native presentation/turn checks, actual capture review and next TestFlight upload |
+| Chat reply grouping and progress placement | Compact metadata spacing and removal of extra reply padding implemented; one active-turn status moved inside the scrolling transcript | Fresh native presentation/turn checks, actual capture review and next TestFlight upload |
 | Build 81 Home/Chat streaming and recovery | Implemented, qualified and uploaded to TestFlight | Owner device send/network/dictation checks in docs/ios/design/p15-build81-release.md |
 | Header/footer transparency, one progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
@@ -17,7 +20,7 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Resolve worker quota, recover this existing task, finish validation and obtain delivery PR; do not duplicate Prepare |
 | 128 GiB worker workspace | Implementation merged and qualified; backend live. Provisioning 42426685636 confirms Azure InvalidTemplateDeployment / QuotaExceeded before activation | Subscription quota investigation: selected Standard_D2as_v5 in Sweden Central needs two free vCPUs. Owner quota limit/usage requested; deployment identity is resource-group scoped. Then provision, verify real capacity/idle deallocation, recover task 23 |
 | Copilot harness | #1639 deployed; refreshed definition and live two-turn canary passed in 42418951594; enabled | Owner multi-turn/tool comparison; Current remains the default |
-| Current vs Copilot comparison | Ready to start; live compatibility passed | Follow docs/runtime-comparison-owner-test.md in fresh matched conversations |
+| Current vs Copilot comparison | Saved and deferred by the owner on 8 November; live compatibility passed | Resume docs/runtime-comparison-owner-test.md when convenient; no owner comparison pass claimed |
 | Notes redesign | #1638 merged as a55e7350; CI 42418217434 and final native 42417916004 passed; captures inspected | Build 82 uploaded in 42419435807; owner editing/navigation acceptance pending |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
 | Next TestFlight bundle | Build 82 uploaded successfully in 42419435807 from a55e7350 | Apple processing/device acceptance; backend worker delivery remains separate |

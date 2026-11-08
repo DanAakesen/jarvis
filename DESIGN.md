@@ -3647,3 +3647,10 @@ spacing token supplies the gaps around it. Keep the tool disclosure's full touch
 target, leading alignment and expansion behavior, readable paragraph spacing and
 the existing separation between conversation messages. Applies to normal Chat and
 both test runtimes through their shared screen.
+
+
+The owner reiterates that Thinking/Working/Writing reply/reconnecting feedback is
+part of Chat. This supersedes the earlier pinned-progress-row choice: render one
+status inside the scrolling active assistant turn, after live tools and before any
+streamed reply text. It scrolls with the conversation and disappears on completion.
+The composer/Now dock must contain no active-turn progress copy.

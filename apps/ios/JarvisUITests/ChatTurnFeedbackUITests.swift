@@ -82,6 +82,10 @@ final class ChatTurnFeedbackUITests: XCTestCase {
 
     private func assertSingleProgress(_ app: XCUIApplication) {
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "chat.turn.status").count, 1)
+        let transcript = app.scrollViews["chat.transcript"]
+        XCTAssertTrue(transcript.exists)
+        XCTAssertEqual(transcript.descendants(matching: .any).matching(identifier: "chat.turn.status").count, 1,
+                       "Turn progress belongs to the scrolling conversation, not the Now/composer dock")
     }
 
     private func attach(_ app: XCUIApplication, _ name: String) {
