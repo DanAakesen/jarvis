@@ -150,3 +150,14 @@ the physical input coordinate, assert the edited value before saving, wait for t
 sheet title to disappear, then assert the refreshed value and reopen it. Keep all
 save/swipe/delete assertions. This is a test correction, not a claimed persistence
 fix. Camera/navigation refinement is qualifying separately on unchanged limits.
+
+## Active reply timer added to the bundle
+
+Owner requested the Codex active-turn pattern and tap-only message timestamps.
+Implemented locally with public commentary events, an elapsed header and thinking/
+tools underneath, in normal and runtime-test chat. Fresh validation is pending.
+Native 42492967707 passed 12/13: camera, runtime progress, navigation, both Notes
+themes, all notification cases and four chrome cases. Lift-only 42494078211 still
+failed readback: retained AX showed 83 kg for saved 82.5 kg. The Last lifts formatter
+now preserves decimals; keep the save/reopen and two-stage gesture checks.
+No TestFlight upload has happened for this candidate.

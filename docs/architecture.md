@@ -9050,3 +9050,13 @@ The camera image-processing context initializes on the serial frame callback que
 when a frame actually needs encoding. Creating the Chat camera placeholder no
 longer initializes Core Image/Metal on the main thread. The context remains reused
 for subsequent frames of that capture object.
+
+## Ongoing public chat updates (8 November 2026)
+
+The model loop marks later pre-tool text with a commentary boundary; the initial
+acknowledgment remains backward compatible. The hosted stream forwards bounded
+commentary text, and the backend verifies it against streamed text before removing
+it from the final reply buffer. Replay retains these events. iOS separates updates
+from the final text and shows an elapsed turn clock in normal and runtime-test chat.
+Only public output text is used; encrypted reasoning is never exposed. Message taps
+toggle timestamps without replacing the native selection/linked-text view.

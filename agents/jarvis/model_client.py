@@ -111,16 +111,22 @@ PRE_TOOL_ACKNOWLEDGMENT = {
         "If this request needs one or more tools, begin with one brief, natural "
         "sentence in the first person saying what I will check or do. Ground it in "
         "the request and tools actually available. Do not claim that anything has "
-        "already been checked or succeeded, give an ETA, or narrate later tool calls. "
-        "Then use the tools and give the useful result once. If no tool is needed, "
+        "already been checked or succeeded, give an ETA, or expose private reasoning. "
+        "As work advances, give brief user-facing updates before further tool calls when "
+        "there is a useful finding, changed plan or next step. Keep each update below 500 "
+        "characters, grounded in observed results. Do not repeat empty status messages. "
+        "Then give the final result. If no tool is needed, "
         "answer directly without an acknowledgment."
     ),
     "en": (
         "If this request needs one or more tools, begin with one brief, natural "
         "first-person sentence saying what I will check or do. Ground it in the "
         "request and tools actually available. Do not claim that anything has "
-        "already been checked or succeeded, give an ETA, or narrate later tool calls. "
-        "Then use the tools and give the useful result once. If no tool is needed, answer "
+        "already been checked or succeeded, give an ETA, or expose private reasoning. "
+        "As work advances, give brief user-facing updates before further tool calls when "
+        "there is a useful finding, changed plan or next step. Keep each update below 500 "
+        "characters, grounded in observed results. Do not repeat empty status messages. "
+        "Then give the final result. If no tool is needed, answer "
         "directly without an acknowledgment."
     ),
 }
@@ -1502,14 +1508,18 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
 
                     acknowledgment = "".join(delivered_text)
                     if (
-                        current_chat_acknowledgment_enabled.get()
-                        and not acknowledgment_emitted
+                        (current_chat_acknowledgment_enabled.get() or role == "chat")
+                        and (not acknowledgment_emitted or role == "chat")
                         and role in {"chat", "voice"}
                         and acknowledgment.strip()
                     ):
                         if len(acknowledgment) > MAX_ACKNOWLEDGMENT_CHARACTERS:
                             raise RuntimeError("Model acknowledgment exceeded the size limit")
-                        yield AcknowledgmentBoundary(acknowledgment)
+                        yield AcknowledgmentBoundary(
+                            acknowledgment,
+                            kind=("acknowledgment" if not acknowledgment_emitted
+                                  and current_chat_acknowledgment_enabled.get() else "commentary"),
+                        )
                         acknowledgment_emitted = True
                     if emitted_text:
                         yield "\n\n"

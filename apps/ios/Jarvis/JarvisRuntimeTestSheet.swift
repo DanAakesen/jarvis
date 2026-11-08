@@ -15,6 +15,8 @@ private final class JarvisRuntimeTestModel: ObservableObject {
     }
     @Published var partial = ""
     @Published var acknowledgment = ""
+    @Published var progressUpdates: [String] = []
+    @Published var turnStartedAt: Date?
     @Published var tools: [ChatToolActivity] = []
     @Published var isReconnecting = false
     @Published var phase: ChatProgress.Phase = .model
@@ -91,6 +93,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
                 partial = ""
                 acknowledgment = ""
                 tools = []
+                progressUpdates = []
                 activeMessageID = nil
             }
             if activeMessageID == nil || hasFinal {
@@ -117,6 +120,8 @@ private final class JarvisRuntimeTestModel: ObservableObject {
         tools = []
         isReconnecting = false
         phase = .model
+        turnStartedAt = Date()
+        progressUpdates = []
         turn = Task {
             defer {
                 sending = false
@@ -149,6 +154,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
                 partial = ""
                 acknowledgment = ""
                 tools = []
+                progressUpdates = []
                 isReconnecting = false
                 error = nil
                 try await consume(events)
@@ -164,12 +170,16 @@ private final class JarvisRuntimeTestModel: ObservableObject {
         for try await event in events {
             switch event {
             case .user(let message):
+                if turnStartedAt == nil { turnStartedAt = ChatWorkProgress.startDate(message.at) ?? Date() }
                 activeMessageID = message.id
                 append(JarvisChatRow(message))
             case .delta(let text): partial += text
             case .acknowledgment(let text):
                 acknowledgment = text
-                if partial.hasPrefix(text) { partial.removeFirst(text.count) }
+                partial = ChatWorkProgress.removingUpdate(text, from: partial)
+            case .commentary(let text):
+                progressUpdates.append(text)
+                partial = ChatWorkProgress.removingUpdate(text, from: partial)
             case .toolActivity(let tool):
                 guard tool.messageId == activeMessageID else { continue }
                 if let index = tools.firstIndex(where: { $0.id == tool.id }) {
@@ -181,6 +191,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
                 append(JarvisChatRow(message))
                 partial = ""
                 acknowledgment = ""
+                progressUpdates = []
                 activeMessageID = nil
             case .interrupted(let message):
                 append(JarvisChatRow(message))
@@ -211,7 +222,8 @@ struct JarvisRuntimeTestSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var model: JarvisRuntimeTestModel
-    @State private var toolsExpanded = false
+    @State private var toolsExpanded = true
+    @State private var selectedTimestampID: String?
     @State private var inputFocused = false
     @State private var requestTask: Task<Void, Never>?
     private let appLanguage: JarvisAppLanguage
@@ -316,37 +328,65 @@ struct JarvisRuntimeTestSheet: View {
             Text(copy(.runtimeEmpty)).foregroundStyle(.secondary)
         }
         ForEach(model.messages) { message in
-            VStack(alignment: .leading, spacing: JarvisDesignTokens.compactSpacing) {
+            VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
                 Text(message.role == .dan ? copy(.runtimeYou) : "Jarvis").font(.headline)
-                Text(.init(message.text)).textSelection(.enabled)
+                if selectedTimestampID == message.id, let date = ChatWorkProgress.startDate(message.at) {
+                    Text(date, format: .dateTime.hour().minute())
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("runtimeTest.timestamp.\(message.id)")
+                }
+                JarvisSelectableReply(text: message.text, identifier: "runtimeTest.reply.\(message.id)") {
+                    selectedTimestampID = selectedTimestampID == message.id ? nil : message.id
+                }
+                .accessibilityAction(named: copy(.turnShowTime)) {
+                    selectedTimestampID = selectedTimestampID == message.id ? nil : message.id
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("runtimeTest.message.\(message.id)")
+        }
+        if model.sending, let startedAt = model.turnStartedAt {
+            JarvisChatWorkHeader(startedAt: startedAt, isReconnecting: model.isReconnecting,
+                                language: appLanguage, identifier: "runtimeTest.elapsed")
         }
         if !model.acknowledgment.isEmpty {
             Text(.init(model.acknowledgment)).textSelection(.enabled)
                 .accessibilityIdentifier("runtimeTest.acknowledgment")
         }
-        if !model.tools.isEmpty {
-            DisclosureGroup(isExpanded: Binding(get: { model.sending || toolsExpanded }, set: { toolsExpanded = $0 })) {
-                ForEach(model.tools) { tool in
-                    HStack {
-                        Image(systemName: tool.outcome == nil ? "ellipsis" : (tool.outcome == .ok ? "checkmark.circle" : "exclamationmark.circle"))
-                            .accessibilityHidden(true)
-                        Text(tool.toolName.replacingOccurrences(of: "_", with: " "))
-                        Text(copy(tool.outcome.map { $0 == .ok ? .toolOK : ($0 == .refused ? .toolRefused : .toolError) } ?? .toolRunning))
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.caption)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("runtimeTest.tool.\(tool.id)")
-                }
-            } label: { Text(copy(.toolActivity) + " \(model.tools.count)") }
+        ForEach(Array(model.progressUpdates.enumerated()), id: \.offset) { index, text in
+            Text(.init(text)).textSelection(.enabled)
+                .accessibilityIdentifier("runtimeTest.update.\(index)")
         }
         if !model.partial.isEmpty { Text(.init(model.partial)).textSelection(.enabled) }
-        if model.sending {
-            JarvisLoadingView(title: copy(model.isReconnecting ? .thinkingReconnecting : (model.phase == .tools ? .turnWorking : .turnWriting)))
-                .accessibilityIdentifier("runtimeTest.progress")
+        if model.sending || !model.tools.isEmpty {
+            VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
+                JarvisRowButton(identifier: model.sending ? "runtimeTest.progress" : "runtimeTest.tools",
+                                action: { toolsExpanded.toggle() }) {
+                    HStack(spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
+                        Text(copy(model.sending ? (model.isReconnecting ? .thinkingReconnecting :
+                                (model.phase == .tools ? .turnWorking : .turnThinking)) : .toolActivity))
+                        if !model.tools.isEmpty { Text("\(model.tools.count)") }
+                        Image(systemName: toolsExpanded ? "chevron.down" : "chevron.right")
+                            .accessibilityHidden(true)
+                    }
+                    .font(.footnote).foregroundStyle(.secondary)
+                }
+                if toolsExpanded {
+                    ForEach(model.tools) { tool in
+                        HStack {
+                            Image(systemName: tool.outcome == nil ? "ellipsis" : (tool.outcome == .ok ? "checkmark.circle" : "exclamationmark.circle"))
+                                .accessibilityHidden(true)
+                            Text(tool.toolName.replacingOccurrences(of: "_", with: " "))
+                            Text(copy(tool.outcome.map { $0 == .ok ? .toolOK : ($0 == .refused ? .toolRefused : .toolError) } ?? .toolRunning))
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.caption)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("runtimeTest.tool.\(tool.id)")
+                    }
+                }
+            }
+            .onChange(of: model.sending, initial: true) { _, sending in toolsExpanded = sending }
         }
     }
 

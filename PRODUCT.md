@@ -2640,3 +2640,12 @@ to that same lift. A short left swipe reveals an icon-only Edit action; farther
 swiping reveals an icon-only Delete action beside it. Retain accessibility names.
 Swiping reveals actions; it must not itself delete the lift. Persist edits/deletes
 and refresh the displayed lift history and dependent summaries.
+
+## Codex-style active conversation turn (8 November 2026)
+
+The owner requests an elapsed working timer above the active assistant turn, useful
+public progress updates throughout tool work, and thinking/tool activity underneath.
+Keep all of it inside the scrolling conversation, never attached to the Now bar.
+Hide message timestamps until the owner taps a message; keep native text selection.
+Use actual elapsed time and observed progress, with no fabricated ETA or private
+reasoning. Apply to normal Chat and Current/Copilot test conversations.

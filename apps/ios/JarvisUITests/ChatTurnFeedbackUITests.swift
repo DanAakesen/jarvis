@@ -62,6 +62,46 @@ final class ChatTurnFeedbackUITests: XCTestCase {
         attach(app, "chat-single-follow-up-compact-bubble-final-tools-and-next-draft")
     }
 
+    func testElapsedHeaderAndOngoingUpdatesFollowTheActiveTurn() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--screenshot-chat-fixture", "--ui-test-chat-feedback",
+                               "-jarvis.appLanguage", "en", "-jarvis.appTheme", "dark"]
+        app.launch()
+        defer { app.terminate() }
+        let input = app.textViews["chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("Check the project")
+        app.buttons["chat.send"].tap()
+        let timer = app.staticTexts["chat.turn.elapsed"]
+        XCTAssertTrue(timer.waitForExistence(timeout: 5))
+        XCTAssertTrue(timer.label.hasPrefix("Working for "))
+        let originalTime = timer.label
+        let userTime = app.staticTexts["chat.timestamp.42"]
+        XCTAssertFalse(userTime.exists)
+        app.descendants(matching: .any).matching(identifier: "chat.message.user").firstMatch.tap()
+        XCTAssertTrue(userTime.waitForExistence(timeout: 3))
+        for name in ["acknowledge-chat-feedback", "progress-chat-feedback"] {
+            CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+                CFNotificationName(rawValue: "com.jarvis.uitests.\(name)" as CFString), nil, nil, true)
+        }
+        let update = app.textViews["chat.reply.update-0"]
+        XCTAssertTrue(update.waitForExistence(timeout: 5))
+        XCTAssertTrue((update.value as? String ?? "").contains("checking the build setup"))
+        XCTAssertNotEqual(timer.label, originalTime, "Elapsed time advances during tool work")
+        let status = app.buttons["chat.turn.status"]
+        XCTAssertLessThan(timer.frame.minY, update.frame.minY)
+        XCTAssertGreaterThan(status.frame.minY, update.frame.minY)
+        assertSingleProgress(app)
+        attach(app, "chat-working-timer-progress-updates-tools")
+        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(rawValue: "com.jarvis.uitests.finish-chat-feedback" as CFString), nil, nil, true)
+        XCTAssertTrue(app.textViews["chat.reply.45"].waitForExistence(timeout: 8))
+        XCTAssertFalse(timer.exists)
+        XCTAssertFalse(app.descendants(matching: .any)["chat.tools.live"].exists)
+        XCTAssertTrue(app.buttons["chat.tools.45"].exists)
+    }
+
     private func assertEmpty(_ app: XCUIApplication) {
         // Match the native editor and its value in one accessibility query. Three
         // remote reads per predicate poll can exhaust the 3s deadline on the hosted

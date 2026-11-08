@@ -66,6 +66,7 @@ public enum ChatEvent: Equatable, Sendable {
     case user(ChatMessage)
     case delta(text: String)
     case acknowledgment(text: String)
+    case commentary(text: String)
     case toolActivity(ChatToolActivity)
     case progress(ChatProgress)
     case foodInvitation(ChatFoodInvitation?)

@@ -20,6 +20,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     private var language = "en"
     private var completionObserver: ChatFixtureCompletionObserver?
     private var acknowledgmentObserver: ChatFixtureCompletionObserver?
+    private var progressObserver: ChatFixtureCompletionObserver?
 
     init(base: any HTTPTransport) { self.base = base }
 
@@ -81,6 +82,14 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
         acknowledgmentObserver = nil
     }
 
+    private func updateProgress() {
+        guard turn != nil else { return }
+        let text = "I found the project configuration. I’m checking the build setup next."
+        turn?.yield(event("delta", ["text": text]))
+        turn?.yield(event("commentary", ["text": text]))
+        progressObserver = nil
+    }
+
     private func finishTurn() {
         guard turn != nil else { return }
         let saved = message(id: "45", role: "jarvis", text: "The synthetic check is complete.")
@@ -98,6 +107,9 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
         // the interrupted state. A timer can finish while XCTest is taking snapshots.
         acknowledgmentObserver = ChatFixtureCompletionObserver(name: "com.jarvis.uitests.acknowledge-chat-feedback") { [weak self] in
             Task { await self?.acknowledgeTurn() }
+        }
+        progressObserver = ChatFixtureCompletionObserver(name: "com.jarvis.uitests.progress-chat-feedback") { [weak self] in
+            Task { await self?.updateProgress() }
         }
         completionObserver = ChatFixtureCompletionObserver(name: "com.jarvis.uitests.finish-chat-feedback") { [weak self] in
             Task { await self?.finishTurn() }

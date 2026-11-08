@@ -539,7 +539,7 @@ struct JarvisHealthArea: View {
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                     Text(lift["exerciseName"]?.stringValue ?? copy.text(.workout)).font(.body)
-                    Text("\(lift["weightKg"]?.numberValue.map { formatNumber($0, language: language) } ?? "—") kg × \(lift["reps"]?.numberValue.map { formatNumber($0, language: language) } ?? "—")")
+                    Text("\(lift["weightKg"]?.numberValue.map { $0.formatted(.number.locale(language.locale).grouping(.never)) } ?? "—") kg × \(lift["reps"]?.numberValue.map { formatNumber($0, language: language) } ?? "—")")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 0)

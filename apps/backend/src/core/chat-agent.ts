@@ -91,7 +91,7 @@ export interface ConversationAgent {
 }
 
 export interface ConversationAgentAcknowledgment {
-  readonly type: 'acknowledgment';
+  readonly type: 'acknowledgment' | 'commentary';
   readonly text: string;
 }
 
@@ -219,7 +219,7 @@ function chunkFromEvent(
     } catch { /* Invalid error metadata is ignored. */ }
     throw new ChatAgentError(errorCode(event.data), retryAfterMs, providerCause);
   }
-  if (event.event !== 'delta' && event.event !== 'acknowledgment') return undefined;
+  if (event.event !== 'delta' && event.event !== 'acknowledgment' && event.event !== 'commentary') return undefined;
   let payload: unknown;
   try {
     payload = JSON.parse(event.data);
@@ -228,11 +228,11 @@ function chunkFromEvent(
   }
   if (typeof payload !== 'object' || payload === null || !('text' in payload) ||
       typeof payload.text !== 'string' || payload.text.length === 0 ||
-      (event.event === 'acknowledgment' && Array.from(payload.text).length > 500)) {
+      (event.event !== 'delta' && Array.from(payload.text).length > 500)) {
     throw new ChatAgentInvocationError('Invalid chat response', 'agent_response_invalid');
   }
-  return event.event === 'acknowledgment'
-    ? { type: 'acknowledgment', text: payload.text }
+  return event.event !== 'delta'
+    ? { type: event.event, text: payload.text }
     : payload.text;
 }
 

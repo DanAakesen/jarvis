@@ -128,6 +128,12 @@ final class ChatPresentationUITests: XCTestCase {
         }
         XCTAssertTrue(text.contains("\n"), "Markdown paragraphs remain separate in one selectable reply")
         XCTAssertFalse(text.contains("**"))
+        let timestamp = app.staticTexts["chat.timestamp.413"]
+        XCTAssertFalse(timestamp.exists, "Timestamps stay hidden until the message is tapped")
+        reply.tap()
+        XCTAssertTrue(timestamp.waitForExistence(timeout: 3))
+        reply.tap()
+        XCTAssertFalse(timestamp.exists)
         let tools = app.buttons["chat.tools.413"]
         XCTAssertTrue(tools.exists)
         XCTAssertEqual(tools.frame.minX, reply.frame.minX, accuracy: 2)

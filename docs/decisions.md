@@ -11800,3 +11800,17 @@ The owner explicitly assigns full SDLC ownership to Jarvis2 primary, session
 `01a1adc7-aebe-76f2-b63d-a852c887204f`. Jarvis2 secondary is development/research
 only and must never deploy; integration and delivery stay with the primary. Save
 the scope and handoff instructions in `docs/secondary-thread-starter.md`.
+
+## 8 November 2026 — Active reply timer and ongoing progress
+
+Dan selects the Codex active-turn layout: elapsed work above the reply, continuing
+public progress updates and thinking/tools below. Timestamps appear only on tap.
+This replaces the persistent timestamp/orb treatment, preserves transcript ownership
+and native text selection, and applies to both runtime testers. Later pre-tool text
+uses additive commentary events, not model-private reasoning. Implementation is
+local; native qualification and deployment remain pending.
+
+The corrected lift test in 42494078211 reached the saved row: AX showed 83 kg after
+a verified 82.5 input. Last lifts used a whole-number formatter. Preserve decimals
+and requalify the unchanged save/reopen/swipe/delete assertions. Artifact 13622798399
+SHA256: 33737f4f61e37d05e4b4927c6c3979657e488424af9b19586d946479b3a0afaf.

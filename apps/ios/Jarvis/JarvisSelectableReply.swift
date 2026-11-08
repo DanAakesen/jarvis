@@ -5,6 +5,7 @@ import UIKit
 struct JarvisSelectableReply: UIViewRepresentable {
     let text: String
     let identifier: String
+    var onTap: (() -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     func makeUIView(context: Context) -> UITextView {
@@ -17,10 +18,35 @@ struct JarvisSelectableReply: UIViewRepresentable {
         view.textContainer.lineFragmentPadding = 0
         view.adjustsFontForContentSizeCategory = true
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped))
+        tap.cancelsTouchesInView = false
+        tap.delegate = context.coordinator
+        view.addGestureRecognizer(tap)
         return view
     }
 
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var onTap: (() -> Void)?
+        @objc func tapped() { onTap?() }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool { true }
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let view = gestureRecognizer.view as? UITextView else { return false }
+            if view.selectedRange.length > 0 { return false }
+            let point = touch.location(in: view)
+            if let position = view.closestPosition(to: point) {
+                let index = view.offset(from: view.beginningOfDocument, to: position)
+                if index < view.attributedText.length,
+                   view.attributedText.attribute(.link, at: index, effectiveRange: nil) != nil { return false }
+            }
+            return true
+        }
+    }
+
     func updateUIView(_ view: UITextView, context: Context) {
+        context.coordinator.onTap = onTap
         _ = dynamicTypeSize
         view.accessibilityIdentifier = identifier
         let value = attributedText(traits: view.traitCollection)

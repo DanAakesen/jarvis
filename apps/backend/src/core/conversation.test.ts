@@ -417,6 +417,10 @@ describe('conversation routes', () => {
       stream: vi.fn(async function* () {
         yield acknowledgment;
         yield { type: 'acknowledgment' as const, text: acknowledgment };
+        yield '\n\nI found the targets; I will verify the units.';
+        yield { type: 'commentary' as const, text: 'I found the targets; I will verify the units.' };
+        yield 'The units match; I am checking the final values.';
+        yield { type: 'commentary' as const, text: 'The units match; I am checking the final values.' };
         yield 'The targets match.';
       }),
     };
@@ -432,6 +436,7 @@ describe('conversation routes', () => {
       .toBeLessThan(response.body.indexOf(`event: acknowledgment\ndata: ${JSON.stringify({ text: acknowledgment })}`));
     expect(response.body.indexOf('event: acknowledgment'))
       .toBeLessThan(response.body.indexOf(`event: delta\ndata: {"text":"The targets match."}`));
+    expect(response.body.match(/event: commentary/g)).toHaveLength(2);
     expect(stored).toEqual([
       { role: 'dan', text: 'Compare my saved targets.' },
       { role: 'jarvis', text: 'The targets match.' },

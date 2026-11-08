@@ -29,7 +29,6 @@ private enum ChatSheet: Identifiable {
 
 private struct RenderedChatRow: Identifiable {
     let message: JarvisChatRow
-    let showsTimestamp: Bool
     let replyTools: [ChatHistoryToolCall]
     let unansweredTools: [ChatHistoryToolCall]
 
@@ -71,6 +70,8 @@ struct JarvisChatScreen: View {
     private let runtimeTestClient: JarvisChatClient?
     private let screenShareBridge = VoiceScreenShareBridge()
     @State private var expandedTools = Set<String>()
+    @State private var selectedTimestampID: String?
+    @State private var liveToolsExpanded = true
 
     init(
         client: JarvisClient?,
@@ -97,16 +98,9 @@ struct JarvisChatScreen: View {
             .init(id: $0.id, sessionID: $0.sessionID, channel: $0.channel, role: $0.role,
                   tools: $0.toolCalls, interrupted: $0.interrupted)
         })
-        return model.messages.enumerated().map { index, message in
-            let previous = index > 0 ? model.messages[index - 1] : nil
+        return model.messages.map { message in
             return RenderedChatRow(
                 message: message,
-                showsTimestamp: ChatMessageGrouping.showsTimestamp(
-                    role: message.role,
-                    at: message.at,
-                    previousRole: previous?.role,
-                    previousAt: previous?.at
-                ),
                 replyTools: placement.replies[message.id] ?? [],
                 unansweredTools: placement.unanswered[message.id] ?? []
             )
@@ -358,26 +352,33 @@ struct JarvisChatScreen: View {
                                 completedTools(row.unansweredTools, messageID: "unanswered-\(row.id)")
                             }
                         }
-                        if model.isSending || !model.streamingText.isEmpty {
-                            if let acknowledgment = model.acknowledgment {
-                                messageBubble(text: acknowledgment, role: .jarvis, interrupted: false, messageID: "acknowledgment")
-                            }
-                            if model.isSending && !model.liveTools.isEmpty {
-                                VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                                    ForEach(model.liveTools) { tool in
-                                        toolRow(name: tool.toolName, outcome: tool.outcome)
-                                    }
+                        if model.isSending || !model.streamingText.isEmpty || model.acknowledgment != nil || !model.progressUpdates.isEmpty {
+                            VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                                if model.isSending, let startedAt = model.turnStartedAt {
+                                    JarvisChatWorkHeader(startedAt: startedAt, isReconnecting: model.isReconnecting,
+                                                        language: appLanguage, identifier: "chat.turn.elapsed")
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .accessibilityIdentifier("chat.tools.live")
-                            }
-                            if model.isSending {
-                                turnStatus
-                            }
-                            if !model.streamingText.isEmpty {
-                                messageBubble(text: model.streamingText, role: .jarvis,
-                                              interrupted: !model.isSending, messageID: "streaming")
-                                    .id("streaming-message")
+                                if let acknowledgment = model.acknowledgment {
+                                    messageBubble(text: acknowledgment, role: .jarvis, interrupted: false, messageID: "acknowledgment")
+                                }
+                                ForEach(Array(model.progressUpdates.enumerated()), id: \.offset) { index, text in
+                                    messageBubble(text: text, role: .jarvis, interrupted: false, messageID: "update-\(index)")
+                                }
+                                if !model.streamingText.isEmpty {
+                                    messageBubble(text: model.streamingText, role: .jarvis,
+                                                  interrupted: !model.isSending, messageID: "streaming")
+                                        .id("streaming-message")
+                                }
+                                if model.isSending { turnStatus }
+                                if model.isSending && liveToolsExpanded && !model.liveTools.isEmpty {
+                                    VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
+                                        ForEach(model.liveTools) { tool in
+                                            toolRow(name: tool.toolName, outcome: tool.outcome)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .accessibilityIdentifier("chat.tools.live")
+                                }
                             }
                         }
                         Color.clear
@@ -400,7 +401,11 @@ struct JarvisChatScreen: View {
                 .onChange(of: model.streamingText) { _, _ in
                     scrollToBottom(proxy, animated: false)
                 }
-                .onChange(of: model.isSending) { _, _ in
+                .onChange(of: model.progressUpdates.count) { _, _ in
+                    scrollToBottom(proxy, animated: false)
+                }
+                .onChange(of: model.isSending) { _, sending in
+                    if sending { liveToolsExpanded = true }
                     scrollToBottom(proxy, animated: false)
                 }
             }
@@ -425,19 +430,22 @@ struct JarvisChatScreen: View {
     @ViewBuilder
     private func messageRow(_ row: RenderedChatRow) -> some View {
         VStack(alignment: row.message.role == .dan ? .trailing : .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
-            if row.showsTimestamp {
+            if selectedTimestampID == row.id {
                 Text(timeString(row.message.at))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: row.message.role == .dan ? .trailing : .leading)
                     .accessibilityLabel("Message time, \(timeString(row.message.at))")
+                    .accessibilityIdentifier("chat.timestamp.\(row.id)")
             }
             messageBubble(
                 text: row.message.text,
                 role: row.message.role,
                 interrupted: row.message.interrupted,
-                messageID: row.message.id
+                messageID: row.message.id,
+                onTap: { toggleTimestamp(row.id) }
             )
+            .accessibilityAction(named: copy(.turnShowTime)) { toggleTimestamp(row.id) }
             if !row.replyTools.isEmpty { completedTools(row.replyTools, messageID: row.id) }
             if !row.message.attachments.isEmpty {
                 HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
@@ -455,6 +463,10 @@ struct JarvisChatScreen: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: row.message.role == .dan ? .trailing : .leading)
+    }
+
+    private func toggleTimestamp(_ id: String) {
+        selectedTimestampID = selectedTimestampID == id ? nil : id
     }
 
     private func completedTools(_ tools: [ChatHistoryToolCall], messageID: String) -> some View {
@@ -501,7 +513,8 @@ struct JarvisChatScreen: View {
         text: String,
         role: ConversationRole,
         interrupted: Bool,
-        messageID: String
+        messageID: String,
+        onTap: (() -> Void)? = nil
     ) -> some View {
         let isUser = role == .dan
         let userBubbleShape = RoundedRectangle(
@@ -510,7 +523,7 @@ struct JarvisChatScreen: View {
         )
         let content = VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
             HStack(alignment: .center, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                messageText(text, role: role, messageID: messageID)
+                messageText(text, role: role, messageID: messageID, onTap: onTap)
                     .font(.body)
                     .foregroundStyle(.primary)
                     .textSelection(.enabled)
@@ -548,6 +561,7 @@ struct JarvisChatScreen: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("You: \(text)")
                     .accessibilityIdentifier("chat.message.user")
+                    .onTapGesture { onTap?() }
                     .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .trailing)
             } else {
                 content
@@ -559,9 +573,9 @@ struct JarvisChatScreen: View {
     }
 
     @ViewBuilder
-    private func messageText(_ text: String, role: ConversationRole, messageID: String) -> some View {
+    private func messageText(_ text: String, role: ConversationRole, messageID: String, onTap: (() -> Void)?) -> some View {
         if role == .jarvis && messageID != "streaming" && messageID != "acknowledgment" {
-            JarvisSelectableReply(text: text, identifier: "chat.reply.\(messageID)")
+            JarvisSelectableReply(text: text, identifier: "chat.reply.\(messageID)", onTap: onTap)
         } else if role == .jarvis {
             let blocks = ChatMarkdownBlock.parse(text)
             VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
@@ -614,18 +628,19 @@ struct JarvisChatScreen: View {
     }
 
     private var turnStatus: some View {
-        HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-            JarvisOrb(activity: .thinking, size: JarvisDesignTokens.chatMiniCoreSize,
-                      isStatic: model.fixtureMode || reduceMotion)
-            Text(model.isReconnecting ? copy(.thinkingReconnecting) :
-                    (!model.streamingText.isEmpty ? copy(.turnWriting) :
-                        (model.statusLine ?? copy(.turnWorking))))
-                .font(.footnote)
-                .foregroundStyle(.primary)
-            Spacer(minLength: 0)
+        JarvisRowButton(identifier: "chat.turn.status", action: { liveToolsExpanded.toggle() }) {
+            HStack(spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
+                Text(model.isReconnecting ? copy(.thinkingReconnecting) :
+                        (model.liveTools.contains(where: { $0.outcome == nil }) ? copy(.turnWorking) :
+                            (!model.streamingText.isEmpty ? copy(.turnWriting) : copy(.turnThinking))))
+                if !model.liveTools.isEmpty { Text("\(model.liveTools.count)") }
+                Image(systemName: liveToolsExpanded ? "chevron.down" : "chevron.right")
+                    .accessibilityHidden(true)
+            }
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("chat.turn.status")
+        .accessibilityValue(copy(liveToolsExpanded ? .menuExpanded : .menuCollapsed))
     }
 
     private var composer: some View {

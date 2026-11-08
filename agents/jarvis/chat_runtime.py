@@ -1044,7 +1044,7 @@ def register_chat_invocation(
                     async for delta in chat:
                         if isinstance(delta, AcknowledgmentBoundary):
                             if (
-                                acknowledgment_sent
+                                (acknowledgment_sent and delta.kind == "acknowledgment")
                                 or not delta.text.strip()
                                 or len(delta.text) > MAX_ACKNOWLEDGMENT_CHARACTERS
                             ):
@@ -1056,9 +1056,10 @@ def register_chat_invocation(
                             output_bytes += len(delta.text.encode("utf-8"))
                             if output_bytes > MAX_OUTPUT_BYTES:
                                 raise RuntimeError("Chat response exceeded the size limit")
-                            acknowledgment_sent = True
+                            if delta.kind == "acknowledgment":
+                                acknowledgment_sent = True
                             yield (
-                                "event: acknowledgment\ndata: "
+                                f"event: {delta.kind}\ndata: "
                                 f"{json.dumps({'text': delta.text}, ensure_ascii=False)}\n\n"
                             )
                             continue

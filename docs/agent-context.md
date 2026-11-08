@@ -7649,3 +7649,13 @@ VoiceCameraCapture.init → CIContext.init → Metal library loading. Apple CICo
 documentation was read before deferring this context to the serial frame queue.
 Requalify normal Chat navigation and the existing camera-sheet case; simulator
 navigation cannot establish physical camera encoding quality.
+
+## Active reply qualification (8 November 2026)
+
+Qualify commentary boundaries with Python model/hosted-stream tests, backend
+agent/conversation persistence tests and Core decoding/elapsed-time tests. Native
+ChatTurnFeedback checks ongoing updates and clock placement; ChatPresentation checks
+tap-only time plus long-press selection. Recheck runtime-test chat and lift gestures.
+The unchanged notification/chrome/navigation/camera cases passed in 42492967707
+(12/13 overall; the old lift assertion failed). Do not call that full run green.
+The new chat/lift candidate requires fresh native evidence.

@@ -432,13 +432,13 @@ public final class JarvisChatClient: Sendable {
             let payload = try JSONDecoder().decode(TextPayload.self, from: data)
             guard !payload.text.isEmpty else { throw JarvisChatClientError.invalidResponse }
             return .delta(text: payload.text)
-        case "acknowledgment":
+        case "acknowledgment", "commentary":
             let payload = try JSONDecoder().decode(TextPayload.self, from: data)
             guard !payload.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                   payload.text.unicodeScalars.count <= 500 else {
                 throw JarvisChatClientError.invalidResponse
             }
-            return .acknowledgment(text: payload.text)
+            return event.name == "commentary" ? .commentary(text: payload.text) : .acknowledgment(text: payload.text)
         case "tool_activity":
             return .toolActivity(try JSONDecoder().decode(ChatToolActivity.self, from: data))
         case "progress":

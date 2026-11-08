@@ -20,8 +20,9 @@ build 83 was cancelled before upload. Do not expect these fixes in 82.
   immediately cleared composer, one progress indicator and a final reply. Type a
   next draft while waiting and confirm it survives. Check short bubbles fit their
   text, final tools collapse under Jarvis, and partial reply text can be selected.
-- [ ] **Reply spacing, next build:** the timestamp, reply and Tool activity should
-  read as one group. Working/Writing reply should scroll with the conversation,
+- [ ] **Reply spacing, next build:** the Working for timer should sit above public progress updates, with
+  thinking/tool activity underneath. Tap a message to show its timestamp and tap
+  again to hide it. Long-press selection must still work. All progress scrolls with the conversation,
   without a duplicate above the Now bar. Open/close tools and select text; keep
   separate messages clear.
 

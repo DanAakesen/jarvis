@@ -158,3 +158,11 @@
 "chat.turn.toolOK" = "Done";
 "chat.turn.toolRefused" = "Not allowed";
 "chat.turn.toolError" = "Failed";
+
+"chat.turn.workingFor" = "Working for";
+
+"chat.turn.reconnectingFor" = "Reconnecting · elapsed";
+
+"chat.turn.thinking" = "Thinking";
+
+"chat.turn.showTime" = "Show message time";

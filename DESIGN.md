@@ -3703,3 +3703,14 @@ labels visible. Native interaction and screenshot qualification is pending.
 The expanded notification heading and its older task rows are separate sibling
 controls. The prior DisclosureGroup accessibility frame overlapped its child task
 link in failed native evidence. The task-navigation assertion remains unchanged.
+
+## Active reply reference — elapsed work and updates (8 November 2026)
+
+The latest Codex screenshot supersedes the always-visible timestamp and orb/status
+layout. One secondary-text “Working for 58s” line and structural divider lead the
+active assistant turn. Public acknowledgment and useful later updates follow;
+thinking/tool disclosure sits underneath, expanded during work and collapsed under
+the final reply. All elements scroll with Chat. Reconnecting retains elapsed time
+and names the connection state. A single message tap toggles its compact timestamp;
+long-press selection and links retain their native behavior. No private reasoning
+is rendered and heartbeats are not presented as newly completed work.

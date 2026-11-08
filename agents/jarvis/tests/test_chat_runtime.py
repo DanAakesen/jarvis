@@ -28,7 +28,7 @@ from jarvis_tools import (
     current_steering_fetcher,
 )
 from model_client import AzureOpenAIResponsesClient
-from model_contract import ToolLoopStalled
+from model_contract import AcknowledgmentBoundary, ToolLoopStalled
 from state import ModelMessage, ModelSettings
 from visual_context import visual_context, visual_context_text
 from voice_runtime import create_app
@@ -216,6 +216,34 @@ def test_unconfigured_copilot_selection_never_falls_back() -> None:
         })
     assert response.status_code == 503
     assert current.chat_calls == 0
+
+
+def test_chat_forwards_multiple_public_updates_before_the_final_result() -> None:
+    class ProgressModel(FakeModel):
+        async def complete_chat(self, *args, **kwargs):
+            del args, kwargs
+            yield "Checking."
+            yield AcknowledgmentBoundary("Checking.")
+            yield "Found the source."
+            yield AcknowledgmentBoundary("Found the source.", kind="commentary")
+            yield "Verified the result."
+            yield AcknowledgmentBoundary("Verified the result.", kind="commentary")
+            yield "Done."
+
+    async def context(*_args):
+        return []
+
+    app = create_app(ProgressModel(), configure_observability=None, chat_context_loader=context)
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Check it", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION,
+        })
+    assert response.status_code == 200
+    assert response.text.count("event: acknowledgment") == 1
+    assert response.text.count("event: commentary") == 2
+    assert response.text.index('"Verified the result."') < response.text.index('"Done."')
+    assert "event: error" not in response.text
 
 
 def test_chat_streams_text_and_sets_tool_source_message() -> None:

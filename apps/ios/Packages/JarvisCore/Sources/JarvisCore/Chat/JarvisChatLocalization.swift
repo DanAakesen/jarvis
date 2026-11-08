@@ -1,6 +1,10 @@
 import Foundation
 
 public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
+    case turnWorkingFor = "chat.turn.workingFor"
+    case turnReconnectingFor = "chat.turn.reconnectingFor"
+    case turnThinking = "chat.turn.thinking"
+    case turnShowTime = "chat.turn.showTime"
     case turnWorking = "chat.turn.working"
     case turnWriting = "chat.turn.writing"
     case toolActivity = "chat.turn.tools"

@@ -3,6 +3,21 @@ import XCTest
 @testable import JarvisCore
 
 final class JarvisChatClientTests: XCTestCase {
+    func testInterimUpdatesRemainOrderedWithToolsAndFinalReply() async throws {
+        let transport = FakeChatTransport([.stream(streamResponse(events: [
+            event("user", ["id": "42", "sessionId": "12", "role": "dan", "text": "Check", "at": "2026-11-08T12:00:00Z"]),
+            event("delta", ["text": "Checking."]),
+            event("acknowledgment", ["text": "Checking."]),
+            event("delta", ["text": "Found the source; verifying it."]),
+            event("commentary", ["text": "Found the source; verifying it."]),
+            event("done", ["id": "43", "sessionId": "12", "role": "jarvis", "text": "Verified.", "at": "2026-11-08T12:00:58Z"]),
+        ].joined()))])
+        let received = try await collect(makeChatClient(transport: transport).sendTurn(sessionId: "12", text: "Check"))
+        XCTAssertEqual(received[2], .acknowledgment(text: "Checking."))
+        XCTAssertEqual(received[4], .commentary(text: "Found the source; verifying it."))
+        XCTAssertEqual(received.count, 6)
+    }
+
     func testRuntimeAvailabilityAndExplicitSessionCreation() async throws {
         let transport = FakeChatTransport([
             .response(jsonResponse(status: 200, body: ["current": ["available": true],
