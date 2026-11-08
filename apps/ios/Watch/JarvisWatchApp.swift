@@ -25,7 +25,7 @@ struct WatchRoot: View {
                     HStack {
                         Text("Jarvis").font(.system(.headline, design: .rounded))
                         Spacer()
-                        Button { path.append(.menu) } label: { Image(systemName: "line.3.horizontal").frame(width: 36, height: 36).modifier(WatchSurface(radius: 18)) }
+                        Button { path.append(.menu) } label: { Image(systemName: "line.3.horizontal").foregroundStyle(WatchStyle.amber).frame(width: 36, height: 36).modifier(WatchSurface(radius: 18)) }
                             .buttonStyle(.plain).accessibilityLabel("Menu")
                     }
                     JarvisWatchAction(title: model.voiceID == nil ? "Voice" : "Resume voice", kind: .voice) {

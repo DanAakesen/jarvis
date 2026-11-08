@@ -12,6 +12,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var chatTask: Task<Void, Never>?
     private var startingChat = false
     private var startingVoice = false
+    private var cancelledVoiceStarts = Set<UUID>()
     private var voice: VoiceSessionClient?
     private var voiceID: UUID?
     private var lastVoiceContact = Date.distantPast
@@ -30,7 +31,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             liveActivity.update(state: .listening, isMuted: muted)
         }
     }
-    private var replies: [UUID: WatchReply] = [:]
+    private var replies: [UUID: (request: WatchRequest, reply: WatchReply)] = [:]
     private var running = Set<UUID>()
     private var generation = UUID()
     private var eventQueue: [WatchEvent] = []
@@ -97,7 +98,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private func handle(_ request: WatchRequest) async -> WatchReply {
         guard request.isValid else { return .init(id: request.id, failure: .invalidRequest) }
         guard let client else { return .init(id: request.id, failure: .signInRequired) }
-        if let reply = replies[request.id] { return reply }
+        if let previous = replies[request.id] { return previous.request == request ? previous.reply : .init(id: request.id, failure: .invalidRequest) }
         guard running.insert(request.id).inserted else { return .init(id: request.id, failure: .busy) }
         defer { running.remove(request.id) }
         let epoch = generation
@@ -117,7 +118,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         // Do not retain audio, health or message bodies unnecessarily. Never auto-replay mutations.
         if reply.failure == nil && ![.audio, .voiceHeartbeat, .snapshot, .history, .tasks, .workouts, .lifts, .projects, .factoryTasks].contains(request.action) {
             if replies.count >= 100 { replies.removeAll() }
-            replies[request.id] = reply
+            replies[request.id] = (request, reply)
         }
         return reply
     }
@@ -158,11 +159,13 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         case .tasks:
             return try encode(try await todayTasks(client: client))
         case .workouts:
+            guard try await health.capabilities().availableSources.contains(JarvisHealthSource.workouts.rawValue) else { throw WatchFailure.unavailable }
             let period = JarvisHealthPeriod.make(.sevenDays)
             let result = try await health.query(.init(source: .workouts, period: period, limit: 30))
             guard result.status == "available" else { throw WatchFailure.unavailable }
             return try encode(result.items)
         case .lifts:
+            guard try await health.capabilities().availableSources.contains(JarvisHealthSource.lifts.rawValue) else { throw WatchFailure.unavailable }
             let result = try await health.query(.init(source: .lifts, limit: 30))
             guard result.status == "available" else { throw WatchFailure.unavailable }
             return try encode(result.items)
@@ -190,6 +193,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             let voiceLanguage = try await client.voiceDefaultLanguage()
             guard let token = try await KeychainTokenStore().read() else { throw WatchFailure.signInRequired }
             guard voiceEpoch == generation else { throw WatchFailure.signInRequired }
+            guard cancelledVoiceStarts.remove(r.id) == nil else { throw WatchFailure.unavailable }
             let id = r.id; voiceID = id; lastVoiceContact = Date()
             voiceWatchdog = Task { [weak self] in
                 while !Task.isCancelled {
@@ -241,6 +245,11 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             guard let voice, r.text == voiceID?.uuidString, let id = r.itemID else { throw WatchFailure.invalidRequest }
             try await voice.playbackCompleted(responseID: id, audible: r.flag ?? false); return nil
         case .endVoice:
+            if startingVoice, voiceID == nil, let value = r.itemID.flatMap(UUID.init(uuidString:)) {
+                if cancelledVoiceStarts.count >= 100 { cancelledVoiceStarts.removeAll() }
+                cancelledVoiceStarts.insert(value)
+                return nil
+            }
             guard r.itemID == voiceID?.uuidString else { throw WatchFailure.invalidRequest }
             await stopVoice(); return nil
         }

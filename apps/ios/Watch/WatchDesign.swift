@@ -41,9 +41,9 @@ struct WatchGlyph: View {
             case .voice: WatchWave()
             case .dictate:
                 HStack(spacing: 2) {
-                    WatchWave().frame(width: 8, height: 13)
-                    Image(systemName: "mic.fill").resizable().scaledToFit()
-                    WatchWave().frame(width: 8, height: 13).scaleEffect(x: -1)
+                    WatchMiniWave()
+                    Image(systemName: "mic.fill").resizable().scaledToFit().frame(width: 12)
+                    WatchMiniWave()
                 }
             case .tasks: Image(systemName: "checklist").resizable().scaledToFit()
             case .factory: Image(systemName: "chevron.left.forwardslash.chevron.right").resizable().scaledToFit()
@@ -61,7 +61,16 @@ struct JarvisWatchAction: View {
                 WatchGlyph(kind: kind).frame(width: 34, height: 26)
                 Text(title).font(.system(.body, design: .rounded, weight: .semibold))
                 Spacer(minLength: 0)
-            }.padding(.horizontal, 14).frame(minHeight: 51).modifier(WatchSurface())
+            }.padding(.horizontal, 14).frame(minHeight: 46).modifier(WatchSurface())
         }.buttonStyle(.plain).accessibilityLabel(title)
+    }
+}
+
+private struct WatchMiniWave: View {
+    private let heights: [CGFloat] = [3, 8, 14, 8, 3]
+    var body: some View {
+        HStack(spacing: 1) {
+            ForEach(heights.indices, id: \.self) { i in Capsule().frame(width: 1, height: heights[i]) }
+        }.frame(width: 9, height: 14)
     }
 }

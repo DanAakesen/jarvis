@@ -43,7 +43,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             }
             WCSession.default.sendMessageData(data, replyHandler: { [weak self] data in
                 Task { @MainActor in
-                    guard let reply = try? JSONDecoder().decode(WatchReply.self, from: data), reply.id == request.id else {
+                    guard let reply = try? JSONDecoder().decode(WatchReply.self, from: data), reply.id == request.id, reply.version == 1 else {
                         self?.complete(request.id, .failure(WatchFailure.failed)); return
                     }
                     if let failure = reply.failure { self?.complete(request.id, .failure(failure)) }
@@ -94,11 +94,11 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         Task { @MainActor in self.updateReachability(); if self.reachable { await self.refresh() } }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
-        guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData) else { return }
+        guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData), event.version == 1 else { return }
         Task { @MainActor in self.onEvent?(event) }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data, replyHandler: @escaping (Data) -> Void) {
-        guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData) else { replyHandler(Data()); return }
+        guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData), event.version == 1 else { replyHandler(Data()); return }
         Task { @MainActor in self.onEvent?(event); replyHandler(Data([1])) }
     }
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {

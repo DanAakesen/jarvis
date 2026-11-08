@@ -30,6 +30,7 @@ jobs:
           xcodegen generate
           xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' -derivedDataPath "$RUNNER_TEMP/WatchBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/watch-build.log"
       - name: Capture isolated Watch previews
+        timeout-minutes: 5
         run: |
           set -euo pipefail
           WATCH_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | contains("Apple Watch")) | select(.name | contains("Ultra"))][0].udid // empty')"

@@ -58,5 +58,7 @@ final class WatchContractTests: XCTestCase {
         XCTAssertEqual(read.id, request.id); XCTAssertEqual(read.action, .saveLift); XCTAssertEqual(read.data, Data([1, 2]))
         XCTAssertNil(WatchAction(rawValue: "https://example.com"))
         XCTAssertNil(WatchAction(rawValue: "startFactoryTask"))
+        var future = request; future.version = 2
+        XCTAssertFalse(future.isValid)
     }
 }

@@ -6,7 +6,8 @@ public enum WatchAction: String, Codable, Sendable {
     case projects, factoryTasks, startVoice, voiceHeartbeat, audio, muteVoice, playbackCompleted, endVoice
 }
 
-public struct WatchRequest: Codable, Sendable {
+public struct WatchRequest: Codable, Equatable, Sendable {
+    public var version = 1
     public var id: UUID
     public var action: WatchAction
     public var text: String?
@@ -17,7 +18,7 @@ public struct WatchRequest: Codable, Sendable {
         self.id = id; self.action = action; self.text = text; self.itemID = itemID; self.data = data; self.flag = flag
     }
     public var isValid: Bool {
-        (text?.utf8.count ?? 0) <= 8_000 && (itemID?.utf8.count ?? 0) <= 200 &&
+        version == 1 && (text?.utf8.count ?? 0) <= 8_000 && (itemID?.utf8.count ?? 0) <= 200 &&
         (data?.count ?? 0) <= 40_000 && (action != .sendTurn || !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 }
@@ -36,6 +37,7 @@ public enum WatchFailure: String, Error, Codable, Sendable {
 }
 
 public struct WatchReply: Codable, Sendable {
+    public var version = 1
     public var id: UUID
     public var data: Data?
     public var failure: WatchFailure?
@@ -45,6 +47,7 @@ public struct WatchReply: Codable, Sendable {
 }
 
 public struct WatchEvent: Codable, Sendable {
+    public var version = 1
     public enum Kind: String, Codable, Sendable { case chatDelta, chatDone, chatError, voiceState, voiceAudio, voiceTranscript, voiceUserTranscript, interrupt }
     public var kind: Kind
     public var requestID: UUID
@@ -60,6 +63,7 @@ public struct WatchEvent: Codable, Sendable {
 public enum WatchWire: Codable, Sendable { case request(WatchRequest), event(WatchEvent) }
 
 public struct WatchHealthSnapshot: Codable, Equatable, Sendable {
+    public var version = 1
     public var generatedAt: Date
     public var dayStart: Date
     public var weekStart: Date
@@ -78,7 +82,7 @@ public struct WatchHealthSnapshot: Codable, Equatable, Sendable {
         weekStart = calendar.dateInterval(of: .weekOfYear, for: now)?.start ?? dayStart
     }
     public func isCurrent(at now: Date, calendar: Calendar = .current) -> Bool {
-        now.timeIntervalSince(generatedAt) >= 0 && now.timeIntervalSince(generatedAt) < 900 && calendar.isDate(now, inSameDayAs: dayStart)
+        version == 1 && now.timeIntervalSince(generatedAt) >= 0 && now.timeIntervalSince(generatedAt) < 900 && calendar.isDate(now, inSameDayAs: dayStart)
     }
     public var cumulativeSteps: [Int] {
         var total = 0
