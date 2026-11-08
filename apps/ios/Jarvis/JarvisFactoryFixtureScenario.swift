@@ -22,7 +22,10 @@ struct JarvisFactoryScreenshotConfiguration {
 enum JarvisFactoryFixtureScenario {
     static func makeClient(state: JarvisFactoryPreviewState) throws -> JarvisFactoryClient {
         let scenario = Data(scenario(for: state).utf8)
-        let transport = try FixtureTransport(scenario: scenario)
+        let transport = try TaskHistoryFixtureTransport(
+            base: FixtureTransport(scenario: scenario),
+            history: Data(#"{"version":1,"interactions":[\#(taskDetailResponse)]}"#.utf8)
+        )
         let client = try JarvisClient(
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!,
@@ -90,8 +93,6 @@ enum JarvisFactoryFixtureScenario {
             interactions.append(releasesResponse)
         } else {
             interactions.append(boardResponse)
-            // Board and notification navigation use the same real task-detail route.
-            interactions.append(taskDetailResponse)
         }
         let encodedInteractions = interactions.joined(separator: ",")
         return #"{"version":1,"interactions":[\#(encodedInteractions)]}"#
@@ -229,6 +230,23 @@ enum JarvisFactoryFixtureScenario {
       }}
     }
     """#
+}
+
+/// Task detail and the board can load independently when a notification opens a task.
+private struct TaskHistoryFixtureTransport: HTTPTransport {
+    let base: FixtureTransport
+    let history: Data
+
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        if request.url.path == "/api/factory/tasks/21" {
+            return try await FixtureTransport(scenario: history).send(request)
+        }
+        return try await base.send(request)
+    }
+
+    func stream(_ request: HTTPRequest) async throws -> HTTPStreamResponse {
+        try await base.stream(request)
+    }
 }
 
 private actor FactoryScreenshotTokenStore: TokenStore {

@@ -393,7 +393,7 @@ struct JarvisActivitySheet: View {
 
     @ViewBuilder
     private func taskLink<Content: View>(
-        _ taskID: String?, identifier: String, @ViewBuilder content: () -> Content
+        _ taskID: String?, identifier: String, @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         if let taskID {
             JarvisRowButton(identifier: identifier) { onOpenTask(taskID) } content: {

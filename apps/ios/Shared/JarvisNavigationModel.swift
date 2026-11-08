@@ -5,7 +5,6 @@ import JarvisCore
 @MainActor
 final class JarvisNavigationModel: ObservableObject {
     @Published private(set) var state: JarvisNavigationState
-    @Published private(set) var requestedFactoryTaskID: String?
     /// Finger-tracked reveal progress (0...1) while a swipe is in flight; nil whenever no swipe is active.
     @Published private(set) var dragProgress: Double?
     /// True while Chat or Voice is open and was reached from Home. Set just before the published state changes.
@@ -23,6 +22,7 @@ final class JarvisNavigationModel: ObservableObject {
     var path: [JarvisDestination] { state.path }
     var isSidebarOpen: Bool { state.isSidebarOpen }
     var currentDestination: JarvisDestination { state.currentDestination }
+    var requestedFactoryTaskID: String? { state.requestedFactoryTaskID }
 
     /// What the page offset and the drawer render from: the live swipe if there is one, else the committed state.
     var revealProgress: Double { dragProgress ?? (state.isSidebarOpen ? 1 : 0) }
@@ -78,16 +78,16 @@ final class JarvisNavigationModel: ObservableObject {
     }
 
     func openFactoryTask(_ id: String) {
-        requestedFactoryTaskID = id
+        write { $0.requestFactoryTask(id) }
+        guard requestedFactoryTaskID == id else { return }
         navigate(to: .softwareFactory)
     }
 
     func consumeFactoryTaskRequest(_ id: String) {
-        if requestedFactoryTaskID == id { requestedFactoryTaskID = nil }
+        write { $0.consumeFactoryTaskRequest(id) }
     }
 
     func reset() {
-        requestedFactoryTaskID = nil
         dragProgress = nil
         state = JarvisNavigationState()
         cameFromToday = false
