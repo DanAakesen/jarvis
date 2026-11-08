@@ -4338,3 +4338,7 @@ copies) alongside legacy logs, before HealthKit de-duplication. Manual record ID
 remain distinct from HealthKit IDs. Historical app vault writes remain supported;
 this change does not migrate or rewrite them. Core fixture coverage checks that
 chat-logged sessions appear, retain identity/duration and respect the date range.
+
+## Apple Watch companion implementation (8 November 2026)
+
+Active secondary scope: feature/apple-watch-companion, PR #1652. Watch targets, four complications, phone-authenticated bridge, voice relay, Chat/manual-send dictation, task/workout/lift screens and read-only Factory are implemented; six approved references preserved. All 532 JarvisCore tests passed locally. Native build/preview evidence and owner-device checks are tracked in docs/ios/design/watch/implementation.md. Next: finish exact-revision native validation, then hand off to Jarvis2 primary for integration, signing and installation. No deployment or live Factory execution in this thread.

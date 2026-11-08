@@ -160,9 +160,12 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         case .workouts:
             let period = JarvisHealthPeriod.make(.sevenDays)
             let result = try await health.query(.init(source: .workouts, period: period, limit: 30))
+            guard result.status == "available" else { throw WatchFailure.unavailable }
             return try encode(result.items)
         case .lifts:
-            return try encode(try await health.query(.init(source: .lifts, limit: 30)).items)
+            let result = try await health.query(.init(source: .lifts, limit: 30))
+            guard result.status == "available" else { throw WatchFailure.unavailable }
+            return try encode(result.items)
         case .saveLift:
             guard let data = r.data, let value = try? JSONDecoder().decode(WatchLiftInput.self, from: data), value.isValid else { throw WatchFailure.invalidRequest }
             if let id = r.itemID {
@@ -184,6 +187,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             let voiceEpoch = generation
             if let voiceID { return try encode(voiceID) }
             guard VoiceLiveActivityActions.session == nil else { throw WatchFailure.busy }
+            let voiceLanguage = try await client.voiceDefaultLanguage()
             guard let token = try await KeychainTokenStore().read() else { throw WatchFailure.signInRequired }
             guard voiceEpoch == generation else { throw WatchFailure.signInRequired }
             let id = r.id; voiceID = id; lastVoiceContact = Date()
@@ -216,11 +220,11 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             })
             voice = session; voiceMuted = false
             VoiceLiveActivityActions.session = self
-            do { try await session.start(accessToken: token, language: language)
+            do { try await session.start(accessToken: token, language: voiceLanguage)
                 guard voiceEpoch == generation, voiceID == id else {
                     try? await session.end(); throw WatchFailure.unavailable
                 }
-                try? liveActivity.start(sessionID: id, language: language == .en ? .en : .da)
+                try? liveActivity.start(sessionID: id, language: voiceLanguage == .en ? .en : .da)
             }
             catch { await stopVoice(); throw error }
             return try encode(id)
@@ -326,7 +330,12 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 var values: [Int] = []; var found = false
                 collection?.enumerateStatistics(from: start, to: end) { statistic, _ in
                     let quantity = statistic.sumQuantity(); found = found || quantity != nil
-                    values.append(Int(quantity?.doubleValue(for: identifier == .stepCount ? .count() : .kilocalorie()).rounded() ?? 0))
+                    let value = Int(quantity?.doubleValue(for: identifier == .stepCount ? .count() : .kilocalorie()).rounded() ?? 0)
+                    if interval.hour == 1 {
+                        let hour = Calendar.current.component(.hour, from: statistic.startDate)
+                        while values.count <= hour { values.append(0) }
+                        values[hour] += value // Merge the repeated clock hour on a daylight-saving transition.
+                    } else { values.append(value) }
                 }
                 if found { continuation.resume(returning: values) } else { continuation.resume(throwing: WatchFailure.unavailable) }
             }

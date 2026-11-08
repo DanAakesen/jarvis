@@ -3719,3 +3719,7 @@ Native follow-up: timestamp taps yield to UIKit long-press selection and cannot
 reflow a reply at the end of a selection gesture. Revealed lift actions overlay
 the shifted row so visible pencil/trash controls receive touches. The selected
 visual design is unchanged; repeat the real interaction checks.
+
+## Apple Watch implementation (8 November 2026)
+
+The six owner-approved [Watch references](docs/ios/design/watch/README.md) define Home, Chat and four complications. Home has compact Voice, Dictate and Factory rows with left icons, menu top right and Jarvis top left. Chat uses iOS-style amber user bubbles and plain assistant replies, small mic/voice controls inside the message input, and manual Send. WatchDesign.swift adapts shared controls to watchOS because iOS JarvisControls depends on UIKit. Native-size/accessibility and device acceptance are tracked in the implementation handoff.

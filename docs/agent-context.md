@@ -7682,3 +7682,7 @@ replays its saved record and retains dumbbell weight, reps, sets, date/session I
 No live owner workout is logged by synthetic checks. Native 42496126403 passed
 timer/progress, runtime isolation and navigation; selection and the exposed Edit
 touch target failed and require a new native run after the interaction fixes.
+
+## Apple Watch companion work (8 November 2026)
+
+Source: apps/ios/Watch, apps/ios/WatchWidgets and iPhone JarvisWatchBridge.swift. Build: apps/ios/project.yml. Tests: `swift test --package-path apps/ios/Packages/JarvisCore --filter WatchContractTests` or full swift test. Native check after xcodegen generate in apps/ios: `xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build`. PR-only watch-build.yml builds Watch and phone unsigned and captures isolated DEBUG --watch-fixture views on an available Ultra simulator. Fixtures are not real health or successful connectivity. Primary owns signing, installation, integration and deployment. References, decisions and unverified checks: docs/ios/design/watch/.

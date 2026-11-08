@@ -61,6 +61,12 @@ struct WatchRoot: View {
         .alert("Jarvis", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
         } message: { Text(model.error ?? "") }
+        .task {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--watch-screen=chat") { path = [.chat] }
+            if ProcessInfo.processInfo.arguments.contains("--watch-screen=health") { path = [.health] }
+            #endif
+        }
         .onOpenURL { url in
             guard url.scheme == "jarvis-watch" else { return }
             switch url.host {

@@ -3,6 +3,7 @@ import SwiftUI
 struct WatchChatView: View {
     @EnvironmentObject private var model: WatchModel
     @EnvironmentObject private var connection: WatchConnection
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var dictate: () -> Void
     var body: some View {
         ScrollViewReader { proxy in
@@ -27,7 +28,7 @@ struct WatchChatView: View {
                     Color.clear.frame(height: 1).id("latest")
                 }
             }
-            .onChange(of: model.messages.last?.text) { _, _ in withAnimation { proxy.scrollTo("latest", anchor: .bottom) } }
+            .onChange(of: model.messages.last?.text) { _, _ in withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { proxy.scrollTo("latest", anchor: .bottom) } }
         }
         .navigationTitle("Jarvis").navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom, spacing: 2) {
@@ -48,9 +49,9 @@ struct WatchChatView: View {
                         Button { Task { await model.send() } } label: { Image(systemName: "arrow.up.circle.fill") }
                             .disabled(model.busy || !connection.reachable || model.voiceID != nil).accessibilityLabel("Send message")
                     }
-                    Button(action: dictate) { Image(systemName: "mic.fill").frame(width: 28, height: 34) }
+                    Button(action: dictate) { Image(systemName: "mic.fill").frame(width: 34, height: 38) }
                         .disabled(!connection.reachable || model.busy || model.voiceID != nil).accessibilityLabel("Dictate into draft")
-                    Button { Task { await model.startVoice() } } label: { WatchWave().frame(width: 22, height: 18).frame(width: 28, height: 34) }
+                    Button { Task { await model.startVoice() } } label: { WatchWave().frame(width: 22, height: 18).frame(width: 34, height: 38) }
                         .disabled(!connection.reachable || model.busy || model.voiceID != nil).accessibilityLabel("Start voice session")
                 }.buttonStyle(.plain).padding(.horizontal, 8).background(WatchStyle.surface, in: Capsule())
             }.background(.black)

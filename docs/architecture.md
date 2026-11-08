@@ -9094,3 +9094,7 @@ requests two free vCPUs, and retains sanitized request/readback evidence. It nev
 allocates a worker or changes IAM. Subscription-scoped Quota Request Operator and
 Microsoft.Quota registration remain administrator prerequisites. Existing Runner
 deploy still owns provisioning, capacity checks and idle-deallocation proof.
+
+## Apple Watch companion boundary (8 November 2026)
+
+XcodeGen JarvisWatch embeds JarvisWatchWidgets and is embedded by the phone app. Both use portable JarvisCore; Watch-native shared controls live under apps/ios/Watch. A Codable WatchConnectivity allow-list connects Watch to the paired phone. JarvisWatchBridge owns authenticated chat/health/lift/Factory reads/writes and VoiceSessionClient; credentials remain on phone. Watch VoiceAudioEngine captures/plays PCM16 through ordered acknowledged messages. Phone expires voice after 15 seconds without Watch heartbeat. Existing VoiceLiveActivityController controls the same session. No backend endpoint, infrastructure or production configuration is added. Display-only Health snapshots cross application context and expire in 15 minutes or date rollover. No offline mutation queue. See docs/ios/design/watch/implementation.md for verification limits.

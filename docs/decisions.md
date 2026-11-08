@@ -11836,3 +11836,7 @@ registration are prerequisites. Submission, Azure approval, provisioning and idl
 verification are separate states. Unknown quota-write outcomes are inspected,
 not automatically retried. Implementation has eight passing focused tests;
 no live quota request is claimed. See docs/factory-worker-quota.md.
+
+## 2026-11-08 — Phone-dependent Apple Watch implementation
+
+Owner-approved: Ultra 2, manual-send dictation, no offline mode, four complications and Home/Chat visuals. Use paired-iPhone WatchConnectivity allow-list with existing clients/authentication/voice protocol; no credentials on Watch or backend routes. Factory is read-only. Watch-specific shared controls adapt UIKit-backed iOS controls. Health boundaries follow phone Calendar.current; display expires in 15 minutes. Owner accepts device voice testing after primary installation; runtime and live-tile acceptance remain unverified. PR #1652 supersedes design PR #1648 for integration and retains its approved assets.
