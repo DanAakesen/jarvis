@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import WatchKit
 
@@ -78,6 +79,9 @@ struct WatchRoot: View {
             case "end-voice": Task { await model.endVoice() }
             default: path = [.menu]
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in
+            if model.voiceID != nil { Task { await model.endVoice() } }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await connection.refresh() } }

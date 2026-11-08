@@ -80,7 +80,15 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         delivery = Task {
             defer { if self.generation == epoch { self.delivery = nil } }
             while !self.eventQueue.isEmpty, !Task.isCancelled, self.generation == epoch {
-                let next = self.eventQueue.removeFirst()
+                var next = self.eventQueue.removeFirst()
+                if next.kind == .voiceAudio, var pcm = Data(base64Encoded: next.text ?? "") {
+                    while let following = self.eventQueue.first, following.kind == .voiceAudio,
+                          following.requestID == next.requestID, following.responseID == next.responseID,
+                          let more = Data(base64Encoded: following.text ?? ""), pcm.count + more.count <= 24_000 {
+                        pcm.append(more); self.eventQueue.removeFirst()
+                    }
+                    next.text = pcm.base64EncodedString()
+                }
                 do {
                     let data = try self.encode(WatchWire.event(next))
                     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in

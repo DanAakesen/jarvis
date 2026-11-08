@@ -86,11 +86,19 @@ final class WatchModel: ObservableObject {
             configurePlaybackCompletion()
             let stream = try audio.startCapture()
             capture = Task { [weak self] in
+                var batch = Data()
                 for await bytes in stream {
                     guard let self, !Task.isCancelled, let id = self.voiceID else { return }
-                    if self.muted { continue }
-                    do { _ = try await self.connection.request(.init(action: .audio, itemID: id.uuidString, data: bytes)) }
+                    if self.muted { batch.removeAll(keepingCapacity: true); continue }
+                    batch.append(bytes)
+                    guard batch.count >= 4_800 else { continue } // ~100 ms at 24 kHz PCM16.
+                    let packet = batch; batch.removeAll(keepingCapacity: true)
+                    do { _ = try await self.connection.request(.init(action: .audio, itemID: id.uuidString, data: packet)) }
                     catch { await self.endVoice(); self.show(error); return }
+                }
+                if !Task.isCancelled, let self, self.voiceID != nil {
+                    await self.endVoice()
+                    self.error = "The connection is too slow for voice. Try again near your iPhone."
                 }
             }
             heartbeat = Task { [weak self] in

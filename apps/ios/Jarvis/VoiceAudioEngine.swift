@@ -52,7 +52,14 @@ final class VoiceAudioEngine: @unchecked Sendable {
             self.lock.lock()
             let continuation = self.captureContinuation
             self.lock.unlock()
+            #if os(watchOS)
+            if let result = continuation?.yield(data), case .dropped = result {
+                // A companion link that cannot keep up must fail visibly instead of losing speech silently.
+                continuation?.finish()
+            }
+            #else
             continuation?.yield(data)
+            #endif
         }
         hasCaptureTap = true
         engine.prepare()
