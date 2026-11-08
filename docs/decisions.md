@@ -11869,3 +11869,23 @@ The separate Notes report is specifically build 84 freezing on the right sidebar
 not app termination. The phrase/Overview restoration is a candidate, not released;
 first native qualification passed order and failed three other cases. Do not
 collapse owner acceptance of chrome into acceptance of the unrelated Notes fixes.
+
+
+## 8 November 2026 — Read the complete Copilot version inventory before retrying
+
+A catalogue refresh failed after its create step when reading Azure's version
+inventory; a separate read-only inspection reproduced the error. The reader did
+not implement Foundry v1 cursor pagination and could request 20 full historical
+definitions in one response. Read bounded single-record pages, follow has_more
+and last_id, and validate every existing version before deciding whether to create
+or reuse. Preserve strict ownership, unique exact matches, response/operation
+bounds and content-free errors. This is a recovery fix, not permission to replay
+an uncertain creation. Live root-cause confirmation and activation remain pending.
+
+The quota workflow also exposed unnecessary full deployments for manual-only
+administration files. Classify the quota workflow/request helper and comparison
+provisioning helpers explicitly as non-application inputs while retaining full CI
+qualification and their manual execution gates. Unknown new runtime files remain
+conservative full-deployment inputs.
+
+Reference: https://ai.azure.com/api-reference/agent-versions/list-agent-versions/.
