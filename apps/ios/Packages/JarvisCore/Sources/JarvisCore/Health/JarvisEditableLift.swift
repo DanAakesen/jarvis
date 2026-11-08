@@ -35,22 +35,22 @@ public struct JarvisEditableLift: Identifiable, Equatable, Sendable {
     }
 
     public init?(row: [String: JSONValue]) {
-        guard let name = row["exerciseName"]?.stringValue,
-              let weight = row["weightKg"]?.numberValue,
-              let reps = row["reps"]?.numberValue, let sets = row["sets"]?.numberValue,
+        guard case let .string(name)? = row["exerciseName"],
+              case let .number(weight)? = row["weightKg"],
+              case let .number(reps)? = row["reps"], case let .number(sets)? = row["sets"],
               reps.isFinite, sets.isFinite, (1...1000).contains(reps), (1...100).contains(sets),
               reps.rounded() == reps, sets.rounded() == sets,
-              let date = row["performedAt"]?.stringValue else { return nil }
+              case let .string(date)? = row["performedAt"] else { return nil }
         value = JarvisLiftEdit(exerciseName: name, weightKg: weight, reps: Int(reps), sets: Int(sets))
         guard value.isValid else { return nil }
         performedAt = date
-        if let path = row["notePath"]?.stringValue,
-           let sha = row["noteSha"]?.stringValue,
-           let content = row["noteContent"]?.stringValue,
+        if case let .string(path)? = row["notePath"],
+           case let .string(sha)? = row["noteSha"],
+           case let .string(content)? = row["noteContent"],
            JarvisGymLogNote.parse(path: path) != nil,
            sha.range(of: #"^[a-fA-F0-9]{40}$"#, options: .regularExpression) != nil {
             source = .vault(path: path, sha: sha, content: content)
-        } else if let id = row["id"]?.stringValue, UUID(uuidString: id) != nil {
+        } else if case let .string(id)? = row["id"], UUID(uuidString: id) != nil {
             source = .health(id: id)
         } else { return nil }
     }
