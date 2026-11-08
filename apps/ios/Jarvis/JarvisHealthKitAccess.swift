@@ -45,8 +45,8 @@ enum JarvisHealthKitAccess {
 }
 
 /// Every workout recorded in Health (strength, runs, rides, walks and the rest), shown with the vault gym logs on Home.
-/// Strength workouts carry no muscle group in Health, so they show as strength training; the combined store drops one
-/// only when a real vault log exists within two hours.
+/// Strength workouts carry no muscle group in Health, so they show as strength training; the combined store merges
+/// their measurements into a matching log within two hours without counting the workout twice.
 struct JarvisHealthKitWorkoutSource: JarvisGymLogStore {
     func save(_ entry: JarvisGymLogEntry) async throws { throw JarvisGymLogError.unavailable }
 

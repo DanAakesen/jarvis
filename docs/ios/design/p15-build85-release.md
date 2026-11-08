@@ -3,7 +3,8 @@
 8 November 2026. PR #1653 merged as df813f348eae27961259c691b526eeadced9ea18 with
 complete tree identity to qualified head 2f0fd280d6f999dd01459e97e0f43e9e12882c3e.
 Final CI 42511384320 passed. TestFlight run 42511641193 successfully archived, signed and uploaded build 85
-from this merge. Apple processing and owner-device availability are not yet verified.
+from this merge. The owner subsequently confirmed the Notes page is fixed on
+8 November. The separate Home Today workout-total bug is tracked in PLAN.md.
 
 ## Changes
 
@@ -25,7 +26,7 @@ and light/dark editor captures were reviewed. Artifact 13629821155 has SHA256
 The 1,003-note library now passes repeated sidebar open/close, scrolling and
 return-to-Chat checks. Both themes pass pin/Raw/edit/save/reopen. Existing 120/150
 second test limits and every assertion are retained. Physical-device acceptance
-of the freeze correction remains pending; TestFlight 85 is uploaded.
+of the freeze correction was subsequently confirmed by the owner; TestFlight 85 is uploaded.
 
 The first native candidate 42507483140 passed order but failed large-library
 responsiveness and both editor-entry tests. Retained spindump showed expensive

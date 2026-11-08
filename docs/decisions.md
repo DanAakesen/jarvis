@@ -1,3 +1,15 @@
+## 8 November 2026 — Retain workout measurements when combining Home sources
+
+Home's vault/manual/HealthKit merge must retain the primary session, date and
+recorded values while filling missing duration, active energy and source IDs from
+the matched source. A duplicate representation is not a reason to discard its
+measurements. Retain the existing compatible-session/two-hour match window;
+choose the nearest unmatched primary row once per source so metrics are neither
+copied across several logs nor lost for a distinct unmatched workout. This only
+changes the read projection; it does not write or migrate health/vault records.
+The nested-source regression reproduces zero Today totals before the fix and all
+533 Core tests pass after it. App delivery/device verification remain separate.
+
 ## 7 November 2026 — Authorize 128 GiB workspaces with automatic compute shutdown
 
 The owner approved proceeding with 128 GiB workspaces at the discussed indicative

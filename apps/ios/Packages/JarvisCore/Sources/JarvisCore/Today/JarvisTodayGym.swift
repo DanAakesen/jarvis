@@ -273,8 +273,8 @@ public struct JarvisVaultGymLogStore: JarvisGymLogStore {
 }
 
 /// Reads gym logs from the vault and from other sources (Health workouts) and writes only to the vault. One source
-/// failing does not hide the others; an error is thrown only when every source fails. A Health workout is dropped
-/// when the vault already has a log of the same session within two hours.
+/// failing does not hide the others; an error is thrown only when every source fails. Matching sessions within
+/// two hours count once, retaining the primary log and filling missing metrics/identities from the other source.
 public struct JarvisCombinedGymLogStore: JarvisGymLogStore {
     private let primary: any JarvisGymLogStore
     private let others: [any JarvisGymLogStore]
@@ -310,11 +310,35 @@ public struct JarvisCombinedGymLogStore: JarvisGymLogStore {
             do {
                 let extra = try await store.entries(since: since)
                 succeeded = true
-                merged += extra.filter { candidate in
-                    !primaryEntries.contains {
-                        Self.sameWorkout($0.session, candidate.session)
-                            && abs($0.performedAt.timeIntervalSince(candidate.performedAt)) < 7200
+                var matched = Set<Int>()
+                for candidate in extra {
+                    // One source row can enrich only one primary row. Pick the nearest log,
+                    // so several nearby lifts cannot each receive the same workout's totals.
+                    let index = primaryEntries.indices.filter {
+                        !matched.contains($0)
+                            && Self.sameWorkout(primaryEntries[$0].session, candidate.session)
+                            && abs(primaryEntries[$0].performedAt.timeIntervalSince(candidate.performedAt)) < 7200
+                    }.min {
+                        abs(primaryEntries[$0].performedAt.timeIntervalSince(candidate.performedAt))
+                            < abs(primaryEntries[$1].performedAt.timeIntervalSince(candidate.performedAt))
                     }
+                    guard let index else {
+                        merged.append(candidate)
+                        continue
+                    }
+                    matched.insert(index)
+                    let existing = merged[index]
+                    merged[index] = JarvisGymLogEntry(
+                        performedAt: existing.performedAt, session: existing.session,
+                        lift: existing.lift ?? candidate.lift,
+                        durationMinutes: existing.durationMinutes > 0 ? existing.durationMinutes : candidate.durationMinutes,
+                        activeKilocalories: existing.activeKilocalories > 0
+                            ? existing.activeKilocalories : candidate.activeKilocalories,
+                        manualWorkoutID: existing.manualWorkoutID ?? candidate.manualWorkoutID,
+                        healthKitID: existing.healthKitID ?? candidate.healthKitID,
+                        healthActivity: existing.healthActivity ?? candidate.healthActivity,
+                        vaultNote: existing.vaultNote ?? candidate.vaultNote
+                    )
                 }
             } catch {
                 firstError = firstError ?? error

@@ -1,3 +1,19 @@
+## Home Today workout totals and Notes acceptance (8 November 2026)
+
+Owner confirmed Notes fixed after build 85. Home Today still counted workouts but
+showed zero time/energy when matching vault/manual sessions replaced HealthKit
+measurements. `JarvisCombinedGymLogStore` now enriches the primary row instead of
+discarding those measurements. The original code fails the new nested-source
+regression; `swift test -j 2` in `apps/ios/Packages/JarvisCore` passes all 533 tests
+after the correction in the official Swift 6.2 container. The shared UI and period
+filter are unchanged. CI/app delivery and owner verification remain pending.
+
+Apple documentation actually read: [HKWorkout.duration](https://developer.apple.com/documentation/healthkit/hkworkout/duration),
+[HKWorkout.statistics(for:)](https://developer.apple.com/documentation/healthkit/hkworkout/statistics(for:))
+and [HIG HealthKit](https://developer.apple.com/design/human-interface-guidelines/healthkit).
+Preserve the existing read permissions and reported workout statistics; no
+HealthKit write, new permission or custom platform behavior is introduced.
+
 ## Owner tracking and next bundle (7 November 2026)
 
 Use PLAN.md's owner status ledger for all discussed work, including items not yet
