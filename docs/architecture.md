@@ -9012,3 +9012,7 @@ continuous background; individual controls own their glass.
 The shared inset header retains the native soft top scroll-edge treatment for
 legibility over moving content. Bottom edges stay unbacked. Screen-level flags
 only hide bottom effects so they do not suppress the shared top treatment.
+
+The top uses `safeAreaBar(edge: .top)` rather than `safeAreaInset`: it also extends
+the native scroll edge through the custom header, per the [Apple API contract](https://developer.apple.com/documentation/swiftui/view/safeareabar(edge:alignment:spacing:content:)-9hwgb).
+This API is available from the existing iOS 26 minimum.

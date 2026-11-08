@@ -89,3 +89,7 @@ Native 42482352002 passed all 12 cases on source 82171fce (iOS tree
 Actual scrolled captures exposed title/text collisions despite the geometry pass.
 A native soft top scroll-edge treatment is being qualified; bottom edges remain
 unbacked. No release is accepted from the pre-refinement captures alone.
+
+The refined header uses the iOS 26 safeAreaBar API to extend its soft native edge
+through custom header content; simply changing the style on safeAreaInset is not
+the documented custom-bar integration. The bottom keeps its transparent inset.

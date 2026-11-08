@@ -3680,3 +3680,7 @@ title; this must blend without a hard rectangular plate. Keep Ember
 and the light palette unchanged. Control-level Reduce Transparency remains intact.
 Fresh native checks must verify the scroll viewport crosses both control regions,
 actual content moves, and controls remain usable; inspect the scrolled captures.
+
+Use iOS 26 `safeAreaBar` for the top inset: Apple documents that it extends the
+scroll-edge effect through custom bar content. The bottom remains `safeAreaInset`
+with its edge effect hidden. No separate rectangular material is added.
