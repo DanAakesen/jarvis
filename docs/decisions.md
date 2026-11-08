@@ -12010,3 +12010,15 @@ Copilot's saved initial/revised note is verified, but 51 displayed attempts and
 refusals remain friction findings. Keep the backend unchanged for the paired
 Current run; do not infer the exact refusal cause from a generic UI label or claim
 that the isolated test establishes normal Chat reliability.
+
+## 2026-11-08 — Phone-dependent Apple Watch implementation
+
+Owner-approved: Ultra 2, manual-send dictation, no offline mode, four complications and Home/Chat visuals. Use paired-iPhone WatchConnectivity allow-list with existing clients/authentication/voice protocol; no credentials on Watch or backend routes. Factory is read-only. Watch-specific shared controls adapt UIKit-backed iOS controls. Health boundaries follow phone Calendar.current; display expires in 15 minutes. Owner accepts device voice testing after primary installation; runtime and live-tile acceptance remain unverified. PR #1652 supersedes design PR #1648 for integration and retains its approved assets.
+
+## 2026-11-08 — Primary Watch integration keeps cached complication data
+
+Live WatchConnectivity availability controls interactive requests, not whether a
+fresh received snapshot can be displayed. Keep cached complication data through
+brief/background unreachability, expire at the earlier of 15 minutes and local
+midnight, and clear on explicit phone sign-out context. Primary owns signing and
+release after the secondary handoff; physical Watch acceptance stays deferred.

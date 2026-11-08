@@ -1,0 +1,68 @@
+name: Apple Watch build
+on:
+  pull_request:
+    paths:
+      - 'apps/ios/**'
+      - '.github/workflows/watch-build.yml'
+permissions:
+  contents: read
+concurrency:
+  group: watch-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  watch:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Select Xcode
+        run: sudo xcode-select --switch /Applications/Xcode_26.6.app
+      - name: Install pinned XcodeGen
+        run: |
+          curl -fsSL https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip -o "$RUNNER_TEMP/xcodegen.zip"
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum --check
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Build watch app and complications without signing
+        working-directory: apps/ios
+        run: |
+          set -o pipefail
+          xcodegen generate
+          xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' -derivedDataPath "$RUNNER_TEMP/WatchBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/watch-build.log"
+      - name: Capture isolated Watch previews
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          WATCH_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | contains("Apple Watch")) | select(.name | contains("Ultra"))][0].udid // empty')"
+          if [[ -z "$WATCH_ID" ]]; then
+            echo "::warning::No Ultra simulator is available; Watch screenshots were not captured."
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/watch-screenshots"
+          xcrun simctl boot "$WATCH_ID" || true
+          xcrun simctl bootstatus "$WATCH_ID" -b
+          xcrun simctl install "$WATCH_ID" "$RUNNER_TEMP/WatchBuild/Build/Products/Debug-watchsimulator/JarvisWatch.app"
+          xcrun simctl launch "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture
+          sleep 3
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/home.png"
+          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=chat
+          sleep 2
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/chat.png"
+          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=health
+          sleep 2
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/health.png"
+      - name: Build paired iPhone bridge without signing
+        if: ${{ !cancelled() }}
+        working-directory: apps/ios
+        run: |
+          set -o pipefail
+          xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/PhoneBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/phone-build.log"
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: watch-build-logs
+          path: |
+            ${{ runner.temp }}/watch-build.log
+            ${{ runner.temp }}/phone-build.log
+            ${{ runner.temp }}/watch-screenshots

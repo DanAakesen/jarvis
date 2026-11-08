@@ -52,7 +52,14 @@ final class VoiceAudioEngine: @unchecked Sendable {
             self.lock.lock()
             let continuation = self.captureContinuation
             self.lock.unlock()
+            #if os(watchOS)
+            if let result = continuation?.yield(data), case .dropped = result {
+                // A companion link that cannot keep up must fail visibly instead of losing speech silently.
+                continuation?.finish()
+            }
+            #else
             continuation?.yield(data)
+            #endif
         }
         hasCaptureTap = true
         engine.prepare()
@@ -149,7 +156,11 @@ final class VoiceAudioEngine: @unchecked Sendable {
 
     private func configureSession() throws {
         let session = AVAudioSession.sharedInstance()
+        #if os(watchOS)
+        try session.setCategory(.playAndRecord, mode: .voiceChat)
+        #else
         try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker])
+        #endif
         try session.setActive(true)
         ownsActiveSession = true
     }

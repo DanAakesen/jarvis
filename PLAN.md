@@ -1,3 +1,17 @@
+## Apple Watch primary integration — 8 November 2026
+
+Primary reviewed #1652 and corrected target/embedding checks, cached complication
+freshness during background unreachability, local-midnight expiry and chat-task
+ownership after account reset. Combined source fa6da450 passes 544 Core tests and
+full CI 42520574348. Native Watch/four widgets/paired iPhone build 42520572882 passed;
+primary inspected fresh Home/Chat/Health captures. Artifact 13633820543 has SHA256
+ed2755edb65aa10cd2c0b2328c066e3c964e1bb649ebdac151e31a21815e2b8a.
+Focused chat interaction qualification with Watch included is running on identical
+iOS tree fd5467327a30ac926c91ec055a06d8f940092c8c in validation run 42521342696.
+Signing and TestFlight remain pending. Physical voice/background/live-tile checks
+remain deferred until installation, as agreed. Secondary's unsigned build is not
+a release. Current repair #1658 is now merged and deploying separately.
+
 ## Current test-chat repair — 8 November 2026
 
 The owner requires Current completion before comparing harnesses. The latest server
@@ -15,8 +29,8 @@ budget. Specific allowlisted failure codes distinguish token exhaustion, content
 filtering, incomplete streams and coordination failures. No uncertain tool or write
 is automatically replayed. These are verified code defects; the historical generic
 error alone cannot prove which caused the owner's failure. All 1,310 agent tests
-pass locally; 356 backend tests and TypeScript build pass. CI, deployment and
-live acceptance are pending.
+pass locally; 356 backend tests and TypeScript build pass. Full CI 42521183807
+and CodeQL pass. #1658 merged as a231e7ec; deployment/live acceptance are pending.
 
 
 ## Copilot owner test review and tool grouping — 8 November 2026
@@ -30,8 +44,9 @@ Owner requests repairing Current first, then repeating the comparison.
 Normal Chat is a separate acceptance surface; do not generalize this test to it.
 
 Consecutive tool grouping is implemented for both iOS chat surfaces, preserving
-attempt counts and refused/error outcomes. Core and focused native qualification
-are in progress; not released. Backend behavior is unchanged for the paired test.
+attempt counts and refused/error outcomes. 537 Core tests and three native checks
+passed in 42518328386; #1656 merged. Included in the next signed app bundle.
+Current runtime completion is repaired separately in #1658.
 Exact rejected-write payload/reason and live per-call arguments are unavailable.
 See [the recorded comparison evidence](docs/runtime-comparison-owner-test.md).
 

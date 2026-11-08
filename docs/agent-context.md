@@ -7827,3 +7827,7 @@ live elapsed/progress checks. Focused validation may use a disposable workflow
 branch with identical app/test tree and unchanged 120/150-second test limits;
 never merge the validation workflow. Keep normal Chat versus isolated harness
 results separate and retain actual native captures before claiming UI acceptance.
+
+## Apple Watch companion work (8 November 2026)
+
+Source: apps/ios/Watch, apps/ios/WatchWidgets and iPhone JarvisWatchBridge.swift. Build: apps/ios/project.yml. Tests: `swift test --package-path apps/ios/Packages/JarvisCore --filter WatchContractTests` or full swift test. Native check after xcodegen generate in apps/ios: `xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build`. PR-only watch-build.yml builds Watch and phone unsigned and captures isolated DEBUG --watch-fixture views on an available Ultra simulator. Fixtures are not real health or successful connectivity. Primary owns signing, installation, integration and deployment. References, decisions and unverified checks: docs/ios/design/watch/.

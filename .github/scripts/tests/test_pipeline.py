@@ -94,6 +94,10 @@ class ImpactTests(unittest.TestCase):
                                  {"ios", "python"})
                 self.assertEqual(deploy_parts(path), set())
 
+    def test_watch_build_workflow_never_selects_production_components(self):
+        self.assertEqual(deploy_parts(".github/workflows/watch-build.yml"), set())
+        self.assertIn("ios", checks_for(".github/workflows/watch-build.yml"))
+
     def test_shared_node_inputs_qualify_vault_mirror(self):
         for path in ("package.json", "package-lock.json", "tsconfig.base.json", ".nvmrc",
                      "packages/contracts/src/status.js"):

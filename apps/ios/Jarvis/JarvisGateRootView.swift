@@ -126,6 +126,7 @@ private final class JarvisGateModel: ObservableObject {
             )
             JarvisApprovalNotificationCoordinator.shared.configure(client: notificationClient ?? client)
             JarvisWidgetSnapshotPublisher.shared.configure(client: client)
+            JarvisWatchBridge.shared.configure(client: client)
             provider.onSignInRequired = { [weak self] in
                 self?.clientRequestedSignIn()
             }
@@ -241,6 +242,7 @@ private final class JarvisGateModel: ObservableObject {
         defer { isSigningOut = false }
         presentation = .loading
         refreshOverlay()
+        await JarvisWatchBridge.shared.disconnect()
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
         }

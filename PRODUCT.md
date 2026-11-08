@@ -2672,3 +2672,7 @@ quality. Long public progress updates must not abort useful work. Written chat
 needs a model budget that accommodates reasoning and complete results, independent
 of short voice responses. Preserve ordered progress and explicit partial failure;
 never recover an uncertain write by blind replay.
+
+## Apple Watch companion (8 November 2026)
+
+Target the owner's Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as watchOS 27.2, unverified. Voice and dictation are primary. Dictation fills an editable input for manual sending. Home adds read-only Factory; menu provides tasks, workouts and lift management. The four approved complications expose daily/weekly health, Tasks Today, Dictation and Voice. Follow the paired iPhone with no standalone credentials or offline send queue. Voice should continue until ended, with an End Session live tile; background behavior and mirrored Activity actions remain unverified. Owner accepts testing on their Watch after primary installation. See docs/ios/design/watch/implementation.md for limits; visual approval is separate from device acceptance.

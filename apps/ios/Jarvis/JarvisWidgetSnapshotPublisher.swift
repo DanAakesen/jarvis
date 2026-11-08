@@ -58,6 +58,7 @@ final class JarvisWidgetSnapshotPublisher {
         apply(factoryResult.map { JarvisWidgetBuilder.home(now: now, factory: $0) }, to: &snapshot.home)
         try? store.save(snapshot)
         WidgetCenter.shared.reloadAllTimelines()
+        await JarvisWatchBridge.shared.publishSnapshotIfReachable()
     }
 
     private func run(_ action: JarvisFactoryWidgetData.Action, id: String) async throws {
