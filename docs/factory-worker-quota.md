@@ -47,3 +47,8 @@ prerequisite if it has not already been done.
 References: [quota API prerequisites](https://learn.microsoft.com/en-us/rest/api/quota/),
 [request contract](https://learn.microsoft.com/en-us/rest/api/quota/quota/create-or-update?view=rest-quota-2025-09-01),
 [family and regional quotas](https://learn.microsoft.com/en-us/azure/quotas/per-vm-quota-requests).
+
+
+### 8 November: subscription access corrected
+
+The owner corrected the Quota Request Operator assignment from resource-group to subscription scope. Live run 42523978403 passed the previous authorization boundary but returned HTTP 400 InvalidResourceName before any quota write. The client now discovers canonical quota resource names from Azure’s catalogue, matches only the two approved resources case-insensitively, and uses returned casing for reads/writes. Missing/ambiguous resources stop without a write; catalogue pagination is bounded and confined to the same scope. Live retry and 128 GiB provisioning remain pending.
