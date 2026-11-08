@@ -2618,3 +2618,7 @@ time limits. Show generated acknowledgment, actual tool activity and reply progr
 inside the conversation. Reconnect to existing execution; never resend a write to
 recover a dropped stream. Connection setup and individual operations may still
 fail, and an unknown outcome must remain visible.
+
+## Apple Watch agreed scope (8 November 2026; design only)
+
+The owner approved the four complications and Home/Chat visual references in `docs/ios/design/watch/README.md`. Target Apple Watch Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as watchOS 27.2 and remains unverified. Voice and dictation are the primary entry points; Home also offers Factory and a menu for workouts and lift management. Dictation populates the Chat input for editing and manual Send, never automatic submission. The Watch follows the paired iPhone with no standalone/offline mode; disconnected operations must show unavailability. Voice sessions should continue until ended, including an End Session live tile. Background voice/platform behavior is unverified; the owner accepts testing it after primary-coordinated installation on their Watch. This scope is not implemented and does not authorize deployment or live Factory execution.

@@ -11701,3 +11701,7 @@ and bounded replay. SSE heartbeat comments establish transport liveness only; th
 must not present them as completed work. Reconnection attaches to the original turn
 without repeating actions. The exact owner failure is not diagnosed by these code
 limits alone; live qualification remains required.
+
+## 2026-11-08 — Apple Watch approved designs and interaction scope
+
+Status: owner-approved product/design direction; implementation unverified. Preserve six approved references in `docs/ios/design/watch/`: four complications, Home and Chat. Target the owner's Ultra 2, with phone-dependent connectivity and no standalone/offline mode. Dictation must populate an editable message draft for manual sending. Continuous voice and live-tile termination remain desired behavior; the owner accepts testing physical-device runtime after primary-coordinated Watch installation. This defers verification rather than establishing background-runtime support. Primary owns integration, deployment and acceptance; the secondary thread has no deployment authority.

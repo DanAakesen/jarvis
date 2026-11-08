@@ -4284,3 +4284,7 @@ stream. Local backend regression checks pass (166 existing/focused checks plus
 three activity tests); 182 hosted stream/runtime checks, Ruff and backend lint/build
 pass. CI, deployment,
 longer-than-limit live qualification and iOS progress UI remain pending.
+
+## Apple Watch design handoff (8 November 2026)
+
+Completed: owner approval and repository preservation of four complication references plus Home and Chat; phone-dependent connectivity and manual-send dictation decisions recorded in `docs/ios/design/watch/README.md`. No Watch code or build tests yet. Next: primary thread coordinates the Watch implementation plan and native target, remaining workflow screens, shared-package compatibility, phone communication/authentication and preview/build validation. Owner accepts deferring physical-device continuous/background voice checks until installation on their Ultra 2; those checks remain pending. Deployment and integration stay with Jarvis2 primary.

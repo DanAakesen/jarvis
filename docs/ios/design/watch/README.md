@@ -35,10 +35,21 @@ The reference PNG is 1925 × 817 pixels (ratio 2.3562), within 0.11% of 193:82 (
 The owner selected this set on 8 November 2026, superseding Next Event and the combined Ask Jarvis proposal. The final visual references above are approved; implementation and platform feasibility remain unverified.
 
 1. **Tasks Today:** checklist icon and remaining incomplete tasks due today. Tap opens today's tasks. Keep overdue tasks separate unless requested. Zero means no remaining tasks; unavailable data must not show zero.
-2. **Dictate:** dedicated single-message entry point. Tap should start dictation with as few steps as watchOS permits, either by opening the Watch app or through a supported system surface. Capture speech as a message to Jarvis, distinct from an ongoing spoken conversation. Recording from the complication/watch face itself is not established. First-use permissions and locked/authentication states may add steps. Submission/confirmation behavior remains to be selected.
+2. **Dictate:** dedicated single-message entry point. Tap should start dictation with as few steps as watchOS permits, either by opening the Watch app or through a supported system surface. Capture speech as a message to Jarvis, distinct from an ongoing spoken conversation. Recording from the complication/watch face itself is not established. First-use permissions and locked/authentication states may add steps. Transcription populates the editable Chat input; the owner sends manually.
 3. **Voice Session:** dedicated ongoing spoken conversation. Tap opens the Watch app and starts a session after necessary permissions/authentication. The desired session continues until the owner ends it, with an ongoing live tile that exposes End Session. Interpret the owner's wording “hours continue” as “should continue”; no multi-hour duration guarantee is established. Ending must stop microphone capture, playback and the backend session, and clear the active tile state. Repeated taps should resume the existing session rather than create duplicates.
 
 Apple lists regular circular artwork sizes of 42–50 pt depending on model. Validate accessoryCircular masking, text and actual bounds in previews; do not confuse this with smaller legacy circular-small artwork sizes.
+
+## Approved app screens and behavior
+
+The owner approved [Home](app-home-approved-concept.png) and [Chat](app-chat-approved-concept.png) on 8 November 2026. These generated images are visual references with illustrative messages, not running app screenshots.
+
+- Home: Jarvis top left, compact menu icon top right; three compact rows with small icons on the left and labels Voice, Dictate and Factory. Factory uses the iOS code symbol `chevron.left.forwardslash.chevron.right` (`</>`). Menu leads to Workouts and Manage lifts.
+- Chat: maximize message area with a slim header. Follow the iOS app's rounded amber-tinted glass user bubbles and plain left-aligned assistant replies. Use a normal message input field with small dictation and voice icons inside it.
+- Dictation fills the input as an editable draft. The owner reviews it and sends manually; no automatic submission. The populated input needs a Send action in implementation; its layout is not shown in the approved empty-field reference.
+- Device: Apple Watch Ultra 2 (49 mm). Owner reported “iOS 27.2”; interpreted as watchOS 27.2, not independently verified. Watch face remains unspecified.
+- Connectivity: follows the paired iPhone, no standalone/offline mode. Show a clear unavailable state when the phone connection is unavailable. Do not imply standalone cellular service or queue offline sends.
+- Voice: the owner accepts deferring continuous/background voice testing until installation on their physical Watch, coordinated by Jarvis2 primary. This is a deferred acceptance check, not a passed check or a promise of platform support. Do not require a pre-build physical-device feasibility test as a new approval gate.
 
 ## Voice feasibility limits
 
@@ -56,6 +67,8 @@ Investigate native Watch Smart Stack controls versus a paired-iPhone Live Activi
 
 No Watch app target or complication code was added. No build, simulator, device, tint, Always On or VoiceOver testing was run. No deployment, release or merge is authorized in this secondary thread.
 
-Before implementation: confirm owner Watch model and watch face; add a Watch target and assess JarvisCore watchOS compatibility; define HealthKit snapshot refresh, timezone/week boundaries and source deduplication; verify all layouts at actual bounds including small models, missing/stale data, large numbers and localized labels; verify tinted/Always On rendering and tap destinations. WidgetKit refresh is system-budgeted, not continuously live.
+Remaining implementation work: confirm watch face; add a Watch target and assess JarvisCore watchOS compatibility; define HealthKit snapshot refresh, timezone/week boundaries and source deduplication; verify all layouts at actual bounds including small models, missing/stale data, large numbers and localized labels; verify tinted/Always On rendering and tap destinations. WidgetKit refresh is system-budgeted, not continuously live.
 
-Primary thread retains implementation coordination, integration, deployment and final acceptance. Open PRs #1646 and #1532 touch iOS navigation/health; this branch only adds design documentation and the four reference images.
+Primary thread retains implementation coordination, integration, deployment and final acceptance. Open PRs #1646 and #1532 touch iOS navigation/health; this branch only adds design documentation and six approved reference images (four complications, Home and Chat).
+
+Remaining design work: active voice controls and session states, End Session live tile, dictation capture/review and populated-input Send state, menu, workout list/detail, lift list/add/edit, Factory views, permission/authentication and disconnected/error states. Plan readable layouts and usable touch areas; actual-size previews, builds and physical-device behavior remain unverified. Save these decisions for implementation; this task does not authorize a deployment or starting live Factory tasks.
