@@ -31,6 +31,14 @@ build 83 was cancelled before upload. Do not expect these fixes in 82.
   task and history load. An issue-only card should open its GitHub issue. Do not
   press Recover while the quota/capacity blocker remains.
 
+- [ ] **Jarvis gym logging, after backend delivery:** send one explicit lift/session
+  request with exercise, kg, reps, sets, date and session. Verify the returned values
+  in Health and the session in Home after refresh, including while a vault copy is
+  pending. Ask Jarvis to correct that same test lift, then delete the test entry;
+  verify no extra approval and no duplicate record. Repeat in Copilot only after
+  its tool-definition refresh passes. The earlier failed workout is not replayed
+  automatically. Historical app vault logs are retained without migration.
+
 - [ ] **Lifts, replacement build:** tap a disposable lift in Last lifts and confirm
   the editor contains its current exercise, weight, reps and sets. Change one
   value, save and reopen it. Short-swipe left to reveal only the pencil; swipe

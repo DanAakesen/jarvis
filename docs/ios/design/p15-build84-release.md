@@ -190,3 +190,11 @@ copies) alongside legacy logs, before HealthKit de-duplication. Manual record ID
 remain distinct from HealthKit IDs. Historical app vault writes remain supported;
 this change does not migrate or rewrite them. Core fixture coverage checks that
 chat-logged sessions appear, retain identity/duration and respect the date range.
+
+Candidate 04735515 passed all 526 Core tests and CodeQL. Backend CI passed 7,443
+tests with two outdated expected tool catalogues; both lists now require
+gym_lifts/gym_sessions and explicitly exclude gym tools when Health is disabled.
+The focused catalogue, composition, gym, parity and instruction checks pass (64).
+No runtime code or iOS source changes in that correction. After normal deployment,
+refresh the existing Copilot definition with both authorized managed-chat inputs
+and require its two-turn canary before claiming parity there.

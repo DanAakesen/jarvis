@@ -42,7 +42,7 @@ const limits = JSON.parse(readFileSync(
 )) as { maxToolDescriptionCharacters: number; maxCatalogueBytes: number };
 
 const healthToolNames = [
-  'health_query', 'health_show', 'health_food', 'health_food_review', 'health_saved_food', 'health_nutrition_targets', 'health_nutrition_suggest',
+  'health_query', 'health_show', 'gym_lifts', 'gym_sessions', 'health_food', 'health_food_review', 'health_saved_food', 'health_nutrition_targets', 'health_nutrition_suggest',
   'health_summary', 'health_nutrition_history', 'health_coach_status',
 ];
 const proactiveToolNames = ['proactive_recent_items', 'proactive_preferences', 'proactive_item_feedback', 'owner_reminders'];
@@ -216,7 +216,7 @@ describe('production tool catalogue', () => {
     const off = modulesWithEveryFeature({ health: false });
     expect(off.map(({ id }) => id)).toEqual(on.map(({ id }) => id).filter((id) => id !== 'health'));
     const offNames = createToolRegistry(off).list().map(({ name }) => name);
-    expect(offNames.filter((name) => name.startsWith('health_') || name.startsWith('daily_'))).toEqual([]);
+    expect(offNames.filter((name) => name.startsWith('health_') || name.startsWith('daily_') || name.startsWith('gym_'))).toEqual([]);
     expect(createToolRegistry(on).list().map(({ name }) => name).filter((name) => !healthToolNames.includes(name)))
       .toEqual(offNames);
     expect(on.find(({ id }) => id === 'health')!.tools.map(({ name }) => name)).toEqual(healthToolNames);

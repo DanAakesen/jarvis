@@ -22,7 +22,7 @@ const owner = config.auth.ownerObjectId;
 const agent = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
 const healthToolNames = [
-  'health_query', 'health_show', 'health_food', 'health_food_review', 'health_saved_food', 'health_nutrition_targets', 'health_nutrition_suggest',
+  'health_query', 'health_show', 'gym_lifts', 'gym_sessions', 'health_food', 'health_food_review', 'health_saved_food', 'health_nutrition_targets', 'health_nutrition_suggest',
   'health_summary', 'health_nutrition_history', 'health_coach_status',
 ];
 type App = ReturnType<typeof buildApp>;
@@ -191,7 +191,8 @@ describe('Health composition', () => {
     const healthRoutes = ['capabilities', 'lifts', 'lifts/:id', 'nutrition-targets', 'training-targets', 'query', 'sync', 'workouts', 'workouts/:id'];
     expect([...onRoutes].filter((url) => !baselineRoutes.has(url)).sort()).toEqual([
       ...healthRoutes.flatMap((route) => [`/health/${route}`, `/daily/${route}`]),
-      ...healthToolNames.flatMap((name) => [`/tools/${name}`, `/tools/${name === 'health_summary' ? 'daily_health_summary' : name === 'health_history' ? 'daily_health_history' : name.replace(/^health_/u, 'daily_')}`]),
+      ...healthToolNames.map((name) => `/tools/${name}`),
+      ...healthToolNames.filter((name) => name.startsWith('health_')).map((name) => `/tools/${name === 'health_summary' ? 'daily_health_summary' : name === 'health_history' ? 'daily_health_history' : name.replace(/^health_/u, 'daily_')}`),
     ].sort());
     expect([...baselineRoutes].filter((url) => !onRoutes.has(url))).toEqual([]);
 
