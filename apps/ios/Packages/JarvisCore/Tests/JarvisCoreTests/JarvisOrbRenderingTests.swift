@@ -22,7 +22,7 @@ final class JarvisOrbRenderingTests: XCTestCase {
     func testEveryOrbSurfaceUsesTheOneMiniCoreView() throws {
         let files = [
             "apps/ios/Jarvis/JarvisGateRootView.swift", "apps/ios/Jarvis/VoiceScreen.swift",
-            "apps/ios/Jarvis/JarvisChatScreen.swift", "apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift",
+            "apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift",
             "apps/ios/VoiceActivity/JarvisVoiceActivity.swift",
         ]
         for file in files {
@@ -36,6 +36,14 @@ final class JarvisOrbRenderingTests: XCTestCase {
         let home = try source("apps/ios/Jarvis/JarvisTodayScreen.swift")
         XCTAssertFalse(home.contains("JarvisOrb"), "The Home composer is the shared chat composer: no orb")
         XCTAssertTrue(home.contains("JarvisComposerBar("))
+        // The owner's Codex-style turn replaces the old Chat orb with elapsed work.
+        // Keep an explicit guard for the new design, alongside the shared-orb guards.
+        let chat = try source("apps/ios/Jarvis/JarvisChatScreen.swift")
+        XCTAssertTrue(chat.contains("JarvisChatWorkHeader("))
+        XCTAssertTrue(chat.contains("chat.turn.status"))
+        for mark in ["JarvisOrb", "JarvisMiniCore", "VoiceOrbView"] {
+            XCTAssertFalse(chat.contains(mark), "Chat has one textual work status, not another orb: \(mark)")
+        }
         let repository = URL(fileURLWithPath: #filePath)
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repository.deletingLastPathComponent().deletingLastPathComponent()

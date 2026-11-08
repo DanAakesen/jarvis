@@ -161,3 +161,9 @@ themes, all notification cases and four chrome cases. Lift-only 42494078211 stil
 failed readback: retained AX showed 83 kg for saved 82.5 kg. The Last lifts formatter
 now preserves decimals; keep the save/reopen and two-stage gesture checks.
 No TestFlight upload has happened for this candidate.
+
+Candidate 6c80ca48 passed 524/525 Core checks; the sole failure was the historical
+source guard requiring an orb in Chat. The selected Codex-style design replaces
+that orb with the elapsed header and text/tool status. The guard now explicitly
+requires the new header/status and forbids an extra Chat orb; all remaining shared
+orb/canvas checks are retained. Native interaction assertions are unchanged.
