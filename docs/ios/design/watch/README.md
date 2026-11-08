@@ -17,20 +17,32 @@ Its rectangular large-image-without-title guidance lists 162 × 69 pt (40 mm), 1
 
 The reference PNG is 1925 × 817 pixels (ratio 2.3562), within 0.11% of 193:82 (2.3537). Proportions match; actual-size typography and readability are NOT validated. In particular the chart ticks and Daily/Weekly labels may require simplification. Keep this original for visual comparison; do not ship the raster as the complication UI.
 
-## Small complication proposals
+## Selected small complication requirements
 
-These are proposed content choices, not approved implementations:
+The owner selected this set on 8 November 2026, superseding Next Event and the combined Ask Jarvis proposal. Visual designs for the two distinct voice entry points remain pending.
 
-- Tasks Today: checklist icon, remaining incomplete tasks due today, Today label. Tap opens today’s tasks. Keep overdue tasks separate unless the owner requests inclusion. Zero means no remaining tasks; unavailable data must not show zero.
-- Next Event: calendar icon, minutes until next event, Next label. Tap opens agenda. Handle in-progress events, all-day-only days, no upcoming event and stale data explicitly.
-- Ask Jarvis: microphone icon and Ask label. Tap opens the Watch voice flow; the complication itself does not record audio. Voice feasibility and authentication remain unverified.
+1. **Tasks Today:** checklist icon and remaining incomplete tasks due today. Tap opens today's tasks. Keep overdue tasks separate unless requested. Zero means no remaining tasks; unavailable data must not show zero.
+2. **Dictate:** dedicated single-message entry point. Tap should start dictation with as few steps as watchOS permits, either by opening the Watch app or through a supported system surface. Capture speech as a message to Jarvis, distinct from an ongoing spoken conversation. Recording from the complication/watch face itself is not established. First-use permissions and locked/authentication states may add steps. Submission/confirmation behavior remains to be selected.
+3. **Voice Session:** dedicated ongoing spoken conversation. Tap opens the Watch app and starts a session after necessary permissions/authentication. The desired session continues until the owner ends it, with an ongoing live tile that exposes End Session. Interpret the owner's wording “hours continue” as “should continue”; no multi-hour duration guarantee is established. Ending must stop microphone capture, playback and the backend session, and clear the active tile state. Repeated taps should resume the existing session rather than create duplicates.
 
-Apple lists regular circular artwork sizes of 42–50 pt depending on model. Validate accessoryCircular masking, text and actual bounds in previews; do not confuse this with the smaller legacy circular-small artwork sizes.
+Apple lists regular circular artwork sizes of 42–50 pt depending on model. Validate accessoryCircular masking, text and actual bounds in previews; do not confuse this with smaller legacy circular-small artwork sizes.
+
+## Voice feasibility limits
+
+The behaviors above are product requirements, not implemented or platform-verified features. A live tile is a status/control surface, not permission to keep microphone capture running. Do not promise an uninterrupted wrist-down or background conversation before device testing.
+
+Apple documentation checked 8 November 2026:
+
+- [Extended runtime sessions](https://developer.apple.com/documentation/watchkit/using-extended-runtime-sessions): ordinary apps can suspend when the wrist lowers. Extended sessions serve specific use cases, have time limits, and must be chosen for the actual use case; do not misclassify Jarvis as a workout or mindfulness app to obtain runtime.
+- [Background audio](https://developer.apple.com/documentation/watchkit/playing-background-audio): background playback support does not establish continuous microphone recording or a duplex conversation during silent intervals.
+- [Live Activities](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities): iPhone-started activities may appear on paired Apple Watch. This does not establish a Watch-originated standalone session lifecycle or a working End action for Jarvis.
+
+Investigate native Watch Smart Stack controls versus a paired-iPhone Live Activity, Watch-only versus phone-assisted audio, permissions, authentication, speaker/headphone routes, wrist-down behavior, silence, interruptions, network loss, reconnect and reliable termination. If uninterrupted background audio is unsupported, surface a truthful paused state and resume action rather than implying the microphone remains active.
 
 ## Remaining work and handoff
 
 No Watch app target or complication code was added. No build, simulator, device, tint, Always On or VoiceOver testing was run. No deployment, release or merge is authorized in this secondary thread.
 
-Before implementation: confirm owner Watch model and watch face; approve small concepts; add a Watch target and assess JarvisCore watchOS compatibility; define HealthKit snapshot refresh, timezone/week boundaries and source deduplication; verify all layouts at actual bounds including small models, missing/stale data, large numbers and localized labels; verify tinted/Always On rendering and tap destinations. WidgetKit refresh is system-budgeted, not continuously live.
+Before implementation: confirm owner Watch model and watch face; approve the revised Dictate and Voice Session visuals; add a Watch target and assess JarvisCore watchOS compatibility; define HealthKit snapshot refresh, timezone/week boundaries and source deduplication; verify all layouts at actual bounds including small models, missing/stale data, large numbers and localized labels; verify tinted/Always On rendering and tap destinations. WidgetKit refresh is system-budgeted, not continuously live.
 
 Primary thread retains implementation coordination, integration, deployment and final acceptance. Open PRs #1646 and #1532 touch iOS navigation/health; this branch only adds design documentation and the reference image.
