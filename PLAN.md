@@ -6,38 +6,21 @@ The production concurrency target remains 100 with 128 GiB isolated workspaces.
 After managed Factory acceptance and cutover, remove the VM and all dedicated
 resources, roles, runtime code and configuration. Preserve shared backend and
 Foundry chat/voice services. Existing Factory test tasks need no migration.
-Group provisioning succeeded in workflow 42585522896. Qualification 42589074806
-identified HTTP 401 during private image import (registry/managed-identity auth).
-Image import now uses a short-lived ACR token from the existing deployment login;
-no registry admin account is enabled. Worker runtime identity is unchanged. Factory cutover, live acceptance and VM retirement remain pending.
-The runtime implementation now adds a durable per-session sandbox assignment,
-independent Blob mailboxes with rotating container-scoped user-delegation SAS,
-lease-fenced allocation, progress/token forwarding and independent idle stop.
-Uncertain creation is reconciled by labels rather than repeated. Disk resume
-restarts a process protected by a filesystem lock; uncertain task claims remain
-interrupted rather than replayed. Completed/cancelled SQL tasks release their
-sandbox/disk after the worker is idle. The group retains up to 1,000 sandbox
-resources separately from SQL’s configurable admission limit (up to 100); stopped bindings
-skip management polling. Partial disk cleanup is retried after sandbox deletion.
-Deploy 42589059070 and Runner deploy 42589059046 passed, with the managed route
-still inactive. Qualification 42592487832 imported the private image successfully,
-then received HTTP 400 creating the 128 GiB volume; no worker qualified and
-cleanup passed. Deploy 42592473404 failed before applying infrastructure because
-legacy worker configuration validation rejected the current values. Normalize
-ARM boolean/resource-ID casing while retaining the exact worker boundary.
-Managed idle handoff now exits the consumer before controller shutdown so a new
-queued command cannot race with stop; resume clears the old idle marker. Local
-regressions pass; the updated release and live five-worker qualification are pending.
-The separately prepared retirement change removes the VM template, quota workflow,
-launcher/inspection scripts, shared-mailbox identity access and VM routing/config.
-It must not be merged until managed cutover and dedicated-resource cleanup pass.
-Run 42596242067 still rejects volume creation with InvalidRequest/error 16. The
-candidate volume request now uses the explicit binary unit `128GiB` (unchanged
-capacity), and storage-only failures retain bounded redacted problem details.
-This is an unverified API-contract correction. Bounded diagnostic profiles allow
-2 or 8 CPU and equivalent 128 GiB strings; production sizing is unchanged and
-live testing remains capped at five. If the documented larger profile is required,
-100 workers need 800 SandboxCores; the observed quota of 300 would need increasing.
+The group, scoped identity and durable per-session adapter are implemented.
+Deploys 42596241964 and 42600636467 passed. The managed route is inactive.
+Live run 42601169164 proves attached DataDisk volumes are capped at 100 GiB:
+`Data disk size must not exceed 107374182400. Got: 128Gi.` This rules out the
+previous 128 GiB attachment regardless of unit notation or CPU. No worker was
+created by that failed probe; cleanup is tracked in its retained evidence.
+The replacement uses the documented 8-vCPU / 16 GiB / 160 GiB persistent-root
+profile. Qualification requires at least 128 GiB **free after a real build**,
+five overlapping isolated workers, POSIX operations and disk-mode stop/resume.
+This profile is implemented but not yet live-qualified. It uses four times the
+CPU allocation of the original candidate; 100 workers require 800 SandboxCores,
+versus the observed 300. Five live test workers require 40 cores. Read-only quota
+catalogue discovery is included; no quota increase or 100-worker run is claimed.
+Factory runtime acceptance, cutover and VM retirement remain pending. The held
+retirement PR removes dedicated VM resources/config only after acceptance.
 See [qualification and evidence](docs/factory-concurrency-correction.md).
 
 ## Owner direction — 9 November 2026
@@ -4508,3 +4491,10 @@ The owner registered Microsoft.Compute (Microsoft.Quota was already registered).
 ### 8 November — quota usage value investigation
 
 Run 42529215408 resolves both approved resource names but fails at usage_decode with ValueError before writes. Retain only numeric counter values/types (including negative sentinels) from the two approved quota resources; arbitrary provider text and structured bodies are excluded. The unknown usage remains rejected rather than assumed zero. This is diagnostic evidence only, not a quota increase or workspace activation.
+
+The main-only `Request 800 Factory sandbox cores` workflow is prepared for the
+approved capacity target. It discovers the canonical SandboxCores quota, submits
+one fixed 800-core request only if needed, and verifies the actual regional usage
+limit. It never allocates workers, lowers a larger limit, guesses a missing quota
+name or automatically replays an uncertain PUT. Submission and approval are
+separate evidence fields. Live submission/approval remain pending.

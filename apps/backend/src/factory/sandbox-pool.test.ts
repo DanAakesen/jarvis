@@ -76,7 +76,9 @@ describe('managed Factory routing', () => {
     await vi.waitFor(() => expect(t.creates).toHaveLength(5));
     expect(new Set(results.map((r) => r.session_id)).size).toBe(5);
     expect(results.every((r) => r.status === 'queued')).toBe(true);
-    expect(new Set(t.creates.map((b) => JSON.stringify(b['volumes']))).size).toBe(5);
+    expect(t.client.volumes.create).not.toHaveBeenCalled();
+    expect(t.creates.every((b) => b['volumes'] === undefined)).toBe(true);
+    expect(t.creates[0]!['resources']).toEqual({cpu: '8000m', memory: '16384Mi', disk: '160Gi'});
     expect(new Set(t.creates.map((b) => (b['environment'] as Record<string, string>)['JARVIS_FACTORY_WORKER_BLOB_URL'])).size).toBe(5);
     t.release();
     await t.pool.stop();
@@ -167,22 +169,23 @@ describe('managed Factory routing', () => {
       expect(t.errors).toEqual([]);
     } finally { await t.pool.stop(); vi.useRealTimers(); }
   });
-  it('finishes disk cleanup after the sandbox was deleted but disk deletion failed', async () => {
+  it('retries sandbox and root-disk cleanup after a transient deletion failure', async () => {
     const t = fixture();
     const result = await t.pool.transport(start) as {session_id: string};
     t.release(); await t.pool.stop();
     t.data.set(`factory-sandbox-pool/delete/${result.session_id}.json`, JSON.stringify({session: result.session_id}));
-    t.client.volumes.beginDelete.mockImplementationOnce(() => ({pollUntilDone: async () => {throw {statusCode: 409};}}));
+    t.client.sandboxes.beginDelete.mockImplementationOnce(() => ({pollUntilDone: async () => {throw {statusCode: 503};}}));
     vi.useFakeTimers();
     try {
       t.pool.start();
       await vi.advanceTimersByTimeAsync(5000);
-      expect(t.boxes.size).toBe(0);
+      expect(t.boxes.size).toBe(1);
       expect(t.errors).toHaveLength(1);
       await vi.advanceTimersByTimeAsync(5000);
-      expect(t.client.volumes.beginDelete).toHaveBeenCalledTimes(2);
+      expect(t.client.volumes.beginDelete).not.toHaveBeenCalled();
+      expect(t.boxes.size).toBe(0);
       expect(JSON.parse(t.data.get(`factory-sandbox-pool/sessions/${result.session_id}.json`)!)).toMatchObject({deleted: true});
-      expect(t.client.sandboxes.beginDelete).toHaveBeenCalledTimes(1);
+      expect(t.client.sandboxes.beginDelete).toHaveBeenCalledTimes(2);
     } finally { await t.pool.stop(); vi.useRealTimers(); }
   });
 

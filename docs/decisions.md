@@ -12174,3 +12174,26 @@ workers; it is not proof of a 128 GiB volume at that size, data-plane permission
 actual resource placement, completed builds or 100 live Codex/Copilot sessions.
 No resources, role assignments, quota or routing were changed. The current VM
 route still handles one coding task at a time. Retain the qualification distinction.
+
+## Persistent-root workspace qualification — 9 November 2026
+
+Run 42601169164 returned the exact storage validation: DataDisk sizes may not
+exceed 107374182400 bytes (100 GiB). No equivalent spelling can provide a 128 GiB
+attached disk. The replacement profile uses the documented 2XL resources:
+8 vCPUs, 16 GiB memory and a 160 GiB persistent root disk. `/files/jarvis` lives on
+that private disk; no DataDisk volume is allocated. Disk-mode stop/resume retains
+it, and deleting the sandbox releases it. The canary checks the same sandbox ID
+and a persisted marker after resume. Partial sandbox deletion is retried.
+
+The live storage test still creates at most five workers. It must measure at
+least 128 GiB free after dependency restore/build, verify POSIX operations and
+five-way overlap, then verify persistence and delete its sandboxes. No model
+inference is included in this infrastructure test. Runtime transport/lifecycle
+qualification remains separate; neither test is a 100-agent provider load test.
+
+The larger CPU allocation changes capacity and cost: 100 workers need 800 active
+sandbox cores; the last observed quota is 300 (37 whole 8-core workers), enough
+for the five-worker test but insufficient for the full target. Quota discovery
+also checks the Microsoft.Quota catalogue without submitting a request. Do not
+claim 100-worker capacity until quota and the matching configuration are verified.
+The managed route remains inactive and VM retirement is held pending acceptance.

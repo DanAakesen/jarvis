@@ -7863,3 +7863,22 @@ The owner registered Microsoft.Compute and obtained the DASv5 quota increase to 
 Provisioning 42530295512 reached deployment but failed DeploymentFailed / MissingSubscriptionRegistration and did not activate routing. The owner was asked to check/register Microsoft.Network, which the template requires for its network, NSG, NIC and outbound IP. The retained error does not name the missing provider, so confirm registration rather than treating that inference as proof.
 
 Before first worker provisioning, verify subscription registration of Microsoft.Compute and Microsoft.Network, plus Microsoft.Quota for quota automation. The template also uses existing ManagedIdentity, ContainerRegistry, Storage and KeyVault providers and Authorization role assignments. Quota authorization is separate from provider-registration permissions. Registration and quota approval do not themselves prove a working 128 GiB workspace.
+
+## Managed Factory workspace qualification — 9 November 2026
+
+`factory-sandboxes.yml` has no sizing/count inputs: it tests exactly five 8-vCPU,
+16 GiB, 160 GiB persistent-root sandboxes. Attached DataDisk volumes cannot exceed
+100 GiB (live evidence 42601169164). It requires 128 GiB free after build and
+stop/resume persistence before success. `factory-runtime.yml` uses the matching
+production adapter and additionally verifies resume preserves its sandbox and
+workspace marker. Managed activation and VM retirement remain gated on successful
+qualification. 100 workers at this profile require 800 SandboxCores; the last
+observed 300-core quota only supports 37. `factory-capacity.yml` reads usage and
+the quota-request catalogue; it changes no quota or worker resources.
+
+The main-only `Request 800 Factory sandbox cores` workflow is prepared for the
+approved capacity target. It discovers the canonical SandboxCores quota, submits
+one fixed 800-core request only if needed, and verifies the actual regional usage
+limit. It never allocates workers, lowers a larger limit, guesses a missing quota
+name or automatically replays an uncertain PUT. Submission and approval are
+separate evidence fields. Live submission/approval remain pending.

@@ -183,18 +183,12 @@ export class FactorySandboxPool {
           throw new Error('Factory sandbox allocation uncertain; reconciliation required');
         }
         if (!box && !deleting) {
-          const volume = sandboxMailboxName(session);
-          try { await this.group.volumes.get(volume, {abortSignal: signal}); }
-          catch (error) {
-            if (!status(error, 404)) throw error;
-            await this.group.volumes.create(volume, {type: 'DataDisk', size: '128GiB', labels, abortSignal: signal});
-          }
           binding.createAttempted = true;
           await this.write(`sessions/${session}.json`, binding, lease);
           box = await this.group.sandboxes.beginCreate({sourcesRef: {diskImage: {id: this.options.diskImageId}},
-            resources: {cpu: '2000m', memory: '4096Mi', disk: '40Gi'},
+            resources: {cpu: '8000m', memory: '16384Mi', disk: '160Gi'},
             lifecycle: {autoSuspend: {enabled: false, mode: 'Disk'}, autoDelete: {enabled: false}},
-            labels, volumes: [{volumeName: volume, mountpoint: '/files'}],
+            labels,
             entrypoint: ['/bin/sh', '-c'], cmd: ['sleep infinity'],
             environment: {AZURE_CLIENT_ID: this.options.identityClientId, KEY_VAULT_URI: this.options.vaultUri,
               JARVIS_WORK_ROOT: '/files/jarvis',
@@ -209,8 +203,6 @@ export class FactorySandboxPool {
       if (box && (box.labels['jarvis-session'] !== session || box.labels['jarvis-purpose'] !== 'factory')) throw new Error('Sandbox ownership mismatch');
       if (deleting) {
         if (box) await this.group.sandboxes.beginDelete(box.id, {abortSignal: signal}).pollUntilDone();
-        try { await this.group.volumes.beginDelete(sandboxMailboxName(session), {abortSignal: signal}).pollUntilDone(); }
-        catch (error) { if (!status(error, 404)) throw error; }
         binding.deleted = true;
         await this.write(`sessions/${session}.json`, binding, lease);
         return;
