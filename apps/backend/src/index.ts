@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { FactorySandboxPool } from './factory/sandbox-pool.js';
 import { FactoryWorkerMailbox } from './factory/worker-mailbox.js';
 import { createBackendLogAuthorizationProbe } from './operations/backend-log-authorization.js';
 import { handleIssueLabel } from './factory/issue-label.js';
@@ -587,7 +588,7 @@ try {
       retentionDays: attachmentRetentionDays(),
     })
     : undefined;
-  let factoryWorker: FactoryWorkerMailbox | undefined;
+  let factoryWorker: FactoryWorkerMailbox | FactorySandboxPool | undefined;
   const clientFor = (agentName: string) => {
     if (!config.foundryEndpoints || !credential) throw new Error('Foundry runner is not configured');
     let client = foundryClients.get(agentName);
@@ -645,12 +646,10 @@ try {
   const projectStore = database ? createProjectStore(database.pool, trackedRepositories) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
   const factoryWorkerResourceId = process.env['JARVIS_FACTORY_WORKER_RESOURCE_ID'];
-  if (factoryWorkerResourceId && database && taskStore && workspaceArtifactServiceClient && credential && githubAppTokenIssuer) {
-    factoryWorker = new FactoryWorkerMailbox({
-      container: workspaceArtifactServiceClient.getContainerClient('factory-worker'), credential,
-      resourceId: factoryWorkerResourceId, enabled: process.env['JARVIS_FACTORY_WORKER_ENABLED'] === 'true',
-      tasks: taskStore, issueToken: (repository) => githubAppTokenIssuer.issue(repository),
-      ownsInvocation: async (taskId, sessionId, invocationId) => {
+  if ((factoryWorkerResourceId || process.env['JARVIS_FACTORY_SANDBOX_IMAGE_ID']) && database && taskStore && workspaceArtifactServiceClient && credential && githubAppTokenIssuer) {
+    const shared = {
+      tasks: taskStore, issueToken: (repository: string) => githubAppTokenIssuer.issue(repository),
+      ownsInvocation: async (taskId: string, sessionId: string, invocationId: string) => {
         const result = await database.pool.request()
           .input('taskId', sql.BigInt, BigInt(taskId))
           .input('sessionId', sql.NVarChar(255), sessionId)
@@ -660,11 +659,24 @@ try {
             WHERE s.task_id = @taskId AND s.foundry_session_id = @sessionId AND t.invocation_id = @invocationId;`);
         return result.recordset.length === 1;
       },
-      onError: (error) => logger.warn(safeErrorFields(error), 'factory_worker.mailbox_failed'),
+      onError: (error: unknown) => logger.warn(safeErrorFields(error), 'factory_worker.mailbox_failed'),
+    };
+    const managedImage = process.env['JARVIS_FACTORY_SANDBOX_IMAGE_ID'];
+    factoryWorker = managedImage ? new FactorySandboxPool({ ...shared,
+      storage: workspaceArtifactServiceClient, credential,
+      subscriptionId: process.env['JARVIS_FACTORY_SANDBOX_SUBSCRIPTION'] ?? '',
+      region: 'swedencentral', resourceGroup: 'rg-jarvis', group: 'jarvis-factory',
+      diskImageId: managedImage, identityClientId: process.env['JARVIS_FACTORY_SANDBOX_IDENTITY_CLIENT_ID'] ?? '',
+      vaultUri: config.keyVaultUri ?? '', backendUrl: process.env['JARVIS_FACTORY_SANDBOX_BACKEND_URL'] ?? '',
+      apiScope: `api://${config.auth.apiClientId}/.default`,
+      enabled: process.env['JARVIS_FACTORY_SANDBOX_ENABLED'] === 'true',
+    }) : new FactoryWorkerMailbox({ ...shared,
+      container: workspaceArtifactServiceClient.getContainerClient('factory-worker'), credential,
+      resourceId: factoryWorkerResourceId ?? '', enabled: process.env['JARVIS_FACTORY_WORKER_ENABLED'] === 'true',
     });
   }
 
-  if (process.env['JARVIS_FACTORY_WORKER_ENABLED'] === 'true' && !factoryWorker) {
+  if ((process.env['JARVIS_FACTORY_WORKER_ENABLED'] === 'true' || process.env['JARVIS_FACTORY_SANDBOX_ENABLED'] === 'true') && !factoryWorker) {
     throw new Error('Factory worker routing is enabled without its required dependencies');
   }
 

@@ -8,6 +8,13 @@ resources, roles, runtime code and configuration. Preserve shared backend and
 Foundry chat/voice services. Existing Factory test tasks need no migration.
 Group provisioning and bounded qualification are implemented; actual provisioning,
 Factory routing, live acceptance and VM retirement remain pending.
+The runtime implementation now adds a durable per-session sandbox assignment,
+independent Blob mailboxes with rotating container-scoped user-delegation SAS,
+lease-fenced allocation, progress/token forwarding and independent idle stop.
+Uncertain creation is reconciled by labels rather than repeated. Disk resume
+restarts a process protected by a filesystem lock; uncertain task claims remain
+interrupted rather than replayed. Completed/cancelled SQL tasks release their
+sandbox/disk after the worker is idle. This code is not yet deployed or live-tested.
 See [qualification and evidence](docs/factory-concurrency-correction.md).
 
 ## Owner direction — 9 November 2026

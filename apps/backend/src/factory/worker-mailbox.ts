@@ -4,8 +4,8 @@ import type { TokenCredential } from '@azure/core-auth';
 import { FoundryClientError, type RunnerTransport } from '../foundry/client.js';
 import type { TaskStore } from './task-store.js';
 
-const prefix = 'vm128-';
-const idPattern = /^vm128-[a-f0-9-]{36}$/u;
+const legacyPrefix = 'vm128-';
+const idPattern = /^(?:vm128|sbx128)-[a-f0-9-]{36}$/u;
 const terminal = new Set(['completed', 'failed', 'cancelled', 'paused', 'interrupted', 'needs_attention']);
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const taskId = (value: unknown): value is string => typeof value === 'string' && /^[1-9][0-9]{0,18}$/u.test(value) && BigInt(value) <= 9_223_372_036_854_775_807n;
@@ -24,7 +24,9 @@ export class FactoryWorkerMailbox {
   constructor(private readonly options: {
     container: ContainerClient;
     credential: TokenCredential;
-    resourceId: string;
+    resourceId?: string;
+    wake?: () => Promise<void>;
+    sessionId?: string;
     enabled: boolean;
     tasks: TaskStore;
     issueToken: (repository: string) => Promise<string>;
@@ -32,7 +34,7 @@ export class FactoryWorkerMailbox {
     onError: (error: unknown) => void;
     fetch?: typeof fetch;
   }) {
-    if (!/^\/subscriptions\/[a-f0-9-]{36}\/resourceGroups\/[A-Za-z0-9_.-]+\/providers\/Microsoft.Compute\/virtualMachines\/[A-Za-z0-9_-]+$/u.test(options.resourceId)) {
+    if (!options.wake && !/^\/subscriptions\/[a-f0-9-]{36}\/resourceGroups\/[A-Za-z0-9_.-]+\/providers\/Microsoft.Compute\/virtualMachines\/[A-Za-z0-9_-]+$/u.test(options.resourceId ?? '')) {
       throw new TypeError('Invalid Factory worker resource ID');
     }
   }
@@ -68,6 +70,7 @@ export class FactoryWorkerMailbox {
   }
 
   private async wake(): Promise<void> {
+    if (this.options.wake) return this.options.wake();
     if (this.wakePending) return this.wakePending;
     if (Date.now() - this.lastWake < 15_000) return;
     this.wakePending = (async () => {
@@ -86,6 +89,7 @@ export class FactoryWorkerMailbox {
   }
 
   readonly transport: RunnerTransport = async (request) => {
+    const prefix = this.options.sessionId ? 'sbx128-' : legacyPrefix;
     const invocationFromPath = decodeURIComponent(request.path.split('/')[2] ?? '');
     const sessionFromPath = decodeURIComponent(request.path.split('/')[1] ?? '');
     const workerSession = request.sessionId?.startsWith(prefix) || sessionFromPath.startsWith(prefix);
@@ -119,10 +123,10 @@ export class FactoryWorkerMailbox {
     if (!['start', 'resume', 'steer', 'pause', 'cancel', 'delete-session'].includes(request.operation)) {
       throw new FoundryClientError('protocol', 'worker-operation');
     }
-    const sessionId = request.sessionId ?? (request.operation === 'delete-session' ? sessionFromPath : prefix + randomUUID());
+    const sessionId = request.sessionId ?? this.options.sessionId ?? (request.operation === 'delete-session' ? sessionFromPath : prefix + randomUUID());
     const invocationId = request.operation === 'cancel' ? invocationFromPath : prefix + randomUUID();
     if (!idPattern.test(sessionId) || !idPattern.test(invocationId)) throw new FoundryClientError('protocol', 'worker-identity');
-    await this.wake();
+    if (!this.options.wake) await this.wake();
     if (request.options.signal?.aborted) throw new FoundryClientError('aborted', request.operation);
     this.activeUntil = Date.now() + 60_000;
     this.nextPollAt = 0;
@@ -136,6 +140,7 @@ export class FactoryWorkerMailbox {
     await this.write(`commands/${commandId}.json`, {
       operation: request.operation, invocationId, sessionId, body: request.body ?? {},
     }, true);
+    if (this.options.wake) await this.wake();
     if (['start', 'resume', 'steer'].includes(request.operation)) return {
       invocation_id: invocationId, session_id: sessionId, agent: request.body?.['agent'], status: 'queued',
     };
@@ -175,7 +180,7 @@ export class FactoryWorkerMailbox {
         if (++count > 100) break;
         observed = true;
         const value = await this.read(blob.name);
-        if (!object(value) || !taskId(value['taskId']) || typeof value['sessionId'] !== 'string' || !idPattern.test(value['sessionId'])) {
+        if (!object(value) || (this.options.sessionId && value['sessionId'] !== this.options.sessionId) || !taskId(value['taskId']) || typeof value['sessionId'] !== 'string' || !idPattern.test(value['sessionId'])) {
           await this.options.container.getBlobClient(blob.name).deleteIfExists({abortSignal: AbortSignal.timeout(20_000)});
           continue;
         }
