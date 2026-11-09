@@ -1,3 +1,4 @@
+import { presenceModes } from './presence-store';
 import { useCallback, useEffect, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react';
 import { backendFetch } from './backend-request';
 import { useThemePreference } from './theme-preference-context';
@@ -23,7 +24,9 @@ interface Settings {
     tone: 'british_butler' | 'warm' | 'direct' | 'playful';
     responseStyle: 'concise' | 'balanced' | 'detailed';
     customInstructions: string;
+    modeInstructions?: Record<'present' | 'away' | 'on_the_move', string>;
   };
+  homeBrief?: { instruction: string; maxVisibleLines: number };
   voice: {
     speechToTextModel: string;
     englishModel: string;
@@ -117,7 +120,7 @@ const optionLabels: Record<string, string> = {
   complete_without_deployment: 'Complete without deployment',
 };
 
-const settingsDeepLinkIds = new Set(['health-upload', 'projects', 'proactive-settings', 'nutrition-targets', 'training-targets']);
+const settingsDeepLinkIds = new Set(['jarvis-instructions', 'identity-settings-heading', 'personality-settings-heading', 'health-upload', 'projects', 'proactive-settings', 'nutrition-targets', 'training-targets']);
 
 const defaultPersonality: Settings['personality'] = {
   tone: 'british_butler',
@@ -147,6 +150,16 @@ function hasUnsupportedControlCharacters(value: string): boolean {
 function isSettingsResponse(value: unknown): value is SettingsResponse {
   if (!isObject(value) || !isObject(value.settings) || !isObject(value.options)) return false;
   const settings = value.settings;
+  if (settings.homeBrief !== undefined && (!isObject(settings.homeBrief) ||
+      typeof settings.homeBrief.instruction !== 'string' || settings.homeBrief.instruction.length > 2_000 ||
+      hasUnsupportedControlCharacters(settings.homeBrief.instruction) ||
+      !Number.isInteger(settings.homeBrief.maxVisibleLines) ||
+      Number(settings.homeBrief.maxVisibleLines) < 1 || Number(settings.homeBrief.maxVisibleLines) > 6)) return false;
+  if (isObject(settings.personality) && settings.personality.modeInstructions !== undefined) {
+    const modes = settings.personality.modeInstructions;
+    if (!isObject(modes) || !presenceModes.every(({ mode }) => typeof modes[mode] === 'string'
+        && (modes[mode] as string).length <= 2_000 && !hasUnsupportedControlCharacters(modes[mode] as string))) return false;
+  }
   const options = value.options;
   const credentials = value.credentials;
   const optionKeys: (keyof SettingsOptions)[] = [
@@ -405,7 +418,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   };
 
   // Optional areas (roles, research, memory, timeouts) only exist on newer backends, so they update separately.
-  const updateArea = (area: 'roles' | 'research' | 'memory' | 'timeouts' | 'decisions', key: string, value: unknown) => {
+  const updateArea = (area: 'roles' | 'research' | 'memory' | 'timeouts' | 'decisions' | 'homeBrief', key: string, value: unknown) => {
     setSettings((current) => current && current[area] ? ({ ...current, [area]: { ...current[area], [key]: value } }) : current);
     setMessage('');
   };
@@ -498,6 +511,15 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   const personalityInstructionsValid = settings !== null &&
     settings.personality.customInstructions.length <= 2_000 &&
     !hasUnsupportedControlCharacters(settings.personality.customInstructions);
+  const homeBriefValid = settings !== null && (!settings.homeBrief ||
+    (settings.homeBrief.instruction.length <= 2_000 && !hasUnsupportedControlCharacters(settings.homeBrief.instruction) &&
+      Number.isInteger(settings.homeBrief.maxVisibleLines) && settings.homeBrief.maxVisibleLines >= 1 &&
+      settings.homeBrief.maxVisibleLines <= 6));
+  const modeInstructionsValid = settings !== null && (!settings.personality.modeInstructions ||
+    presenceModes.every(({ mode }) => {
+      const text = settings.personality.modeInstructions![mode];
+      return text.length <= 2_000 && !hasUnsupportedControlCharacters(text);
+    }));
   const identityDescriptionValid = settings !== null &&
     settings.identity.description.length <= 2_000 &&
     !hasUnsupportedControlCharacters(settings.identity.description);
@@ -513,7 +535,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
   const projectDefaultsDirty = settings !== null && savedSettings !== null &&
     Object.keys(changedSettings(savedSettings, settings)).includes('newProjects');
   const saveDisabled = !dirty || !advancedValid || !globalLimitsValid || !maxTasksValid ||
-    !newProjectMaxTasksValid || !personalityInstructionsValid || !identityDescriptionValid || saving;
+    !newProjectMaxTasksValid || !personalityInstructionsValid || !identityDescriptionValid || !homeBriefValid || !modeInstructionsValid || saving;
   const projectDefaultsDisabledReason = !newProjectMaxTasksValid
     ? 'Parallel tasks must be 1–100.'
     : !advancedValid || !globalLimitsValid || !maxTasksValid ||
@@ -682,6 +704,9 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
             </CollapsibleSection>
           )}
 
+          <CollapsibleSection storageKey="settings.instructions" id="jarvis-instructions"
+            headingId="instructions-settings-heading" title="Instructions">
+          <p className="settings-explanation">Identity, style, presence and Home keep separate scopes. Home instructions apply only to the Home brief.</p>
           <CollapsibleSection storageKey="settings.identity" headingId="identity-settings-heading" title="Identitet og rolle">
             <div className="settings-field">
               <label htmlFor="identity-description">Identity and role description</label>
@@ -741,6 +766,43 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
                 {resettingPersonality ? 'Resetting personality…' : personalityResetMessage}
               </p>
             )}
+          </CollapsibleSection>
+
+          {settings.personality.modeInstructions ? (
+            <fieldset className="settings-grid">
+              <legend>Presence-mode instructions</legend>
+              {presenceModes.map(({ mode, label }) => (
+                <div className="settings-field" key={mode}>
+                  <label htmlFor={`instructions-mode-${mode}`}>{label} · extra instructions</label>
+                  <textarea id={`instructions-mode-${mode}`} rows={4} maxLength={2_000} disabled={saving}
+                    value={settings.personality.modeInstructions![mode]}
+                    onChange={event => update('personality', 'modeInstructions', {
+                      ...settings.personality.modeInstructions!, [mode]: event.target.value,
+                    })} />
+                </div>
+              ))}
+            </fieldset>
+          ) : <p className="settings-unavailable" role="status">Mode instructions are unavailable on this backend.</p>}
+          {settings.homeBrief ? (
+            <fieldset className="settings-grid">
+              <legend>Home brief</legend>
+              <div className="settings-field">
+                <label htmlFor="home-brief-instruction">Home brief instruction</label>
+                <textarea id="home-brief-instruction" rows={4} maxLength={2_000} disabled={saving}
+                  value={settings.homeBrief.instruction}
+                  onChange={event => updateArea('homeBrief', 'instruction', event.target.value)} />
+                <p className="settings-explanation">Guides the grounded Home brief only. It does not change chat, voice, identity or permissions.</p>
+              </div>
+              <div className="settings-field settings-number-field">
+                <label htmlFor="home-brief-lines">Maximum visible lines</label>
+                <input id="home-brief-lines" type="number" min="1" max="6" step="1" disabled={saving}
+                  value={settings.homeBrief.maxVisibleLines}
+                  onChange={event => updateArea('homeBrief', 'maxVisibleLines', Number(event.target.value))} />
+                <p className="settings-explanation">1–6 lines; default 3. Text still scales with accessibility settings.</p>
+              </div>
+            </fieldset>
+          ) : <p className="settings-unavailable" role="status">Home brief preferences are unavailable on this backend.</p>}
+          {(!homeBriefValid || !modeInstructionsValid) && <p className="settings-validation-error" role="alert">Use 1–6 Home lines and at most 2,000 characters per instruction.</p>}
           </CollapsibleSection>
 
           <CollapsibleSection storageKey="settings.voice" headingId="voice-settings-heading" title="Voice">

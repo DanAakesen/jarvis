@@ -46,8 +46,8 @@ final class JarvisTodayGymTests: XCTestCase {
             now: now, language: .en
         )
         XCTAssertEqual(display.totalWorkouts, 2)
-        XCTAssertEqual(display.activeMinutes, 70)
-        XCTAssertEqual(display.activeKilocalories, 550)
+        XCTAssertNil(display.activeMinutes)
+        XCTAssertNil(display.activeKilocalories)
     }
 
     func testLiftsHaveBothLanguagesAndAValidSession() {

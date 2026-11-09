@@ -23,7 +23,8 @@ export interface HomeBriefOptions {
   readonly model?: ApprovalModelPort;
   readonly now?: () => number;
 }
-const sourceIds = new Set(['calendar', 'todos', 'health', 'nutrition', 'weather']);
+// Legacy health facts do not yet carry merged-daily provenance; do not quote ambiguous activity totals.
+const sourceIds = new Set(['calendar', 'todos', 'nutrition', 'weather']);
 const cacheMs = 15 * 60_000;
 const system = 'Write one concise, useful Home brief for the owner in the requested language. ' +
   'Use only the supplied facts, dates and availability. Prioritise concrete upcoming commitments and useful connections. ' +
@@ -40,8 +41,9 @@ export class HomeBriefService {
   private readonly pending = new Map<string, Promise<HomeBrief>>();
   private readonly controllers = new Set<AbortController>();
   private starts: number[] = [];
+  private revision = 0;
   constructor(private readonly options: HomeBriefOptions) { this.now = options.now ?? Date.now; }
-  invalidate() { this.context = undefined; }
+  invalidate() { this.context = undefined; this.revision += 1; }
   close() { for (const controller of this.controllers) controller.abort(); }
 
   private async facts(force: boolean): Promise<SourceResult[]> {
@@ -51,6 +53,7 @@ export class HomeBriefService {
     this.controllers.add(controller);
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]);
     const at = this.now();
+    const revision = this.revision;
     const work = Promise.all(this.options.sources.filter(source => sourceIds.has(source.id)).map(async source => {
       try {
         return await source.read({ now: new Date(at), signal, settings: defaultProactiveSettings() });
@@ -59,7 +62,7 @@ export class HomeBriefService {
           facts: [], observedAt: new Date(at).toISOString() };
       }
     })).then(rows => {
-      this.context = { at, rows };
+      if (revision === this.revision) this.context = { at, rows };
       return rows;
     }).finally(() => { this.controllers.delete(controller); this.contextPending = undefined; });
     this.contextPending = work;

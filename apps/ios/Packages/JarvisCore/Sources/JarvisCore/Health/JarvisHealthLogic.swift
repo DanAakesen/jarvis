@@ -4,15 +4,17 @@ public enum JarvisHealthPeriodPreset: String, CaseIterable, Identifiable, Sendab
     case today
     case yesterday
     case sevenDays
+    case fourteenDays
     case thirtyDays
 
-    /// The published dashboard has exactly these three choices; yesterday remains a supported stored value.
-    public static let dashboardPresets: [Self] = [.today, .sevenDays, .thirtyDays]
+    /// The published dashboard has exactly these four choices; yesterday remains a supported stored value.
+    public static let dashboardPresets: [Self] = [.today, .sevenDays, .fourteenDays, .thirtyDays]
     public var id: String { rawValue }
     public var dayCount: Int {
         switch self {
         case .today, .yesterday: 1
         case .sevenDays: 7
+        case .fourteenDays: 14
         case .thirtyDays: 30
         }
     }

@@ -4,6 +4,7 @@ import JarvisCore
 import SwiftUI
 
 struct JarvisHealthRingsSection<Accessory: View>: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let data: JarvisHealthDashboardData
     let period: JarvisHealthPeriod
     let language: JarvisAppLanguage
@@ -35,12 +36,19 @@ struct JarvisHealthRingsSection<Accessory: View>: View {
                     }
                 }
                 Divider()
-                HStack(alignment: .top, spacing: JarvisDesignTokens.healthSectionSpacing) {
+                let layout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing))
+                    : AnyLayout(HStackLayout(alignment: .top, spacing: JarvisDesignTokens.healthSectionSpacing))
+                layout {
                     trainingStat(stepCount.map { formatNumber($0, language: language) } ?? "—", title: .steps)
-                    Divider()
-                    trainingStat(activeSeconds.map { formatDuration($0, language: language) } ?? "—", title: .activeTime)
+                    trainingStat(activityValue(exerciseTotal), title: .activeTime)
+                    trainingStat(activityValue(energyTotal), title: .activeKcal)
                 }
                 .fixedSize(horizontal: false, vertical: true)
+                if let issue = activityIssue {
+                    Text(copy.text(issue)).font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("health.activity.issue")
+                }
                 JarvisHealthBarChart(
                     values: JarvisHealthChartValues(values: stepDays, endingOn: period.endDate,
                         count: max(period.dayCount, 7), target: data.trainingTargets?.targets.dailySteps),
@@ -123,13 +131,27 @@ struct JarvisHealthRingsSection<Accessory: View>: View {
         }
     }
 
-    private var activeSeconds: Double? {
-        if data.workouts.state == .empty { return 0 }
-        let values = data.workouts.items.filter {
-            guard let day = date($0["workout_date"]) ?? date($0["start_at"]) else { return false }
-            return day >= period.startDate && day <= period.endDate
-        }.compactMap { $0["duration_seconds"]?.numberValue }
-        return values.isEmpty ? nil : values.reduce(0, +)
+    private var exerciseTotal: JarvisActivityTotal {
+        (data.dailyActivity ?? JarvisDailyActivitySnapshot(days: [:], fetchedAt: data.activityNow))
+            .total(\.exerciseMinutes, period: period, now: data.activityNow, stale: data.dailyActivityStale)
+    }
+
+    private var energyTotal: JarvisActivityTotal {
+        (data.dailyActivity ?? JarvisDailyActivitySnapshot(days: [:], fetchedAt: data.activityNow))
+            .total(\.activeKilocalories, period: period, now: data.activityNow, stale: data.dailyActivityStale)
+    }
+
+    private func activityValue(_ total: JarvisActivityTotal) -> String {
+        guard let raw = total.value, let value = Int(exactly: raw.rounded()) else { return "—" }
+        return (total.availability == .partial ? "≥ " : "") + JarvisNumberFormat.compact(value, language: language)
+    }
+
+    private var activityIssue: JarvisHealthLocalizationKey? {
+        let states = [energyTotal.availability, exerciseTotal.availability]
+        if states.contains(.stale) { return .activityStale }
+        if states.contains(.unavailable) { return .activityUnavailable }
+        if states.contains(.partial) { return .activityPartial }
+        return nil
     }
 
     private var scaledStepsTarget: Double? {

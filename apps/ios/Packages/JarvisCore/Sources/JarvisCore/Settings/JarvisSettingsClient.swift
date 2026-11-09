@@ -719,8 +719,15 @@ public enum JarvisSettingsLogic {
                     valid = validSettingsFieldValue(value, options: ["british_butler", "warm", "direct", "playful"])
                 case ("personality", "responseStyle"):
                     valid = validSettingsFieldValue(value, options: ["concise", "balanced", "detailed"])
-                case ("personality", "customInstructions"), ("identity", "description"):
+                case ("personality", "customInstructions"), ("identity", "description"), ("homeBrief", "instruction"):
                     valid = validSettingsFieldValue(value, maximumLength: 2_000)
+                case ("personality", "modeInstructions"):
+                    if case .object(let modes) = value {
+                        valid = !modes.isEmpty && modes.allSatisfy { mode, text in
+                            ["present", "away", "on_the_move"].contains(mode)
+                                && validSettingsFieldValue(text, maximumLength: 2_000)
+                        }
+                    } else { valid = false }
                 case ("presentation", "showWork"):
                     valid = validSettingsFieldValue(value)
                 case ("decisions", "provider"):
@@ -744,7 +751,7 @@ public enum JarvisSettingsLogic {
                     valid = value == .null || validSettingsFieldValue(value, numericBounds: -180...180)
                 case ("research", "depth"):
                     valid = validSettingsFieldValue(value, options: ["quick", "standard", "deep"])
-                case ("research", "maxSources"),
+                case ("homeBrief", "maxVisibleLines"), ("research", "maxSources"),
                      ("global", "maxParallelTasks"), ("global", "maxCheckAttempts"),
                      ("global", "screenShareDailyFrameCap"), ("global", "visionDailyBudgetUsd"),
                      ("global", "conversationSummaryDailyLimit"), ("newProjects", "maxParallelTasks"):
@@ -847,6 +854,7 @@ public enum JarvisSettingsLogic {
 
     public static func numericBounds(area: String, key: String) -> ClosedRange<Double>? {
         switch (area, key) {
+        case ("homeBrief", "maxVisibleLines"): 1...6
         case ("research", "maxSources"): 1...50
         case ("global", "maxParallelTasks"): 1...100
         case ("global", "maxCheckAttempts"): 0...10

@@ -141,3 +141,24 @@ public struct JarvisUnavailableDailyActivitySource: JarvisDailyActivitySource {
         throw JarvisTodayDataError.unavailable
     }
 }
+
+// Reuses the existing authenticated Health query contract. These are alternative day totals, never additions.
+extension JarvisHealthClient {
+    public func dailyActivity(now: Date, days: Int = 30) async throws -> JarvisDailyActivitySnapshot {
+        let calendar = JarvisHealthSyncWindow.calendar
+        let start = calendar.date(byAdding: .day, value: -(max(1, min(days, 30)) - 1), to: now) ?? now
+        let period = JarvisHealthPeriod(
+            startDate: JarvisHealthPeriod.make(.today, now: start).startDate,
+            endDate: JarvisHealthPeriod.make(.today, now: now).endDate
+        )!
+        async let energy = try? queryAll(JarvisHealthQuery(
+            source: .metrics, period: period, metric: "active_energy_burned", limit: 100
+        ))
+        async let exercise = try? queryAll(JarvisHealthQuery(
+            source: .metrics, period: period, metric: "apple_exercise_time", limit: 100
+        ))
+        let (energyResult, exerciseResult) = await (energy, exercise)
+        guard energyResult != nil || exerciseResult != nil else { throw JarvisTodayDataError.failed }
+        return .server(rows: (energyResult?.items ?? []) + (exerciseResult?.items ?? []), fetchedAt: now)
+    }
+}

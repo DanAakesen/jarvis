@@ -535,6 +535,7 @@ struct ContentView: View {
         var dependencies = JarvisTodayDependencies()
         dependencies.notes = notes
         dependencies.briefClient = briefClient
+        dependencies.healthClient = health
         if fixtureData {
             let fixture = JarvisTodayFixture.make()
             dependencies.fixture = fixture

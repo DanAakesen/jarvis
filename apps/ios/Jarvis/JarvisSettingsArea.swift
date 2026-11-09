@@ -25,6 +25,7 @@ enum JarvisSettingsDetail: String, Hashable {
     case appearance
     case personality
     case identity
+    case instructions
     case voice
     case research
     case proactive
@@ -173,7 +174,7 @@ struct JarvisSettingsArea: View {
         case .general:
             [
                 .init(id: "appearance", title: copy(.appearanceRow), rowIDs: ["language", "appearance"]),
-                .init(id: "jarvis", title: "Jarvis", rowIDs: ["personality", "identity", "voice", "research"]),
+                .init(id: "jarvis", title: "Jarvis", rowIDs: ["instructions", "voice", "research"]),
                 .init(id: "behaviour", title: copy(.behaviour), rowIDs: ["proactive", "notifications", "routines"]),
                 .init(id: "memory", title: copy(.memoryRow), rowIDs: ["memory"]),
             ]
@@ -343,8 +344,7 @@ struct JarvisSettingsArea: View {
             return [
                 row("language", .language, .appLanguage, value: copy(language == .da ? .danish : .english)),
                 row("appearance", .appearanceRow, .appearance, setting: "appearance", key: "theme"),
-                row("personality", .personalityRow, .personality, setting: "personality", key: "tone"),
-                row("identity", .identityRow, .identity, setting: "identity", key: "description"),
+                row("instructions", .instructionsRow, .instructions),
                 row("voice", .voiceRow, .voice, setting: "voice", key: "defaultLanguage"),
                 row("research", .researchRow, .research, setting: "research", key: "depth"),
                 row("proactive", .proactiveRow, .proactive),
@@ -445,6 +445,7 @@ struct JarvisSettingsArea: View {
         switch id {
         case "language": "globe"
         case "appearance": "slider.horizontal.3"
+        case "instructions": "text.alignleft"
         case "personality": "face.smiling"
         case "identity", "owner": "person"
         case "voice": "waveform"
@@ -517,7 +518,7 @@ struct JarvisSettingsArea: View {
             JarvisNewDeploymentView(client: client, language: language, readOnly: readOnly, onFailure: noteFailure)
         default:
             JarvisSettingsEditorView(
-                detail: detail,
+                detail: detail == .personality || detail == .identity ? .instructions : detail,
                 response: response,
                 client: client,
                 language: language,

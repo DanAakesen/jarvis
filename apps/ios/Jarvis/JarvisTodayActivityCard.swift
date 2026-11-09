@@ -96,6 +96,7 @@ struct JarvisTodayActivityCard: View {
                     retry: model.workouts.failure != .unavailable
                 )
             }
+            summary(display)
         } else {
             let layout = isLargeText
                 ? AnyLayout(VStackLayout(spacing: JarvisPageHeaderMetrics.spacing))

@@ -109,7 +109,7 @@
 "health.syncRetry" = "Prøv igen";
 
 "health.training" = "Træning";
-"health.activeTime" = "Aktiv tid";
+"health.activeTime" = "Træningsminutter";
 "health.lastLifts" = "Seneste løft";
 "health.totalTarget" = "af %@";
 
@@ -123,3 +123,9 @@
 "health.measurements" = "Målinger";
 "health.oneMeasurement" = "1 måling";
 "health.measurementCount" = "%ld målinger";
+
+"health.period.fourteenDays" = "14 dage";
+"health.activeKcal" = "Aktive kcal";
+"health.activityUnavailable" = "Nogle aktivitetsmålinger er ikke tilgængelige.";
+"health.activityPartial" = "Delvise aktivitetsdata; de viste totaler er et minimum.";
+"health.activityStale" = "Viser ældre aktivitetsmålinger.";

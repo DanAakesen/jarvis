@@ -27,6 +27,7 @@ struct JarvisTodayDependencies {
     var gym: any JarvisGymLogStore = JarvisUnavailableGymLogStore()
     var notes: JarvisNotesClient?
     var briefClient: JarvisHomeBriefClient?
+    var healthClient: JarvisHealthClient?
     var now: () -> Date = { Date() }
     var fixture: JarvisTodayFixture?
 }
@@ -233,6 +234,7 @@ final class JarvisTodayModel: ObservableObject {
         notes = JarvisTodaySection(value: fixture.notes, isLoading: false)
         steps = JarvisTodaySection(value: fixture.steps, isLoading: false)
         workouts = JarvisTodaySection(value: fixture.gymEntries, isLoading: false)
+        dailyActivity = JarvisTodaySection(value: fixture.dailyActivity, isLoading: false)
     }
 
     private func loadCalendar(force: Bool) async {
@@ -296,7 +298,19 @@ final class JarvisTodayModel: ObservableObject {
 
     private func loadActivity() async {
         let now = self.now
-        let result = await fetch { try await self.dependencies.dailyActivity.activity(now: now, days: 30) }
+        let localSource = dependencies.dailyActivity
+        let serverClient = dependencies.healthClient
+        let result = await fetch {
+            async let localRead = try? localSource.activity(now: now, days: 30)
+            async let serverRead = try? serverClient?.dailyActivity(now: now, days: 30)
+            let (local, retained) = await (localRead, serverRead)
+            if let retained, let local { return retained.merging(local: local) }
+            if let local { return local }
+            if let retained {
+                return retained.merging(local: JarvisDailyActivitySnapshot(days: [:], fetchedAt: now))
+            }
+            throw JarvisTodayDataError.unavailable
+        }
         dailyActivity = Self.merged(dailyActivity, result)
     }
 

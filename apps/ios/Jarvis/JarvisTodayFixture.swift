@@ -10,6 +10,24 @@ struct JarvisTodayFixture {
     let notes: [VaultNoteSummary]
     let steps: JarvisStepsSnapshot
     let gymEntries: [JarvisGymLogEntry]
+    var dailyActivity: JarvisDailyActivitySnapshot {
+        let calendar = JarvisHealthSyncWindow.calendar
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        var days: [String: JarvisDailyActivityDay] = [:]
+        for offset in 0..<30 {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: now) else { continue }
+            days[formatter.string(from: date)] = JarvisDailyActivityDay(
+                activeKilocalories: offset == 0 ? 420 : 360,
+                exerciseMinutes: offset == 0 ? 24 : 30,
+                observedAt: now
+            )
+        }
+        return JarvisDailyActivitySnapshot(days: days, fetchedAt: now)
+    }
+
     var maxBriefLines: Int {
         let value = ProcessInfo.processInfo.arguments.first { $0.hasPrefix("--home-brief-lines=") }
             .flatMap { Int($0.dropFirst("--home-brief-lines=".count)) } ?? 3

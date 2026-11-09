@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
-import { backendFetch } from './backend-request';
-import { presenceLabel, presenceModes, usePresence, useDevicePresence, type PresenceMode } from './presence-store';
+import { presenceLabel, presenceModes, usePresence, useDevicePresence } from './presence-store';
 import { StateMessage } from './StateMessage';
 import { CollapsibleSection } from './CollapsibleSection';
 import { ShellIcon } from './ShellIcon';
@@ -8,8 +7,6 @@ import { returnFocusAfterOutsidePress } from './overlay-focus';
 import { useOverlayMotion } from './overlay-motion';
 import { formatDateTime } from './format/date-time';
 
-type ModeInstructions = Record<PresenceMode, string>;
-const maxInstruction = 2_000;
 // Sources reported by GET /presence (P6-23): manual (Dan), jarvis (its tool) and browser (activity returns Dan to Present).
 function sourceLabel(source: string) {
   return source === 'jarvis' ? 'Jarvis' : source === 'browser' ? 'browser activity' : source === 'manual' || source === 'dan' ? 'you' : source;
@@ -69,49 +66,11 @@ export function PresenceChip({ backendUrl, getAccessToken }: { backendUrl: strin
   );
 }
 
-function readModeInstructions(value: unknown): ModeInstructions | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const settings = (value as { settings?: { personality?: { modeInstructions?: unknown } } }).settings;
-  const raw = settings?.personality?.modeInstructions;
-  if (typeof raw !== 'object' || raw === null) return null;
-  const record = raw as Record<string, unknown>;
-  const text = (key: PresenceMode) => typeof record[key] === 'string' ? (record[key] as string).slice(0, maxInstruction) : '';
-  return { present: text('present'), away: text('away'), on_the_move: text('on_the_move') };
-}
-
-/** Settings → Presence: the current mode with a switch, and one extra instruction per mode on top of the base one. */
+/** Presence switches remain here; all saved instruction scopes have one canonical editor. */
 export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: string | null; getAccessToken: () => Promise<string> }) {
   const { presence, setMode, retry } = usePresence(backendUrl, getAccessToken);
   const ids = useId();
-  const [saved, setSaved] = useState<ModeInstructions | null>(null);
-  const [draft, setDraft] = useState<ModeInstructions | null>(null);
-  const [instructionsState, setInstructionsState] = useState<'loading' | 'ready' | 'unavailable' | 'error'>('loading');
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    if (!backendUrl) return () => { active = false; };
-    void (async () => {
-      try {
-        const token = await getAccessToken();
-        const response = await backendFetch(`${backendUrl.replace(/\/+$/u, '')}/settings`, {
-          headers: { Authorization: `${['Bear', 'er'].join('')} ${token}`, Accept: 'application/json' },
-          cache: 'no-store',
-        });
-        if (!response.ok) throw new Error('Settings could not be loaded.');
-        const instructions = readModeInstructions(await response.json());
-        if (!active) return;
-        if (!instructions) { setInstructionsState('unavailable'); return; }
-        setSaved(instructions);
-        setDraft(instructions);
-        setInstructionsState('ready');
-      } catch {
-        if (active) setInstructionsState('error');
-      }
-    })();
-    return () => { active = false; };
+  return () => { active = false; };
   }, [backendUrl, getAccessToken]);
 
   const changed = Boolean(saved && draft && presenceModes.some(({ mode }) => saved[mode] !== draft[mode]));
@@ -170,38 +129,7 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
           {presence.error && <p className="settings-validation-error" role="alert">{presence.error}</p>}
         </>
       )}
-      <h3 className="presence-instructions-heading">Instructions per mode</h3>
-      {instructionsState === 'loading' && <StateMessage variant="loading" loaderVariant="lines" message="Loading mode instructions" />}
-      {instructionsState === 'unavailable' && (
-        <p className="settings-unavailable" role="status">Mode instructions unavailable.</p>
-      )}
-      {instructionsState === 'error' && <StateMessage variant="error" className="settings-validation-error"
-        message="Mode instructions could not be loaded." detail="Reload Settings to try again." />}
-      {instructionsState === 'ready' && draft && (
-        <>
-          <div className="presence-instructions">
-            {presenceModes.map(({ mode, label, tone }) => (
-              <div className="settings-field presence-instruction" key={mode} style={{ '--tone': tone } as CSSProperties}>
-                <label htmlFor={`${ids}-${mode}`}><span className="presence-dot" aria-hidden="true" />{label}</label>
-                <textarea id={`${ids}-${mode}`} rows={4} value={draft[mode]} disabled={saving} maxLength={maxInstruction + 200}
-                  aria-describedby={`${ids}-${mode}-count`}
-                  onChange={(event) => setDraft((current) => current ? { ...current, [mode]: event.target.value } : current)} />
-                <p className="settings-explanation" id={`${ids}-${mode}-count`}>
-                  {draft[mode].length} / 2,000 characters
-                </p>
-              </div>
-            ))}
-          </div>
-          {tooLong && <p className="settings-validation-error" role="alert">Each mode instruction can be at most 2,000 characters.</p>}
-          <div className="settings-actions">
-            <button className="primary-button" type="button" disabled={!changed || tooLong || saving} onClick={() => { void saveInstructions(); }}>
-              {saving ? 'Saving…' : 'Save mode instructions'}
-            </button>
-          </div>
-          {message && <p className="settings-feedback" role="status">{message}</p>}
-          {error && <p className="settings-validation-error" role="alert">{error}</p>}
-        </>
-      )}
+      <a className="secondary-button" href="#jarvis-instructions">Edit Jarvis instructions</a>
     </CollapsibleSection>
   );
 }

@@ -109,7 +109,7 @@
 "health.syncRetry" = "Try again";
 
 "health.training" = "Training";
-"health.activeTime" = "Active time";
+"health.activeTime" = "Exercise min";
 "health.lastLifts" = "Last lifts";
 "health.totalTarget" = "of %@";
 
@@ -123,3 +123,9 @@
 "health.measurements" = "Measurements";
 "health.oneMeasurement" = "1 measurement";
 "health.measurementCount" = "%ld measurements";
+
+"health.period.fourteenDays" = "14 days";
+"health.activeKcal" = "Active kcal";
+"health.activityUnavailable" = "Some activity readings are unavailable.";
+"health.activityPartial" = "Partial activity data; shown totals are a minimum.";
+"health.activityStale" = "Showing older activity readings.";
