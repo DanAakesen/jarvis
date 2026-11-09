@@ -663,6 +663,7 @@ def register_chat_invocation(
         visual = visual_context(payload.get("visualContext")) if isinstance(payload, dict) else None
         attachments = payload.get("attachments") if isinstance(payload, dict) else None
         reflex_note = payload.get("reflexNote") if isinstance(payload, dict) else None
+        proactive_context = payload.get("proactiveContext") if isinstance(payload, dict) else None
         expected_keys = (
             {"messageId", "text", "language", "smoke"}
             if smoke else {"messageId", "text", "language", "delegatedAuthorization"}
@@ -685,6 +686,8 @@ def register_chat_invocation(
             expected_keys.add("attachments")
         if isinstance(payload, dict) and "reflexNote" in payload:
             expected_keys.add("reflexNote")
+        if isinstance(payload, dict) and "proactiveContext" in payload:
+            expected_keys.add("proactiveContext")
         approval_history_valid = (
             isinstance(smoke_history, list)
             and len(smoke_history) == 2
@@ -734,6 +737,14 @@ def register_chat_invocation(
                     or language != "en"
                     or not isinstance(smoke_approval, bool)
                     or not valid_smoke_prompt
+                )
+            )
+            or (
+                "proactiveContext" in payload
+                and (
+                    not isinstance(proactive_context, str)
+                    or not proactive_context.strip()
+                    or len(proactive_context) > 34_000
                 )
             )
             or set(payload) != expected_keys
@@ -1013,6 +1024,8 @@ def register_chat_invocation(
                             ),
                         ),
                     )
+                if proactive_context:
+                    messages = (*messages, ModelMessage("user", proactive_context))
                 if attachments:
                     attachment_context = "\n\n".join(
                         (

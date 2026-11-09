@@ -1,3 +1,16 @@
+## Notification conversation context — 9 November 2026
+
+Native taps call authenticated `POST /proactive/items/:id/conversation` before
+navigating to Chat. The server verifies the configured owner and loads the finding
+through its existing policy-aware item store. Migration 0077 persists only the
+owner's selected finding UUID and timestamp. No synthetic conversation message is
+written. The 24-hour selection is revalidated at each chat turn and voice response.
+The backend passes bounded `proactiveContext` to the hosted chat agent separately
+from owner text/source-message ID; it is untrusted historical evidence. Active voice
+connections refresh instructions on selection without creating a response; later
+responses reread SQL, including on other replicas. Existing permissions remain.
+See [handoff](push-chat-continuity.md).
+
 ## Current managed Factory delivery — 9 November 2026
 
 Azure Container Apps Sandboxes is active for new Factory work. Live production-

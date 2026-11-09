@@ -648,6 +648,27 @@ final class JarvisProactiveSettingsTests: XCTestCase {
         XCTAssertEqual(saved.sources.count, 12)
     }
 
+    func testNotificationOpensConversationWithoutSubmittingATurn() async throws {
+        let id = "11111111-1111-4111-8111-111111111111"
+        let transport = try FixtureTransport(scenario: Data("""
+        {"version":1,"interactions":[
+          {"method":"POST","path":"/api/proactive/items/\(id)/conversation",
+           "requestBody":{},"response":{"statusCode":204}},
+          {"method":"POST","path":"/api/proactive/items/\(id)/conversation",
+           "requestBody":{},"response":{"statusCode":204}}
+        ]}
+        """.utf8))
+        let client = JarvisProactiveClient(client: try insightsClient(transport))
+        try await client.openConversation(id: id)
+        try await client.openConversation(id: id)
+        do {
+            try await client.openConversation(id: "../../settings")
+            XCTFail("Invalid identity must not issue a request")
+        } catch {
+            XCTAssertEqual(error as? JarvisInsightsError, .invalidRequest)
+        }
+    }
+
     func testNotificationLoadsItsExactFindingAndRejectsInvalidIdentity() async throws {
         let id = "11111111-1111-4111-8111-111111111111"
         let item = JarvisProactiveItem(id: id, title: "Useful opportunity", body: "Based on recorded progress.",

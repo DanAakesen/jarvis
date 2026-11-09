@@ -13,6 +13,8 @@ struct ContentView: View {
     @StateObject private var healthSyncModel = JarvisHealthSyncModel()
     @Namespace private var carryOver
     @State private var chatHandoff: JarvisChatHandoff?
+    @State private var openingProactiveItemID: String?
+    @State private var proactiveOpenError: String?
     private let chatClient: JarvisClient?
     private let startupError: String?
     private let fixtureMode: Bool
@@ -201,6 +203,7 @@ struct ContentView: View {
                                         || fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-screen=notifications")
                                         ? .activity : nil),
                                 startupError: startupError,
+                                notificationContextError: proactiveOpenError,
                                 handoff: $chatHandoff,
                                 onNavigate: { navigate(to: $0) }
                             )
@@ -219,6 +222,7 @@ struct ContentView: View {
                         await voiceModel.end(returnToChat: false)
                         guard !Task.isCancelled else { return }
                         appliedSessionEpoch = sessionEpoch
+                        openProactiveNotificationIfNeeded()
                         if navigation.currentDestination == .voice { await voiceModel.start() }
                     }
                     guard !Task.isCancelled else { return }
@@ -415,8 +419,35 @@ struct ContentView: View {
     }
 
     private func openProactiveNotificationIfNeeded() {
-        if let id = UserDefaults.standard.string(forKey: JarvisApprovalNotificationCoordinator.pendingProactiveItemKey),
-           UUID(uuidString: id) != nil { navigate(to: .proactive) }
+        guard let id = UserDefaults.standard.string(forKey: JarvisApprovalNotificationCoordinator.pendingProactiveItemKey),
+              UUID(uuidString: id) != nil, openingProactiveItemID == nil else { return }
+        openingProactiveItemID = id
+        proactiveOpenError = nil
+        let epoch = sessionEpoch
+        Task { @MainActor in
+            defer {
+                openingProactiveItemID = nil
+                // A different notification may have arrived while this one loaded.
+                if let pending = UserDefaults.standard.string(forKey: JarvisApprovalNotificationCoordinator.pendingProactiveItemKey),
+                   pending != id { openProactiveNotificationIfNeeded() }
+            }
+            do {
+                guard let proactiveClient else { throw JarvisInsightsError.invalidRequest }
+                try await proactiveClient.openConversation(id: id)
+                guard !Task.isCancelled, epoch == appliedSessionEpoch else { return }
+                if UserDefaults.standard.string(forKey: JarvisApprovalNotificationCoordinator.pendingProactiveItemKey) == id {
+                    UserDefaults.standard.removeObject(forKey: JarvisApprovalNotificationCoordinator.pendingProactiveItemKey)
+                }
+                proactiveOpenError = nil
+                navigate(to: .chat)
+            } catch {
+                guard !Task.isCancelled, epoch == appliedSessionEpoch else { return }
+                navigate(to: .chat)
+                proactiveOpenError = language == .da
+                    ? "Chatten er åben, men Jarvis har ikke indlæst denne notifikations kontekst. Åbn notifikationen igen for at prøve igen."
+                    : "Chat is open, but Jarvis has not loaded this notification's context. Open the notification again to retry."
+            }
+        }
     }
 
     private func navigate(to destination: JarvisDestination) {
