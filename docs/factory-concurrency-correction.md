@@ -122,3 +122,14 @@ uses this run’s labels only, including reconciling ambiguous creates. This wor
 does not switch production routing or delete the VM. Those steps follow separate
 Factory integration acceptance. No 100-worker or model concurrency claim follows
 from this synthetic qualification.
+
+The runtime qualification in `factory-runtime.yml` builds the exact runner source
+and invokes the production TypeScript pool against a disposable Entra-only Blob
+account. Five deliberately invalid task requests prove delivery/refusal without
+model calls or repository writes, followed by actual worker disk/credential probes,
+five overlapping shell commands, adapter restart, idle stop and resume. It is a
+transport/lifecycle test, not a claim that five model tasks completed or that SQL
+admission ran against production tasks. CI covers the existing SQL ownership and
+admission contracts. The temporary storage role is scoped to that test account;
+workers still receive only their individual container SAS. Account removal follows
+confirmed cleanup of the five owned sandboxes and volumes.
