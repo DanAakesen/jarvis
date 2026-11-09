@@ -261,7 +261,7 @@ final class ComponentGalleryUITests: XCTestCase {
         openPage("health", language: language, theme: theme, launch: true)
         let training = app.descendants(matching: .any)["health.hero.training"]
         XCTAssertTrue(training.waitForExistence(timeout: 15))
-        let periodIDs = ["today", "sevenDays", "thirtyDays"].map { "health.period.\($0)" }
+        let periodIDs = ["today", "sevenDays", "fourteenDays", "thirtyDays"].map { "health.period.\($0)" }
         for id in periodIDs { XCTAssertTrue(app.buttons[id].exists, id) }
         XCTAssertFalse(app.buttons["health.period.yesterday"].exists)
         let initial = app.buttons["health.period.today"].frame

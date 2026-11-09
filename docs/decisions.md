@@ -12,8 +12,10 @@ Google, GitHub/Factory, health, vault/workspaces, settings and browser voice.
 Keep actual access checks, secret protection, revision checks and duplicate-write
 protection; questions and untrusted source content do not authorize writes.
 Telephone callers remain a distinct identity boundary. Legacy pending endpoints
-are compatibility code, not a requirement for new owner requests. Implementation
-is under qualification; deployment is a separate verified outcome.
+are compatibility code, not a requirement for new owner requests. PR #1690 merged
+as `70c669c9`; CI 42661574458 and CodeQL passed. Production run 42663408198
+deployed backend and hosted-agent changes and passed readiness/live conversation
+acceptance. Real owner use remains a separate acceptance check.
 
 ## 2026-11-09 — Owner requests do not need a second approval
 

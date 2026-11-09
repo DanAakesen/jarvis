@@ -1,3 +1,7 @@
+## Native UI alignment correction
+
+The earlier WIP native run passed its Home normal/English/Danish/accessibility cases, but exposed a Health carousel regression: the additional activity quality caption made the fixed-height Training page overflow and moved its header relative to Sleep. The caption now sits below the fixed-height carousel, with the shared card/header components unchanged. The new four-period and visible-line-limit UI cases still require execution against this correction. The broader suite also has Notes and notification-to-chat failures already recorded by primary; this branch does not take over those separate fixes.
+
 ## Implementation handoff — 9 November 2026
 
 Draft PR: [#1689](https://github.com/DanAakesen/jarvis/pull/1689). Branch: `feature/home-brief-daily-activity`.

@@ -45,10 +45,6 @@ struct JarvisHealthRingsSection<Accessory: View>: View {
                     trainingStat(activityValue(energyTotal), title: .activeKcal)
                 }
                 .fixedSize(horizontal: false, vertical: true)
-                if let issue = activityIssue {
-                    Text(copy.text(issue)).font(.footnote).foregroundStyle(.secondary)
-                        .accessibilityIdentifier("health.activity.issue")
-                }
                 JarvisHealthBarChart(
                     values: JarvisHealthChartValues(values: stepDays, endingOn: period.endDate,
                         count: max(period.dayCount, 7), target: data.trainingTargets?.targets.dailySteps),
@@ -146,7 +142,7 @@ struct JarvisHealthRingsSection<Accessory: View>: View {
         return (total.availability == .partial ? "≥ " : "") + JarvisNumberFormat.compact(value, language: language)
     }
 
-    private var activityIssue: JarvisHealthLocalizationKey? {
+    var activityIssue: JarvisHealthLocalizationKey? {
         let states = [energyTotal.availability, exerciseTotal.availability]
         if states.contains(.stale) { return .activityStale }
         if states.contains(.unavailable) { return .activityUnavailable }
