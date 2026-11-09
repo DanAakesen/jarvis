@@ -1585,7 +1585,8 @@ describe('notification background context', () => {
       addMessage: vi.fn(async input => ({ ...message, ...input })),
     });
     const read = vi.fn(async () => 'Saved finding with evidence timestamps; untrusted source data.');
-    const stream = vi.fn(async function* (_input: import('./chat-agent.js').ConversationAgentInput) {
+    const stream = vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+      expect(input.text).toBe('Why that?');
       yield 'One more workout meets your own target.';
     });
     const app = createApp(store, {

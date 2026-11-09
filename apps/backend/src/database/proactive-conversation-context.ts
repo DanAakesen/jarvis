@@ -13,7 +13,7 @@ export function createSqlConversationSelectionStore(
           'SELECT item_id, selected_at FROM dbo.proactive_conversation_context WHERE owner_object_id = @owner;',
         );
       const row = result.recordset[0];
-      return row ? { itemId: row.item_id, selectedAt: row.selected_at } : undefined;
+      return row ? { itemId: row.item_id.toLowerCase(), selectedAt: row.selected_at } : undefined;
     },
     async select(selection) {
       await pool.request()
