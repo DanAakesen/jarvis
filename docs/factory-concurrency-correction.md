@@ -1,5 +1,15 @@
 # Factory concurrency correction — 9 November 2026
 
+Current runtime result: 42607263687 failed during worker command delivery with
+five allocated sandboxes. Cleanup passed; managed activation and VM retirement
+did not run. The separate storage/build qualification remains passed. The runtime
+canary now retains finite startup error codes, source locations and file metadata
+without credentials, provider messages or file contents. Optional image reuse
+requires a digest-verified artifact from this main-only workflow, the same runner
+source tree, subscription and registry. It does not reuse a runtime pass: all
+five-worker lifecycle assertions still run against the current adapter.
+The owner accepts the existing 300-core quota for now (up to 37 8-core workers).
+
 The Factory must support up to **100 simultaneously executing coding agents**.
 Workers start on demand, have isolated workspaces with the selected 128 GiB
 capacity target per worker, and release compute when idle. Preserve owner-set

@@ -98,6 +98,11 @@ class ImpactTests(unittest.TestCase):
         self.assertEqual(deploy_parts(".github/workflows/watch-build.yml"), set())
         self.assertIn("ios", checks_for(".github/workflows/watch-build.yml"))
 
+    def test_worker_image_inspection_keeps_full_checks_without_rebuilding_apps(self):
+        path = ".github/scripts/reuse_factory_image.py"
+        self.assertEqual(deploy_parts(path), set())
+        self.assertEqual(checks_for(path), set(CHECKS))
+
     def test_shared_node_inputs_qualify_vault_mirror(self):
         for path in ("package.json", "package-lock.json", "tsconfig.base.json", ".nvmrc",
                      "packages/contracts/src/status.js"):

@@ -2,6 +2,10 @@ name: Factory managed runtime qualification
 on:
   workflow_dispatch:
     inputs:
+      reuse_image_run:
+        description: Prior runtime run with identical runner source (blank builds a new image)
+        type: string
+        default: ''
       activate:
         description: Switch Factory after the five-worker test passes
         type: boolean
@@ -62,7 +66,14 @@ jobs:
           with open(os.environ['GITHUB_ENV'], 'a') as f:
               f.write('REGISTRY=' + outputs['containerRegistryName']['value'] + '\nREGISTRY_HOST=' + outputs['containerRegistryLoginServer']['value'] + '\n')
           PY
+      - name: Verify reusable immutable worker image
+        if: inputs.reuse_image_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REUSE_IMAGE_RUN: ${{ inputs.reuse_image_run }}
+        run: python .github/scripts/reuse_factory_image.py
       - name: Build the exact qualified worker source
+        if: inputs.reuse_image_run == ''
         run: |
           az acr build --registry "$REGISTRY" --image "jarvis-runner-base:$IMAGE_TAG" --file runner/Dockerfile --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
           az acr build --registry "$REGISTRY" --image "jarvis-runner-dotnet:$IMAGE_TAG" --file runner/Dockerfile.dotnet --build-arg "RUNNER_BASE_IMAGE=$REGISTRY_HOST/jarvis-runner-base:$IMAGE_TAG" --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
