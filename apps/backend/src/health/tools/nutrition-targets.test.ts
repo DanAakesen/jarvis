@@ -261,7 +261,7 @@ describe('health_nutrition_targets set_targets', () => {
   it('refuses to change anything when Now approval is unavailable', async () => {
     const f = fixture(emptyNutritionTargets, { approval: false });
     await expect(f.tool.execute({ operation: 'set_targets', targets: { restingKcal: 1750 } }, f.request, signal()))
-      .rejects.toThrow('Now approval is unavailable. No nutrition target was changed.');
+      .rejects.toThrow('Action execution is unavailable. No nutrition target was changed.');
     expect(f.store.write).not.toHaveBeenCalled();
   });
 
@@ -269,7 +269,7 @@ describe('health_nutrition_targets set_targets', () => {
     const f = fixture(synthetic);
     const first = await f.begin({ operation: 'set_targets', targets: { restingKcal: 1800 } });
     await expect(f.tool.execute({ operation: 'set_targets', targets: { deficitKcal: 400 } }, f.request, signal()))
-      .rejects.toThrow(/already waiting for approval/u);
+      .rejects.toThrow(/already running/u);
     expect(f.runConfirmed).toHaveBeenCalledOnce();
     await first.resolve('reject').catch(() => undefined);
     const second = await f.begin({ operation: 'set_targets', targets: { deficitKcal: 400 } });

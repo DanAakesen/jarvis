@@ -176,14 +176,19 @@ describe('inactive internal saved-food workflow', () => {
     expect(await f.tool.execute(input, f.request, signal())).toMatchObject({ status: 'already-deleted' });
     expect(f.store.removePlan).toHaveBeenCalledOnce();
   });
-  it.each(['away', 'ended', 'cancelled'])('refuses %s before the approved callback writes', async state => {
+  it.each(['ended', 'cancelled'])('refuses %s before the approved callback writes', async state => {
     const f = fixture(); const controller = new AbortController();
     const pending = await f.begin(save(), controller.signal);
-    if (state === 'away') f.mode.mode = 'away';
     if (state === 'ended') f.session.endedAt = at;
     if (state === 'cancelled') controller.abort();
     await expect(pending.resolve()).rejects.toThrow();
     expect(f.store.favorite).not.toHaveBeenCalled();
+  });
+  it('allows the requested saved-food write while away', async () => {
+    const f = fixture(); f.mode.mode = 'away';
+    const pending = await f.begin(save());
+    expect(await pending.resolve()).toMatchObject({ status: 'committed' });
+    expect(f.store.favorite).toHaveBeenCalledOnce();
   });
   it('recovers an uncertain commit by one matching readback without retrying the write', async () => {
     const f = fixture(); const original = f.store.favorite.getMockImplementation()!;

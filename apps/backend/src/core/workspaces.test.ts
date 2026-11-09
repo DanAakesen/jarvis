@@ -307,7 +307,7 @@ describe('Workspaces API and Jarvis tools', () => {
     expect(ambiguous.json().outcome).toBe('refused');
     expect(ambiguous.json().result.refused).toContain('Ask Dan to choose');
     expect(ambiguous.json().result.refused.length).toBeLessThanOrEqual(500);
-    data.search.mockResolvedValueOnce([]);
+    data.search.mockResolvedValue([]);
     expect((await manage(data.app, { query: 'missing', action: 'delete' })).json().outcome).toBe('refused');
     expect((await manage(data.app, { query: 'missing', action: 'rename', title: 'New' })).json().result.refused)
       .toContain('No Workspaces item matched');
@@ -348,69 +348,30 @@ describe('Workspaces API and Jarvis tools', () => {
     expect(data.remove).not.toHaveBeenCalled();
   });
 
-  it.each(['approve', 'reject'] as const)('waits for Now %s naming the item before removal', async (decision) => {
-    const service = approvals();
-    const data = fixture({ ownerInteractions: service, awayModeStore: presence() });
-    data.remove.mockImplementationOnce(async () => { data.search.mockResolvedValue([]); });
-    const operation = manage(data.app, { query: 'Ignite', action: 'delete' });
-    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
-    const confirmation = service.pendingBrowserConfirmations()[0]!;
-    expect(confirmation).toMatchObject({ actionKind: 'delete' });
-    expect(confirmation.summary).toContain(item.title);
-    expect(confirmation.summary).toContain(item.id);
-    expect(data.remove).not.toHaveBeenCalled();
-    expect((await manage(data.app, { id: item.id, action: 'delete' })).json().result.refused)
-      .toContain('already awaiting');
-    await service.resolveBrowserConfirmation(confirmation.id, decision);
-    const response = await operation;
-    expect(response.json().outcome).toBe(decision === 'approve' ? 'ok' : 'refused');
-    if (decision === 'approve') {
-      expect(response.json().result).toMatchObject({ id: item.id, deleted: true, untrusted: true });
-      expect(data.remove).toHaveBeenCalledWith(ownerId, item.id, expect.any(AbortSignal));
-      const listed = await data.app.inject({ url: '/workspaces', headers: authorization('owner.e30.sig') });
-      expect(listed.json().items).toEqual([]);
-      expect(data.read).not.toHaveBeenCalled();
-    } else {
-      expect(data.remove).not.toHaveBeenCalled();
-    }
-  });
-
-  it.each(['away', 'on_the_move'] as const)('refuses deletion while %s without staging approval', async (mode) => {
+  it.each(['present', 'away', 'on_the_move'] as const)('deletes the requested item directly while %s', async mode => {
     const service = approvals();
     const data = fixture({ ownerInteractions: service, awayModeStore: presence(mode) });
     const response = await manage(data.app, { id: item.id, action: 'delete' });
-    expect(response.json().outcome).toBe('refused');
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { id: item.id, deleted: true } });
     expect(service.pendingBrowserConfirmations()).toEqual([]);
-    expect(data.get).not.toHaveBeenCalled();
+    expect(data.remove).toHaveBeenCalledOnce();
+    expect(data.remove).toHaveBeenCalledWith(ownerId, item.id, expect.any(AbortSignal));
+    expect(data.read).not.toHaveBeenCalled();
+  });
+
+  it('refuses a changed item before deleting it', async () => {
+    const data = fixture({ ownerInteractions: approvals() });
+    data.get.mockResolvedValueOnce({ item, sourceId });
+    data.get.mockResolvedValueOnce({ item: { ...item, title: 'Different report' }, sourceId });
+    expect((await manage(data.app, { id: item.id, action: 'delete' })).json().outcome).toBe('refused');
     expect(data.remove).not.toHaveBeenCalled();
   });
 
-  it.each(['presence', 'title'] as const)('rechecks $0 after approval and does not delete a changed item', async (change) => {
-    const service = approvals();
-    const awayModeStore = presence();
-    const data = fixture({ ownerInteractions: service, awayModeStore });
-    const operation = manage(data.app, { id: item.id, action: 'delete' });
-    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
-    if (change === 'presence') vi.mocked(awayModeStore.read).mockResolvedValue({ mode: 'away', source: 'manual', changedAt: null });
-    else data.get.mockResolvedValue({ item: { ...item, title: 'Different report' }, sourceId });
-    await service.resolveBrowserConfirmation(service.pendingBrowserConfirmations()[0]!.id, 'approve');
-    expect((await operation).json().outcome).toBe('refused');
-    expect(data.remove).not.toHaveBeenCalled();
-  });
-
-  it('fails closed when presence or the approval service is unavailable', async () => {
-    const service = approvals();
-    const withoutPresence = fixture({ ownerInteractions: service });
-    expect((await manage(withoutPresence.app, { id: item.id, action: 'delete' })).json().outcome).toBe('refused');
-    const withoutApproval = fixture({ awayModeStore: presence() });
-    expect((await manage(withoutApproval.app, { id: item.id, action: 'delete' })).json().result.refused)
-      .toContain('approval service is unavailable');
-    expect(withoutApproval.remove).not.toHaveBeenCalled();
-    const unavailable = presence();
-    vi.mocked(unavailable.read).mockRejectedValue(new Error('private provider detail'));
-    const data = fixture({ ownerInteractions: service, awayModeStore: unavailable });
-    const response = await manage(data.app, { id: item.id, action: 'delete' });
-    expect(response.json().outcome).toBe('refused');
-    expect(response.body).not.toContain('private provider detail');
+  it('does not depend on presence and reports unavailable execution', async () => {
+    const data = fixture({ ownerInteractions: approvals() });
+    expect((await manage(data.app, { id: item.id, action: 'delete' })).json().outcome).toBe('ok');
+    const unavailable = fixture();
+    expect((await manage(unavailable.app, { id: item.id, action: 'delete' })).json().outcome).toBe('refused');
+    expect(unavailable.remove).not.toHaveBeenCalled();
   });
 });

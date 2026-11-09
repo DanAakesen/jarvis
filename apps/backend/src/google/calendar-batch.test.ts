@@ -61,113 +61,55 @@ function fixture(request: GoogleApiClient['request'], signal = new AbortControll
 }
 
 describe('calendar batch module boundary', () => {
-  it.each([2, 10])('stages all %s immutable summaries and writes only once after later approval', async (count) => {
+  it.each([2, 10])('creates all %s requested events once and returns a concise receipt', async count => {
     const request = vi.fn<GoogleApiClient['request']>(async () => ({ id: 'synthetic-created' }));
     const f = fixture(request);
     const events = count === 2 ? structuredClone(hotels) : Array.from({ length: count }, (_, index) => ({
       ...hotels[0], subject: `Synthetic hotel ${index + 1}`,
     }));
-    const stage = (await f.call('calendar_create_events', { events })).json();
-    expect(stage.outcome).toBe('ok');
-    expect(stage.result.items).toHaveLength(count);
-    if (count === 2) {
-      expect(stage.result.summary).toContain('14 June 2027 at 15:00');
-      expect(stage.result.summary).toContain('09 December 2027 at 16:00');
-      expect(stage.result.summary).toContain('Europe/Copenhagen local time');
-    }
-    events[0]!.subject = 'Changed outside the captured proposal';
-    expect(request).not.toHaveBeenCalled();
-    const confirm = () => f.call('calendar_confirm_change', {
-      confirmationCode: stage.result.confirmationCode,
-    });
-    expect((await confirm()).json().outcome).toBe('refused');
-    f.reply('yes');
-    const result = (await confirm()).json();
-    expect(result).toMatchObject({
-      outcome: 'ok',
-      result: {
-        status: 'completed',
-        instruction: expect.stringContaining('without reading the details aloud'),
-      },
-      confirmation: count === 2 ? 'Both are in your calendar.' : `All ${count} are in your calendar.`,
-    });
-    expect(result.result.summary).toBe(stage.result.summary);
-    expect(result.result.items.map((item: { summary: string }) => item.summary))
-      .toEqual(stage.result.items.map((item: { summary: string }) => item.summary));
+    const result = (await f.call('calendar_create_events', { events })).json();
+    expect(result).toMatchObject({ outcome: 'ok', result: { status: 'completed' },
+      confirmation: count === 2 ? 'Both are in your calendar.' : `All ${count} are in your calendar.` });
+    expect(result.result.items).toHaveLength(count);
     expect(result.result.items.every((item: { status: string }) => item.status === 'completed')).toBe(true);
+    if (count === 2) {
+      expect(result.result.items[0].summary).toContain('14 June 2027 at 15:00');
+      expect(result.result.items[1].summary).toContain('09 December 2027 at 16:00');
+    }
+    expect((await f.call('calendar_create_events', { events })).json()).toEqual(result);
     expect(request).toHaveBeenCalledTimes(count);
-    expect(JSON.stringify(request.mock.calls)).not.toContain('Changed outside');
-    expect((await confirm()).json().outcome).toBe('refused');
-    expect((await f.call('calendar_get_pending_change')).json().result.lastChange.summary)
-      .toBe(stage.result.summary);
-    expect(request).toHaveBeenCalledTimes(count);
+    expect(f.pending.size).toBe(0);
   });
 
-  it.each(['invalid-time', 'invalid-attendee', 'duplicate', 'one', 'eleven'])(
-    'rejects %s without replacing an existing single-event proposal', async (invalid) => {
-      const request = vi.fn<GoogleApiClient['request']>(async () => ({}));
-      const f = fixture(request);
-      const original = (await f.call('calendar_create_event', hotels[0]!)).json();
-      const events = invalid === 'one' ? [hotels[0]] : invalid === 'eleven'
-        ? Array.from({ length: 11 }, (_, index) => ({ ...hotels[0], subject: `Hotel ${index}` }))
-        : invalid === 'duplicate' ? [hotels[0], hotels[0]]
-        : [hotels[0], { ...hotels[1], ...(invalid === 'invalid-time'
-          ? { endDateTime: '2027-12-01T00:00:00Z' } : { attendees: ['invalid-email'] }) }];
-      const response = await f.call('calendar_create_events', { events });
-      expect(response.statusCode === 400 || response.json().outcome === 'refused').toBe(true);
-      expect((await f.call('calendar_get_pending_change')).json().result.confirmationCode)
-        .toBe(original.result.confirmationCode);
-      expect(request).not.toHaveBeenCalled();
-      expect(f.pending.size).toBe(1);
-    },
-  );
-
-  it.each(['forbidden', 'uncertain', 'unexpected', 'interrupted'] as const)(
-    'preserves completed items, reports %s honestly and never replays them', async (kind) => {
-      const abort = new AbortController();
-      const request = vi.fn<GoogleApiClient['request']>()
-        .mockResolvedValueOnce({ id: 'first-created' })
-        .mockImplementationOnce(async () => {
-          if (kind === 'interrupted') abort.abort();
-          throw kind === 'unexpected' || kind === 'interrupted'
-            ? new Error('Synthetic unclassified failure') : new GoogleApiError(kind);
-        });
-      const f = fixture(request, abort.signal);
-      const events = [...hotels, { ...hotels[1], subject: 'Third synthetic hotel' }];
-      const staged = (await f.call('calendar_create_events', { events })).json();
-      f.reply('approved');
-      const confirm = () => f.call('calendar_confirm_change', {
-        confirmationCode: staged.result.confirmationCode,
-      });
-      const result = (await confirm()).json();
-      expect(result).toMatchObject({ outcome: 'ok', result: { status: 'partial', items: [
-        { status: 'completed' },
-        { status: kind === 'forbidden' ? 'failed' : 'unverified' },
-        { status: 'not_attempted' },
-      ] } });
-      expect(result.confirmation).toContain('1 of 3');
-      expect(result.confirmation).not.toContain('Done:');
-      expect((await confirm()).json().outcome).toBe('refused');
-      expect(request).toHaveBeenCalledTimes(2);
-      expect((await f.call('calendar_get_pending_change')).json().result.lastChange.items)
-        .toEqual(result.result.items);
-    },
-  );
-
-  it.each(['no', 'other-session'])('does not write after %s and preserves session boundaries', async (reply) => {
+  it.each(['invalid-time', 'invalid-attendee', 'duplicate', 'one', 'eleven'])('rejects %s before any write', async invalid => {
     const request = vi.fn<GoogleApiClient['request']>(async () => ({}));
     const f = fixture(request);
-    const staged = (await f.call('calendar_create_events', { events: hotels })).json();
-    f.reply(reply === 'no' ? 'no' : 'yes', reply === 'no' ? '1' : '2');
-    const result = (await f.call('calendar_confirm_change', {
-      confirmationCode: staged.result.confirmationCode,
-    })).json();
-    expect(result).toMatchObject(reply === 'no'
-      ? { outcome: 'ok', result: { status: 'cancelled' } }
-      : { outcome: 'refused' });
+    const events = invalid === 'one' ? [hotels[0]] : invalid === 'eleven'
+      ? Array.from({ length: 11 }, (_, index) => ({ ...hotels[0], subject: `Hotel ${index}` }))
+      : invalid === 'duplicate' ? [hotels[0], hotels[0]]
+      : [hotels[0], { ...hotels[1], ...(invalid === 'invalid-time'
+        ? { endDateTime: '2027-12-01T00:00:00Z' } : { attendees: ['invalid-email'] }) }];
+    const response = await f.call('calendar_create_events', { events });
+    expect(response.statusCode === 400 || response.json().outcome === 'refused').toBe(true);
     expect(request).not.toHaveBeenCalled();
-    expect(f.pending.size).toBe(reply === 'no' ? 0 : 1);
-    expect(f.pending.pendingCalendarChange()).not.toHaveProperty('lastChange');
-    expect(new PendingGoogleActions().pendingCalendarChange()).not.toHaveProperty('lastChange');
+  });
+
+  it.each(['forbidden', 'uncertain', 'unexpected', 'interrupted'] as const)('reports %s without replaying completed or uncertain events', async kind => {
+    const abort = new AbortController();
+    const request = vi.fn<GoogleApiClient['request']>().mockResolvedValueOnce({ id: 'first' })
+      .mockImplementationOnce(async () => {
+        if (kind === 'interrupted') abort.abort();
+        throw kind === 'unexpected' || kind === 'interrupted'
+          ? new Error('Synthetic failure') : new GoogleApiError(kind);
+      });
+    const f = fixture(request, abort.signal);
+    const events = [...hotels, { ...hotels[1], subject: 'Third hotel' }];
+    const result = (await f.call('calendar_create_events', { events })).json();
+    expect(result).toMatchObject({ outcome: 'ok', result: { status: 'partial', items: [
+      { status: 'completed' }, { status: kind === 'forbidden' ? 'failed' : 'unverified' }, { status: 'not_attempted' },
+    ] } });
+    expect(result.confirmation).toContain('1 of 3');
+    if (kind !== 'interrupted') expect((await f.call('calendar_create_events', { events })).json()).toEqual(result);
+    expect(request).toHaveBeenCalledTimes(2);
   });
 });

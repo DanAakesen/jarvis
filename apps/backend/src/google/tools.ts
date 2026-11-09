@@ -786,7 +786,7 @@ export function createGoogleModule(
             const completed = items.filter((item) => item.status === 'completed').length;
             return {
               status: completed === events.length ? 'completed' : 'partial',
-              detail: `${completed} of ${events.length} calendar events were created. ${completed === events.length ? 'The approved proposal is complete.' : 'The proposal stopped; no automatic retry will run. Verify unverified events before a new proposal.'}`,
+              detail: `${completed} of ${events.length} calendar events were created. ${completed === events.length ? 'The requested events are complete.' : 'The proposal stopped; no automatic retry will run. Verify unverified events before a new proposal.'}`,
               items,
             };
           },

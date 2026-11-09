@@ -47,7 +47,7 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
       }
       if (action?.status === 'cancelled') return 'Cancelled. No Gmail change was made.';
     }
-    if (tool === 'calendar_confirm_change') {
+    if (tool.startsWith('calendar_')) {
       const change = result as { status?: unknown; detail?: unknown; items?: unknown } | null;
       if (change?.status === 'completed') {
         return Array.isArray(change.items) && change.items.length > 1
