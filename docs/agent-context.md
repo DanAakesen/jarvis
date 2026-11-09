@@ -7921,3 +7921,7 @@ one fixed 800-core request only if needed, and verifies the actual regional usag
 limit. It never allocates workers, lowers a larger limit, guesses a missing quota
 name or automatically replays an uncertain PUT. Submission and approval are
 separate evidence fields. Live submission/approval remain pending.
+
+## Intelligent proactive notification handoff — 9 November 2026
+
+PR #1669 implements only the owner's accepted context/computation/intelligence scope. Read docs/research/intelligent-proactive-notifications.md before integration. Migration 0076 expands source/alert constraints and retains history on downgrade. Deploy backend only after migration; coordinate new source IDs with the iPhone build. Existing proactive/push/APNs/Health switches and notification permission apply, with no production changes by this secondary. Local checks: backend build/lint; `npm test --workspace @jarvis/backend -- src/proactive src/push`; web build/lint/push tests; Swift 6.2 JarvisCore tests; isolated loopback SQL `test:database`. Owner wants direct installed use and iteration, not shadow mode or additional policy/feedback-learning work. Primary alone owns deployment/installation and physical receipt qualification.

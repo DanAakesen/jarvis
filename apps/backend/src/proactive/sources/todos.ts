@@ -15,7 +15,7 @@ function unavailable(now: Date, reason: string): SourceResult {
   return { source: 'todos', state: 'unavailable', reason, facts: [], observedAt: now.toISOString() };
 }
 
-export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
+export function createTodosSource(vaultClient?: VaultReader, includeOrdinary = false): ProactiveSource {
   return {
     id: 'todos',
     label: 'Todo list',
@@ -30,7 +30,7 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
         const todos = await readVaultTasks(vaultClient, sourceSignal);
         const seen = new Map<string, { dueHasTime: boolean }>();
         const open = todos.flatMap((todo, index) => {
-          if (todo.done || !todo.highPriority) return [];
+          if (todo.done || !includeOrdinary && !todo.highPriority) return [];
           const key = JSON.stringify([normaliseFactText(todo.text), todo.dueAt, todo.remindAtDue === true]);
           const existing = seen.get(key);
           if (existing) {
@@ -65,7 +65,7 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
               ? { taskScope: todo.path.startsWith('Personal/') ? 'personal' as const : 'work' as const }
               : {}),
             ...(/(?:^|\/)projects?(?:\/|$)/iu.test(todo.path) ? { projectRelated: true } : {}),
-            kind: 'todo',
+            kind: todo.highPriority ? 'todo' as const : 'commitment' as const,
             label: 'Todo list',
             text: todo.text,
             observedAt: now.toISOString(),

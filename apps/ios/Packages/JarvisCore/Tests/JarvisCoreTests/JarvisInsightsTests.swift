@@ -482,7 +482,10 @@ final class JarvisProactiveLogicTests: XCTestCase {
         XCTAssertEqual(JarvisProactiveLogic.sourceReason("timeout"), .proactiveReasonTimeout)
         XCTAssertEqual(JarvisProactiveLogic.sourceReason("surprise"), .proactiveReasonUnknown)
         XCTAssertEqual(JarvisProactiveLogic.sourceReason(nil), .proactiveReasonUnknown)
-        XCTAssertEqual(JarvisProactiveSourceID.allCases.count, 8)
+        XCTAssertEqual(JarvisProactiveSourceID.allCases.count, 12)
+        XCTAssertTrue([JarvisProactiveSourceID.health, .nutrition, .notes, .memory].allSatisfy {
+            JarvisProactiveSourceID.allCases.contains($0)
+        })
         XCTAssertEqual(JarvisProactiveCategory.allCases.count, 9)
     }
 }
@@ -642,7 +645,26 @@ final class JarvisProactiveSettingsTests: XCTestCase {
         let saved = try await JarvisProactiveClient(client: try insightsClient(transport)).updateSettings(patch)
         XCTAssertEqual(saved.monthlyBudgetDkk, 80)
         XCTAssertEqual(saved.revision, next)
-        XCTAssertEqual(saved.sources.count, 8)
+        XCTAssertEqual(saved.sources.count, 12)
+    }
+
+    func testNotificationLoadsItsExactFindingAndRejectsInvalidIdentity() async throws {
+        let id = "11111111-1111-4111-8111-111111111111"
+        let item = JarvisProactiveItem(id: id, title: "Useful opportunity", body: "Based on recorded progress.",
+            category: .suggestion, createdAt: "2026-11-09T10:00:00Z")
+        let body = String(decoding: try JSONEncoder().encode(item), as: UTF8.self)
+        let transport = try FixtureTransport(scenario: Data("""
+        {"version":1,"interactions":[{"method":"GET","path":"/api/proactive/items/\(id)","response":{"statusCode":200,"body":\(body)}}]}
+        """.utf8))
+        let client = JarvisProactiveClient(client: try insightsClient(transport))
+        let loaded = try await client.item(id: id)
+        XCTAssertEqual(loaded, item)
+        do {
+            _ = try await client.item(id: "../../settings")
+            XCTFail("Invalid notification identity must not issue a request")
+        } catch {
+            XCTAssertEqual(error as? JarvisInsightsError, .invalidRequest)
+        }
     }
 
     func testClientMapsAMissingFeatureToUnavailable() async throws {

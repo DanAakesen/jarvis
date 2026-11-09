@@ -4498,3 +4498,7 @@ one fixed 800-core request only if needed, and verifies the actual regional usag
 limit. It never allocates workers, lowers a larger limit, guesses a missing quota
 name or automatically replays an uncertain PUT. Submission and approval are
 separate evidence fields. Live submission/approval remain pending.
+
+## Intelligent cross-app notifications — 9 November 2026
+
+Secondary PR #1669 implements owner-approved context, computed facts and intelligent notification selection. Added canonical Health/nutrition/Notes/Memory readers, ordinary task context, model silence/source diversity, native APNs with browser fallback, and exact-finding native routing. Additional policy/feedback-learning stages and shadow mode were explicitly declined. Local core, notification and isolated SQL checks are recorded in the PR; native build evidence is being collected. Primary owns integration, migration 0076, rollout and installed-device acceptance. No production switches were changed.

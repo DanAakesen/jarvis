@@ -5,7 +5,7 @@ import { defaultProactiveSettings } from '../store.js';
 describe('proactive source registry', () => {
   it('registers the sources alphabetically and keeps X as a non-throwing placeholder', async () => {
     const sources = buildSourceRegistry({});
-    expect(sources.map(({ id }) => id)).toEqual(['calendar', 'factory', 'mail', 'news', 'todos', 'travel', 'weather', 'x']);
+    expect(sources.map(({ id }) => id)).toEqual(['calendar', 'factory', 'health', 'mail', 'memory', 'news', 'notes', 'nutrition', 'todos', 'travel', 'weather', 'x']);
     const source = sources.at(-1);
     expect(source?.id).toBe('x');
     const result = await source!.read({
@@ -29,7 +29,7 @@ describe('proactive source registry', () => {
       signal: new AbortController().signal,
       settings: defaultProactiveSettings(),
     };
-    for (const id of ['calendar', 'factory', 'mail', 'todos', 'travel', 'weather'] as const) {
+    for (const id of ['calendar', 'factory', 'mail', 'todos', 'travel', 'weather', 'health', 'nutrition', 'notes', 'memory'] as const) {
       await expect(sources.find((source) => source.id === id)!.read(context)).resolves.toMatchObject({
         source: id,
         state: 'unavailable',

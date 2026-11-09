@@ -143,3 +143,18 @@ describe('proactive prompt', () => {
     expect(small.guidance.length).toBeLessThan(source.guidance.length);
   });
 });
+
+
+describe('cross-domain prompt coverage', () => {
+  it('keeps a busy task stream from crowding health, nutrition, notes or memory out of the request', () => {
+    const facts = [
+      ...Array.from({ length: 100 }, (_, index) => ({ ...fact(`todos:${index}`, input.now.toISOString()), text: 'Task context '.repeat(60) })),
+      ...(['health', 'nutrition', 'notes', 'memory'] as const).map(kind => ({ ...fact(`${kind}:0`, input.now.toISOString()), kind: kind === 'notes' ? 'note' as const : kind, text: 'Source context' })),
+    ];
+    const prompt = buildProactivePrompt({ ...input, facts });
+    for (const source of ['health', 'nutrition', 'notes', 'memory']) {
+      expect(prompt.facts.some(fact => fact.ref === `${source}:0`)).toBe(true);
+    }
+    expect(Buffer.byteLength(prompt.content)).toBeLessThanOrEqual(32 * 1024);
+  });
+});

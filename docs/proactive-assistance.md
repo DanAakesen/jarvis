@@ -842,3 +842,7 @@ When the existing proactive checks flag is on, chat and voice can retrieve the
 current owner-scoped findings with one read-only tool, using the same item query
 as the Proactive page. Results are bounded and explicitly marked as untrusted
 data; recall does not mark findings seen, approve anything or trigger work.
+
+## Cross-app normal insights (9 November 2026)
+
+Owner-approved follow-up PR #1669 adds Health/training, nutrition, Notes and Memory evidence plus model-only ordinary task context. Normal model findings can be sent through native APNs, with browser fallback when no native device is registered. Check now can produce a real normal-insight notification. Existing source/category preferences, quiet hours, budget and receipts still apply. The owner declined shadow mode, new policy stages and feedback learning and wants actual notification details for personal use. [Current implementation and primary handoff](research/intelligent-proactive-notifications.md) supersede earlier research recommendations.

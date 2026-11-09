@@ -38,6 +38,9 @@ function sanitizeLine(value) {
 function notificationText(payload) {
   if (payload?.v === 2 && typeof payload.title === 'string' && typeof payload.body === 'string') {
     const title = sanitizeLine(payload.title);
+    if (payload.kind === 'insight' && title && title.toLowerCase() !== 'jarvis') {
+      return { title: truncate(title, 80), body: truncate(sanitizeLine(payload.body), 400) };
+    }
     if (title && title.toLowerCase() !== 'jarvis') {
       const body = payload.body.split(/\r\n?|\n|\u2028|\u2029/u)
         .map(sanitizeLine)

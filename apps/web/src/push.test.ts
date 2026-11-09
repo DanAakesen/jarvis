@@ -41,6 +41,13 @@ function createWorker(clients: Record<string, unknown> = {}) {
 }
 
 describe('push service worker', () => {
+  it('shows a generated insight and full useful details without replacing them with a fixed headline', async () => {
+    const { showNotification, dispatch, settle } = createWorker();
+    const body = 'Evidence-backed detail. '.repeat(12).trim();
+    dispatch('push', { data: { json: () => ({ v: 2, itemId, kind: 'insight', title: 'A useful opportunity', body }) } });
+    await settle();
+    expect(showNotification).toHaveBeenCalledWith('A useful opportunity', { body, tag: itemId, data: { itemId } });
+  });
   it('shows a generic notification for payloads without valid templates and malformed data', async () => {
     const { showNotification, dispatch, settle } = createWorker();
     dispatch('push', { data: { json: () => ({ itemId, title: 'Private title', body: 'Private body' }) } });

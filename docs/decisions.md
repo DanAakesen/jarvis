@@ -12194,3 +12194,7 @@ for the five-worker test but insufficient for the full target. Quota discovery
 also checks the Microsoft.Quota catalogue without submitting a request. Do not
 claim 100-worker capacity until quota and the matching configuration are verified.
 The managed route remains inactive and VM retirement is held pending acceptance.
+
+## 2026-11-09 — Intelligent cross-app notifications, direct owner testing
+
+The owner accepts research items 1–3: connect relevant data, compute accurate facts and use intelligence to choose useful notifications. Items 4–5 (additional delivery-policy stage and feedback learning) and shadow mode are explicitly declined. The sole-owner app should include useful actual details rather than add privacy-redacted messages. Reuse existing proactive engine, controls, receipts and native APNs infrastructure; broaden normal informational insights and add no automatic task writes from new context. Keep current schedule and existing source/goal semantics. Implementation is PR #1669; integration/deployment/device acceptance remain primary responsibilities. This supersedes the earlier research proposal's privacy-redaction and shadow-rollout recommendations, without authorizing production configuration or unrelated Daily automation.
