@@ -1,6 +1,11 @@
 name: Chat failure diagnostics
 on:
   workflow_dispatch:
+    inputs:
+      generation:
+        description: Inspect proactive/image failure codes and OpenAI secret names only
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -22,4 +27,11 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       - name: Read fixed-scope recent failure codes without raw logs
+        if: inputs.generation != true
         run: python .github/scripts/chat_failure_diagnostics.py
+      - name: Inspect generation without reading content or secret values
+        if: inputs.generation == true
+        env:
+          SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          INFRA_DEPLOYMENT: ${{ vars.JARVIS_INFRA_DEPLOYMENT_NAME }}
+        run: python .github/scripts/generation_diagnostics.py

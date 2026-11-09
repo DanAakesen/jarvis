@@ -12381,3 +12381,12 @@ No temporary compatibility setting was shipped. VM retirement remains proven by
 Factory is ready for the owner's fresh coding-task acceptance, which is distinct
 from these zero-model-call canaries. Preserve the accepted 300-core quota and
 owner/project admission limits; no 100-worker test or extra quota is authorized.
+
+## Generation diagnostics — 9 November 2026
+
+The existing main-only Chat failure diagnostics workflow now accepts the optional
+`generation=true` input. It reads fixed proactive/image failure classifications
+from the backend's last 24 hours and OpenAI-named Key Vault secret metadata via ARM.
+It reads no secret values, prompts, image bytes or model text, performs no writes
+and does not replay jobs. Historical proactive output validation did not retain
+the specific failing field; this inspection must not imply otherwise.
