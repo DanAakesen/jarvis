@@ -1,3 +1,7 @@
+## Home brief and daily activity implementation — 9 November 2026
+
+Home briefs are grounded in available calendar/tasks and optional nutrition/weather context, generated through the existing model infrastructure. The owner edits Home instructions and a 1–6 visible-line limit (default 3) in the canonical Instructions destination. All-day Active kcal uses merged HealthKit activeEnergyBurned; exercise minutes uses appleExerciseTime. Workout counts remain separate.
+
 ## Push to conversation continuity — 9 November 2026
 
 Opening a proactive notification enters the existing normal chat. Its saved finding

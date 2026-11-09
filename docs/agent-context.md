@@ -1,3 +1,7 @@
+## Home brief and daily activity implementation — 9 November 2026
+
+PR #1689 is secondary-owned implementation/qualification of configurable Home briefs and canonical merged daily activity. No live changes. Home instruction scope must never become general chat instructions. All-day activity must never fall back to workout sums or basal energy. Missing quantities are unknown, not zero. Primary owns integration/deployment and installed-device acceptance.
+
 ## Push-to-chat branch qualification — 9 November 2026
 
 `feature/push-chat-continuity` changes notification navigation/context and adds

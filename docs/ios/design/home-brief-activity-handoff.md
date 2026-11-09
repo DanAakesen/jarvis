@@ -1,3 +1,11 @@
+## Secondary implementation — PR #1689
+
+Branch: `feature/home-brief-daily-activity`. Backend/native/web implementation is in progress; isolated CI qualification is pending. Primary owns integration/deployment. No live settings, data or infrastructure were changed.
+
+The Home brief currently uses calendar/tasks and optional nutrition/weather context. Health source facts are deliberately excluded until their context adapter carries the merged-daily provenance required to quote all-day activity safely. This does not affect the Home/Health activity tiles. Existing model deployment/credentials are reused; no new deployment is provisioned.
+
+Remaining checks: installed iPhone/Watch HealthKit permissions and unavailable readings, late Watch synchronization, midnight/DST behavior, real English/Danish brief quality and final visual acceptance. Detailed tests and exact revision will be recorded in the draft PR after qualification.
+
 # Home brief and activity totals — secondary implementation handoff
 
 Investigated against main `6601dbb8ca074e3f8059300f34fc9d8a4733bfcb` on

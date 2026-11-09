@@ -1,3 +1,7 @@
+## Home brief and daily activity implementation — 9 November 2026
+
+Implemented in PR #1689 on feature/home-brief-daily-activity; qualification is in progress. Primary owns integration and deployment. Remaining installed-device checks include HealthKit authorization/no-data ambiguity, midnight/DST, late Watch sync and actual model output in English/Danish. No deployment or owner acceptance is claimed.
+
 ## Push-to-chat continuity — 9 November 2026
 
 Implemented on `feature/push-chat-continuity`: owner-scoped durable notification

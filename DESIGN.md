@@ -1,3 +1,7 @@
+## Home brief and daily activity implementation — 9 November 2026
+
+Preserve the accepted Home layout, typography, shared glass surfaces and transparent chrome. The brief uses its configured visible-line limit at every Dynamic Type size; its full text remains available to accessibility. Settings → General → Jarvis → Instructions keeps identity, general/personality, presence modes and Home instructions in distinct saved scopes. Unknown activity is an em dash, partial coverage is identified, and stale retained readings are labeled.
+
 ## Approved push-to-chat continuity — 9 November 2026
 
 The owner selected direct continuity into normal chat and retained its existing

@@ -101,3 +101,30 @@ describe('idempotency', () => {
     expect(normalized.feedKinds).toEqual(['metrics']);
   });
 });
+
+describe('all-day activity provenance', () => {
+  it('keeps non-workout activity, true zero and latest merged day without raw-source double counting', () => {
+    const batch = parse({ samples: [
+      sample('energy-early', { metric: 'active_energy_burned', unit: 'kcal', value: 200, aggregation: 'daily_total',
+        start: '2026-11-03T23:00:00Z', end: '2026-11-04T10:00:00Z' }),
+      sample('energy-late', { metric: 'active_energy_burned', unit: 'kcal', value: 420, aggregation: 'daily_total',
+        start: '2026-11-03T23:00:00Z', end: '2026-11-04T15:00:00Z' }),
+      sample('energy-watch', { metric: 'active_energy_burned', unit: 'kcal', value: 400, source: 'Watch' }),
+      sample('exercise', { metric: 'apple_exercise_time', unit: 'min', value: 24, aggregation: 'daily_total' }),
+      sample('zero', { metric: 'active_energy_burned', unit: 'kcal', value: 0, aggregation: 'daily_total',
+        start: '2026-11-04T23:00:00Z', end: '2026-11-05T12:00:00Z' }),
+    ] });
+    const result = normalizeHealth(deviceSyncPayload(batch));
+    expect(result.workouts).toHaveLength(0);
+    expect(result.metrics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ metric_name: 'active_energy_burned', metric_date: '2026-11-04', value: 420 }),
+      expect.objectContaining({ metric_name: 'apple_exercise_time', value: 24 }),
+      expect.objectContaining({ metric_name: 'active_energy_burned', metric_date: '2026-11-05', value: 0 }),
+    ]));
+    expect(deviceSyncId(batch)).toBe(deviceSyncId(parse({ samples: [...batch.samples].reverse() })));
+  });
+  it('rejects invented aggregation and negative daily totals', () => {
+    expect(parseDeviceSync({ samples: [sample('invalid', { aggregation: 'sum' })] }).ok).toBe(false);
+    expect(parseDeviceSync({ samples: [sample('invalid', { aggregation: 'daily_total', value: -1 })] }).ok).toBe(false);
+  });
+});
