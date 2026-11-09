@@ -4717,8 +4717,9 @@ the current OpenAI API. Official API documentation lists GPT Image 2.6 Sunburst
 and Flare; the implementation selects Sunburst for detailed mock-ups. The backend
 uses its existing Key Vault identity and private artifact storage, without a
 Factory worker. Required secret defaults to `openai-api-key`; an alternate name
-can be set with `JARVIS_OPENAI_IMAGE_SECRET_NAME`. Credential presence and live
-API generation have not yet been verified. No new key is created by this change.
+can be set with `JARVIS_OPENAI_IMAGE_SECRET_NAME`. Azure metadata checks 42681044657 and 42686082051 found no OpenAI-named
+secrets. Live API generation awaits the owner adding `openai-api-key` (or
+identifying an existing key under another name). No new key was created.
 
 The 18:00 proactive message maps to `invalid_model_output`, not an owner approval.
 Historical code collapsed response truncation/refusal, invalid JSON and finding
@@ -4744,4 +4745,9 @@ Qualification correction: CI 42682000377 passed 7,421 backend tests and found on
 unregistered-log-event failure. Both new diagnostic events now have explicit
 reason/numeric-field allowlists; stdout and telemetry redaction tests and the
 source-registration check pass locally (239 focused tests). Full agent suite:
-1,319 passed. Final CI and production qualification are still pending.
+1,319 passed. Final CI 42684036400 and CodeQL 42684036900 passed on
+774b087a, including 7,424 backend tests. An unchanged PC-bridge test hit a
+listener-disposal race on the first attempt and passed on retry. PR #1694 merged
+as 9eb1e87f. Production deployment 42685720635 passed: backend and Jarvis
+agent activation, deterministic readiness and live conversation acceptance.
+No native build is required. Live image generation remains unverified until the credential exists.
