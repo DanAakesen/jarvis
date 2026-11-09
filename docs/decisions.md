@@ -1,3 +1,9 @@
+## 9 November 2026 — Configurable Home brief and independent daily activity
+
+The owner requests a model-generated, evidence-grounded Home brief with an editable instruction and 1–6 visible lines (default 3). Consolidate identity, general/personality, presence-mode and Home editors in one Instructions destination while preserving separate scopes and stored values; expose the same preferences through web and existing settings tools. Home guidance must not become ordinary chat instructions.
+
+Active kcal means merged HealthKit activeEnergyBurned, including activity outside workouts and excluding basal energy. Exercise minutes means appleExerciseTime, independently of workout count. Home and Health share these definitions across Today/7d/14d/30d in Copenhagen time. Missing readings remain unknown; explicit zero is preserved. Repeated daily sync replaces coverage rather than adding another source. Secondary implementation and qualification are tracked in PR #1689; primary owns integration/deployment and device acceptance.
+
 ## 2026-11-09 — Owner requests do not need a second approval
 
 The owner explicitly rejects repeated approvals and prescribed command wording.
