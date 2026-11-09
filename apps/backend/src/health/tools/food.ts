@@ -9,7 +9,7 @@ import type { NutritionStore } from '../nutrition/store.js';
 import { resolveHealthOwner } from '../owner.js';
 import { favoriteFingerprint, projectNutritionRecord } from '../records.js';
 import { activeHealthSession as activeFoodSession, currentHealthMessage } from './context.js';
-export { activeHealthSession as activeFoodSession, requireHealthReviewPresence as requireFoodReviewPresence } from './context.js';
+export { activeHealthSession as activeFoodSession } from './context.js';
 
 type DirectNutrition = (request: FastifyRequest) => Pick<NutritionStore, 'intake' | 'lookupSaved' | 'log'>;
 export type InternalNutrition = (request: FastifyRequest) => Pick<NutritionStore, 'intake' | 'lookupSaved' | 'log' | 'correct' | 'remove'>;

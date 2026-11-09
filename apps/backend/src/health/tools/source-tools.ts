@@ -335,7 +335,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
     });
   const coachProfileTool: JarvisTool = {
     name: 'health_coach_profile',
-    description: 'Read the saved coach profile, or update only fields explicitly requested in ordinary conversation. Every update requires exact browser Now approval before persistence; caller-supplied confirmation flags are not accepted. An unconfigured profile stays unconfigured and is not filled with invented defaults.',
+    description: 'Read the saved coach profile, or update only fields explicitly requested in ordinary conversation. Execute requested updates directly; caller-supplied confirmation flags are not accepted. An unconfigured profile stays unconfigured and is not filled with invented defaults.',
     inputSchema: schema({
       operation: { type: 'string', enum: ['read', 'update'] },
       patch: { type: 'object', additionalProperties: true },
@@ -357,7 +357,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
       const summary = `Review this exact coach profile update in Now. Nothing has changed yet.\n${JSON.stringify({ before: current.profile, patch })}`;
       if (summary.length > 8_000) throw new ToolRefusal('The profile change is too large to review safely.');
       const interactions = request.server.ownerInteractions;
-      if (!interactions) throw new ToolRefusal('Now approval is unavailable. No profile field was changed.');
+      if (!interactions) throw new ToolRefusal('Action execution is unavailable. No profile field was changed.');
       return interactions.runConfirmed('other', summary, async () => {
         const latest = await store.profile(signal);
         if (latest.status !== 'available' || BigInt(String(latest.profile.revision)) !== revision) throw new ToolRefusal('The coach profile changed. Read it and review the update again.');
@@ -367,7 +367,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
   };
   const mealPreferenceTool: JarvisTool = {
     name: 'health_meal_preference',
-    description: 'Set or clear the owner’s like/dislike for one exact favorite or meal key. This changes feedback only, never intake or Health. Every change requires exact browser Now approval; null clears the preference. No caller-supplied confirmation or owner fields.',
+    description: 'Set or clear the owner’s like/dislike for one exact favorite or meal key. This changes feedback only, never intake or Health. Execute requested changes directly; null clears the preference. No caller-supplied confirmation or owner fields.',
     inputSchema: schema({ mealKey: { type: 'string', minLength: 3, maxLength: 200 }, preference: { type: ['string', 'null'], enum: ['like', 'dislike', null] } }, ['mealKey', 'preference']),
     sensitive: true, denyOnPhone: true, bodyLimit: 2 * 1024,
     execute: async (raw, request, signal) => {
@@ -380,7 +380,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
       const current = (await store.preferences([input.mealKey], signal))[0] ?? null;
       if ((current?.preference ?? null) === input.preference) return { status: 'unchanged', mealKey: input.mealKey, preference: input.preference };
       const interactions = request.server.ownerInteractions;
-      if (!interactions) throw new ToolRefusal('Now approval is unavailable. No meal preference was changed.');
+      if (!interactions) throw new ToolRefusal('Action execution is unavailable. No meal preference was changed.');
       const revision = current ? BigInt(String(current.revision)) : 0n;
       return interactions.runConfirmed('other', `Review this exact meal preference in Now. No food or Health row changes.\n${JSON.stringify({
         mealKey: input.mealKey, before: current?.preference ?? null, after: input.preference,
@@ -395,7 +395,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
   };
   const recoveryTool: JarvisTool = {
     name: 'health_recovery_period',
-    description: 'Mark or clear one to 365 past or current dates as recovery days, without modifying measured health, sleep, workout or food data. Recovery markers are excluded from selected analytical totals. Every write requires exact browser Now approval; clear cannot include context. No caller-supplied confirmation or owner fields.',
+    description: 'Mark or clear one to 365 past or current dates as recovery days, without modifying measured health, sleep, workout or food data. Recovery markers are excluded from selected analytical totals. Execute requested writes directly; clear cannot include context. No caller-supplied confirmation or owner fields.',
     inputSchema: schema({ startDate: dateSchema, endDate: dateSchema, state: { type: 'string', enum: ['sick', 'clear'] }, context: { type: 'string', minLength: 1, maxLength: 280 } }, ['startDate', 'endDate']),
     sensitive: true, denyOnPhone: true, bodyLimit: 2 * 1024,
     execute: async (raw, request, signal) => {
@@ -411,7 +411,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
       const store = coach(request);
       const before = await store.recovery(period.startDate, period.endDate, signal);
       const interactions = request.server.ownerInteractions;
-      if (!interactions) throw new ToolRefusal('Now approval is unavailable. No recovery marker was changed.');
+      if (!interactions) throw new ToolRefusal('Action execution is unavailable. No recovery marker was changed.');
       return interactions.runConfirmed('other', `Review this exact recovery-period change in Now. Measured records remain untouched.\n${JSON.stringify({
         ...period, state, context: input.context ?? null, before: before.map(row => ({
           date: row.recovery_date instanceof Date ? row.recovery_date.toISOString().slice(0, 10) : String(row.recovery_date).slice(0, 10),
@@ -460,13 +460,13 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
       [{ operation: 'get_health_summary', tool: healthSummaryTool },
         { operation: 'get_health_history', tool: healthHistoryTool }]),
     grouped('health_nutrition_history',
-      'Read canonical named-meal history, analyze nutrition totals/trends, calculate known calorie balance, or set one meal preference. Use operation get_nutrition_history, analyze_nutrition, get_calorie_balance, or set_meal_preference. History reads one bounded window/page per call; replay coverage.continuation with the original explicit startDate/endDate when the requested answer needs more. Never call a first page the full year/history. Disclose actual loaded windows/records and remaining limits; stop at the assistant tool/time budget and label failed, interrupted or budget-limited traversal partial. Retained exhaustion is not source completeness, which stays unknown. Writes require exact browser Now approval. Health nutrient observations are not named meals; unknown values remain null.',
+      'Read canonical named-meal history, analyze nutrition totals/trends, calculate known calorie balance, or set one meal preference. Use operation get_nutrition_history, analyze_nutrition, get_calorie_balance, or set_meal_preference. History reads one bounded window/page per call; replay coverage.continuation with the original explicit startDate/endDate when the requested answer needs more. Never call a first page the full year/history. Disclose actual loaded windows/records and remaining limits; stop at the assistant tool/time budget and label failed, interrupted or budget-limited traversal partial. Retained exhaustion is not source completeness, which stays unknown. Execute requested writes directly. Health nutrient observations are not named meals; unknown values remain null.',
       [{ operation: 'get_nutrition_history', tool: nutritionHistoryTool },
         { operation: 'analyze_nutrition', tool: nutritionAnalyzeTool },
         { operation: 'get_calorie_balance', tool: calorieBalanceTool },
         { operation: 'set_meal_preference', tool: mealPreferenceTool }]),
     grouped('health_coach_status',
-      'Read conversational Status, read or update the saved coach profile, or mark/clear recovery dates. Use get_coach_status, get_coach_profile, update_coach_profile, or set_recovery_period. Every write uses exact browser Now approval; no fixed Status renderer, commitments, defaults or measured-data changes.',
+      'Read conversational Status, read or update the saved coach profile, or mark/clear recovery dates. Use get_coach_status, get_coach_profile, update_coach_profile, or set_recovery_period. Execute requested writes directly; no fixed Status renderer, commitments, defaults or measured-data changes.',
       [{ operation: 'get_coach_status', tool: coachStatusTool },
         { operation: 'get_coach_profile', tool: coachProfileTool, injected: { operation: 'read' }, exclude: ['patch'] },
         { operation: 'update_coach_profile', tool: coachProfileTool, required: ['patch'], injected: { operation: 'update' } },

@@ -4151,22 +4151,16 @@ describe('backend-relayed Voice Live WebSocket', () => {
   });
 });
 
-describe('food estimate confirmation turns', () => {
+describe('direct food estimate voice turns', () => {
   it.each([
-    { path: '/voice', discovery: false, cancel: false, interrupt: false }, { path: '/voice/da', discovery: false, cancel: false, interrupt: false },
-    { path: '/voice', discovery: true, cancel: false, interrupt: false }, { path: '/voice/da', discovery: true, cancel: false, interrupt: false },
-    { path: '/voice', discovery: false, cancel: true, interrupt: false }, { path: '/voice/da', discovery: true, cancel: true, interrupt: false },
-    { path: '/voice', discovery: false, cancel: false, interrupt: true }, { path: '/voice/da', discovery: true, cancel: false, interrupt: true },
-  ])('delivers only a current food invitation before a new owner reply in $path (discovery: $discovery, cancel: $cancel, interrupt: $interrupt)', async ({ path, discovery, cancel, interrupt }) => {
+    { path: '/voice', discovery: false }, { path: '/voice/da', discovery: false },
+    { path: '/voice', discovery: true }, { path: '/voice/da', discovery: true },
+  ])('logs the requested estimate directly in $path (discovery: $discovery)', async ({ path, discovery }) => {
     let upstream!: WebSocket;
     let connections = 0;
     const ready = Promise.withResolvers<void>();
     const outputs = new Map<string, Record<string, unknown>>();
     const invitations: string[] = [];
-    const staged = Promise.withResolvers<void>();
-    const invitationText = path === '/voice/da'
-      ? 'Estimat: Synthetic portion, 200 kcal, usikre portionsmål. Vil du logge det?'
-      : 'Estimate: Synthetic portion, 200 kcal, uncertain portions. Would you like to log it?';
     const receiptText = 'Logged Synthetic portion: 200 kcal. Receipt: committed.';
     const upstreamUrl = await echoServer(socket => {
       upstream = socket;
@@ -4183,18 +4177,7 @@ describe('food estimate confirmation turns', () => {
           outputs.set(event.item.call_id, JSON.parse(event.item.output));
         }
         if (event.type === 'response.create' && event.response?.instructions?.includes('Present this exact server-staged food estimate')) {
-          expect(event.response).toMatchObject({ tools: [], tool_choice: 'none' });
-          expect(event.response.instructions).toContain('Synthetic portion');
-          expect(event.response.instructions).toContain('- Calories: 200 kcal');
-          expect(event.response.instructions).toContain('- Protein: unknown (not zero) g');
-          expect(event.response.instructions).toContain('- Fat: unknown (not zero) g');
-          expect(event.response.instructions).toContain('Uncertainty:');
           invitations.push(event.response.instructions);
-          socket.send(JSON.stringify({ type: 'response.created', response: { id: 'food-invitation' } }));
-          socket.send(JSON.stringify({ type: 'response.audio.delta', delta: Buffer.alloc(480).toString('base64') }));
-          socket.send(JSON.stringify({ type: 'response.audio_transcript.done', item_id: 'food-invitation-item', transcript: invitationText }));
-          socket.send(JSON.stringify({ type: interrupt ? 'response.cancelled' : 'response.done',
-            response: { id: 'food-invitation', status: interrupt ? 'cancelled' : 'completed' } }));
         } else if (event.type === 'response.create' && outputs.get('food-estimate')?.outcome === 'ok') {
           socket.send(JSON.stringify({ type: 'response.created', response: { id: 'food-receipt' } }));
           socket.send(JSON.stringify({ type: 'response.audio_transcript.done', transcript: receiptText }));
@@ -4232,7 +4215,7 @@ describe('food estimate confirmation turns', () => {
       getDanMessagesAfter: async ({ after }) => messages.filter(message => message.role === 'dan' && BigInt(message.id) > BigInt(after))
         .map(({ id, text }) => ({ id, text, language: 'en' as const })),
     };
-    app.awayModeStore = { read: async () => ({ mode: 'present', source: 'manual', changedAt: null }),
+    app.awayModeStore = { read: async () => ({ mode: 'away', source: 'manual', changedAt: null }),
       set: vi.fn(), markPresent: vi.fn() };
     const service = createOwnerInteractionService({ ownerObjectId: config.auth.ownerObjectId,
       onConfirmationsChanged: () => app.nowEventHub.publish({ type: 'refresh' }),
@@ -4240,7 +4223,6 @@ describe('food estimate confirmation turns', () => {
         app.nowEventHub.publish(foodEstimate
           ? { type: 'food_estimate_pending', ...foodEstimate, confirmation }
           : { type: 'status', kind: 'approval_pending' });
-        staged.resolve();
       },
       conversationStore: app.conversationStore, store: {
       createConfirmation: vi.fn(async () => {}),
@@ -4257,7 +4239,7 @@ describe('food estimate confirmation turns', () => {
     browser.on('message', data => delivered.push(JSON.parse(data.toString())));
     await ready.promise;
     upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
-      item_id: 'food-request', transcript: 'Estimate this synthetic food portion.' }));
+      item_id: 'food-request', transcript: 'Log this synthetic food portion as an estimate.' }));
     await vi.waitFor(() => expect(messages).toHaveLength(1));
     const call = (name: string, callId: string, args: unknown) => {
       const item = { type: 'function_call', name, call_id: callId, arguments: JSON.stringify(args) };
@@ -4282,36 +4264,14 @@ describe('food estimate confirmation turns', () => {
     const args = { change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion', energyKcal: 200 } } };
     call(discovery ? 'jarvis_execute_capability' : 'health_food_review', 'food-estimate',
       discovery ? { capability: 'health_food_review', arguments: args } : args);
-    await staged.promise;
-    expect(invitations).toEqual([]);
-    expect(log).not.toHaveBeenCalled();
-    if (cancel) await service.expirePendingConfirmations();
     upstream.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
-    if (cancel) {
-      await vi.waitFor(() => expect(outputs.get('food-estimate')).toMatchObject({ outcome: 'refused' }));
-      expect(invitations).toEqual([]);
-      expect(log).not.toHaveBeenCalled();
-      return;
-    }
-    await vi.waitFor(() => expect(delivered).toContainEqual({
-      type: 'response.audio_transcript.done', item_id: 'food-invitation-item', transcript: invitationText,
-    }));
-    expect(delivered).toContainEqual(expect.objectContaining({ type: 'response.audio.delta' }));
-    await vi.waitFor(() => expect(messages.some(message => message.role === 'jarvis' &&
-      message.text.includes('- Protein: unknown (not zero) g\n- Calories: 200 kcal\n- Fat: unknown (not zero) g'))).toBe(true));
-    expect(invitations).toHaveLength(1);
-    expect(outputs.has('food-estimate')).toBe(false);
-    expect(log).not.toHaveBeenCalled();
-    upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
-      item_id: 'food-approval', transcript: path === '/voice/da' ? 'ja tak, log det' : 'Log it' }));
     await vi.waitFor(() => expect(outputs.get('food-estimate')).toMatchObject({ outcome: 'ok',
       result: { status: 'committed', record: { energy_kcal: 200, capture_method: 'voice' } } }));
     await vi.waitFor(() => expect(delivered).toContainEqual({
       type: 'response.audio_transcript.done', transcript: receiptText,
     }));
-    upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
-      item_id: 'food-repeat', transcript: 'yes' }));
-    await vi.waitFor(() => expect(messages.filter(message => message.role === 'dan')).toHaveLength(3));
+    expect(invitations).toEqual([]);
+    expect(messages.filter(message => message.role === 'dan')).toHaveLength(1);
     expect(log).toHaveBeenCalledOnce();
     expect(service.pendingBrowserConfirmations()).toEqual([]);
   });

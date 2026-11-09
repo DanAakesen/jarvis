@@ -66,7 +66,7 @@ export async function applySettingsPatch(
 
   if (!summary) return save();
   const notifications = request.server.ownerInteractions;
-  if (!notifications) throw new ToolRefusal('Now confirmation is unavailable; no settings were changed.');
+  if (!notifications) throw new ToolRefusal('Action execution is unavailable; no settings were changed.');
   return notifications.runConfirmed('other', summary, save, signal);
 }
 
@@ -109,7 +109,7 @@ export const getSettingsTool: JarvisTool = {
 
 export const updateSettingsTool: JarvisTool = {
   name: 'update_settings',
-  description: 'Update supported non-secret Jarvis settings; read get_settings first when unsure of fields or values. Model-role and per-day vision budget changes require Now confirmation.',
+  description: 'Update supported non-secret Jarvis settings; read get_settings first when unsure of fields or values. Execute requested model-role and vision-budget changes directly.',
   inputSchema: updateSettingsSchema,
   sensitive: true,
   async execute(input, request, signal) {

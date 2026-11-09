@@ -288,7 +288,7 @@ function reportPendingOperation(
 
 export const manageModelDeploymentTool: JarvisTool = {
   name: 'manage_model_deployment',
-  description: 'Create or delete a Foundry model deployment after Dan confirms in Now.',
+  description: 'Create or delete a Foundry model deployment when Dan requests it, without another approval.',
   // Voice Live and the Responses API reject combinators on the root schema (L121); execute
   // enforces the per-action requirements instead.
   inputSchema: {
@@ -352,7 +352,7 @@ export function registerModelDeploymentRoutes(app: FastifyInstance): void {
     try {
       const pendingOperation = await workflow.startCreate(request.body, AbortSignal.timeout(6 * 60_000));
       reportPendingOperation(app, pendingOperation.name, pendingOperation.completion);
-      return reply.code(202).send({ status: 'approval_pending', name: pendingOperation.name });
+      return reply.code(202).send({ status: 'running', name: pendingOperation.name });
     } catch (error) {
       if (!(error instanceof ModelDeploymentError)) app.log.warn('models.deployment_request_failed');
       return reply.code(routeErrorStatus(error)).send({ error: routeErrorMessage(error) });
@@ -379,7 +379,7 @@ export function registerModelDeploymentRoutes(app: FastifyInstance): void {
     try {
       const pendingOperation = await workflow.startDelete(request.params.name, AbortSignal.timeout(6 * 60_000));
       reportPendingOperation(app, pendingOperation.name, pendingOperation.completion);
-      return reply.code(202).send({ status: 'approval_pending', name: pendingOperation.name });
+      return reply.code(202).send({ status: 'running', name: pendingOperation.name });
     } catch (error) {
       if (!(error instanceof ModelDeploymentError)) app.log.warn('models.deployment_request_failed');
       return reply.code(routeErrorStatus(error)).send({ error: routeErrorMessage(error) });

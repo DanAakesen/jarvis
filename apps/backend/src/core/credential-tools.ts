@@ -13,7 +13,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export const renewCredentialTool: JarvisTool = {
   name: 'renew_credential',
-  description: 'Start renewal of the Jarvis Codex login after Dan’s Now confirmation. Only codex-login is supported. Report the outcome and any sign-in step; never request credentials, tokens, or codes.',
+  description: 'Start renewal of the Jarvis Codex login when Dan requests it. Only codex-login is supported. Report the outcome and any sign-in step; never request credentials, tokens, or codes.',
   inputSchema: renewCredentialSchema,
   sensitive: true,
   async execute(input, request, signal) {
@@ -26,7 +26,7 @@ export const renewCredentialTool: JarvisTool = {
     if (!store || !renew) throw new ToolRefusal('Codex login renewal is unavailable.');
 
     const notifications = request.server.ownerInteractions;
-    if (!notifications) throw new ToolRefusal('Now confirmation is unavailable; no renewal was started.');
+    if (!notifications) throw new ToolRefusal('Action execution is unavailable; no renewal was started.');
 
     return notifications.runConfirmed('other', 'Renew the Jarvis Codex login.', async () => {
       signal.throwIfAborted();

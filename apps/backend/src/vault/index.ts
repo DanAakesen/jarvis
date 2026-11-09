@@ -1648,7 +1648,7 @@ export function createVaultModule(options: {
     },
     {
       name: 'vault_delete',
-      description: 'Permanently delete one safe Markdown note from Dan’s GitHub vault, except notes in dot-directories. Use only when Dan explicitly asks to delete it; the exact path is shown in a Now confirmation before the commit.',
+      description: 'Permanently delete one safe Markdown note from Dan’s GitHub vault, except notes in dot-directories. Use only when Dan explicitly asks to delete it; resolve the exact path and execute the request without another approval.',
       inputSchema: {
         type: 'object',
         properties: { path: { type: 'string', minLength: 1, maxLength: maxPathLength } },
@@ -1666,19 +1666,10 @@ export function createVaultModule(options: {
         const path = validateWritePath(value.path);
         const service: OwnerInteractionService | null = request.server.ownerInteractions;
         if (!service) {
-          throw new ToolRefusal('Dan’s Now approval service is unavailable; the note was not deleted.');
-        }
-        try {
-          if (request.server.awayModeStore &&
-              (await request.server.awayModeStore.read()).mode !== 'present') {
-            throw new ToolRefusal('Vault deletion requires Dan’s browser confirmation while present.');
-          }
-        } catch (error) {
-          if (error instanceof ToolRefusal) throw error;
-          throw new ToolRefusal('Dan’s Now approval service is unavailable; the note was not deleted.');
+          throw new ToolRefusal('Action execution is unavailable; the note was not deleted.');
         }
         if (pendingVaultDeletions.has(path)) {
-          throw new ToolRefusal('A deletion for this vault note is already awaiting approval.');
+          throw new ToolRefusal('This vault note is already being deleted.');
         }
         pendingVaultDeletions.add(path);
         const operationSignal = AbortSignal.any([signal, AbortSignal.timeout(6 * 60_000)]);
@@ -2726,25 +2717,16 @@ export function createVaultModule(options: {
         }
         const note = await options.client.read(path, signal);
         if (!note) return reply.code(404).send({ error: 'Memory not found' });
-        const service: OwnerInteractionService | null = app.ownerInteractions;
-        if (!service) return reply.code(503).send({ error: 'Web approval unavailable' });
-        try {
-          if (app.awayModeStore && (await app.awayModeStore.read()).mode !== 'present') {
-            return reply.code(409).send({ error: 'Web approval is unavailable while Jarvis is away' });
-          }
-        } catch {
-          return reply.code(503).send({ error: 'Web approval unavailable' });
-        }
         if (pendingVaultDeletions.has(path)) {
-          return reply.code(202).send({ status: 'approval_pending', message: 'approval pending in Jarvis' });
+          return reply.code(409).send({ error: 'This note is already being deleted.' });
         }
         pendingVaultDeletions.add(path);
-        void service.runConfirmed('delete', `Permanently delete vault note ${path}.`, async () => {
-          return deleteNote(path, note.sha, AbortSignal.timeout(30_000));
-        }, AbortSignal.timeout(6 * 60_000)).catch(() => {
-          app.log.warn('memory.vault_forget_failed');
-        }).finally(() => { pendingVaultDeletions.delete(path); });
-        return reply.code(202).send({ status: 'approval_pending', message: 'approval pending in Jarvis' });
+        try {
+          await deleteNote(path, note.sha, signal);
+          return reply.code(204).send();
+        } finally {
+          pendingVaultDeletions.delete(path);
+        }
       });
     },
   };

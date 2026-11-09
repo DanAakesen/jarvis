@@ -1,9 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationMessage } from '../core/conversation-store.js';
-import { approvalInstruction, approvalNotPending, approvalUnclear } from '../core/approval.js';
-import { approvalDeciderFor } from '../core/approval-interpreter.js';
-import { PendingAction } from '../core/pending-action.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { GitHubAppRequestError, type GitHubAppTokenIssuer } from '../github-app.js';
 import { containsLikelySecret } from './issues.js';
@@ -28,8 +25,8 @@ const untrustedWarning = 'GitHub issues, pull requests, comments, workflow data 
 const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 const branchPattern = /^[A-Za-z0-9._/-]{1,255}$/u;
 const shaPattern = /^[0-9a-f]{40}$/iu;
-const approvalTtlMs = 10 * 60_000;
-const maxPendingApprovals = 100;
+const actionReceiptTtlMs = 10 * 60_000;
+const maxTrackedActions = 100;
 
 function validRepository(repository: string): boolean {
   if (!repositoryPattern.test(repository)) return false;
@@ -60,10 +57,9 @@ interface OperationDefinition {
   readonly required: string[];
 }
 
-interface PendingApproval {
-  readonly confirmation: PendingAction;
-  readonly warning?: string;
-  readonly explicitProceed?: boolean;
+interface RequestedGitHubAction {
+  readonly expiresAt: number;
+  execute(action: () => Promise<unknown>, signal?: AbortSignal): Promise<unknown>;
 }
 
 class GitHubRequestError extends Error {
@@ -78,7 +74,7 @@ declare module 'fastify' {
   }
 }
 
-const pendingApprovals = new WeakMap<object, Map<string, PendingApproval>>();
+const requestedActions = new WeakMap<object, Map<string, RequestedGitHubAction>>();
 
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
@@ -90,26 +86,12 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value) ?? 'null';
 }
 
-function approvalKey(tool: string, repository: string, input: Input): string {
+function actionKey(tool: string, repository: string, input: Input): string {
   return createHash('sha256')
     .update(`${tool}\n${repository}\n${canonicalJson(input)}`)
     .digest('hex');
 }
 
-function hasExplicitProceed(
-  request: FastifyRequest,
-  tool: string,
-  repository: string,
-  input: Input,
-): boolean {
-  const key = approvalKey(tool, repository, input);
-  const action = pendingApprovals.get(request.server)?.get(key);
-  return Boolean(action?.confirmation.pending && action.explicitProceed === true);
-}
-
-function saysProceed(value: string): boolean {
-  return /\bproceed\b/iu.test(value) && !/\b(?:do not|don['’]?t|dont|never|no|not)\b[^.!?\n]*\bproceed\b/iu.test(value);
-}
 
 function object(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -381,19 +363,19 @@ async function danMessage(request: FastifyRequest): Promise<ConversationMessage>
   if (message) {
     if (request.principal === null || message.role !== 'dan' || !/^[1-9]\d{0,18}$/u.test(message.id) ||
         !hasSession(message)) {
-      throw new ToolRefusal('I need a verified message from Dan before I can request approval.');
+      throw new ToolRefusal('I need a verified message from Dan before I can execute this action.');
     }
     return message;
   }
   const id = request.headers['x-jarvis-message-id'];
   if (typeof id !== 'string' || !/^[1-9]\d{0,18}$/u.test(id) || !request.agentPrincipal ||
       !request.server.conversationStore) {
-    throw new ToolRefusal('I need a verified message from Dan before I can request approval.');
+    throw new ToolRefusal('I need a verified message from Dan before I can execute this action.');
   }
   const page = await request.server.conversationStore.getHistory({ limit: 1 });
   const latest = page.messages[0];
   if (!latest || latest.id !== id || latest.role !== 'dan' || !hasSession(latest)) {
-    throw new ToolRefusal('I need a verified message from Dan before I can request approval.');
+    throw new ToolRefusal('I need a verified message from Dan before I can execute this action.');
   }
   return latest;
 }
@@ -403,82 +385,36 @@ function hasSession(message: ConversationMessage): boolean {
   return typeof message.sessionId === 'string' && message.sessionId.length > 0;
 }
 
-/** A short, bounded description of the staged write for the approval interpreter. Large fields are reported by size. */
-function approvalSummary(tool: string, repository: string, input: Input, warningText?: string): string {
-  const details = Object.keys(input).sort().flatMap((key) => {
-    if (key === 'repository' || key === 'project' || key === 'operation') return [];
-    const value = input[key];
-    if (typeof value === 'string') {
-      return [`${key}: ${key === 'content' || key === 'body' ? `${Buffer.byteLength(value)} bytes` : truncateUtf8(value, 160)}`];
-    }
-    if (typeof value === 'number' || typeof value === 'boolean') return [`${key}: ${value}`];
-    return Array.isArray(value) ? [`${key}: ${value.length} items`] : [];
-  });
-  return [`GitHub ${tool} in ${repository}`, ...details, ...(warningText ? [warningText] : [])].join('\n');
-}
-
-async function approval(
+async function ownerAction(
   request: FastifyRequest,
   signal: AbortSignal,
   tool: string,
   repository: string,
   input: Input,
-  warningText?: string,
-): Promise<PendingAction> {
+): Promise<RequestedGitHubAction> {
   const message = await danMessage(request);
-  const key = approvalKey(tool, repository, input);
+  signal.throwIfAborted();
+  const key = `${message.sessionId}:${message.id}:${actionKey(tool, repository, input)}`;
   const now = Date.now();
-  const actions = pendingApprovals.get(request.server) ?? new Map<string, PendingApproval>();
-  pendingApprovals.set(request.server, actions);
-  const expire = () => {
-    for (const [id, action] of actions) {
-      if (!action.confirmation.pending) {
-        action.confirmation.cancel();
-        actions.delete(id);
-      }
-    }
+  const actions = requestedActions.get(request.server) ?? new Map<string, RequestedGitHubAction>();
+  requestedActions.set(request.server, actions);
+  for (const [id, action] of actions) {
+    if (action.expiresAt <= now) actions.delete(id);
+  }
+  const prior = actions.get(key);
+  if (prior) return prior;
+  if (actions.size >= maxTrackedActions) throw new ToolFailure('Too many GitHub actions are being tracked.');
+  let receipt: Promise<unknown> | undefined;
+  const action: RequestedGitHubAction = {
+    expiresAt: now + actionReceiptTtlMs,
+    execute(write, operationSignal) {
+      operationSignal?.throwIfAborted();
+      receipt ??= Promise.resolve().then(write);
+      return receipt;
+    },
   };
-  expire();
-  const pending = actions.get(key);
-  // Provenance first: a verified later message in the same session. Only then is its meaning interpreted.
-  if (pending?.confirmation.eligible(message)) {
-    const verdict = await pending.confirmation.decision(message, approvalDeciderFor(request), signal);
-    // Nothing below awaits before the approval is consumed, so only one concurrent call can use it.
-    expire();
-    if (signal.aborted || actions.get(key) !== pending) throw new ToolRefusal(approvalNotPending);
-    const warning = warningText ?? pending.warning;
-    let decision: 'approve' | 'decline';
-    try {
-      decision = pending.confirmation.consume(verdict, signal);
-    } catch (error) {
-      if (error instanceof ToolRefusal && error.message === approvalUnclear && warning) {
-        throw new ToolRefusal(`${approvalUnclear} ${warning}`);
-      }
-      throw error;
-    }
-    actions.delete(key);
-    if (decision === 'decline') throw new ToolRefusal('Dan declined, so I made no change.');
-    return pending.confirmation;
-  }
-  if (!pending) {
-    if (actions.size >= maxPendingApprovals) throw new ToolFailure('I have too many pending GitHub approvals; try again shortly.');
-    actions.set(key, {
-      confirmation: new PendingAction({
-        key,
-        summary: approvalSummary(tool, repository, input, warningText),
-        family: 'github',
-        sourceMessageId: message.id,
-        sourceSessionId: message.sessionId,
-        createdAt: now,
-        lifetimeMs: approvalTtlMs,
-      }),
-      ...(warningText ? { warning: warningText } : {}),
-      ...(tool === 'pr_merge' && input.proceedDespiteFailingChecks === true &&
-        saysProceed(message.text) ? { explicitProceed: true } : {}),
-    });
-  }
-  const warning = warningText ?? pending?.warning;
-  throw new ToolRefusal(`I haven’t made this change yet. ${approvalInstruction}${warning ? ` ${warning}` : ''}`);
+  actions.set(key, action);
+  return action;
 }
 
 function rootSchema(properties: Record<string, unknown>, required: string[] = []) {
@@ -922,12 +858,6 @@ function arrayInput(input: Input, name: string): string[] | undefined {
   return input[name] === undefined ? undefined : listOfStrings(input[name]);
 }
 
-async function requireApproval(
-  request: FastifyRequest, signal: AbortSignal, name: string, repository: string, input: Input, warningText?: string,
-) {
-  return approval(request, signal, name, repository, input, warningText);
-}
-
 async function writeHandler(
   input: Input,
   repository: string,
@@ -949,7 +879,7 @@ async function writeHandler(
   scan(input);
   const base = requireRepoName(repository);
   if (name === 'issue_update') {
-    let confirmation: PendingAction | undefined;
+    let confirmation: RequestedGitHubAction | undefined;
     const number = requireNumber(input, 'number');
     const patch: Record<string, unknown> = {};
     const title = text(input, 'title', 500);
@@ -959,7 +889,7 @@ async function writeHandler(
     if (input.state !== undefined) {
       if (!['open', 'closed'].includes(String(input.state))) throw new ToolRefusal('I need issue state open or closed.');
       if (input.state === 'closed') {
-        confirmation = await requireApproval(request, signal, name, repository, input);
+        confirmation = await ownerAction(request, signal, name, repository, input);
       }
       patch.state = input.state;
     }
@@ -1014,7 +944,7 @@ async function writeHandler(
     return { status: 'created', repository, number: result?.number, title: safeString(result?.title, 500), url: safeString(result?.html_url, 500) };
   }
   if (name === 'pr_update') {
-    let confirmation: PendingAction | undefined;
+    let confirmation: RequestedGitHubAction | undefined;
     requireNumber(input, 'number');
     const patch: Record<string, unknown> = {};
     for (const key of ['title', 'body', 'state', 'base'] as const) {
@@ -1023,7 +953,7 @@ async function writeHandler(
         if (key === 'state' && !['open', 'closed'].includes(value)) throw new ToolRefusal('I need pull request state open or closed.');
         if (key === 'base' && !branchPattern.test(value)) throw new ToolRefusal('I need a valid base branch.');
         if (key === 'state' && value === 'closed') {
-          confirmation = await requireApproval(request, signal, name, repository, input);
+          confirmation = await ownerAction(request, signal, name, repository, input);
         }
         patch[key] = value;
       }
@@ -1073,14 +1003,12 @@ async function writeHandler(
     const failing = status?.state === 'failure' || status?.state === 'error' ||
       runs.some((run) => ['failure', 'cancelled', 'timed_out', 'action_required', 'stale'].includes(String(object(run)?.conclusion)));
     if (failing) {
-      const message = await danMessage(request);
-      if (input.proceedDespiteFailingChecks !== true ||
-          (!saysProceed(message.text) && !hasExplicitProceed(request, name, repository, input))) {
+      await danMessage(request);
+      if (input.proceedDespiteFailingChecks !== true) {
         throw new ToolRefusal('I can’t merge while checks are failing. Dan must explicitly say to proceed despite the failures.');
       }
     }
-    const confirmation = await requireApproval(request, signal, name, repository, input,
-      failing ? 'Some checks are failing. I will proceed only because Dan explicitly asked me to continue.' : undefined);
+    const confirmation = await ownerAction(request, signal, name, repository, input);
     const merged = object(await confirmation.execute(() => githubJson(`${base}/pulls/${number}/merge`, token, signal, 'PUT', {
       merge_method: method, sha: expected.toLowerCase(),
     }), signal));
@@ -1130,7 +1058,7 @@ async function writeHandler(
     return { status: 'rerun_requested', repository, runId };
   }
   if (name === 'file_write') {
-    let confirmation: PendingAction | undefined;
+    let confirmation: RequestedGitHubAction | undefined;
     const path = text(input, 'path', 1024, true)!;
     const branch = text(input, 'branch', 255, true)!;
     const content = text(input, 'content', maxFileContentBytes, true)!;
@@ -1144,8 +1072,7 @@ async function writeHandler(
     const isDefaultBranch = metadata?.default_branch === branch;
     const isPublic = metadata?.private === false;
     if (isDefaultBranch || isPublic) {
-      confirmation = await requireApproval(request, signal, name, repository, input,
-        isPublic ? 'This writes content to a public repository where anyone can read it.' : undefined);
+      confirmation = await ownerAction(request, signal, name, repository, input);
     }
     const write = () => githubJson(`${base}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, token, signal, 'PUT', {
       message, content: Buffer.from(content).toString('base64'), branch, ...(sha ? { sha } : {}),
@@ -1172,12 +1099,12 @@ const writeDefinitionsComplete: readonly OperationDefinition[] = [
   { name: 'pr_update', description: 'Update a pull request title, body, base or open/closed state.', permission: { name: 'pull_requests', access: 'write' }, properties: { ...repoProperties, number: issueNumber, title: { type: 'string', maxLength: 500 }, body: { type: 'string', maxLength: 50_000 }, state: { type: 'string', enum: ['open', 'closed'] }, base: { type: 'string', maxLength: 255 } }, required: ['number'] },
   { name: 'pr_comment', description: 'Post a pull request conversation comment directly.', permission: { name: 'pull_requests', access: 'write' }, properties: { ...repoProperties, number: issueNumber, body: { type: 'string', minLength: 1, maxLength: maxCommentBytes } }, required: ['number', 'body'] },
   { name: 'pr_review', description: 'Submit a pull request comment, approval or request-changes review directly.', permission: { name: 'pull_requests', access: 'write' }, properties: { ...repoProperties, number: issueNumber, event: { type: 'string', enum: ['COMMENT', 'APPROVE', 'REQUEST_CHANGES'] }, body: { type: 'string', maxLength: maxCommentBytes } }, required: ['number', 'event'] },
-  { name: 'pr_merge', description: 'Merge a pull request only when its expected head SHA still matches; refuses failing checks unless Dan explicitly asks to proceed and always requires later simple approval.', permission: { name: 'pull_requests', access: 'write', also: [{ name: 'checks', access: 'read' }, { name: 'statuses', access: 'read' }] }, properties: { ...repoProperties, number: issueNumber, expectedHeadSha: { type: 'string', pattern: '^[0-9a-fA-F]{40}$' }, method: { type: 'string', enum: ['merge', 'squash', 'rebase'] }, proceedDespiteFailingChecks: { type: 'boolean' } }, required: ['number', 'expectedHeadSha'] },
+  { name: 'pr_merge', description: 'Merge a pull request only when its expected head SHA still matches; refuses failing checks unless Dan explicitly asks to proceed.', permission: { name: 'pull_requests', access: 'write', also: [{ name: 'checks', access: 'read' }, { name: 'statuses', access: 'read' }] }, properties: { ...repoProperties, number: issueNumber, expectedHeadSha: { type: 'string', pattern: '^[0-9a-fA-F]{40}$' }, method: { type: 'string', enum: ['merge', 'squash', 'rebase'] }, proceedDespiteFailingChecks: { type: 'boolean' } }, required: ['number', 'expectedHeadSha'] },
   { name: 'pr_ready', description: 'Mark a draft pull request ready for review.', permission: { name: 'pull_requests', access: 'write' }, properties: { ...repoProperties, number: issueNumber }, required: ['number'] },
   { name: 'branch_create', description: 'Create a repository branch from a full commit SHA.', permission: { name: 'contents', access: 'write' }, properties: { ...repoProperties, branch: { type: 'string', minLength: 1, maxLength: 255 }, sha: { type: 'string', pattern: '^[0-9a-fA-F]{40}$' } }, required: ['branch', 'sha'] },
   { name: 'workflow_dispatch', description: 'Dispatch a repository workflow on a branch or tag.', permission: { name: 'actions', access: 'write' }, properties: { ...repoProperties, workflow: { type: 'string', minLength: 1, maxLength: 255 }, ref: { type: 'string', minLength: 1, maxLength: 255 }, inputs: { type: 'object', maxProperties: 20, additionalProperties: { type: 'string', maxLength: 1_000 } } }, required: ['workflow', 'ref'] },
   { name: 'workflow_rerun', description: 'Request a rerun of a GitHub Actions workflow run.', permission: { name: 'actions', access: 'write' }, properties: { ...repoProperties, runId: { type: 'integer', minimum: 1 } }, required: ['runId'] },
-  { name: 'file_write', description: 'Create or update a bounded UTF-8 repository file on a branch using SHA-guarded updates; default-branch or public-repository writes need later simple approval.', permission: { name: 'contents', access: 'write' }, properties: { ...repoProperties, path: { type: 'string', minLength: 1, maxLength: 1024 }, branch: { type: 'string', minLength: 1, maxLength: 255 }, content: { type: 'string', minLength: 1, maxLength: maxFileContentBytes }, sha: { type: 'string', pattern: '^[0-9a-fA-F]{40}$' }, message: { type: 'string', minLength: 1, maxLength: 500 } }, required: ['path', 'branch', 'content', 'message'] },
+  { name: 'file_write', description: 'Create or update a bounded UTF-8 repository file on a branch using SHA-guarded updates; default-branch and public-repository writes execute the owner request.', permission: { name: 'contents', access: 'write' }, properties: { ...repoProperties, path: { type: 'string', minLength: 1, maxLength: 1024 }, branch: { type: 'string', minLength: 1, maxLength: 255 }, content: { type: 'string', minLength: 1, maxLength: maxFileContentBytes }, sha: { type: 'string', pattern: '^[0-9a-fA-F]{40}$' }, message: { type: 'string', minLength: 1, maxLength: 500 } }, required: ['path', 'branch', 'content', 'message'] },
   { name: 'label_create', description: 'Create a repository label.', permission: { name: 'issues', access: 'write' }, properties: { ...repoProperties, name: { type: 'string', minLength: 1, maxLength: 100 }, color: { type: 'string', pattern: '^[0-9a-fA-F]{6}$' }, description: { type: 'string', maxLength: 500 } }, required: ['name'] },
 ];
 

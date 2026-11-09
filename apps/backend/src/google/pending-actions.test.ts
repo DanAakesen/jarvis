@@ -471,3 +471,37 @@ describe('pending Google actions: meaning decided by the interpreter, provenance
     expect(f.execute).toHaveBeenCalledOnce();
   });
 });
+
+describe('requested Google action execution', () => {
+  it('shares the same in-flight result for duplicate owner calls without creating an approval', async () => {
+    const actions = new PendingGoogleActions();
+    let finish!: (value: unknown) => void;
+    const execute = vi.fn(() => new Promise(resolve => { finish = resolve; }));
+    const pending = vi.fn();
+    actions.onConfirmationPending = pending;
+    const input = { scope: 'mail' as const, sourceSessionId: '1', sourceMessageId: '42',
+      requestKey: 'exact-input', summary: 'Send requested message', execute, signal: new AbortController().signal };
+    const first = actions.executeRequested(input);
+    const second = actions.executeRequested(input);
+    await Promise.resolve();
+    finish({ status: 'completed' });
+    expect(await first).toEqual(await second);
+    expect(execute).toHaveBeenCalledOnce();
+    expect(pending).not.toHaveBeenCalled();
+  });
+
+  it('honors cancellation before executing and keeps distinct resources distinct', async () => {
+    const actions = new PendingGoogleActions();
+    const controller = new AbortController();
+    controller.abort();
+    const execute = vi.fn(async () => ({ status: 'completed' }));
+    const input = { scope: 'calendar' as const, sourceSessionId: '1', sourceMessageId: '42',
+      requestKey: 'event-one', summary: 'Delete event', execute, signal: controller.signal };
+    expect(() => actions.executeRequested(input)).toThrow();
+    expect(execute).not.toHaveBeenCalled();
+    const signal = new AbortController().signal;
+    await actions.executeRequested({ ...input, signal });
+    await actions.executeRequested({ ...input, signal, requestKey: 'event-two' });
+    expect(execute).toHaveBeenCalledTimes(2);
+  });
+});
