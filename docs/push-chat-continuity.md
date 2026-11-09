@@ -6,7 +6,7 @@ voice follow-up. Normal chat layout, bubbles and composer are unchanged. No gree
 duplicate message, automatic send, context card/banner or extra conversation is added.
 
 Implementation branch: `feature/push-chat-continuity`, based on main
-`6601dbb8ca074e3f8059300f34fc9d8a4733bfcb`. Primary owns review and integration.
+`6601dbb8ca074e3f8059300f34fc9d8a4733bfcb`. PR: [#1686](https://github.com/DanAakesen/jarvis/pull/1686). Primary owns review and integration.
 
 ## Data flow
 
@@ -24,6 +24,7 @@ Implementation branch: `feature/push-chat-continuity`, based on main
 5. Normal chat/steering receives bounded background finding JSON separately from
    the actual owner message/source identity. English/Danish voice refreshes context
    in existing connections and rereads it before responses, without speaking on open.
+   Context reads retain voice response request order even when SQL is slow.
    The selected finding is shared across the owner's normal sessions/devices;
    runtime-test chats do not receive it.
 6. Evidence dates, finding state and feedback remain explicit. The original finding

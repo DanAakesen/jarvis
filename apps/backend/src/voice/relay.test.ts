@@ -4595,3 +4595,39 @@ describe('notification context in voice', () => {
     expect(stop).toHaveBeenCalledOnce();
   });
 });
+
+describe('voice notification context ordering', () => {
+  it('keeps response order while the first context read is delayed', async () => {
+    let release!: () => void;
+    const delayed = new Promise<void>(resolve => { release = resolve; });
+    let reads = 0;
+    const service = {
+      read: vi.fn(async () => {
+        if (++reads === 2) await delayed; // Startup is the first read.
+        return 'Saved notification evidence.';
+      }),
+      select: async () => true, subscribe: () => () => {},
+    };
+    const services = { ...taskReflexServices(), proactiveConversationContext: service };
+    const { browser, upstream, received } = await connectedPartialVoice(
+      partialSpeechHarness(), { classify: vi.fn(async () => null) }, [], services,
+    );
+    const responses = () => received.filter(event => event.type === 'response.create');
+    try {
+      browser.send(JSON.stringify({ type: 'response.create', response: { instructions: 'First requested answer.' } }));
+      await vi.waitFor(() => expect(reads).toBe(2));
+      browser.send(JSON.stringify({ type: 'response.create', response: { instructions: 'Second requested answer.' } }));
+      await new Promise(resolve => setTimeout(resolve, 30));
+      expect(responses()).toHaveLength(0);
+    } finally {
+      release();
+    }
+    await vi.waitFor(() => expect(responses()).toHaveLength(1));
+    expect((responses()[0]!.response as { instructions: string }).instructions).toContain('First requested answer.');
+    const done = once(browser, 'message');
+    upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
+    await done;
+    await vi.waitFor(() => expect(responses()).toHaveLength(2));
+    expect((responses()[1]!.response as { instructions: string }).instructions).toContain('Second requested answer.');
+  });
+});

@@ -3,7 +3,7 @@
 Implemented on `feature/push-chat-continuity`: owner-scoped durable notification
 selection, native push routing to existing Chat, background context in chat/steering
 and English/Danish voice, duplicate-tap reuse and existing error feedback.
-The chat layout and composer remain unchanged. Qualification is pending CI;
+The chat layout and composer remain unchanged. CI qualification is tracked in PR #1686;
 installed-device push delivery and model continuity remain owner checks after primary
 integration. Not merged, deployed or accepted. See [handoff](docs/push-chat-continuity.md).
 

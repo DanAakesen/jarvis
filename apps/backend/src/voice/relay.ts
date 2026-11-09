@@ -1620,38 +1620,49 @@ function registerVoiceRoute(
       });
     };
 
+    const sendPreparedResponseCreate = (message: Record<string, unknown>) => {
+      if (upstream?.readyState !== WebSocket.OPEN) return;
+      if (responseCreateActive || settingsUpdatePending || settingsUpdateQueued) {
+        pendingResponseCreate = message;
+        return;
+      }
+      const next = pendingResponseCreate ?? message;
+      pendingResponseCreate = undefined;
+      responseCreateActive = true;
+      assistantResponding = true;
+      responseDone = false;
+      responseCompletionState = responseCompletion();
+      responseImageUsageItem = pendingImageUsageItem;
+      pendingImageUsageItem = undefined;
+      const response = next.response as Record<string, unknown> | undefined;
+      const composedInstructions = sessionUpdate().session.instructions;
+      const specialInstructions = typeof response?.instructions === 'string' ? response.instructions : '';
+      const instructions = specialInstructions
+        ? `${composedInstructions}\n\nAdditional response-specific instructions that do not replace the shared identity or fixed truthfulness and security kernel:\n${specialInstructions}`
+        : composedInstructions;
+      sendUpstream({
+        ...next,
+        response: {
+          ...response,
+          instructions: `${instructions}\n${modeContext(presence)}\n${workspaceContext(
+            app.workspaceCommands.snapshot(app.ownerObjectId), app.workspaceCommands.deviceContext(app.ownerObjectId),
+          )}`,
+        },
+      });
+    };
+
+    // Preserve request order while loading SQL context; the existing response guard still
+    // coalesces pending requests during playback/settings changes.
+    let responseContextQueue = Promise.resolve();
     const sendResponseCreate = (message: Record<string, unknown>) => {
-      void (async () => {
+      if (!app.proactiveConversationContext) {
+        sendPreparedResponseCreate(message);
+        return;
+      }
+      responseContextQueue = responseContextQueue.then(async () => {
         await refreshProactiveContext();
-        if (upstream?.readyState !== WebSocket.OPEN) return;
-        if (responseCreateActive || settingsUpdatePending || settingsUpdateQueued) {
-          pendingResponseCreate = message;
-          return;
-        }
-        const next = pendingResponseCreate ?? message;
-        pendingResponseCreate = undefined;
-        responseCreateActive = true;
-        assistantResponding = true;
-        responseDone = false;
-        responseCompletionState = responseCompletion();
-        responseImageUsageItem = pendingImageUsageItem;
-        pendingImageUsageItem = undefined;
-        const response = next.response as Record<string, unknown> | undefined;
-        const composedInstructions = sessionUpdate().session.instructions;
-        const specialInstructions = typeof response?.instructions === 'string' ? response.instructions : '';
-        const instructions = specialInstructions
-          ? `${composedInstructions}\n\nAdditional response-specific instructions that do not replace the shared identity or fixed truthfulness and security kernel:\n${specialInstructions}`
-          : composedInstructions;
-        sendUpstream({
-          ...next,
-          response: {
-            ...response,
-            instructions: `${instructions}\n${modeContext(presence)}\n${workspaceContext(
-              app.workspaceCommands.snapshot(app.ownerObjectId), app.workspaceCommands.deviceContext(app.ownerObjectId),
-            )}`,
-          },
-        });
-      })().catch(() => close(1011, 'Notification context unavailable'));
+        if (!controller.signal.aborted) sendPreparedResponseCreate(message);
+      }).catch(() => close(1011, 'Notification context unavailable'));
     };
 
     const flushPendingResponseCreate = () => {

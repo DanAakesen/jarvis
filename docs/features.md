@@ -1,6 +1,6 @@
 ## Notification conversation continuity — 9 November 2026
 
-Implemented on the secondary branch, qualification pending: proactive pushes open
+Implemented on the secondary branch, with CI tracked in PR #1686: proactive pushes open
 normal Chat with the finding/evidence behind the scenes for typed, dictated and voice
 follow-ups. No duplicate message or visual chat change. Durable owner selection and
 duplicate-tap reuse are included. Primary integration and physical-device/model
