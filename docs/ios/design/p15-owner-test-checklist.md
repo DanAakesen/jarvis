@@ -104,6 +104,10 @@ every additional optional Notes check below was separately exercised.
   image qualification. The owner will leave Factory unused until primary confirms
   readiness. Existing test tasks need no migration/recovery; GitHub test issue
   #1634 is closed. A real coding task remains distinct from infrastructure canaries.
+  The owner reported the app-wide limit was 3 and selected 37. Confirm it is saved;
+  ask Jarvis to check the existing Jarvis project's separate parallel-task limit
+  before a concurrency test, and set it to 37 if that is the intended project cap. Changing
+  the new-project default alone does not update an existing project.
 - **Approval friction:** after Factory is ready, confirm a clear authorized coding
   instruction proceeds without a redundant yes and a plan-only request stays a
   proposal. Backend acceptance passed; owner end-to-end confirmation is pending.
