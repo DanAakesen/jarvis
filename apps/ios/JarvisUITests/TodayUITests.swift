@@ -48,30 +48,33 @@ final class TodayUITests: XCTestCase {
         add(image)
     }
 
-    func testBriefVisibleLineLimitAtNormalAndAccessibilitySizesInBothLanguages() {
-        for language in ["en", "da"] {
-            for accessibility in [false, true] {
-                var heights: [CGFloat] = []
-                for lines in [1, 3, 6] {
-                    var arguments = ["--home-brief-long", "--home-brief-lines=\(lines)"]
-                    if accessibility {
-                        arguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
-                    }
-                    launch(language: language, extraArguments: arguments)
-                    let brief = app.descendants(matching: .any)["today.greeting"]
-                    XCTAssertTrue(brief.waitForExistence(timeout: 10))
-                    XCTAssertTrue(brief.label.contains(language == "da" ? "begynder" : "starts"))
-                    XCTAssertGreaterThan(brief.frame.height, 0)
-                    heights.append(brief.frame.height)
-                    capture("home-brief-\(language)-\(accessibility ? "ax" : "normal")-\(lines)-lines")
-                    app.terminate()
-                }
-                XCTAssertGreaterThan(heights[1], heights[0] * 1.5)
-                XCTAssertLessThanOrEqual(heights[1], heights[0] * 3.3)
-                XCTAssertGreaterThan(heights[2], heights[1])
-                XCTAssertLessThanOrEqual(heights[2], heights[0] * 6.3)
+    func testBriefVisibleLineLimitNormalEnglish() { verifyBriefLines(language: "en", accessibility: false) }
+    func testBriefVisibleLineLimitNormalDanish() { verifyBriefLines(language: "da", accessibility: false) }
+    func testBriefVisibleLineLimitAccessibilityEnglish() { verifyBriefLines(language: "en", accessibility: true) }
+    func testBriefVisibleLineLimitAccessibilityDanish() { verifyBriefLines(language: "da", accessibility: true) }
+
+    /// Each three-launch case stays within the native runner's per-test time budget.
+    private func verifyBriefLines(language: String, accessibility: Bool) {
+        var heights: [CGFloat] = []
+        for lines in [1, 3, 6] {
+            var arguments = ["--home-brief-long", "--home-brief-lines=\(lines)"]
+            if accessibility {
+                arguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
             }
+            launch(language: language, extraArguments: arguments)
+            let brief = app.descendants(matching: .any)["today.greeting"]
+            XCTAssertTrue(brief.waitForExistence(timeout: 10))
+            XCTAssertTrue(brief.label.contains(language == "da" ? "begynder" : "starts"))
+            XCTAssertGreaterThan(brief.frame.height, 0)
+            heights.append(brief.frame.height)
+            capture("home-brief-\(language)-\(accessibility ? "ax" : "normal")-\(lines)-lines")
+            app.terminate()
         }
+        XCTAssertGreaterThan(heights[1], heights[0] * 1.5)
+        XCTAssertLessThanOrEqual(heights[1], heights[0] * 3.3)
+        XCTAssertGreaterThan(heights[2], heights[1])
+        XCTAssertLessThanOrEqual(heights[2], heights[0] * 6.3)
+
     }
 
     func testTodayIsTheLaunchPageInDanishAndEnglish() {
