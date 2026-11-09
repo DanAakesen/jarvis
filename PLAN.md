@@ -4700,3 +4700,19 @@ explicitly states SecretProperties.value is never returned by that service.
 Project only names/enabled flags, bound pagination to the same vault, and retain
 missing/disabled-key rejection before any APNs configuration write. Six focused
 checks pass; live metadata readback and activation remain pending.
+
+## Image API repair and proactive diagnostics — 9 November 2026
+
+Owner requested replacement of failed subscription-backed image generation with
+the current OpenAI API. Official API documentation lists GPT Image 2.6 Sunburst
+and Flare; the implementation selects Sunburst for detailed mock-ups. The backend
+uses its existing Key Vault identity and private artifact storage, without a
+Factory worker. Required secret defaults to `openai-api-key`; an alternate name
+can be set with `JARVIS_OPENAI_IMAGE_SECRET_NAME`. Credential presence and live
+API generation have not yet been verified. No new key is created by this change.
+
+The 18:00 proactive message maps to `invalid_model_output`, not an owner approval.
+Historical code collapsed response truncation/refusal, invalid JSON and finding
+validation into the same reason. New content-free diagnostic stages distinguish
+these paths; this does not prove which caused the historical failure or claim it
+is fixed. Chat/voice harness behavior and proactive validation remain unchanged.

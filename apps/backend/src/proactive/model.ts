@@ -53,6 +53,7 @@ export interface FoundryProactiveModelOptions {
   getCredentialToken: (scope: string, signal: AbortSignal) => Promise<string>;
   foundryProjectEndpoint?: string;
   fetcher?: typeof fetch;
+  logger?: { warn(data: { reason: string; outputTokens?: number }, message: string): void };
 }
 
 class InvalidModelOutput extends Error {}
@@ -201,6 +202,7 @@ export function createFoundryProactiveModel(options: FoundryProactiveModelOption
       running = true;
       const deadline = AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]);
       let usage: ProactiveModelResult['usage'];
+      let stage = 'response_size_or_json';
       const work = async (): Promise<ProactiveModelResult> => {
         try {
           const selected = await selection();
@@ -234,6 +236,7 @@ export function createFoundryProactiveModel(options: FoundryProactiveModelOption
             throw new Error('Model unavailable');
           }
           const result = object(await boundedJson(response, deadline));
+          stage = 'response_envelope';
           const tokens = object(result.usage);
           if (![tokens.prompt_tokens, tokens.completion_tokens].every((count) =>
             typeof count === 'number' && Number.isSafeInteger(count) && count >= 0)) throw new InvalidModelOutput();
@@ -242,11 +245,14 @@ export function createFoundryProactiveModel(options: FoundryProactiveModelOption
               !Array.isArray(result.choices) || result.choices.length !== 1) throw new InvalidModelOutput();
           const choice = object(result.choices[0]);
           const message = object(choice.message);
+          stage = 'completion_incomplete';
           if (choice.finish_reason !== 'stop' || message.role !== 'assistant' || message.refusal != null ||
               message.tool_calls !== undefined || message.function_call !== undefined ||
               typeof message.content !== 'string' || !message.content.trim()) throw new InvalidModelOutput();
+          stage = 'invalid_json';
           let decoded: unknown;
           try { decoded = JSON.parse(message.content); } catch { throw new InvalidModelOutput(); }
+          stage = 'invalid_findings';
           return { findings: validateModelFindings(decoded, prompt.facts), usage };
         } finally {
           // A provider that ignores cancellation keeps the slot until it settles.
@@ -256,6 +262,8 @@ export function createFoundryProactiveModel(options: FoundryProactiveModelOption
       try { return await cancellable(work(), deadline); }
       catch (error) {
         signal.throwIfAborted();
+        options.logger?.warn({ reason: error instanceof InvalidModelOutput ? stage : 'model_unavailable',
+          ...(usage ? { outputTokens: usage.outputTokens } : {}) }, 'proactive.model_failed');
         return { findings: [], reason: error instanceof InvalidModelOutput ? 'invalid_model_output' : 'model_unavailable',
           ...(usage ? { usage } : {}) };
       }

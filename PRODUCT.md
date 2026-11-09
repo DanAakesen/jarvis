@@ -1683,11 +1683,11 @@ Dan accepted four additions after reviewing the supplied video transcript:
 - **Web research:** search and retrieve sources, synthesise findings with links
   and supply results to existing dynamic-view consumers through Dan's existing
   ChatGPT/Codex subscription. Bing grounding and pay-per-call search are excluded.
-- **Image generation:** generate images with Dan's ChatGPT/Codex subscription
-  through the existing hosted runner, expose truthful job outcomes, and save
-  private workspace artifacts for chat and workspace display. Usage is shared
-  with coding tasks; no pay-per-image API or fallback is allowed. Video is
-  deferred indefinitely to a separate issue. Artifact retention remains open.
+- **Image generation:** generate images through the OpenAI Images API using GPT
+  Image 2.6 Sunburst by default, expose truthful outcomes, and save private
+  workspace artifacts for chat and workspace display. The backend calls the API
+  directly; this uses separate OpenAI API billing, not coding-task allowance.
+  Video is deferred; artifact retention remains open.
 - **Editable personality:** persist Dan's tone/response-style preferences and
   custom instructions, applying the same configuration to new chat and voice
   sessions. Keep the current butler default until changed; personality does not
@@ -1697,7 +1697,7 @@ Dan accepted four additions after reviewing the supplied video transcript:
 Tasks: P7-14–P7-16, P7-40 and the P8-19 Personality settings UI. P7-14, P7-16,
 P7-40 and P8-19 are implemented and tested offline; live Azure/Codex behavior and
 vault access remain unverified. P7-15 image generation is implemented offline with
-live subscription and Blob acceptance pending; video is deferred and artifact
+live OpenAI credential, model access and Blob acceptance pending; video is deferred and artifact
 retention remains open.
 The existing Microsoft-first service and cost constraints remain in force.
 

@@ -26,7 +26,8 @@ describe('backend configuration', () => {
   it('defaults to the infrastructure port and offline logs', () => {
     expect(loadConfig({})).toEqual({
       port: 3000, logLevel: 'info', codexToolModel: 'gpt-5.5',
-      codexImageModel: 'gpt-5.5',
+      imageModel: 'gpt-image-2.6-sunburst',
+      openaiImageSecretName: 'openai-api-key',
       pushEnabled: false,
       proactiveEnabled: false,
       proactiveTodoWritesEnabled: false,
@@ -100,7 +101,8 @@ describe('backend configuration', () => {
       },
       foundryRunnerAgentName: 'jarvis-runner-node-1x2',
       codexToolModel: 'gpt-5.5',
-      codexImageModel: 'gpt-5.5',
+      imageModel: 'gpt-image-2.6-sunburst',
+      openaiImageSecretName: 'openai-api-key',
       pushEnabled: false,
       proactiveEnabled: false,
       proactiveTodoWritesEnabled: false,
@@ -111,10 +113,16 @@ describe('backend configuration', () => {
   });
   it('validates the configurable ChatGPT Codex tool model', () => {
     expect(loadConfig({ JARVIS_CODEX_TOOL_MODEL: 'gpt-5.5' }).codexToolModel).toBe('gpt-5.5');
-    expect(loadConfig({ JARVIS_CODEX_TOOL_MODEL: 'gpt-5.5' }).codexImageModel).toBe('gpt-5.5');
+    expect(loadConfig({ JARVIS_CODEX_TOOL_MODEL: 'gpt-5.5' }).imageModel).toBe('gpt-image-2.6-sunburst');
     for (const JARVIS_CODEX_TOOL_MODEL of ['', 'gpt-6.1-sol', '../model', 'bad model', 'gpt-5.5\n--help']) {
       expect(() => loadConfig({ JARVIS_CODEX_TOOL_MODEL })).toThrow('JARVIS_CODEX_TOOL_MODEL');
     }
+  });
+  it('configures image models independently of Codex and validates secret names', () => {
+    expect(loadConfig({ JARVIS_IMAGE_MODEL: 'gpt-image-2.6-flare', JARVIS_OPENAI_IMAGE_SECRET_NAME: 'jarvis-openai' }))
+      .toMatchObject({ imageModel: 'gpt-image-2.6-flare', openaiImageSecretName: 'jarvis-openai' });
+    expect(() => loadConfig({ JARVIS_IMAGE_MODEL: 'gpt-5.5' })).toThrow('JARVIS_IMAGE_MODEL');
+    expect(() => loadConfig({ JARVIS_OPENAI_IMAGE_SECRET_NAME: '../secret' })).toThrow('JARVIS_OPENAI_IMAGE_SECRET_NAME');
   });
   it('accepts only an HTTPS Azure Key Vault URI', () => {
     expect(loadConfig({ KEY_VAULT_URI: 'https://fixture.vault.azure.net/' }).keyVaultUri)

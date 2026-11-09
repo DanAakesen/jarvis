@@ -200,6 +200,22 @@ describe('Foundry proactive model', () => {
     });
   });
 
+  it.each([
+    ['length', 'private content', 'completion_incomplete'],
+    ['stop', 'private invalid JSON', 'invalid_json'],
+    ['stop', '{"findings":[{"title":"private title"}]}', 'invalid_findings'],
+  ])('logs a content-free diagnosis for %s responses', async (finish, content, reason) => {
+    const logger = { warn: vi.fn() };
+    const { model, fetcher } = setup({ logger });
+    const result = envelope();
+    result.choices[0]!.finish_reason = finish;
+    result.choices[0]!.message.content = content;
+    fetcher.mockResolvedValue(Response.json(result));
+    await model.summarize(input, signal());
+    expect(logger.warn).toHaveBeenCalledWith({ reason, outputTokens: 100 }, 'proactive.model_failed');
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('private');
+  });
+
   it('rejects multiple choices and a missing assistant role while retaining usage', async () => {
     const { model, fetcher } = setup();
     const response = envelope();
