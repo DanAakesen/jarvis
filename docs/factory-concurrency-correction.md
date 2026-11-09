@@ -225,12 +225,14 @@ also checks the Microsoft.Quota catalogue without submitting a request. Do not
 claim 100-worker capacity until quota and the matching configuration are verified.
 The managed route remains inactive and VM retirement is held pending acceptance.
 
-The main-only `Request 800 Factory sandbox cores` workflow is prepared for the
-approved capacity target. It discovers the canonical SandboxCores quota, submits
+The main-only `Factory sandbox quota` workflow defaults to read-only inspection.
+Its optional future increase discovers the canonical SandboxCores quota and submits
 one fixed 800-core request only if needed, and verifies the actual regional usage
 limit. It never allocates workers, lowers a larger limit, guesses a missing quota
 name or automatically replays an uncertain PUT. Submission and approval are
-separate evidence fields. Live submission/approval remain pending.
+separate evidence fields. The earlier PUT failed; no increase is confirmed. The
+owner has since accepted 300 cores for now, so do not submit another increase
+without a new owner instruction.
 
 ### Live storage acceptance — 9 November, 11:13 UTC
 
@@ -244,3 +246,12 @@ Quota PUT 42606699111 failed with an opaque diagnostic; readback 42607004866
 still reports 300 SandboxCores. The quota workflow defaults to inspecting request
 history before another submission, and preserves bounded redacted service details.
 Managed transport acceptance, cutover and VM retirement remain pending.
+
+### Accepted initial capacity — 9 November, 11:47 UTC
+
+The owner accepts the existing 300-core quota: up to 37 simultaneous workers at
+8 cores each, subject to other regional sandbox usage and provider limits. The
+five-worker test consumes 40 cores, confirmed by readback 42611441981. The
+100-worker architecture target remains, but no additional quota request or
+100-worker load test is currently required. Finish the five-worker qualification
+and dedicated VM retirement within the existing quota.

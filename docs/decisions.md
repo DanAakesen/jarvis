@@ -1,3 +1,14 @@
+## 9 November 2026 — Keep the current 300-core sandbox quota
+
+The owner accepts 300 SandboxCores for now. The qualified persistent-root profile
+uses 8 cores per worker, so the quota permits up to 37 simultaneously allocated
+workers when no other regional sandboxes consume it. Stopped workers release
+their core allocation. Keep live qualification at five workers, finish managed
+Factory cutover and retire the dedicated VM. Do not submit another quota increase
+without a new owner instruction. The design can retain its 100-worker ceiling;
+800 cores and model-provider capacity would be needed to operate that full target.
+Readback 42611441981 confirms limit 300 and usage 40 during the five-worker test.
+
 ## Managed Factory delivery update — 9 November 2026
 
 The owner has authorized Azure Container Apps Sandboxes as the managed JIT

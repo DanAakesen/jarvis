@@ -2,7 +2,10 @@
 
 The owner has authorized Azure Container Apps Sandboxes as the managed JIT
 replacement and limited live qualification to **five concurrent workers**.
-The production concurrency target remains 100 with 128 GiB isolated workspaces.
+The design retains its 100-worker target, but the owner now accepts the current
+300-core quota (up to 37 simultaneous 8-core workers). Do not submit another
+quota increase without a new owner instruction. Five-worker qualification and
+VM retirement remain authorized.
 After managed Factory acceptance and cutover, remove the VM and all dedicated
 resources, roles, runtime code and configuration. Preserve shared backend and
 Foundry chat/voice services. Existing Factory test tasks need no migration.

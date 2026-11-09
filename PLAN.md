@@ -2,7 +2,9 @@
 
 The owner has authorized Azure Container Apps Sandboxes as the managed JIT
 replacement and limited live qualification to **five concurrent workers**.
-The production concurrency target remains 100 with 128 GiB isolated workspaces.
+The architecture retains its 100-worker target. The owner has accepted the current
+300-core quota for now: up to 37 simultaneous workers with the qualified 8-core
+profile. Do not submit another quota increase without a new owner instruction.
 After managed Factory acceptance and cutover, remove the VM and all dedicated
 resources, roles, runtime code and configuration. Preserve shared backend and
 Foundry chat/voice services. Existing Factory test tasks need no migration.
@@ -19,11 +21,13 @@ Storage qualification 42606694866 passed: five independent workers each had
 157728206848 free bytes after restore/build, overlapping execution and retained
 files after stop/resume. Cleanup passed; no model tasks were run. It uses four times the
 CPU allocation of the original candidate; 100 workers require 800 SandboxCores,
-versus the observed 300. Five live test workers require 40 cores. Read-only quota
+versus the accepted current quota of 300. Five live test workers require 40 cores. Read-only quota
 catalogue discovery is included. Request 42606699111 reached the quota PUT but
 failed with an initially opaque error. Readback 42607004866 still shows 300; no
-approval or 100-worker run is claimed. Quota inspection now defaults to read-only
-request-history lookup, with sanitized actionable provider errors.
+approval or 100-worker run is claimed. Readback 42611441981 confirms the same
+300-core limit and 40 cores allocated during runtime qualification. Quota
+inspection defaults to read-only request-history lookup; further submissions
+are on hold following the owner's capacity decision.
 Factory runtime acceptance, cutover and VM retirement are queued in 42607263687
 after backend release 42606694858; they remain pending. The held
 retirement PR removes dedicated VM resources/config only after acceptance.
