@@ -54,3 +54,8 @@ Physical push taps (warm/cold/signed out), actual model wording/voice behavior,
 network transitions and owner acceptance require the installed build. No UI screenshot
 is provided because normal chat presentation is unchanged. This branch is not
 merged or deployed by the secondary thread.
+
+Primary integration now updates the native fixture activation route and replaces
+superseded notification-to-Proactive navigation assertions with notification-to-
+Chat checks for current/historical findings, no automatic send and preparation
+failure recovery. These native checks require execution before claiming a pass.
