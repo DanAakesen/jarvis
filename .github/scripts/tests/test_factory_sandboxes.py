@@ -70,3 +70,19 @@ class QualificationTests(unittest.TestCase):
         self.assertEqual(result['serviceFacts'], ['registry', 'authentication'])
         self.assertNotIn('secret', str(result))
         self.assertNotIn('https', str(result))
+
+    def test_problem_details_preserve_only_safe_volume_constraints(self):
+        from types import SimpleNamespace
+        import json
+        error = RuntimeError('Bad request')
+        error.status_code = 400
+        error.response = SimpleNamespace(text=lambda: json.dumps({
+            'title': 'InvalidRequest', 'errorCode': 4,
+            'detail': 'Volume size exceeds maximum 128Gi. Bearer secret https://host?sig=hidden'}))
+        result = module.failure_details(error, 'volume-create')
+        self.assertEqual(result['serviceCode'], 'InvalidRequest')
+        self.assertEqual(result['serviceErrorCode'], 4)
+        self.assertEqual(result['sizeFacts'], ['128gi'])
+        self.assertIn('maximum', result['serviceFacts'])
+        self.assertNotIn('secret', str(result))
+        self.assertNotIn('hidden', str(result))

@@ -19,7 +19,15 @@ interrupted rather than replayed. Completed/cancelled SQL tasks release their
 sandbox/disk after the worker is idle. The group retains up to 1,000 sandbox
 resources separately from SQL’s configurable admission limit (up to 100); stopped bindings
 skip management polling. Partial disk cleanup is retried after sandbox deletion.
-This runtime code is not yet deployed or live-tested.
+Deploy 42589059070 and Runner deploy 42589059046 passed, with the managed route
+still inactive. Qualification 42592487832 imported the private image successfully,
+then received HTTP 400 creating the 128 GiB volume; no worker qualified and
+cleanup passed. Deploy 42592473404 failed before applying infrastructure because
+legacy worker configuration validation rejected the current values. Normalize
+ARM boolean/resource-ID casing while retaining the exact worker boundary.
+Managed idle handoff now exits the consumer before controller shutdown so a new
+queued command cannot race with stop; resume clears the old idle marker. Local
+regressions pass; the updated release and live five-worker qualification are pending.
 See [qualification and evidence](docs/factory-concurrency-correction.md).
 
 ## Owner direction — 9 November 2026

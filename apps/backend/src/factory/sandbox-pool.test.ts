@@ -139,6 +139,30 @@ describe('managed Factory routing', () => {
       await t.pool.transport({...start, operation: 'resume', sessionId: result.session_id});
       await vi.advanceTimersByTimeAsync(5000);
       expect(t.client.sandboxes.beginResume).toHaveBeenCalledTimes(1);
+      expect(t.data.has(`${mailbox}/health.json`)).toBe(false);
+      await vi.advanceTimersByTimeAsync(15000);
+      expect(t.client.sandboxes.beginStop).toHaveBeenCalledTimes(1);
+      expect(t.creates).toHaveLength(1);
+      expect(t.errors).toEqual([]);
+    } finally { await t.pool.stop(); vi.useRealTimers(); }
+  });
+  it('stops a quiescent worker with a newly queued turn and resumes without losing it', async () => {
+    const t = fixture();
+    const result = await t.pool.transport(start) as {session_id: string};
+    t.release(); await t.pool.stop();
+    const mailbox = sandboxMailboxName(result.session_id);
+    const queued = [...t.data.keys()].filter((key) => key.startsWith(`${mailbox}/commands/`));
+    expect(queued).toHaveLength(1);
+    t.data.set(`${mailbox}/health.json`, JSON.stringify({idle: true, at: Date.now() / 1000}));
+    vi.useFakeTimers();
+    try {
+      t.pool.start();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(t.client.sandboxes.beginStop).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(20000);
+      expect(t.client.sandboxes.beginResume).toHaveBeenCalledTimes(1);
+      expect(t.client.sandboxes.beginStop).toHaveBeenCalledTimes(1);
+      expect(t.data.has(queued[0]!)).toBe(true);
       expect(t.creates).toHaveLength(1);
       expect(t.errors).toEqual([]);
     } finally { await t.pool.stop(); vi.useRealTimers(); }

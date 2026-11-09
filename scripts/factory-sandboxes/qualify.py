@@ -64,13 +64,29 @@ def failure_details(error: Exception, stage: str) -> dict:
                'httpStatus': getattr(error, 'status_code', None)}
     service_error = getattr(error, 'error', None)
     code = getattr(service_error, 'code', None)
+    problem = {}
+    try:
+        body = json.loads(error.response.text())
+        if isinstance(body, dict):
+            problem = body
+    except (AttributeError, TypeError, ValueError):
+        pass
+    code = code or problem.get('title')
     if isinstance(code, str) and re.fullmatch(r'[A-Za-z][A-Za-z0-9_.-]{0,79}', code):
         details['serviceCode'] = code
-    message = str(error).lower()
+    message = (str(error) + ' ' + str(problem.get('detail', ''))).lower()
     terms = ('registry', 'acr', 'image', 'manifest', 'token', 'audience', 'issuer',
              'identity', 'permission', 'unauthorized', 'authentication', 'not found',
-             'access denied', 'expired', 'credential', 'role', 'subscription')
+             'access denied', 'expired', 'credential', 'role', 'subscription',
+             'size', 'volume', 'disk', 'name', 'length', 'invalid', 'minimum',
+             'maximum', 'range', 'exceeds', 'budget', 'unsupported', 'format',
+             'integer', 'must', 'between', 'less than', 'greater than')
     details['serviceFacts'] = [term for term in terms if term in message]
+    # Problem-details responses are not decoded by azure-core's ARM error model.
+    # Retain numeric size constraints, never arbitrary body text or identifiers.
+    details['sizeFacts'] = re.findall(r'\b\d{1,9}(?:\.\d{1,3})?\s*(?:gib|mib|gi|mi|bytes|characters)\b', message)[:12]
+    if type(problem.get('errorCode')) is int:
+        details['serviceErrorCode'] = problem['errorCode']
     return details
 
 
@@ -188,7 +204,7 @@ asyncio.run(check())
             for box in group.list_sandboxes(labels=labels):
                 if all(box.labels.get(k) == v for k, v in labels.items()):
                     try:
-                        group.get_sandbox_client(box.id).delete()
+                        group.get_sandbox_client(box.id).begin_delete().result()
                     except Exception as error:
                         errors.append(type(error).__name__)
         except Exception as error:
@@ -196,7 +212,7 @@ asyncio.run(check())
         for volume in volumes:
             for attempt in range(20):
                 try:
-                    group.delete_volume(volume)
+                    group.begin_delete_volume(volume).result()
                     break
                 except Exception as error:
                     if getattr(error, 'status_code', None) == 404:

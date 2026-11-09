@@ -9216,3 +9216,14 @@ values and groups against the caller's calendar. A detached task builds the valu
 only its noncancelled result is published on the main actor. LazyVStack/Section
 keeps individual note rows lazy, with shared per-row grouped material corners.
 Neither the shared page chrome nor the complete underlying inventory is changed.
+
+### Managed Factory idle handoff (9 November 2026)
+
+The managed mailbox consumer publishes `health.idle=true` and exits its claim
+loop. The pool stops only a booted, quiescent consumer, including when a new
+command arrived during handoff. The queued command survives in its private
+mailbox and causes disk-mode resume on the next reconciliation. Before launching
+a successor, the pool deletes the old idle heartbeat; rotating the SAS for a
+live consumer leaves the heartbeat intact. This contract prevents active work
+from being stopped based on an earlier idle snapshot. Local race tests pass;
+live managed execution remains unqualified at the volume-create boundary.
