@@ -12275,3 +12275,15 @@ The fix supplies `--yes` for only the authorized legacy mailbox. Recovery first
 verifies the VM and all dedicated named resources are absent, then removes only
 the old mailbox and deployment record. Any remaining dedicated resource stops
 recovery for inspection. Final inventory/evidence and source cleanup are pending.
+
+## Managed Factory retirement accepted — 9 November 2026
+
+Five-worker production-adapter run 42629384227 passed delivery, overlap,
+restart routing, idle stop, disk persistence/resume, owned cleanup, activation
+and dedicated VM retirement. Retained evidence is in
+`docs/factory-managed-runtime-evidence.json`. No model calls were made.
+Remove VM templates, scripts, quota workflow, runtime fallback and configuration;
+retain shared backend and Foundry chat/voice/research/image/login services.
+The cleanup release requires a fresh worker image before final source retirement
+is claimed live. The owner accepts the current 300-core limit for up to 37
+8-core workers; further quota requests and a 100-worker test remain out of scope.
