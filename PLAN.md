@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+Implemented on fix/watch-startup-connectivity-alert: suppress bootstrap/idle disconnect alerts, guard passive history reads, retain inline history errors and preserve explicit action recovery. Four composer recovery regression scenarios are added. CI/native builds and physical startup/reconnection checks remain unverified until their results are recorded in the PR. Primary owns integration and deployment.
+
 ## Direct owner actions — 9 November 2026
 
 Shared owner actions, Google writes and Factory/GitHub writes now execute the

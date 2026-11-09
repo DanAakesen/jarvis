@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+Ordinary Watch startup, foreground connection warm-up and passive history refresh must not display an interrupted-send alert. Show connection/history status inline. Actual user-action failures and interrupted active chat/voice still report errors; preserve unsent drafts and never automatically resend an accepted request.
+
 ## Owner action policy — current, 9 November 2026
 
 The signed-in owner's clear request authorizes the resolved action in chat and

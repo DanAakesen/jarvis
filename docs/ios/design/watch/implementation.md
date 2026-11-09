@@ -1,3 +1,13 @@
+## Startup alert follow-up — 9 November 2026
+
+The owner reproduced the modal "iPhone unavailable. Reconnect and check history before sending again." on ordinary Watch launch, including launches unrelated to notifications. The root cause is the unconditional WatchModel disconnect alert combined with initial WCSession activation reporting not reachable.
+
+Branch: `fix/watch-startup-connectivity-alert`, based on main `f54a4d15d6fa09be73563c3969a342ae20caa4a6`. The separate Home work stays in PR #1689. Primary session `01a1adc7-aebe-76f2-b63d-a852c887204f` owns integration and deployment.
+
+The implementation makes initial/idle reachability status quiet, emits disconnect callbacks on real transitions, preserves active chat/voice failure feedback, and keeps history read errors inline. History results/failures are discarded if a newer typed/voice action supersedes the read. Four Core scenarios cover idle drafts, interrupted unacknowledged sends, acknowledged turns awaiting a reply, and active voice interruption. Tests and native build results are pending; no device verification or deployment is claimed.
+
+Remaining device checks: ordinary launch and wrist-up with phone foreground/background/locked; opening a notification/chat; idle Bluetooth/range loss/reconnection without a modal; a genuine in-flight send/voice loss with feedback and no automatic resubmission; draft retention and history recovery. Signing/installation follow primary's existing release process. No live settings/data, entitlements or infrastructure are changed here.
+
 # Apple Watch implementation handoff
 
 9 November primary follow-up: the owner completed both App Group associations.
