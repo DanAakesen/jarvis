@@ -1,3 +1,15 @@
+## Owner instructions and reminder defaults — 9 November 2026
+
+The owner's request authorizes the requested action: do not require a second
+approval or prescribed wording. Ask only for essential missing information.
+New tasks and reminders default to Personal unless Work is mentioned or an
+existing work item is referenced. A time with no date means today in
+Europe/Copenhagen, including dot notation such as 17.10. Never silently move
+an already-past time to tomorrow. Preserve conversation context for follow-ups.
+Authentication, resource access, cancellation, stale-write checks and truthful
+results remain required. This supersedes earlier blanket approval requirements;
+the removal across all action families is still being implemented.
+
 ## Push to conversation continuity — 9 November 2026
 
 Opening a proactive notification enters the existing normal chat. Its saved finding
