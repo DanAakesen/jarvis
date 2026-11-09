@@ -893,6 +893,33 @@ final class ComponentGalleryUITests: XCTestCase {
         }
         return element
     }
+    func testInstructionsDestinationPreservesSavedScopes() {
+        app.launchArguments = ["--ui-test-navigation", "--screenshot-settings-fixture",
+                               "-jarvis.appLanguage", "en", "-jarvis.appTheme", "dark"]
+        app.launch()
+        defer { app.terminate() }
+        let search = app.textFields["settings.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: 15))
+        search.tap()
+        search.typeText("Instructions")
+        let row = app.descendants(matching: .any).matching(identifier: "settings.row.instructions").firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        let identity = app.descendants(matching: .any).matching(identifier: "settings.field.identity.description").firstMatch
+        XCTAssertTrue(identity.waitForExistence(timeout: 5))
+        XCTAssertEqual(identity.value as? String, "Synthetic assistant identity")
+        let present = app.descendants(matching: .any).matching(identifier: "settings.field.personality.modeInstructions.present").firstMatch
+        for _ in 0..<8 { if present.exists && present.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(present.exists)
+        XCTAssertEqual(present.value as? String, "Synthetic present instruction")
+        attach(app.screenshot(), named: "Home-instructions-saved-scopes-en")
+        let lines = app.descendants(matching: .any).matching(identifier: "settings.field.homeBrief.maxVisibleLines").firstMatch
+        for _ in 0..<8 { if lines.exists && lines.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(lines.exists)
+        XCTAssertEqual(lines.value as? String, "3")
+        attach(app.screenshot(), named: "Home-instructions-brief-preferences-en")
+    }
+
     func testSettingsSectionsSearchAndDetailsDarkEnglish() {
         exerciseSettings(language: "en", theme: "dark")
     }

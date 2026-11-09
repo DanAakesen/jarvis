@@ -273,7 +273,7 @@ struct JarvisSettingsEditorView: View {
         let parts = id.split(separator: ".", maxSplits: 2).map(String.init)
         let value: JarvisSettingsValue?
         if parts.count == 3 {
-            value = response.settings["roles"]?[parts[1]]?[parts[2]]
+            value = response.settings[parts[0]]?[parts[1]]?[parts[2]]
         } else if parts.count == 2 {
             value = response.value(area: parts[0], key: parts[1])
         } else {

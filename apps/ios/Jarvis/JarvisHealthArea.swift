@@ -885,6 +885,7 @@ struct JarvisHealthArea: View {
     /// normal pass refreshes only what is stale. `force` (pull to refresh, a saved workout, a sync event) refreshes
     /// everything.
     private func loadDashboard(force: Bool = false) async {
+        if observeRefreshEvents { now = Date() }
         isLoading = true
         defer { isLoading = false }
         if dashboard == nil {

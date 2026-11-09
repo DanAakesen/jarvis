@@ -120,8 +120,8 @@ describe('Workout parity composition', () => {
   it('loads activity from metrics and inventory from catalogue rows, never workout detail', async () => {
     read.mockImplementation(async (_url, query) => healthFixture(query, query.source === sources.metrics ? [
       { metric_name: 'step_count', metric_date: '2026-10-02', value: 123, unit: 'count' },
-      { metric_name: 'active_energy_burned', metric_date: '2026-10-02', value: 42, unit: 'kcal' },
-      { metric_name: 'apple_exercise_time', metric_date: '2026-10-02', value: 5, unit: 'min' },
+      { metric_name: 'active_energy_burned', metric_date: '2026-10-02', value: 42, unit: 'kcal', fields: { mergedDailyTotal: true } },
+      { metric_name: 'apple_exercise_time', metric_date: '2026-10-02', value: 5, unit: 'min', fields: { mergedDailyTotal: true } },
     ] : [
       { metric_name: 'step_count', first_date: '2026-10-02', last_date: '2026-10-02', day_count: 1, units: ['count'] },
       { metric_name: 'heart_rate', first_date: '2026-10-02', last_date: '2026-10-02', day_count: 1, units: ['bpm'] },
@@ -129,7 +129,7 @@ describe('Workout parity composition', () => {
     mount();
     await waitFor(() => expect(figure('Activity', 'Steps')?.textContent).toBe('123 steps'));
     expect(figure('Activity', 'Active energy')?.textContent).toBe('42 kcal');
-    expect(figure('Activity', 'Activity time')?.textContent).toBe('5 min');
+    expect(figure('Activity', 'Exercise minutes')?.textContent).toBe('5 min');
     expect(within(screen.getByRole('region', { name: 'Summary candidates inventory' }))
       .getByText('Step count — 1 recorded day · count')).toBeTruthy();
     expect(within(screen.getByRole('region', { name: 'Heart and provenance inventory' }))
