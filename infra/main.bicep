@@ -108,6 +108,7 @@ var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var backendAppName = 'ca-jarvis-backend-${suffix}'
 var deployBackendApp = !empty(backendImage)
 var deployVaultMirror = vaultMirrorEnabled && !empty(vaultMirrorImage)
+var nativePushSecretNames = nativePushEnabled ? ['apns-team-id', 'apns-key-id', 'apns-signing-key'] : []
 
 resource backendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: last(split(backendIdentityResourceId, '/'))
@@ -874,11 +875,11 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
           identity: backendIdentity.id
         }
       ]
-      secrets: nativePushEnabled ? [for name in ['apns-team-id', 'apns-key-id', 'apns-signing-key']: {
+      secrets: [for name in nativePushSecretNames: {
         name: name
         keyVaultUrl: '${keyVault.properties.vaultUri}secrets/${name}'
         identity: backendIdentity.id
-      }] : []
+      }]
     }
     template: {
       scale: {
