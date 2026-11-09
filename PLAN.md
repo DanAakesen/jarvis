@@ -4521,3 +4521,17 @@ separate evidence fields. Live submission/approval remain pending.
 ## Intelligent cross-app notifications — 9 November 2026
 
 Secondary PR #1669 implements owner-approved context, computed facts and intelligent notification selection. Added canonical Health/nutrition/Notes/Memory readers, ordinary task context, model silence/source diversity, native APNs with browser fallback, and exact-finding native routing. Additional policy/feedback-learning stages and shadow mode were explicitly declined. Local validation passed: 7,489 backend tests (one skipped), 948 proactive/push tests (included in backend), 275 isolated SQL tests, 545 Swift core tests and 62 web push tests; builds and lint passed. Native compilation evidence is tracked in the PR separately from physical delivery acceptance. Primary owns integration, migration 0076, rollout and installed-device acceptance. No production switches were changed.
+
+
+## Primary notification integration and Apple feature candidates — 9 November 2026
+
+Primary has received PR #1669 and merged main `34655d46` into its integration
+branch, including the qualified Watch arm64_32 correction. Exact integrated-head
+checks and release are pending. Migration 0076 uses the existing transactional
+startup migration runner before the new backend accepts requests; verify its
+startup/readiness evidence during deployment. Bundle the native source-label and
+notification-routing changes with the corrected Watch TestFlight build.
+
+The owner-confirmed Apple portal capabilities and next feature candidates are
+recorded in [Apple capabilities](docs/ios/apple-capabilities.md). Portal setup is
+separate from implementation; CarPlay entitlement approval remains unconfirmed.
