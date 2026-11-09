@@ -166,3 +166,21 @@ a receipt for another source is rejected. VM role cleanup is scoped to rg-jarvis
 and includes the backend's obsolete VM wake grant, preserving its shared access.
 Failed image preparation releases the disposable storage before workers exist;
 failed worker cleanup retains the storage and bounded failure diagnostics.
+
+## Idle handoff and current qualification failure
+
+A managed worker publishes idle and exits its command loop after 120 idle seconds.
+The controller can then stop it even when another turn was queued after its final
+queue read. That turn remains durable and resumes the same sandbox on the next
+reconciliation. A new consumer clears the old idle heartbeat before boot; SAS
+rotation of a live consumer keeps its heartbeat. This closes a shutdown/claim
+race without holding an allocation lease while the user submits work.
+
+Run 42592487832 passed image import and failed at volume creation (HTTP 400),
+with no qualified workers and cleanup complete. Qualification now reads safe
+problem-details codes and numeric size facts, and waits for deletion tombstones
+before reporting cleanup complete. The exact storage constraint remains under
+investigation. Five-way execution, Factory activation and VM retirement have
+not passed. The later normal deploy failed legacy configuration validation before
+applying infrastructure; ARM boolean and resource-ID casing are normalized, with
+other identities and invalid flags still rejected.

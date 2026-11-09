@@ -212,19 +212,22 @@ class Worker:
         active = any(state.worker and not state.worker.done() for state in runner.tasks.values())
         if active or keys:
             self.last_busy = time.monotonic()
-        if time.monotonic() - self.last_health >= 20:
+        idle = not active and not keys and time.monotonic() - self.last_busy >= 120
+        if idle or time.monotonic() - self.last_health >= 20:
             disk = runner._disk_snapshot()
             await self.io("put", "health.json", {"at": time.time(), "instance": self.instance_id,
                 "active": active, "queued": len(keys),
-                "idle": not active and not keys and time.monotonic() - self.last_busy >= 120, **disk})
+                "idle": idle, **disk})
             self.last_health = time.monotonic()
-        return not active and not keys and time.monotonic() - self.last_busy >= 120
+        return idle
 
     async def run(self):
         runner.WORK_ROOT.mkdir(parents=True, exist_ok=True)
         while True:
             try:
-                await self.tick()
+                if await self.tick():
+                    # New turns stay queued while the controller stops this box.
+                    return
             except Exception as error:
                 print("factory_worker.operation_failed", type(error).__name__, flush=True)
                 self.last_busy = time.monotonic()
