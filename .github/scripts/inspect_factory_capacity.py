@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import subprocess
 import uuid
@@ -73,6 +74,30 @@ def catalogue(provider):
     }
 
 
+def quota_observations(response):
+    if response['state'] != 'observed':
+        return {'state': response['state']}
+    value = response['value']
+    rows = value.get('value')
+    if not isinstance(rows, list):
+        return {'state': 'invalid_response'}
+    quotas = []
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get('name'), dict):
+            continue
+        name = row['name'].get('value')
+        if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z0-9_. -]{1,120}', name) or 'sandbox' not in name.casefold():
+            continue
+        observation = {'name': name}
+        for key in ('limit', 'currentValue'):
+            number = row.get(key)
+            observation[key] = (number if type(number) in (int, float)
+                                and math.isfinite(number) and 0 <= number <= 2**53 else None)
+        quotas.append(observation)
+    return {'state': 'observed' if quotas else 'not_listed', 'quotas': quotas,
+            'morePages': bool(value.get('nextLink'))}
+
+
 def inspect(subscription, *, get=arm_get):
     subscription = str(uuid.UUID(subscription))
     result = {
@@ -102,6 +127,8 @@ def inspect(subscription, *, get=arm_get):
                                        'morePages': bool(groups['value'].get('nextLink'))}
             else:
                 result['groupRead'] = {'state': 'invalid_response'}
+    usage = get(subscription, f'/subscriptions/{subscription}/providers/Microsoft.App/locations/{REGION}/usages?api-version=2024-03-01')
+    result['sandboxQuota'] = quota_observations(usage)
     return result
 
 

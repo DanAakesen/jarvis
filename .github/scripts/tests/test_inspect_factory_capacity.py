@@ -28,7 +28,7 @@ class FactoryCapacityTests(unittest.TestCase):
                 return self.provider()
             return {'state': 'observed', 'value': {'value': [{'name': 'private-name'}]}}
         result = capacity.inspect(SUB, get=get)
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)
         self.assertTrue(calls[1][1].endswith('?api-version=2026-01-01'))
         self.assertTrue(result['sandboxGroups']['regionListed'])
         self.assertEqual(result['groupRead']['countOnThisPage'], 1)
@@ -46,7 +46,7 @@ class FactoryCapacityTests(unittest.TestCase):
                 return {'state': 'observed', 'value': {'resourceTypes': []}}
             result = capacity.inspect(SUB, get=get)
             self.assertEqual(result['sandboxGroups']['state'], 'not_listed')
-            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(calls), 2)
             self.assertNotIn('groupRead', result)
             unused.assert_not_called()
 
@@ -82,8 +82,28 @@ class FactoryCapacityTests(unittest.TestCase):
                 'value': [], 'nextLink': 'https://untrusted.invalid/private'}}
         result = capacity.inspect(SUB, get=get)
         self.assertTrue(result['groupRead']['morePages'])
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 3)
         self.assertNotIn('untrusted', json.dumps(result))
+
+    def test_quota_exports_only_sandbox_counters_without_inferring_available_capacity(self):
+        response = {'state': 'observed', 'value': {'value': [
+            {'name': {'value': 'SandboxCores', 'localizedValue': 'private-name'},
+             'limit': 300, 'currentValue': 0.25, 'private': 'must-not-export'},
+            {'name': {'value': 'OtherCores'}, 'limit': 2000, 'currentValue': 0},
+        ]}}
+        result = capacity.quota_observations(response)
+        self.assertEqual(result, {'state': 'observed', 'quotas': [
+            {'name': 'SandboxCores', 'limit': 300, 'currentValue': 0.25}], 'morePages': False})
+
+    def test_missing_and_invalid_quota_values_remain_unknown(self):
+        for number in [True, -1, '300', float('nan'), None]:
+            result = capacity.quota_observations({'state': 'observed', 'value': {'value': [
+                {'name': {'value': 'SandboxCores'}, 'limit': number}]}})
+            self.assertIsNone(result['quotas'][0]['limit'])
+            self.assertIsNone(result['quotas'][0]['currentValue'])
+        result = capacity.quota_observations({'state': 'observed', 'value': {'value': []}})
+        self.assertEqual(result['state'], 'not_listed')
+        self.assertEqual(result['quotas'], [])
 
     def test_transport_is_get_only_and_does_not_export_provider_errors(self):
         response = subprocess.CompletedProcess([], 1, '', 'private-provider-body')
