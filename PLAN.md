@@ -15,8 +15,9 @@ final VM retirement. Inventory confirmed no dedicated VM resources remain; the
 legacy mailbox and deployment record were removed. PR #1674 now removes the
 obsolete VM implementation and configuration. Its source cleanup still requires
 a fresh managed worker image and five-worker qualification after deployment.
-The adapter retains the managed-sandbox flag required by previously qualified
-images so idle handoff stays safe while the replacement image is released.
+The owner will leave Factory unused until the full rollout is complete. No
+temporary compatibility flag is retained for the outgoing worker image; release
+the fresh image and pass five-worker qualification before requesting owner use.
 Shared backend and Foundry chat, voice, research/image and login routes remain.
 Earlier dated sections below record the investigation stages, not current status.
 

@@ -195,8 +195,6 @@ export class FactorySandboxPool {
             entrypoint: ['/bin/sh', '-c'], cmd: ['sleep infinity'],
             environment: {AZURE_CLIENT_ID: this.options.identityClientId, KEY_VAULT_URI: this.options.vaultUri,
               JARVIS_WORK_ROOT: '/files/jarvis',
-              // Older qualified images require this to hand idle ownership back to the controller.
-              JARVIS_FACTORY_MANAGED_SANDBOX: 'true',
               JARVIS_FACTORY_WORKER_BLOB_URL: container.url,
               JARVIS_FACTORY_MAILBOX_SAS_FILE: '/files/jarvis/.mailbox-sas',
               JARVIS_BACKEND_URL: this.options.backendUrl, JARVIS_API_SCOPE: this.options.apiScope,
