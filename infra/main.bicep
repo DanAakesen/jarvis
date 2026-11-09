@@ -33,6 +33,9 @@ param factoryWorkerEnabled bool = false
 @description('Explicitly qualified managed Factory runtime settings; preserved during ordinary deployments.')
 param factorySandboxConfiguration object = {}
 
+@description('Preserve native APNs delivery after the owner provisions the three protected APNs secrets and primary activates it.')
+param nativePushEnabled bool = false
+
 @description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')
 param pcBridgeClientId string = ''
 @description('Dan’s IANA time zone used for Google Calendar day boundaries. Empty disables Google mail and calendar tools.')
@@ -105,6 +108,7 @@ var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var backendAppName = 'ca-jarvis-backend-${suffix}'
 var deployBackendApp = !empty(backendImage)
 var deployVaultMirror = vaultMirrorEnabled && !empty(vaultMirrorImage)
+var nativePushSecretNames = nativePushEnabled ? ['apns-team-id', 'apns-key-id', 'apns-signing-key'] : []
 
 resource backendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: last(split(backendIdentityResourceId, '/'))
@@ -871,6 +875,11 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
           identity: backendIdentity.id
         }
       ]
+      secrets: [for name in nativePushSecretNames: {
+        name: name
+        keyVaultUrl: '${keyVault.properties.vaultUri}secrets/${name}'
+        identity: backendIdentity.id
+      }]
     }
     template: {
       scale: {
@@ -1039,7 +1048,13 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               name: 'FOUNDRY_COPILOT_POLICY_COMPATIBILITY'
               value: foundryCopilotPolicyCompatibility
             }
-          ], empty(jarvisAgentObjectId) ? [] : [
+          ], nativePushEnabled ? [
+            { name: 'JARVIS_APPROVAL_NOTIFICATIONS_ENABLED', value: 'true' }
+            { name: 'APNS_ENVIRONMENT', value: 'production' }
+            { name: 'APNS_TEAM_ID', secretRef: 'apns-team-id' }
+            { name: 'APNS_KEY_ID', secretRef: 'apns-key-id' }
+            { name: 'APNS_SIGNING_KEY', secretRef: 'apns-signing-key' }
+          ] : [], empty(jarvisAgentObjectId) ? [] : [
             {
               name: 'ENTRA_JARVIS_AGENT_OBJECT_ID'
               value: jarvisAgentObjectId
