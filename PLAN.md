@@ -1,3 +1,14 @@
+## Watch signed-archive correction — 9 November 2026
+
+The owner associated the shared App Group with both Watch App IDs. TestFlight
+run 42613537731 (build 88) passed the previous provisioning failure, then exposed
+four integer-literal overflows when compiling shared generated-view validation
+for watchOS arm64_32. Clamp the JSON safe-integer ceiling to the platform Int
+range before validation/arithmetic. The Watch PR workflow now compiles physical
+Watch Release architectures as well as the Simulator. Qualification and a new
+signed TestFlight upload remain pending; no extra Apple portal change is required
+for this compilation error.
+
 ## Managed Factory delivery update — 9 November 2026
 
 The owner has authorized Azure Container Apps Sandboxes as the managed JIT

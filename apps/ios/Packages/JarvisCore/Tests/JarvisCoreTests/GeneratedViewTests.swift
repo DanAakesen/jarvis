@@ -35,6 +35,23 @@ final class GeneratedViewTests: XCTestCase {
         XCTAssertNoThrow(try decodeView(view))
     }
 
+    func testCodeLineRangesRespectThePlatformIntegerWidth() throws {
+        let limit = Int.bitWidth == 32 ? 2_147_483_647.0 : 9_007_199_254_740_991.0
+        let valid = makeView(renderer: "code", data: [
+            "repo": "example/project", "path": "example.swift", "content": "one line",
+            "startLine": limit - 1, "highlight": [["from": limit - 1, "to": limit - 1]],
+        ])
+        XCTAssertNoThrow(try decodeView(valid))
+        assertInvalidView(makeView(renderer: "code", data: [
+            "repo": "example/project", "path": "example.swift", "content": "one line",
+            "startLine": limit,
+        ]), path: "view.data.content")
+        assertInvalidView(makeView(renderer: "code", data: [
+            "repo": "example/project", "path": "example.swift", "content": "one line",
+            "startLine": limit + 1,
+        ]), path: "view.data.startLine")
+    }
+
     func testImageAndToolValidationAcceptsWebGuardContext() throws {
         let imageView = makeView(renderer: "image", data: [
             "images": [[
