@@ -36,6 +36,14 @@ See [qualification and evidence](docs/factory-concurrency-correction.md).
 
 ## Owner direction — 9 November 2026
 
+Runtime run 42607263687 allocated five workers but failed at command delivery;
+all five sandboxes and temporary storage were cleaned up. Managed cutover and VM
+retirement were skipped. Startup diagnostics now distinguish known adapter
+failures and collect only file metadata/error class names before cleanup. A
+qualified prior immutable worker image can be reused only when its runner source
+tree is identical, avoiding unrelated rebuilds during adapter diagnosis. The owner
+has accepted 300 cores (up to 37 8-core workers) for now; no further quota request.
+
 Factory concurrency is a priority correction: Dan requires up to 100 agents
 executing simultaneously on isolated, on-demand workers. The 128 GiB single-VM
 route serializes tasks and does not meet the existing parallel-work requirement.
