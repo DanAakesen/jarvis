@@ -8,6 +8,7 @@ import { AzureCliCredential } from '@azure/identity';
 import { BlobServiceClient } from '@azure/storage-blob';
 import { SandboxGroupClient, endpointForRegion } from '@azure/containerapps-sandbox';
 import { FactorySandboxPool, sandboxMailboxName } from '../../apps/backend/dist/factory/sandbox-pool.js';
+import { safeError, workerInspection } from './diagnostics.mjs';
 
 const [configurationPath, evidencePath] = process.argv.slice(2);
 const config = JSON.parse(await readFile(configurationPath, 'utf8'));
@@ -18,10 +19,6 @@ const client = new SandboxGroupClient(credential, endpointForRegion('swedencentr
   'rg-jarvis', 'jarvis-factory', {retryOptions: {maxRetries: 0}});
 const evidence = {workersRequested: 5, sessions: [], passed: false, cleanupPassed: false, modelCalls: 0, poolErrors: []};
 let stage = 'storage-access';
-function safeError(error) {
-  return {type: error.constructor.name, status: Number.isInteger(error.statusCode) ? error.statusCode : null,
-    code: typeof error.code === 'string' && /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/u.test(error.code) ? error.code : null};
-}
 const save = () => writeFile(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
 const options = {storage, credential, client, subscriptionId: config.subscription,
   region: 'swedencentral', resourceGroup: 'rg-jarvis', group: 'jarvis-factory', diskImageId: config.imageId,
@@ -78,6 +75,9 @@ try {
   await save();
   if (new Set(evidence.sessions.map((s) => s.session)).size !== 5) throw new Error('Worker isolation failed');
   await until(async () => {
+    if (evidence.poolErrors.some((error) => ['workspace_setup_failed', 'worker_boot_failed', 'ownership_mismatch', 'invalid_state'].includes(error.code))) {
+      throw new Error('Deterministic worker startup failure');
+    }
     const statuses = await Promise.all(evidence.sessions.map((s) => pool.transport(request('status', undefined, s.invocation))));
     return statuses.every((s) => s.status === 'failed' && s.error === 'Worker command failed');
   }, 900, 'five runner refusal responses');
@@ -141,6 +141,19 @@ try {
 } catch (error) {
   evidence.failureStage = stage;
   evidence.failure = safeError(error);
+  await pool.stop();
+  evidence.workerDiagnostics = [];
+  for (const record of evidence.sessions) {
+    try {
+      const binding = await jsonBlob(storage.getContainerClient('factory-sandbox-pool'), `sessions/${record.session}.json`);
+      const box = await sandboxFor(record.session);
+      const diagnostic = {session: record.session, booted: binding?.booted === true, state: box.state};
+      const inspection = await client.sandboxes.exec(box.id, {command: workerInspection});
+      if (inspection.exitCode === 0 && inspection.stdout.length < 8192) diagnostic.filesystem = JSON.parse(inspection.stdout);
+      else diagnostic.inspectionExitCode = inspection.exitCode;
+      evidence.workerDiagnostics.push(diagnostic);
+    } catch (error) { evidence.workerDiagnostics.push({session: record.session, failure: safeError(error)}); }
+  }
   await save();
   console.error('Factory runtime qualification failed; details withheld to protect credentials');
   process.exitCode = 1;
