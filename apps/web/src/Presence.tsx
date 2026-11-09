@@ -70,35 +70,6 @@ export function PresenceChip({ backendUrl, getAccessToken }: { backendUrl: strin
 export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: string | null; getAccessToken: () => Promise<string> }) {
   const { presence, setMode, retry } = usePresence(backendUrl, getAccessToken);
   const ids = useId();
-  return () => { active = false; };
-  }, [backendUrl, getAccessToken]);
-
-  const changed = Boolean(saved && draft && presenceModes.some(({ mode }) => saved[mode] !== draft[mode]));
-  const tooLong = Boolean(draft && presenceModes.some(({ mode }) => draft[mode].length > maxInstruction));
-
-  async function saveInstructions() {
-    if (!backendUrl || !draft || !changed || tooLong || saving) return;
-    setSaving(true);
-    setMessage('');
-    setError('');
-    try {
-      const token = await getAccessToken();
-      const response = await backendFetch(`${backendUrl.replace(/\/+$/u, '')}/settings`, {
-        method: 'PATCH',
-        headers: { Authorization: `${['Bear', 'er'].join('')} ${token}`, Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personality: { modeInstructions: draft } }),
-        cache: 'no-store',
-      });
-      if (!response.ok) throw new Error('Mode instructions could not be saved. Try again.');
-      setSaved(draft);
-      setMessage('Saved. Applies next reply.');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Mode instructions could not be saved. Try again.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
   return (
     <CollapsibleSection storageKey="settings.presence" className="presence-settings" id="presence" headingId={`${ids}-heading`} title="Presence"
       summary={presence.status === 'ready' ? presenceLabel(presence.mode) : undefined}>

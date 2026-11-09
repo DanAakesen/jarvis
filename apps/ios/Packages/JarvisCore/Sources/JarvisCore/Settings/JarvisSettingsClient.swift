@@ -668,7 +668,7 @@ public enum JarvisSettingsLogic {
         switch value {
         case .string(let value):
             return (allowEmpty || !value.isEmpty) &&
-                value.utf8.count <= (maximumLength ?? 2_000) &&
+                value.utf16.count <= (maximumLength ?? 2_000) &&
                 !value.unicodeScalars.contains(where: {
                     $0.value < 0x20 && $0 != "\n" && $0 != "\r" && $0 != "\t"
                 }) &&

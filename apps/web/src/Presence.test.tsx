@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { publishPresenceMode } from './presence-store';
@@ -71,28 +71,17 @@ describe('presence modes', () => {
     render(<PresenceSettings backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
 
     expect(await screen.findByText('Presence modes unavailable.')).not.toBeNull();
-    expect(await screen.findByText('Mode instructions unavailable.')).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Edit Jarvis instructions' }).getAttribute('href')).toBe('#jarvis-instructions');
     expect(screen.queryByRole('button', { name: 'Present' })).toBeNull();
   });
 
-  it('saves one instruction per mode', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).endsWith('/presence')) return json({ mode: 'away', source: 'jarvis', changedAt: null });
-      if (init?.method === 'PATCH') return json({});
-      return json({ settings: { personality: { customInstructions: 'Base', modeInstructions: { present: '', away: 'Be brief.', on_the_move: '' } } } });
-    });
+  it('links to the single instruction editor without loading or patching settings', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => json({ mode: 'away', source: 'jarvis', changedAt: null }));
     vi.stubGlobal('fetch', fetchMock);
     render(<PresenceSettings backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
-
-    const move = await screen.findByLabelText('On the move');
-    fireEvent.change(move, { target: { value: 'Speak short sentences.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save mode instructions' }));
-
-    expect(await screen.findByText('Saved. Applies next reply.')).not.toBeNull();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/settings', expect.objectContaining({
-      method: 'PATCH',
-      body: JSON.stringify({ personality: { modeInstructions: { present: '', away: 'Be brief.', on_the_move: 'Speak short sentences.' } } }),
-    })));
-    expect(screen.getByRole('button', { name: /^Away/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(await screen.findByRole('button', { name: /^Away/ })).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Edit Jarvis instructions' }).getAttribute('href')).toBe('#jarvis-instructions');
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(fetchMock.mock.calls.every(call => !String(call[0]).endsWith('/settings'))).toBe(true);
   });
 });
