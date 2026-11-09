@@ -676,6 +676,10 @@ struct JarvisProactiveArea: View {
         case .news: "globe"
         case .travel: "airplane"
         case .x: "text.bubble"
+        case .health: "heart"
+        case .nutrition: "fork.knife"
+        case .notes: "note.text"
+        case .memory: "brain.head.profile"
         }
     }
 

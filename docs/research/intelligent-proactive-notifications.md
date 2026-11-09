@@ -31,4 +31,14 @@ The owner explicitly declined the proposed additional delivery-policy/validation
 
 ## Verification
 
-See the PR for exact tested revision and final check results. Local tests use synthetic data and an isolated loopback SQL Server container only. No production data, cloud resources or live Factory tasks were touched. Primary owns integration, migration execution, deployment, installation and final acceptance.
+Local checks passed with Node 22.23.3 and Swift 6.2:
+
+- Full backend: 7,489 passed, one skipped. The first broad run caught the missing migration-manifest entry; it was fixed and the full suite rerun successfully.
+- Proactive/push subset: 948 passed, included in the backend count.
+- Full isolated SQL suite: 275 passed, including new context/owner-isolation and migration-retention checks. Disposable container removed afterward.
+- JarvisCore: 545 passed, including notification finding lookup and new source compatibility/localization.
+- Web push: 62 passed. Backend and browser builds/lint and Swift frontend parsing passed.
+
+Native iPhone/Watch compilation uses the existing PR-only workflow; see the PR for exact revision and final result. It caught an iPhone-only source-icon switch missing the new cases, corrected before handoff. Fixture screenshots in that workflow cover Watch, not actual notification receipt or the new Proactive flow. No physical-device delivery, model usefulness or notification UI screenshot is claimed here.
+
+Local tests use synthetic data and an isolated loopback SQL Server container only. No production data, cloud resources or live Factory tasks were touched. Primary owns integration, migration execution, deployment, installation and final acceptance.
