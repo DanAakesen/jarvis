@@ -13,7 +13,7 @@ group_outputs = json.loads((root / 'sandbox-outputs.json').read_text())
 bootstrap = json.loads(Path('infra/bootstrap.output.json').read_text())
 credential = AzureCliCredential()
 client = SandboxGroupClient(endpoint_for_region('swedencentral'), credential,
-    subscription_id=os.environ['SUBSCRIPTION_ID'], resource_group='rg-jarvis', sandbox_group='jarvis-factory')
+    subscription_id=os.environ['SUBSCRIPTION_ID'], resource_group='rg-jarvis', sandbox_group='jarvis-factory', retry_total=0)
 try:
     image = client.begin_create_disk_image(os.environ['WORKER_IMAGE'],
         name='factory-' + os.environ['GITHUB_SHA'][:16],

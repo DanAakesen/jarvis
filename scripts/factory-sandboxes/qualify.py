@@ -92,7 +92,7 @@ def qualify(args) -> None:
     save()
     credential = AzureCliCredential()
     group = SandboxGroupClient(endpoint_for_region('swedencentral'), credential,
-        subscription_id=args.subscription, resource_group='rg-jarvis', sandbox_group='jarvis-factory')
+        subscription_id=args.subscription, resource_group='rg-jarvis', sandbox_group='jarvis-factory', retry_total=0)
     stage = 'group-access'
     try:
         # Only read-only permission probes are retried while a new scoped role propagates.
