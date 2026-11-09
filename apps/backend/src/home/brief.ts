@@ -44,8 +44,8 @@ function bounded<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
 
 export class HomeBriefService {
   private readonly now: () => number;
-  private context?: { at: number; rows: SourceResult[] };
-  private contextPending?: Promise<SourceResult[]>;
+  private context: { at: number; rows: SourceResult[] } | undefined;
+  private contextPending: Promise<SourceResult[]> | undefined;
   private readonly cache = new Map<string, { at: number; value: HomeBrief }>();
   private readonly pending = new Map<string, Promise<HomeBrief>>();
   private readonly controllers = new Set<AbortController>();
@@ -126,7 +126,10 @@ export class HomeBriefService {
         const result = value as Record<string, unknown>;
         if (Object.keys(result).some(key => key !== 'text' && key !== 'evidenceRefs') ||
             typeof result.text !== 'string' || !result.text.trim() || result.text.length > 1200 ||
-            /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(result.text) ||
+            Array.from(result.text).some(char => {
+              const code = char.codePointAt(0)!;
+              return code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13);
+            }) ||
             !Array.isArray(result.evidenceRefs) || result.evidenceRefs.length > 12 ||
             !result.evidenceRefs.every(ref => typeof ref === 'string' && facts.some(fact => fact.ref === ref)) ||
             (facts.length > 0 && result.evidenceRefs.length === 0)) return unavailable('model');

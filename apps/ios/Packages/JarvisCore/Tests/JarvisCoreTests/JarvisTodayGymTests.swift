@@ -229,8 +229,8 @@ final class JarvisCombinedGymLogStoreTests: XCTestCase {
                 steps: .empty, now: now, language: .en, calendar: calendar
             )
             XCTAssertEqual(display.totalWorkouts, range == .today ? 2 : 3, "\(range)")
-            XCTAssertEqual(display.activeMinutes, range == .today ? 90 : 110, "\(range)")
-            XCTAssertEqual(display.activeKilocalories, range == .today ? 600 : 720, "\(range)")
+            XCTAssertNil(display.activeMinutes, "\(range): workout duration is not Apple exercise time")
+            XCTAssertNil(display.activeKilocalories, "\(range): workout calories are not all-day active energy")
         }
     }
 
