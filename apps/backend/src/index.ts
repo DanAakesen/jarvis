@@ -154,6 +154,8 @@ import { createNativeProactiveDelivery } from './proactive/native-delivery.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
 import { composeHealth } from './health/composition.js';
 import { registerProactive } from './proactive/composition.js';
+import { createProactiveConversationContext } from './proactive/conversation-context.js';
+import { createSqlConversationSelectionStore } from './database/proactive-conversation-context.js';
 import { createProactiveStore } from './database/proactive-store.js';
 import { createOwnerReminderStore } from './database/owner-reminder-store.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
@@ -1317,6 +1319,10 @@ try {
     eventHub,
     nowEventHub,
     ...(conversationAgent ? { conversationAgent } : {}),
+    ...(proactiveStore && database ? { proactiveConversationContext: createProactiveConversationContext(
+      config.auth.ownerObjectId, proactiveStore.items,
+      createSqlConversationSelectionStore(database.pool, config.auth.ownerObjectId),
+    ) } : {}),
     ...(ownerInteractions ? { ownerInteractions } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
   });

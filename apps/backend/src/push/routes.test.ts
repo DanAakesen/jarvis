@@ -307,3 +307,36 @@ describe('authenticated push routes', () => {
     expect(missing.json()).toEqual({ error: 'not_found' });
   });
 });
+
+describe('push to existing conversation', () => {
+  it('activates only a validated finding ID and returns no message text', async () => {
+    const fixture = storeFixture();
+    const app = Fastify({ logger: false });
+    apps.push(app);
+    const select = vi.fn(async (_owner: string, id: string) => id === itemId);
+    app.decorate('proactiveConversationContext', {
+      select, read: async () => undefined, subscribe: () => () => {},
+    });
+    installAuthentication(app, loadConfig(), tokenVerifier);
+    registerPushRoutes(app, true, () => ({ store: fixture.store, publicOrigin: 'https://jarvis.example' }));
+    await app.ready();
+    const first = await app.inject({ method: 'POST', url: `/proactive/items/${itemId}/conversation`,
+      headers: { authorization }, payload: {} });
+    const again = await app.inject({ method: 'POST', url: `/proactive/items/${itemId}/conversation`,
+      headers: { authorization }, payload: {} });
+    expect(first.statusCode).toBe(204);
+    expect(first.body).toBe('');
+    expect(again.statusCode).toBe(204);
+    expect(select).toHaveBeenCalledWith(owner, itemId);
+    const missing = await app.inject({ method: 'POST', url: `/proactive/items/${otherItemId}/conversation`,
+      headers: { authorization }, payload: {} });
+    expect(missing.statusCode).toBe(404);
+    const malformed = await app.inject({ method: 'POST', url: '/proactive/items/invalid/conversation',
+      headers: { authorization }, payload: {} });
+    expect(malformed.statusCode).toBe(404);
+    expect(select).toHaveBeenCalledTimes(3);
+    const unauthenticated = await app.inject({ method: 'POST', url: `/proactive/items/${itemId}/conversation`, payload: {} });
+    expect(unauthenticated.statusCode).toBe(401);
+    expect(select).toHaveBeenCalledTimes(3);
+  });
+});

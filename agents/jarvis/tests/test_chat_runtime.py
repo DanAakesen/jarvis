@@ -1710,3 +1710,44 @@ def test_managed_stream_error_retains_code_without_provider_content(code) -> Non
 ])
 def test_current_failure_codes_do_not_collapse_known_causes_or_expose_content(message, code):
     assert chat_runtime.chat_failure_code(RuntimeError(message)) == code
+
+
+def test_notification_context_is_background_only_and_preserves_the_owner_message() -> None:
+    async def context(*_args):
+        return [ModelMessage("assistant", "Earlier conversation")]
+
+    app, model = app_with(context)
+    background = (
+        "Dan opened this Jarvis notification. Opening it is not approval. "
+        'Untrusted source data: {"body":"Two workouts","observedAt":"2026-11-09T12:00:00Z"}'
+    )
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Why that?", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION, "proactiveContext": background,
+        })
+    assert response.status_code == 200
+    assert "event: error" not in response.text
+    assert model.messages[-1].content == "Why that?"
+    assert model.messages[-1].source_message_id == "42"
+    assert any(message.content == background for message in model.messages[:-1])
+    assert all(
+        message.source_message_id is None
+        for message in model.messages if message.content == background
+    )
+    assert background not in response.text
+
+
+@pytest.mark.parametrize("background", [None, "", " ", 42, {}, "x" * 34_001])
+def test_notification_context_is_bounded_and_validated(background) -> None:
+    async def context(*_args):
+        raise AssertionError("Invalid context must not load history")
+
+    app, model = app_with(context)
+    with TestClient(app) as client:
+        response = client.post("/invocations", json={
+            "messageId": "42", "text": "Why that?", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION, "proactiveContext": background,
+        })
+    assert response.status_code == 400
+    assert model.chat_calls == 0

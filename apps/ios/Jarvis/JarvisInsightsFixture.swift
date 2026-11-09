@@ -64,6 +64,13 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
         case (.get, "/proactive/settings"): return Self.response(200, settings())
         case (.patch, "/proactive/settings"): return patchSettings(request.body)
         default:
+            if request.method == .post, path.hasPrefix("/proactive/items/"), path.hasSuffix("/conversation") {
+                let parts = path.split(separator: "/")
+                guard parts.count == 4, Self.itemIDs.contains(String(parts[2])) else {
+                    return Self.response(404, ["error": "not_found"])
+                }
+                return Self.response(204, [:])
+            }
             if request.method == .get, path.hasPrefix("/proactive/items/"),
                let id = path.split(separator: "/").last,
                let index = Self.itemIDs.firstIndex(of: String(id)) {

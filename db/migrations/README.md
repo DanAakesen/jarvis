@@ -112,3 +112,5 @@ it does not remove tasks, issues, conversations or notification receipts.
 
 
 `0076_proactive_context.sql` expands the existing proactive source-status and alert-class constraints for Health, nutrition, notes, memory and normal model insights. Apply it before the corresponding backend. It creates no table and rewrites no historical record. The down batch refuses rollback while new-source statuses or insight receipts exist, preserving history rather than deleting it to force a downgrade. Coordinate the backend with a native client that recognizes the four new source IDs.
+
+`0077_proactive_conversation_context.sql` adds one owner-keyed notification selection (finding UUID and timestamp). Apply before the compatible backend, then the updated native client. It changes no findings or messages. Its down batch drops selection metadata only; revert the dependent backend first. Live rollback remains primary/owner-controlled.

@@ -1,3 +1,10 @@
+## Push-to-chat follow-up — 9 November 2026
+
+The later owner-approved flow supersedes opening Proactive: normal insight pushes now
+prepare background finding context and open the existing Chat, without repeating the
+notification or changing its UI. This follow-up is implemented on a separate branch;
+qualification and handoff are in [push-chat continuity](../push-chat-continuity.md).
+
 # Intelligent notifications across Jarvis
 
 Owner-approved implementation scope, 9 November 2026. PR [#1669](https://github.com/DanAakesen/jarvis/pull/1669), branch `research/data-driven-proactive-notifications`, based on main `d8967757`. The earlier research proposal is superseded by the owner's corrections below.

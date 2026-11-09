@@ -640,6 +640,8 @@ return {
       if (request.body.visualContext !== undefined && !visualContext) {
         return reply.code(400).send({ error: 'Invalid visual context' });
       }
+      // Resolve the server-owned selection before accepting a message. No notification prose is stored as a turn.
+      await app.proactiveConversationContext?.read(request.principal!.objectId);
       const attachmentIds = request.body.attachmentIds ?? [];
       if (attachmentIds.length > 0 && !app.conversationAttachments) {
         return reply.code(503).send({ error: 'Conversation attachments are unavailable.' });
@@ -815,11 +817,14 @@ return {
               }
             });
             try {
+              const proactiveContext = session.runtimeTest ? undefined
+                : await app.proactiveConversationContext?.read(request.principal!.objectId);
               agentIterator = agent.stream({
                 messageId: turnMessageId,
                 agentSessionId,
                 text: turnText,
                 language: turnLanguage,
+                ...(proactiveContext ? { proactiveContext } : {}),
                 turnId: activeTurn.rootMessageId,
                 onAgentPhaseTimings: (timings) => {
                   const replyTimings: AgentPhaseTimings = {};

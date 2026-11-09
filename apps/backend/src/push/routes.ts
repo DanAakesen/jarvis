@@ -118,6 +118,17 @@ function createRoutes<Logger extends FastifyBaseLogger>(
       });
     });
 
+    app.post<{ Params: { id: string } }>('/proactive/items/:id/conversation', async (request, reply) => {
+      const owner = request.principal?.objectId;
+      if (!owner) return reply.code(401).send({ error: 'Unauthorized' });
+      if (!uuidPattern.test(request.params.id)) return reply.code(404).send({ error: 'not_found' });
+      if (!app.proactiveConversationContext) return reply.code(503).send({ error: 'context_unavailable' });
+      if (!await app.proactiveConversationContext.select(owner, request.params.id)) {
+        return reply.code(404).send({ error: 'not_found' });
+      }
+      return reply.code(204).send();
+    });
+
     app.get<{ Params: { id: string } }>('/proactive/items/:id', async (request, reply) => {
       const owner = request.principal?.objectId;
       if (!owner) return reply.code(401).send({ error: 'Unauthorized' });

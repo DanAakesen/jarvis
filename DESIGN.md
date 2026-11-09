@@ -1,3 +1,12 @@
+## Approved push-to-chat continuity — 9 November 2026
+
+The owner selected direct continuity into normal chat and retained its existing
+page, bubbles, composer, dictation and voice controls. No notification card,
+banner, context chip, duplicate message or automatic greeting/send is added.
+Successful taps prepare background context before navigating to Chat. A failed
+load opens Chat with its existing error presentation and retains the tap for retry.
+This supersedes the earlier normal insight push destination of Proactive.
+
 ## Chat connection failure copy (7 November 2026)
 
 Use the existing error surface for distinct timeout and interrupted-connection

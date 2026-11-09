@@ -31,6 +31,8 @@ import type { TaskEventMessage } from '../factory/task-store.js';
 import { mapGithubWebhook } from '../github/webhook-mapping.js';
 import { createPushStore } from './push-store.js';
 import { createProactiveStore } from './proactive-store.js';
+import { createSqlConversationSelectionStore } from './proactive-conversation-context.js';
+import { createProactiveConversationContext } from '../proactive/conversation-context.js';
 import { proactiveSettingsRevision, ProactiveSettingsConflictError } from '../proactive/preferences.js';
 import { createProactiveAlertStore } from './proactive-alert-store.js';
 import { createProactiveTodoReceiptStore } from './proactive-todo-store.js';
@@ -59,7 +61,7 @@ const tablesInSchema = [
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_issue_origins', 'factory_task_submissions',
   'github_app_mint_status', 'jarvis_sessions',
   'memories', 'memory_deletions', 'memory_history', 'messages', 'owner_reminder_schedules', 'owner_sessions', 'phone_sessions',
-  'proactive_alerts', 'proactive_items',
+  'proactive_alerts', 'proactive_conversation_context', 'proactive_items',
   'proactive_reminders', 'proactive_runs', 'proactive_settings', 'proactive_source_status', 'proactive_spend', 'proactive_todo_receipts', 'projects',
   'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'session_runtime_sources', 'session_runtime_tests', 'session_runtime_turns',
@@ -3161,4 +3163,50 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await applyMigrations(rollbackPool, committed)).toEqual(committed.map((migration) => migration.name));
     expect(await tables(rollbackPool)).toEqual(tablesInSchema);
   }));
+});
+
+
+describe('durable notification conversation selection', () => {
+  it('survives store recreation, stays owner scoped and keeps the same selection on repeated taps', async () => {
+    const owner = randomUUID();
+    const now = new Date('2026-11-09T12:00:00Z');
+    const items = createProactiveStore(pool, owner).items;
+    const item = await items.upsertFinding({
+      dedupeKey: randomUUID(), title: 'Training progress', body: 'Two saved workouts this week.',
+      category: 'suggestion', urgency: 'normal', dueAt: null, runId: null, language: 'en',
+      evidence: [{ source: 'health', label: 'Recorded workout history', observedAt: now.toISOString() }],
+    });
+    const selections = createSqlConversationSelectionStore(pool, owner);
+    const first = createProactiveConversationContext(owner, items, selections, () => now);
+    expect(await first.select(owner, item.id)).toBe(true);
+    const reopened = createProactiveConversationContext(owner, createProactiveStore(pool, owner).items,
+      createSqlConversationSelectionStore(pool, owner), () => now);
+    expect(await reopened.read(owner)).toContain(item.body);
+    expect(await reopened.select(owner, item.id)).toBe(true);
+    expect(await selections.read()).toEqual({ itemId: item.id.toLowerCase(), selectedAt: now });
+    expect(await createSqlConversationSelectionStore(pool, randomUUID()).read()).toBeUndefined();
+    expect(await reopened.read(randomUUID())).toBeUndefined();
+  });
+  it('rolls back selection metadata without deleting findings or messages', async () => {
+    await withRollbackDatabase(async (rollbackPool, committed) => {
+      const owner = randomUUID();
+      const items = createProactiveStore(rollbackPool, owner).items;
+      const item = await items.upsertFinding({
+        dedupeKey: randomUUID(), title: 'Keep finding', body: 'Saved original finding.',
+        category: 'suggestion', urgency: 'normal', dueAt: null, runId: null, language: 'en', evidence: [],
+      });
+      const conversations = createConversationStore(rollbackPool);
+      const session = await conversations.createSession({ channel: 'chat', language: 'en', ownerObjectId: owner });
+      const message = await conversations.addMessage({ sessionId: session.id, role: 'dan', text: 'Keep this message.', model: null });
+      const selections = createSqlConversationSelectionStore(rollbackPool, owner);
+      await selections.select({ itemId: item.id, selectedAt: new Date('2026-11-09T12:00:00Z') });
+      const before = await tables(rollbackPool);
+      await revertMigration(rollbackPool, committed, await readDownMigration('0077_proactive_conversation_context.sql'));
+      expect(await tables(rollbackPool)).toEqual(before.filter(name => name !== 'proactive_conversation_context'));
+      expect((await items.get(item.id))?.body).toBe('Saved original finding.');
+      expect((await conversations.getHistory({ limit: 10 })).messages.some(row => row.id === message?.id)).toBe(true);
+      await applyMigrations(rollbackPool, committed);
+      expect(await selections.read()).toBeUndefined();
+    });
+  });
 });
