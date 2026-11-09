@@ -121,7 +121,8 @@ enum JarvisFixtureScenario {
           "body": {
             "settings": {
               "appearance": {"theme": "system"},
-              "personality": {"tone": "british_butler", "responseStyle": "balanced", "customInstructions": ""},
+              "personality": {"tone": "british_butler", "responseStyle": "balanced", "customInstructions": "", "modeInstructions": {"present": "Synthetic present instruction", "away": "Synthetic away instruction", "on_the_move": "Synthetic move instruction"}},
+              "homeBrief": {"instruction": "Synthetic grounded Home brief instruction", "maxVisibleLines": 3},
               "identity": {"description": "Synthetic assistant identity"},
               "presentation": {"showWork": true},
               "voice": {

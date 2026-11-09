@@ -42,6 +42,22 @@ describe('grounded Home brief', () => {
     expect(f.model).toHaveBeenCalledTimes(2);
     f.service.close();
   });
+  it('invalidates cached output after meaningful source changes and Copenhagen midnight', async () => {
+    const f = fixture();
+    await f.service.read('en');
+    vi.mocked(f.sources[0]!.read).mockResolvedValue({
+      source: 'calendar', state: 'ok', reason: null, observedAt: '2026-11-02T13:01:00Z',
+      facts: [{ kind: 'event', ref: 'calendar', label: 'Review', text: 'Review moved to 16:00',
+        observedAt: '2026-11-02T13:01:00Z' }],
+    });
+    f.service.invalidate();
+    await f.service.read('en');
+    expect(f.model).toHaveBeenCalledTimes(2);
+    f.advance(24 * 60 * 60_000);
+    await f.service.read('en');
+    expect(f.model).toHaveBeenCalledTimes(3);
+    f.service.close();
+  });
   it('never treats a failed commitment source as a clear day', async () => {
     const f = fixture();
     vi.mocked(f.sources[0]!.read).mockRejectedValue(new Error('offline'));

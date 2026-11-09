@@ -76,7 +76,10 @@ describe('presence modes', () => {
   });
 
   it('links to the single instruction editor without loading or patching settings', async () => {
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL) => json({ mode: 'away', source: 'jarvis', changedAt: null }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toMatch(/\/presence$/u);
+      return json({ mode: 'away', source: 'jarvis', changedAt: null });
+    });
     vi.stubGlobal('fetch', fetchMock);
     render(<PresenceSettings backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
     expect(await screen.findByRole('button', { name: /^Away/ })).not.toBeNull();
