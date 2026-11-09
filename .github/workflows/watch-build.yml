@@ -29,6 +29,11 @@ jobs:
           set -o pipefail
           xcodegen generate
           xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' -derivedDataPath "$RUNNER_TEMP/WatchBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/watch-build.log"
+      - name: Compile release for physical Watch architectures
+        working-directory: apps/ios
+        run: |
+          set -o pipefail
+          xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS' -configuration Release -derivedDataPath "$RUNNER_TEMP/WatchDeviceBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/watch-device-build.log"
       - name: Capture isolated Watch previews
         timeout-minutes: 5
         run: |
@@ -64,5 +69,6 @@ jobs:
           name: watch-build-logs
           path: |
             ${{ runner.temp }}/watch-build.log
+            ${{ runner.temp }}/watch-device-build.log
             ${{ runner.temp }}/phone-build.log
             ${{ runner.temp }}/watch-screenshots

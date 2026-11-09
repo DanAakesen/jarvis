@@ -1,5 +1,13 @@
 # Apple Watch implementation handoff
 
+9 November primary follow-up: the owner completed both App Group associations.
+Signed archive 42613537731 (build 88) advanced past provisioning and failed on
+four JSON safe-integer literals that overflow watchOS arm64_32 Int. The correction
+caps line validation at the smaller of the platform Int maximum and JavaScript's
+safe-integer maximum, preserving iPhone behavior. The Watch build workflow now
+also compiles a Release build for physical Watch architectures without signing.
+CI/native qualification and a replacement TestFlight upload remain pending.
+
 Branch: `feature/apple-watch-companion`. PR: https://github.com/DanAakesen/jarvis/pull/1652. Primary: Jarvis2 primary, session `01a1adc7-aebe-76f2-b63d-a852c887204f`.
 
 ## Implemented
