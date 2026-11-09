@@ -1,3 +1,27 @@
+## Managed Factory delivery update — 9 November 2026
+
+The owner has authorized Azure Container Apps Sandboxes as the managed JIT
+replacement and limited live qualification to **five concurrent workers**.
+The production concurrency target remains 100 with 128 GiB isolated workspaces.
+After managed Factory acceptance and cutover, remove the VM and all dedicated
+resources, roles, runtime code and configuration. Preserve shared backend and
+Foundry chat/voice services. Existing Factory test tasks need no migration.
+Group provisioning succeeded in workflow 42585522896. Qualification 42589074806
+identified HTTP 401 during private image import (registry/managed-identity auth).
+Image import now uses a short-lived ACR token from the existing deployment login;
+no registry admin account is enabled. Worker runtime identity is unchanged. Factory cutover, live acceptance and VM retirement remain pending.
+The runtime implementation now adds a durable per-session sandbox assignment,
+independent Blob mailboxes with rotating container-scoped user-delegation SAS,
+lease-fenced allocation, progress/token forwarding and independent idle stop.
+Uncertain creation is reconciled by labels rather than repeated. Disk resume
+restarts a process protected by a filesystem lock; uncertain task claims remain
+interrupted rather than replayed. Completed/cancelled SQL tasks release their
+sandbox/disk after the worker is idle. The group retains up to 1,000 sandbox
+resources separately from SQL’s configurable admission limit (up to 100); stopped bindings
+skip management polling. Partial disk cleanup is retried after sandbox deletion.
+This runtime code is not yet deployed or live-tested.
+See [qualification and evidence](factory-concurrency-correction.md).
+
 ## 8 November 2026 — Retain workout measurements when combining Home sources
 
 Home's vault/manual/HealthKit merge must retain the primary session, date and
@@ -12118,3 +12142,55 @@ generation (`codex-tool`) and automatic/manual Codex credential refresh
 before those functions stop using the Foundry runner. No such cutover occurred
 in this documentation update; native voice, personal memory and the 128 GiB VM
 remain independent of the parked chat migration.
+
+## 9 November 2026 — Preserve Factory concurrency when increasing workspace storage
+
+Dan rejects a single-worker Factory. The product already exposes a global
+parallel-task limit of 1–100; the intended behavior is simultaneous agents on
+isolated, on-demand compute, with idle capacity released. Replacing all new
+Foundry starts with one VM and serializing them in worker.py does not satisfy
+that behavior. The 128 GiB disk qualification is valid but is not fleet acceptance.
+
+Prefer managed infrastructure. Current Microsoft documentation describes Container
+Apps Sandboxes with independent sandboxes, persistent data-disk volumes, larger
+disk tiers and Microsoft-managed clusters. This option was omitted from the
+earlier assessment; it requires subscription/region, API, identity, disk,
+build-performance and concurrency qualification before adoption. No provider
+cutover, quota increase, new worker or 100-agent load run occurs in this change.
+Read-only catalogue inspection supports that qualification; a visible catalogue
+is not a working sandbox or proof of available capacity. See
+docs/factory-concurrency-correction.md for sources and acceptance requirements.
+
+### Managed capacity readback — 9 November, 08:33 Copenhagen
+
+After #1670 merged as 1d9f3074 with full CI 42579005933 and CodeQL 42579005892,
+GET-only inspection 42580034945 confirms Microsoft.App Registered, sandboxGroups
+available in Sweden Central with API 2026-07-01, and no groups yet in rg-jarvis.
+SandboxCores is limit 300 / usage 0. This is sufficient CPU quota for 100 two-core
+workers; it is not proof of a 128 GiB volume at that size, data-plane permission,
+actual resource placement, completed builds or 100 live Codex/Copilot sessions.
+No resources, role assignments, quota or routing were changed. The current VM
+route still handles one coding task at a time. Retain the qualification distinction.
+
+## Persistent-root workspace qualification — 9 November 2026
+
+Run 42601169164 returned the exact storage validation: DataDisk sizes may not
+exceed 107374182400 bytes (100 GiB). No equivalent spelling can provide a 128 GiB
+attached disk. The replacement profile uses the documented 2XL resources:
+8 vCPUs, 16 GiB memory and a 160 GiB persistent root disk. `/files/jarvis` lives on
+that private disk; no DataDisk volume is allocated. Disk-mode stop/resume retains
+it, and deleting the sandbox releases it. The canary checks the same sandbox ID
+and a persisted marker after resume. Partial sandbox deletion is retried.
+
+The live storage test still creates at most five workers. It must measure at
+least 128 GiB free after dependency restore/build, verify POSIX operations and
+five-way overlap, then verify persistence and delete its sandboxes. No model
+inference is included in this infrastructure test. Runtime transport/lifecycle
+qualification remains separate; neither test is a 100-agent provider load test.
+
+The larger CPU allocation changes capacity and cost: 100 workers need 800 active
+sandbox cores; the last observed quota is 300 (37 whole 8-core workers), enough
+for the five-worker test but insufficient for the full target. Quota discovery
+also checks the Microsoft.Quota catalogue without submitting a request. Do not
+claim 100-worker capacity until quota and the matching configuration are verified.
+The managed route remains inactive and VM retirement is held pending acceptance.

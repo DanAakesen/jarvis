@@ -120,6 +120,30 @@ def test_restart_recovers_status_without_starting_provider(tmp_path):
     assert app.tasks[item['invocationId']].worker is None
 
 
+def test_managed_idle_handoff_leaves_a_racing_new_command_queued(monkeypatch):
+    monkeypatch.setenv('JARVIS_FACTORY_MANAGED_SANDBOX', 'true')
+    item = command()
+
+    class RacingMailbox(Mailbox):
+        def put(self, key, value, create=False):
+            super().put(key, value, create)
+            if key == 'health.json' and value['idle']:
+                self.data['commands/new.json'] = item
+
+    async def fail(_):
+        pytest.fail('A quiescent consumer must not claim new work')
+
+    monkeypatch.setattr(app, 'invoke', fail)
+    mailbox = RacingMailbox()
+    worker = Worker(mailbox)
+    worker.last_busy -= 121
+    worker.last_health = time.monotonic()  # Idle must publish before the usual interval.
+    asyncio.run(asyncio.wait_for(worker.run(), timeout=1))
+    assert mailbox.data['health.json']['idle'] is True
+    assert mailbox.data['commands/new.json'] == item
+    assert 'claims/new.json' not in mailbox.data
+
+
 def test_probe_rejects_small_disk(monkeypatch):
     mailbox = Mailbox()
     item = command()

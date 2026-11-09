@@ -1,3 +1,27 @@
+## Managed Factory delivery update — 9 November 2026
+
+The owner has authorized Azure Container Apps Sandboxes as the managed JIT
+replacement and limited live qualification to **five concurrent workers**.
+The production concurrency target remains 100 with 128 GiB isolated workspaces.
+After managed Factory acceptance and cutover, remove the VM and all dedicated
+resources, roles, runtime code and configuration. Preserve shared backend and
+Foundry chat/voice services. Existing Factory test tasks need no migration.
+Group provisioning succeeded in workflow 42585522896. Qualification 42589074806
+identified HTTP 401 during private image import (registry/managed-identity auth).
+Image import now uses a short-lived ACR token from the existing deployment login;
+no registry admin account is enabled. Worker runtime identity is unchanged. Factory cutover, live acceptance and VM retirement remain pending.
+The runtime implementation now adds a durable per-session sandbox assignment,
+independent Blob mailboxes with rotating container-scoped user-delegation SAS,
+lease-fenced allocation, progress/token forwarding and independent idle stop.
+Uncertain creation is reconciled by labels rather than repeated. Disk resume
+restarts a process protected by a filesystem lock; uncertain task claims remain
+interrupted rather than replayed. Completed/cancelled SQL tasks release their
+sandbox/disk after the worker is idle. The group retains up to 1,000 sandbox
+resources separately from SQL’s configurable admission limit (up to 100); stopped bindings
+skip management polling. Partial disk cleanup is retried after sandbox deletion.
+This runtime code is not yet deployed or live-tested.
+See [qualification and evidence](factory-concurrency-correction.md).
+
 ## Direct owner instructions for Factory (7 November 2026)
 
 Factory create/start first verifies the current stored owner message. Its internal
@@ -9000,6 +9024,25 @@ requests ARM deallocation. Deployment verifies the actual deallocated state befo
 activation. Disk, OS disk and outbound IP costs remain while compute is deallocated.
 This provisions one worker; automatic expansion into a fleet is not implemented.
 
+On 9 November the owner reaffirmed the existing requirement for up to 100
+simultaneously executing agents with on-demand managed workers. The single-worker
+route is an architectural regression against that requirement, not an accepted
+replacement for session-based scaling. `FactoryWorkerMailbox` intercepts every
+new start while enabled and targets one resource ID. `Worker.process` defers
+start/resume while any task is active, and health is one shared `health.json`.
+Removing that guard or starting multiple consumers against the same mailbox/disk
+does not implement an isolated fleet. Replacement requires per-worker routing,
+health, task claims, isolated storage, capacity admission and lifecycle handling.
+See [Factory concurrency correction](factory-concurrency-correction.md) for the
+managed candidate, discovery workflow and acceptance requirements. No fleet or
+routing change is delivered by that discovery workflow.
+
+Read-only discovery 42580034945 on 9 November confirms the managed sandbox
+catalogue includes Sweden Central and API 2026-07-01. The regional SandboxCores
+quota is 300 with zero usage, and rg-jarvis has no sandbox groups. This supplies
+enough CPU quota for 100 two-core sandboxes, but runtime placement, 128 GiB mounted
+storage, task lifecycle and provider concurrency are not yet qualified.
+
 ## Established chat stream lifetime (8 November 2026)
 
 The Foundry invocation adapter bounds authentication/connection setup at 210 seconds
@@ -9173,3 +9216,37 @@ values and groups against the caller's calendar. A detached task builds the valu
 only its noncancelled result is published on the main actor. LazyVStack/Section
 keeps individual note rows lazy, with shared per-row grouped material corners.
 Neither the shared page chrome nor the complete underlying inventory is changed.
+
+### Managed Factory idle handoff (9 November 2026)
+
+The managed mailbox consumer publishes `health.idle=true` and exits its claim
+loop. The pool stops only a booted, quiescent consumer, including when a new
+command arrived during handoff. The queued command survives in its private
+mailbox and causes disk-mode resume on the next reconciliation. Before launching
+a successor, the pool deletes the old idle heartbeat; rotating the SAS for a
+live consumer leaves the heartbeat intact. This contract prevents active work
+from being stopped based on an earlier idle snapshot. Local race tests pass;
+live managed execution remains unqualified at the volume-create boundary.
+
+## Persistent-root workspace qualification — 9 November 2026
+
+Run 42601169164 returned the exact storage validation: DataDisk sizes may not
+exceed 107374182400 bytes (100 GiB). No equivalent spelling can provide a 128 GiB
+attached disk. The replacement profile uses the documented 2XL resources:
+8 vCPUs, 16 GiB memory and a 160 GiB persistent root disk. `/files/jarvis` lives on
+that private disk; no DataDisk volume is allocated. Disk-mode stop/resume retains
+it, and deleting the sandbox releases it. The canary checks the same sandbox ID
+and a persisted marker after resume. Partial sandbox deletion is retried.
+
+The live storage test still creates at most five workers. It must measure at
+least 128 GiB free after dependency restore/build, verify POSIX operations and
+five-way overlap, then verify persistence and delete its sandboxes. No model
+inference is included in this infrastructure test. Runtime transport/lifecycle
+qualification remains separate; neither test is a 100-agent provider load test.
+
+The larger CPU allocation changes capacity and cost: 100 workers need 800 active
+sandbox cores; the last observed quota is 300 (37 whole 8-core workers), enough
+for the five-worker test but insufficient for the full target. Quota discovery
+also checks the Microsoft.Quota catalogue without submitting a request. Do not
+claim 100-worker capacity until quota and the matching configuration are verified.
+The managed route remains inactive and VM retirement is held pending acceptance.

@@ -30,6 +30,8 @@ param githubAppId string = ''
 @description('Separately provisioned and probed 128 GiB Factory worker. Empty retains Foundry.')
 param factoryWorkerResourceId string = ''
 param factoryWorkerEnabled bool = false
+@description('Explicitly qualified managed Factory runtime settings; preserved during ordinary deployments.')
+param factorySandboxConfiguration object = {}
 
 @description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')
 param pcBridgeClientId string = ''
@@ -950,8 +952,12 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             }
             {
               name: 'JARVIS_FACTORY_WORKER_ENABLED'
-              value: string(factoryWorkerEnabled)
+              value: factoryWorkerEnabled ? 'true' : 'false'
             }
+            ...map(items(factorySandboxConfiguration), setting => {
+              name: setting.key
+              value: string(setting.value)
+            })
             {
               name: 'TASK_EVENT_ARCHIVE_STORAGE_ACCOUNT'
               value: storage.name

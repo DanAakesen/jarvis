@@ -1,0 +1,66 @@
+name: Factory managed sandboxes
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jarvis-production-deploy
+  cancel-in-progress: false
+  queue: max
+jobs:
+  qualify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      id-token: write
+    env:
+      SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      INFRA_DEPLOYMENT: ${{ vars.JARVIS_INFRA_DEPLOYMENT_NAME }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version-file: .python-version
+      - name: Require exact main qualification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --depth=2 origin main
+          PYTHONPATH=.github/scripts python -c 'import os; from release_state import qualify; qualify(os.environ["GITHUB_SHA"])'
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Provision sandbox group and scoped identities
+        run: |
+          az deployment group show --resource-group rg-jarvis --name "$INFRA_DEPLOYMENT" --subscription "$SUBSCRIPTION_ID" --query properties.outputs --output json --only-show-errors > "$RUNNER_TEMP/infra.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          outputs = json.loads((root/'infra.json').read_text())
+          bootstrap = json.loads(Path('infra/bootstrap.output.json').read_text())
+          params = {'registryName': outputs['containerRegistryName']['value'], 'keyVaultName': outputs['keyVaultName']['value'], 'backendIdentityName': bootstrap['backendIdentity']['resourceId'].rsplit('/',1)[1], 'deployPrincipalId': bootstrap['deploy']['servicePrincipalId']}
+          (root/'sandbox-parameters.json').write_text(json.dumps({'parameters': {k: {'value': v} for k,v in params.items()}}))
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('VAULT_URI=https://' + outputs['keyVaultName']['value'] + '.vault.azure.net/\n')
+          PY
+          az deployment group create --resource-group rg-jarvis --name jarvis-factory-sandboxes --subscription "$SUBSCRIPTION_ID" --template-file infra/factory-sandboxes.bicep --parameters "@$RUNNER_TEMP/sandbox-parameters.json" --query properties.outputs --output json --only-show-errors > "$RUNNER_TEMP/sandbox-outputs.json"
+      - name: Install pinned sandbox qualification SDK
+        run: python -m pip install --require-hashes -r scripts/factory-sandboxes/requirements.txt
+      - name: Qualify five workers only
+        run: |
+          python scripts/factory-sandboxes/qualify.py --subscription "$SUBSCRIPTION_ID" --outputs "$RUNNER_TEMP/sandbox-outputs.json" --vault-uri "$VAULT_URI" --image 'crjarvisrmw7kae3bza6a.azurecr.io/jarvis-runner-dotnet@sha256:14c6c82ce95445a90bedcb4f75ff8576ded38ea8b8f9cefd6d891bdfbc9016a3' --state "$RUNNER_TEMP/factory-sandboxes.json"
+      - name: Retain sanitized qualification evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: factory-sandboxes
+          path: ${{ runner.temp }}/factory-sandboxes.json
+          if-no-files-found: warn
+          retention-days: 14

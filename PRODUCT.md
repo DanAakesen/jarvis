@@ -1,3 +1,15 @@
+## Managed Factory delivery update — 9 November 2026
+
+The owner has authorized Azure Container Apps Sandboxes as the managed JIT
+replacement and limited live qualification to **five concurrent workers**.
+The production concurrency target remains 100 with 128 GiB isolated workspaces.
+After managed Factory acceptance and cutover, remove the VM and all dedicated
+resources, roles, runtime code and configuration. Preserve shared backend and
+Foundry chat/voice services. Existing Factory test tasks need no migration.
+Group provisioning and bounded qualification are implemented; actual provisioning,
+Factory routing, live acceptance and VM retirement remain pending.
+See [qualification and evidence](docs/factory-concurrency-correction.md).
+
 ## Direct Home send recovery (7 November 2026)
 
 Home and Chat share streaming acceptance and recovery. Small accepted/progress
@@ -816,7 +828,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 | **Updates** | Events update state and progress live, without manual refresh. Automatic board updates preserve an in-flight read in the same scope and coalesce into one follow-up; project, backend, identity and unmount changes still cancel obsolete reads. |
 | **Assignment** | One active coding agent per task. |
 | **Plan tracking** | The repository's `PLAN.md` is the shared task-status view, with each task linked to its GitHub issue. An open issue with a worker label (`Codex`, `Copilot`, `Dan`, or `Jarvis`) or an open linked PR sets In progress (assignees are ignored), completed tasks set Complete, and all other tasks, including issues closed without completion, reset to Not started unless Blocked is set by hand. New task rows get a labelled issue with dependency links. |
-| **Parallel work** | Dan controls concurrency across projects; capacity depends on provider limits and compute. |
+| **Parallel work** | Dan controls concurrency across projects, up to 100 simultaneously executing agents. Provision isolated workers on demand and release idle compute. A larger workspace must preserve this capability; one worker serially draining a queue is not an acceptable replacement. Actual capacity depends on qualified compute and provider limits. |
 | **Agent choice** | Codex or GitHub Copilot per task, regardless of project. |
 | **Subscriptions** | Coding tasks and image generation use Dan's ChatGPT/Codex subscription through the Jarvis-only login; Copilot uses Dan's work seat on his personal GitHub account, approved for Jarvis. Codex usage is shared with Dan's use; no per-image API billing or fallback is allowed. |
 | **Voice** | An open browser is enough. Danish and English, chosen from the shared More → Language menu in the composer and voice bar; status requests and follow-ups. During English sessions, Jarvis announces selected task, pull-request, and deployment status changes in fixed short wording, merging bursts and waiting until the current voice turn is idle. Voice Live credentials stay on the backend; the browser connects through an authenticated backend WebSocket relay. |
@@ -2613,10 +2625,17 @@ conflict checks and must never silently overwrite another edit. Done saves chang
 content before returning to the library. Dark pages share the approved Ember background.
 ## Disk-backed Factory workspace
 
-Coding tasks use a persistent 128 GiB workspace after provisioning qualification.
-The backend remains available while the separate worker deallocates after 120
-seconds with no queued or active work. New tasks wake it automatically. Recovery
-retains the existing task and branch; uncertain actions must never replay.
+Coding tasks need sufficient isolated workspace, with 128 GiB as the selected
+capacity target per worker, while retaining up to 100 concurrent workers. Workers
+start on demand and release idle compute independently. The backend remains
+available. Recovery retains the existing task and branch; uncertain actions must
+never replay. Provider or infrastructure limits must be visible rather than
+presenting queued work as an executing agent.
+
+The provisioned 128 GiB VM handles only one active coding task. It proves storage
+and idle deallocation, not the Factory concurrency requirement. The managed worker
+correction and acceptance criteria are in
+[Factory concurrency correction](docs/factory-concurrency-correction.md).
 
 ## Long-running conversation progress (8 November 2026)
 

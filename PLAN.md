@@ -1,4 +1,42 @@
+## Managed Factory delivery update — 9 November 2026
+
+The owner has authorized Azure Container Apps Sandboxes as the managed JIT
+replacement and limited live qualification to **five concurrent workers**.
+The production concurrency target remains 100 with 128 GiB isolated workspaces.
+After managed Factory acceptance and cutover, remove the VM and all dedicated
+resources, roles, runtime code and configuration. Preserve shared backend and
+Foundry chat/voice services. Existing Factory test tasks need no migration.
+The group, scoped identity and durable per-session adapter are implemented.
+Deploys 42596241964 and 42600636467 passed. The managed route is inactive.
+Live run 42601169164 proves attached DataDisk volumes are capped at 100 GiB:
+`Data disk size must not exceed 107374182400. Got: 128Gi.` This rules out the
+previous 128 GiB attachment regardless of unit notation or CPU. No worker was
+created by that failed probe; cleanup is tracked in its retained evidence.
+The replacement uses the documented 8-vCPU / 16 GiB / 160 GiB persistent-root
+profile. Qualification requires at least 128 GiB **free after a real build**,
+five overlapping isolated workers, POSIX operations and disk-mode stop/resume.
+This profile is implemented but not yet live-qualified. It uses four times the
+CPU allocation of the original candidate; 100 workers require 800 SandboxCores,
+versus the observed 300. Five live test workers require 40 cores. Read-only quota
+catalogue discovery is included; no quota increase or 100-worker run is claimed.
+Factory runtime acceptance, cutover and VM retirement remain pending. The held
+retirement PR removes dedicated VM resources/config only after acceptance.
+See [qualification and evidence](docs/factory-concurrency-correction.md).
+
 ## Owner direction — 9 November 2026
+
+Factory concurrency is a priority correction: Dan requires up to 100 agents
+executing simultaneously on isolated, on-demand workers. The 128 GiB single-VM
+route serializes tasks and does not meet the existing parallel-work requirement.
+Workspace provisioning remains verified; Factory capacity is incomplete. Prefer
+managed execution; qualify Container Apps Sandboxes and its larger disks before
+choosing a replacement. Read-only subscription discovery is implemented, not
+worker provisioning or fleet execution. Live inspection 42580034945 confirms
+Sweden Central availability in the subscription catalogue and SandboxCores quota
+300 / usage 0 at discovery, sufficient CPU quota for 100 two-core workers. The
+sandbox group has since been provisioned; mounted 128 GiB storage, integration
+and concurrent execution remain unverified. See
+[scope, evidence and acceptance](docs/factory-concurrency-correction.md).
 
 Copilot harness migration and further comparison are parked. Keep the custom
 harness as the default and focus on its reliability/control. Existing Copilot
@@ -4453,3 +4491,10 @@ The owner registered Microsoft.Compute (Microsoft.Quota was already registered).
 ### 8 November — quota usage value investigation
 
 Run 42529215408 resolves both approved resource names but fails at usage_decode with ValueError before writes. Retain only numeric counter values/types (including negative sentinels) from the two approved quota resources; arbitrary provider text and structured bodies are excluded. The unknown usage remains rejected rather than assumed zero. This is diagnostic evidence only, not a quota increase or workspace activation.
+
+The main-only `Request 800 Factory sandbox cores` workflow is prepared for the
+approved capacity target. It discovers the canonical SandboxCores quota, submits
+one fixed 800-core request only if needed, and verifies the actual regional usage
+limit. It never allocates workers, lowers a larger limit, guesses a missing quota
+name or automatically replays an uncertain PUT. Submission and approval are
+separate evidence fields. Live submission/approval remain pending.
