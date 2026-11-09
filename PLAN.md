@@ -1,6 +1,6 @@
 ## Home brief and daily activity implementation — 9 November 2026
 
-Implemented in PR #1689 on feature/home-brief-daily-activity; qualification is in progress. Primary owns integration and deployment. Remaining installed-device checks include HealthKit authorization/no-data ambiguity, midnight/DST, late Watch sync and actual model output in English/Danish. No deployment or owner acceptance is claimed.
+Implemented in draft PR #1689 on feature/home-brief-daily-activity. General CI and three native builds passed at the code revision recorded in docs/ios/design/home-brief-activity-handoff.md. Native UI measurements/screenshots remain queued; installed-device checks include HealthKit authorization/no-data ambiguity, midnight/DST, late Watch sync and actual model output in English/Danish. Primary owns integration and deployment. No deployment or owner acceptance is claimed.
 
 ## Direct owner actions — 9 November 2026
 
