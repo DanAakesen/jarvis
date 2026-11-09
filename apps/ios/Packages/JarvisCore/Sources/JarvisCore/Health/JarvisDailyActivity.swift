@@ -122,10 +122,12 @@ public struct JarvisDailyActivitySnapshot: Codable, Equatable, Sendable {
         let keys = Set(energy.keys).union(exercise.keys)
         return Self(days: Dictionary(uniqueKeysWithValues: keys.map { day in
             (day, JarvisDailyActivityDay(activeKilocalories: energy[day]?.0,
-                exerciseMinutes: exercise[day]?.0, observedAt: max(energy[day]?.1 ?? .distantPast,
-                    exercise[day]?.1 ?? .distantPast),
+                exerciseMinutes: exercise[day]?.0, observedAt: min(energy[day]?.1 ?? .distantFuture,
+                    exercise[day]?.1 ?? .distantFuture),
                 isStale: day == JarvisHealthPeriod.make(.today, now: fetchedAt).startDate
-                    && fetchedAt.timeIntervalSince(max(energy[day]?.1 ?? .distantPast, exercise[day]?.1 ?? .distantPast)) > 15 * 60,
+                    && [energy[day]?.1, exercise[day]?.1].compactMap { $0 }.contains {
+                        fetchedAt.timeIntervalSince($0) > 15 * 60 || $0 > fetchedAt.addingTimeInterval(60)
+                    },
                 isPartial: partialDays.contains(day)))
         }), fetchedAt: fetchedAt)
     }

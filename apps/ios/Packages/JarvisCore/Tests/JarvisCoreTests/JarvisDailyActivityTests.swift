@@ -72,4 +72,21 @@ final class JarvisDailyActivityTests: XCTestCase {
             now: now.addingTimeInterval(901)).availability, .stale)
     }
 
+    func testFreshExerciseCannotHideStaleEnergyAndFutureReadingsAreNotFresh() {
+        let rows: [[String: JSONValue]] = [
+            ["metric_name": .string("active_energy_burned"), "metric_date": .string("2026-11-02"),
+             "unit": .string("kcal"), "value": .number(200), "fields": .object(["mergedDailyTotal": .bool(true)]),
+             "updated_at": .string("2026-11-02T12:00:00Z")],
+            ["metric_name": .string("apple_exercise_time"), "metric_date": .string("2026-11-02"),
+             "unit": .string("min"), "value": .number(20), "fields": .object(["mergedDailyTotal": .bool(true)]),
+             "updated_at": .string("2026-11-02T13:30:00Z")],
+        ]
+        let snapshot = JarvisDailyActivitySnapshot.server(rows: rows, fetchedAt: now)
+        XCTAssertEqual(snapshot.total(\.activeKilocalories, period: .make(.today, now: now), now: now).availability, .stale)
+        var future = rows[0]
+        future["updated_at"] = .string("2026-11-02T14:30:00Z")
+        XCTAssertEqual(JarvisDailyActivitySnapshot.server(rows: [future], fetchedAt: now)
+            .total(\.activeKilocalories, period: .make(.today, now: now), now: now).availability, .stale)
+    }
+
 }
