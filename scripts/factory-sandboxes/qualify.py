@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 from pathlib import Path
 import shlex
+import re
 import time
 from uuid import uuid4
 
@@ -56,6 +57,23 @@ def checked_exec(box, script: str) -> dict:
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
+def failure_details(error: Exception, stage: str) -> dict:
+    # Retain the service's error code and a fixed vocabulary of diagnostic facts,
+    # never its free-form message, response body, headers, or signed URLs.
+    details = {'failureStage': stage, 'failureType': type(error).__name__,
+               'httpStatus': getattr(error, 'status_code', None)}
+    service_error = getattr(error, 'error', None)
+    code = getattr(service_error, 'code', None)
+    if isinstance(code, str) and re.fullmatch(r'[A-Za-z][A-Za-z0-9_.-]{0,79}', code):
+        details['serviceCode'] = code
+    message = str(error).lower()
+    terms = ('registry', 'acr', 'image', 'manifest', 'token', 'audience', 'issuer',
+             'identity', 'permission', 'unauthorized', 'authentication', 'not found',
+             'access denied', 'expired', 'credential', 'role', 'subscription')
+    details['serviceFacts'] = [term for term in terms if term in message]
+    return details
+
+
 def qualify(args) -> None:
     from azure.containerapps.sandbox import SandboxGroupClient, SandboxVolume, endpoint_for_region
     from azure.identity import AzureCliCredential
@@ -74,7 +92,8 @@ def qualify(args) -> None:
     save()
     credential = AzureCliCredential()
     group = SandboxGroupClient(endpoint_for_region('swedencentral'), credential,
-        subscription_id=args.subscription, resource_group='rg-jarvis', sandbox_group='jarvis-factory')
+        subscription_id=args.subscription, resource_group='rg-jarvis', sandbox_group='jarvis-factory', retry_total=0)
+    stage = 'group-access'
     try:
         # Only read-only permission probes are retried while a new scoped role propagates.
         for attempt in range(13):
@@ -85,6 +104,7 @@ def qualify(args) -> None:
                 if getattr(error, 'status_code', None) != 403 or attempt == 12:
                     raise
                 time.sleep(10)
+        stage = 'image-import'
         image = group.begin_create_disk_image(args.image, name='factory-qualified-' + args.image[-16:],
             managed_identity_resource_id=identity, entrypoint=['/bin/sh', '-c'], cmd=['sleep infinity'],
             polling_timeout=1200).result()
@@ -94,7 +114,9 @@ def qualify(args) -> None:
         for index in range(WORKERS):
             volume = f'{run}-{index}'
             volumes.append(volume)  # Include uncertain creates in owned cleanup.
+            stage = 'volume-create'
             group.create_volume(volume, type='DataDisk', size='128Gi', labels=labels)
+            stage = 'sandbox-create'
             box = group.begin_create_sandbox(disk=None, disk_id=image.id, cpu='2000m', memory='4096Mi',
                 disk_size='40Gi', auto_suspend_seconds=900, auto_suspend_mode='Disk',
                 labels={**labels, 'jarvis-worker': str(index)},
@@ -104,6 +126,7 @@ def qualify(args) -> None:
                 polling_timeout=600).result()
             boxes.append(box)
             # Explicit filesystem ownership; SDK execution and image USER are qualified live.
+            stage = 'workspace-probe'
             result = box.exec('mkdir -p /files/jarvis && chmod 700 /files/jarvis')
             if result.exit_code:
                 raise RuntimeError('Workspace directory setup failed')
@@ -116,6 +139,7 @@ def qualify(args) -> None:
             index, box = pair
             timings = checked_exec(box, 'import json,time\ns=time.time()\ntime.sleep(30)\nprint(json.dumps({"startedAt":s,"finishedAt":time.time()}))')
             return index, timings
+        stage = 'overlap-probe'
         with ThreadPoolExecutor(max_workers=WORKERS) as pool:
             for index, timings in pool.map(overlap, enumerate(boxes)):
                 evidence['results'][index].update(timings)
@@ -123,6 +147,7 @@ def qualify(args) -> None:
         evidence['overlappingWorkers'] = WORKERS
         save()
         # Credential access is observed as booleans only; no model tasks or writes.
+        stage = 'credential-probe'
         checked_exec(boxes[0], '''import asyncio,json,sys
 sys.path.insert(0,'/app')
 import app
@@ -135,6 +160,7 @@ async def check():
 asyncio.run(check())
 ''')
         evidence['credentialsAccessible'] = True
+        stage = 'stop-resume'
         first = boxes[0]
         first.begin_stop().result()
         evidence['stoppedState'] = first.get().state
@@ -148,8 +174,8 @@ asyncio.run(check())
         evidence['passed'] = True
         save()
     except Exception as error:
-        evidence['failureType'] = type(error).__name__
-        evidence['httpStatus'] = getattr(error, 'status_code', None)
+        evidence.update(failure_details(error, stage))
+        print(json.dumps(failure_details(error, stage)), flush=True)
         save()
         raise RuntimeError('Managed worker qualification failed; inspect sanitized evidence') from None
     finally:

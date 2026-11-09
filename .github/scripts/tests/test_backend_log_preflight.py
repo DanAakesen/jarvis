@@ -102,6 +102,29 @@ class MetadataTests(unittest.TestCase):
         self.assertNotIn("sharedKey", json.dumps(azure.calls))
         self.assertNotIn("Log_s", json.dumps(azure.calls))  # Schema is read; log content is never queried.
 
+    def test_more_than_twelve_distinct_roles_preserves_complete_permission_review(self):
+        azure = FakeAzure()
+        original = azure.get
+        role_ids = [f"00000000-0000-4000-8000-{number:012d}" for number in range(16)]
+        azure.assignments = [{"properties": {"principalId": PRINCIPAL,
+            "principalType": "ServicePrincipal", "scope": GROUP,
+            "roleDefinitionId": GROUP + "/providers/Microsoft.Authorization/roleDefinitions/" + role}}
+            for role in role_ids]
+        requested = []
+        def get(resource, version, query=None):
+            role = resource.rsplit("/", 1)[-1]
+            if role in role_ids:
+                requested.append(role)
+                return {"properties": {"permissions": [{"actions": ["*/read"] if role == role_ids[-1] else [],
+                    "notActions": [], "dataActions": [], "notDataActions": []}]}}
+            return original(resource, version, query)
+        azure.get = get
+        result = inspect(EXPECTED, azure)
+        self.assertEqual(set(requested), set(role_ids))
+        self.assertEqual(len(requested), len(role_ids))  # shared role definitions are cached
+        self.assertIn("existing_workspace_log_grant_requires_review", result["access_findings"])
+        self.assertTrue(result["assigned_to_inventory_complete"])
+
     def test_detects_recreated_identity_and_runtime_client_mismatch(self):
         for obj, key in (("identity", "principalId"), ("identity", "clientId"), ("identity", "tenantId"), ("app", "clientId")):
             with self.subTest(obj=obj, key=key):

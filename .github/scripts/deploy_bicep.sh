@@ -28,7 +28,7 @@ jq -n --argjson emails "$budget_emails" \
   '{parameters: {budgetContactEmails: {value: $emails}}}' >"$budget_parameters"
 
 backend_apps=$(az containerapp list --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
-  --query "[?starts_with(name, 'ca-jarvis-backend-')].{name:name,image:properties.template.containers[0].image,worker:properties.template.containers[0].env[?starts_with(name, 'JARVIS_FACTORY_WORKER_')],copilot:properties.template.containers[0].env[?name=='FOUNDRY_COPILOT_AGENT_NAME' || name=='FOUNDRY_COPILOT_AGENT_VERSION' || name=='FOUNDRY_COPILOT_DEFINITION_SHA256' || name=='FOUNDRY_COPILOT_POLICY_COMPATIBILITY']}" \
+  --query "[?starts_with(name, 'ca-jarvis-backend-')].{name:name,image:properties.template.containers[0].image,worker:properties.template.containers[0].env[?starts_with(name, 'JARVIS_FACTORY_WORKER_')],sandboxes:properties.template.containers[0].env[?starts_with(name, 'JARVIS_FACTORY_SANDBOX_')],copilot:properties.template.containers[0].env[?name=='FOUNDRY_COPILOT_AGENT_NAME' || name=='FOUNDRY_COPILOT_AGENT_VERSION' || name=='FOUNDRY_COPILOT_DEFINITION_SHA256' || name=='FOUNDRY_COPILOT_POLICY_COMPATIBILITY']}" \
   --output json --only-show-errors)
 if ! jq -e 'type == "array" and length <= 1 and all(.[]; type == "object")' <<<"$backend_apps" >/dev/null; then
   echo "::error::Unable to identify one existing backend configuration."
@@ -70,6 +70,15 @@ if (( copilot_value_count != 0 )); then
 fi
 
 parameters=(backendIdentityResourceId="$identity" sqlAdminGroupObjectId="$sql_group")
+sandbox_configuration=$(jq -cer '
+  .[0].sandboxes // [] | if type != "array" or any(.[];
+    (.name | IN("JARVIS_FACTORY_SANDBOX_IMAGE_ID", "JARVIS_FACTORY_SANDBOX_SUBSCRIPTION",
+      "JARVIS_FACTORY_SANDBOX_IDENTITY_CLIENT_ID", "JARVIS_FACTORY_SANDBOX_BACKEND_URL",
+      "JARVIS_FACTORY_SANDBOX_ENABLED") | not) or (.value | type != "string"))
+    then error else reduce .[] as $item ({}; .[$item.name] = $item.value) end
+' <<<"$backend_apps")
+parameters+=(factorySandboxConfiguration="$sandbox_configuration")
+
 worker_id=$(jq -r '.[0].worker // [] | map(select(.name == "JARVIS_FACTORY_WORKER_RESOURCE_ID"))[0].value // ""' <<<"$backend_apps")
 worker_enabled=$(jq -r '.[0].worker // [] | map(select(.name == "JARVIS_FACTORY_WORKER_ENABLED"))[0].value // "false"' <<<"$backend_apps")
 if [[ -n "$worker_id" ]]; then

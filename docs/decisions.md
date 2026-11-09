@@ -6,8 +6,19 @@ The production concurrency target remains 100 with 128 GiB isolated workspaces.
 After managed Factory acceptance and cutover, remove the VM and all dedicated
 resources, roles, runtime code and configuration. Preserve shared backend and
 Foundry chat/voice services. Existing Factory test tasks need no migration.
-Group provisioning and bounded qualification are implemented; actual provisioning,
-Factory routing, live acceptance and VM retirement remain pending.
+Group provisioning succeeded in workflow 42585522896. Its two qualification
+attempts returned HTTP 401 before a worker passed; sanitized operation diagnostics
+are being added. Factory cutover, live acceptance and VM retirement remain pending.
+The runtime implementation now adds a durable per-session sandbox assignment,
+independent Blob mailboxes with rotating container-scoped user-delegation SAS,
+lease-fenced allocation, progress/token forwarding and independent idle stop.
+Uncertain creation is reconciled by labels rather than repeated. Disk resume
+restarts a process protected by a filesystem lock; uncertain task claims remain
+interrupted rather than replayed. Completed/cancelled SQL tasks release their
+sandbox/disk after the worker is idle. The group retains up to 1,000 sandbox
+resources separately from SQL’s configurable admission limit (up to 100); stopped bindings
+skip management polling. Partial disk cleanup is retried after sandbox deletion.
+This runtime code is not yet deployed or live-tested.
 See [qualification and evidence](factory-concurrency-correction.md).
 
 ## 8 November 2026 — Retain workout measurements when combining Home sources

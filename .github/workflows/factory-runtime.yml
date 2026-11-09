@@ -1,0 +1,106 @@
+name: Factory managed runtime qualification
+on:
+  workflow_dispatch:
+    inputs:
+      activate:
+        description: Switch Factory after the five-worker test passes
+        type: boolean
+        default: false
+      retire_vm:
+        description: Remove the idle legacy VM after successful managed cutover
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: jarvis-production-deploy
+  cancel-in-progress: false
+  queue: max
+jobs:
+  qualify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      id-token: write
+    env:
+      SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      INFRA_DEPLOYMENT: ${{ vars.JARVIS_INFRA_DEPLOYMENT_NAME }}
+      IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-sandbox
+      QA_STORAGE: stjfqa${{ github.run_id }}${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version-file: .python-version
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version-file: .nvmrc
+      - name: Require exact main qualification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --depth=2 origin main
+          PYTHONPATH=.github/scripts python -c 'import os; from release_state import qualify; qualify(os.environ["GITHUB_SHA"])'
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Read qualified sandbox infrastructure
+        run: |
+          az deployment group show --resource-group rg-jarvis --name "$INFRA_DEPLOYMENT" --subscription "$SUBSCRIPTION_ID" --query properties.outputs -o json > "$RUNNER_TEMP/infra.json"
+          az deployment group show --resource-group rg-jarvis --name jarvis-factory-sandboxes --subscription "$SUBSCRIPTION_ID" --query properties.outputs -o json > "$RUNNER_TEMP/sandbox-outputs.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          outputs = json.loads((root/'infra.json').read_text())
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write('REGISTRY=' + outputs['containerRegistryName']['value'] + '\nREGISTRY_HOST=' + outputs['containerRegistryLoginServer']['value'] + '\n')
+          PY
+      - name: Build the exact qualified worker source
+        run: |
+          az acr build --registry "$REGISTRY" --image "jarvis-runner-base:$IMAGE_TAG" --file runner/Dockerfile --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
+          az acr build --registry "$REGISTRY" --image "jarvis-runner-dotnet:$IMAGE_TAG" --file runner/Dockerfile.dotnet --build-arg "RUNNER_BASE_IMAGE=$REGISTRY_HOST/jarvis-runner-base:$IMAGE_TAG" --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
+          digest=$(az acr manifest show-metadata --registry "$REGISTRY" --name "jarvis-runner-dotnet:$IMAGE_TAG" --query digest --output tsv --subscription "$SUBSCRIPTION_ID")
+          echo "WORKER_IMAGE=$REGISTRY_HOST/jarvis-runner-dotnet@$digest" >> "$GITHUB_ENV"
+      - name: Create disposable qualification storage and scope its access
+        run: |
+          az storage account create --resource-group rg-jarvis --name "$QA_STORAGE" --location swedencentral --sku Standard_LRS --allow-blob-public-access false --allow-shared-key-access false --min-tls-version TLS1_2 --tags project=jarvis purpose=factory-qualification run="$GITHUB_RUN_ID" --subscription "$SUBSCRIPTION_ID" --output none
+          principal=$(jq -er .deploy.servicePrincipalId infra/bootstrap.output.json)
+          az role assignment create --assignee-object-id "$principal" --assignee-principal-type ServicePrincipal --role 'Storage Blob Data Contributor' --scope "/subscriptions/$SUBSCRIPTION_ID/resourceGroups/rg-jarvis/providers/Microsoft.Storage/storageAccounts/$QA_STORAGE" --output none
+      - name: Import worker image and prepare non-secret runtime configuration
+        run: |
+          python -m pip install --require-hashes -r scripts/factory-sandboxes/requirements.txt
+          python scripts/factory-sandboxes/prepare-runtime.py
+          npm install --global npm@10.9.9
+          npm ci
+          npm run build --workspace @jarvis/backend
+      - name: Qualify five Factory workers through the production adapter
+        run: node scripts/factory-sandboxes/pool-canary.mjs "$RUNNER_TEMP/pool-config.json" "$RUNNER_TEMP/pool-canary.json"
+      - name: Remove disposable storage after sandbox cleanup
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/pool-canary.json" ]] && jq -e '.cleanupPassed == true' "$RUNNER_TEMP/pool-canary.json" >/dev/null; then
+            az storage account delete --resource-group rg-jarvis --name "$QA_STORAGE" --subscription "$SUBSCRIPTION_ID" --yes --output none
+          fi
+      - name: Activate qualified managed Factory and retire the legacy VM
+        if: inputs.activate == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RETIRE_VM: ${{ inputs.retire_vm }}
+        run: python scripts/factory-sandboxes/cutover.py
+      - name: Retain sanitized runtime evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: factory-runtime
+          path: |
+            ${{ runner.temp }}/pool-config.json
+            ${{ runner.temp }}/pool-canary.json
+          if-no-files-found: warn
+          retention-days: 14

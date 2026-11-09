@@ -58,3 +58,15 @@ class QualificationTests(unittest.TestCase):
                 return Result()
         with self.assertRaisesRegex(RuntimeError, '^Sandbox qualification command failed$'):
             module.checked_exec(Box(), 'pass')
+
+    def test_service_diagnostics_do_not_retain_credentials_or_urls(self):
+        from types import SimpleNamespace
+        error = RuntimeError('Registry authentication: Bearer secret-value https://host/path?sig=secret')
+        error.status_code = 401
+        error.error = SimpleNamespace(code='Unauthorized')
+        result = module.failure_details(error, 'image-import')
+        self.assertEqual(result['serviceCode'], 'Unauthorized')
+        self.assertEqual(result['failureStage'], 'image-import')
+        self.assertEqual(result['serviceFacts'], ['registry', 'authentication'])
+        self.assertNotIn('secret', str(result))
+        self.assertNotIn('https', str(result))

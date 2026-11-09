@@ -23,7 +23,8 @@ resource group 'Microsoft.App/sandboxGroups@2026-07-01' = {
     defaultCpu: '2'
     defaultMemory: '4Gi'
     defaultDisk: '40Gi'
-    maxSandboxCount: 100
+    // Retained stopped sessions must not consume the 100 active-worker slots.
+    maxSandboxCount: 1000
   }
 }
 resource backend 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = { name: backendIdentityName }
