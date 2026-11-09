@@ -4,6 +4,8 @@ import os
 import re
 import subprocess
 
+APNS_SECRET_NAMES = ('apns-team-id', 'apns-key-id', 'apns-signing-key')
+
 
 def azure(*args, timeout=60):
     result = subprocess.run(['az', *args, '--subscription', os.environ['SUBSCRIPTION_ID'],
@@ -61,12 +63,22 @@ def main():
     report = summarize(app)
     try:
         metadata = secret_metadata(outputs['keyVaultName']['value'])
-        names = [item['name'] for item in metadata]
-        report['candidateSecretNames'] = [name for name in names if re.search(r'apns|apple-push', name, re.I)]
+        report.update(metadata_presence(metadata))
         report['secretNamesReadable'] = True
     except RuntimeError:
         report['secretNamesReadable'] = False
     print(json.dumps(report, indent=2))
+
+
+def metadata_presence(metadata):
+    # Emit only fixed field names and booleans, never provider-supplied strings.
+    return {
+        'apnsSecretsPresent': {name: any(item['name'] == name for item in metadata)
+                               for name in APNS_SECRET_NAMES},
+        'otherAPNsSecretPresent': any(item['name'] not in APNS_SECRET_NAMES
+                                      and re.search(r'apns|apple-push', item['name'], re.I) is not None
+                                      for item in metadata),
+    }
 
 
 if __name__ == '__main__':

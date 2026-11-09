@@ -51,3 +51,12 @@ class NativePushReadinessTests(unittest.TestCase):
     def test_missing_revision_is_not_ready(self):
         app = {'properties': {'template': {'containers': [{'name': 'backend'}]}}}
         self.assertFalse(module.summarize(app)['revisionReady'])
+
+    def test_metadata_report_never_logs_provider_supplied_names_or_values(self):
+        metadata = [{'name': 'apns-signing-key', 'attributes': {'enabled': True}},
+                    {'name': 'apns-private-name', 'value': 'private-value'}]
+        result = module.metadata_presence(metadata)
+        self.assertNotIn('private-', json.dumps(result))
+        self.assertEqual(result['apnsSecretsPresent'], {
+            'apns-team-id': False, 'apns-key-id': False, 'apns-signing-key': True})
+        self.assertTrue(result['otherAPNsSecretPresent'])
