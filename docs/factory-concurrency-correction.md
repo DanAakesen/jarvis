@@ -170,3 +170,14 @@ investigation. Five-way execution, Factory activation and VM retirement have
 not passed. The later normal deploy failed legacy configuration validation before
 applying infrastructure; ARM boolean and resource-ID casing are normalized, with
 other identities and invalid flags still rejected.
+
+## Volume request contract follow-up
+
+Qualification 42596242067 returned `InvalidRequest`, service error 16, before
+creating a worker. Its retained facts identify the `128Gi` size but do not include
+the validation instruction. The next candidate sends `128GiB` explicitly at the
+volume API, preserving 137,438,953,472 requested bytes. This representation still
+requires live acceptance. Storage validation now retains a bounded problem-detail
+message with URLs, credentials and opaque identifiers removed; authentication
+and command failures continue to retain only codes/facts. No CPU profile change,
+production activation or VM deletion is implied by this candidate.

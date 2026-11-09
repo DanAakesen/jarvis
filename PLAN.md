@@ -28,6 +28,11 @@ ARM boolean/resource-ID casing while retaining the exact worker boundary.
 Managed idle handoff now exits the consumer before controller shutdown so a new
 queued command cannot race with stop; resume clears the old idle marker. Local
 regressions pass; the updated release and live five-worker qualification are pending.
+Run 42596242067 still rejects volume creation with InvalidRequest/error 16. The
+candidate volume request now uses the explicit binary unit `128GiB` (unchanged
+capacity), and storage-only failures retain bounded redacted problem details.
+This is an unverified API-contract correction; no CPU tier or workspace capacity
+has been reduced, and the live test remains capped at five.
 See [qualification and evidence](docs/factory-concurrency-correction.md).
 
 ## Owner direction — 9 November 2026

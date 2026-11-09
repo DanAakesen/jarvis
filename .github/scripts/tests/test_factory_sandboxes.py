@@ -86,3 +86,17 @@ class QualificationTests(unittest.TestCase):
         self.assertIn('maximum', result['serviceFacts'])
         self.assertNotIn('secret', str(result))
         self.assertNotIn('hidden', str(result))
+
+    def test_storage_diagnostics_preserve_size_units_but_remove_auth_and_urls(self):
+        from types import SimpleNamespace
+        import json
+        error = RuntimeError('Do not publish this exception or request headers')
+        error.response = SimpleNamespace(text=lambda: json.dumps({'detail':
+            'Invalid disk size 128Gi; use 128GiB. Bearer private-value token=another-private-value '
+            'https://host/path?sig=private aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'}))
+        result = module.failure_details(error, 'volume-create')
+        self.assertIn('Invalid disk size 128Gi; use 128GiB.', result['validationDetail'])
+        self.assertNotIn('private', str(result))
+        self.assertNotIn('https://', str(result))
+        self.assertNotIn('aaaaaaaa', str(result))
+        self.assertNotIn('validationDetail', module.failure_details(error, 'image-import'))

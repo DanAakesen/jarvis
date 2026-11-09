@@ -58,8 +58,8 @@ def checked_exec(box, script: str) -> dict:
 
 
 def failure_details(error: Exception, stage: str) -> dict:
-    # Retain the service's error code and a fixed vocabulary of diagnostic facts,
-    # never its free-form message, response body, headers, or signed URLs.
+    # Authentication and command errors retain codes/facts only. For storage
+    # validation, retain a bounded redacted problem detail without HTTP headers.
     details = {'failureStage': stage, 'failureType': type(error).__name__,
                'httpStatus': getattr(error, 'status_code', None)}
     service_error = getattr(error, 'error', None)
@@ -87,6 +87,13 @@ def failure_details(error: Exception, stage: str) -> dict:
     details['sizeFacts'] = re.findall(r'\b\d{1,9}(?:\.\d{1,3})?\s*(?:gib|mib|gi|mi|bytes|characters)\b', message)[:12]
     if type(problem.get('errorCode')) is int:
         details['serviceErrorCode'] = problem['errorCode']
+    if stage in ('volume-create', 'sandbox-create') and isinstance(problem.get('detail'), str):
+        detail = problem['detail'][:4096]
+        detail = re.sub(r'https?://\S+', '[url]', detail, flags=re.I)
+        detail = re.sub(r'\b(?:Bearer|Basic)\s+\S+', '[credential]', detail, flags=re.I)
+        detail = re.sub(r'\b(?:[\w-]*(?:token|password|secret|signature)|api[_-]?key|sig)\s*[:=]\s*["\']?[^\s"\',;]+', '[credential]', detail, flags=re.I)
+        detail = re.sub(r'[A-Za-z0-9_/+=.-]{24,}', '[identifier]', detail)
+        details['validationDetail'] = ' '.join(detail.split())[:1000]
     return details
 
 
@@ -134,7 +141,7 @@ def qualify(args) -> None:
             volume = f'{run}-{index}'
             volumes.append(volume)  # Include uncertain creates in owned cleanup.
             stage = 'volume-create'
-            group.create_volume(volume, type='DataDisk', size='128Gi', labels=labels)
+            group.create_volume(volume, type='DataDisk', size='128GiB', labels=labels)
             stage = 'sandbox-create'
             box = group.begin_create_sandbox(disk=None, disk_id=image.id, cpu='2000m', memory='4096Mi',
                 disk_size='40Gi', auto_suspend_seconds=900, auto_suspend_mode='Disk',
