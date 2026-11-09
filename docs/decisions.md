@@ -12212,6 +12212,17 @@ The runner image is unchanged. Nine adapter tests and backend typechecking pass;
 live requalification is pending.
 
 
+## Native APNs delivery configuration — 9 November 2026
+
+Use the owner's existing APNs key through three Key Vault secrets (`apns-team-id`,
+`apns-key-id`, `apns-signing-key`). The explicit main-only activation workflow
+requires exact source qualification and enabled secret metadata before changing
+the existing backend. Container Apps resolves protected references using its
+already-authorized managed identity. Infrastructure deployments preserve this
+activation; startup validates the key before becoming ready. Inspection reports
+configuration presence only. No key is committed, logged or read by the workflow.
+The owner is preparing the secrets; live activation and device receipt are pending.
+
 ## Managed Factory cutover — 9 November 2026
 
 Run 42620552706 passed five production-adapter workers, credential access,
