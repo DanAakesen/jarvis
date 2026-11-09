@@ -9000,6 +9000,19 @@ requests ARM deallocation. Deployment verifies the actual deallocated state befo
 activation. Disk, OS disk and outbound IP costs remain while compute is deallocated.
 This provisions one worker; automatic expansion into a fleet is not implemented.
 
+On 9 November the owner reaffirmed the existing requirement for up to 100
+simultaneously executing agents with on-demand managed workers. The single-worker
+route is an architectural regression against that requirement, not an accepted
+replacement for session-based scaling. `FactoryWorkerMailbox` intercepts every
+new start while enabled and targets one resource ID. `Worker.process` defers
+start/resume while any task is active, and health is one shared `health.json`.
+Removing that guard or starting multiple consumers against the same mailbox/disk
+does not implement an isolated fleet. Replacement requires per-worker routing,
+health, task claims, isolated storage, capacity admission and lifecycle handling.
+See [Factory concurrency correction](factory-concurrency-correction.md) for the
+managed candidate, discovery workflow and acceptance requirements. No fleet or
+routing change is delivered by that discovery workflow.
+
 ## Established chat stream lifetime (8 November 2026)
 
 The Foundry invocation adapter bounds authentication/connection setup at 210 seconds

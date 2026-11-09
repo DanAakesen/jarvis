@@ -12118,3 +12118,21 @@ generation (`codex-tool`) and automatic/manual Codex credential refresh
 before those functions stop using the Foundry runner. No such cutover occurred
 in this documentation update; native voice, personal memory and the 128 GiB VM
 remain independent of the parked chat migration.
+
+## 9 November 2026 — Preserve Factory concurrency when increasing workspace storage
+
+Dan rejects a single-worker Factory. The product already exposes a global
+parallel-task limit of 1–100; the intended behavior is simultaneous agents on
+isolated, on-demand compute, with idle capacity released. Replacing all new
+Foundry starts with one VM and serializing them in worker.py does not satisfy
+that behavior. The 128 GiB disk qualification is valid but is not fleet acceptance.
+
+Prefer managed infrastructure. Current Microsoft documentation describes Container
+Apps Sandboxes with independent sandboxes, persistent data-disk volumes, larger
+disk tiers and Microsoft-managed clusters. This option was omitted from the
+earlier assessment; it requires subscription/region, API, identity, disk,
+build-performance and concurrency qualification before adoption. No provider
+cutover, quota increase, new worker or 100-agent load run occurs in this change.
+Read-only catalogue inspection supports that qualification; a visible catalogue
+is not a working sandbox or proof of available capacity. See
+docs/factory-concurrency-correction.md for sources and acceptance requirements.

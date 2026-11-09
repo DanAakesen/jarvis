@@ -1,12 +1,21 @@
 ## Active owner decisions — 9 November 2026
 
+Factory must run up to 100 independent agents concurrently, with isolated
+workspaces and on-demand compute. The single 128 GiB VM is a storage mitigation,
+not accepted Factory delivery. Do not reduce the owner's concurrency requirement
+to fit that host or claim 100 queued tasks prove 100 running workers. Managed
+execution is preferred. Read docs/factory-concurrency-correction.md before any
+worker routing/provisioning change; do not decommission the Foundry runner as part
+of the earlier VM-only direction until the replacement preserves concurrency.
+
 Copilot harness migration/comparison is parked: Dan prefers control of the custom
 harness and sees insufficient gain. Keep Current as default; retain existing test
 code and evidence without further migration or resource deletion.
 Existing Factory tasks are tests and do not need migration/recovery. Retiring the
 old worker route instead requires moving future web research/HTML reports, image
-generation and Codex login renewal to the VM, then checking their lifecycle and
-outputs. That implementation/decommissioning has not occurred. Do not require
+generation and Codex login renewal to a qualified replacement, then checking their
+lifecycle and outputs. The earlier VM-only target is superseded by the concurrency
+requirement. That implementation/decommissioning has not occurred. Do not require
 Task 23 recovery as a prerequisite or treat this clarification as bulk deletion.
 
 ## Home Today workout totals and Notes acceptance (8 November 2026)

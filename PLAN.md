@@ -1,5 +1,14 @@
 ## Owner direction — 9 November 2026
 
+Factory concurrency is a priority correction: Dan requires up to 100 agents
+executing simultaneously on isolated, on-demand workers. The 128 GiB single-VM
+route serializes tasks and does not meet the existing parallel-work requirement.
+Workspace provisioning remains verified; Factory capacity is incomplete. Prefer
+managed execution; qualify Container Apps Sandboxes and its larger disks before
+choosing a replacement. Read-only subscription discovery is implemented, not
+worker provisioning or fleet execution. See
+[scope, evidence and acceptance](docs/factory-concurrency-correction.md).
+
 Copilot harness migration and further comparison are parked. Keep the custom
 harness as the default and focus on its reliability/control. Existing Copilot
 test functionality and evidence are retained; no Azure resource was removed.
