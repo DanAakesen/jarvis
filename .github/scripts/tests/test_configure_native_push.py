@@ -15,8 +15,8 @@ class ConfigureNativePushTests(unittest.TestCase):
     def test_missing_or_disabled_key_never_changes_the_app(self):
         outputs = {'keyVaultName': {'value': 'vault'}, 'backendAppName': {'value': 'backend'}}
         for metadata in [[], [{'name': name, 'attributes': {'enabled': name != 'apns-signing-key'}} for name in module.SECRET_NAMES]]:
-            with patch.dict(os.environ, GITHUB_SHA='head', INFRA_DEPLOYMENT='infra'), \
-                 patch.object(module, 'qualify'), patch.object(module, 'azure', side_effect=[outputs, metadata]) as azure:
+            with patch.dict(os.environ, GITHUB_SHA='head', INFRA_DEPLOYMENT='infra', SUBSCRIPTION_ID='sub'), \
+                 patch.object(module, 'qualify'), patch.object(module, 'azure', side_effect=[outputs, {'value': [{'name': m['name'], 'properties': {'attributes': m['attributes']}} for m in metadata]}]) as azure:
                 with self.assertRaisesRegex(RuntimeError, 'Create enabled Key Vault secrets'):
                     module.main()
                 self.assertEqual(azure.call_count, 2)
@@ -29,9 +29,9 @@ class ConfigureNativePushTests(unittest.TestCase):
         ready = {'revisionReady': True, 'enabled': {'JARVIS_APPROVAL_NOTIFICATIONS_ENABLED': True},
                  'apnsConfigured': dict.fromkeys(module.SECRET_NAMES, True), 'apnsProduction': True,
                  'signingKeyUsesSecretReference': True}
-        with patch.dict(os.environ, GITHUB_SHA='head', INFRA_DEPLOYMENT='infra'), \
+        with patch.dict(os.environ, GITHUB_SHA='head', INFRA_DEPLOYMENT='infra', SUBSCRIPTION_ID='sub'), \
              patch.object(module, 'qualify') as qualify, patch.object(module, 'summarize', return_value=ready), \
-             patch.object(module, 'azure', side_effect=[outputs, metadata, app, {}, {}, app]) as azure:
+             patch.object(module, 'azure', side_effect=[outputs, {'value': [{'name': m['name'], 'properties': {'attributes': m['attributes']}} for m in metadata]}, app, {}, {}, app]) as azure:
             module.main()
             qualify.assert_called_once_with('head')
             commands = [call.args for call in azure.call_args_list]

@@ -7944,3 +7944,17 @@ and waits for the ready backend revision. Ordinary Bicep deployments preserve
 the enabled state and the three references. No private-key read is needed by
 the workflow, and it sends no test notification. Installed receipt/tap testing
 remains separate. Activation has not run.
+
+## APNs metadata access correction — 9 November 2026
+
+Readiness run 42627268441 confirmed the backend is ready with proactive, alert,
+Web Push and Health switches enabled; native APNs registration/delivery is off
+and its four runtime settings are absent. The deployment identity could not list
+Key Vault secrets through the data-plane API, so secret storage remains unknown.
+Use the existing ARM deployment metadata API for secret names and enabled flags,
+without fetching values or granting new data-plane access. The official
+`azure-mgmt-keyvault` 14.1.0 SDK defines the list endpoint at API 2026-05-15 and
+explicitly states SecretProperties.value is never returned by that service.
+Project only names/enabled flags, bound pagination to the same vault, and retain
+missing/disabled-key rejection before any APNs configuration write. Six focused
+checks pass; live metadata readback and activation remain pending.
