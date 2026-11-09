@@ -61,3 +61,9 @@ read timeout despite the backend's 270-second generation budget. Two regression
 tests reproduced the default/configured mismatch. Image calls now use the existing
 long-tool setting (320 seconds by default), like web research. This requires
 releasing the Jarvis agent as well as the backend. No total chat deadline is added.
+
+Qualification correction: CI 42682000377 passed 7,421 backend tests and found one
+unregistered-log-event failure. Both new diagnostic events now have explicit
+reason/numeric-field allowlists; stdout and telemetry redaction tests and the
+source-registration check pass locally (239 focused tests). Full agent suite:
+1,319 passed. Final CI and production qualification are still pending.

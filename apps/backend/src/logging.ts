@@ -24,7 +24,7 @@ export async function createTelemetry(connectionString?: string): Promise<Teleme
 }
 
 const failureEvents = new Set([
-  'proactive.failed',
+  'proactive.failed', 'proactive.model_failed', 'image_generation.failed',
   'proactive.todo_writer',
   'daily.gym_log',
   'Background job visibility read failed', 'Background job dismissal failed', 'Background job dismissal import failed',
@@ -379,6 +379,20 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
         /^(?:\/(?:[A-Za-z_][A-Za-z0-9_-]{0,63}|\d{1,10}))*$/u.test(input.instancePath)) {
       fields.instancePath = input.instancePath;
     }
+    return fields;
+  }
+  if (input.msg === 'proactive.model_failed' || input.msg === 'image_generation.failed') {
+    const fields: Record<string, unknown> = {};
+    const reasons = input.msg === 'proactive.model_failed'
+      ? ['response_size_or_json', 'response_envelope', 'completion_incomplete', 'invalid_json', 'invalid_findings', 'model_unavailable']
+      : ['credential_unavailable', 'credential_missing', 'transport_failed', 'provider_http_error', 'empty_response', 'invalid_image_response', 'artifact_storage_failed'];
+    if (typeof input.reason === 'string' && reasons.includes(input.reason)) fields.reason = input.reason;
+    if (input.msg === 'proactive.model_failed' && typeof input.outputTokens === 'number' &&
+        Number.isSafeInteger(input.outputTokens) && input.outputTokens >= 0 && input.outputTokens <= 1_000_000) {
+      fields.outputTokens = input.outputTokens;
+    }
+    if (input.msg === 'image_generation.failed' && typeof input.status === 'number' &&
+        Number.isInteger(input.status) && input.status >= 100 && input.status <= 599) fields.status = input.status;
     return fields;
   }
   if (input.msg === 'proactive.failed') {
