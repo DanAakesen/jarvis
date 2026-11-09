@@ -60,5 +60,8 @@ Push enabled. Reuse its downloaded `.p8` private key; no replacement is needed
 for this integration if that file is available and the key permits production
 Jarvis delivery. Store the key only in Azure Key Vault as `apns-signing-key`,
 with `apns-key-id` and `apns-team-id`. The private key is not part of this record.
+The existing signed-build configuration confirms Team ID `KCA96N89FA`.
+Use that value for `apns-team-id` and `367DAUWL3Z` for `apns-key-id` in
+`kv-jarvis-rmw7kae3bza6a`.
 The primary has merged server configuration support; secret storage, activation
 and installed receipt are not yet confirmed.
