@@ -15,11 +15,17 @@ created by that failed probe; cleanup is tracked in its retained evidence.
 The replacement uses the documented 8-vCPU / 16 GiB / 160 GiB persistent-root
 profile. Qualification requires at least 128 GiB **free after a real build**,
 five overlapping isolated workers, POSIX operations and disk-mode stop/resume.
-This profile is implemented but not yet live-qualified. It uses four times the
+Storage qualification 42606694866 passed: five independent workers each had
+157728206848 free bytes after restore/build, overlapping execution and retained
+files after stop/resume. Cleanup passed; no model tasks were run. It uses four times the
 CPU allocation of the original candidate; 100 workers require 800 SandboxCores,
 versus the observed 300. Five live test workers require 40 cores. Read-only quota
-catalogue discovery is included; no quota increase or 100-worker run is claimed.
-Factory runtime acceptance, cutover and VM retirement remain pending. The held
+catalogue discovery is included. Request 42606699111 reached the quota PUT but
+failed with an initially opaque error. Readback 42607004866 still shows 300; no
+approval or 100-worker run is claimed. Quota inspection now defaults to read-only
+request-history lookup, with sanitized actionable provider errors.
+Factory runtime acceptance, cutover and VM retirement are queued in 42607263687
+after backend release 42606694858; they remain pending. The held
 retirement PR removes dedicated VM resources/config only after acceptance.
 See [qualification and evidence](docs/factory-concurrency-correction.md).
 

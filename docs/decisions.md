@@ -12197,3 +12197,16 @@ for the five-worker test but insufficient for the full target. Quota discovery
 also checks the Microsoft.Quota catalogue without submitting a request. Do not
 claim 100-worker capacity until quota and the matching configuration are verified.
 The managed route remains inactive and VM retirement is held pending acceptance.
+
+### Live storage acceptance — 9 November, 11:13 UTC
+
+[42606694866](https://github.com/DanAakesen/jarvis/actions/runs/42606694866) passed
+with exactly five 8-core / 16 GiB / 160 GiB sandboxes. Each measured
+157728206848 bytes free after a sample .NET restore/build. All five execution
+windows overlapped; POSIX checks, credential access, stop/resume persistence and
+owned cleanup passed. [Retained evidence](factory-managed-storage-evidence.json)
+records the scope: no model calls or SQL task/provider concurrency proof.
+Quota PUT 42606699111 failed with an opaque diagnostic; readback 42607004866
+still reports 300 SandboxCores. The quota workflow defaults to inspecting request
+history before another submission, and preserves bounded redacted service details.
+Managed transport acceptance, cutover and VM retirement remain pending.

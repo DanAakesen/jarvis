@@ -231,3 +231,16 @@ one fixed 800-core request only if needed, and verifies the actual regional usag
 limit. It never allocates workers, lowers a larger limit, guesses a missing quota
 name or automatically replays an uncertain PUT. Submission and approval are
 separate evidence fields. Live submission/approval remain pending.
+
+### Live storage acceptance — 9 November, 11:13 UTC
+
+[42606694866](https://github.com/DanAakesen/jarvis/actions/runs/42606694866) passed
+with exactly five 8-core / 16 GiB / 160 GiB sandboxes. Each measured
+157728206848 bytes free after a sample .NET restore/build. All five execution
+windows overlapped; POSIX checks, credential access, stop/resume persistence and
+owned cleanup passed. [Retained evidence](factory-managed-storage-evidence.json)
+records the scope: no model calls or SQL task/provider concurrency proof.
+Quota PUT 42606699111 failed with an opaque diagnostic; readback 42607004866
+still reports 300 SandboxCores. The quota workflow defaults to inspecting request
+history before another submission, and preserves bounded redacted service details.
+Managed transport acceptance, cutover and VM retirement remain pending.

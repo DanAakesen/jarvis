@@ -7882,3 +7882,10 @@ one fixed 800-core request only if needed, and verifies the actual regional usag
 limit. It never allocates workers, lowers a larger limit, guesses a missing quota
 name or automatically replays an uncertain PUT. Submission and approval are
 separate evidence fields. Live submission/approval remain pending.
+
+Quota troubleshooting: run `factory-sandbox-quota.yml` with `inspect_only=true`
+(the default) to read current capacity and matching quota-request history. Do not
+repeat an uncertain request before checking that evidence. A fixed 800-core request
+requires `inspect_only=false`; actual usage-limit readback establishes approval.
+The workflow creates no workers. Five-worker storage acceptance is retained in
+`docs/factory-managed-storage-evidence.json`; Factory transport/cutover is separate.
