@@ -12101,3 +12101,20 @@ cost and general superiority are unproven. Current remains the default, and this
 result does not establish normal Chat/Home, Voice, later-turn or Factory parity.
 Preserve earlier failed runs. Do not require another repetition merely to prove
 this completed case. Refusal causes and missing routing instructions remain open.
+
+
+## 9 November 2026 — Park Copilot migration; no old test-task migration required
+
+Dan chooses to retain control of the custom harness and park the Foundry Copilot
+migration for insufficient expected gain. Current remains default. Preserve the
+implemented comparison path/results; no further migration or comparison rounds
+are planned and no cloud resource or test UI is removed by this decision.
+
+Dan confirms existing Factory tasks are tests and need not be migrated. Task 23
+recovery is no longer a prerequisite. This does not execute bulk task deletion.
+The remaining old-runner dependency is future web research/HTML reports, image
+generation (`codex-tool`) and automatic/manual Codex credential refresh
+(`renew-codex`). The backend and VM command allowlist need adaptation and tests
+before those functions stop using the Foundry runner. No such cutover occurred
+in this documentation update; native voice, personal memory and the 128 GiB VM
+remain independent of the parked chat migration.

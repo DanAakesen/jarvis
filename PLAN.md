@@ -1,3 +1,13 @@
+## Owner direction — 9 November 2026
+
+Copilot harness migration and further comparison are parked. Keep the custom
+harness as the default and focus on its reliability/control. Existing Copilot
+test functionality and evidence are retained; no Azure resource was removed.
+Existing Factory tasks are disposable tests for migration planning: no transfer
+or Task 23 recovery is required. Old-runner retirement instead concerns future
+research/HTML report, image-generation and Codex-renewal operations. This was an
+explanation of the remaining boundary, not a completed routing/decommissioning change.
+
 ## Apple Watch primary integration — 8 November 2026
 
 Primary reviewed #1652 and corrected target/embedding checks, cached complication
@@ -115,10 +125,10 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | One progress row, composer clearing, compact bubbles, reply selection, two-line task titles without Inbox/source labels | Included in 81 through earlier releases; native checks passed | Owner confirms the reported device regressions are gone |
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
-| Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Worker is activated; recover this existing task, finish validation and obtain delivery PR; do not duplicate Prepare |
-| 128 GiB worker workspace | Provisioned and activated in successful run 42530882044. 128 GiB managed disk; 124.93 GiB formatted, 123.64 GiB free. Both credentials accessible, actual idle deallocation and backend readiness verified | Existing Task 23 recovery and a complete Factory task remain owner-authenticated end-to-end checks; fleet autoscaling is not implemented |
-| Copilot harness | Pagination repair #1651 merged/deployed. Read-only inspection 42509996653 found one exact matching version. Authorized catalogue refresh 42510264543 passed readiness, fresh two-turn managed_chat_comparison_canary_ok and live acceptance at 18:34 UTC | Ready for owner retesting, including gym tools; broader Current-vs-Copilot comparison pending. Current remains default |
-| Current vs Copilot comparison | Both owner widget-plan exercises completed. Current CIRRENT-85 commits 26170110/a796d675 and Copilot commits 4cb08916/7030beb4 verify creation and revision of each same note. Both report first-save refusal followed by success | Functional pass with friction for both; Copilot found the scaffold branch. Refusal/routing diagnosis and matched performance evidence remain open. Current stays default; no repeat needed to prove this case |
+| Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Owner confirms all existing tasks are tests; recovery/migration is not required for worker cutover. No task or branch deleted |
+| 128 GiB worker workspace | Provisioned and activated in successful run 42530882044. 128 GiB managed disk; 124.93 GiB formatted, 123.64 GiB free. Both credentials accessible, actual idle deallocation and backend readiness verified | A fresh representative Factory task can establish end-to-end delivery; owner no longer requires old test-task recovery. Fleet autoscaling is not implemented |
+| Copilot harness | Implemented comparison path and canaries retained; migration parked by owner on 9 November | Keep custom harness as default; no further migration or default switch planned |
+| Current vs Copilot comparison | Both owner widget-plan exercises completed. Current CIRRENT-85 commits 26170110/a796d675 and Copilot commits 4cb08916/7030beb4 verify creation and revision of each same note. Both report first-save refusal followed by success | Both completed with friction; Copilot found the scaffold branch. Further harness comparison parked by owner. Shared refusal/routing diagnosis remains relevant to Current |
 | Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653; qualified and delivered in build 85 | Owner confirmed Notes fixed on 8 November. Preserve this and accepted header/footer transparency |
 | Home Today workout totals | #1654 merged as ef783da2; all 533 Core tests, CI, CodeQL and native compilation passed, including Today/7d/14d/30d and no duplicated measurements | Build 86 uploaded successfully in 42515467682; owner retest Today against Health once it appears in TestFlight |
 | Apple Watch | PR #1652 reviewed and merged as 85ddd010. Final CI and CodeQL passed; 544 core tests, native Watch/widgets/paired iPhone builds, and three focused native interactions passed. Signed TestFlight build 87 failed in 42523594128: both Watch provisioning profiles lack the shared App Group | Associate group.com.danaakesen.jarvis with both Watch App IDs in Apple Developer, rerun signing/upload; then installation and physical Watch acceptance |
