@@ -154,6 +154,7 @@ class ImpactTests(unittest.TestCase):
 
     def test_explicit_admin_workflows_still_qualify_without_application_redeployment(self):
         for path in (".github/workflows/worker-quota.yml", ".github/scripts/request_worker_quota.py",
+                     ".github/workflows/factory-capacity.yml", ".github/scripts/inspect_factory_capacity.py",
                      ".github/scripts/provision_managed_chat.py", ".github/scripts/provision_managed_chat_handoff.sh"):
             with self.subTest(path=path):
                 self.assertEqual(deploy_parts(path), set())

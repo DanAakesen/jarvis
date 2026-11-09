@@ -1,5 +1,12 @@
 # 128 GiB Factory workspace delivery — 8 November 2026
 
+**Status correction, 9 November:** the disk is delivered, but the Factory is not.
+This worker runs one active coding task and does not meet the owner's requirement
+for up to 100 concurrent agents. See
+[Factory concurrency correction](factory-concurrency-correction.md). Preserve
+on-demand parallel execution when correcting storage; do not treat the single VM
+as the accepted final architecture.
+
 [Provisioning run 42530882044](https://github.com/DanAakesen/jarvis/actions/runs/42530882044)
 succeeded. Evidence artifact 13637845540 records activated=true,
 credentialsAccessible=true, idleDeallocationVerified=true and backendReadyVerified=true.
