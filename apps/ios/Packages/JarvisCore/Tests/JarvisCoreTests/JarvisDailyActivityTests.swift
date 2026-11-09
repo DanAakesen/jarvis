@@ -51,4 +51,25 @@ final class JarvisDailyActivityTests: XCTestCase {
         XCTAssertEqual(stale.total(\.activeKilocalories, period: .make(.today, now: now), now: now).availability, .stale)
         XCTAssertEqual(local.total(\.activeKilocalories, period: .make(.sevenDays, now: now), now: now).availability, .partial)
     }
+    func testServerRejectsRawOverlapAndDeduplicatesAliasesWithLateUpdates() {
+        func row(_ metric: String, _ value: Double, merged: Bool, updated: String) -> [String: JSONValue] {
+            ["metric_name": .string(metric), "metric_date": .string("2026-11-02"),
+             "unit": .string("kcal"), "value": .number(value),
+             "fields": .object(["mergedDailyTotal": .bool(merged)]), "updated_at": .string(updated)]
+        }
+        let rows = [
+            row("active_energy", 900, merged: true, updated: "2026-11-02T13:30:00Z"),
+            row("active_energy_burned", 200, merged: true, updated: "2026-11-02T13:20:00Z"),
+            row("active_energy_burned", 250, merged: true, updated: "2026-11-02T13:30:00Z"),
+            row("active_energy_burned", 999, merged: false, updated: "2026-11-02T13:31:00Z"),
+        ]
+        let snapshot = JarvisDailyActivitySnapshot.server(rows: rows, fetchedAt: now)
+        XCTAssertEqual(snapshot.days["2026-11-02"]?.activeKilocalories, 250)
+        XCTAssertNil(snapshot.days["2026-11-02"]?.exerciseMinutes)
+        XCTAssertEqual(snapshot, JarvisDailyActivitySnapshot.server(rows: Array(rows.reversed()), fetchedAt: now))
+        XCTAssertEqual(snapshot.total(\.activeKilocalories, period: .make(.today, now: now), now: now).availability, .available)
+        XCTAssertEqual(snapshot.total(\.activeKilocalories, period: .make(.today, now: now),
+            now: now.addingTimeInterval(901)).availability, .stale)
+    }
+
 }
