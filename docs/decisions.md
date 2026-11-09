@@ -12222,3 +12222,18 @@ already-authorized managed identity. Infrastructure deployments preserve this
 activation; startup validates the key before becoming ready. Inspection reports
 configuration presence only. No key is committed, logged or read by the workflow.
 The owner is preparing the secrets; live activation and device receipt are pending.
+
+## Managed Factory cutover — 9 November 2026
+
+Run 42620552706 passed five production-adapter workers, credential access,
+147 GiB free per workspace, overlapping execution, restart routing, idle stop
+and resume with persisted disk content. Test resources were removed. The backend
+cutover succeeded at revision `ca-jarvis-backend-rmw7kae3bza6a--0000560`.
+This qualification used no model calls or live owner tasks.
+
+VM retirement stopped before deletion because Azure CLI rejects `role assignment
+list --scope ... --all`. The corrected cleanup enumerates the resource group's
+role assignments through ARM, including child scopes, and retains the exact
+identity/resource filters before deleting grants. Pagination cannot leave the
+resource group. VM retirement and source cleanup remain pending live execution.
+The owner accepts 300 sandbox cores for now; no further quota request is authorized.
