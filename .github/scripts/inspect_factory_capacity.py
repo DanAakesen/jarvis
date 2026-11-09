@@ -98,6 +98,25 @@ def quota_observations(response):
             'morePages': bool(value.get('nextLink'))}
 
 
+def requestable_quotas(response):
+    if response['state'] != 'observed':
+        return {'state': response['state']}
+    rows = response['value'].get('value')
+    if not isinstance(rows, list):
+        return {'state': 'invalid_response'}
+    names = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        properties = row.get('properties')
+        name_object = properties.get('name') if isinstance(properties, dict) else None
+        name = name_object.get('value') if isinstance(name_object, dict) else None
+        if isinstance(name, str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,120}', name) and 'sandbox' in name.casefold():
+            names.append(name)
+    return {'state': 'observed' if names else 'not_listed', 'names': names,
+            'morePages': bool(response['value'].get('nextLink'))}
+
+
 def inspect(subscription, *, get=arm_get):
     subscription = str(uuid.UUID(subscription))
     result = {
@@ -129,6 +148,8 @@ def inspect(subscription, *, get=arm_get):
                 result['groupRead'] = {'state': 'invalid_response'}
     usage = get(subscription, f'/subscriptions/{subscription}/providers/Microsoft.App/locations/{REGION}/usages?api-version=2024-03-01')
     result['sandboxQuota'] = quota_observations(usage)
+    quota_catalogue = get(subscription, f'/subscriptions/{subscription}/providers/Microsoft.App/locations/{REGION}/providers/Microsoft.Quota/quotas?api-version=2025-09-01')
+    result['quotaRequestCatalogue'] = requestable_quotas(quota_catalogue)
     return result
 
 

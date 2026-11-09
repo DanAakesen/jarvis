@@ -2,28 +2,19 @@
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ThreadPoolExecutor
 import json
-from pathlib import Path
-import shlex
 import re
+import shlex
 import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from uuid import uuid4
 
 WORKERS = 5  # Owner-approved live test ceiling, separate from the production cap.
-MIN_WORKSPACE_BYTES = 120 * 1024**3
-PROFILES = {
-    '2cpu': {'cpu': '2000m', 'memory': '4096Mi', 'disk_size': '40Gi'},
-    # Microsoft's documented shared disk budget requires room for root + data.
-    '8cpu': {'cpu': '8000m', 'memory': '16384Mi', 'disk_size': '32Gi'},
-}
-VOLUME_SIZES = ('128Gi', '128GiB', '131072Mi', '131072MiB')
-
-
-def storage_configuration(profile: str, volume_size: str) -> dict:
-    if profile not in PROFILES or volume_size not in VOLUME_SIZES:
-        raise ValueError('Qualification requires an approved profile and exactly 128 GiB')
-    return {**PROFILES[profile], 'volume_size': volume_size}
+MIN_WORKSPACE_BYTES = 128 * 1024**3
+# Attached DataDisk volumes are capped at 100 GiB. Use the documented 2XL
+# persistent root disk, leaving room for the image plus 128 GiB free workspace.
+ALLOCATION = {'cpu': '8000m', 'memory': '16384Mi', 'disk_size': '160Gi'}
 
 
 def command(script: str) -> str:
@@ -33,7 +24,7 @@ def command(script: str) -> str:
 def validate_results(results: list[dict]) -> None:
     if len(results) != WORKERS or len({x['worker'] for x in results}) != WORKERS:
         raise ValueError('Expected five independently addressed workers')
-    if any(x['workspaceBytes'] < MIN_WORKSPACE_BYTES for x in results):
+    if any(x['workspaceBytes'] < MIN_WORKSPACE_BYTES or x['freeBytes'] < MIN_WORKSPACE_BYTES for x in results):
         raise ValueError('Workspace capacity did not meet the 128 GiB target')
     if max(x['startedAt'] for x in results) >= min(x['finishedAt'] for x in results):
         raise ValueError('Five-way overlapping execution was not demonstrated')
@@ -99,21 +90,26 @@ def failure_details(error: Exception, stage: str) -> dict:
     details['sizeFacts'] = re.findall(r'\b\d{1,9}(?:\.\d{1,3})?\s*(?:gib|mib|gi|mi|bytes|characters)\b', message)[:12]
     if type(problem.get('errorCode')) is int:
         details['serviceErrorCode'] = problem['errorCode']
-    if stage in ('volume-create', 'sandbox-create') and isinstance(problem.get('detail'), str):
-        detail = problem['detail'][:4096]
-        detail = re.sub(r'https?://\S+', '[url]', detail, flags=re.I)
-        detail = re.sub(r'\b(?:Bearer|Basic)\s+\S+', '[credential]', detail, flags=re.I)
-        detail = re.sub(r'\b(?:[\w-]*(?:token|password|secret|signature)|api[_-]?key|sig)["\']?\s*[:=]\s*["\']?[^\s"\',;]+', '[credential]', detail, flags=re.I)
+    if stage in ('volume-create', 'sandbox-create'):
+        detail = problem.get('detail') or getattr(service_error, 'message', None) or str(error)
+        detail = (detail if isinstance(detail, str) else json.dumps(detail))[:4096]
+        detail = re.sub(r'https?://\S+', '[url]', detail, flags=re.IGNORECASE)
+        detail = re.sub(r'\b(?:Bearer|Basic)\s+\S+', '[credential]', detail, flags=re.IGNORECASE)
+        detail = re.sub(r'\b(?:[\w-]*(?:token|password|secret|signature)|api[_-]?key|sig)["\']?\s*[:=]\s*["\']?[^\s"\',;]+', '[credential]', detail, flags=re.IGNORECASE)
         detail = re.sub(r'[A-Za-z0-9_/+=.-]{24,}', '[identifier]', detail)
         details['validationDetail'] = ' '.join(detail.split())[:1000]
     return details
 
 
 def qualify(args) -> None:
-    allocation = storage_configuration(args.worker_profile, args.volume_size)
-    from azure.containerapps.sandbox import SandboxGroupClient, SandboxVolume, RegistryCredentials, endpoint_for_region
-    from image_auth import acr_credentials
+    allocation = ALLOCATION
+    from azure.containerapps.sandbox import (
+        RegistryCredentials,
+        SandboxGroupClient,
+        endpoint_for_region,
+    )
     from azure.identity import AzureCliCredential
+    from image_auth import acr_credentials
 
     outputs = json.loads(args.outputs.read_text())
     client_id = outputs['identityClientId']['value']
@@ -122,7 +118,7 @@ def qualify(args) -> None:
     evidence = {'run': run, 'workersRequested': WORKERS, 'routingChanged': False,
                 'image': args.image, 'allocation': allocation,
                 'results': [], 'passed': False, 'cleanupPassed': False}
-    volumes: list[str] = []
+    markers: list[str] = []
     boxes = []
     def save():
         args.state.write_text(json.dumps(evidence, indent=2) + '\n')
@@ -152,10 +148,8 @@ def qualify(args) -> None:
         save()
         # Create one, inspect its disk/build, then add four. Never run six or 100.
         for index in range(WORKERS):
-            volume = f'{run}-{index}'
-            volumes.append(volume)  # Include uncertain creates in owned cleanup.
-            stage = 'volume-create'
-            group.create_volume(volume, type='DataDisk', size=allocation['volume_size'], labels=labels)
+            marker = f'{run}-{index}'
+            markers.append(marker)
             stage = 'sandbox-create'
             box = group.begin_create_sandbox(disk=None, disk_id=image.id,
                 cpu=allocation['cpu'], memory=allocation['memory'], disk_size=allocation['disk_size'],
@@ -163,7 +157,6 @@ def qualify(args) -> None:
                 labels={**labels, 'jarvis-worker': str(index)},
                 environment={'AZURE_CLIENT_ID': client_id, 'KEY_VAULT_URI': args.vault_uri,
                              'JARVIS_WORK_ROOT': '/files/jarvis'},
-                volumes=[SandboxVolume(volume_name=volume, mountpoint='/files')],
                 polling_timeout=600).result()
             boxes.append(box)
             # Explicit filesystem ownership; SDK execution and image USER are qualified live.
@@ -171,7 +164,9 @@ def qualify(args) -> None:
             result = box.exec('mkdir -p /files/jarvis && chmod 700 /files/jarvis')
             if result.exit_code:
                 raise RuntimeError('Workspace directory setup failed')
-            record = checked_exec(box, probe_script(volume))
+            record = checked_exec(box, probe_script(marker))
+            if record['freeBytes'] < MIN_WORKSPACE_BYTES:
+                raise RuntimeError('Fresh workspace has less than 128 GiB free after the build')
             evidence['results'].append(record)
             save()
             print(f'Worker {index + 1}/{WORKERS}: workspace and build passed', flush=True)
@@ -209,12 +204,12 @@ asyncio.run(check())
             raise RuntimeError('Independent worker shutdown was not observed')
         first.begin_resume().result()
         persisted = checked_exec(first, "import json,pathlib\nprint(json.dumps({'owner':pathlib.Path('/files/jarvis/owner').read_text()}))")
-        if persisted['owner'] != volumes[0]:
+        if persisted['owner'] != markers[0]:
             raise RuntimeError('Workspace did not survive stop/resume')
         evidence['diskPersistencePassed'] = True
         evidence['passed'] = True
         save()
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 - retain sanitized provider diagnostics before cleanup
         evidence.update(failure_details(error, stage))
         print(json.dumps(failure_details(error, stage)), flush=True)
         save()
@@ -227,23 +222,10 @@ asyncio.run(check())
                 if all(box.labels.get(k) == v for k, v in labels.items()):
                     try:
                         group.get_sandbox_client(box.id).begin_delete().result()
-                    except Exception as error:
+                    except Exception as error:  # noqa: BLE001 - attempt cleanup of every owned resource
                         errors.append(type(error).__name__)
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001 - record failed reconciliation without credential output
             errors.append(type(error).__name__)
-        for volume in volumes:
-            for attempt in range(20):
-                try:
-                    group.begin_delete_volume(volume).result()
-                    break
-                except Exception as error:
-                    if getattr(error, 'status_code', None) == 404:
-                        break
-                    if getattr(error, 'status_code', None) == 409 and attempt < 19:
-                        time.sleep(3)
-                        continue
-                    errors.append(type(error).__name__)
-                    break
         evidence['cleanupErrors'] = errors
         evidence['cleanupPassed'] = not errors
         save()
@@ -259,6 +241,4 @@ if __name__ == '__main__':
     parser.add_argument('--image', required=True)
     parser.add_argument('--vault-uri', required=True)
     parser.add_argument('--state', type=Path, required=True)
-    parser.add_argument('--worker-profile', choices=PROFILES, default='2cpu')
-    parser.add_argument('--volume-size', choices=VOLUME_SIZES, default='128GiB')
     qualify(parser.parse_args())

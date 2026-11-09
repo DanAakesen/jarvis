@@ -1,17 +1,6 @@
 name: Factory managed sandboxes
 on:
   workflow_dispatch:
-    inputs:
-      worker_profile:
-        description: Bounded diagnostic sizing; five workers maximum
-        type: choice
-        options: [2cpu, 8cpu]
-        default: 2cpu
-      volume_size:
-        description: Equivalent explicit 128 GiB representations for storage API qualification
-        type: choice
-        options: [128Gi, 128GiB, 131072Mi, 131072MiB]
-        default: 128GiB
 permissions:
   contents: read
 concurrency:
@@ -31,8 +20,6 @@ jobs:
     env:
       SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       INFRA_DEPLOYMENT: ${{ vars.JARVIS_INFRA_DEPLOYMENT_NAME }}
-      WORKER_PROFILE: ${{ inputs.worker_profile }}
-      VOLUME_SIZE: ${{ inputs.volume_size }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
@@ -68,7 +55,7 @@ jobs:
         run: python -m pip install --require-hashes -r scripts/factory-sandboxes/requirements.txt
       - name: Qualify five workers only
         run: |
-          python scripts/factory-sandboxes/qualify.py --subscription "$SUBSCRIPTION_ID" --outputs "$RUNNER_TEMP/sandbox-outputs.json" --vault-uri "$VAULT_URI" --image 'crjarvisrmw7kae3bza6a.azurecr.io/jarvis-runner-dotnet@sha256:14c6c82ce95445a90bedcb4f75ff8576ded38ea8b8f9cefd6d891bdfbc9016a3' --state "$RUNNER_TEMP/factory-sandboxes.json" --worker-profile "$WORKER_PROFILE" --volume-size "$VOLUME_SIZE"
+          python scripts/factory-sandboxes/qualify.py --subscription "$SUBSCRIPTION_ID" --outputs "$RUNNER_TEMP/sandbox-outputs.json" --vault-uri "$VAULT_URI" --image 'crjarvisrmw7kae3bza6a.azurecr.io/jarvis-runner-dotnet@sha256:14c6c82ce95445a90bedcb4f75ff8576ded38ea8b8f9cefd6d891bdfbc9016a3' --state "$RUNNER_TEMP/factory-sandboxes.json"
       - name: Retain sanitized qualification evidence
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

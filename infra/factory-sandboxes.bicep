@@ -20,9 +20,9 @@ resource group 'Microsoft.App/sandboxGroups@2026-07-01' = {
     userAssignedIdentities: { '${identity.id}': {} }
   }
   properties: {
-    defaultCpu: '2'
-    defaultMemory: '4Gi'
-    defaultDisk: '40Gi'
+    defaultCpu: '8'
+    defaultMemory: '16Gi'
+    defaultDisk: '160Gi'
     // Retained stopped sessions must not consume the 100 active-worker slots.
     maxSandboxCount: 1000
   }

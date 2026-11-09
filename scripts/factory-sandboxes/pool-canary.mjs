@@ -102,16 +102,18 @@ try {
     await until(async () => {
       const result = await jsonBlob(container, `responses/${id}.json`);
       if (!result) return false;
-      if (result.status !== 'ok' || result.disk_total_bytes < 120 * 1024 ** 3 || result.credentialsAccessible !== true) {
+      if (result.status !== 'ok' || ![result.disk_total_bytes, result.disk_free_bytes].every(Number.isSafeInteger) || result.disk_total_bytes < 128 * 1024 ** 3 || result.disk_free_bytes < 128 * 1024 ** 3 || result.credentialsAccessible !== true) {
         throw new Error('Worker disk/credential probe failed');
       }
       record.workspaceBytes = result.disk_total_bytes;
+      record.freeBytes = result.disk_free_bytes;
       return true;
     }, 90, 'worker probe');
   }));
   evidence.workerProbePassed = true;
   stage = 'overlapping-execution';
   const boxes = await Promise.all(evidence.sessions.map((s) => sandboxFor(s.session)));
+  await client.files.write(boxes[0].id, '/files/jarvis/.qualification-owner', evidence.sessions[0].session);
   const windows = await Promise.all(boxes.map(async (box) => {
     const result = await client.sandboxes.exec(box.id, {command: 'python -c \'import time,json; s=time.time(); time.sleep(30); print(json.dumps({"start":s,"end":time.time()}))\''});
     if (result.exitCode) throw new Error('Overlapping worker execution failed');
@@ -128,6 +130,11 @@ try {
   const first = evidence.sessions[0];
   const resumed = await pool.transport(request('resume', first.session));
   await until(async () => (await pool.transport(request('status', undefined, resumed.invocation_id))).status === 'failed', 300, 'resume result');
+  const resumedBox = await sandboxFor(first.session);
+  if (resumedBox.id !== boxes[0].id) throw new Error('Resume changed the sandbox assignment');
+  const persisted = await client.sandboxes.exec(resumedBox.id, {command: 'cat /files/jarvis/.qualification-owner'});
+  if (persisted.exitCode || persisted.stdout !== first.session) throw new Error('Workspace did not survive resume');
+  evidence.diskPersistencePassed = true;
   evidence.resumePassed = true;
   evidence.passed = true;
   await save();
@@ -151,8 +158,6 @@ try {
       for await (const box of client.sandboxes.list({labels: {'jarvis-purpose': 'factory', 'jarvis-session': session}})) {
         if (box.labels['jarvis-session'] === session && box.labels['jarvis-purpose'] === 'factory') await client.sandboxes.beginDelete(box.id).pollUntilDone();
       }
-      try { await client.volumes.beginDelete(sandboxMailboxName(session)).pollUntilDone(); }
-      catch (error) { if (error.statusCode !== 404) throw error; }
     }
   } catch (error) { errors.push(error.constructor.name); }
   evidence.cleanupErrors = errors; evidence.cleanupPassed = errors.length === 0;
