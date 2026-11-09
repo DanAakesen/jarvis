@@ -9250,3 +9250,19 @@ for the five-worker test but insufficient for the full target. Quota discovery
 also checks the Microsoft.Quota catalogue without submitting a request. Do not
 claim 100-worker capacity until quota and the matching configuration are verified.
 The managed route remains inactive and VM retirement is held pending acceptance.
+
+
+## Managed worker credential ownership — 9 November 2026
+
+Runtime qualification 42617745859 identified `worker_boot_failed` in all five
+sandboxes. The upload API creates `.mailbox-sas.next` as root (0644) within
+worker-owned `/files/jarvis` (0700), while exec runs as UID 1000. The previous
+chmod therefore failed before starting the consumer. All test workers and
+temporary storage were cleaned up; cutover and VM retirement did not run.
+
+The adapter now copies the upload into a worker-owned 0600 staging file, atomically
+renames it to the live credential path, and removes the upload. Credential values
+remain out of command arguments and logs; the containing directory stays private.
+This also supports renewal without exposing a partially written live credential.
+The runner image is unchanged. Nine adapter tests and backend typechecking pass;
+live requalification is pending.
