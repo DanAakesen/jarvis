@@ -9,7 +9,7 @@ import sys
 import time
 
 sys.path.insert(0, str(Path('.github/scripts').resolve()))
-from release_state import previous_release  # noqa: E402
+from release_state import api, artifact, validate_previous, UPLOAD  # noqa: E402
 
 
 def az(*args):
@@ -28,7 +28,11 @@ def cutover(root: Path):
             or evidence.get('overlappingWorkers') != 5 or len(evidence.get('sessions', [])) != 5
             or config['source'] != os.environ['GITHUB_SHA']):
         raise RuntimeError('Exact five-worker qualification is required before cutover')
-    _, release = previous_release(int(os.environ['GITHUB_RUN_ID']))
+    runs = api('/actions/workflows/deploy.yml/runs?branch=main&per_page=10')['workflow_runs']
+    if not runs or runs[0]['status'] != 'completed' or runs[0]['conclusion'] != 'success':
+        raise RuntimeError('The latest main deployment must finish successfully before cutover')
+    release = artifact(runs[0], UPLOAD, 'release-evidence.json')
+    validate_previous(runs[0], release)
     backend = (release or {}).get('components', {}).get('backend', {})
     if (not release or not release.get('accepted') or backend.get('state') != 'applied'
             or backend.get('origin', {}).get('source') != config['source']):
