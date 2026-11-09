@@ -9293,3 +9293,14 @@ role assignments through ARM, including child scopes, and retains the exact
 identity/resource filters before deleting grants. Pagination cannot leave the
 resource group. VM retirement and source cleanup remain pending live execution.
 The owner accepts 300 sandbox cores for now; no further quota request is authorized.
+
+
+## Factory VM cleanup finalization — 9 November 2026
+
+Runtime 42625011714 again passed five workers and managed cutover. Its ordered
+teardown completed role, VM, disk and network deletion, then stopped because
+`storage container-rm delete` requires explicit CLI confirmation in automation.
+The fix supplies `--yes` for only the authorized legacy mailbox. Recovery first
+verifies the VM and all dedicated named resources are absent, then removes only
+the old mailbox and deployment record. Any remaining dedicated resource stops
+recovery for inspection. Final inventory/evidence and source cleanup are pending.
