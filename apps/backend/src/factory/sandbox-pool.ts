@@ -187,7 +187,7 @@ export class FactorySandboxPool {
           try { await this.group.volumes.get(volume, {abortSignal: signal}); }
           catch (error) {
             if (!status(error, 404)) throw error;
-            await this.group.volumes.create(volume, {type: 'DataDisk', size: '128Gi', labels, abortSignal: signal});
+            await this.group.volumes.create(volume, {type: 'DataDisk', size: '128GiB', labels, abortSignal: signal});
           }
           binding.createAttempted = true;
           await this.write(`sessions/${session}.json`, binding, lease);

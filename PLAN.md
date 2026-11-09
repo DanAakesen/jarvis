@@ -28,6 +28,13 @@ ARM boolean/resource-ID casing while retaining the exact worker boundary.
 Managed idle handoff now exits the consumer before controller shutdown so a new
 queued command cannot race with stop; resume clears the old idle marker. Local
 regressions pass; the updated release and live five-worker qualification are pending.
+Run 42596242067 still rejects volume creation with InvalidRequest/error 16. The
+candidate volume request now uses the explicit binary unit `128GiB` (unchanged
+capacity), and storage-only failures retain bounded redacted problem details.
+This is an unverified API-contract correction. Bounded diagnostic profiles allow
+2 or 8 CPU and equivalent 128 GiB strings; production sizing is unchanged and
+live testing remains capped at five. If the documented larger profile is required,
+100 workers need 800 SandboxCores; the observed quota of 300 would need increasing.
 See [qualification and evidence](docs/factory-concurrency-correction.md).
 
 ## Owner direction — 9 November 2026
