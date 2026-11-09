@@ -1,3 +1,13 @@
+## Push-to-chat branch qualification — 9 November 2026
+
+`feature/push-chat-continuity` changes notification navigation/context and adds
+migration 0077. Primary must integrate the migration and compatible hosted-agent/
+backend before the new native client. No release or live change is authorized here.
+Existing ready-PR checks cover backend, agent, migrations and Swift; native
+workflows compile without deployment. This mobile session uses the connected
+GitHub plugin and isolated Actions checks, without PC/local filesystem access.
+Tests and device limitations: [handoff](push-chat-continuity.md).
+
 ## Current managed Factory delivery — 9 November 2026
 
 Azure Container Apps Sandboxes is active for new Factory work. Live production-

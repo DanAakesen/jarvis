@@ -1,3 +1,14 @@
+## 9 November 2026 — Keep notification continuity inside normal chat
+
+The owner approved direct push-to-chat continuity with the existing chat page.
+Keep the finding behind the scenes, preserve the actual next owner message, and
+add no duplicate push text, cards, banners or automatic sends. Typed/dictated/voice
+follow-ups use one owner-scoped durable selection. Opening never authorizes a write.
+A new selection replaces the previous one; repeated taps retain its identity and
+24-hour lifetime. Current facts require verification against the original timestamps.
+Primary owns integration/deployment; implementation, tests and owner acceptance
+remain separate stages. This supersedes opening Proactive for normal insight pushes.
+
 ## 9 November 2026 — Keep the current 300-core sandbox quota
 
 The owner accepts 300 SandboxCores for now. The qualified persistent-root profile

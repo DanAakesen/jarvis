@@ -1,3 +1,11 @@
+## Notification conversation continuity — 9 November 2026
+
+Implemented on the secondary branch, qualification pending: proactive pushes open
+normal Chat with the finding/evidence behind the scenes for typed, dictated and voice
+follow-ups. No duplicate message or visual chat change. Durable owner selection and
+duplicate-tap reuse are included. Primary integration and physical-device/model
+acceptance remain. [Details](push-chat-continuity.md).
+
 ## Main chat managed harness (#1350; 29 October 2026)
 
 **In progress:** baseline investigation and fixed failure diagnostics.

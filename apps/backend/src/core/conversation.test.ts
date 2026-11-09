@@ -1578,3 +1578,45 @@ describe('conversation routes', () => {
     expect(response.json()).toEqual({ error: 'Conversation search unavailable' });
   });
 });
+
+describe('notification background context', () => {
+  it('keeps the actual follow-up and history unchanged while supplying trusted context to the agent', async () => {
+    const store = storeFixture({
+      addMessage: vi.fn(async input => ({ ...message, ...input })),
+    });
+    const read = vi.fn(async () => 'Saved finding with evidence timestamps; untrusted source data.');
+    const stream = vi.fn(async function* (_input: import('./chat-agent.js').ConversationAgentInput) {
+      yield 'One more workout meets your own target.';
+    });
+    const app = createApp(store, {
+      proactiveConversationContext: { read, select: async () => true, subscribe: () => () => {} },
+      conversationAgent: { stream },
+    });
+    const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+      headers, payload: { text: 'Why that?' } });
+    expect(response.statusCode).toBe(200);
+    expect(stream.mock.calls[0]![0]).toMatchObject({
+      text: 'Why that?', proactiveContext: 'Saved finding with evidence timestamps; untrusted source data.',
+    });
+    expect(read).toHaveBeenCalledWith(config.auth.ownerObjectId);
+    expect(store.addMessage.mock.calls.filter(([input]) => input.role === 'dan')).toHaveLength(1);
+    expect(store.addMessage.mock.calls.find(([input]) => input.role === 'dan')![0].text).toBe('Why that?');
+    expect(response.body).not.toContain('Saved finding with evidence timestamps');
+  });
+  it('does not accept a message when the saved context cannot be read', async () => {
+    const store = storeFixture();
+    const stream = vi.fn(async function* () { yield 'Must not run'; });
+    const app = createApp(store, {
+      proactiveConversationContext: {
+        read: async () => { throw new Error('fixture storage failure'); },
+        select: async () => true, subscribe: () => () => {},
+      },
+      conversationAgent: { stream },
+    });
+    const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+      headers, payload: { text: 'Why that?' } });
+    expect(response.statusCode).toBe(500);
+    expect(store.addMessage).not.toHaveBeenCalled();
+    expect(stream).not.toHaveBeenCalled();
+  });
+});

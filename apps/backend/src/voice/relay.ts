@@ -434,10 +434,18 @@ function registerVoiceRoute(
     controller.signal.addEventListener('abort', () => clearTimeout(attemptTimer), { once: true });
     const activeTools = () => activeRung?.tools ?? app.jarvisTools;
     const discoveredCapabilities = new Set<string>();
-    const sessionUpdate = (rung: ToolBudgetRung | undefined = activeRung) => createRealtimeSessionUpdate(
-      rung?.tools ?? app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
-      rung?.instructions, identitySettings, rung?.capabilityMode,
-    );
+    let proactiveContext: string | undefined;
+    const refreshProactiveContext = async () => {
+      proactiveContext = await app.proactiveConversationContext?.read(request.principal!.objectId);
+    };
+    const sessionUpdate = (rung: ToolBudgetRung | undefined = activeRung) => {
+      const update = createRealtimeSessionUpdate(
+        rung?.tools ?? app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
+        rung?.instructions, identitySettings, rung?.capabilityMode,
+      );
+      if (proactiveContext) update.session.instructions += '\n\n' + proactiveContext;
+      return update;
+    };
     let configured = false;
     let upstreamSessionReady = false;
     let queuedBytes = 0;
@@ -497,6 +505,7 @@ function registerVoiceRoute(
       outcome?: 'ok' | 'refused' | 'error',
     ) => void>();
     let unsubscribeSettings: (() => void) | undefined;
+    let unsubscribeProactiveContext: (() => void) | undefined;
     // Declared early because closeAnnouncements can run before the announcer exists.
     // eslint-disable-next-line prefer-const
     let statusAnnouncer: ReturnType<typeof createVoiceStatusAnnouncer> | undefined;
@@ -518,6 +527,8 @@ function registerVoiceRoute(
       unregisterVisionVoice = undefined;
       unsubscribeSettings?.();
       unsubscribeSettings = undefined;
+      unsubscribeProactiveContext?.();
+      unsubscribeProactiveContext = undefined;
       clearTimeout(settingsUpdateTimer);
       settingsUpdateTimer = undefined;
       statusAnnouncer?.close();
@@ -1610,34 +1621,37 @@ function registerVoiceRoute(
     };
 
     const sendResponseCreate = (message: Record<string, unknown>) => {
-      if (upstream?.readyState !== WebSocket.OPEN) return;
-      if (responseCreateActive || settingsUpdatePending || settingsUpdateQueued) {
-        pendingResponseCreate = message;
-        return;
-      }
-      const next = pendingResponseCreate ?? message;
-      pendingResponseCreate = undefined;
-      responseCreateActive = true;
-      assistantResponding = true;
-      responseDone = false;
-      responseCompletionState = responseCompletion();
-      responseImageUsageItem = pendingImageUsageItem;
-      pendingImageUsageItem = undefined;
-      const response = next.response as Record<string, unknown> | undefined;
-      const composedInstructions = sessionUpdate().session.instructions;
-      const specialInstructions = typeof response?.instructions === 'string' ? response.instructions : '';
-      const instructions = specialInstructions
-        ? `${composedInstructions}\n\nAdditional response-specific instructions that do not replace the shared identity or fixed truthfulness and security kernel:\n${specialInstructions}`
-        : composedInstructions;
-      sendUpstream({
-        ...next,
-        response: {
-          ...response,
-          instructions: `${instructions}\n${modeContext(presence)}\n${workspaceContext(
-            app.workspaceCommands.snapshot(app.ownerObjectId), app.workspaceCommands.deviceContext(app.ownerObjectId),
-          )}`,
-        },
-      });
+      void (async () => {
+        await refreshProactiveContext();
+        if (upstream?.readyState !== WebSocket.OPEN) return;
+        if (responseCreateActive || settingsUpdatePending || settingsUpdateQueued) {
+          pendingResponseCreate = message;
+          return;
+        }
+        const next = pendingResponseCreate ?? message;
+        pendingResponseCreate = undefined;
+        responseCreateActive = true;
+        assistantResponding = true;
+        responseDone = false;
+        responseCompletionState = responseCompletion();
+        responseImageUsageItem = pendingImageUsageItem;
+        pendingImageUsageItem = undefined;
+        const response = next.response as Record<string, unknown> | undefined;
+        const composedInstructions = sessionUpdate().session.instructions;
+        const specialInstructions = typeof response?.instructions === 'string' ? response.instructions : '';
+        const instructions = specialInstructions
+          ? `${composedInstructions}\n\nAdditional response-specific instructions that do not replace the shared identity or fixed truthfulness and security kernel:\n${specialInstructions}`
+          : composedInstructions;
+        sendUpstream({
+          ...next,
+          response: {
+            ...response,
+            instructions: `${instructions}\n${modeContext(presence)}\n${workspaceContext(
+              app.workspaceCommands.snapshot(app.ownerObjectId), app.workspaceCommands.deviceContext(app.ownerObjectId),
+            )}`,
+          },
+        });
+      })().catch(() => close(1011, 'Notification context unavailable'));
     };
 
     const flushPendingResponseCreate = () => {
@@ -1794,6 +1808,13 @@ function registerVoiceRoute(
           },
         });
       },
+    });
+    unsubscribeProactiveContext = app.proactiveConversationContext?.subscribe(async () => {
+      await refreshProactiveContext();
+      if (english && configured && upstreamSessionReady) {
+        settingsUpdateQueued = true;
+        applyQueuedSettingsUpdate();
+      }
     });
     unsubscribeSettings = app.nowEventHub.subscribe((event) => {
       if (event.type === 'food_estimate_result') {
@@ -2305,6 +2326,7 @@ function registerVoiceRoute(
     void (async () => {
       try {
         await sessionReady;
+        await refreshProactiveContext();
         const token = await credential(getToken, controller.signal);
         diagnostics.stage('credential_loaded');
         if (controller.signal.aborted || browser.readyState !== WebSocket.OPEN) return;

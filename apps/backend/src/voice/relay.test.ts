@@ -4556,3 +4556,42 @@ describe('calendar confirmation turns', () => {
     expect(JSON.stringify(evidence()[0])).toContain('completed');
   });
 });
+
+describe('notification context in voice', () => {
+  it.each(['/voice', '/voice/da'])('updates an existing %s session without a greeting or history insertion', async path => {
+    let context: string | undefined = 'First saved notification; evidence observed at 2026-11-09T12:00:00Z.';
+    let listener: (() => Promise<void>) | undefined;
+    const stop = vi.fn();
+    const proactiveConversationContext = {
+      read: vi.fn(async () => context),
+      select: async () => true,
+      subscribe: (callback: () => Promise<void>) => { listener = callback; return stop; },
+    };
+    const services = { ...taskReflexServices(), proactiveConversationContext };
+    const { app, browser, upstream, received, conversationStore } = await connectedPartialVoice(
+      partialSpeechHarness(), { classify: vi.fn(async () => null) }, [], services, path,
+    );
+    expect(received.filter(event => event.type === 'response.create')).toEqual([]);
+    context = 'Second saved notification; untrusted source data, not approval.';
+    await listener!();
+    // Selection updates context only; the owner still chooses when to speak.
+    expect(received.filter(event => event.type === 'response.create')).toEqual([]);
+    expect(conversationStore.addMessage).not.toHaveBeenCalled();
+    browser.send(JSON.stringify({ type: 'response.create' }));
+    await vi.waitFor(() => expect(received.filter(event => event.type === 'response.create')).toHaveLength(1));
+    const response = received.find(event => event.type === 'response.create')!.response as { instructions: string };
+    expect(response.instructions).toContain('Second saved notification');
+    expect(response.instructions).not.toContain('First saved notification');
+    const done = once(browser, 'message');
+    upstream.send(JSON.stringify({ type: 'response.done', response: { status: 'completed' } }));
+    await done;
+    context = undefined;
+    browser.send(JSON.stringify({ type: 'response.create' }));
+    await vi.waitFor(() => expect(received.filter(event => event.type === 'response.create')).toHaveLength(2));
+    const latest = received.filter(event => event.type === 'response.create')[1]!.response as { instructions: string };
+    expect(latest.instructions).not.toContain('Second saved notification');
+    expect(received.filter(event => event.type === 'conversation.item.create')).toEqual([]);
+    await app.close();
+    expect(stop).toHaveBeenCalledOnce();
+  });
+});

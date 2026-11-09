@@ -57,6 +57,7 @@ export interface ConversationAgentInput {
     readonly context: string;
   }[];
   readonly reflexNote?: string;
+  readonly proactiveContext?: string;
   readonly steering?: boolean;
   readonly onVisualResult?: (result: ConversationVisualResult) => void;
   readonly onAgentPhaseTimings?: (timings: AgentPhaseTimings) => void;

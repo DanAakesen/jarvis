@@ -61,6 +61,7 @@ struct JarvisChatScreen: View {
     @State private var photoSelection: [PhotosPickerItem] = []
     @State private var composerFocused = false
     private let initialActivitySheet: ActivitySheetKind?
+    private let notificationContextError: String?
     let onNavigate: (JarvisDestination) -> Void
     @Binding private var handoff: JarvisChatHandoff?
     @EnvironmentObject private var navigation: JarvisNavigationModel
@@ -78,6 +79,7 @@ struct JarvisChatScreen: View {
         fixtureMode: Bool = false,
         initialActivitySheet: ActivitySheetKind? = nil,
         startupError: String? = nil,
+        notificationContextError: String? = nil,
         handoff: Binding<JarvisChatHandoff?> = .constant(nil),
         onNavigate: @escaping (JarvisDestination) -> Void
     ) {
@@ -89,6 +91,7 @@ struct JarvisChatScreen: View {
         _model = StateObject(wrappedValue: chatModel)
         runtimeTestClient = client.map { JarvisChatClient(client: $0) }
         self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil
+        self.notificationContextError = notificationContextError
         self.onNavigate = onNavigate
         _handoff = handoff
     }
@@ -167,6 +170,9 @@ struct JarvisChatScreen: View {
                 JarvisSidebarMenuButton(language: appLanguage)
             }
             .sharedBackgroundVisibility(.hidden)
+        }
+        .onChange(of: notificationContextError, initial: true) { _, error in
+            if let error { model.actionError = error }
         }
         .task(id: handoff?.action != nil || model.isReadyForHandoff ? handoff?.id : nil) {
             // Observe the root-owned action directly, even when navigation renders

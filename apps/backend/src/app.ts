@@ -77,6 +77,7 @@ import {
 import type { BrowserConfirmation } from './core/owner-interactions.js';
 
 export interface BuildAppOptions {
+  readonly proactiveConversationContext?: import('./proactive/conversation-context.js').ProactiveConversationContext;
   readonly activityKit?: ActivityKitServices;
   readonly approvalNotifications?: ApprovalNotificationServices;
   readonly notifyApproval?: (confirmation: BrowserConfirmation) => void;
@@ -186,6 +187,7 @@ declare module 'fastify' {
     onConversationSessionEnded: (sessionId: string) => void;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
+    proactiveConversationContext: import('./proactive/conversation-context.js').ProactiveConversationContext | null;
     conversationRuntimeTests: import('./core/runtime-test-availability.js').ConversationRuntimeTestReader | null;
     managedRuntime: import('./core/managed-runtime-routes.js').ManagedRuntimeServices | null;
     reflexClassifier: ReflexClassifier | null;
@@ -376,6 +378,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);
   app.decorate('usageStore', options.usageStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
+  app.decorate('proactiveConversationContext', options.proactiveConversationContext ?? null);
   app.decorate('conversationRuntimeTests', options.conversationRuntimeTests ?? null);
   app.decorate('managedRuntime', options.managedRuntime ?? null);
   app.decorate('conversationAttachments', options.conversationAttachments ?? null);

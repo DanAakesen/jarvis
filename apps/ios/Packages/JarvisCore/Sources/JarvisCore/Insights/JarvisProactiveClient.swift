@@ -594,6 +594,16 @@ public final class JarvisProactiveClient: Sendable {
         }
     }
 
+    /// Selects the trusted finding as conversation context without sending a chat message.
+    public func openConversation(id: String) async throws {
+        guard UUID(uuidString: id) != nil else { throw JarvisInsightsError.invalidRequest }
+        let response = try await client.performAuthenticatedRequest(
+            method: .post, path: ["proactive", "items", id, "conversation"],
+            body: Data("{}".utf8), idempotent: true
+        )
+        guard response.statusCode == 204 else { throw JarvisInsightsError.invalidResponse }
+    }
+
     public func item(id: String) async throws -> JarvisProactiveItem {
         guard UUID(uuidString: id) != nil else { throw JarvisInsightsError.invalidRequest }
         let value: JarvisProactiveItem = try await get(["proactive", "items", id])

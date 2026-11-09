@@ -1,3 +1,13 @@
+## Push to conversation continuity — 9 November 2026
+
+Opening a proactive notification enters the existing normal chat. Its saved finding
+and evidence become background context for the next typed, dictated or voice turn.
+Do not repeat the push, send automatically, add a conversation message, or change
+the chat layout/composer. Opening is not approval for an action. Repeated taps
+reuse context. Missing context uses existing chat error feedback. Selection is
+shared across the owner's conversation, survives backend restarts and expires after
+24 hours; current facts still require verification.
+
 ## Managed Factory delivery update — 9 November 2026
 
 The owner has authorized Azure Container Apps Sandboxes as the managed JIT
