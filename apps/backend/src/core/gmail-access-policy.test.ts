@@ -17,7 +17,7 @@ function computer(name: string, execute: JarvisTool['execute']): JarvisTool {
 }
 
 describe('Gmail access execution boundary', () => {
-  it.each(['Synthetic subject', 'Dentist appointment'])('confirms the actual "%s" Gmail stage without touching an older calendar', async (subject) => {
+  it.each(['Synthetic subject', 'Dentist appointment'])('creates the requested "%s" Gmail draft without touching a legacy calendar proposal', async (subject) => {
     const actions = new PendingGoogleActions(() => 1000);
     const api = vi.fn<GoogleApiClient['request']>(async (_api, _path, options) => options.method === 'POST' ? { id: 'fixture-draft' } : {
       threadId: 'fixture-thread', payload: { headers: [
@@ -33,21 +33,15 @@ describe('Gmail access execution boundary', () => {
       headers: { 'x-jarvis-message-id': '42' }, agentPrincipal: { kind: 'jarvis-agent' },
       server: { conversationStore: { getHistory: async () => ({ messages: [latest], nextCursor: null }) } },
     } as unknown as FastifyRequest;
-    await registry.get('calendar_create_event')!.execute({
-      subject: 'Synthetic calendar', startDateTime: '2026-11-05T16:00:00+01:00',
-      endDateTime: '2026-11-06T12:00:00+01:00',
-    }, req, signal());
+    actions.stage({ scope: 'calendar', sourceMessageId: '42', sourceSessionId: '1',
+      summary: 'Legacy calendar proposal', execute: async () => ({ status: 'completed' }) });
     const calendar = actions.pendingCalendarChange();
     latest = { ...latest, id: '43', text: 'Draft a Gmail reply.', at: new Date(1001) };
     req.headers['x-jarvis-message-id'] = '43';
     const mail = await registry.get('mail_draft_reply')!.execute({
       messageId: 'fixture-message', replyBody: 'Synthetic reply.',
-    }, req, signal()) as { confirmationCode: string; summary: string };
-    expect(mail.summary).toBe(`Reply to "${subject}" from guest@example.test with this exact text:\nSynthetic reply.`);
-    latest = { ...latest, id: '44', text: 'yes', at: new Date(1002) };
-    req.headers['x-jarvis-message-id'] = '44';
-    await expect(registry.get('mail_confirm_action')!.execute({ confirmationCode: mail.confirmationCode }, req, signal()))
-      .resolves.toMatchObject({ status: 'completed', detail: 'The reply draft was saved in Gmail. Dan can send it from Gmail.' });
+    }, req, signal());
+    expect(mail).toMatchObject({ status: 'completed', detail: 'The reply draft was saved in Gmail. Dan can send it from Gmail.' });
     expect(actions.pendingCalendarChange()).toEqual(calendar);
     expect(api.mock.calls.filter(([, , options]) => options?.method === 'POST').map(([api, path]) => [api, path]))
       .toEqual([['gmail', '/users/me/drafts']]);

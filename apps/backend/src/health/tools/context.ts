@@ -29,15 +29,3 @@ export async function activeHealthSession(request: FastifyRequest, source: Conve
   }
   return session;
 }
-
-export async function requireHealthReviewPresence(request: FastifyRequest, signal: AbortSignal) {
-  try {
-    if (!request.server.awayModeStore || (await request.server.awayModeStore.read()).mode !== 'present') {
-      throw new ToolRefusal('Health review requires Dan to be present and approve the exact proposal in Now.');
-    }
-    signal.throwIfAborted();
-  } catch (error) {
-    if (signal.aborted || error instanceof ToolRefusal) throw error;
-    throw new ToolRefusal('Presence is unavailable. No Health change was authorised.');
-  }
-}

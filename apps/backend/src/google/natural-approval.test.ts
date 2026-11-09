@@ -18,7 +18,8 @@ let createGoogleModule: typeof import('./tools.js').createGoogleModule;
 beforeAll(async () => { ({ createGoogleModule } = await import('./tools.js')); }, 120_000);
 
 /*
- * These tests drive the real Google tools and the real interpreter through the real confirm path. Only the model is
+ * These compatibility tests seed legacy pending actions directly: new writes never stage approvals.
+ * They drive the real confirmation tools and interpreter. Only the model is
  * fake: a table keyed on Dan's reply. They therefore prove the plumbing (provenance first, verdict to action, fail
  * closed, one execution), not how well a real model understands natural language.
  */
@@ -136,9 +137,13 @@ function fixture(options: FixtureOptions = {}) {
   const confirm = (surface: Surface, code: string, message: ConversationMessage, signal?: AbortSignal) =>
     run('calendar_confirm_change', { confirmationCode: code }, as(surface, message), signal);
   const stage = async (surface: Surface, name: string, input: unknown) => {
-    const staged = await run(name, input, as(surface, dan('10', 'Please set that up', clock - 1_000))) as {
-      status: string; confirmationCode: string; instruction: string;
-    };
+    const source = dan('10', 'Please set that up', clock - 1_000);
+    const staged = pending.stage({
+      scope: name.startsWith('mail_') ? 'mail' : 'calendar',
+      sourceMessageId: source.id, sourceSessionId: source.sessionId,
+      summary: `${name === 'calendar_create_events' ? 'Create 2 calendar events' : name}: ${JSON.stringify(input)}`,
+      execute: signal => run(name, input, as(surface, source), signal),
+    });
     expect(staged.status).toBe('awaiting_confirmation');
     expect(provider).not.toHaveBeenCalled();
     return staged;
@@ -166,7 +171,7 @@ describe('the test corpus', () => {
   });
 });
 
-describe.each(surfaces)('natural approval through the real Google tools (%s)', (surface) => {
+describe.each(surfaces)('legacy pending-action compatibility through Google tools (%s)', (surface) => {
   it.each(approving)('approves %j and creates both events once', async (phrase) => {
     const model = vi.fn(classifier());
     const f = fixture({ model });

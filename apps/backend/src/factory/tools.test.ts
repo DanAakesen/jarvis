@@ -176,17 +176,6 @@ afterEach(async () => {
 });
 
 describe('Software Factory Jarvis tools', () => {
-  async function confirm(test: ReturnType<typeof fixture>, draft: { confirmationCode: string }, text?: string) {
-    test.setLatestMessage({
-      id: '43', sessionId: 'session', role: 'dan', model: null,
-      text: text ?? 'yes', at: new Date(Date.now() + 2_000),
-    });
-    return test.app.inject({
-      method: 'POST', url: '/tools/confirm_create_issue',
-      headers: { ...headers, 'x-jarvis-message-id': '43' }, payload: { confirmationCode: draft.confirmationCode },
-    });
-  }
-
   it('creates a confirmed bug with private attachment description and error text, never an image', async () => {
     const test = fixture();
     const staged = await test.app.inject({
@@ -194,9 +183,7 @@ describe('Software Factory Jarvis tools', () => {
       payload: { title: 'Bug: broken screen', body: 'Problem: retry fails.\nAcceptance: retry works.', attachmentIds: [test.attachment.id] },
     });
     expect(staged.json().outcome).toBe('ok');
-    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
-    const result = await confirm(test, staged.json().result);
-    expect(result.json().outcome).toBe('ok');
+    expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
     const body = test.githubIssueClient.createIssue.mock.calls[0]?.[2];
     expect(body).toContain('broken.png');
     expect(body).toContain('Error: retry failed');
@@ -213,70 +200,10 @@ describe('Software Factory Jarvis tools', () => {
       method: 'POST', url: '/tools/issue_comment', headers,
       payload: { issueNumber: 8, text: 'Retry is still broken.', ...(withAttachment ? { attachmentIds: [test.attachment.id] } : {}) },
     });
-    if (withAttachment) {
-      expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
-      expect((await confirm(test, staged.json().result)).json()).toMatchObject({ outcome: 'ok', result: { status: 'commented', number: 8 } });
-    } else {
-      expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'commented', number: 8 } });
-    }
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'commented', number: 8 } });
     expect(test.githubIssueClient.createComment).toHaveBeenCalledWith(project.repo, 8,
       withAttachment ? expect.stringContaining('Error: retry failed') : 'Retry is still broken.', expect.any(AbortSignal));
     expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
-  });
-
-  it('previews only one image, warns, and publishes EXIF-free bytes only after later file-named confirmation', async () => {
-    const test = fixture();
-    const staged = await test.app.inject({
-      method: 'POST', url: '/tools/issue_comment', headers,
-      payload: { issueNumber: 8, text: 'Confirmed screenshot.', attachmentIds: [test.attachment.id], publish: 'public' },
-    });
-    const draft = staged.json().result;
-    expect(draft.warning).toContain('public');
-    expect(draft.warning).toContain(test.attachment.name);
-    expect(test.workspaceCommands.execute).toHaveBeenCalledWith(expect.any(String),
-      expect.objectContaining({ view: expect.objectContaining({ renderer: 'image' }) }), expect.any(AbortSignal));
-    expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
-    expect((await confirm(test, draft, 'not yet')).json().outcome).toBe('refused');
-    expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
-    const result = await confirm(test, draft, 'approved');
-    expect(result.json().outcome).toBe('ok');
-    expect(test.githubIssueClient.publishIssueImage).toHaveBeenCalledOnce();
-    const call = test.githubIssueClient.publishIssueImage.mock.calls[0]!;
-    expect(call.slice(0, 2)).toEqual([project.repo, 8]);
-    expect((await sharp(call[2]).metadata()).exif).toBeUndefined();
-    expect(test.githubIssueClient.createComment).toHaveBeenCalledWith(project.repo, 8,
-      expect.stringContaining('![broken.png](https://raw.githubusercontent.com/'), expect.any(AbortSignal));
-    expect(JSON.stringify(test.record.mock.calls)).not.toContain('sig=private');
-    expect((await confirm(test, draft, 'approved')).json().outcome).toBe('refused');
-  });
-
-  it('refuses same-message publication, missing previews, multiple files and public documents', async () => {
-    const test = fixture();
-    const payload = { issueNumber: 8, text: 'Attach it.', attachmentIds: [test.attachment.id], publish: 'public' };
-    const staged = await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers, payload });
-    const code = staged.json().result.confirmationCode;
-    test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', model: null,
-      text: 'yes', at: new Date(Date.now() + 1_000) });
-    expect((await test.app.inject({ method: 'POST', url: '/tools/confirm_create_issue', headers, payload: { confirmationCode: code } })).json().outcome).toBe('refused');
-    test.workspaceCommands.isConnected.mockReturnValue(false);
-    expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers, payload })).json().outcome).toBe('refused');
-    test.workspaceCommands.isConnected.mockReturnValue(true);
-    expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
-      payload: { ...payload, attachmentIds: [] } })).json().outcome).toBe('refused');
-    test.attachment.contentType = 'text/plain';
-    expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers, payload })).json().outcome).toBe('refused');
-    expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
-  });
-
-  it('cancels public publication without writes and cannot replay the declined action', async () => {
-    const test = fixture();
-    const staged = await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
-      payload: { issueNumber: 8, text: 'Screenshot', attachmentIds: [test.attachment.id], publish: 'public' } });
-    const draft = staged.json().result;
-    expect((await confirm(test, draft, 'no')).json().outcome).toBe('refused');
-    expect((await confirm(test, draft, 'go ahead')).json().outcome).toBe('refused');
-    expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
-    expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
   });
 
   it('checks secrets on subsequent document pages and fences file-derived Markdown', async () => {
@@ -289,20 +216,8 @@ describe('Software Factory Jarvis tools', () => {
     test.attachment.content = '```text\n![image](https://example.invalid/private.png)\n<script>bad</script>';
     const staged = await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
       payload: { issueNumber: 8, text: 'Details', attachmentIds: [test.attachment.id] } });
-    expect(staged.json().result.body).toContain('````text\nFile: broken.png');
-    expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
-  });
-
-  it('publishes a reviewed attachment on a newly created issue and surfaces partial embedding failure', async () => {
-    const test = fixture();
-    const staged = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
-      payload: { title: 'Bug: retry', body: 'Problem and acceptance.', attachmentIds: [test.attachment.id], publish: 'public', executor: 'none' } });
-    test.githubIssueClient.createComment.mockRejectedValueOnce(new Error('private provider detail'));
-    const result = await confirm(test, staged.json().result, 'confirmed');
-    expect(result.json().outcome).toBe('error');
-    expect(JSON.stringify(result.json())).toContain('was created');
-    expect(JSON.stringify(result.json())).not.toContain('private provider detail');
-    expect(test.githubIssueClient.publishIssueImage.mock.calls[0]?.slice(0, 2)).toEqual([project.repo, 9]);
+    expect(staged.json().outcome).toBe('ok');
+    expect(test.githubIssueClient.createComment.mock.calls[0]?.[2]).toContain('````text\nFile: broken.png');
   });
 
   it('refuses unknown issues, foreign files and secrets before any writes', async () => {
@@ -338,13 +253,13 @@ describe('Software Factory Jarvis tools', () => {
     ];
     expect(factoryModule.tools.map(({ name }) => name)).toEqual(names);
     const capabilities = capabilityInstructions(defaultSettings.memory);
-    for (const name of names.filter((name) => !repositoryNames.includes(name))) {
+    for (const name of names.filter((name) => !repositoryNames.includes(name) && !['get_pending_issue', 'confirm_create_issue', 'confirm_project_archive'].includes(name))) {
       expect(capabilities).toContain(name);
     }
     expect(capabilities).toContain('repo_overview first');
     expect(capabilities).toContain('repo_search or repo_read');
     expect(capabilities).toContain('create a GitHub issue');
-    expect(capabilities).toContain('confirm_create_issue');
+    expect(capabilities).not.toContain('confirm_create_issue');
     expect(capabilities).toContain('set_jarvis_model');
 
     const { app } = fixture();
@@ -357,39 +272,6 @@ describe('Software Factory Jarvis tools', () => {
       inputSchema.type === 'object')).toBe(true);
     const advertisedIssue = response.json().find(({ name }: { name: string }) => name === 'create_issue');
     expect(advertisedIssue.inputSchema.properties.project.description).toContain('active project ID');
-  });
-
-  it.each(['[Bug] Fix retries', 'Add a new feature'])('stages my own %s until Dan approves', async (title) => {
-    const test = fixture();
-    const { app, githubIssueClient } = test;
-    const staged = await app.inject({
-      method: 'POST',
-      url: '/tools/create_issue',
-      headers,
-      payload: {
-        title,
-        body: 'Problem: retries fail.\nAcceptance: retry succeeds.',
-      },
-    });
-    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
-    expect(githubIssueClient.createIssue).not.toHaveBeenCalled();
-    expect(test.taskStore.create).not.toHaveBeenCalled();
-    const created = await confirm(test, staged.json().result);
-    expect(created.json()).toMatchObject({
-      outcome: 'ok',
-      result: {
-        number: 9,
-        url: 'https://github.com/DanAakesen/jarvis/issues/9',
-        taskCode: 'P11-01',
-      },
-    });
-    expect(githubIssueClient.createIssue).toHaveBeenCalledWith(
-      project.repo,
-      `P11-01: ${title}`,
-      'Problem: retries fail.\nAcceptance: retry succeeds.',
-      { labels: ['P11', title.startsWith('[Bug]') ? 'bug' : 'enhancement'] },
-    );
-    expect(githubIssueClient.addLabels).toHaveBeenCalledWith(project.repo, 9, ['Jarvis']);
   });
 
   it.each([
@@ -664,8 +546,7 @@ describe('Software Factory Jarvis tools', () => {
         text: 'The fix is ready.', attachmentIds: [withAttachment.attachment.id],
       },
     });
-    expect(staged.json().result.status).toBe('awaiting_confirmation');
-    const published = await confirm(withAttachment, staged.json().result);
+    const published = staged;
     expect(published.json()).toMatchObject({ outcome: 'ok', result: { status: 'commented', number: 8 } });
     expect(withAttachment.githubIssueClient.createComment).toHaveBeenCalledWith(
       'external-owner/external-repo', 8, expect.stringContaining('The screen shows Error: retry failed.'),
@@ -998,84 +879,6 @@ describe('Software Factory Jarvis tools', () => {
     expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['refused', 'refused', 'refused']);
   });
 
-  it('archives a project only after a later Dan message approves it', async () => {
-    const record = vi.fn<(call: ToolCallRecord) => Promise<void>>(async () => {});
-    let latestMessage: ConversationMessage = {
-      id: '42',
-      sessionId: 'session',
-      role: 'dan',
-      text: 'Archive the project',
-      model: null,
-      at: new Date(Date.now() - 1_000),
-    };
-    const conversationStore = {
-      getHistory: vi.fn(async () => ({ messages: [latestMessage], nextCursor: null })),
-    } as unknown as ConversationStore;
-    const projectStore = {
-      list: vi.fn(async () => [project]),
-      update: vi.fn(async () => project),
-      archive: vi.fn(async (id: string) => id === project.id),
-    } as unknown as ProjectStore;
-    const app = buildApp(config, undefined, {
-      modules: [coreModule, factoryModule],
-      auth: (async () => ({
-        kind: 'jarvis-agent',
-        objectId: '00000000-0000-0000-0000-000000000001',
-        tenantId: config.auth.tenantId,
-      })) as TokenVerifier,
-      conversationStore,
-      projectStore,
-      toolCallStore: { record },
-    });
-    apps.push(app);
-
-    const staged = await app.inject({
-      method: 'POST', url: '/tools/archive_project', headers, payload: { projectId: '7' },
-    });
-    expect(staged.json()).toMatchObject({
-      outcome: 'ok',
-      result: { status: 'awaiting_confirmation', projectId: '7', repo: project.repo },
-    });
-    const confirmationCode = staged.json().result.confirmationCode as string;
-    expect(confirmationCode).toMatch(/^\d{8}$/u);
-    expect(projectStore.archive).not.toHaveBeenCalled();
-
-    latestMessage = { ...latestMessage, text: 'yes', at: new Date(Date.now() + 1_000) };
-    const sameMessage = await app.inject({
-      method: 'POST',
-      url: '/tools/confirm_project_archive',
-      headers,
-      payload: { confirmationCode },
-    });
-    expect(sameMessage.json()).toMatchObject({ outcome: 'refused' });
-    expect(projectStore.archive).not.toHaveBeenCalled();
-
-    latestMessage = {
-      ...latestMessage, id: '43', text: 'yes, and also archive another project', at: new Date(Date.now() + 2_000),
-    };
-    const refused = await app.inject({
-      method: 'POST',
-      url: '/tools/confirm_project_archive',
-      headers: { ...headers, 'x-jarvis-message-id': '43' },
-      payload: { confirmationCode },
-    });
-    expect(refused.json()).toMatchObject({ outcome: 'refused' });
-    expect(projectStore.archive).not.toHaveBeenCalled();
-
-    latestMessage = { ...latestMessage, id: '44', text: 'yes', at: new Date(Date.now() + 3_000) };
-    const confirmed = await app.inject({
-      method: 'POST',
-      url: '/tools/confirm_project_archive',
-      headers: { ...headers, 'x-jarvis-message-id': '44' },
-      payload: { confirmationCode },
-    });
-    expect(confirmed.json()).toMatchObject({
-      outcome: 'ok',
-      result: { status: 'archived', projectId: '7', repo: project.repo },
-    });
-    expect(projectStore.archive).toHaveBeenCalledOnce();
-  });
-
   it('refuses unverified task models and running-task changes with valid options', async () => {
     const { app, taskStore, record } = fixture();
     const invalid = await app.inject({
@@ -1198,8 +1001,7 @@ describe('Software Factory Jarvis tools', () => {
     const staged = await app.inject({
       method: 'POST', url: '/tools/start_issue', headers, payload: { issue: 8 },
     });
-    expect(taskStore.create).not.toHaveBeenCalled();
-    const started = await confirm(test, staged.json().result);
+    const started = staged;
     expect(started.json()).toMatchObject({
       outcome: 'ok',
       result: {
@@ -1215,6 +1017,7 @@ describe('Software Factory Jarvis tools', () => {
       number: 8, title: 'P10-02: Factory tasks', body: '', state: 'closed',
       url: 'https://github.com/DanAakesen/jarvis/issues/8', labels: [], isPullRequest: false,
     });
+    test.setLatestMessage({ id: '43', sessionId: 'session', role: 'dan', model: null, text: 'Start issue 8', at: new Date() });
     const refused = await app.inject({
       method: 'POST', url: '/tools/start_issue', headers: { ...headers, 'x-jarvis-message-id': '43' }, payload: { issue: 8 },
     });
@@ -1264,100 +1067,6 @@ it('explains a failed issue-list read before staging self-improvement and makes 
   expect(test.taskStore.create).not.toHaveBeenCalled();
 });
 
-it('recovers the original scaffold after yes please and confirms once without reselecting the project', async () => {
-  const test = fixture();
-  const call = (name: string, payload: object, id = '42') => test.app.inject({
-    method: 'POST', url: `/tools/${name}`, headers: { ...headers, 'x-jarvis-message-id': id }, payload,
-  });
-  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', text: 'Prepare the widget in Jarvis', model: null, at: new Date() });
-  const staged = (await call('create_issue', { project: project.id, title: 'Prepare widget scaffold', body: 'Create apps/winwidget. Acceptance: the scaffold builds.' })).json();
-  expect(staged).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation', repository: project.repo } });
-  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
-  const early = await call('confirm_create_issue', { confirmationCode: staged.result.confirmationCode });
-  expect(early.json().outcome).toBe('refused');
-  test.setLatestMessage({ id: '43', sessionId: 'session', role: 'dan', text: 'Yes please', model: null, at: new Date(Date.now() + 2_000) });
-  const recovered = (await call('get_pending_issue', {}, '43')).json();
-  expect(recovered).toMatchObject({ outcome: 'ok', result: {
-    status: 'awaiting_confirmation', confirmationCode: staged.result.confirmationCode,
-    body: staged.result.body, repository: project.repo,
-  } });
-  // Even if the model mistakenly retries create, it cannot replace the approved scope.
-  const retry = (await call('create_issue', { project: project.id, title: 'A changed title', body: 'A different scope' }, '43')).json();
-  expect(retry.result).toEqual(recovered.result);
-  const confirmations = await Promise.all([1, 2].map(() => call('confirm_create_issue', { confirmationCode: recovered.result.confirmationCode }, '43')));
-  expect(confirmations.map((r) => r.json().outcome).sort()).toEqual(['ok', 'refused']);
-  expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
-  expect(test.githubIssueClient.createIssue.mock.calls[0]?.[2]).toContain('Create apps/winwidget');
-  expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
-  expect((await call('get_pending_issue', {}, '43')).json().result.status).toBe('none');
-  const after = await call('create_issue', { project: project.id, title: 'Prepare widget scaffold', body: 'Same scope' }, '43');
-  expect(after.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation', replacement: true } });
-  expect((await call('confirm_create_issue', { confirmationCode: after.json().result.confirmationCode }, '43')).json().outcome).toBe('refused');
-  expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
-});
-
-it('replaces a stale own-project clarification with an explicit scaffold request, still requiring later approval', async () => {
-  const test = fixture();
-  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', text: 'Prepare the widget in the repo', model: null, at: new Date() });
-  const first = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
-    payload: { project: project.id, title: 'Widget', body: 'Scaffold the app.' } });
-  expect(first.json().outcome).toBe('refused');
-  test.setLatestMessage({ id: '43', sessionId: 'session', role: 'dan', text: 'Prepare the widget in Jarvis', model: null, at: new Date(Date.now() + 2_000) });
-  const explicit = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers: { ...headers, 'x-jarvis-message-id': '43' },
-    payload: { project: project.id, title: 'Prepare widget scaffold', body: 'Create apps/winwidget with build instructions.' } });
-  expect(explicit.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation', repository: project.repo } });
-  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
-});
-
-it('does not expose or cancel a pending issue from another conversation', async () => {
-  const test = fixture();
-  const call = (name: string, payload: object, id: string) => test.app.inject({ method: 'POST', url: `/tools/${name}`, headers: { ...headers, 'x-jarvis-message-id': id }, payload });
-  const source = { role: 'dan' as const, model: null, at: new Date() };
-  test.setLatestMessage({ ...source, id: '42', sessionId: 'session', text: 'Prepare the widget in Jarvis' });
-  const first = (await call('create_issue', { project: project.id, title: 'Widget', body: 'Original scope' }, '42')).json().result;
-  test.setLatestMessage({ ...source, id: '43', sessionId: 'runtime-test', text: 'Prepare a chart in Jarvis' });
-  expect((await call('get_pending_issue', {}, '43')).json().result.status).toBe('none');
-  await call('create_issue', { project: project.id, title: 'Chart', body: 'Separate scope' }, '43');
-  test.setLatestMessage({ ...source, id: '44', sessionId: 'session', text: 'Yes please', at: new Date(Date.now() + 2_000) });
-  expect((await call('get_pending_issue', {}, '44')).json().result.confirmationCode).toBe(first.confirmationCode);
-  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
-});
-
-it('reports an expired proposal as none and never invents approval for a replacement', async () => {
-  let now = Date.now();
-  vi.spyOn(Date, 'now').mockImplementation(() => now);
-  const test = fixture();
-  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', text: 'Prepare the widget in Jarvis', model: null, at: new Date() });
-  await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
-    payload: { project: project.id, title: 'Widget', body: 'Original scope' } });
-  now += 11 * 60_000;
-  const later = now;
-  try {
-    test.setLatestMessage({ id: '43', sessionId: 'session', role: 'dan', text: 'Yes please', model: null, at: new Date(later) });
-    const result = await test.app.inject({ method: 'POST', url: '/tools/get_pending_issue', headers: { ...headers, 'x-jarvis-message-id': '43' }, payload: {} });
-    expect(result.json()).toMatchObject({ outcome: 'ok', result: { status: 'none' } });
-    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
-  } finally { vi.restoreAllMocks(); }
-});
-
-
-it('stages a missing own-code proposal under yes without approving it, then accepts only another later reply', async () => {
-  const test = fixture();
-  const call = (tool: string, payload: object, id: string) => test.app.inject({ method: 'POST', url: `/tools/${tool}`,
-    headers: { ...headers, 'x-jarvis-message-id': id }, payload });
-  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', text: 'Yes please', model: null, at: new Date() });
-  const staged = (await call('create_issue', { title: 'Recovered scaffold scope', body: 'Prepare the reviewed widget scaffold.' }, '42')).json();
-  expect(staged).toMatchObject({ outcome: 'ok', result: { replacement: true, status: 'awaiting_confirmation', repository: project.repo } });
-  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
-  expect((await call('confirm_create_issue', { confirmationCode: staged.result.confirmationCode }, '42')).json().outcome).toBe('refused');
-  test.setLatestMessage({ id: '43', sessionId: 'session', role: 'dan', text: 'Yes please', model: null, at: new Date(Date.now() + 2_000) });
-  const recovered = (await call('get_pending_issue', {}, '43')).json().result;
-  expect(recovered.confirmationCode).toBe(staged.result.confirmationCode);
-  expect((await call('confirm_create_issue', { confirmationCode: recovered.confirmationCode }, '43')).json().outcome).toBe('ok');
-  expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
-  expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
-});
-
 it('does not use bare approval to select or write an external repository when no proposal exists', async () => {
   const external = { ...project, id: '8', name: 'Other', repo: 'synthetic/other' };
   const test = fixture([project, external]);
@@ -1381,34 +1090,10 @@ it('executes one verified direct scaffold instruction without a second yes, incl
   expect(responses[0]!.json().result).toEqual(responses[1]!.json().result);
   expect(responses[0]!.json().result.confirmationCode).toBeUndefined();
   expect(test.githubIssueClient.createIssue).toHaveBeenCalledTimes(1);
-  expect(interpret).toHaveBeenCalledTimes(1);
-  expect(interpret.mock.calls[0]?.[0]).toMatchObject({ family: 'factory', intent: 'factory_request',
-    reply: 'Prepare the widget in Jarvis now', messageId: '42', sessionId: 'session' });
-  expect(interpret.mock.calls[0]?.[0].summary).toContain(payload.body);
-  expect(interpret.mock.calls[0]?.[0].summary).toContain(project.repo);
+  expect(interpret).not.toHaveBeenCalled();
   const changed = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
     payload: { ...payload, body: 'A different scope' } });
   expect(changed.json().outcome).toBe('refused');
-  expect(test.githubIssueClient.createIssue).toHaveBeenCalledTimes(1);
-});
-
-it('keeps a plan-only request staged and accepts a later yes against that same scope', async () => {
-  const interpret: ApprovalInterpreter = async (question) => ({
-    verdict: question.intent === 'factory_request' ? 'neither' : 'approve', path: 'model',
-  });
-  const test = fixture([project], interpret);
-  test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', model: null,
-    text: 'Show me your plan for the widget first; do not start.', at: new Date() });
-  const staged = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
-    payload: { title: 'Scaffold the widget', body: 'Create the requested desktop scaffold.' } });
-  expect(staged.json().result.status).toBe('awaiting_confirmation');
-  expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
-  test.setLatestMessage({ id: '43', sessionId: 'session', role: 'dan', model: null,
-    text: 'Yes', at: new Date(Date.now() + 2_000) });
-  const confirmed = await test.app.inject({ method: 'POST', url: '/tools/confirm_create_issue',
-    headers: { ...headers, 'x-jarvis-message-id': '43' },
-    payload: { confirmationCode: staged.json().result.confirmationCode } });
-  expect(confirmed.json().outcome).toBe('ok');
   expect(test.githubIssueClient.createIssue).toHaveBeenCalledTimes(1);
 });
 
@@ -1439,4 +1124,48 @@ it('reuses an already active own-repository issue without another approval', asy
   expect(response.json()).toMatchObject({ outcome: 'ok', result: { task: { id: '42' } } });
   expect(test.taskStore.create).not.toHaveBeenCalled();
   expect(interpret).not.toHaveBeenCalled();
+});
+
+it('archives the requested active project directly', async () => {
+  const test = fixture();
+  const result = await test.app.inject({ method: 'POST', url: '/tools/archive_project', headers,
+    payload: { projectId: project.id } });
+  expect(result.json()).toMatchObject({ outcome: 'ok', result: { status: 'archived', projectId: project.id } });
+  expect(test.projectStore.archive).toHaveBeenCalledOnce();
+});
+
+it('publishes the requested image without a preview gate, strips EXIF, and deduplicates repeats', async () => {
+  const test = fixture();
+  test.workspaceCommands.isConnected.mockReturnValue(false);
+  const send = () => test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
+    payload: { issueNumber: 8, text: 'Publish screenshot', attachmentIds: [test.attachment.id], publish: 'public' } });
+  expect((await send()).json().outcome).toBe('ok');
+  expect((await send()).json().outcome).toBe('ok');
+  expect(test.githubIssueClient.publishIssueImage).toHaveBeenCalledOnce();
+  expect(test.githubIssueClient.createComment).toHaveBeenCalledOnce();
+  const published = test.githubIssueClient.publishIssueImage.mock.calls[0]!;
+  expect((await sharp(published[2]).metadata()).exif).toBeUndefined();
+  expect(JSON.stringify(test.record.mock.calls)).not.toContain('sig=private');
+});
+
+it('retains a partial publication result without duplicating the created issue', async () => {
+  const test = fixture();
+  test.githubIssueClient.createComment.mockRejectedValue(new Error('private provider detail'));
+  const send = () => test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
+    payload: { title: 'Bug: retry', body: 'Problem and acceptance.', attachmentIds: [test.attachment.id], publish: 'public', executor: 'none' } });
+  const result = await send();
+  expect(result.json().outcome).toBe('error');
+  expect(JSON.stringify(result.json())).toContain('was created');
+  expect(JSON.stringify(result.json())).not.toContain('private provider detail');
+  await send();
+  expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
+});
+
+it.each([[], ['00000000-0000-4000-8000-000000000000']])('refuses invalid public image selection %j before writing', async (attachmentIds) => {
+  const test = fixture();
+  const result = await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
+    payload: { issueNumber: 8, text: 'Publish screenshot', attachmentIds, publish: 'public' } });
+  expect(result.json().outcome).toBe('refused');
+  expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
+  expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
 });

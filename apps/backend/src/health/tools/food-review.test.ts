@@ -241,7 +241,7 @@ describe('inactive internal food proposal review', () => {
       const address = await app.listen({ host: '127.0.0.1', port: 0 });
       const response = await fetch(`${address}/conversation/sessions/41/turns`, {
         method: 'POST', headers: { ...ownerHeaders, 'content-type': 'application/json' },
-        body: JSON.stringify({ text: 'Estimate this synthetic food portion.' }),
+        body: JSON.stringify({ text: lookupOnly ? 'Estimate this synthetic food portion.' : 'Log this synthetic food portion as an estimate.' }),
         signal: AbortSignal.timeout(10_000),
       });
       expect(response.status).toBe(200);
@@ -270,29 +270,13 @@ describe('inactive internal food proposal review', () => {
         expect(service.pendingBrowserConfirmations()).toEqual([]);
         return;
       }
-      while (!body.includes('event: food_invitation\n')) {
-        const chunk = await reader.read();
-        expect(chunk.done).toBe(false);
-        body += decoder.decode(chunk.value, { stream: true });
-      }
-      expect(body).toContain('Review this exact food estimate for logging in Now. Nothing has changed.');
-      expect(body).toContain('Synthetic portion');
-      expect(body).toContain('- Protein: 10 g');
-      expect(body).toContain('- Calories: 200 kcal');
-      expect(body).toContain('- Fat: 20 g');
-      expect(body).toContain('Uncertainty:');
-      expect(body).not.toContain('committed');
-      expect(f.store.log).not.toHaveBeenCalled();
-      const reply = await app.inject({ method: 'POST', url: '/conversation/sessions/41/steer',
-        headers: ownerHeaders, payload: { text: 'Log it', language: 'en' } });
-      expect(reply.statusCode).toBe(202);
       while (true) {
         const chunk = await reader.read();
         if (chunk.done) break;
         body += decoder.decode(chunk.value, { stream: true });
       }
       expect(body).toContain('committed');
-      expect(body).toContain('event: food_invitation\ndata: null');
+      expect(body).not.toContain('event: food_invitation');
       expect(body).not.toContain('event: error');
       expect(f.store.log).toHaveBeenCalledOnce();
       expect(service.pendingBrowserConfirmations()).toEqual([]);
@@ -344,7 +328,7 @@ describe('inactive internal food proposal review', () => {
     }
   });
 
-  it.each(['chat', 'voice'])('commits the pending %s estimate from a natural reply once and recovers the receipt on retry', async channel => {
+  it.each(['chat', 'voice'])('commits a requested %s estimate directly and recovers the receipt on retry', async channel => {
     const f = fixture();
     f.session.channel = channel;
     const confirmations: ConfirmationStore = {
@@ -360,19 +344,14 @@ describe('inactive internal food proposal review', () => {
     f.runConfirmed.mockImplementation((...args) => service.runConfirmed(...args));
     const result = channel === 'voice' ? executeThroughVoiceCapability(f.tool, f.request, estimate())
       : f.tool.execute(estimate(), f.request, signal());
-    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
-    expect(f.store.log).not.toHaveBeenCalled();
-    const reply = { id: '43', sessionId: f.session.id, role: 'dan' as const,
-      text: 'yes, log that', model: null, at: new Date() };
-    expect(await service.resolveFoodEstimateReply!(reply, approvalDeciderFor(f.request), signal())).toBe(true);
     const receipt = await result;
     expect(channel === 'voice' ? JSON.parse(receipt as string).result : receipt).toMatchObject({
       status: 'committed', record: { meal_name: 'Synthetic portion', energy_kcal: 200, capture_method: channel === 'chat' ? 'text' : 'voice' },
     });
-    expect(await service.resolveFoodEstimateReply!({ ...reply, id: '44' }, approvalDeciderFor(f.request), signal())).toBe(false);
+    expect(service.pendingBrowserConfirmations()).toEqual([]);
     expect(await f.tool.execute(estimate(), f.request, signal())).toMatchObject({ status: 'committed' });
     expect(f.store.log).toHaveBeenCalledOnce();
-    expect(confirmations.consumeApproval).toHaveBeenCalledOnce();
+    expect(confirmations.consumeApproval).not.toHaveBeenCalled();
   });
 
   it('keeps estimate and correction writes behind browser approval through compact voice dispatch', async () => {
@@ -553,20 +532,19 @@ describe('inactive internal food proposal review', () => {
     f.approve(); await first;
     expect(f.runConfirmed).toHaveBeenCalledOnce(); expect(f.store.log).toHaveBeenCalledOnce();
   });
-  it('refuses presence changes or cancellation after staging without committing', async () => {
+  it('allows an authenticated action while away and still honors cancellation', async () => {
     const f = fixture(); const result = f.tool.execute(estimate(), f.request, signal());
-    const refused = expect(result).rejects.toThrow('present');
-    await f.staged; f.mode.mode = 'away'; f.approve(); await refused;
-    expect(f.store.log).not.toHaveBeenCalled();
+    await f.staged; f.mode.mode = 'away'; f.approve();
+    await expect(result).resolves.toMatchObject({ status: 'committed' });
+    expect(f.store.log).toHaveBeenCalledOnce();
     const cancelled = fixture(); const controller = new AbortController();
     const pending = cancelled.tool.execute(estimate(), cancelled.request, controller.signal);
     const aborted = expect(pending).rejects.toThrow();
     await cancelled.staged; controller.abort(); cancelled.approve(); await aborted;
     expect(cancelled.store.log).not.toHaveBeenCalled();
   });
-  it('refuses non-present, unavailable, stale and phone context before requesting review', async () => {
+  it('refuses unavailable, stale and phone context before writing', async () => {
     for (const modify of [
-      (f: ReturnType<typeof fixture>) => { f.mode.mode = 'away'; },
       (f: ReturnType<typeof fixture>) => { f.request.server.ownerInteractions = undefined; },
       (f: ReturnType<typeof fixture>) => { f.session.channel = 'phone'; },
       (f: ReturnType<typeof fixture>) => { f.request.jarvisConversationMessage = { ...f.request.jarvisConversationMessage!, at: new Date(at.getTime() - 600001) }; },

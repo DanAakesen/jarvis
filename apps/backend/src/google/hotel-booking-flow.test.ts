@@ -14,7 +14,7 @@ import { createGoogleModule } from './tools.js';
 
 /**
  * Offline end-to-end check of the flow Dan tried live in #885: find hotel bookings in Gmail, show them on screen, stage
- * both in the calendar, approve with a plain reply and see them in the calendar. Gmail and Calendar are in-memory fakes
+ * both in the calendar directly and see them in the calendar. Gmail and Calendar are in-memory fakes
  * and every name, address and date is synthetic. Each channel reaches the backend the way it does in production: typed
  * chat calls /tools/* as the Jarvis agent, and voice runs the model's tool calls on the owner's session inside the
  * relay's call scope, while the relay answers a reply to a staged change itself from backend state.
@@ -293,7 +293,7 @@ function harness(channel: Channel) {
 }
 
 describe.each(['chat', 'voice'] as const)('hotel booking flow in %s', (channel) => {
-  it('finds the bookings, shows them, stages both events and creates them only after a later plain yes', async () => {
+  it('finds bookings, shows them and creates the requested events directly once', async () => {
     const jarvis = harness(channel);
     const { google, delivered } = jarvis;
 
@@ -335,58 +335,16 @@ describe.each(['chat', 'voice'] as const)('hotel booking flow in %s', (channel) 
       operation: 'create', viewId: 'hotels-found', view: hotelsView,
     });
 
-    jarvis.say('Stage them in my calendar.');
-    const staged = await jarvis.call('calendar_create_events', { events: hotelStays });
-    expect(staged).toMatchObject({ outcome: 'ok', result: {
-      status: 'awaiting_confirmation',
-      confirmationCode: expect.stringMatching(/^\d{8}$/u),
-      items: [
-        { summary: expect.stringContaining('Synthetic Hotel Alpha') },
-        { summary: expect.stringContaining('Synthetic Hotel Beta') },
-      ],
+    jarvis.say('Add both to my calendar.');
+    const created = await jarvis.call('calendar_create_events', { events: hotelStays });
+    expect(created).toMatchObject({ outcome: 'ok', result: {
+      status: 'completed', items: [{ status: 'completed' }, { status: 'completed' }],
     } });
-    const { confirmationCode: code, summary } = staged.result as { confirmationCode: string; summary: string };
-    expect(summary).toContain('12 November 2027 at 15:00');
-    expect(summary).toContain('20 November 2027 at 16:00');
-    expect(google.writes).toEqual([]);
-    if (channel === 'voice') {
-      const proposal = await jarvis.screen('google-103');
-      expect(proposal).toMatchObject({ title: 'Calendar', renderer: 'text', data: { content: summary } });
-      expect(JSON.stringify(proposal)).not.toContain(code);
-    }
-    // The message that staged the change can never approve it, even with the right code.
-    expect(await jarvis.call('calendar_confirm_change', { confirmationCode: code })).toMatchObject({ outcome: 'refused' });
-    expect(google.writes).toEqual([]);
-
-    jarvis.say('Is it created?');
-    expect((await jarvis.pending()).result).toMatchObject({
-      status: 'awaiting_confirmation', summary, confirmationCode: code, reply: null,
-    });
-    // A later message that is not an approval cannot confirm it either.
-    expect(await jarvis.call('calendar_confirm_change', { confirmationCode: code })).toMatchObject({ outcome: 'refused' });
-    expect(google.writes).toEqual([]);
-
-    jarvis.say('yes');
-    const approved = await jarvis.answer(code, 'approve');
-    expect(approved).toMatchObject({
-      outcome: 'ok',
-      result: { status: 'completed', summary, items: [{ status: 'completed' }, { status: 'completed' }] },
-      confirmation: expect.stringContaining('calendar'),
-    });
+    expect(created.result).not.toHaveProperty('confirmationCode');
     expect(google.writes).toEqual(createdBodies);
-    if (channel === 'voice') {
-      const done = visibleText(await jarvis.screen('google-105'));
-      expect(done).toContain('Done.');
-      expect(done).toContain('Synthetic Hotel Alpha');
-      expect(done).toContain('Synthetic Hotel Beta');
-    }
-
-    // A repeated yes reaches the model, which looks for a pending change and finds nothing left to approve.
-    jarvis.say('yes');
-    expect((await jarvis.call('calendar_get_pending_change', {})).result)
-      .toMatchObject({ status: 'none', lastChange: { status: 'completed', summary } });
-    expect(await jarvis.call('calendar_confirm_change', { confirmationCode: code })).toMatchObject({ outcome: 'refused' });
+    await jarvis.call('calendar_create_events', { events: hotelStays });
     expect(google.writes).toHaveLength(2);
+    expect((await jarvis.call('calendar_get_pending_change', {})).result).toMatchObject({ status: 'none' });
 
     jarvis.say('Show me my calendar for November.');
     const listed = await jarvis.call('calendar_list_events', { start: '2027-11-01', end: '2027-11-30' });
@@ -395,7 +353,7 @@ describe.each(['chat', 'voice'] as const)('hotel booking flow in %s', (channel) 
       { subject: 'Hotel stay: Synthetic Hotel Beta', start: '2027-11-20T15:00:00.000Z', end: '2027-11-22T11:00:00.000Z' },
     ] } });
     if (channel === 'voice') {
-      const agenda = await jarvis.screen('google-107');
+      const agenda = await jarvis.screen('google-104');
       expect(agenda).toMatchObject({ title: 'Calendar', renderer: 'text' });
       expect(visibleText(agenda)).toContain('Hotel stay: Synthetic Hotel Alpha');
       expect(visibleText(agenda)).toContain('Hotel stay: Synthetic Hotel Beta');
@@ -412,34 +370,21 @@ describe.each(['chat', 'voice'] as const)('hotel booking flow in %s', (channel) 
 
     expect(google.unexpected).toEqual([]);
     expect(JSON.stringify(delivered)).not.toMatch(/private-|gmail-id-/u);
-    expect(JSON.stringify(delivered)).not.toContain(code);
     if (channel === 'chat') {
       expect(jarvis.records.length).toBeGreaterThan(0);
       for (const record of jarvis.records) {
         expect([record.arguments, record.result]).toEqual([{ redacted: true }, { redacted: true }]);
       }
-      expect(JSON.stringify(jarvis.records)).not.toContain(code);
     }
   });
 
-  it('creates nothing when Dan declines the staged events', async () => {
+  it('does not write while inspecting bookings and cannot confirm a nonexistent proposal', async () => {
     const jarvis = harness(channel);
-
-    jarvis.say('Stage them in my calendar.');
-    const staged = await jarvis.call('calendar_create_events', { events: hotelStays });
-    expect(staged).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
-    const { confirmationCode: code } = staged.result as { confirmationCode: string };
-    if (channel === 'voice') await jarvis.screen('google-101');
-
-    jarvis.say('no');
-    expect(await jarvis.answer(code, 'decline')).toMatchObject({ outcome: 'ok', result: { status: 'cancelled' } });
-    if (channel === 'voice') expect(visibleText(await jarvis.screen('google-102'))).toContain('Cancelled');
-    expect(await jarvis.call('calendar_confirm_change', { confirmationCode: code })).toMatchObject({ outcome: 'refused' });
-
     jarvis.say('Show me my calendar for November.');
     expect(await jarvis.call('calendar_list_events', { start: '2027-11-01', end: '2027-11-30' }))
       .toMatchObject({ outcome: 'ok', result: { events: [] } });
-    if (channel === 'voice') expect(visibleText(await jarvis.screen('google-103'))).toContain('No events in this period.');
+    expect(await jarvis.call('calendar_confirm_change', { confirmationCode: '12345678' }))
+      .toMatchObject({ outcome: 'refused' });
     expect(jarvis.google.writes).toEqual([]);
     expect(jarvis.google.unexpected).toEqual([]);
   });

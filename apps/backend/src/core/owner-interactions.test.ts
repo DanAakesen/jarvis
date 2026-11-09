@@ -74,10 +74,16 @@ function fixture(withConversationStore = true) {
     onConfirmationsChanged,
     onConfirmationPending,
   });
-  return { service, store, rows, onWebNotification, onConfirmationsChanged, onConfirmationPending, conversationStore };
+  const directService = service;
+  const phoneService: OwnerInteractionService = {
+    ...service,
+    runConfirmed: (kind, summary, action, signal, delivery) => withPhoneConfirmationSession('42', () =>
+      directService.runConfirmed(kind, summary, action, signal, delivery)),
+  };
+  return { service: phoneService, directService, store, rows, onWebNotification, onConfirmationsChanged, onConfirmationPending, conversationStore };
 }
 
-describe('food natural language owner interactions', () => {
+describe('phone-bound food confirmation compatibility', () => {
   const delivery = {
     channel: 'browser' as const, lifetimeSeconds: 120,
     foodEstimate: { sessionId: '41', sourceMessageId: '42' },
@@ -229,7 +235,7 @@ describe('food natural language owner interactions', () => {
   });
 });
 
-describe('owner interactions', () => {
+describe('phone-bound owner interactions', () => {
   const delivery = {
     channel: 'browser' as const, lifetimeSeconds: 120,
     foodEstimate: { sessionId: '41', sourceMessageId: '42' },
@@ -425,7 +431,7 @@ describe('owner interactions', () => {
     const confirmation = service.pendingBrowserConfirmations()[0]!;
     expect(confirmation).toMatchObject({ actionKind: 'delete', summary: 'Remove the staged item.' });
     expect(store.createConfirmation).toHaveBeenCalledWith(
-      confirmation.id, ownerObjectId, 'browser', 'delete', 300,
+      confirmation.id, ownerObjectId, 'browser', 'delete', 300, '42',
     );
     expect(action).not.toHaveBeenCalled();
     expect(onConfirmationsChanged).toHaveBeenCalledOnce();
@@ -534,5 +540,30 @@ describe('owner interactions', () => {
     const { service, onWebNotification } = fixture();
     await service.notify('warning', 'A task needs attention.');
     expect(onWebNotification).toHaveBeenCalledExactlyOnceWith('warning', 'A task needs attention.');
+  });
+});
+
+
+describe('signed-in owner actions', () => {
+  it('executes immediately without creating an approval or waiting for a second message', async () => {
+    const { directService, store, onConfirmationPending } = fixture();
+    const action = vi.fn(async () => ({ saved: true }));
+    await expect(directService.runConfirmed('delete', 'Delete the requested item', action))
+      .resolves.toEqual({ saved: true });
+    expect(action).toHaveBeenCalledOnce();
+    expect(store.createConfirmation).not.toHaveBeenCalled();
+    expect(onConfirmationPending).not.toHaveBeenCalled();
+    expect(directService.pendingBrowserConfirmations()).toEqual([]);
+  });
+
+  it('preserves cancellation and reports execution failures without asking for approval', async () => {
+    const { directService } = fixture();
+    const controller = new AbortController();
+    controller.abort();
+    const action = vi.fn(async () => 'saved');
+    await expect(directService.runConfirmed('other', 'Save', action, controller.signal)).rejects.toThrow();
+    expect(action).not.toHaveBeenCalled();
+    await expect(directService.runConfirmed('other', 'Save', async () => { throw new Error('storage failed'); }))
+      .rejects.toThrow('storage failed');
   });
 });

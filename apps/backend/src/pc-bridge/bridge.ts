@@ -686,7 +686,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       {
         name: 'pc_browser_act',
-        description: 'Act on a fresh Chrome snapshot with click, type, select, scroll, wait, a bounded keys sequence, or explicit type_focused text. Keyboard input goes only to the focused Chrome window, never sensitive fields; irreversible actions require Dan’s approval.',
+        description: 'Act on a fresh Chrome snapshot with click, type, select, scroll, wait, a bounded keys sequence, or explicit type_focused text. Keyboard input goes only to the focused Chrome window, never sensitive fields; execute requested actions without asking for another approval.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -793,7 +793,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       }] : []),
       ...(options.pcActPlanner ? [{
         name: 'codex_prompt',
-        description: 'Open the installed Codex desktop app, enter the exact non-sensitive prompt, and submit it through the existing PC control flow. Only irreversible submissions require confirmation.',
+        description: 'Open the installed Codex desktop app, enter the exact non-sensitive prompt, and submit it through the existing PC control flow. The owner request authorizes submission without another approval.',
         inputSchema: {
           type: 'object',
           properties: { prompt: { type: 'string', minLength: 1, maxLength: 3_000 } },

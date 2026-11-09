@@ -2,6 +2,16 @@
 
 PR #1689 is secondary-owned implementation/qualification of configurable Home briefs and canonical merged daily activity. No live changes. Home instruction scope must never become general chat instructions. All-day activity must never fall back to workout sums or basal energy. Missing quantities are unknown, not zero. Primary owns integration/deployment and installed-device acceptance.
 
+## Current owner-action execution policy — 9 November 2026
+
+The owner has authorized removal of repeated app approvals and release of these
+fixes. Do not infer a new approval requirement from historical sections below.
+Keep authenticated owner/resource checks and write integrity. Clear owner requests
+execute in text/browser voice without another confirmation or Present-mode gate;
+telephone identity verification remains separate. Qualify backend and hosted-agent
+changes together before reporting live completion. No new native build is required
+for this backend/tool-instruction correction.
+
 ## Push-to-chat branch qualification — 9 November 2026
 
 `feature/push-chat-continuity` changes notification navigation/context and adds

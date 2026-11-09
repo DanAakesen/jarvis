@@ -7,7 +7,7 @@ import { internalSavedInput, internalSavedInputSchema, savedChangeSchema, savedR
 import { foodRecordRevision } from '../nutrition/review.js';
 import { resolveHealthOwner } from '../owner.js';
 import { favoriteFingerprint, projectHealthRecord, projectNutritionRecord } from '../records.js';
-import { activeFoodSession, foodMessageIdentity, foodSourceMessage, requireFoodReviewPresence } from './food.js';
+import { activeFoodSession, foodMessageIdentity, foodSourceMessage } from './food.js';
 
 export type InternalSavedNutrition = (request: FastifyRequest) => Pick<NutritionStore,
   'lookupSaved' | 'preferences' | 'intake' | 'findFavorite' | 'favorite' | 'favoriteRecords' |
@@ -40,7 +40,7 @@ export function healthSavedFoodTool(nutrition: InternalSavedNutrition, now: () =
   const pending = new Set<string>();
   return {
     name: 'health_saved_food',
-    description: 'Read owned saved food by exact name/alias (lookup_saved) or canonical favourite preferences (read_preferences). Save favourite/aliases from an owned intake or a proposed definition; save a plan from owned favourites; soft-delete a plan; set like/dislike/null feedback on an exact favourite. Reads need no review; every mutation needs the exact browser Now approval within two minutes. Read current revisions first (0 means new); plans require one breakfast, lunch and dinner. Never supply operation IDs, owners, confidence, provenance or confirmation flags. Writes require a current verified present chat/browser-voice source; no phone or Teams. Definitions/plans/preferences never log intake or export Health. Keep the same source and revision on retry.',
+    description: 'Read owned saved food by exact name/alias (lookup_saved) or canonical favourite preferences (read_preferences). Save favourite/aliases from an owned intake or a proposed definition; save a plan from owned favourites; soft-delete a plan; set like/dislike/null feedback on an exact favourite. Reads need no review; requested mutations execute without another approval. Read current revisions first (0 means new); plans require one breakfast, lunch and dinner. Never supply operation IDs, owners, confidence, provenance or confirmation flags. Writes require a current verified chat/browser-voice source; no phone or Teams. Definitions/plans/preferences never log intake or export Health. Keep the same source and revision on retry.',
     inputSchema: internalSavedInputSchema,
     execution: {
       defaultEffect: 'unclassified',
@@ -84,7 +84,6 @@ export function healthSavedFoodTool(nutrition: InternalSavedNutrition, now: () =
       }
       const source = structuredClone(await foodSourceMessage(request, signal));
       await activeFoodSession(request, source, signal, now());
-      await requireFoodReviewPresence(request, signal);
       const identity = foodMessageIdentity(owner, source);
       const operationId = createHash('sha256').update(`${identity.id}:${input.operation}:health-saved`).digest('hex');
       const changeResult = savedChangeSchema.safeParse({ change: {
@@ -192,13 +191,12 @@ export function healthSavedFoodTool(nutrition: InternalSavedNutrition, now: () =
       }, null, 2)}`;
       if (summary.length > 4000) throw new ToolRefusal('This saved-food proposal is too large to review safely. Use a smaller change.');
       const service = request.server.ownerInteractions;
-      if (!service) throw new ToolRefusal('Now approval is unavailable. No saved food was changed.');
+      if (!service) throw new ToolRefusal('Action execution is unavailable. No saved food was changed.');
       const lock = `${owner.toLowerCase()}:${target}`;
       if (pending.has(lock) || pending.size >= 10) throw new ToolRefusal('This saved-food target is already pending, or the review queue is full. Resolve the existing reviews first.');
       pending.add(lock);
       try {
         return await service.runConfirmed(change.operation === 'delete_plan' ? 'delete' : 'other', summary, async () => {
-          await requireFoodReviewPresence(request, operationSignal);
           await activeFoodSession(request, source, operationSignal, now());
           operationSignal.throwIfAborted();
           let row: Row;

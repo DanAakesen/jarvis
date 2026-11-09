@@ -810,7 +810,7 @@ describe('conversation routes', () => {
     }));
   });
 
-  it('resolves a natural food reply without aborting or replaying the active model/tool round', async () => {
+  it('executes a requested food action without an approval turn or replay', async () => {
     const service = createOwnerInteractionService({ ownerObjectId: config.auth.ownerObjectId,
       conversationStore: { getDanMessagesAfter: vi.fn(async () => [{ id: '43', text: 'yes, log that', language: 'en' }]) }, store: {
       createConfirmation: vi.fn(async () => {}),
@@ -820,112 +820,81 @@ describe('conversation routes', () => {
       expireConfirmation: vi.fn(async () => false),
       expirePendingConfirmations: vi.fn(async () => {}),
     } });
-    const approval = { id: '43', text: 'yes, log that', language: 'en' as const };
-    const store = storeFixture({
-      addMessage: vi.fn(async input => ({ ...message, at: new Date(),
-        id: input.role === 'dan' && input.text === approval.text ? '43' : '42', role: input.role, text: input.text })),
-      getDanMessagesAfter: vi.fn(async ({ after }) => BigInt(after) < 43n ? [approval] : []),
-    });
+    const store = storeFixture();
     const action = vi.fn(async () => 'Logged.');
-    const appRef: { current?: ReturnType<typeof buildApp> } = {};
     const chatAgent = { stream: vi.fn(async function* (_input, _auth, signal: AbortSignal) {
       const pending = service.runConfirmed('other', 'Log synthetic portion: 200 kcal.', action, signal,
         { channel: 'browser', lifetimeSeconds: 120, foodEstimate: { sessionId: '41', sourceMessageId: '42' } });
-      await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
-      const response = await appRef.current!.inject({
-        method: 'POST', url: '/conversation/sessions/41/steer', headers,
-        payload: { text: approval.text, language: 'en' },
-      });
-      expect(response.statusCode).toBe(202);
       expect(signal.aborted).toBe(false);
       yield await pending;
     }) };
     const app = createApp(store, { ownerInteractions: service, conversationAgent: chatAgent });
-    appRef.current = app;
     const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
-      payload: { text: 'Review synthetic portion.' } });
+      payload: { text: 'Log synthetic portion.' } });
     expect(response.body).toContain('event: done');
     expect(response.body).toContain('Logged.');
     expect(response.body).not.toContain('event: interrupted');
     expect(chatAgent.stream).toHaveBeenCalledOnce();
     expect(action).toHaveBeenCalledOnce();
+    expect(service.pendingBrowserConfirmations()).toEqual([]);
   });
 
-  it.each(['approve', 'cancel', 'expire', 'disconnect_after_commit'] as const)('recovers a disconnected exact food proposal: %s', async decision => {
+  it.each(['complete', 'cancel', 'disconnect_after_commit'] as const)('recovers a disconnected direct owner action: %s', async decision => {
     const service = createOwnerInteractionService({ ownerObjectId: config.auth.ownerObjectId,
-      onConfirmationPending: (confirmation, foodEstimate) => {
-        if (foodEstimate) app.nowEventHub.publish({ type: 'food_estimate_pending', ...foodEstimate, confirmation });
-      },
-      onConfirmationsChanged: () => app.nowEventHub.publish({ type: 'refresh' }),
       store: {
         createConfirmation: vi.fn(async () => {}), resolveConfirmation: vi.fn(async () => 'approved'),
         consumeApproval: vi.fn(async () => true), cancelConfirmation: vi.fn(async () => {}),
         expireConfirmation: vi.fn(async () => true), expirePendingConfirmations: vi.fn(async () => {}),
       } });
     const committed = Promise.withResolvers<void>();
-    const deliver = Promise.withResolvers<void>();
-    const approved = decision === 'approve' || decision === 'disconnect_after_commit';
+    const proceed = Promise.withResolvers<void>();
     const action = vi.fn(async () => { committed.resolve(); return 'Synthetic meal saved once.'; });
     const store = storeFixture({ addMessage: vi.fn(async input => ({ ...message, ...input,
       id: input.role === 'dan' ? '42' : '44' })) });
     let agentSignal!: AbortSignal;
     const agent = { stream: vi.fn(async function* (_input, _auth, signal: AbortSignal) {
       agentSignal = signal;
-      const result = await service.runConfirmed('other', 'Synthetic portion: 200 kcal.', action, signal,
-        { channel: 'browser', lifetimeSeconds: 120, foodEstimate: { sessionId: '41', sourceMessageId: '42' } });
-      if (decision === 'disconnect_after_commit') await deliver.promise;
+      yield 'Working.';
+      if (decision !== 'disconnect_after_commit') await proceed.promise;
+      const result = await service.runConfirmed('other', 'Log synthetic portion.', action, signal);
+      if (decision === 'disconnect_after_commit') await proceed.promise;
       yield result;
     }) };
     const app = createApp(store, { conversationAgent: agent, ownerInteractions: service });
-    // Fetch may retain pooled sockets after abort/replay on Node 22. Dispose this
-    // fixture's transports only during teardown, after all recovery assertions.
     app.addHook('preClose', async () => { app.server.closeAllConnections(); });
     const address = await app.listen({ port: 0, host: '127.0.0.1' });
     const transport = new AbortController();
     const response = await fetch(`${address}/conversation/sessions/41/turns`, {
       method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
-      body: JSON.stringify({ text: 'Estimate synthetic meal' }), signal: transport.signal,
+      body: JSON.stringify({ text: 'Log synthetic meal' }), signal: transport.signal,
     });
     const reader = response.body!.getReader();
     let wire = '';
-    while (!wire.includes('food_invitation')) wire += new TextDecoder().decode((await reader.read()).value);
-    const invitation = service.pendingBrowserConfirmations()[0]!;
+    while (!wire.includes('Working.')) {
+      const chunk = await reader.read();
+      expect(chunk.done).toBe(false);
+      wire += new TextDecoder().decode(chunk.value);
+    }
+    expect(wire).not.toContain('food_invitation');
     for (const suffix of ['events', 'cancel']) {
       const wrongSession = await app.inject({ method: suffix === 'events' ? 'GET' : 'POST',
         url: `/conversation/sessions/99/turns/42/${suffix}`, headers });
       expect(wrongSession.statusCode).toBe(404);
     }
-    expect(agentSignal.aborted).toBe(false);
-    expect(action).not.toHaveBeenCalled();
-    if (decision === 'disconnect_after_commit') {
-      await service.resolveBrowserConfirmation(invitation.id, 'approve');
-      await committed.promise; // Side effect committed, final response deliberately not emitted yet.
-      expect(action).toHaveBeenCalledOnce();
-    }
+    if (decision === 'disconnect_after_commit') await committed.promise;
     transport.abort();
     await reader.cancel().catch(() => {});
     expect(agentSignal.aborted).toBe(false);
-    expect(invitation.summary).toBe('Synthetic portion: 200 kcal.');
     const replay = fetch(`${address}/conversation/sessions/41/turns/42/events`, { headers });
-    if (decision === 'approve') await service.resolveBrowserConfirmation(invitation.id, 'approve');
-    else if (decision === 'cancel') await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns/42/cancel', headers });
-    else if (decision === 'disconnect_after_commit') deliver.resolve();
-    else {
-      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 121_000);
-      await service.expirePendingConfirmations();
-      expect(await service.resolveBrowserConfirmation(invitation.id, 'approve')).toBe(false);
-      vi.restoreAllMocks();
-    }
+    if (decision === 'cancel') await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns/42/cancel', headers });
+    proceed.resolve();
     const recovered = await (await replay).text();
-    expect(recovered).toContain(approved ? 'event: done' : 'event: error');
-    expect(action).toHaveBeenCalledTimes(approved ? 1 : 0);
-    // A second attachment after the write/response cannot execute the meal again.
+    expect(recovered).toContain(decision === 'cancel' ? 'event: error' : 'event: done');
+    expect(action).toHaveBeenCalledTimes(decision === 'cancel' ? 0 : 1);
     const again = await app.inject({ method: 'GET', url: '/conversation/sessions/41/turns/42/events', headers });
     expect(again.body).toBe(recovered);
     expect(agent.stream).toHaveBeenCalledOnce();
-    expect(agent.stream).toHaveBeenCalledWith(expect.objectContaining({ messageId: '42', turnId: '42' }),
-      headers.authorization, expect.any(AbortSignal));
-    expect(service.pendingBrowserConfirmations()).toHaveLength(0);
+    expect(service.pendingBrowserConfirmations()).toEqual([]);
   });
 
   it('does not let an older approval interrupt the response to a newer cancellation', async () => {

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import sql from 'mssql';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations, readDownMigration, revertMigration } from './migrations.js';
@@ -13,7 +13,6 @@ import { healthSavedFoodTool } from '../health/tools/saved-food.js';
 import { createOwnerInteractionService } from '../core/owner-interactions.js';
 import { createConfirmationStore } from './confirmation-store.js';
 import { createConversationStore } from './conversation-store.js';
-import { approvalDeciderFor } from '../core/approval-interpreter.js';
 
 const config = loadDatabaseConfig();
 if (!config || process.env.NODE_ENV !== 'test' || config.server !== '127.0.0.1') throw new Error('Nutrition tests require isolated loopback SQL Server');
@@ -388,11 +387,11 @@ describe('inactive nutrition services on real SQL Server', () => {
     }
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
   });
-  it.each(['browser', 'natural'] as const)('requires actual one-time browser approvals for internal estimate/correction/deletion on real SQL (%s estimate reply)', async replyMode => {
+  it.each(['chat', 'voice'] as const)('executes requested estimate/correction/deletion directly once on real SQL (%s)', async channel => {
     const conversations = createConversationStore(pool);
-    const session = await conversations.createSession({ channel: 'voice', language: 'en' });
+    const session = await conversations.createSession({ channel, language: 'en' });
     const source = (await conversations.addMessage({ sessionId: session.id, role: 'dan',
-      text: 'I ate a synthetic portion; review the estimate.', model: null }))!;
+      text: 'Log a synthetic portion as an estimate.', model: null }))!;
     const at = source.at;
     const controller = new AbortController();
     const notifications: string[] = [];
@@ -406,30 +405,16 @@ describe('inactive nutrition services on real SQL Server', () => {
       publish: change => { notifications.push(...change.sources); },
     }), () => at.getTime());
     let active: Promise<unknown> | undefined;
-    const review = async (input: unknown, decision: 'approve' | 'reject' = 'approve', naturalReply = false) => {
+    const review = async (input: unknown) => {
       active = tool.execute(input, req, controller.signal);
-      const outcome = active.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
-      await vi.waitFor(() => expect(confirmations.pendingBrowserConfirmations()).toHaveLength(1), { timeout: 10000 });
-      const confirmation = confirmations.pendingBrowserConfirmations()[0]!;
-      const remaining = Date.parse(confirmation.expiresAt) - Date.now();
-      expect(remaining).toBeGreaterThan(0);
-      expect(remaining).toBeLessThanOrEqual(120_000);
-      expect(confirmation.summary).toContain('Nothing has changed');
-      if (naturalReply) {
-        const reply = (await conversations.addMessage({ sessionId: session.id, role: 'dan',
-          text: 'yes, log that', model: null }))!;
-        expect(await confirmations.resolveFoodEstimateReply!(reply, approvalDeciderFor(req), controller.signal)).toBe(true);
-        expect(await confirmations.resolveFoodEstimateReply!(reply, approvalDeciderFor(req), controller.signal)).toBe(false);
-      } else expect(await confirmations.resolveBrowserConfirmation(confirmation.id, decision)).toBe(true);
-      const result = await outcome;
-      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, 'approve')).toBe(false);
-      if (!result.ok) throw result.error;
-      return result.value;
+      const result = await active;
+      expect(confirmations.pendingBrowserConfirmations()).toEqual([]);
+      return result;
     };
     try {
       const input = { change: { operation: 'log_estimate', food: { mealName: 'Synthetic reviewed portion', energyKcal: 200 } } };
-      const logged = await review(input, 'approve', replyMode === 'natural') as { record: { idempotency_key: string } };
-      expect(logged).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null, confidence: 'estimate', capture_method: 'voice', revision: '1' } });
+      const logged = await review(input) as { record: { idempotency_key: string } };
+      expect(logged).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null, confidence: 'estimate', capture_method: channel === 'voice' ? 'voice' : 'text', revision: '1' } });
       expect(await tool.execute(input, req, controller.signal)).toEqual(logged);
       expect(notifications).toEqual(['daily.nutrition.meals']);
       const key = logged.record.idempotency_key;
@@ -444,11 +429,6 @@ describe('inactive nutrition services on real SQL Server', () => {
       req.jarvisConversationMessage = (await conversations.addMessage({ sessionId: session.id, role: 'dan',
         text: 'Delete this synthetic portion.', model: null }))!;
       const deletion = { change: { operation: 'delete', idempotencyKey: key, expectedRevision: '2' } };
-      await expect(review(deletion, 'reject')).rejects.toThrow('rejected');
-      expect(await store().intake(key, signal())).toMatchObject({ deleted_at: null, revision: '2' });
-      expect(notifications).toHaveLength(2);
-      req.jarvisConversationMessage = (await conversations.addMessage({ sessionId: session.id, role: 'dan',
-        text: 'Now approve deletion of this synthetic portion.', model: null }))!;
       expect(await review(deletion)).toMatchObject({ status: 'committed', record: { energy_kcal: 222, revision: '3', deleted_at: expect.any(String) } });
       expect(await tool.execute(deletion, req, controller.signal)).toMatchObject({ status: 'already-deleted', record: { revision: '3' } });
       expect(notifications).toHaveLength(3);
@@ -459,14 +439,14 @@ describe('inactive nutrition services on real SQL Server', () => {
       if (active) await Promise.allSettled([active]);
     }
   });
-  it('commits internal saved-food reviews once through real native approval, refreshes preferences and never logs intake', async () => {
+  it('executes requested saved-food changes once on real SQL, refreshes preferences and never logs intake', async () => {
     const at = new Date(now()); const sessionId = randomUUID(); const controller = new AbortController();
     const notifications: string[] = [];
     const mealsBefore = (await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count;
     const confirmations = createOwnerInteractionService({
       ownerObjectId: owner, store: createConfirmationStore(pool), onWebNotification: async () => {},
     });
-    const source = { id: '224001', sessionId, role: 'dan' as const, text: 'Review this synthetic saved-food change.', model: null, at };
+    const source = { id: '224001', sessionId, role: 'dan' as const, text: 'Save this synthetic food.', model: null, at };
     const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
       server: { ownerObjectId: owner, ownerInteractions: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
         conversationStore: { getSession: async () => ({ id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null }) } } } as unknown as FastifyRequest;
@@ -474,20 +454,11 @@ describe('inactive nutrition services on real SQL Server', () => {
       publish: change => { notifications.push(...change.sources); },
     }), () => at.getTime());
     let active: Promise<unknown> | undefined;
-    const review = async (input: unknown, decision: 'approve' | 'reject' = 'approve') => {
+    const review = async (input: unknown) => {
       active = tool.execute(input, req, controller.signal);
-      const outcome = active.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
-      await vi.waitFor(() => expect(confirmations.pendingBrowserConfirmations()).toHaveLength(1), { timeout: 10000 });
-      const confirmation = confirmations.pendingBrowserConfirmations()[0]!;
-      expect(confirmation.summary).toContain('Nothing has changed');
-      expect(confirmation.summary.length).toBeLessThanOrEqual(4000);
-      expect(Date.parse(confirmation.expiresAt) - Date.now()).toBeGreaterThan(0);
-      expect(Date.parse(confirmation.expiresAt) - Date.now()).toBeLessThanOrEqual(120000);
-      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, decision)).toBe(true);
-      const result = await outcome;
-      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, 'approve')).toBe(false);
-      if (!result.ok) throw result.error;
-      return result.value;
+      const result = await active;
+      expect(confirmations.pendingBrowserConfirmations()).toEqual([]);
+      return result;
     };
     try {
       const favoriteInput = { operation: 'save_favorite', name: 'Internal native saved favourite', aliases: ['Internal native alias'],
@@ -519,7 +490,6 @@ describe('inactive nutrition services on real SQL Server', () => {
       expect(notifications).toEqual(['daily.nutrition.favorites', 'daily.nutrition.plans', 'daily.nutrition.favorites', 'daily.nutrition.favorites']);
       req.jarvisConversationMessage = { ...source, id: '224005' };
       const deletion = { operation: 'delete_plan', id: savedPlan.record.id, expectedRevision: '1' };
-      await expect(review(deletion, 'reject')).rejects.toThrow('rejected');
       expect((await store().planRecord(savedPlan.record.id, signal()))?.deleted_at).toBeNull();
       expect(await review(deletion)).toMatchObject({ status: 'committed', record: { revision: '2', deleted_at: expect.any(String) } });
       expect(await tool.execute(deletion, req, controller.signal)).toMatchObject({ status: 'already-deleted' });

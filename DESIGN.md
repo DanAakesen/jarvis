@@ -2,6 +2,14 @@
 
 Preserve the accepted Home layout, typography, shared glass surfaces and transparent chrome. The brief uses its configured visible-line limit at every Dynamic Type size; its full text remains available to accessibility. Settings → General → Jarvis → Instructions keeps identity, general/personality, presence modes and Home instructions in distinct saved scopes. Unknown activity is an em dash, partial coverage is identified, and stale retained readings are labeled.
 
+## Owner actions without approval interruptions — 9 November 2026
+
+Requested actions return progress and a truthful completion or failure receipt.
+They do not introduce a Now approval card, spoken approval invitation, required
+screen interaction or second confirmation turn. Apply this in signed-in text and
+browser voice, including Away mode. Existing telephone identity verification is
+separate. No new screen or layout is introduced.
+
 ## Direct owner action feedback — 9 November 2026
 
 A clear reminder request should produce a concise saved result, without a

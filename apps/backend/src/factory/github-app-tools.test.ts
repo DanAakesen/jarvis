@@ -342,7 +342,7 @@ describe('GitHub App capability tools', () => {
     });
   });
 
-  it('does not close an issue without a later approving reply from a verified Dan message', async () => {
+  it('does not close an issue without a verified owner message', async () => {
     const fetchImpl = vi.fn<typeof fetch>();
     const { app } = fixture(fetchImpl, { issues: 'write' });
     const response = await callTool(app, 'issue_update', { number: 700, state: 'closed' });
@@ -351,36 +351,31 @@ describe('GitHub App capability tools', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('asks for approval in natural words before merging and never calls the merge endpoint', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async (request) => {
+  it('merges the requested verified head directly and deduplicates tool repeats', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (request, init) => {
       const url = new URL(String(request));
+      if (init?.method === 'PUT') return Response.json({ merged: true, sha: 'b'.repeat(40) });
       if (url.pathname.endsWith('/pulls/700')) return Response.json({ head: { sha: 'a'.repeat(40) } });
       if (url.pathname.endsWith('/check-runs')) return Response.json({ total_count: 0, check_runs: [] });
       return Response.json({ state: 'success' });
     });
     const { app } = fixture(fetchImpl, { pull_requests: 'write', checks: 'read', statuses: 'read' }, true);
-    const response = await callTool(app, 'pr_merge', { number: 700, expectedHeadSha: 'a'.repeat(40) });
-
-    expect(response.json()).toMatchObject({
-      outcome: 'refused', result: { refused: expect.stringContaining('in your own words') },
-    });
-    expect(JSON.stringify(response.json())).not.toMatch(/yes, approved|go ahead/iu);
-    expect(fetchImpl.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
+    const input = { number: 700, expectedHeadSha: 'a'.repeat(40) };
+    expect((await callTool(app, 'pr_merge', input)).json()).toMatchObject({ outcome: 'ok', result: { status: 'merged' } });
+    expect((await callTool(app, 'pr_merge', input)).json()).toMatchObject({ outcome: 'ok', result: { status: 'merged' } });
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
   });
 
-  it('asks for approval in natural words before writing a file to the default branch or a public repository', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ default_branch: 'main', private: false }));
+  it('writes the requested default-branch file directly without an approval round trip', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (_request, init) => Response.json(init?.method === 'PUT'
+      ? { commit: { sha: 'b'.repeat(40) }, content: { path: 'notes.txt' } }
+      : { default_branch: 'main', private: false }));
     const { app } = fixture(fetchImpl, { contents: 'write' }, true);
     const response = await callTool(app, 'file_write', {
       path: 'notes.txt', branch: 'main', content: 'hello', message: 'Update notes',
     });
-
-    expect(response.json()).toMatchObject({
-      outcome: 'refused',
-      result: { refused: expect.stringMatching(/in your own words.*public repository/u) },
-    });
-    expect(JSON.stringify(response.json())).not.toMatch(/yes, approved|go ahead/iu);
-    expect(fetchImpl.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
+    expect(response.json().outcome).toBe('ok');
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
   });
 
   it('paginates within bounds and truncates untrusted comment bodies', async () => {

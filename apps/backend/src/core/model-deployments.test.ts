@@ -245,7 +245,7 @@ describe('Foundry model deployment manager', () => {
       payload: { model: 'gpt-5.6-luna', version: '2026-12-03', sku: 'GlobalStandard', capacity: 20 },
     });
     expect(route.statusCode).toBe(202);
-    expect(route.json()).toEqual({ status: 'approval_pending', name: 'gpt-5.6-luna-2026-12-03' });
+    expect(route.json()).toEqual({ status: 'running', name: 'gpt-5.6-luna-2026-12-03' });
 
     const deletion = await app.inject({
       method: 'DELETE',
@@ -253,7 +253,7 @@ describe('Foundry model deployment manager', () => {
       headers,
     });
     expect(deletion.statusCode).toBe(202);
-    expect(deletion.json()).toEqual({ status: 'approval_pending', name: 'custom-unused' });
+    expect(deletion.json()).toEqual({ status: 'running', name: 'custom-unused' });
 
     const denied = buildApp(config, undefined, {
       modules: [coreModule],

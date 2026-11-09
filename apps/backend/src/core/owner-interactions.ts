@@ -315,6 +315,11 @@ export function createOwnerInteractionService({
     },
     async runConfirmed(actionKind, summary, action, signal, delivery) {
       if (typeof action !== 'function') throw new ToolRefusal('A confirmed action is required.');
+      signal?.throwIfAborted();
+      // The signed-in owner's request already authorizes this action. Callers
+      // retain resource/input checks and the action's stale-write safeguards.
+      // Telephone callers have a separate identity boundary.
+      if (phoneSessionContext.getStore() === undefined) return action();
       const confirmation = await requestConfirmation(actionKind, summary, signal, delivery);
       return confirmation.execute(action, signal);
     },

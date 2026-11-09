@@ -2105,7 +2105,7 @@ describe('GitHub vault', () => {
     expect(indexStore.entry(path)).toBeDefined();
   });
 
-  it('refuses invalid paths and unavailable Now approval before reading a note', async () => {
+  it('refuses invalid paths and unavailable execution before reading a note', async () => {
     const { github, module } = moduleFor();
     const toolRequest = {
       ...request,
@@ -2115,7 +2115,7 @@ describe('GitHub vault', () => {
     await expect(tool(module, 'vault_delete').execute({ path: '../General/note.md' }, toolRequest, signal()))
       .rejects.toThrow('Markdown path');
     await expect(tool(module, 'vault_delete').execute({ path: 'General/note.md' }, toolRequest, signal()))
-      .rejects.toThrow('Now approval service is unavailable');
+      .rejects.toThrow('Action execution is unavailable');
     expect(github.calls).toHaveLength(0);
   });
 
@@ -2306,7 +2306,7 @@ describe('GitHub vault', () => {
     expect(response.body).not.toContain('never-return-this-value');
   });
 
-  it('commits vault corrections and holds vault deletion behind browser approval', async () => {
+  it('commits vault corrections and deletes directly from the authenticated owner request', async () => {
     const { store } = apiMemoryStore();
     const { github, module } = moduleFor({
       apiMemoryStore: store,
@@ -2320,15 +2320,7 @@ describe('GitHub vault', () => {
     });
     const path = 'People/Alex.md';
     const id = `vault_${Buffer.from(path, 'utf8').toString('base64url')}`;
-    let approve: (() => Promise<unknown>) | undefined;
-    const runConfirmed = vi.fn((_kind: unknown, _summary: unknown, action: () => Promise<unknown>) =>
-      new Promise<unknown>((resolve, reject) => {
-        approve = async () => {
-          try { resolve(await action()); } catch (error) { reject(error); }
-        };
-      }));
-    const notifications = { runConfirmed } as unknown as OwnerInteractionService;
-    const app = memoryApiApp(module, { ownerInteractions: notifications });
+    const app = memoryApiApp(module);
 
     const correction = await app.inject({
       method: 'PATCH', url: `/memory/${id}`, headers: apiAuthorization,
@@ -2342,15 +2334,7 @@ describe('GitHub vault', () => {
     });
 
     const deletion = await app.inject({ method: 'DELETE', url: `/memory/${id}`, headers: apiAuthorization });
-    expect(deletion.statusCode).toBe(202);
-    expect(deletion.json()).toEqual({ status: 'approval_pending', message: 'approval pending in Jarvis' });
-    expect(runConfirmed).toHaveBeenCalledWith('delete', expect.stringContaining(path), expect.any(Function), expect.any(AbortSignal));
-    expect(github.calls.some(({ method }) => method === 'DELETE')).toBe(false);
-    const repeated = await app.inject({ method: 'DELETE', url: `/memory/${id}`, headers: apiAuthorization });
-    expect(repeated.statusCode).toBe(202);
-    expect(runConfirmed).toHaveBeenCalledTimes(1);
-
-    await approve!();
+    expect(deletion.statusCode).toBe(204);
     expect(github.calls.some(({ method }) => method === 'DELETE')).toBe(true);
     expect(github.files.has(path)).toBe(false);
   });

@@ -2,6 +2,17 @@
 
 Home briefs are grounded in available calendar/tasks and optional nutrition/weather context, generated through the existing model infrastructure. The owner edits Home instructions and a 1–6 visible-line limit (default 3) in the canonical Instructions destination. All-day Active kcal uses merged HealthKit activeEnergyBurned; exercise minutes uses appleExerciseTime. Workout counts remain separate.
 
+## Owner action policy — current, 9 November 2026
+
+The signed-in owner's clear request authorizes the resolved action in chat and
+browser voice, including calendar/mail, Factory/GitHub, health, notes, settings
+and PC tools. Do not request another approval, a browser tap or prescribed words.
+Questions and previews do not authorize changes. Ask only for missing essential
+data. Personal and today in Copenhagen are reminder defaults. Actual provider
+permissions, authentication, secret protection, stale-write checks and duplicate
+protection remain. Telephone callers retain their separate identity boundary.
+This supersedes earlier action-approval and Present-mode requirements below.
+
 ## Owner instructions and reminder defaults — 9 November 2026
 
 The owner's request authorizes the requested action: do not require a second
