@@ -12,6 +12,7 @@ CHECKS = ("web", "backend", "vault-mirror", "database", "foundry", "runner", "ja
           "infra", "python", "ios")
 NODE_CHECKS = {"web", "backend", "vault-mirror", "database", "foundry"}
 CHECK_ONLY_WORKFLOWS = {
+    "native-push-readiness.yml",
     "backend-ci.yml", "ci.yml", "codeql.yml", "copilot-ready.yml", "copilot-setup-steps.yml",
     "database-ci.yml", "foundry-contract.yml", "jarvis-agent-ci.yml", "plan-status.yml",
     "pr-title.yml", "project-board.yml", "runner-ci.yml", "runner-deploy.yml", "web-ci.yml",
@@ -19,6 +20,7 @@ CHECK_ONLY_WORKFLOWS = {
     "ios-ci.yml", "ios-simulator.yml", "ios-testflight.yml", "watch-build.yml", "worker-quota.yml", "chat-diagnostics.yml", "factory-capacity.yml", "factory-sandboxes.yml", "factory-runtime.yml",
 }
 CHECK_ONLY_SCRIPTS = {
+    "native_push_readiness.py",
     "deploy_plan.py", "deploy_smoke.py", "smoke_reasons.py", "pipeline_impact.py",
     "pipeline_evidence.py", "release_state.py", "project_board.py", "plan_status.py",
     "worker_label.py", "ci_timing.py", "python-ci.sh", "normalize-pr-title.sh", "validate-pr-title.sh",

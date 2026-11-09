@@ -7921,3 +7921,13 @@ one fixed 800-core request only if needed, and verifies the actual regional usag
 limit. It never allocates workers, lowers a larger limit, guesses a missing quota
 name or automatically replays an uncertain PUT. Submission and approval are
 separate evidence fields. Live submission/approval remain pending.
+
+
+## Native APNs configuration inspection — 9 November 2026
+
+The main-only `Native push readiness` workflow reads the existing backend's
+notification switches and APNs configuration presence. It emits booleans and
+matching Key Vault secret names only, never key contents or device tokens.
+It makes no configuration changes and sends no notification. Use it to identify
+missing server wiring before claiming intelligent notifications are available
+on an installed iPhone; Apple Developer capability enablement alone is insufficient.

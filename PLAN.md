@@ -4533,3 +4533,13 @@ remain out of command arguments and logs; the containing directory stays private
 This also supports renewal without exposing a partially written live credential.
 The runner image is unchanged. Nine adapter tests and backend typechecking pass;
 live requalification is pending.
+
+
+## Native APNs configuration inspection — 9 November 2026
+
+The main-only `Native push readiness` workflow reads the existing backend's
+notification switches and APNs configuration presence. It emits booleans and
+matching Key Vault secret names only, never key contents or device tokens.
+It makes no configuration changes and sends no notification. Use it to identify
+missing server wiring before claiming intelligent notifications are available
+on an installed iPhone; Apple Developer capability enablement alone is insufficient.
