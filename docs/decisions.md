@@ -12335,3 +12335,16 @@ shared Home/Health semantics. The time definition and initial 1–6 line range
 (default 3) are implementation recommendations, not an already selected owner
 preference. See `docs/ios/design/home-brief-activity-handoff.md` for evidence.
 No Home implementation or live-device data verification is claimed.
+
+## Final managed Factory rollout — 9 November 2026
+
+Cleanup PR #1674 merged as 6601dbb8. Production deployment 42639280047 and
+runner deployment 42639280048 passed. Fresh-image qualification 42644583506
+passed five concurrent isolated workers, command delivery, restart routing,
+credential/storage probes, idle shutdown, persistent-disk resume, cleanup and
+activation on ready backend revision 0000568. Each worker had 146.9 GiB free.
+No temporary compatibility setting was shipped. VM retirement remains proven by
+42629384227; the active VM implementation/configuration is now removed too.
+Factory is ready for the owner's fresh coding-task acceptance, which is distinct
+from these zero-model-call canaries. Preserve the accepted 300-core quota and
+owner/project admission limits; no 100-worker test or extra quota is authorized.

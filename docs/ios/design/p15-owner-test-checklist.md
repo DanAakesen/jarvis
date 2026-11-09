@@ -22,10 +22,11 @@ Preserve the previously approved browsing/editor interactions; do not infer that
 every additional optional Notes check below was separately exercised.
 
 - [x] **Notes sidebar and phrase/Overview:** owner confirmed fixed after build 85.
-- [ ] **Home Today workout totals:** new report shows two workouts but zero active
-  time and kcal; longer periods and Health work. In build 86,
-  compare Today against the same workouts in Health, then switch 7d → Today and
-  refresh. Counts must not duplicate and recorded time/calories must remain.
+- [ ] **Home daily activity and brief:** the build-86 workout merge correction is
+  included, but the 9 November report exposes workout-only time/kcal definitions.
+  Secondary must implement all-day active energy, clearly defined exercise time,
+  shared Home/Health semantics and configurable Home instructions/line limits.
+  See [handoff](home-brief-activity-handoff.md). No new fix is available yet.
 
 - [ ] **Notes:** swipe the title-only pinned carousel, open a recent note, browse
   folders, and use New folder at the bottom right. Create/edit a disposable note,
@@ -98,11 +99,11 @@ every additional optional Notes check below was separately exercised.
   and arm64_32 fixes. Install after Apple processing, then check the four
   complications, phone connection, dictation/voice and background return.
 - **Copilot comparison — parked by owner on 9 November after both combined exercises completed.** The saved [comparison guide](../../runtime-comparison-owner-test.md) records independently verified note creation/revision for both. Current's post-repair rerun now delivers its final reply. Both report an initial save refusal; refusal/routing diagnosis and matched speed/cost evidence remain open. Current stays default; no repeat is needed just to prove this case.
-- **Factory end-to-end — hold until the full managed rollout finishes.** Five
-  concurrent managed sandbox lifecycle tests passed and the VM was retired in
-  42629384227. The final source cleanup still needs deployment and a fresh worker
-  image qualification. The owner will leave Factory unused until primary confirms
-  readiness. Existing test tasks need no migration/recovery; GitHub test issue
+- **Factory end-to-end — ready for a fresh owner coding-task test.** The VM was
+  retired in 42629384227. Source/config cleanup #1674 deployed successfully;
+  fresh-image qualification 42644583506 passed five overlapping workers, storage,
+  restart routing, idle stop, disk resume, cleanup and activation on revision
+  `0000568`. Existing test tasks need no migration/recovery; GitHub test issue
   #1634 is closed. A real coding task remains distinct from infrastructure canaries.
   The owner reported the app-wide limit was 3 and selected 37. Confirm it is saved;
   ask Jarvis to check the existing Jarvis project's separate parallel-task limit

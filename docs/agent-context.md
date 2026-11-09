@@ -5,10 +5,13 @@ passed readiness and live conversation acceptance, including startup migration
 0076. Owner-created APNs secrets were verified by metadata and activation
 42636282777 passed on ready backend revision `0000565`. Keep key values in Key
 Vault; use `docs/ios/apple-capabilities.md` rather than earlier key-ID instructions.
-Actual receipt/taps, Apple processing and physical Watch checks remain. See
+Read-only readiness 42646690853 reconfirmed production APNs and delivery flags
+on ready revision 0000568 after Factory activation. Actual receipt/taps, Apple
+processing and physical Watch checks remain. See
 `docs/ios/design/p15-build89-release.md` for focused device checks and the three
-known pre-existing Notes native-test failures. Factory testing stays on hold
-until its complete managed image rollout is ready; no temporary compatibility.
+known pre-existing Notes native-test failures. Factory's complete managed image
+rollout passed in 42644583506 and is ready for a fresh owner coding-task test;
+no temporary compatibility was added.
 
 ## Current managed Factory delivery — 9 November 2026
 
@@ -24,9 +27,13 @@ These canaries make no model calls: they establish worker transport and lifecycl
 not five concurrent real coding tasks. Owner Factory task acceptance remains.
 Run 42629384227 passed all five worker/lifecycle checks, cutover readiness and
 final VM retirement. Inventory confirmed no dedicated VM resources remain; the
-legacy mailbox and deployment record were removed. PR #1674 now removes the
-obsolete VM implementation and configuration. Its source cleanup still requires
-a fresh managed worker image and five-worker qualification after deployment.
+legacy mailbox and deployment record were removed. PR #1674 merged as
+`6601dbb8`; production deployment 42639280047 and runner deployment 42639280048
+passed. Fresh-image runtime 42644583506 passed all five worker checks, cleanup
+and activation on ready backend revision `0000568`. Each worker had 146.9 GiB
+free. Factory is ready for the owner's fresh end-to-end coding task; no model
+calls were made by the infrastructure canary. See
+`docs/factory-clean-runtime-evidence.json` (repository-root path).
 Shared backend and Foundry chat, voice, research/image and login routes remain.
 Earlier dated sections below record the investigation stages, not current status.
 

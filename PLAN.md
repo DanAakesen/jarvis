@@ -23,12 +23,15 @@ These canaries make no model calls: they establish worker transport and lifecycl
 not five concurrent real coding tasks. Owner Factory task acceptance remains.
 Run 42629384227 passed all five worker/lifecycle checks, cutover readiness and
 final VM retirement. Inventory confirmed no dedicated VM resources remain; the
-legacy mailbox and deployment record were removed. PR #1674 now removes the
-obsolete VM implementation and configuration. Its source cleanup still requires
-a fresh managed worker image and five-worker qualification after deployment.
-The owner will leave Factory unused until the full rollout is complete. No
-temporary compatibility flag is retained for the outgoing worker image; release
-the fresh image and pass five-worker qualification before requesting owner use.
+legacy mailbox and deployment record were removed. PR #1674 merged as
+`6601dbb8`; production deployment 42639280047 and runner deployment 42639280048
+passed. Fresh-image runtime 42644583506 passed all five worker checks, cleanup
+and activation on ready backend revision `0000568`. Each worker had 146.9 GiB
+free. Factory is ready for the owner's fresh end-to-end coding task; no model
+calls were made by the infrastructure canary. See
+`docs/factory-clean-runtime-evidence.json` (repository-root path).
+The owner waited for the complete rollout; no temporary compatibility flag was
+retained. The final fresh-image qualification is now passed.
 Shared backend and Foundry chat, voice, research/image and login routes remain.
 Earlier dated sections below record the investigation stages, not current status.
 
@@ -227,13 +230,13 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
 | Legacy Factory test, issue 1634 / task 23 | Owner requested cleanup. GitHub issue #1634 closed as not planned on 9 November; execution label removed and board sync passed | No task recovery/migration. The separate SQL record and saved branch were not deleted by the GitHub closure |
-| Managed Factory workspace | New Factory work uses isolated Azure Container Apps Sandboxes. Five-worker runtime/lifecycle and cleanup checks passed in 42620552706 and 42625011714; each 160 GiB persistent root has about 147 GiB free after a build. Owner accepts 300 cores (up to 37 8-core workers) | VM retirement completed in 42629384227; source/config removal and a fresh managed worker image are being delivered. Real coding-task owner acceptance remains; infrastructure canaries make no model calls |
+| Managed Factory workspace | New Factory work uses isolated Azure Container Apps Sandboxes. Five-worker runtime/lifecycle and cleanup checks passed in 42620552706 and 42625011714; each 160 GiB persistent root has about 147 GiB free after a build. Owner accepts 300 cores (up to 37 8-core workers) | VM retirement completed in 42629384227; #1674 source/config cleanup deployed. Fresh-image five-worker qualification and activation passed in 42644583506 (ready revision 0000568). Ready for a fresh owner coding task; infrastructure canaries make no model calls |
 | Copilot harness | Implemented comparison path and canaries retained; migration parked by owner on 9 November | Keep custom harness as default; no further migration or default switch planned |
 | Current vs Copilot comparison | Both owner widget-plan exercises completed. Current CIRRENT-85 commits 26170110/a796d675 and Copilot commits 4cb08916/7030beb4 verify creation and revision of each same note. Both report first-save refusal followed by success | Both completed with friction; Copilot found the scaffold branch. Further harness comparison parked by owner. Shared refusal/routing diagnosis remains relevant to Current |
 | Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653; qualified and delivered in build 85 | Owner confirmed Notes fixed on 8 November. Preserve this and accepted header/footer transparency |
-| Home Today workout totals | #1654 merged as ef783da2; all 533 Core tests, CI, CodeQL and native compilation passed, including Today/7d/14d/30d and no duplicated measurements | Build 86 uploaded successfully in 42515467682; owner retest Today against Health once it appears in TestFlight |
+| Home Today workout totals | #1654 merged as ef783da2; all 533 Core tests, CI, CodeQL and native compilation passed, including Today/7d/14d/30d and no duplicated measurements | Build 86 workout-merge fix uploaded. New 9 November report requires all-day active energy/exercise time instead of workout-only totals; secondary handoff prepared, implementation pending |
 | Apple Watch | Companion and four complications merged; App Group and arm64_32 fixes qualified. Signed iPhone/Watch build 89 uploaded successfully in 42635187842 | Apple processing, installation, physical voice/background/complication checks |
-| Intelligent notifications | #1669 merged as f1cc32f9; CI/CodeQL and three new native notification interactions passed. Deploy 42635181674 passed readiness/live acceptance; startup migration 0076 applied. Owner replacement key stored; APNs activation 42636282777 passed on ready revision 0000565 | Install build 89 and verify actual phone receipt, finding taps and Watch mirroring. Three existing Notes tests still fail the broader native suite |
+| Intelligent notifications | #1669 merged as f1cc32f9; CI/CodeQL and three new native notification interactions passed. Deploy 42635181674 passed readiness/live acceptance; startup migration 0076 applied. Owner replacement key stored; APNs activation 42636282777 passed and read-only readiness 42646690853 reconfirmed all production delivery flags on ready revision 0000568 | Install build 89 and verify actual phone receipt, finding taps and Watch mirroring. Three existing Notes tests still fail the broader native suite |
 | CarPlay | Owner submitted entitlement request to Apple; reply pending (8 November) | Apple decision; entitlement activation and device verification remain pending |
 | Consecutive tool activity | #1656 merged; consecutive tools grouped in ordinary and isolated test chat, retaining real counts and refused/failed outcomes. Three focused native interactions passed | Included in uploaded build 89; owner checks on both surfaces remain |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |

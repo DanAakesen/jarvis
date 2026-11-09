@@ -76,3 +76,7 @@ intelligent-notification release, including startup migration 0076.
 Actual APNs acceptance, phone receipt and notification-tap routing still require
 an installed-device check. Watch notification mirroring is also a device check;
 this does not establish Watch background HealthKit upload or workout recording.
+
+Read-only readiness 42646690853 confirmed production APNs and all delivery flags
+remain configured on ready revision `0000568` after the final Factory cutover.
+This configuration check did not send a push notification.

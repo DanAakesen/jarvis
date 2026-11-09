@@ -49,5 +49,16 @@ Remote provider acceptance and actual device receipt remain unverified.
    no useful finding is a valid result. When a finding notification arrives,
    tapping it should open that exact finding and its appropriate actions.
 
-Factory testing is separate: the owner is waiting until the full managed worker
-rollout is confirmed ready. Copilot comparison remains parked.
+Factory testing is separate and now ready: fresh-image run 42644583506 passed
+five-worker lifecycle, storage, cleanup and activation on ready revision 0000568.
+The canary made no model calls; start a fresh owner coding task for end-to-end
+acceptance. Copilot comparison remains parked.
+
+The 9 November Home report is a new metric-definition/configuration task, not
+included in build 89: daily active energy/exercise time and configurable brief
+instructions/line count are handed to secondary in
+[the implementation brief](home-brief-activity-handoff.md).
+
+Read-only readiness 42646690853 confirmed production APNs and all delivery flags
+remain configured on ready revision `0000568` after the final Factory cutover.
+This configuration check did not send a push notification.
