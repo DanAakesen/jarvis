@@ -1,7 +1,7 @@
 import Foundation
 
 public enum JarvisProactiveSourceID: String, CaseIterable, Codable, Sendable, Identifiable {
-    case todos, calendar, mail, weather, factory, news, travel, x
+    case todos, calendar, mail, weather, factory, news, travel, x, health, nutrition, notes, memory
 
     public var id: String { rawValue }
 
@@ -15,6 +15,10 @@ public enum JarvisProactiveSourceID: String, CaseIterable, Codable, Sendable, Id
         case .news: .proactiveSourceNews
         case .travel: .proactiveSourceTravel
         case .x: .proactiveSourceX
+        case .health: .proactiveSourceHealth
+        case .nutrition: .proactiveSourceNutrition
+        case .notes: .proactiveSourceNotes
+        case .memory: .proactiveSourceMemory
         }
     }
 }
@@ -588,6 +592,13 @@ public final class JarvisProactiveClient: Sendable {
             guard value.isValid else { throw JarvisInsightsError.invalidResponse }
             return value
         }
+    }
+
+    public func item(id: String) async throws -> JarvisProactiveItem {
+        guard UUID(uuidString: id) != nil else { throw JarvisInsightsError.invalidRequest }
+        let value: JarvisProactiveItem = try await get(["proactive", "items", id])
+        guard value.isValid, value.id.lowercased() == id.lowercased() else { throw JarvisInsightsError.invalidResponse }
+        return value
     }
 
     public func fetchItems(validator: String?) async throws -> JarvisFetchResult<[JarvisProactiveItem]> {

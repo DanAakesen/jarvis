@@ -15,7 +15,7 @@ function unavailable(now: Date, reason: string): SourceResult {
   return { source: 'todos', state: 'unavailable', reason, facts: [], observedAt: now.toISOString() };
 }
 
-export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
+export function createTodosSource(vaultClient?: VaultReader, includeOrdinary = false): ProactiveSource {
   return {
     id: 'todos',
     label: 'Todo list',
@@ -28,13 +28,14 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
       const sourceSignal = AbortSignal.any([signal, timeout.signal]);
       try {
         const todos = await readVaultTasks(vaultClient, sourceSignal);
-        const seen = new Map<string, { dueHasTime: boolean }>();
+        const seen = new Map<string, { dueHasTime: boolean; highPriority: boolean }>();
         const open = todos.flatMap((todo, index) => {
-          if (todo.done || !todo.highPriority) return [];
+          if (todo.done || !includeOrdinary && !todo.highPriority) return [];
           const key = JSON.stringify([normaliseFactText(todo.text), todo.dueAt, todo.remindAtDue === true]);
           const existing = seen.get(key);
           if (existing) {
             existing.dueHasTime ||= todo.dueHasTime;
+            existing.highPriority ||= todo.highPriority;
             return [];
           }
           const candidate = { ...todo };
@@ -50,7 +51,10 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
           .filter(({ dueTime }) => dueTime !== null && (dueTime < windowStart || dueTime > windowEnd))
           .sort((left, right) => left.dueTime! - right.dueTime!);
         const noDue = open.filter(({ dueTime }) => dueTime === null);
-        const selected = [...dueWindow, ...otherDue, ...noDue].slice(0, maxFacts);
+        const ordered = [...dueWindow, ...otherDue, ...noDue];
+        // Ordinary commitments must not displace the existing urgent-alert source.
+        const selected = [...ordered.filter(({ todo }) => todo.highPriority),
+          ...ordered.filter(({ todo }) => !todo.highPriority)].slice(0, maxFacts);
         return {
           source: 'todos',
           state: 'ok',
@@ -65,7 +69,7 @@ export function createTodosSource(vaultClient?: VaultReader): ProactiveSource {
               ? { taskScope: todo.path.startsWith('Personal/') ? 'personal' as const : 'work' as const }
               : {}),
             ...(/(?:^|\/)projects?(?:\/|$)/iu.test(todo.path) ? { projectRelated: true } : {}),
-            kind: 'todo',
+            kind: todo.highPriority ? 'todo' as const : 'commitment' as const,
             label: 'Todo list',
             text: todo.text,
             observedAt: now.toISOString(),

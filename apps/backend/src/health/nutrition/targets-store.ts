@@ -33,6 +33,10 @@ async function run(request: sql.Request, command: string, signal: AbortSignal) {
  * is read or written unless Health is composed. A cleared target is a deleted row, so "unset" is explicit.
  */
 export class NutritionTargetsStore {
+  static forOwner(pool: sql.ConnectionPool, owner: string): NutritionTargetsStore {
+    if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(owner)) throw new TypeError('Invalid Health owner');
+    return new NutritionTargetsStore(pool, owner.toLowerCase());
+  }
   private constructor(private readonly pool: sql.ConnectionPool, private readonly owner: string) {}
 
   static forRequest(pool: sql.ConnectionPool, request: FastifyRequest): NutritionTargetsStore {

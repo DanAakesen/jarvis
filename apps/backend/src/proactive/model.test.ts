@@ -88,20 +88,20 @@ describe('Foundry proactive model', () => {
     expect(modelCatalogue.read).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects empty findings with usage and refreshes settings on every call', async () => {
+  it('accepts silence with usage and refreshes settings on every call', async () => {
     const { model, fetcher, settingsStore } = setup();
     fetcher.mockImplementation(async () => Response.json(envelope({ findings: [] })));
-    expect(await model.summarize(input, signal())).toMatchObject({ findings: [], reason: 'invalid_model_output' });
+    expect(await model.summarize(input, signal())).toMatchObject({ findings: [], usage: { inputTokens: 300 } });
     settingsStore.read.mockResolvedValue({ 'roles.chat.model': JSON.stringify('gpt-6-luna') });
     expect(await model.summarize(input, signal())).toMatchObject({ usage: { model: 'gpt-6-luna' } });
     expect(settingsStore.read).toHaveBeenCalledTimes(2);
   });
 
-  it('marks an empty findings object invalid even when there are no facts', async () => {
+  it('accepts silence even when there are no facts', async () => {
     const { model, fetcher } = setup();
     fetcher.mockResolvedValue(Response.json(envelope({ findings: [] })));
     expect(await model.summarize({ ...input, facts: [] }, signal())).toEqual({
-      findings: [], reason: 'invalid_model_output',
+      findings: [],
       usage: { model: 'gpt-5.6-luna', inputTokens: 300, outputTokens: 100 },
     });
   });
@@ -372,10 +372,10 @@ describe('model finding validation', () => {
     expect(() => validateModelFindings({ findings: [{ ...finding, ...patch }] }, input.facts)).toThrow();
   });
 
-  it('rejects unknown envelope keys, excess findings and empty validated output', () => {
+  it('accepts explicit silence while rejecting malformed or entirely invalid findings', () => {
     expect(() => validateModelFindings({ findings: [], extra: true }, input.facts)).toThrow();
     expect(() => validateModelFindings({ findings: Array.from({ length: 11 }, () => finding) }, input.facts)).toThrow();
-    expect(() => validateModelFindings({ findings: [] }, input.facts)).toThrow();
+    expect(validateModelFindings({ findings: [] }, input.facts)).toEqual([]);
     expect(() => validateModelFindings({ findings: [{ ...finding, evidence: ['unknown'] }] }, input.facts)).toThrow();
   });
 

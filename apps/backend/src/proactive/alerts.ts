@@ -30,6 +30,7 @@ export interface ProactiveAlertHookOptions {
   store: Pick<ProactiveStore, 'settings' | 'items'>;
   pushStore: Pick<PushStore, 'listSubscriptions' | 'updateItemDelivery'>;
   ownerObjectId: string;
+  hasNativeRecipients?: () => Promise<boolean>;
   ledger: AlertLedgerStore;
   send: (request: SystemPushRequest, signal: AbortSignal) => Promise<SystemPushOutcome>;
   now: () => Date;
@@ -59,7 +60,7 @@ function safeLog(
 
 export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
   return async function onFindingsStored(context: FindingsStoredContext): Promise<void> {
-    if (context.trigger !== 'scheduled' && context.trigger !== 'catchup') return;
+    const automatic = context.trigger === 'scheduled' || context.trigger === 'catchup';
     let startedAt = 0;
     const duration = () => {
       try { return Math.max(0, options.now().getTime() - startedAt); } catch { return 0; }
@@ -102,8 +103,8 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
         return findingAllowed(settings, finding.category, finding.suggestionScope, finding.relatedCategories) &&
           proactiveEvidenceSourcesAllowed(settings, sources);
       }).flatMap((finding) => {
-        const alertClass = findingClass[finding.category];
-        return finding.urgency === 'time_critical' && alertClass
+        const alertClass = finding.modelGenerated && finding.urgency === 'normal' ? 'insight' : findingClass[finding.category];
+        return (automatic && finding.urgency === 'time_critical' || alertClass === 'insight') && alertClass
           ? [{
             itemId: finding.itemId,
             dedupeKey: finding.dedupeKey,
@@ -112,10 +113,10 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
             language: finding.language,
           }]
           : [];
-      }).sort(compareCandidates).slice(0, 99);
+      });
       if (candidates.length === 0) return;
       const subscriptions: StoredPushSubscription[] = await options.pushStore.listSubscriptions(options.ownerObjectId);
-      if (subscriptions.length === 0) {
+      if (subscriptions.length === 0 && !await options.hasNativeRecipients?.()) {
         log('no_subscription', candidates.length, [...new Set(candidates.map(({ alertClass }) => alertClass))].sort().join(','));
         return;
       }
@@ -164,10 +165,15 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
         ) && proactiveEvidenceSourcesAllowed(latestSettings, sources);
       });
       if (active.length === 0) return;
+      // Select only after receipts, item states and preferences are checked. An
+      // already-delivered first insight must not starve a later useful finding.
+      const critical = active.filter(({ candidate }) => candidate.alertClass !== 'insight')
+        .sort((left, right) => compareCandidates(left.candidate, right.candidate));
+      active = critical.length ? critical.slice(0, 99) : active.slice(0, 1);
       const details = await Promise.all(active.slice(0, 3).map(async ({ candidate }) => {
         try {
           const item = await options.store.items.get(candidate.itemId, false);
-          return item ? { itemId: candidate.itemId, title: item.title, dueAt: item.dueAt } : undefined;
+          return item ? { itemId: candidate.itemId, title: item.title, body: item.body, dueAt: item.dueAt } : undefined;
         } catch {
           return undefined;
         }
@@ -189,14 +195,14 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
       if (active.length === 0) return;
       const mostUrgent = active[0]!.candidate;
       const request: SystemPushRequest = {
-        kind: 'alert',
+        kind: mostUrgent.alertClass === 'insight' ? 'insight' : 'alert',
         count: active.length,
         language: mostUrgent.language ?? 'en',
         itemId: mostUrgent.itemId,
         origin: 'proactive_alert',
         details: details.filter((detail): detail is NonNullable<typeof detail> => detail !== undefined &&
           active.some(({ candidate }) => candidate.itemId === detail.itemId))
-          .map(({ title, dueAt }) => ({ title, dueAt })),
+          .map(({ title, body, dueAt }) => ({ title, dueAt, ...(mostUrgent.alertClass === 'insight' ? { body } : {}) })),
       };
       const outcome = await options.send(request, context.signal);
       const classes = [...new Set(active.map(({ candidate }) => candidate.alertClass))].sort().join(',');

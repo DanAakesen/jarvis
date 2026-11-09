@@ -66,6 +66,11 @@ function requestForTargets(request: sql.Request, owner: string, targets: Trainin
 
 export class TrainingTargetsStore {
   private constructor(private readonly pool: sql.ConnectionPool, private readonly owner: string) {}
+  /** Configured owner only, for background proactive reads. */
+  static forOwner(pool: sql.ConnectionPool, owner: string): TrainingTargetsStore {
+    if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(owner)) throw new TypeError('Invalid Health owner');
+    return new TrainingTargetsStore(pool, owner.toLowerCase());
+  }
 
   static forRequest(pool: sql.ConnectionPool, request: FastifyRequest): TrainingTargetsStore {
     const owner = resolveHealthOwner(request);

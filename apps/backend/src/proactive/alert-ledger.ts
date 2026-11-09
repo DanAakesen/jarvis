@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-export type AlertClass = 'deadline_24h' | 'calendar_clash' | 'travel_disruption';
+export type AlertClass = 'deadline_24h' | 'calendar_clash' | 'travel_disruption' | 'insight';
 export type AlertStatus = 'sent' | 'failed';
 
 export interface AlertLedgerRow {

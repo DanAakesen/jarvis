@@ -939,3 +939,27 @@ describe('proactive background job mapping', () => {
     });
   });
 });
+
+
+describe('normal insight provenance', () => {
+  it('marks only model-generated findings for normal push delivery', async () => {
+    const hook = vi.fn<(context: FindingsStoredContext) => Promise<void>>(async () => {});
+    const fixture = setup({ onFindingsStored: [hook] });
+    const claim = await fixture.claim();
+    await fixture.engine(claim);
+    const findings = hook.mock.calls[0]![0].findings;
+    expect(findings.find(finding => finding.category === 'prep')).toMatchObject({ modelGenerated: true, urgency: 'normal' });
+    expect(findings.filter(finding => finding.category !== 'prep').every(finding => !finding.modelGenerated)).toBe(true);
+  });
+});
+
+
+describe('new context sources are notification-only', () => {
+  it.each(['health', 'commitment'] as const)('does not turn new %s context into an automatic task write', async (kind) => {
+    const hook = vi.fn<(context: FindingsStoredContext) => Promise<void>>(async () => {});
+    const fixture = setup({ sources: [source(kind === 'health' ? 'health' : 'todos', [fact({ kind, dueAt: null })])], onFindingsStored: [hook] });
+    await fixture.run();
+    expect(hook.mock.calls[0]![0].findings[0]).toMatchObject({ modelGenerated: true });
+    expect(hook.mock.calls[0]![0].findings[0]).not.toHaveProperty('suggestedTodo');
+  });
+});

@@ -55,6 +55,10 @@ export class NutritionStore {
   static forRequest(pool: sql.ConnectionPool, request: FastifyRequest, now = () => new Date().toISOString(), changes?: HealthChangeSink): NutritionStore {
     return new NutritionStore(pool, resolveHealthOwner(request), now, changes);
   }
+  static forOwner(pool: sql.ConnectionPool, owner: string): NutritionStore {
+    if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(owner)) throw new TypeError('Invalid Health owner');
+    return new NutritionStore(pool, owner.toLowerCase(), () => new Date().toISOString());
+  }
   private request(parent: sql.Transaction | sql.ConnectionPool, signal: AbortSignal): sql.Request {
     signal.throwIfAborted();
     return (parent instanceof sql.Transaction ? new sql.Request(parent) : new sql.Request(parent)).input('owner', sql.UniqueIdentifier, this.owner);

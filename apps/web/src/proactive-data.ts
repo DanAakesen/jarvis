@@ -1,7 +1,7 @@
 import { backendFetch } from './backend-request';
 import { formatDateTime, formatTimeOnly } from './format/date-time';
 
-export type SourceId = 'todos' | 'calendar' | 'mail' | 'weather' | 'factory' | 'news' | 'travel' | 'x';
+export type SourceId = 'todos' | 'calendar' | 'mail' | 'weather' | 'factory' | 'news' | 'travel' | 'x' | 'health' | 'nutrition' | 'notes' | 'memory';
 export type ItemState = 'new' | 'seen' | 'dismissed' | 'snoozed';
 export type ItemAction = 'seen' | 'dismiss' | 'snooze' | 'useful' | 'wrong';
 export type RunStatus = 'running' | 'done' | 'failed' | 'skipped' | 'cancelled';
@@ -107,7 +107,7 @@ function isDate(value: unknown): value is string {
 
 export function isSourceId(value: unknown): value is SourceId {
   return value === 'todos' || value === 'calendar' || value === 'mail' || value === 'weather' ||
-    value === 'factory' || value === 'news' || value === 'travel' || value === 'x';
+    value === 'factory' || value === 'news' || value === 'travel' || value === 'x' || value === 'health' || value === 'nutrition' || value === 'notes' || value === 'memory';
 }
 
 export function isRun(value: unknown): value is RunSummary {
@@ -221,6 +221,10 @@ export const sourceLabels: Record<SourceId, string> = {
   news: 'News',
   travel: 'Travel',
   x: 'X',
+  health: 'Health and training',
+  nutrition: 'Nutrition',
+  notes: 'Notes',
+  memory: 'Memory',
 };
 
 const sourceReasons: Record<string, string> = {

@@ -48,6 +48,10 @@ struct JarvisProactiveArea: View {
     @State private var earlierItems: JarvisInsightsLoad<[JarvisProactiveItem]> = .loading
     @State private var runs: [JarvisProactiveRun] = []
     @State private var tab = Tab.open
+    @AppStorage(JarvisApprovalNotificationCoordinator.pendingProactiveItemKey) private var pendingNotificationID = ""
+    @State private var notificationItem: JarvisProactiveItem?
+    @State private var notificationFailure: JarvisInsightsFailure?
+    @State private var notificationRetryID = ""
     @State private var expandedID: String?
     @State private var busyIDs: Set<String> = []
     @State private var addedTaskIDs: Set<String> = []
@@ -71,6 +75,14 @@ struct JarvisProactiveArea: View {
                         JarvisPageHeadline(
                             phrase: JarvisProactivePagePhrase.make(status: loaded, openItems: openItems.count, language: language, firstTitle: openItems.first?.title)
                         )
+                    }
+                    if let notificationItem {
+                        itemRow(notificationItem, actionable: notificationItem.state == .new || notificationItem.state == .seen)
+                    }
+                    if let notificationFailure {
+                        JarvisInsightsStateView(kind: .failure(notificationFailure), language: language, identifier: "proactive.notification.error") {
+                            pendingNotificationID = notificationRetryID
+                        }
                     }
                     content
                 }
@@ -96,6 +108,7 @@ struct JarvisProactiveArea: View {
         .toolbar(.hidden, for: .navigationBar)
         .task(id: PollKey(active: scenePhase == .active, token: reloadToken)) { await poll() }
         .task(id: tab) { await loadEarlierIfNeeded() }
+        .task(id: pendingNotificationID) { await openNotification() }
         .sheet(item: $editorRequest) { request in
             JarvisProactiveSettingsSheet(
                 client: client,
@@ -409,7 +422,7 @@ struct JarvisProactiveArea: View {
             )
         } else {
             JarvisRowGroup {
-                ForEach(showAllItems ? openItems : Array(openItems.prefix(3))) { item in itemRow(item, actionable: true) }
+                ForEach((showAllItems ? openItems : Array(openItems.prefix(3))).filter { $0.id != notificationItem?.id }) { item in itemRow(item, actionable: true) }
                 if openItems.count > 3 {
                     JarvisTextButton(title: showAllItems ? text(.showLess) : JarvisInsightsLocalization.format(.showMore, language: language, openItems.count - 3),
                         identifier: "proactive.showMore") { showAllItems.toggle() }
@@ -565,6 +578,26 @@ struct JarvisProactiveArea: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func openNotification() async {
+        let id = pendingNotificationID
+        guard !id.isEmpty, let client else { return }
+        notificationItem = nil
+        notificationFailure = nil
+        notificationRetryID = ""
+        do {
+            let value = try await client.item(id: id)
+            guard pendingNotificationID == id else { return }
+            notificationItem = value
+            expandedID = value.id
+            if value.state == .new { await perform(.seen, on: value) }
+        } catch {
+            if Task.isCancelled || pendingNotificationID != id { return }
+            notificationRetryID = id
+            notificationFailure = JarvisInsightsFailure(error)
+        }
+        if pendingNotificationID == id { pendingNotificationID = "" }
+    }
+
     private func toggle(_ item: JarvisProactiveItem, actionable: Bool) {
         if expandedID == item.id {
             expandedID = nil
@@ -585,8 +618,10 @@ struct JarvisProactiveArea: View {
             await JarvisAppCache.invalidate(.proactive, scope: "items")
             if case .seen = action {
                 if let index = openItems.firstIndex(where: { $0.id == item.id }) { openItems[index] = updated }
+                if notificationItem?.id == item.id { notificationItem = updated }
             } else {
                 openItems.removeAll { $0.id == item.id }
+                if notificationItem?.id == item.id { notificationItem = nil }
                 if expandedID == item.id { expandedID = nil }
                 earlierItems = .loading
             }
@@ -652,6 +687,10 @@ struct JarvisProactiveArea: View {
         case .news: "globe"
         case .travel: "airplane"
         case .x: "text.bubble"
+        case .health: "heart"
+        case .nutrition: "fork.knife"
+        case .notes: "note.text"
+        case .memory: "brain.head.profile"
         }
     }
 

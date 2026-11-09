@@ -4,6 +4,8 @@ import os
 import re
 import subprocess
 
+APNS_SECRET_NAMES = ('apns-team-id', 'apns-key-id', 'apns-signing-key')
+
 
 def azure(*args, timeout=60):
     result = subprocess.run(['az', *args, '--subscription', os.environ['SUBSCRIPTION_ID'],
@@ -23,12 +25,34 @@ def summarize(app):
     required = ['APNS_TEAM_ID', 'APNS_KEY_ID', 'APNS_SIGNING_KEY', 'APNS_ENVIRONMENT']
     return {
         'readyRevision': properties.get('latestReadyRevisionName'),
-        'revisionReady': properties.get('latestRevisionName') == properties.get('latestReadyRevisionName'),
+        'revisionReady': bool(properties.get('latestRevisionName')) and properties.get('latestRevisionName') == properties.get('latestReadyRevisionName'),
         'enabled': {name: env.get(name, {}).get('value') == 'true' for name in flags},
         'apnsConfigured': {name: bool(env.get(name, {}).get('value') or env.get(name, {}).get('secretRef')) for name in required},
         'apnsProduction': env.get('APNS_ENVIRONMENT', {}).get('value') == 'production',
         'signingKeyUsesSecretReference': bool(env.get('APNS_SIGNING_KEY', {}).get('secretRef')),
     }
+
+
+def secret_metadata(vault, reader=None):
+    """Read deployment metadata through ARM; this API never returns secret values."""
+    reader = reader or azure
+    if not re.fullmatch(r'[A-Za-z0-9-]{3,24}', vault):
+        raise RuntimeError('Invalid Key Vault name')
+    base = ('https://management.azure.com/subscriptions/' + os.environ['SUBSCRIPTION_ID']
+            + '/resourceGroups/rg-jarvis/providers/Microsoft.KeyVault/vaults/' + vault + '/secrets')
+    url = base + '?api-version=2026-05-15'
+    result = []
+    for _ in range(20):
+        page = reader('rest', '--method', 'get', '--url', url)
+        result.extend({'name': item['name'].split('/')[-1],
+                       'attributes': {'enabled': item.get('properties', {}).get('attributes', {}).get('enabled')}}
+                      for item in page['value'])
+        url = page.get('nextLink')
+        if not url:
+            return result
+        if not url.startswith(base + '?'):
+            raise RuntimeError('Secret metadata pagination left the expected vault')
+    raise RuntimeError('Secret metadata pagination exceeded its limit')
 
 
 def main():
@@ -38,13 +62,23 @@ def main():
                 '--name', outputs['backendAppName']['value'])
     report = summarize(app)
     try:
-        names = azure('keyvault', 'secret', 'list', '--vault-name', outputs['keyVaultName']['value'],
-                      '--query', '[].name')
-        report['candidateSecretNames'] = [name for name in names if re.search(r'apns|apple-push', name, re.I)]
+        metadata = secret_metadata(outputs['keyVaultName']['value'])
+        report.update(metadata_presence(metadata))
         report['secretNamesReadable'] = True
     except RuntimeError:
         report['secretNamesReadable'] = False
     print(json.dumps(report, indent=2))
+
+
+def metadata_presence(metadata):
+    # Emit only fixed field names and booleans, never provider-supplied strings.
+    return {
+        'apnsSecretsPresent': {name: any(item['name'] == name for item in metadata)
+                               for name in APNS_SECRET_NAMES},
+        'otherAPNsSecretPresent': any(item['name'] not in APNS_SECRET_NAMES
+                                      and re.search(r'apns|apple-push', item['name'], re.I) is not None
+                                      for item in metadata),
+    }
 
 
 if __name__ == '__main__':

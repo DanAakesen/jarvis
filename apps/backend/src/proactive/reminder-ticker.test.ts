@@ -11,7 +11,7 @@ const now = new Date('2026-10-20T08:00:00Z');
 const owner = '11111111-1111-4111-8111-111111111111';
 const stoppers: (() => Promise<void>)[] = [];
 
-async function setup(language: 'en' | 'da', throws = false, onVaultRead?: () => Promise<void>) {
+async function setup(language: 'en' | 'da', throws = false, onVaultRead?: () => Promise<void>, nativeRecipient = false) {
   const store = createMemoryProactiveStore(owner);
   const reminders = createMemoryProactiveReminderStore(owner);
   const rows = [50, 10, 40, 20, 30].map((minutes) => {
@@ -40,6 +40,7 @@ async function setup(language: 'en' | 'da', throws = false, onVaultRead?: () => 
   };
   const ticker = createReminderTicker({
     store, reminders, pushStore, ownerObjectId: owner,
+    hasNativeRecipients: async () => nativeRecipient,
     vault: {
       tree: async () => [{ path: 'tasks.md', sha: 'synthetic' }],
       read: async () => {
@@ -61,6 +62,14 @@ afterEach(async () => {
 });
 
 describe('reminder ticker push details', () => {
+  it('delivers automatic reminders to a native recipient without a browser subscription', async () => {
+    const fixture = await setup('en', false, undefined, true);
+    fixture.pushStore.listSubscriptions.mockResolvedValue([]);
+    await fixture.ticker.tick();
+    expect(fixture.send).toHaveBeenCalledOnce();
+    expect(fixture.reminders.snapshot().every(({ state }) => state === 'sent')).toBe(true);
+  });
+
   it.each(['en', 'da'] as const)('sends only the soonest three row titles and due times with the full %s count', async (language) => {
     const fixture = await setup(language);
     await fixture.ticker.tick();

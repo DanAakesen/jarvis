@@ -112,7 +112,7 @@ describe('proactive routes', () => {
       newsFeeds: ['https://example.test/feed.xml'],
       guidance: 'Prefer concise reminders.',
     });
-    expect(patched.json().sources).toHaveLength(8);
+    expect(patched.json().sources).toHaveLength(sourceIds.length);
     expect(patched.json().sources[0]).toEqual({ id: 'todos', enabled: false });
     expect(patched.json().sources[1]).toEqual({ id: 'calendar', enabled: true });
   });

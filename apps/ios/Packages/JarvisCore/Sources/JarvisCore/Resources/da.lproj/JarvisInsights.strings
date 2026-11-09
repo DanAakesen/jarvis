@@ -256,3 +256,11 @@
 
 "insights.showMore" = "Vis %d mere";
 "insights.showLess" = "Vis mindre";
+
+"insights.proactiveSourceHealth" = "Sundhed og træning";
+
+"insights.proactiveSourceNutrition" = "Ernæring";
+
+"insights.proactiveSourceNotes" = "Noter";
+
+"insights.proactiveSourceMemory" = "Hukommelse";

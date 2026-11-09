@@ -109,3 +109,6 @@ value.
 an internal issue-to-conversation-origin association. Message retention cascades
 association removal. The down batch drops the new association, index and column;
 it does not remove tasks, issues, conversations or notification receipts.
+
+
+`0076_proactive_context.sql` expands the existing proactive source-status and alert-class constraints for Health, nutrition, notes, memory and normal model insights. Apply it before the corresponding backend. It creates no table and rewrites no historical record. The down batch refuses rollback while new-source statuses or insight receipts exist, preserving history rather than deleting it to force a downgrade. Coordinate the backend with a native client that recognizes the four new source IDs.

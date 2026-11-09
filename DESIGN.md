@@ -3747,3 +3747,11 @@ owner-accepted build 84 header/footer transparency and scroll-behind behavior.
 Recent notes keep their grouped appearance while each row is created lazily;
 the full inventory remains reachable. The title-only pinned carousel, right-aligned
 New folder action and approved formatted/Raw editor remain unchanged.
+
+## Intelligent notification presentation — 9 November 2026
+
+Owner-selected scope keeps the existing Proactive page and source settings. Add Health/training, nutrition, Notes and Memory labels in Danish/English. Normal insight pushes show model-generated titles and actual detail bodies, with no new redaction layer. Native taps open and expand the exact finding in the existing page, including an older finding; unavailable details use the existing failure view. No new dashboard, feedback-learning controls or shadow-mode UI.
+
+Notification entry preserves normal finding actions for open items and marks them
+seen. Historical notifications remain read-only. Failed network loads expose the
+shared Retry control without losing the requested finding identifier.

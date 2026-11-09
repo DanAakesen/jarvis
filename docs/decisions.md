@@ -12195,6 +12195,10 @@ also checks the Microsoft.Quota catalogue without submitting a request. Do not
 claim 100-worker capacity until quota and the matching configuration are verified.
 The managed route remains inactive and VM retirement is held pending acceptance.
 
+## 2026-11-09 — Intelligent cross-app notifications, direct owner testing
+
+The owner accepts research items 1–3: connect relevant data, compute accurate facts and use intelligence to choose useful notifications. Items 4–5 (additional delivery-policy stage and feedback learning) and shadow mode are explicitly declined. The sole-owner app should include useful actual details rather than add privacy-redacted messages. Reuse existing proactive engine, controls, receipts and native APNs infrastructure; broaden normal informational insights and add no automatic task writes from new context. Keep current schedule and existing source/goal semantics. Implementation is PR #1669; integration/deployment/device acceptance remain primary responsibilities. This supersedes the earlier research proposal's privacy-redaction and shadow-rollout recommendations, without authorizing production configuration or unrelated Daily automation.
+
 
 ## Managed worker credential ownership — 9 November 2026
 
@@ -12248,3 +12252,17 @@ The fix supplies `--yes` for only the authorized legacy mailbox. Recovery first
 verifies the VM and all dedicated named resources are absent, then removes only
 the old mailbox and deployment record. Any remaining dedicated resource stops
 recovery for inspection. Final inventory/evidence and source cleanup are pending.
+
+## APNs metadata access correction — 9 November 2026
+
+Readiness run 42627268441 confirmed the backend is ready with proactive, alert,
+Web Push and Health switches enabled; native APNs registration/delivery is off
+and its four runtime settings are absent. The deployment identity could not list
+Key Vault secrets through the data-plane API, so secret storage remains unknown.
+Use the existing ARM deployment metadata API for secret names and enabled flags,
+without fetching values or granting new data-plane access. The official
+`azure-mgmt-keyvault` 14.1.0 SDK defines the list endpoint at API 2026-05-15 and
+explicitly states SecretProperties.value is never returned by that service.
+Project only names/enabled flags, bound pagination to the same vault, and retain
+missing/disabled-key rejection before any APNs configuration write. Six focused
+checks pass; live metadata readback and activation remain pending.

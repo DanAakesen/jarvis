@@ -3,6 +3,7 @@ import type { GoogleApiClient } from '../../google/api-client.js';
 import type { TaskStore } from '../../factory/task-store.js';
 import type { SettingsStore } from '../../core/settings.js';
 import type { createGitHubVaultClient } from '../../vault/github-client.js';
+import { createContextSources, type ContextDependencies } from './context.js';
 import { createCalendarSource } from './calendar.js';
 import { createFactorySource } from './factory.js';
 import { createMailSource } from './mail.js';
@@ -13,7 +14,7 @@ import { createWeatherSource } from './weather.js';
 
 type VaultClient = ReturnType<typeof createGitHubVaultClient>;
 
-export interface SourceDependencies {
+export interface SourceDependencies extends ContextDependencies {
   googleApiClient?: GoogleApiClient;
   vaultClient?: VaultClient;
   taskStore?: TaskStore;
@@ -34,10 +35,12 @@ export function buildSourceRegistry(dependencies: SourceDependencies): Proactive
     createFactorySource(dependencies.taskStore),
     createMailSource(dependencies.googleApiClient),
     createNewsSource(),
-    createTodosSource(dependencies.vaultClient),
+    createTodosSource(dependencies.vaultClient, true),
     createTravelSource(dependencies.googleApiClient),
     createWeatherSource(dependencies.settingsStore),
   ];
+  sources.push(...createContextSources(dependencies));
+  sources.sort((left, right) => left.id.localeCompare(right.id));
   sources.push(xSource);
   return sources;
 }

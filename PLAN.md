@@ -183,16 +183,17 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Owner confirms all existing tasks are tests; recovery/migration is not required for worker cutover. No task or branch deleted |
-| 128 GiB worker workspace | Provisioned and activated in successful run 42530882044. 128 GiB managed disk; 124.93 GiB formatted, 123.64 GiB free. Both credentials accessible, actual idle deallocation and backend readiness verified | A fresh representative Factory task can establish end-to-end delivery; owner no longer requires old test-task recovery. Fleet autoscaling is not implemented |
+| Managed Factory workspace | New Factory work uses isolated Azure Container Apps Sandboxes. Five-worker runtime/lifecycle and cleanup checks passed in 42620552706 and 42625011714; each 160 GiB persistent root has about 147 GiB free after a build. Owner accepts 300 cores (up to 37 8-core workers) | Final legacy VM mailbox/deployment cleanup in 42629384227, then removal of VM source/config and a fresh worker image. Real coding-task owner acceptance remains; infrastructure canaries make no model calls |
 | Copilot harness | Implemented comparison path and canaries retained; migration parked by owner on 9 November | Keep custom harness as default; no further migration or default switch planned |
 | Current vs Copilot comparison | Both owner widget-plan exercises completed. Current CIRRENT-85 commits 26170110/a796d675 and Copilot commits 4cb08916/7030beb4 verify creation and revision of each same note. Both report first-save refusal followed by success | Both completed with friction; Copilot found the scaffold branch. Further harness comparison parked by owner. Shared refusal/routing diagnosis remains relevant to Current |
 | Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653; qualified and delivered in build 85 | Owner confirmed Notes fixed on 8 November. Preserve this and accepted header/footer transparency |
 | Home Today workout totals | #1654 merged as ef783da2; all 533 Core tests, CI, CodeQL and native compilation passed, including Today/7d/14d/30d and no duplicated measurements | Build 86 uploaded successfully in 42515467682; owner retest Today against Health once it appears in TestFlight |
-| Apple Watch | PR #1652 reviewed and merged as 85ddd010. Final CI and CodeQL passed; 544 core tests, native Watch/widgets/paired iPhone builds, and three focused native interactions passed. Signed TestFlight build 87 failed in 42523594128: both Watch provisioning profiles lack the shared App Group | Associate group.com.danaakesen.jarvis with both Watch App IDs in Apple Developer, rerun signing/upload; then installation and physical Watch acceptance |
+| Apple Watch | Companion and four complications merged. Owner corrected both App Group assignments. Build 88 passed that signing step but exposed arm64_32 integer overflow; #1679 fixes it, with physical-Watch, Simulator and paired-iPhone compilation passing | Next signed iPhone/Watch upload, installation, voice/background/complication checks |
+| Intelligent notifications | #1669 reviewed: saved health/nutrition goals, current notes and memory inform model-written insights. Priority/receipt handling and native-only reminders corrected; three new notification UI interactions passed. Migration 0076 and deployment pending | Existing APNs key 367DAUWL3Z is Push-enabled. Confirm Key Vault secrets, activate delivery, release iPhone and test actual receipt/taps |
 | CarPlay | Owner submitted entitlement request to Apple; reply pending (8 November) | Apple decision; entitlement activation and device verification remain pending |
 | Consecutive tool activity | #1656 merged and integrated into build 87. Shared grouping in ordinary and isolated test chat; real call counts and refusals/failures retained. Three focused native interactions passed and captures inspected | Build 87 failed signing; successful replacement upload and owner checks on both surfaces remain pending |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
-| Latest TestFlight bundle | Build 86 uploaded in 42515467682 with Home workout totals corrected. Build 85 Notes correction is owner-accepted; earlier build 84 chat/navigation/lift changes remain included | Apple processing/device availability and Home device acceptance pending; other unexercised owner checks remain on the saved checklist |
+| Latest TestFlight bundle | Build 86 remains the latest successful upload. Builds 87/88 failed; both identified causes have been corrected. The next bundle includes Watch, tool grouping and intelligent-notification finding navigation | Exact-source CI, signed upload and Apple processing, then installed-device testing |
 
 The owner now explicitly requests implementation and delivery of all five items.
 This supersedes the earlier hold while collecting additions. Notes and Ember are
@@ -4518,6 +4519,37 @@ limit. It never allocates workers, lowers a larger limit, guesses a missing quot
 name or automatically replays an uncertain PUT. Submission and approval are
 separate evidence fields. Live submission/approval remain pending.
 
+## Intelligent cross-app notifications — 9 November 2026
+
+Secondary PR #1669 implements owner-approved context, computed facts and intelligent notification selection. Added canonical Health/nutrition/Notes/Memory readers, ordinary task context, model silence/source diversity, native APNs with browser fallback, and exact-finding native routing. Additional policy/feedback-learning stages and shadow mode were explicitly declined. Local validation passed: 7,489 backend tests (one skipped), 948 proactive/push tests (included in backend), 275 isolated SQL tests, 545 Swift core tests and 62 web push tests; builds and lint passed. Native compilation evidence is tracked in the PR separately from physical delivery acceptance. Primary owns integration, migration 0076, rollout and installed-device acceptance. No production switches were changed.
+
+
+## Primary notification integration and Apple feature candidates — 9 November 2026
+
+Primary has received PR #1669 and merged main `34655d46` into its integration
+branch, including the qualified Watch arm64_32 correction. Exact integrated-head
+checks and release are pending. Migration 0076 uses the existing transactional
+startup migration runner before the new backend accepts requests; verify its
+startup/readiness evidence during deployment. Bundle the native source-label and
+notification-routing changes with the corrected Watch TestFlight build.
+
+The owner-confirmed Apple portal capabilities and next feature candidates are
+recorded in [Apple capabilities](docs/ios/apple-capabilities.md). Portal setup is
+separate from implementation; CarPlay entitlement approval remains unconfirmed.
+
+
+## Primary review corrections — 9 November 2026
+
+Reserve the bounded task context for high-priority tasks before ordinary
+commitments, including a high-priority duplicate discovered later. Apply delivery
+receipt and item-state eligibility before selecting the first normal insight so
+a delivered or dismissed finding cannot starve a new one. Open notification
+findings retain Add to tasks, Snooze and Dismiss, and opening marks them seen;
+historical findings remain read-only. Transient finding-load failures have Retry.
+Focused backend regressions pass (29 tests); native action, historical-open and
+transient-error cases are added to the existing simulator suite. Integrated
+qualification and installed-device push acceptance remain pending.
+
 
 ## Managed worker credential ownership — 9 November 2026
 
@@ -4582,3 +4614,17 @@ The fix supplies `--yes` for only the authorized legacy mailbox. Recovery first
 verifies the VM and all dedicated named resources are absent, then removes only
 the old mailbox and deployment record. Any remaining dedicated resource stops
 recovery for inspection. Final inventory/evidence and source cleanup are pending.
+
+## APNs metadata access correction — 9 November 2026
+
+Readiness run 42627268441 confirmed the backend is ready with proactive, alert,
+Web Push and Health switches enabled; native APNs registration/delivery is off
+and its four runtime settings are absent. The deployment identity could not list
+Key Vault secrets through the data-plane API, so secret storage remains unknown.
+Use the existing ARM deployment metadata API for secret names and enabled flags,
+without fetching values or granting new data-plane access. The official
+`azure-mgmt-keyvault` 14.1.0 SDK defines the list endpoint at API 2026-05-15 and
+explicitly states SecretProperties.value is never returned by that service.
+Project only names/enabled flags, bound pagination to the same vault, and retain
+missing/disabled-key rejection before any APNs configuration write. Six focused
+checks pass; live metadata readback and activation remain pending.

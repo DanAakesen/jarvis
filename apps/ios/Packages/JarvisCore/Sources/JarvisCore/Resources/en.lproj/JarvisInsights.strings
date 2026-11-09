@@ -256,3 +256,11 @@
 
 "insights.showMore" = "Show %d more";
 "insights.showLess" = "Show less";
+
+"insights.proactiveSourceHealth" = "Health and training";
+
+"insights.proactiveSourceNutrition" = "Nutrition";
+
+"insights.proactiveSourceNotes" = "Notes";
+
+"insights.proactiveSourceMemory" = "Memory";
