@@ -28,7 +28,7 @@ jq -n --argjson emails "$budget_emails" \
   '{parameters: {budgetContactEmails: {value: $emails}}}' >"$budget_parameters"
 
 backend_apps=$(az containerapp list --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
-  --query "[?starts_with(name, 'ca-jarvis-backend-')].{name:name,image:properties.template.containers[0].image,worker:properties.template.containers[0].env[?starts_with(name, 'JARVIS_FACTORY_WORKER_')],sandboxes:properties.template.containers[0].env[?starts_with(name, 'JARVIS_FACTORY_SANDBOX_')],copilot:properties.template.containers[0].env[?name=='FOUNDRY_COPILOT_AGENT_NAME' || name=='FOUNDRY_COPILOT_AGENT_VERSION' || name=='FOUNDRY_COPILOT_DEFINITION_SHA256' || name=='FOUNDRY_COPILOT_POLICY_COMPATIBILITY']}" \
+  --query "[?starts_with(name, 'ca-jarvis-backend-')].{name:name,image:properties.template.containers[0].image,worker:properties.template.containers[0].env[?starts_with(name, 'JARVIS_FACTORY_WORKER_')],nativePush:properties.template.containers[0].env[?name=='JARVIS_APPROVAL_NOTIFICATIONS_ENABLED'],sandboxes:properties.template.containers[0].env[?starts_with(name, 'JARVIS_FACTORY_SANDBOX_')],copilot:properties.template.containers[0].env[?name=='FOUNDRY_COPILOT_AGENT_NAME' || name=='FOUNDRY_COPILOT_AGENT_VERSION' || name=='FOUNDRY_COPILOT_DEFINITION_SHA256' || name=='FOUNDRY_COPILOT_POLICY_COMPATIBILITY']}" \
   --output json --only-show-errors)
 if ! jq -e 'type == "array" and length <= 1 and all(.[]; type == "object")' <<<"$backend_apps" >/dev/null; then
   echo "::error::Unable to identify one existing backend configuration."
@@ -78,6 +78,10 @@ sandbox_configuration=$(jq -cer '
     then error else reduce .[] as $item ({}; .[$item.name] = $item.value) end
 ' <<<"$backend_apps")
 parameters+=(factorySandboxConfiguration="$sandbox_configuration")
+native_push_enabled=$(jq -er '.[0].nativePush // [] | if length == 0 then "false"
+  elif length == 1 and (.[0].value == "true" or .[0].value == "false") then .[0].value
+  else error("Invalid native push configuration") end' <<<"$backend_apps")
+parameters+=(nativePushEnabled="$native_push_enabled")
 
 worker_id=$(jq -r '.[0].worker // [] | map(select(.name == "JARVIS_FACTORY_WORKER_RESOURCE_ID"))[0].value // ""' <<<"$backend_apps")
 worker_enabled=$(jq -r '.[0].worker // [] | map(select(.name == "JARVIS_FACTORY_WORKER_ENABLED"))[0].value // "false"' <<<"$backend_apps")

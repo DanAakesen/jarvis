@@ -76,10 +76,12 @@ class CutoverTests(unittest.TestCase):
             if args[:2] == ('vm', 'list'): return [vm]
             if args[:2] == ('vm', 'get-instance-view'):
                 return {'instanceView': {'statuses': [{'code': 'PowerState/deallocated'}]}}
-            if args[:3] == ('role', 'assignment', 'list'):
-                self.assertEqual(args[3:], ('--scope', scope, '--all'))
-                return assignments
+            if args[:3] == ('rest', '--method', 'get'):
+                self.assertEqual(args[3:], ('--url', 'https://management.azure.com' + scope
+                    + '/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01'))
+                return {'value': [{'id': value['id'], 'properties': value} for value in assignments]}
             if args[:2] == ('resource', 'list'): return []
+            if args[:3] in [('storage', 'container-rm', 'list'), ('deployment', 'group', 'list')]: return []
             return None
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, SUBSCRIPTION_ID='sub'), \
              patch.object(module, 'az', side_effect=azure) as calls:
@@ -88,6 +90,38 @@ class CutoverTests(unittest.TestCase):
             deleted = [call.args[-1] for call in calls.call_args_list if call.args[:3] == ('role', 'assignment', 'delete')]
             self.assertEqual(deleted, ['old-secret-access', 'old-backend-wake'])
             self.assertTrue(evidence['vmResourcesRetired'])
+
+    def test_absent_vm_with_remaining_dedicated_resource_is_not_declared_retired(self):
+        with patch.dict(os.environ, SUBSCRIPTION_ID='sub'), patch.object(module, 'az', side_effect=[
+                [], [{'name': 'vm-jarvis-factory-workspace'}]]) as azure:
+            with self.assertRaisesRegex(RuntimeError, 'dedicated resources remain'):
+                module.retire_vm({'cutoverPassed': True}, {}, Path('/unused'))
+            self.assertEqual(azure.call_count, 2)
+
+    def test_absent_vm_finishes_only_legacy_mailbox_and_deployment_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, SUBSCRIPTION_ID='sub'), \
+             patch.object(module, 'az', side_effect=[[], [], [{'name': 'factory-worker'}, {'name': 'keep'}],
+                 None, ['jarvis-factory-worker'], None, [{'name': 'keep'}]]) as azure:
+            evidence = {'cutoverPassed': True}
+            module.retire_vm(evidence, {'storageAccountName': {'value': 'sharedstorage'}}, Path(directory))
+            deletes = [call.args for call in azure.call_args_list if 'delete' in call.args]
+            self.assertEqual(len(deletes), 2)
+            self.assertEqual(deletes[0][-3:], ('--name', 'factory-worker', '--yes'))
+            self.assertEqual(deletes[1][-1], 'jarvis-factory-worker')
+            self.assertTrue(evidence['vmResourcesRetired'])
+
+    def test_role_assignment_pages_stay_in_the_resource_group(self):
+        scope = '/subscriptions/sub/resourceGroups/rg-jarvis'
+        next_url = 'https://management.azure.com' + scope + '/providers/Microsoft.Authorization/roleAssignments?api-version=2022-04-01&skiptoken=next'
+        assignment = {'id': 'grant', 'properties': {'principalId': 'worker', 'scope': scope + '/resource'}}
+        with patch.object(module, 'az', side_effect=[{'value': [], 'nextLink': next_url}, {'value': [assignment]}]) as azure:
+            self.assertEqual(module.role_assignments(scope), [{'id': 'grant', **assignment['properties']}])
+            self.assertEqual(azure.call_args_list[-1].args[-1], next_url)
+        for next_link in ['https://untrusted.invalid/path', 'https://management.azure.com/subscriptions/other/roleAssignments']:
+            with patch.object(module, 'az', return_value={'value': [], 'nextLink': next_link}) as azure:
+                with self.assertRaisesRegex(RuntimeError, 'left the resource group'):
+                    module.role_assignments(scope)
+                self.assertEqual(azure.call_count, 1)
 
     def test_exact_accepted_release_can_reuse_a_previously_qualified_backend_image(self):
         origin = {'source': 'a' * 40, 'run': 1, 'attempt': 1}
