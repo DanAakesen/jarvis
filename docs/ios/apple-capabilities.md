@@ -65,3 +65,10 @@ Use that value for `apns-team-id` and `367DAUWL3Z` for `apns-key-id` in
 `kv-jarvis-rmw7kae3bza6a`.
 The primary has merged server configuration support; secret storage, activation
 and installed receipt are not yet confirmed.
+
+The owner has a downloaded `.p8`, but the shown filename is
+`AuthKey_PAUD5A32KG.p8`, which indicates a different Key ID. Matching
+`AuthKey_367DAUWL3Z.p8` or confirmation that PAUD5A32KG is an active APNs key is
+still needed before choosing its runtime Key ID. Do not relabel a different key.
+Readiness run 42627268441 confirms APNs is not wired into the backend yet;
+Key Vault secret presence remains unverified because metadata listing failed.
