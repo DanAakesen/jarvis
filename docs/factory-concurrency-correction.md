@@ -184,3 +184,20 @@ investigation. Five-way execution, Factory activation and VM retirement have
 not passed. The later normal deploy failed legacy configuration validation before
 applying infrastructure; ARM boolean and resource-ID casing are normalized, with
 other identities and invalid flags still rejected.
+
+## Volume request contract follow-up
+
+Qualification 42596242067 returned `InvalidRequest`, service error 16, before
+creating a worker. Its retained facts identify the `128Gi` size but do not include
+the validation instruction. The next candidate sends `128GiB` explicitly at the
+volume API, preserving 137,438,953,472 requested bytes. This representation still
+requires live acceptance. Storage validation now retains a bounded problem-detail
+message with URLs, credentials and opaque identifiers removed; authentication
+and command failures continue to retain only codes/facts. No production CPU profile change, activation or VM deletion is implied by this
+candidate. The diagnostic workflow allows only four equivalent 128 GiB strings
+and two fixed profiles: 2 CPU / 4 GiB RAM / 40 GiB root, or 8 CPU / 16 GiB RAM /
+32 GiB root. The larger profile leaves space for the data disk within the
+[documented shared disk budget](https://github.com/microsoft/azure-container-apps/issues/1761).
+It still creates at most five workers and records the actual profile in evidence.
+If eight cores are required live, 100 running workers will require 800 SandboxCores,
+above the previously observed 300. That capacity is not claimed available.

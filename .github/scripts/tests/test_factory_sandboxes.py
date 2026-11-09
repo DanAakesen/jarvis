@@ -9,6 +9,18 @@ spec.loader.exec_module(module)
 
 
 class QualificationTests(unittest.TestCase):
+    def test_diagnostics_cannot_request_unbounded_capacity(self):
+        for profile, size in [('100cpu', '128GiB'), ('2cpu', '128TiB'), ('8cpu', '20Gi')]:
+            with self.subTest(profile=profile, size=size), self.assertRaises(ValueError):
+                module.storage_configuration(profile, size)
+
+    def test_large_profile_leaves_disk_budget_for_128_gib_workspace(self):
+        profile = module.storage_configuration('8cpu', '128GiB')
+        cores = int(profile['cpu'].removesuffix('m')) / 1000
+        root = int(profile['disk_size'].removesuffix('Gi'))
+        self.assertLessEqual(root + 128, cores * 20)
+        self.assertEqual(module.WORKERS, 5)
+
     def results(self):
         return [{'worker': str(i), 'workspaceBytes': 128 * 1024**3,
                  'startedAt': i, 'finishedAt': 40 + i,
@@ -86,3 +98,17 @@ class QualificationTests(unittest.TestCase):
         self.assertIn('maximum', result['serviceFacts'])
         self.assertNotIn('secret', str(result))
         self.assertNotIn('hidden', str(result))
+
+    def test_storage_diagnostics_preserve_size_units_but_remove_auth_and_urls(self):
+        from types import SimpleNamespace
+        import json
+        error = RuntimeError('Do not publish this exception or request headers')
+        error.response = SimpleNamespace(text=lambda: json.dumps({'detail':
+            'Invalid disk size 128Gi; use 128GiB. Bearer private-value token=another-private-value '
+            'https://host/path?sig=private aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "password": "private-word"'}))
+        result = module.failure_details(error, 'volume-create')
+        self.assertIn('Invalid disk size 128Gi; use 128GiB.', result['validationDetail'])
+        self.assertNotIn('private', str(result))
+        self.assertNotIn('https://', str(result))
+        self.assertNotIn('aaaaaaaa', str(result))
+        self.assertNotIn('validationDetail', module.failure_details(error, 'image-import'))

@@ -12,6 +12,18 @@ from uuid import uuid4
 
 WORKERS = 5  # Owner-approved live test ceiling, separate from the production cap.
 MIN_WORKSPACE_BYTES = 120 * 1024**3
+PROFILES = {
+    '2cpu': {'cpu': '2000m', 'memory': '4096Mi', 'disk_size': '40Gi'},
+    # Microsoft's documented shared disk budget requires room for root + data.
+    '8cpu': {'cpu': '8000m', 'memory': '16384Mi', 'disk_size': '32Gi'},
+}
+VOLUME_SIZES = ('128Gi', '128GiB', '131072Mi', '131072MiB')
+
+
+def storage_configuration(profile: str, volume_size: str) -> dict:
+    if profile not in PROFILES or volume_size not in VOLUME_SIZES:
+        raise ValueError('Qualification requires an approved profile and exactly 128 GiB')
+    return {**PROFILES[profile], 'volume_size': volume_size}
 
 
 def command(script: str) -> str:
@@ -58,8 +70,8 @@ def checked_exec(box, script: str) -> dict:
 
 
 def failure_details(error: Exception, stage: str) -> dict:
-    # Retain the service's error code and a fixed vocabulary of diagnostic facts,
-    # never its free-form message, response body, headers, or signed URLs.
+    # Authentication and command errors retain codes/facts only. For storage
+    # validation, retain a bounded redacted problem detail without HTTP headers.
     details = {'failureStage': stage, 'failureType': type(error).__name__,
                'httpStatus': getattr(error, 'status_code', None)}
     service_error = getattr(error, 'error', None)
@@ -87,10 +99,18 @@ def failure_details(error: Exception, stage: str) -> dict:
     details['sizeFacts'] = re.findall(r'\b\d{1,9}(?:\.\d{1,3})?\s*(?:gib|mib|gi|mi|bytes|characters)\b', message)[:12]
     if type(problem.get('errorCode')) is int:
         details['serviceErrorCode'] = problem['errorCode']
+    if stage in ('volume-create', 'sandbox-create') and isinstance(problem.get('detail'), str):
+        detail = problem['detail'][:4096]
+        detail = re.sub(r'https?://\S+', '[url]', detail, flags=re.I)
+        detail = re.sub(r'\b(?:Bearer|Basic)\s+\S+', '[credential]', detail, flags=re.I)
+        detail = re.sub(r'\b(?:[\w-]*(?:token|password|secret|signature)|api[_-]?key|sig)["\']?\s*[:=]\s*["\']?[^\s"\',;]+', '[credential]', detail, flags=re.I)
+        detail = re.sub(r'[A-Za-z0-9_/+=.-]{24,}', '[identifier]', detail)
+        details['validationDetail'] = ' '.join(detail.split())[:1000]
     return details
 
 
 def qualify(args) -> None:
+    allocation = storage_configuration(args.worker_profile, args.volume_size)
     from azure.containerapps.sandbox import SandboxGroupClient, SandboxVolume, RegistryCredentials, endpoint_for_region
     from image_auth import acr_credentials
     from azure.identity import AzureCliCredential
@@ -100,7 +120,8 @@ def qualify(args) -> None:
     run = 'q-' + uuid4().hex
     labels = {'jarvis-purpose': 'qualification', 'jarvis-run': run}
     evidence = {'run': run, 'workersRequested': WORKERS, 'routingChanged': False,
-                'image': args.image, 'results': [], 'passed': False, 'cleanupPassed': False}
+                'image': args.image, 'allocation': allocation,
+                'results': [], 'passed': False, 'cleanupPassed': False}
     volumes: list[str] = []
     boxes = []
     def save():
@@ -134,10 +155,11 @@ def qualify(args) -> None:
             volume = f'{run}-{index}'
             volumes.append(volume)  # Include uncertain creates in owned cleanup.
             stage = 'volume-create'
-            group.create_volume(volume, type='DataDisk', size='128Gi', labels=labels)
+            group.create_volume(volume, type='DataDisk', size=allocation['volume_size'], labels=labels)
             stage = 'sandbox-create'
-            box = group.begin_create_sandbox(disk=None, disk_id=image.id, cpu='2000m', memory='4096Mi',
-                disk_size='40Gi', auto_suspend_seconds=900, auto_suspend_mode='Disk',
+            box = group.begin_create_sandbox(disk=None, disk_id=image.id,
+                cpu=allocation['cpu'], memory=allocation['memory'], disk_size=allocation['disk_size'],
+                auto_suspend_seconds=900, auto_suspend_mode='Disk',
                 labels={**labels, 'jarvis-worker': str(index)},
                 environment={'AZURE_CLIENT_ID': client_id, 'KEY_VAULT_URI': args.vault_uri,
                              'JARVIS_WORK_ROOT': '/files/jarvis'},
@@ -237,4 +259,6 @@ if __name__ == '__main__':
     parser.add_argument('--image', required=True)
     parser.add_argument('--vault-uri', required=True)
     parser.add_argument('--state', type=Path, required=True)
+    parser.add_argument('--worker-profile', choices=PROFILES, default='2cpu')
+    parser.add_argument('--volume-size', choices=VOLUME_SIZES, default='128GiB')
     qualify(parser.parse_args())
