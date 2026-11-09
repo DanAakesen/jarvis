@@ -1,3 +1,18 @@
+## Owner-action delivery evidence — 9 November 2026
+
+PR #1690 merged as `70c669c9`. CI 42661574458 passed 7,400 backend, 1,317
+agent and 277 SQL tests; CodeQL passed. Deploy 42663408198 completed backend
+and hosted-agent rollout, runtime readiness and live conversation acceptance.
+No new native build is needed for the approval cleanup. Reminder defaults shipped
+in PR #1688 / deploy 42656168159. Owner installed-use checks remain.
+
+Push-to-chat is already deployed in 42650781492 and build 90 uploaded in
+42653211307. Native UI run 42650781412 has six failures (72 passes): three
+pre-existing Notes cases and three new notification-to-chat cases. Empty chat
+renders `chat.mode`, not a disabled `chat.send`; fix those test expectations.
+Investigate the missing failure-recovery message separately. Do not claim the
+native UI suite or physical push acceptance passed.
+
 ## Current owner-action execution policy — 9 November 2026
 
 The owner has authorized removal of repeated app approvals and release of these

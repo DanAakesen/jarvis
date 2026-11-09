@@ -4,17 +4,24 @@ Shared owner actions, Google writes and Factory/GitHub writes now execute the
 resolved authenticated request without a second approval. Health logging and
 vault/workspace changes no longer require Present mode or a browser approval.
 Chat and voice guidance follows the same policy. Reminder defaults and removal
-of prescribed wording shipped in PR #1688; this broader change is in qualification.
-Do not mark this broader cleanup deployed until its production rollout completes.
+of prescribed wording shipped in PR #1688. Broader cleanup merged in PR #1690
+as `70c669c9`. CI 42661574458 passed 7,400 backend, 1,317 agent and 277 SQL
+tests; CodeQL passed. Production run 42663408198 deployed the backend and hosted
+agent and passed deterministic readiness and live conversation acceptance.
+Installed-use acceptance remains the owner check; no new native build is required.
 
 ## Push-to-chat continuity — 9 November 2026
 
 Implemented on `feature/push-chat-continuity`: owner-scoped durable notification
 selection, native push routing to existing Chat, background context in chat/steering
 and English/Danish voice, duplicate-tap reuse and existing error feedback.
-The chat layout and composer remain unchanged. CI qualification is tracked in PR #1686;
-installed-device push delivery and model continuity remain owner checks after primary
-integration. Not merged, deployed or accepted. See [handoff](docs/push-chat-continuity.md).
+PR #1686 merged as `88ff9338`; production run 42650781492 succeeded and
+TestFlight run 42653211307 uploaded build 90. Installed-device acceptance remains.
+Native UI run 42650781412 completed with 72 passes and six failures: three earlier
+Notes cases and three new push-to-chat checks. Two new checks incorrectly expect
+a disabled Send button when the empty composer shows Voice; the failure-recovery
+message check still needs investigation. Do not mark native acceptance passed.
+See [handoff](docs/push-chat-continuity.md).
 
 ## Home brief and daily activity semantics — 9 November 2026
 
