@@ -104,6 +104,8 @@ describe('managed Factory routing', () => {
     expect(t.client.volumes.create).not.toHaveBeenCalled();
     expect(t.creates.every((b) => b['volumes'] === undefined)).toBe(true);
     expect(t.creates[0]!['resources']).toEqual({cpu: '8000m', memory: '16384Mi', disk: '160Gi'});
+    // Retained images must exit their claim loop before the controller suspends them.
+    expect(t.creates.every((b) => (b['environment'] as Record<string, string>)['JARVIS_FACTORY_MANAGED_SANDBOX'] === 'true')).toBe(true);
     expect(new Set(t.creates.map((b) => (b['environment'] as Record<string, string>)['JARVIS_FACTORY_WORKER_BLOB_URL'])).size).toBe(5);
     t.release();
     await t.pool.stop();
