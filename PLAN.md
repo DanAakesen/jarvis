@@ -4701,6 +4701,15 @@ Project only names/enabled flags, bound pagination to the same vault, and retain
 missing/disabled-key rejection before any APNs configuration write. Six focused
 checks pass; live metadata readback and activation remain pending.
 
+## Generation diagnostics — 9 November 2026
+
+The existing main-only Chat failure diagnostics workflow now accepts the optional
+`generation=true` input. It reads fixed proactive/image failure classifications
+from the backend's last 24 hours and OpenAI-named Key Vault secret metadata via ARM.
+It reads no secret values, prompts, image bytes or model text, performs no writes
+and does not replay jobs. Historical proactive output validation did not retain
+the specific failing field; this inspection must not imply otherwise.
+
 ## Image API repair and proactive diagnostics — 9 November 2026
 
 Owner requested replacement of failed subscription-backed image generation with
