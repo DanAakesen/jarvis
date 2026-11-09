@@ -1,7 +1,9 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import unittest
+from unittest.mock import Mock, patch
 
 spec = importlib.util.spec_from_file_location('native_push_readiness', Path(__file__).parents[1] / 'native_push_readiness.py')
 module = importlib.util.module_from_spec(spec)
@@ -27,3 +29,25 @@ class NativePushReadinessTests(unittest.TestCase):
         result = module.summarize(app)
         self.assertFalse(any(result['apnsConfigured'].values()))
         self.assertFalse(any(result['enabled'].values()))
+
+    def test_arm_metadata_is_projected_and_pagination_stays_in_the_vault(self):
+        base = 'https://management.azure.com/subscriptions/sub/resourceGroups/rg-jarvis/providers/Microsoft.KeyVault/vaults/vault/secrets'
+        first = {'value': [{'name': 'vault/apns-key-id', 'properties': {
+            'value': 'must-not-escape', 'secretUri': 'must-not-escape', 'attributes': {'enabled': True}}}],
+            'nextLink': base + '?api-version=2026-05-15&$skiptoken=next'}
+        reader = Mock(side_effect=[first, {'value': [{'name': 'apns-signing-key', 'properties': {'attributes': {'enabled': False}}}]}])
+        with patch.dict(os.environ, SUBSCRIPTION_ID='sub'):
+            result = module.secret_metadata('vault', reader)
+        self.assertEqual(result, [
+            {'name': 'apns-key-id', 'attributes': {'enabled': True}},
+            {'name': 'apns-signing-key', 'attributes': {'enabled': False}}])
+        self.assertNotIn('must-not-escape', json.dumps(result))
+        self.assertEqual(reader.call_args_list[0].args[:4], ('rest', '--method', 'get', '--url'))
+        for next_link in ['https://untrusted.invalid/next', base + '-other?next=1']:
+            with patch.dict(os.environ, SUBSCRIPTION_ID='sub'):
+                with self.assertRaisesRegex(RuntimeError, 'left the expected vault'):
+                    module.secret_metadata('vault', Mock(return_value={'value': [], 'nextLink': next_link}))
+
+    def test_missing_revision_is_not_ready(self):
+        app = {'properties': {'template': {'containers': [{'name': 'backend'}]}}}
+        self.assertFalse(module.summarize(app)['revisionReady'])

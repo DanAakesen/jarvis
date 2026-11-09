@@ -2,7 +2,7 @@
 import os
 import time
 
-from native_push_readiness import azure, summarize
+from native_push_readiness import azure, secret_metadata, summarize
 from release_state import qualify
 
 SECRET_NAMES = ('apns-team-id', 'apns-key-id', 'apns-signing-key')
@@ -28,7 +28,7 @@ def main():
                     '--name', os.environ['INFRA_DEPLOYMENT'], '--query', 'properties.outputs')
     vault = outputs['keyVaultName']['value']
     name = outputs['backendAppName']['value']
-    metadata = azure('keyvault', 'secret', 'list', '--vault-name', vault)
+    metadata = secret_metadata(vault, reader=azure)
     require_secrets(metadata)
     app = azure('containerapp', 'show', '--resource-group', 'rg-jarvis', '--name', name)
     identities = list(app['identity'].get('userAssignedIdentities', {}))
