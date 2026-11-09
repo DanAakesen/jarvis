@@ -6,10 +6,6 @@ on:
         description: Switch Factory after the five-worker test passes
         type: boolean
         default: false
-      retire_vm:
-        description: Remove the idle legacy VM after successful managed cutover
-        type: boolean
-        default: false
 permissions:
   contents: read
 concurrency:
@@ -90,11 +86,10 @@ jobs:
           if [[ ! -f "$RUNNER_TEMP/pool-canary.json" ]] || jq -e '.cleanupPassed == true' "$RUNNER_TEMP/pool-canary.json" >/dev/null; then
             az storage account delete --resource-group rg-jarvis --name "$QA_STORAGE" --subscription "$SUBSCRIPTION_ID" --yes --output none
           fi
-      - name: Activate qualified managed Factory and retire the legacy VM
+      - name: Activate qualified managed Factory
         if: inputs.activate == true
         env:
           GH_TOKEN: ${{ github.token }}
-          RETIRE_VM: ${{ inputs.retire_vm }}
         run: python scripts/factory-sandboxes/cutover.py
       - name: Retain sanitized runtime evidence
         if: always()
