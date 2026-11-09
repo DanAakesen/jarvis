@@ -127,7 +127,7 @@ export async function getSystemHealth(app: FastifyInstance, signal: AbortSignal,
       status === 'ok' ? 'Stored credential status is healthy.' : 'Credential status is unavailable.',
     credential?.lastCheckedAt ?? credential?.lastRenewedAt,
     name === 'codex-login' && app.renewCodexCredential && app.ownerInteractions
-      ? [{ tool: 'renew_credential', description: 'Request renewal of codex-login with Now approval.' }] : []);
+      ? [{ tool: 'renew_credential', description: 'Renew codex-login when the owner requests it.' }] : []);
   }
   add('background_jobs', jobs ? jobs.count ? 'degraded' : 'ok' : 'unknown',
     jobs ? `${jobs.count === 1_000 ? '1000 or more' : jobs.count} failed background jobs in the last hour of retained history.` :
