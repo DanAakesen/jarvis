@@ -1,3 +1,14 @@
+## Watch signed-archive correction — 9 November 2026
+
+The owner associated the shared App Group with both Watch App IDs. TestFlight
+run 42613537731 (build 88) passed the previous provisioning failure, then exposed
+four integer-literal overflows when compiling shared generated-view validation
+for watchOS arm64_32. Clamp the JSON safe-integer ceiling to the platform Int
+range before validation/arithmetic. The Watch PR workflow now compiles physical
+Watch Release architectures as well as the Simulator. Qualification and a new
+signed TestFlight upload remain pending; no extra Apple portal change is required
+for this compilation error.
+
 ## Managed Factory delivery update — 9 November 2026
 
 The owner has authorized Azure Container Apps Sandboxes as the managed JIT
@@ -34,6 +45,14 @@ retirement PR removes dedicated VM resources/config only after acceptance.
 See [qualification and evidence](docs/factory-concurrency-correction.md).
 
 ## Owner direction — 9 November 2026
+
+Runtime run 42607263687 allocated five workers but failed at command delivery;
+all five sandboxes and temporary storage were cleaned up. Managed cutover and VM
+retirement were skipped. Startup diagnostics now distinguish known adapter
+failures and collect only file metadata/error class names before cleanup. A
+qualified prior immutable worker image can be reused only when its runner source
+tree is identical, avoiding unrelated rebuilds during adapter diagnosis. The owner
+has accepted 300 cores (up to 37 8-core workers) for now; no further quota request.
 
 Factory concurrency is a priority correction: Dan requires up to 100 agents
 executing simultaneously on isolated, on-demand workers. The 128 GiB single-VM
@@ -4508,3 +4527,19 @@ one fixed 800-core request only if needed, and verifies the actual regional usag
 limit. It never allocates workers, lowers a larger limit, guesses a missing quota
 name or automatically replays an uncertain PUT. Submission and approval are
 separate evidence fields. Live submission/approval remain pending.
+
+
+## Managed worker credential ownership — 9 November 2026
+
+Runtime qualification 42617745859 identified `worker_boot_failed` in all five
+sandboxes. The upload API creates `.mailbox-sas.next` as root (0644) within
+worker-owned `/files/jarvis` (0700), while exec runs as UID 1000. The previous
+chmod therefore failed before starting the consumer. All test workers and
+temporary storage were cleaned up; cutover and VM retirement did not run.
+
+The adapter now copies the upload into a worker-owned 0600 staging file, atomically
+renames it to the live credential path, and removes the upload. Credential values
+remain out of command arguments and logs; the containing directory stays private.
+This also supports renewal without exposing a partially written live credential.
+The runner image is unchanged. Nine adapter tests and backend typechecking pass;
+live requalification is pending.

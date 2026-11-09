@@ -22,7 +22,7 @@ CHECK_ONLY_SCRIPTS = {
     "deploy_plan.py", "deploy_smoke.py", "smoke_reasons.py", "pipeline_impact.py",
     "pipeline_evidence.py", "release_state.py", "project_board.py", "plan_status.py",
     "worker_label.py", "ci_timing.py", "python-ci.sh", "normalize-pr-title.sh", "validate-pr-title.sh",
-    "chat_failure_diagnostics.py", "inspect_factory_capacity.py", "provision_managed_chat.py", "provision_managed_chat_handoff.sh",
+    "chat_failure_diagnostics.py", "inspect_factory_capacity.py", "reuse_factory_image.py", "provision_managed_chat.py", "provision_managed_chat_handoff.sh",
 }
 
 

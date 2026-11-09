@@ -1025,12 +1025,15 @@ private enum GeneratedViewValidator {
             .components(separatedBy: "\n")
             .count
         let startLine: Int
+        // watchOS arm64_32 uses a 32-bit Int. Keep both the platform and JSON
+        // integer bounds before converting or adding the displayed line count.
+        let maximumLineNumber = Int(clamping: Int64(9_007_199_254_740_991))
         if let value = data["startLine"] {
-            startLine = try integer(value, path: "\(path).startLine", minimum: 1, maximum: 9_007_199_254_740_991)
+            startLine = try integer(value, path: "\(path).startLine", minimum: 1, maximum: maximumLineNumber)
         } else {
             startLine = 1
         }
-        guard lineCount <= 400, startLine <= 9_007_199_254_740_991 - lineCount else {
+        guard lineCount <= 400, startLine <= maximumLineNumber - lineCount else {
             throw invalid("\(path).content", "must contain at most 400 lines with a safe line range")
         }
         if let highlightsValue = data["highlight"] {
@@ -1040,8 +1043,8 @@ private enum GeneratedViewValidator {
                 let rangePath = "\(path).highlight[\(index)]"
                 let range = try object(rangeValue, path: rangePath)
                 try checkKeys(range, path: rangePath, allowed: ["from", "to"], required: ["from", "to"])
-                let from = try integer(range["from"], path: "\(rangePath).from", minimum: 1, maximum: 9_007_199_254_740_991)
-                let to = try integer(range["to"], path: "\(rangePath).to", minimum: 1, maximum: 9_007_199_254_740_991)
+                let from = try integer(range["from"], path: "\(rangePath).from", minimum: 1, maximum: maximumLineNumber)
+                let to = try integer(range["to"], path: "\(rangePath).to", minimum: 1, maximum: maximumLineNumber)
                 guard from >= startLine, to >= from, to <= endLine else {
                     throw invalid(rangePath, "must be an inclusive range within the displayed lines")
                 }

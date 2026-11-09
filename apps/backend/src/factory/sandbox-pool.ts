@@ -11,6 +11,9 @@ const idPattern = /^sbx128-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0
 const object = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const status = (error: unknown, code: number): boolean => object(error) && error['statusCode'] === code;
 const io = (): {abortSignal: AbortSignal} => ({abortSignal: AbortSignal.timeout(20_000)});
+// Uploads are root-owned, but exec runs as the worker. Copy into a worker-owned
+// 0600 file inside the private directory, then atomically publish the rotation.
+export const installSandboxCredential = 'install -m 600 /files/jarvis/.mailbox-sas.next /files/jarvis/.mailbox-sas.ready && mv /files/jarvis/.mailbox-sas.ready /files/jarvis/.mailbox-sas && rm /files/jarvis/.mailbox-sas.next';
 export const sandboxMailboxName = (session: string): string => {
   if (!idPattern.test(session)) throw new FoundryClientError('protocol', 'sandbox-session');
   return 'factory-sbx-' + session.slice(7).replaceAll('-', '');
@@ -241,7 +244,7 @@ export class FactorySandboxPool {
         if (setup.exitCode) throw new Error('Sandbox workspace initialization failed');
         await this.group.files.write(box.id, '/files/jarvis/.mailbox-sas.next', sas, {abortSignal: signal});
         const boot = await this.group.sandboxes.exec(box.id, {command:
-          'chmod 600 /files/jarvis/.mailbox-sas.next && mv /files/jarvis/.mailbox-sas.next /files/jarvis/.mailbox-sas && cd /app && (nohup python worker.py </dev/null >>/files/jarvis/.worker.log 2>&1 &)'}, {abortSignal: signal});
+          installSandboxCredential + ' && cd /app && (nohup python worker.py </dev/null >>/files/jarvis/.worker.log 2>&1 &)'}, {abortSignal: signal});
         if (boot.exitCode) throw new Error('Sandbox worker boot failed');
         binding.booted = true;
         binding.bootedAt = Date.now();

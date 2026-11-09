@@ -1,5 +1,15 @@
 # Factory concurrency correction — 9 November 2026
 
+Previous runtime result: 42607263687 failed during worker command delivery with
+five allocated sandboxes. Cleanup passed; managed activation and VM retirement
+did not run. The separate storage/build qualification remains passed. The runtime
+canary now retains finite startup error codes, source locations and file metadata
+without credentials, provider messages or file contents. Optional image reuse
+requires a digest-verified artifact from this main-only workflow, the same runner
+source tree, subscription and registry. It does not reuse a runtime pass: all
+five-worker lifecycle assertions still run against the current adapter.
+The owner accepts the existing 300-core quota for now (up to 37 8-core workers).
+
 The Factory must support up to **100 simultaneously executing coding agents**.
 Workers start on demand, have isolated workspaces with the selected 128 GiB
 capacity target per worker, and release compute when idle. Preserve owner-set
@@ -255,3 +265,20 @@ five-worker test consumes 40 cores, confirmed by readback 42611441981. The
 100-worker architecture target remains, but no additional quota request or
 100-worker load test is currently required. Finish the five-worker qualification
 and dedicated VM retirement within the existing quota.
+
+
+
+## Managed worker credential ownership — 9 November 2026
+
+Runtime qualification 42617745859 identified `worker_boot_failed` in all five
+sandboxes. The upload API creates `.mailbox-sas.next` as root (0644) within
+worker-owned `/files/jarvis` (0700), while exec runs as UID 1000. The previous
+chmod therefore failed before starting the consumer. All test workers and
+temporary storage were cleaned up; cutover and VM retirement did not run.
+
+The adapter now copies the upload into a worker-owned 0600 staging file, atomically
+renames it to the live credential path, and removes the upload. Credential values
+remain out of command arguments and logs; the containing directory stays private.
+This also supports renewal without exposing a partially written live credential.
+The runner image is unchanged. Nine adapter tests and backend typechecking pass;
+live requalification is pending.
