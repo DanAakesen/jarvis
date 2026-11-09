@@ -136,3 +136,17 @@ admission ran against production tasks. CI covers the existing SQL ownership and
 admission contracts. The temporary storage role is scoped to that test account;
 workers still receive only their individual container SAS. Account removal follows
 confirmed cleanup of the five owned sandboxes and volumes.
+
+## Dedicated VM retirement
+
+`cutover.py` first requires the exact accepted backend release and passing evidence
+for five managed workers. It enables managed routing, verifies the ready revision,
+then removes only the deallocated legacy VM, its OS/data disks, NIC, outbound IP,
+VNet, NSG, identity grants, obsolete mailbox and deployment record. Shared backend,
+registry, vault, storage account and Foundry services remain. Resource deletion is
+not claimed until the retained evidence confirms it.
+
+The source cleanup removes the VM-specific Bicep, quota and provisioning scripts,
+workflow inputs, ARM power calls and backend environment preservation. Sandbox
+mailboxes accept only their own rotating container-scoped credentials. Historical
+VM evidence remains documentation, not an active deployment procedure.

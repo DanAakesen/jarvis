@@ -19,6 +19,9 @@ sandbox/disk after the worker is idle. The group retains up to 1,000 sandbox
 resources separately from SQL’s configurable admission limit (up to 100); stopped bindings
 skip management polling. Partial disk cleanup is retried after sandbox deletion.
 This runtime code is not yet deployed or live-tested.
+The separately prepared retirement change removes the VM template, quota workflow,
+launcher/inspection scripts, shared-mailbox identity access and VM routing/config.
+It must not be merged until managed cutover and dedicated-resource cleanup pass.
 See [qualification and evidence](factory-concurrency-correction.md).
 
 ## Direct owner instructions for Factory (7 November 2026)
