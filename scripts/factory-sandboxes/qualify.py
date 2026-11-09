@@ -188,7 +188,7 @@ asyncio.run(check())
             for box in group.list_sandboxes(labels=labels):
                 if all(box.labels.get(k) == v for k, v in labels.items()):
                     try:
-                        group.get_sandbox_client(box.id).delete()
+                        group.get_sandbox_client(box.id).begin_delete().result()
                     except Exception as error:
                         errors.append(type(error).__name__)
         except Exception as error:
@@ -196,7 +196,7 @@ asyncio.run(check())
         for volume in volumes:
             for attempt in range(20):
                 try:
-                    group.delete_volume(volume)
+                    group.begin_delete_volume(volume).result()
                     break
                 except Exception as error:
                     if getattr(error, 'status_code', None) == 404:
