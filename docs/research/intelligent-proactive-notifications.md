@@ -62,3 +62,10 @@ requested reminders still checked only browser subscriptions. They now use the
 same native-recipient availability check as intelligent insights, without changing
 explicit reminder timing, preferences, claim ownership or duplicate suppression.
 The 26 focused reminder/composition tests, backend typecheck and lint pass.
+
+The three new native notification interactions passed in job 129175020846 of
+run 42620677166: open finding actions/dismissal, read-only historical findings,
+and transient-load recovery. The run also exposes three pre-existing Notes tests
+that still follow the previous inline folder UI; those are not notification
+regressions and are not reported as passing. The current iOS source tree is
+identical to this tested revision; backend-only reminder corrections are separate.
