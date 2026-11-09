@@ -8,6 +8,11 @@ are disposable tests; the owner also requested removal of legacy GitHub tasks an
 issues. Issue #1634 was closed as not planned and its execution label removed;
 this does not assert that its separate SQL task record was deleted.
 
+The owner reported the app-wide parallel-task limit was 3, then chose 37 to match
+the accepted Azure quota. The owner is changing the setting; saving/readback is
+not independently verified. Existing project limits also constrain admission and
+must be checked through the owner app/tool path before claiming 37 task throughput.
+
 ## 9 November 2026 — Keep the current 300-core sandbox quota
 
 The owner accepts 300 SandboxCores for now. The qualified persistent-root profile
