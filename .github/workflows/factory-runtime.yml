@@ -69,6 +69,7 @@ jobs:
           digest=$(az acr manifest show-metadata --registry "$REGISTRY" --name "jarvis-runner-dotnet:$IMAGE_TAG" --query digest --output tsv --subscription "$SUBSCRIPTION_ID")
           echo "WORKER_IMAGE=$REGISTRY_HOST/jarvis-runner-dotnet@$digest" >> "$GITHUB_ENV"
       - name: Create disposable qualification storage and scope its access
+        id: qa-storage
         run: |
           az storage account create --resource-group rg-jarvis --name "$QA_STORAGE" --location swedencentral --sku Standard_LRS --allow-blob-public-access false --allow-shared-key-access false --min-tls-version TLS1_2 --tags project=jarvis purpose=factory-qualification run="$GITHUB_RUN_ID" --subscription "$SUBSCRIPTION_ID" --output none
           principal=$(jq -er .deploy.servicePrincipalId infra/bootstrap.output.json)
@@ -83,9 +84,10 @@ jobs:
       - name: Qualify five Factory workers through the production adapter
         run: node scripts/factory-sandboxes/pool-canary.mjs "$RUNNER_TEMP/pool-config.json" "$RUNNER_TEMP/pool-canary.json"
       - name: Remove disposable storage after sandbox cleanup
-        if: always()
+        if: always() && steps.qa-storage.outcome == 'success'
         run: |
-          if [[ -f "$RUNNER_TEMP/pool-canary.json" ]] && jq -e '.cleanupPassed == true' "$RUNNER_TEMP/pool-canary.json" >/dev/null; then
+          # The canary writes its initial evidence before it can allocate workers.
+          if [[ ! -f "$RUNNER_TEMP/pool-canary.json" ]] || jq -e '.cleanupPassed == true' "$RUNNER_TEMP/pool-canary.json" >/dev/null; then
             az storage account delete --resource-group rg-jarvis --name "$QA_STORAGE" --subscription "$SUBSCRIPTION_ID" --yes --output none
           fi
       - name: Activate qualified managed Factory and retire the legacy VM

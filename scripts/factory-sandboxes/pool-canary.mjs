@@ -16,7 +16,12 @@ const credential = new AzureCliCredential();
 const storage = new BlobServiceClient(`https://${config.storage}.blob.core.windows.net`, credential);
 const client = new SandboxGroupClient(credential, endpointForRegion('swedencentral'), config.subscription,
   'rg-jarvis', 'jarvis-factory', {retryOptions: {maxRetries: 0}});
-const evidence = {workersRequested: 5, sessions: [], passed: false, cleanupPassed: false, modelCalls: 0};
+const evidence = {workersRequested: 5, sessions: [], passed: false, cleanupPassed: false, modelCalls: 0, poolErrors: []};
+let stage = 'storage-access';
+function safeError(error) {
+  return {type: error.constructor.name, status: Number.isInteger(error.statusCode) ? error.statusCode : null,
+    code: typeof error.code === 'string' && /^[A-Za-z][A-Za-z0-9_.-]{0,79}$/u.test(error.code) ? error.code : null};
+}
 const save = () => writeFile(evidencePath, JSON.stringify(evidence, null, 2) + '\n');
 const options = {storage, credential, client, subscriptionId: config.subscription,
   region: 'swedencentral', resourceGroup: 'rg-jarvis', group: 'jarvis-factory', diskImageId: config.imageId,
@@ -24,7 +29,11 @@ const options = {storage, credential, client, subscriptionId: config.subscriptio
   apiScope: config.apiScope, enabled: true,
   tasks: {getActiveRepository: async () => null, recordEvent: async () => { throw new Error('Unexpected task mutation'); }},
   issueToken: async () => { throw new Error('Qualification must not mint repository tokens'); },
-  ownsInvocation: async () => false, onError: (error) => { console.log('Pool observation:', error.constructor.name); },
+  ownsInvocation: async () => false, onError: (error) => {
+    const detail = safeError(error);
+    if (evidence.poolErrors.length < 20) evidence.poolErrors.push(detail);
+    console.log('Pool observation:', JSON.stringify(detail));
+  },
 };
 let pool = new FactorySandboxPool(options);
 const request = (operation, sessionId, invocationId) => ({operation, sessionId,
@@ -61,6 +70,7 @@ try {
     try { await storage.getContainerClient('factory-sandbox-pool').createIfNotExists(); return true; }
     catch (error) { if (error.statusCode === 403) return false; throw error; }
   }, 180, 'temporary storage role propagation');
+  stage = 'worker-command-delivery';
   pool.start();
   // All five requests return accepted while independent environments start.
   const results = await Promise.all(Array.from({length: 5}, () => pool.transport(request('start'))));
@@ -73,6 +83,7 @@ try {
   }, 900, 'five runner refusal responses');
   evidence.commandDeliveryPassed = true;
   console.log('Five independently booted workers returned their command results');
+  stage = 'adapter-restart';
   // Recreate the actual backend adapter; assignments must survive the restart.
   await pool.stop();
   pool = new FactorySandboxPool(options); pool.start();
@@ -81,6 +92,7 @@ try {
     if (state.status !== 'failed') throw new Error('Persisted invocation lookup failed');
   }
   evidence.restartRoutingPassed = true;
+  stage = 'worker-disk-credentials';
   // The existing non-model probe reads mounted capacity and both provider credentials.
   await Promise.all(evidence.sessions.map(async (record) => {
     const container = storage.getContainerClient(sandboxMailboxName(record.session));
@@ -98,6 +110,7 @@ try {
     }, 90, 'worker probe');
   }));
   evidence.workerProbePassed = true;
+  stage = 'overlapping-execution';
   const boxes = await Promise.all(evidence.sessions.map((s) => sandboxFor(s.session)));
   const windows = await Promise.all(boxes.map(async (box) => {
     const result = await client.sandboxes.exec(box.id, {command: 'python -c \'import time,json; s=time.time(); time.sleep(30); print(json.dumps({"start":s,"end":time.time()}))\''});
@@ -107,8 +120,10 @@ try {
   if (Math.max(...windows.map((w) => w.start)) >= Math.min(...windows.map((w) => w.end))) throw new Error('Workers did not overlap');
   evidence.overlappingWorkers = 5;
   await save();
+  stage = 'idle-shutdown';
   await until(async () => (await Promise.all(boxes.map((box) => client.sandboxes.get(box.id)))).every((box) => ['Stopped','Suspended','Idle'].includes(box.state)), 240, 'independent idle shutdown');
   evidence.idleShutdownPassed = true;
+  stage = 'resume';
   // A new turn must resume the same private disk and use its fenced consumer.
   const first = evidence.sessions[0];
   const resumed = await pool.transport(request('resume', first.session));
@@ -117,7 +132,8 @@ try {
   evidence.passed = true;
   await save();
 } catch (error) {
-  evidence.failureType = error.constructor.name;
+  evidence.failureStage = stage;
+  evidence.failure = safeError(error);
   await save();
   console.error('Factory runtime qualification failed; details withheld to protect credentials');
   process.exitCode = 1;

@@ -9,7 +9,7 @@ import sys
 import time
 
 sys.path.insert(0, str(Path('.github/scripts').resolve()))
-from release_state import api, artifact, validate_previous, UPLOAD  # noqa: E402
+from release_state import api, artifact, validate_previous, valid_origin, valid_version, UPLOAD  # noqa: E402
 
 
 def az(*args):
@@ -18,6 +18,19 @@ def az(*args):
     if result.returncode:
         raise RuntimeError('Azure operation failed: ' + args[0])
     return json.loads(result.stdout) if result.stdout.strip() else None
+
+
+def accepted_backend(release: dict | None, source: str) -> dict:
+    backend = (release or {}).get('components', {}).get('backend', {})
+    # A script-only change may correctly reuse the same qualified backend image.
+    # Require the exact release receipt, including its successful reuse checks.
+    if (not release or release.get('accepted') is not True
+            or release.get('source') != source or release.get('applied_head') != source
+            or backend.get('state') not in {'applied', 'reused'}
+            or not valid_version('backend', backend.get('version'))
+            or not valid_origin(backend.get('origin')) or not valid_origin(backend.get('revision_origin'))):
+        raise RuntimeError('Deploy and accept this exact backend revision before cutover')
+    return backend
 
 
 def cutover(root: Path):
@@ -33,10 +46,7 @@ def cutover(root: Path):
         raise RuntimeError('The latest main deployment must finish successfully before cutover')
     release = artifact(runs[0], UPLOAD, 'release-evidence.json')
     validate_previous(runs[0], release)
-    backend = (release or {}).get('components', {}).get('backend', {})
-    if (not release or not release.get('accepted') or backend.get('state') != 'applied'
-            or backend.get('origin', {}).get('source') != config['source']):
-        raise RuntimeError('Deploy and accept this exact backend revision before cutover')
+    backend = accepted_backend(release, config['source'])
     app_name = outputs['backendAppName']['value']
     app = az('containerapp', 'show', '--resource-group', 'rg-jarvis', '--name', app_name)
     image = backend['version']['image']
@@ -91,9 +101,11 @@ def retire_vm(evidence, outputs, root):
     if [value['id'].lower() for value in vm['networkProfile']['networkInterfaces']] != [expected_nic.lower()]:
         raise RuntimeError('VM references an unexpected shared network interface')
     # Remove the obsolete identity's scoped grants, including grants on shared vault/registry.
-    assignments = az('role', 'assignment', 'list', '--all')
+    assignments = az('role', 'assignment', 'list', '--scope', scope, '--all')
     for assignment in assignments:
-        if assignment.get('principalId') == principal and assignment['scope'].lower().startswith(scope.lower() + '/'):
+        dedicated_identity = assignment.get('principalId') == principal and assignment['scope'].lower().startswith(scope.lower() + '/')
+        dedicated_vm_scope = assignment['scope'].lower() == (scope + '/providers/Microsoft.Compute/virtualMachines/' + name).lower()
+        if dedicated_identity or dedicated_vm_scope:
             az('role', 'assignment', 'delete', '--ids', assignment['id'])
     az('vm', 'delete', '--resource-group', 'rg-jarvis', '--name', name, '--yes')
     for disk in disks:
