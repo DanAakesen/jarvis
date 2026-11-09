@@ -1,9 +1,13 @@
 import { Readable } from 'node:stream';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { SandboxGroupClient } from '@azure/containerapps-sandbox';
 import type { BlobServiceClient } from '@azure/storage-blob';
 import type { TaskStore } from './task-store.js';
-import { FactorySandboxPool, sandboxMailboxName } from './sandbox-pool.js';
+import { FactorySandboxPool, installSandboxCredential, sandboxMailboxName } from './sandbox-pool.js';
 
 function fixture() {
   const data = new Map<string, string>();
@@ -70,6 +74,27 @@ const start = {operation: 'start', path: 'protocols/invocations', method: 'POST'
   body: {agent: 'codex', task_id: '23'}, sessionId: undefined, options: {}};
 
 describe('managed Factory routing', () => {
+  it.skipIf(process.platform === 'win32')('publishes private worker-owned credentials and rotates without mutating the uploaded inode', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'factory-sas-'));
+    const command = installSandboxCredential.replaceAll('/files/jarvis', directory);
+    try {
+      for (const value of ['synthetic-first', 'synthetic-rotation']) {
+        const uploaded = join(directory, '.mailbox-sas.next');
+        writeFileSync(uploaded, value, {mode: 0o444});
+        const original = statSync(uploaded);
+        expect(execFileSync('sh', ['-c', command], {encoding: 'utf8'})).toBe('');
+        const published = join(directory, '.mailbox-sas');
+        expect(readFileSync(published, 'utf8')).toBe(value);
+        expect(statSync(published).mode & 0o777).toBe(0o600);
+        expect(statSync(published).uid).toBe(process.getuid!());
+        expect(statSync(published).ino).not.toBe(original.ino);
+        expect(existsSync(uploaded)).toBe(false);
+        expect(existsSync(join(directory, '.mailbox-sas.ready'))).toBe(false);
+      }
+      expect(() => execFileSync('sh', ['-c', command], {stdio: 'pipe'})).toThrow();
+      expect(readFileSync(join(directory, '.mailbox-sas'), 'utf8')).toBe('synthetic-rotation');
+    } finally { rmSync(directory, {recursive: true, force: true}); }
+  });
   it('accepts five independent tasks while all five sandbox starts are still pending', async () => {
     const t = fixture();
     const results = await Promise.all(Array.from({length: 5}, () => t.pool.transport(start))) as {session_id: string; invocation_id: string; status: string}[];
