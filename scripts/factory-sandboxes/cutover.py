@@ -7,6 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path('.github/scripts').resolve()))
 from release_state import api, artifact, validate_previous, valid_origin, valid_version, UPLOAD  # noqa: E402
@@ -18,6 +19,29 @@ def az(*args):
     if result.returncode:
         raise RuntimeError('Azure operation failed: ' + args[0])
     return json.loads(result.stdout) if result.stdout.strip() else None
+
+
+def role_assignments(scope):
+    # CLI --scope excludes child scopes; --all cannot be combined with it.
+    # The resource-group REST listing includes the resource-scoped grants we
+    # must retire without requiring a subscription-wide role enumeration.
+    path = scope + '/providers/Microsoft.Authorization/roleAssignments'
+    url = 'https://management.azure.com' + path + '?api-version=2022-04-01'
+    assignments = []
+    for _ in range(20):
+        parsed = urlsplit(url)
+        if (parsed.scheme != 'https' or parsed.netloc != 'management.azure.com'
+                or parsed.path.lower() != path.lower() or parsed.fragment):
+            raise RuntimeError('Role assignment pagination left the resource group')
+        page = az('rest', '--method', 'get', '--url', url)
+        for value in page['value']:
+            properties = value['properties']
+            assignments.append({'id': value['id'], 'scope': properties['scope'],
+                                'principalId': properties['principalId']})
+        url = page.get('nextLink')
+        if not url:
+            return assignments
+    raise RuntimeError('Role assignment pagination exceeded its bound')
 
 
 def accepted_backend(release: dict | None, source: str) -> dict:
@@ -101,7 +125,7 @@ def retire_vm(evidence, outputs, root):
     if [value['id'].lower() for value in vm['networkProfile']['networkInterfaces']] != [expected_nic.lower()]:
         raise RuntimeError('VM references an unexpected shared network interface')
     # Remove the obsolete identity's scoped grants, including grants on shared vault/registry.
-    assignments = az('role', 'assignment', 'list', '--scope', scope, '--all')
+    assignments = role_assignments(scope)
     for assignment in assignments:
         dedicated_identity = assignment.get('principalId') == principal and assignment['scope'].lower().startswith(scope.lower() + '/')
         dedicated_vm_scope = assignment['scope'].lower() == (scope + '/providers/Microsoft.Compute/virtualMachines/' + name).lower()
