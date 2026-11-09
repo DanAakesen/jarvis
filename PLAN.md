@@ -4540,6 +4540,19 @@ live requalification is pending.
 The main-only `Native push readiness` workflow reads the existing backend's
 notification switches and APNs configuration presence. It emits booleans and
 matching Key Vault secret names only, never key contents or device tokens.
-It makes no configuration changes and sends no notification. Use it to identify
+Inspection makes no configuration changes and sends no notification. Use it to identify
 missing server wiring before claiming intelligent notifications are available
 on an installed iPhone; Apple Developer capability enablement alone is insufficient.
+
+The owner identified existing Apple APNs key `367DAUWL3Z` (Jarvis APNs key).
+Reuse its downloaded private key if APNs access is enabled; do not create or
+revoke a key merely because server setup is incomplete. Store its contents in
+`apns-signing-key`, with metadata in `apns-key-id` and `apns-team-id`.
+
+After the owner stores those enabled secrets, primary may dispatch Native push
+readiness with `enable_delivery=true` from qualified main. Activation uses only
+Key Vault references with the existing backend identity, sets production APNs,
+and waits for the ready backend revision. Ordinary Bicep deployments preserve
+the enabled state and the three references. No private-key read is needed by
+the workflow, and it sends no test notification. Installed receipt/tap testing
+remains separate. Activation has not run.

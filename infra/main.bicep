@@ -33,6 +33,9 @@ param factoryWorkerEnabled bool = false
 @description('Explicitly qualified managed Factory runtime settings; preserved during ordinary deployments.')
 param factorySandboxConfiguration object = {}
 
+@description('Preserve native APNs delivery after the owner provisions the three protected APNs secrets and primary activates it.')
+param nativePushEnabled bool = false
+
 @description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')
 param pcBridgeClientId string = ''
 @description('Dan’s IANA time zone used for Google Calendar day boundaries. Empty disables Google mail and calendar tools.')
@@ -871,6 +874,11 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
           identity: backendIdentity.id
         }
       ]
+      secrets: nativePushEnabled ? [for name in ['apns-team-id', 'apns-key-id', 'apns-signing-key']: {
+        name: name
+        keyVaultUrl: '${keyVault.properties.vaultUri}secrets/${name}'
+        identity: backendIdentity.id
+      }] : []
     }
     template: {
       scale: {
@@ -1039,7 +1047,13 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               name: 'FOUNDRY_COPILOT_POLICY_COMPATIBILITY'
               value: foundryCopilotPolicyCompatibility
             }
-          ], empty(jarvisAgentObjectId) ? [] : [
+          ], nativePushEnabled ? [
+            { name: 'JARVIS_APPROVAL_NOTIFICATIONS_ENABLED', value: 'true' }
+            { name: 'APNS_ENVIRONMENT', value: 'production' }
+            { name: 'APNS_TEAM_ID', secretRef: 'apns-team-id' }
+            { name: 'APNS_KEY_ID', secretRef: 'apns-key-id' }
+            { name: 'APNS_SIGNING_KEY', secretRef: 'apns-signing-key' }
+          ] : [], empty(jarvisAgentObjectId) ? [] : [
             {
               name: 'ENTRA_JARVIS_AGENT_OBJECT_ID'
               value: jarvisAgentObjectId

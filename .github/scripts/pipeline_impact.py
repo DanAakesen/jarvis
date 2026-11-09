@@ -20,7 +20,7 @@ CHECK_ONLY_WORKFLOWS = {
     "ios-ci.yml", "ios-simulator.yml", "ios-testflight.yml", "watch-build.yml", "worker-quota.yml", "chat-diagnostics.yml", "factory-capacity.yml", "factory-sandboxes.yml", "factory-runtime.yml",
 }
 CHECK_ONLY_SCRIPTS = {
-    "native_push_readiness.py",
+    "native_push_readiness.py", "configure_native_push.py",
     "deploy_plan.py", "deploy_smoke.py", "smoke_reasons.py", "pipeline_impact.py",
     "pipeline_evidence.py", "release_state.py", "project_board.py", "plan_status.py",
     "worker_label.py", "ci_timing.py", "python-ci.sh", "normalize-pr-title.sh", "validate-pr-title.sh",

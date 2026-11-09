@@ -5,10 +5,10 @@ import re
 import subprocess
 
 
-def azure(*args):
+def azure(*args, timeout=60):
     result = subprocess.run(['az', *args, '--subscription', os.environ['SUBSCRIPTION_ID'],
                              '--only-show-errors', '--output', 'json'],
-                            capture_output=True, text=True, check=False, timeout=60)
+                            capture_output=True, text=True, check=False, timeout=timeout)
     if result.returncode:
         raise RuntimeError('Azure read unavailable: ' + args[0])
     return json.loads(result.stdout)

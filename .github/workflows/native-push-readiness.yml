@@ -1,18 +1,31 @@
 name: Native push readiness
 on:
   workflow_dispatch:
+    inputs:
+      enable_delivery:
+        description: Enable production APNs using the three owner-provided Key Vault secrets
+        type: boolean
+        default: false
 permissions:
   contents: read
+concurrency:
+  group: jarvis-production-deploy
+  cancel-in-progress: false
+  queue: max
 jobs:
   inspect:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: read
+      actions: read
+      pull-requests: read
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
         with:
           python-version-file: .python-version
@@ -21,6 +34,13 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Activate owner-provided APNs keys on qualified main
+        if: inputs.enable_delivery == true
+        env:
+          SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          INFRA_DEPLOYMENT: ${{ vars.JARVIS_INFRA_DEPLOYMENT_NAME }}
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/configure_native_push.py
       - name: Inspect configuration presence without reading signing keys
         env:
           SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
