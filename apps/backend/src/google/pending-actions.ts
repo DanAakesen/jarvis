@@ -43,6 +43,29 @@ export class PendingGoogleActions {
 
   constructor(private readonly now: () => number = Date.now) {}
 
+  private readonly requested = new Map<string, { expiresAt: number; result: Promise<unknown> }>();
+
+  /** Run an authenticated owner's resolved request without staging another approval. */
+  executeRequested(input: Omit<PendingAction, 'code' | 'browserId' | 'createdAt' | 'confirmation'> & {
+    readonly signal: AbortSignal;
+    readonly requestKey: string;
+  }): Promise<unknown> {
+    if (!input.sourceSessionId || !input.sourceMessageId) throw new ToolRefusal('A verified owner request is required.');
+    input.signal.throwIfAborted();
+    for (const [key, receipt] of this.requested) {
+      if (receipt.expiresAt <= this.now()) this.requested.delete(key);
+    }
+    const key = JSON.stringify([input.sourceSessionId, input.sourceMessageId, input.scope, input.requestKey, input.summary, input.items]);
+    const prior = this.requested.get(key);
+    if (prior) return prior.result;
+    if (this.requested.size >= MAX_PENDING_ACTIONS) throw new ToolRefusal('Too many actions are currently being tracked.');
+    const result = Promise.resolve().then(() => input.execute(input.signal));
+    // Retain uncertain failures too: a duplicate call must not send/create again.
+    this.requested.set(key, { expiresAt: this.now() + ACTION_TTL_MS, result });
+    return result;
+  }
+
+
   stage(input: Omit<PendingAction, 'code' | 'browserId' | 'createdAt' | 'confirmation'>): {
     readonly status: 'awaiting_confirmation';
     readonly summary: string;

@@ -133,7 +133,7 @@ Preferences do not alter backend policy.`;
 
 ${projectAwarenessInstructions(projects)}
 
-Away does not change approval routing: confirmations wait in the authenticated browser app in every mode.`;
+Owner requests execute without another approval in every presence mode.`;
   return [style, mode, contextual].join('\n\n');
 }
 
@@ -172,8 +172,8 @@ ${additionalRealtimeInstructions(
 
 function voiceCapabilityGuidance(language: 'da' | 'en'): string {
   return language === 'da'
-      ? `Brug først jarvis_discover_capabilities for at finde den relevante kapabilitet og dens skema. Kald derefter jarvis_execute_capability med det nøjagtige kapabilitetsnavn og argumenterne. Skemaet er vejledning; backend validerer stadig alle argumenter og anvender den eksisterende adgangs- og godkendelsespolitik. En mundtlig accept godkender kun, når backend knytter Dans senere svar til en faktisk klargjort kalenderændring eller det aktuelle afventende madestimat; ellers bruges godkendelse i Now. Klargør aldrig ændringen igen fra et ja; bekræft kun det faktiske værktøjsresultat.`
-      : `Use jarvis_discover_capabilities first to find the relevant capability and its schema. Then call jarvis_execute_capability with the exact capability name and arguments. The schema guides the call; the backend still validates every argument and applies the existing authorization and approval policy. Spoken agreement approves only when the backend binds Dan's later reply to an actual staged calendar change or the current pending food estimate; otherwise use approval in Now. Never restage the change from a yes; report only the actual tool result.`;
+      ? `Brug jarvis_discover_capabilities og derefter jarvis_execute_capability med det fundne skema. Dans anmodning giver tilladelse: udfør uden endnu en godkendelse. Brug samtalens kontekst; spørg kun efter nødvendige manglende oplysninger. Backend kontrollerer adgang og argumenter. Bekræft kun det faktiske værktøjsresultat.`
+      : `Use jarvis_discover_capabilities then jarvis_execute_capability with the discovered schema. Dan's request authorizes its scope: execute without another approval. Use conversation context; ask only for essential missing details. The backend validates access and arguments. Report only actual tool results.`;
 }
 
 function compactInstructions(
@@ -366,7 +366,7 @@ export function createRealtimeSessionUpdate(
     session: {
       instructions: `${capabilityMode === 'discovery'
         ? `${instructions}\n\n${voiceCapabilityGuidance(language)}`
-        : instructions}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call. Earlier refusals in history do not change this channel. Backend permissions still apply. For every meal estimate, show actual returned protein (g), calories (kcal) and fat (g) as a bulleted list; unknown stays unknown. Stage food estimates with health_food_review log_estimate before inviting confirmation; prose or lookup alone creates no pending proposal. Only the backend can bind a new reply to that exact proposal. Never use historical agreement or claim a write without a committed tool receipt.`,
+        : instructions}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call. Earlier refusals in history do not change this channel. Backend permissions still apply. For every meal estimate, show actual returned protein (g), calories (kcal) and fat (g) as a bulleted list; unknown stays unknown. When Dan asks to log an estimate, use health_food_review log_estimate directly without another approval. Questions or previews only require lookup. Never claim a write without a committed tool receipt.`,
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },

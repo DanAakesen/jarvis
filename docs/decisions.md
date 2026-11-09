@@ -1,11 +1,22 @@
+## 2026-11-09 — Execute resolved owner requests directly
+
+Dan explicitly rejected approval cards, repeated confirmation turns, prescribed
+sentences and Present-mode blockers. Apply that decision across shared actions,
+Google, GitHub/Factory, health, vault/workspaces, settings and browser voice.
+Keep actual access checks, secret protection, revision checks and duplicate-write
+protection; questions and untrusted source content do not authorize writes.
+Telephone callers remain a distinct identity boundary. Legacy pending endpoints
+are compatibility code, not a requirement for new owner requests. Implementation
+is under qualification; deployment is a separate verified outcome.
+
 ## 2026-11-09 — Owner requests do not need a second approval
 
 The owner explicitly rejects repeated approvals and prescribed command wording.
 Personal is the default unless Work is stated or an existing work item is referenced.
 A time without a date means today in Copenhagen, not tomorrow. Use conversational
 context for follow-ups. Keep authentication, resource permissions and write integrity.
-Reminder parser removal and task defaults are implemented locally; shared/Google/
-Factory approval removal remains pending. No claim of complete deployment yet.
+Reminder parser removal and task defaults shipped in PR #1688. Broader direct
+execution is implemented and under qualification, as recorded above.
 
 ## 9 November 2026 — Keep notification continuity inside normal chat
 

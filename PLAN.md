@@ -1,12 +1,11 @@
-## Owner action friction — 9 November 2026
+## Direct owner actions — 9 November 2026
 
-Implemented locally: Personal default in task schema/writer and chat/voice
-instructions; today's date for time-only reminder instructions; removal of the
-reminder backend's exact-sentence parser. Structured schedule validation, verified
-owner-message provenance, resource checks and retry deduplication remain.
-The reminder and task regression suite passes. Broader shared, Google and Factory
-confirmation paths remain to be migrated to the owner's no-second-approval policy.
-This change is not yet deployed; do not report all approval gates removed.
+Shared owner actions, Google writes and Factory/GitHub writes now execute the
+resolved authenticated request without a second approval. Health logging and
+vault/workspace changes no longer require Present mode or a browser approval.
+Chat and voice guidance follows the same policy. Reminder defaults and removal
+of prescribed wording shipped in PR #1688; this broader change is in qualification.
+Do not mark this broader cleanup deployed until its production rollout completes.
 
 ## Push-to-chat continuity — 9 November 2026
 

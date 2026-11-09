@@ -1,3 +1,13 @@
+## Current owner-action execution policy — 9 November 2026
+
+The owner has authorized removal of repeated app approvals and release of these
+fixes. Do not infer a new approval requirement from historical sections below.
+Keep authenticated owner/resource checks and write integrity. Clear owner requests
+execute in text/browser voice without another confirmation or Present-mode gate;
+telephone identity verification remains separate. Qualify backend and hosted-agent
+changes together before reporting live completion. No new native build is required
+for this backend/tool-instruction correction.
+
 ## Push-to-chat branch qualification — 9 November 2026
 
 `feature/push-chat-continuity` changes notification navigation/context and adds

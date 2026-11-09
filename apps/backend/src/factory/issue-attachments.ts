@@ -42,7 +42,11 @@ export async function issueAttachments(server: FastifyInstance, input: IssueAtta
     if (!attachment) {
       throw new ToolRefusal('That file is not available in Dan’s conversation history.');
     }
-    validateIssueDraft(attachment.name, attachment.content || 'No extracted description is available.');
+    if (input.publish === 'public' && !['image/png', 'image/jpeg', 'image/webp'].includes(attachment.contentType)) {
+      throw new ToolRefusal('Only sanitized images can be published; use a description for documents.');
+    }
+    try { validateIssueDraft(attachment.name, attachment.content || 'No extracted description is available.'); }
+    catch { throw new ToolRefusal('The attachment contains invalid text or a possible secret. Nothing was published.'); }
     result.push(attachment);
   }
   return result;

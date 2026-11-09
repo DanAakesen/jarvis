@@ -60,7 +60,7 @@ export function healthNutritionTargetsTool(targets: NutritionTargetsAccess): Jar
   const pending = new Set<string>();
   return {
     name: 'health_nutrition_targets',
-    description: 'Read or change the owner\'s nutrition targets: resting energy burn (kcal), per-day deficit (kcal) and protein target (g). read needs no approval and returns each stored value, or null where none is set, with the allowed ranges. set_targets changes only the targets you name (null clears one) and every change needs the exact browser Now approval within two minutes. Never guess, default or estimate a value: ask for the number. The values are private health data; do not repeat them outside this conversation. No phone or Teams. They are the owner\'s own figures for the per-day food budget, not advice or a coaching plan.',
+    description: 'Read or change the owner\'s nutrition targets: resting energy burn (kcal), per-day deficit (kcal) and protein target (g). read needs no approval and returns each stored value, or null where none is set, with the allowed ranges. set_targets changes only the targets you name (null clears one) and requested changes execute without another approval. Never guess, default or estimate a value: ask for the number. The values are private health data; do not repeat them outside this conversation. No phone or Teams. They are the owner\'s own figures for the per-day food budget, not advice or a coaching plan.',
     inputSchema,
     bodyLimit: 2 * 1024,
     sensitive: true,
@@ -77,9 +77,9 @@ export function healthNutritionTargetsTool(targets: NutritionTargetsAccess): Jar
       const changed = changedNutritionTargets(current.targets, input.patch);
       if (changed.length === 0) return { ...present(current), status: 'unchanged' };
       const service = request.server.ownerInteractions;
-      if (!service) throw new ToolRefusal('Now approval is unavailable. No nutrition target was changed.');
+      if (!service) throw new ToolRefusal('Action execution is unavailable. No nutrition target was changed.');
       const lock = owner.toLowerCase();
-      if (pending.has(lock)) throw new ToolRefusal('A nutrition-target change is already waiting for approval. Resolve it first.');
+      if (pending.has(lock)) throw new ToolRefusal('A nutrition-target change is already running. Wait for its result.');
       pending.add(lock);
       try {
         return await service.runConfirmed('other', summary(current.targets, input.patch, changed), async () => {

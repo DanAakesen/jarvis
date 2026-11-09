@@ -1,3 +1,15 @@
+## Direct owner execution — 9 November 2026
+
+OwnerInteractionService.runConfirmed executes directly outside telephone context.
+Its callers retain authorization, resource validation, cancellation and revision
+checks. Google operations execute the verified owner-message request and retain
+bounded process-local receipts, including uncertain failures, to avoid duplicate
+writes. GitHub direct requests use message-scoped receipts; Factory retains its
+existing single-use and issue-origin protections without a second model approval.
+Health and vault/workspace actions no longer depend on Present mode. Historical
+pending-action endpoints remain for compatibility, but new owner writes do not
+stage approvals. Receipts are not a durable cross-restart exactly-once guarantee.
+
 ## Conversational reminder execution — 9 November 2026
 
 The agent resolves reminder intent from the conversation into structured tool
@@ -6,8 +18,7 @@ with a separate natural-language command grammar. It still verifies source owner
 message/session, validates schedule fields, resolves saved task identity and
 persists with retry deduplication. The task writer defaults omitted scope to
 Personal; agent and shared chat/voice instructions default date-free times to
-today in Europe/Copenhagen. Other action-family approval implementations are
-still separate and pending removal under the updated owner policy.
+today in Europe/Copenhagen. Other action families now follow the direct execution policy above.
 
 ## Notification conversation context — 9 November 2026
 

@@ -1,3 +1,11 @@
+## Owner actions without approval interruptions — 9 November 2026
+
+Requested actions return progress and a truthful completion or failure receipt.
+They do not introduce a Now approval card, spoken approval invitation, required
+screen interaction or second confirmation turn. Apply this in signed-in text and
+browser voice, including Away mode. Existing telephone identity verification is
+separate. No new screen or layout is introduced.
+
 ## Direct owner action feedback — 9 November 2026
 
 A clear reminder request should produce a concise saved result, without a

@@ -6,7 +6,7 @@ import type { FridaLookup } from '../nutrition/frida.js';
 import { healthResultByteLimit, type HealthFoodLookup } from '../query.js';
 import { resolveHealthOwner } from '../owner.js';
 import { projectNutritionRecord } from '../records.js';
-import { activeFoodSession, foodMessageIdentity, foodReceipt, foodSourceMessage, requireFoodReviewPresence, type InternalNutrition } from './food.js';
+import { activeFoodSession, foodMessageIdentity, foodReceipt, foodSourceMessage, type InternalNutrition } from './food.js';
 
 function optionalIntent<T>(parse: (text: string) => T, text: string): T | null {
   try { return parse(text); }
@@ -39,7 +39,7 @@ export function healthFoodReviewTool(nutrition: InternalNutrition, now: () => nu
   const pending = new Set<string>();
   return {
     name: 'health_food_review',
-    description: 'For food photos, use the existing image input only to propose generic food components and estimated grams; Frida is a nutrient reference, not image or portion recognition. Never describe estimates as measured. If an image is unreadable or not food, say so and ask for a clearer photo or description. If Frida fails, report that reference failure without guessing nutrition and offer a retry or text description. Use lookup_components with 1-25 {name, grams|null, preparationMethod|null} values to resolve references. Always present actual returned protein (g), calories (kcal) and fat (g) as a bulleted list, including for lookup-only estimates. Use the returned presentation; never stop at an acknowledgment. Show unknown nutrients as unknown, never zero or invented numbers. Present component/portion estimates and uncertainty and invite edits. Ask about missing quantities or preparation where needed. If identity, preparation or grams change, look up the edited components again. Then call log_estimate with referenceComponents and a mealName BEFORE inviting confirmation; the server re-resolves Frida, calculates totals and stages the exact proposal. A prose estimate or lookup alone does not stage approval. Nothing writes until Dan approves the exact proposal; his next natural text/browser-voice reply can approve the current pending estimate, or he can use Now. Never restage an estimate from an affirmative reply or treat historical agreement as approval. If no proposal is pending, prepare and stage a new proposal for a new confirmation; do not claim intake was logged. Report lookup estimates immediately; only claim intake was logged after a committed tool receipt. Never supply totals, provider provenance, capture method, owner or confirmation flags for a reference estimate. Use health_food for exact labels/favourites. Corrections/deletions require the exact owned intake key/current revision and Now approval. Present-mode browser chat/browser voice on desktop or mobile are supported; a mobile browser is NOT a telephone call. Telephone calls, Teams and Health export are unsupported.',
+    description: 'For food photos, use the existing image input only to propose generic food components and estimated grams; Frida is a nutrient reference, not image or portion recognition. Never describe estimates as measured. If an image is unreadable or not food, say so and ask for a clearer photo or description. If Frida fails, report that reference failure without guessing nutrition and offer a retry or text description. Use lookup_components with 1-25 {name, grams|null, preparationMethod|null} values to resolve references. Always present actual returned protein (g), calories (kcal) and fat (g) as a bulleted list, including for lookup-only estimates. Use the returned presentation; never stop at an acknowledgment. Show unknown nutrients as unknown, never zero or invented numbers. Present component/portion estimates and uncertainty and invite edits. Ask about missing quantities or preparation where needed. If identity, preparation or grams change, look up the edited components again. When Dan requests logging, call log_estimate with referenceComponents and mealName; the server resolves references and saves the estimate without another approval. For a question or preview, only look up and present the estimate. Report lookup estimates immediately; only claim intake was logged after a committed tool receipt. Never supply totals, provider provenance, capture method, owner or confirmation flags for a reference estimate. Use health_food for exact labels/favourites. Corrections/deletions require the exact owned intake key/current revision. Authenticated browser chat/browser voice on desktop or mobile are supported; a mobile browser is NOT a telephone call. Telephone calls, Teams and Health export are unsupported.',
     inputSchema: foodReviewInputSchema,
     bodyLimit: 96 * 1024,
     sensitive: true,
@@ -103,9 +103,8 @@ export function healthFoodReviewTool(nutrition: InternalNutrition, now: () => nu
           throw new ToolRefusal('Use health_food log_favorite for this explicit saved favourite; no extra approval is needed.');
         }
       }
-      await requireFoodReviewPresence(request, signal);
       const service = request.server.ownerInteractions;
-      if (!service) throw new ToolRefusal('Dan’s Now approval service is unavailable. No food was changed.');
+      if (!service) throw new ToolRefusal('Action execution is unavailable. No food was changed.');
       const lock = `${owner.toLowerCase()}:${key}`;
       if (pending.has(lock)) throw new ToolRefusal('This food entry is already awaiting review. Resolve that proposal first.');
       if (pending.size >= 10) throw new ToolRefusal('There are too many pending food proposals. Resolve one first.');
@@ -162,7 +161,6 @@ export function healthFoodReviewTool(nutrition: InternalNutrition, now: () => nu
       }
       try {
         return await service.runConfirmed(change.operation === 'delete' ? 'delete' : 'other', summary, async () => {
-          await requireFoodReviewPresence(request, operationSignal);
           operationSignal.throwIfAborted();
           const current = await store.intake(key, operationSignal);
           const replay = replayedChange(current);
