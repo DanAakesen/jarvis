@@ -101,7 +101,7 @@ export class FactorySandboxPool {
     let mailbox = this.mailboxes.get(session);
     if (!mailbox) {
       mailbox = new FactoryWorkerMailbox({container: this.options.storage.getContainerClient(sandboxMailboxName(session)),
-        credential: this.options.credential, enabled: this.options.enabled, sessionId: session,
+        enabled: this.options.enabled, sessionId: session,
         wake: async () => { this.schedule(session); }, tasks: this.options.tasks, issueToken: this.options.issueToken,
         ownsInvocation: this.options.ownsInvocation, onError: this.options.onError});
       this.mailboxes.set(session, mailbox);
@@ -197,7 +197,7 @@ export class FactorySandboxPool {
             labels, volumes: [{volumeName: volume, mountpoint: '/files'}],
             entrypoint: ['/bin/sh', '-c'], cmd: ['sleep infinity'],
             environment: {AZURE_CLIENT_ID: this.options.identityClientId, KEY_VAULT_URI: this.options.vaultUri,
-              JARVIS_WORK_ROOT: '/files/jarvis', JARVIS_FACTORY_MANAGED_SANDBOX: 'true',
+              JARVIS_WORK_ROOT: '/files/jarvis',
               JARVIS_FACTORY_WORKER_BLOB_URL: container.url,
               JARVIS_FACTORY_MAILBOX_SAS_FILE: '/files/jarvis/.mailbox-sas',
               JARVIS_BACKEND_URL: this.options.backendUrl, JARVIS_API_SCOPE: this.options.apiScope,

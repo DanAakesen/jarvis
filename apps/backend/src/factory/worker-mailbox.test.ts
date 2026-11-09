@@ -4,8 +4,8 @@ import type { ContainerClient } from '@azure/storage-blob';
 import type { TaskStore } from './task-store.js';
 import { FactoryWorkerMailbox } from './worker-mailbox.js';
 
-const session = 'vm128-00000000-0000-4000-8000-000000000001';
-const invocation = 'vm128-00000000-0000-4000-8000-000000000002';
+const session = 'sbx128-00000000-0000-4000-8000-000000000001';
+const invocation = 'sbx128-00000000-0000-4000-8000-000000000002';
 function fixture(enabled = true) {
   const values = new Map<string, unknown>();
   const container = {
@@ -22,24 +22,23 @@ function fixture(enabled = true) {
       for (const name of values.keys()) if (name.startsWith(prefix)) yield {name, properties: {createdOn: new Date()}};
     },
   };
-  const wake = vi.fn(async () => new Response(null, {status: 202}));
+  const wake = vi.fn(async () => undefined);
   const tasks = {getActiveRepository: vi.fn(async () => 'owner/project'), recordEvent: vi.fn(async () => ({}))};
   const issueToken = vi.fn(async () => 'scoped-test-token');
   const ownsInvocation = vi.fn(async () => true);
   const worker = new FactoryWorkerMailbox({container: container as unknown as ContainerClient,
-    credential: {getToken: async () => ({token: 'test', expiresOnTimestamp: Date.now() + 60_000})},
-    resourceId: '/subscriptions/00000000-0000-4000-8000-000000000001/resourceGroups/rg-jarvis/providers/Microsoft.Compute/virtualMachines/vm-jarvis-factory',
-    enabled, tasks: tasks as unknown as TaskStore, issueToken, ownsInvocation, fetch: wake, onError: (error) => {throw error;}});
+    sessionId: session, wake,
+    enabled, tasks: tasks as unknown as TaskStore, issueToken, ownsInvocation, onError: (error) => {throw error;}});
   return {worker, values, wake, tasks, issueToken, ownsInvocation};
 }
 const request = (operation: string, path = 'protocols/invocations', body?: Record<string, string>) =>
   ({operation, path, method: 'POST', body, sessionId: undefined, options: {}});
 
 describe('128 GiB worker transport', () => {
-  it('queues one task without waiting for VM startup and uses the existing invocation contract', async () => {
+  it('queues one task without waiting for sandbox startup and uses the existing invocation contract', async () => {
     const test = fixture();
     const accepted = await test.worker.transport(request('start', undefined, {agent: 'codex', task_id: '23'}));
-    expect(accepted).toMatchObject({status: 'queued', agent: 'codex', session_id: expect.stringMatching(/^vm128-/u)});
+    expect(accepted).toMatchObject({status: 'queued', agent: 'codex', session_id: expect.stringMatching(/^sbx128-/u)});
     expect([...test.values.keys()].filter((key) => key.startsWith('commands/'))).toHaveLength(1);
     expect(test.wake).toHaveBeenCalledOnce();
   });

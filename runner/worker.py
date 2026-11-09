@@ -8,7 +8,6 @@ from __future__ import annotations
 import asyncio
 import fcntl
 import json
-import os
 import re
 import time
 from types import SimpleNamespace
@@ -17,7 +16,7 @@ from uuid import uuid4
 import app as runner
 from worker_storage import Mailbox
 
-ID = re.compile(r"^(?:vm128|sbx128)-[a-f0-9-]{36}$")
+ID = re.compile(r"^sbx128-[a-f0-9-]{36}$")
 TERMINAL = {"completed", "failed", "cancelled", "paused", "interrupted", "needs_attention"}
 
 
@@ -58,7 +57,7 @@ class Worker:
         return await asyncio.to_thread(getattr(self.mailbox, method), *args, **kwargs)
 
     async def snapshot(self, invocation_id):
-        request = Request({"invocationId": invocation_id, "sessionId": "vm128-" + str(uuid4())})
+        request = Request({"invocationId": invocation_id, "sessionId": "sbx128-" + str(uuid4())})
         response = await runner.get_invocation(request)
         if response.status_code == 200:
             value = json.loads(response.body)
@@ -221,26 +220,11 @@ class Worker:
             self.last_health = time.monotonic()
         return not active and not keys and time.monotonic() - self.last_busy >= 120
 
-    async def deallocate(self):
-        resource_id = os.environ["JARVIS_FACTORY_WORKER_RESOURCE_ID"]
-        if not re.fullmatch(r"/subscriptions/[a-f0-9-]{36}/resourceGroups/[A-Za-z0-9_.-]+/providers/Microsoft.Compute/virtualMachines/[A-Za-z0-9_-]+", resource_id):
-            raise ValueError("Invalid worker resource ID")
-        token = await asyncio.to_thread(self.mailbox.credential.get_token,
-                                        "https://management.azure.com/.default")
-        response = await asyncio.to_thread(self.mailbox.client.post,
-            "https://management.azure.com" + resource_id + "/deallocate?api-version=2024-07-01",
-            headers={"Authorization": "Bearer " + token.token})
-        if response.status_code not in {200, 202}:
-            raise RuntimeError("Worker deallocation was not accepted")
-
     async def run(self):
         runner.WORK_ROOT.mkdir(parents=True, exist_ok=True)
         while True:
             try:
-                if await self.tick() and os.environ.get("JARVIS_FACTORY_MANAGED_SANDBOX") != "true":
-                    await self.deallocate()
-                    # ARM can take time. Never claim billing stopped based on this response.
-                    await asyncio.sleep(10)
+                await self.tick()
             except Exception as error:
                 print("factory_worker.operation_failed", type(error).__name__, flush=True)
                 self.last_busy = time.monotonic()

@@ -34,8 +34,8 @@ class Mailbox:
 
 
 def command():
-    return {'operation': 'start', 'sessionId': 'vm128-' + str(uuid4()),
-            'invocationId': 'vm128-' + str(uuid4()), 'body': {}}
+    return {'operation': 'start', 'sessionId': 'sbx128-' + str(uuid4()),
+            'invocationId': 'sbx128-' + str(uuid4()), 'body': {}}
 
 
 @pytest.fixture(autouse=True)
@@ -92,7 +92,7 @@ def test_active_worker_heartbeat_preserves_its_claim():
     assert 'responses/1.json' not in mailbox.data
 
 
-def test_idle_deallocation_requires_no_work_or_queue(monkeypatch):
+def test_idle_signal_requires_no_work_or_queue(monkeypatch):
     async def run():
         mailbox = Mailbox()
         worker = Worker(mailbox)
