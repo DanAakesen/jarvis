@@ -1,0 +1,70 @@
+{
+  "run": "q-b6bd609e0a3640f693d5fdd00908e473",
+  "workersRequested": 5,
+  "routingChanged": false,
+  "image": "crjarvisrmw7kae3bza6a.azurecr.io/jarvis-runner-dotnet@sha256:14c6c82ce95445a90bedcb4f75ff8576ded38ea8b8f9cefd6d891bdfbc9016a3",
+  "allocation": {
+    "cpu": "8000m",
+    "memory": "16384Mi",
+    "disk_size": "160Gi"
+  },
+  "results": [
+    {
+      "worker": "q-b6bd609e0a3640f693d5fdd00908e473-0",
+      "workspaceBytes": 168906596352,
+      "freeBytes": 157728206848,
+      "posixPassed": true,
+      "buildPassed": true,
+      "startedAt": 1794222735.9787562,
+      "finishedAt": 1794222765.9793808
+    },
+    {
+      "worker": "q-b6bd609e0a3640f693d5fdd00908e473-1",
+      "workspaceBytes": 168906596352,
+      "freeBytes": 157728206848,
+      "posixPassed": true,
+      "buildPassed": true,
+      "startedAt": 1794222736.3357346,
+      "finishedAt": 1794222766.3361623
+    },
+    {
+      "worker": "q-b6bd609e0a3640f693d5fdd00908e473-2",
+      "workspaceBytes": 168906596352,
+      "freeBytes": 157728206848,
+      "posixPassed": true,
+      "buildPassed": true,
+      "startedAt": 1794222736.2987313,
+      "finishedAt": 1794222766.298894
+    },
+    {
+      "worker": "q-b6bd609e0a3640f693d5fdd00908e473-3",
+      "workspaceBytes": 168906596352,
+      "freeBytes": 157728206848,
+      "posixPassed": true,
+      "buildPassed": true,
+      "startedAt": 1794222736.3308866,
+      "finishedAt": 1794222766.3311596
+    },
+    {
+      "worker": "q-b6bd609e0a3640f693d5fdd00908e473-4",
+      "workspaceBytes": 168906596352,
+      "freeBytes": 157728206848,
+      "posixPassed": true,
+      "buildPassed": true,
+      "startedAt": 1794222736.3562708,
+      "finishedAt": 1794222766.356562
+    }
+  ],
+  "passed": true,
+  "cleanupPassed": true,
+  "diskImageId": "af14f250-92a7-47da-ac3f-ca1bf6a5e69e",
+  "overlappingWorkers": 5,
+  "credentialsAccessible": true,
+  "stoppedState": "Stopped",
+  "diskPersistencePassed": true,
+  "cleanupErrors": [],
+  "workflowRun": "https://github.com/DanAakesen/jarvis/actions/runs/42606694866",
+  "source": "d89677577705c0db048004b3b5a7c271237d799b",
+  "modelCalls": 0,
+  "scope": "Storage, POSIX operations, sample .NET build, process overlap, credential access, disk persistence and owned cleanup; not SQL task or model-provider concurrency."
+}

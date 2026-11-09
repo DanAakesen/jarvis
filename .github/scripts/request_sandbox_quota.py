@@ -16,6 +16,15 @@ REGION = 'swedencentral'
 API = '2025-09-01'
 
 
+def sanitized_detail(value):
+    text = str(value)[:8192]
+    text = re.sub(r'https?://\S+', '[url]', text, flags=re.IGNORECASE)
+    text = re.sub(r'\b(?:Bearer|Basic)\s+\S+', '[credential]', text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(?:[\w-]*(?:token|password|secret|signature)|api[_-]?key|sig)[\"']?\s*[:=]\s*[\"']?[^\s\"',;]+", '[credential]', text, flags=re.IGNORECASE)
+    text = re.sub(r'[A-Za-z0-9_/+=.-]{24,}', '[identifier]', text)
+    return ' '.join(text.split())[:2000]
+
+
 def client(subscription):
     subscription = str(uuid.UUID(subscription))
     scope = f'/subscriptions/{subscription}/providers/Microsoft.App/locations/{REGION}'
@@ -27,7 +36,7 @@ def client(subscription):
         if parsed.scheme != 'https' or parsed.netloc != 'management.azure.com' or parsed.fragment:
             raise ValueError('Quota URL outside the approved service')
         if method == 'GET':
-            if parsed.path not in (scope + '/usages', urlsplit(base).path):
+            if parsed.path not in (scope + '/usages', urlsplit(base).path, urlsplit(base).path.removesuffix('/quotas') + '/quotaRequests'):
                 raise ValueError('Quota read outside the approved scope')
         elif method == 'PUT':
             name = parsed.path.removeprefix(urlsplit(base).path + '/')
@@ -42,8 +51,7 @@ def client(subscription):
             args += ['--body', json.dumps(body)]
         result = subprocess.run(args, capture_output=True, text=True, timeout=90, check=False)
         if result.returncode:
-            match = re.search(r'\(([A-Za-z][A-Za-z0-9]{1,60})\)', result.stderr)
-            raise RuntimeError('Quota API: ' + (match[1] if match else 'request failed'))
+            raise RuntimeError('Quota API: ' + sanitized_detail(result.stderr or 'request failed'))
         value = json.loads(result.stdout) if result.stdout.strip() else {}
         if not isinstance(value, dict):
             raise TypeError('Invalid quota response')
@@ -63,7 +71,7 @@ def actual_limit(value):
     return int(limit)
 
 
-def request(subscription, state, *, make_client=client, pause=time.sleep):
+def request(subscription, state, *, inspect_only=False, make_client=client, pause=time.sleep):
     base, usage, call = make_client(subscription)
     result = {'targetCores': TARGET, 'workersAllocated': 0, 'requestAttempted': False, 'approved': False}
     def save():
@@ -74,6 +82,14 @@ def request(subscription, state, *, make_client=client, pause=time.sleep):
         result['observedLimit'] = limit
         if limit >= TARGET:
             result['approved'] = True
+            save()
+            return result
+        if inspect_only:
+            history = call('GET', base.removesuffix('/quotas') + '/quotaRequests?api-version=' + API)
+            result['requestHistory'] = [sanitized_detail(json.dumps(row)) for row in history.get('value', [])
+                if 'sandboxcores' in json.dumps(row).casefold()][:20]
+            result['historyHasMorePages'] = bool(history.get('nextLink'))
+            result['inspectOnly'] = True
             save()
             return result
         names, url = [], base + '?api-version=' + API
@@ -118,5 +134,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--subscription', required=True)
     parser.add_argument('--state', type=Path, required=True)
+    parser.add_argument('--inspect-only', action='store_true')
     args = parser.parse_args()
-    print(json.dumps(request(args.subscription, args.state), indent=2))
+    print(json.dumps(request(args.subscription, args.state, inspect_only=args.inspect_only), indent=2))

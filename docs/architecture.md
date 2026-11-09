@@ -1,3 +1,23 @@
+## Current managed Factory delivery — 9 November 2026
+
+Azure Container Apps Sandboxes is active for new Factory work. Live production-
+adapter runs 42620552706 and 42625011714 each passed five concurrent isolated
+workers, credential delivery, restart lookup, idle stop, disk-mode resume and
+cleanup. The qualified profile is 8 vCPUs, 16 GiB memory and a 160 GiB persistent
+root, with about 147 GiB free after the build probe. The accepted 300-core quota
+supports up to 37 such running workers, subject to other usage and provider limits.
+No further quota request or 100-worker load test is authorized.
+
+These canaries make no model calls: they establish worker transport and lifecycle,
+not five concurrent real coding tasks. Owner Factory task acceptance remains.
+Run 42629384227 passed all five worker/lifecycle checks, cutover readiness and
+final VM retirement. Inventory confirmed no dedicated VM resources remain; the
+legacy mailbox and deployment record were removed. PR #1674 now removes the
+obsolete VM implementation and configuration. Its source cleanup still requires
+a fresh managed worker image and five-worker qualification after deployment.
+Shared backend and Foundry chat, voice, research/image and login routes remain.
+Earlier dated sections below record the investigation stages, not current status.
+
 ## Managed Factory delivery update — 9 November 2026
 
 The owner has authorized Azure Container Apps Sandboxes as the managed JIT
@@ -20,6 +40,9 @@ sandbox/disk after the worker is idle. The group retains up to 1,000 sandbox
 resources separately from SQL’s configurable admission limit (up to 100); stopped bindings
 skip management polling. Partial disk cleanup is retried after sandbox deletion.
 This runtime code is not yet deployed or live-tested.
+The separately prepared retirement change removes the VM template, quota workflow,
+launcher/inspection scripts, shared-mailbox identity access and VM routing/config.
+It must not be merged until managed cutover and dedicated-resource cleanup pass.
 See [qualification and evidence](factory-concurrency-correction.md).
 
 ## Direct owner instructions for Factory (7 November 2026)

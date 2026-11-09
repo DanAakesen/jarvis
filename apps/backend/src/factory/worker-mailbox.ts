@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { ContainerClient } from '@azure/storage-blob';
-import type { TokenCredential } from '@azure/core-auth';
 import { FoundryClientError, type RunnerTransport } from '../foundry/client.js';
 import type { TaskStore } from './task-store.js';
 
-const legacyPrefix = 'vm128-';
-const idPattern = /^(?:vm128|sbx128)-[a-f0-9-]{36}$/u;
+const prefix = 'sbx128-';
+const idPattern = /^sbx128-[a-f0-9-]{36}$/u;
 const terminal = new Set(['completed', 'failed', 'cancelled', 'paused', 'interrupted', 'needs_attention']);
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const taskId = (value: unknown): value is string => typeof value === 'string' && /^[1-9][0-9]{0,18}$/u.test(value) && BigInt(value) <= 9_223_372_036_854_775_807n;
@@ -16,27 +15,20 @@ const taskId = (value: unknown): value is string => typeof value === 'string' &&
 export class FactoryWorkerMailbox {
   private timer: NodeJS.Timeout | undefined;
   private polling: Promise<void> | undefined;
-  private wakePending: Promise<void> | undefined;
-  private lastWake = 0;
   private nextPollAt = 0;
   private activeUntil = 0;
 
   constructor(private readonly options: {
     container: ContainerClient;
-    credential: TokenCredential;
-    resourceId?: string;
-    wake?: () => Promise<void>;
-    sessionId?: string;
+    wake: () => Promise<void>;
+    sessionId: string;
     enabled: boolean;
     tasks: TaskStore;
     issueToken: (repository: string) => Promise<string>;
     ownsInvocation: (taskId: string, sessionId: string, invocationId: string) => Promise<boolean>;
     onError: (error: unknown) => void;
-    fetch?: typeof fetch;
   }) {
-    if (!options.wake && !/^\/subscriptions\/[a-f0-9-]{36}\/resourceGroups\/[A-Za-z0-9_.-]+\/providers\/Microsoft.Compute\/virtualMachines\/[A-Za-z0-9_-]+$/u.test(options.resourceId ?? '')) {
-      throw new TypeError('Invalid Factory worker resource ID');
-    }
+    if (!idPattern.test(options.sessionId)) throw new TypeError('Invalid Factory session ID');
   }
 
   private async read(key: string): Promise<unknown | undefined> {
@@ -69,27 +61,7 @@ export class FactoryWorkerMailbox {
     });
   }
 
-  private async wake(): Promise<void> {
-    if (this.options.wake) return this.options.wake();
-    if (this.wakePending) return this.wakePending;
-    if (Date.now() - this.lastWake < 15_000) return;
-    this.wakePending = (async () => {
-      const signal = AbortSignal.timeout(20_000);
-      const token = await this.options.credential.getToken('https://management.azure.com/.default', { abortSignal: signal });
-      if (!token) throw new FoundryClientError('auth', 'worker-wake');
-      const response = await (this.options.fetch ?? fetch)(`https://management.azure.com${this.options.resourceId}/start?api-version=2024-07-01`, {
-        method: 'POST', headers: { Authorization: `Bearer ${token.token}` }, signal,
-      });
-      await response.body?.cancel();
-      // A deallocation already in flight settles first. Status polling wakes the queued work again.
-      if (!response.ok && response.status !== 409) throw new FoundryClientError('http', 'worker-wake', response.status);
-      this.lastWake = Date.now();
-    })();
-    try { await this.wakePending; } finally { this.wakePending = undefined; }
-  }
-
   readonly transport: RunnerTransport = async (request) => {
-    const prefix = this.options.sessionId ? 'sbx128-' : legacyPrefix;
     const invocationFromPath = decodeURIComponent(request.path.split('/')[2] ?? '');
     const sessionFromPath = decodeURIComponent(request.path.split('/')[1] ?? '');
     const workerSession = request.sessionId?.startsWith(prefix) || sessionFromPath.startsWith(prefix);
@@ -103,7 +75,7 @@ export class FactoryWorkerMailbox {
       if (!terminal.has(String(snapshot['status']))) {
         this.activeUntil = Date.now() + 60_000;
         this.nextPollAt = 0;
-        await this.wake();
+        await this.options.wake();
         const health = await this.read('health.json');
         if (snapshot['status'] === 'queued' && typeof snapshot['started_at'] === 'number' &&
             Date.now() / 1000 - snapshot['started_at'] > 600 &&
@@ -123,10 +95,9 @@ export class FactoryWorkerMailbox {
     if (!['start', 'resume', 'steer', 'pause', 'cancel', 'delete-session'].includes(request.operation)) {
       throw new FoundryClientError('protocol', 'worker-operation');
     }
-    const sessionId = request.sessionId ?? this.options.sessionId ?? (request.operation === 'delete-session' ? sessionFromPath : prefix + randomUUID());
+    const sessionId = request.sessionId ?? this.options.sessionId;
     const invocationId = request.operation === 'cancel' ? invocationFromPath : prefix + randomUUID();
     if (!idPattern.test(sessionId) || !idPattern.test(invocationId)) throw new FoundryClientError('protocol', 'worker-identity');
-    if (!this.options.wake) await this.wake();
     if (request.options.signal?.aborted) throw new FoundryClientError('aborted', request.operation);
     this.activeUntil = Date.now() + 60_000;
     this.nextPollAt = 0;
@@ -140,7 +111,7 @@ export class FactoryWorkerMailbox {
     await this.write(`commands/${commandId}.json`, {
       operation: request.operation, invocationId, sessionId, body: request.body ?? {},
     }, true);
-    if (this.options.wake) await this.wake();
+    await this.options.wake();
     if (['start', 'resume', 'steer'].includes(request.operation)) return {
       invocation_id: invocationId, session_id: sessionId, agent: request.body?.['agent'], status: 'queued',
     };

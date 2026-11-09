@@ -1292,7 +1292,7 @@ describe('dispatcher SQL coordination', () => {
     const store = createTaskStore(pool, events);
     const task = await createTask(events, 'Worker redelivery');
     const event = {taskId: task.id, type: 'progress', source: 'runner' as const,
-      summary: 'Working', payload: {invocationId: 'vm128-worker-turn', eventIndex: 3}};
+      summary: 'Working', payload: {invocationId: 'sbx128-worker-turn', eventIndex: 3}};
     const published: TaskEventMessage[] = [];
     const unsubscribe = events.subscribe((value) => published.push(value));
     try {

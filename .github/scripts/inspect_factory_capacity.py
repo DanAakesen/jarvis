@@ -124,7 +124,6 @@ def inspect(subscription, *, get=arm_get):
         'region': REGION,
         'targetConcurrentWorkers': 100,
         'requiredWorkspaceGiBPerWorker': 128,
-        'currentVmWorkerConcurrency': 1,
         'capacityVerified': False,
         'dataPlaneAccessVerified': False,
         'workspaceVerified': False,

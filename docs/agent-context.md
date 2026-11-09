@@ -1,8 +1,31 @@
+## Current managed Factory delivery — 9 November 2026
+
+Azure Container Apps Sandboxes is active for new Factory work. Live production-
+adapter runs 42620552706 and 42625011714 each passed five concurrent isolated
+workers, credential delivery, restart lookup, idle stop, disk-mode resume and
+cleanup. The qualified profile is 8 vCPUs, 16 GiB memory and a 160 GiB persistent
+root, with about 147 GiB free after the build probe. The accepted 300-core quota
+supports up to 37 such running workers, subject to other usage and provider limits.
+No further quota request or 100-worker load test is authorized.
+
+These canaries make no model calls: they establish worker transport and lifecycle,
+not five concurrent real coding tasks. Owner Factory task acceptance remains.
+Run 42629384227 passed all five worker/lifecycle checks, cutover readiness and
+final VM retirement. Inventory confirmed no dedicated VM resources remain; the
+legacy mailbox and deployment record were removed. PR #1674 now removes the
+obsolete VM implementation and configuration. Its source cleanup still requires
+a fresh managed worker image and five-worker qualification after deployment.
+Shared backend and Foundry chat, voice, research/image and login routes remain.
+Earlier dated sections below record the investigation stages, not current status.
+
 ## Managed Factory delivery update — 9 November 2026
 
 The owner has authorized Azure Container Apps Sandboxes as the managed JIT
 replacement and limited live qualification to **five concurrent workers**.
-The production concurrency target remains 100 with 128 GiB isolated workspaces.
+The design retains its 100-worker target, but the owner now accepts the current
+300-core quota (up to 37 simultaneous 8-core workers). Do not submit another
+quota increase without a new owner instruction. Five-worker qualification and
+VM retirement remain authorized.
 After managed Factory acceptance and cutover, remove the VM and all dedicated
 resources, roles, runtime code and configuration. Preserve shared backend and
 Foundry chat/voice services. Existing Factory test tasks need no migration.
@@ -20,6 +43,9 @@ sandbox/disk after the worker is idle. The group retains up to 1,000 sandbox
 resources separately from SQL’s configurable admission limit (up to 100); stopped bindings
 skip management polling. Partial disk cleanup is retried after sandbox deletion.
 This runtime code is not yet deployed or live-tested.
+The separately prepared retirement change removes the VM template, quota workflow,
+launcher/inspection scripts, shared-mailbox identity access and VM routing/config.
+It must not be merged until managed cutover and dedicated-resource cleanup pass.
 See [qualification and evidence](factory-concurrency-correction.md).
 
 ## Active owner decisions — 9 November 2026
@@ -7615,66 +7641,24 @@ items tracked at the top of PLAN.md. Notes/Ember implementation uses the native
 shared controls and account-bound cache, with lossless document and native workflow
 coverage. Do not confuse a source implementation, a CI pass, a live deployment and
 owner acceptance. Factory and Copilot still require their own live evidence.
-## Provisioning the approved Factory workspace
+## Managed Factory provisioning and legacy retirement
 
-Run Runner deploy on main with provision_workspace=true after qualified backend
-deployment. It builds immutable images, provisions infra/factory-worker.bicep,
-checks usable disk capacity and both provider credentials, and observes idle ARM
-deallocation before enabling JARVIS_FACTORY_WORKER_ENABLED. Main Bicep preserves
-that setting and resource identity on later deploys. Never delete/reformat the
-workspace to recover capacity; recover the existing Factory task and branch.
+Use `Factory managed sandboxes` on qualified main for group/storage acceptance,
+then `Factory managed runtime qualification` for the five-worker adapter test.
+Only enable its activation and retirement inputs after the exact backend release
+has been accepted. Keep all live qualification at five concurrent workers.
+See [the managed runbook](factory-concurrency-correction.md).
 
-Worker image updates require disabled new-task routing and an already-idle, deallocated VM. Provisioning keeps
-the disk and rewrites only non-secret launcher configuration. On failure, leave
-new-task routing disabled and inspect controlled deployment evidence; do not claim
-the migration succeeded based on a template or a local unit test.
-
-
-### Inspecting the persistent Factory worker
-
-After provisioning, dispatch Runner deploy from qualified main with
-`inspect_workspace=true` (and `provision_workspace=false`) to record real disk
-capacity and sanitized retained task outcomes. This wakes a deallocated worker
-for read-only inspection; it submits no Factory work. Normal idle deallocation
-then stops compute again. The evidence artifact contains no prompts or credentials.
-The mailbox polls every 20 seconds when idle and every second around active work.
-
-
-Worker inspection also reports bounded Azure deployment error codes when the VM
-does not exist. Provisioning failures retain the same code-only diagnostics, with
-no provider response messages, template parameters or credentials in logs.
-For a provisioning-only retry, `existing_image_tag` may reuse a prior image only
-after its source passes the normal exact-tree qualification and its complete runner
-build context matches the current source (deployment scripts and tests excluded).
-The resolved image is still pinned by digest.
-
-
-### Factory quota blocker (7 November 2026, 23:49 UTC)
-
-8 November update: Dan explicitly authorized increasing the quota. The manual
-`Factory worker quota` workflow and `.github/scripts/request_worker_quota.py`
-prepare a bounded request for two free vCPUs for the existing worker. See
-[the quota runbook](factory-worker-quota.md). `jarvis-github-deploy` still needs
-subscription-scoped Quota Request Operator and Microsoft.Quota registration;
-Codex has no connected subscription-admin identity. Do not invent a submitted
-request, grant roles from the deployment workflow or widen the worker allocation.
+The VM deployment template, quota request workflow, launcher and ARM wake/stop
+routing are removed by the retirement change. Do not use the archived VM commands
+or recover old test tasks. The shared backend Container App, Foundry chat/voice
+and research/image/login runner remain separate services.
 
 Dan requests recurring status updates as short parallel bullets: gym chat logging;
 chat/navigation/lift editing and current build; Notes/background; Copilot;
 128 GiB/Factory; approval/timeouts. Carry unresolved items forward and distinguish
 implemented, verified, deployed, available to test and waiting for owner testing.
-
-Provisioning 42426685636 failed with InvalidTemplateDeployment / QuotaExceeded;
-worker routing was never enabled. The main deploy 42426666246 succeeded. Resolve
-the subscription quota before claiming 128 GiB delivery. The reviewed worker is
-Standard_D2as_v5 (2 vCPUs, 8 GiB) in Sweden Central. Owner current limit/usage for
-its VM family and Total Regional vCPUs is pending; do not invent either value.
-The deploy identity is rg-jarvis scoped and cannot administer subscription quotas.
-After quota resolution, rerun qualified main provisioning with reusable image tag
-`a59ed10742edb5543c2667309a97e1d290d8e2a3-42422208795-1` only while the existing
-build-context equivalence checks pass. Verify capacity, provider access and real
-idle deallocation, then recover existing task 23 from the authenticated owner app.
-The deploy principal is smoke-only and must not impersonate that owner session.
+The deploy principal is smoke-only and must not impersonate the owner session.
 
 ## 8 November 2026 — Long-running stream checks
 
@@ -7921,6 +7905,13 @@ one fixed 800-core request only if needed, and verifies the actual regional usag
 limit. It never allocates workers, lowers a larger limit, guesses a missing quota
 name or automatically replays an uncertain PUT. Submission and approval are
 separate evidence fields. Live submission/approval remain pending.
+
+Quota troubleshooting: run `factory-sandbox-quota.yml` with `inspect_only=true`
+(the default) to read current capacity and matching quota-request history. Do not
+repeat an uncertain request before checking that evidence. A fixed 800-core request
+requires `inspect_only=false`; actual usage-limit readback establishes approval.
+The workflow creates no workers. Five-worker storage acceptance is retained in
+`docs/factory-managed-storage-evidence.json`; Factory transport/cutover is separate.
 
 ## Intelligent proactive notification handoff — 9 November 2026
 

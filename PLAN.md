@@ -1,3 +1,26 @@
+## Current managed Factory delivery — 9 November 2026
+
+Azure Container Apps Sandboxes is active for new Factory work. Live production-
+adapter runs 42620552706 and 42625011714 each passed five concurrent isolated
+workers, credential delivery, restart lookup, idle stop, disk-mode resume and
+cleanup. The qualified profile is 8 vCPUs, 16 GiB memory and a 160 GiB persistent
+root, with about 147 GiB free after the build probe. The accepted 300-core quota
+supports up to 37 such running workers, subject to other usage and provider limits.
+No further quota request or 100-worker load test is authorized.
+
+These canaries make no model calls: they establish worker transport and lifecycle,
+not five concurrent real coding tasks. Owner Factory task acceptance remains.
+Run 42629384227 passed all five worker/lifecycle checks, cutover readiness and
+final VM retirement. Inventory confirmed no dedicated VM resources remain; the
+legacy mailbox and deployment record were removed. PR #1674 now removes the
+obsolete VM implementation and configuration. Its source cleanup still requires
+a fresh managed worker image and five-worker qualification after deployment.
+The owner will leave Factory unused until the full rollout is complete. No
+temporary compatibility flag is retained for the outgoing worker image; release
+the fresh image and pass five-worker qualification before requesting owner use.
+Shared backend and Foundry chat, voice, research/image and login routes remain.
+Earlier dated sections below record the investigation stages, not current status.
+
 ## Watch signed-archive correction — 9 November 2026
 
 The owner associated the shared App Group with both Watch App IDs. TestFlight
@@ -13,7 +36,9 @@ for this compilation error.
 
 The owner has authorized Azure Container Apps Sandboxes as the managed JIT
 replacement and limited live qualification to **five concurrent workers**.
-The production concurrency target remains 100 with 128 GiB isolated workspaces.
+The architecture retains its 100-worker target. The owner has accepted the current
+300-core quota for now: up to 37 simultaneous workers with the qualified 8-core
+profile. Do not submit another quota increase without a new owner instruction.
 After managed Factory acceptance and cutover, remove the VM and all dedicated
 resources, roles, runtime code and configuration. Preserve shared backend and
 Foundry chat/voice services. Existing Factory test tasks need no migration.
@@ -26,11 +51,19 @@ created by that failed probe; cleanup is tracked in its retained evidence.
 The replacement uses the documented 8-vCPU / 16 GiB / 160 GiB persistent-root
 profile. Qualification requires at least 128 GiB **free after a real build**,
 five overlapping isolated workers, POSIX operations and disk-mode stop/resume.
-This profile is implemented but not yet live-qualified. It uses four times the
+Storage qualification 42606694866 passed: five independent workers each had
+157728206848 free bytes after restore/build, overlapping execution and retained
+files after stop/resume. Cleanup passed; no model tasks were run. It uses four times the
 CPU allocation of the original candidate; 100 workers require 800 SandboxCores,
-versus the observed 300. Five live test workers require 40 cores. Read-only quota
-catalogue discovery is included; no quota increase or 100-worker run is claimed.
-Factory runtime acceptance, cutover and VM retirement remain pending. The held
+versus the accepted current quota of 300. Five live test workers require 40 cores. Read-only quota
+catalogue discovery is included. Request 42606699111 reached the quota PUT but
+failed with an initially opaque error. Readback 42607004866 still shows 300; no
+approval or 100-worker run is claimed. Readback 42611441981 confirms the same
+300-core limit and 40 cores allocated during runtime qualification. Quota
+inspection defaults to read-only request-history lookup; further submissions
+are on hold following the owner's capacity decision.
+Factory runtime acceptance, cutover and VM retirement are queued in 42607263687
+after backend release 42606694858; they remain pending. The held
 retirement PR removes dedicated VM resources/config only after acceptance.
 See [qualification and evidence](docs/factory-concurrency-correction.md).
 
@@ -183,17 +216,17 @@ acceptance. The owner explicitly requested updates across all discussed items.
 | Home sections/agenda icons/swipe completion, health graph, widget layout/contrast/deep links/Tasks naming, labelled settings, no Away mode or empty activity bar | Earlier released changes retained in 81 | Device spot checks; preserve any previously accepted behavior |
 | Direct coding-command approval friction | Backend fix deployed and service acceptance passed | New-policy owner end-to-end write not confirmed; do not duplicate task 23 to test it |
 | Windows widget scaffold, issue 1634 / task 23 | Code saved on jarvis/task-23 at 3ace0ad8; stopped with disk_low; no PR as of 23:49 UTC | Owner confirms all existing tasks are tests; recovery/migration is not required for worker cutover. No task or branch deleted |
-| Managed Factory workspace | New Factory work uses isolated Azure Container Apps Sandboxes. Five-worker runtime/lifecycle and cleanup checks passed in 42620552706 and 42625011714; each 160 GiB persistent root has about 147 GiB free after a build. Owner accepts 300 cores (up to 37 8-core workers) | Final legacy VM mailbox/deployment cleanup in 42629384227, then removal of VM source/config and a fresh worker image. Real coding-task owner acceptance remains; infrastructure canaries make no model calls |
+| Managed Factory workspace | New Factory work uses isolated Azure Container Apps Sandboxes. Five-worker runtime/lifecycle and cleanup checks passed in 42620552706 and 42625011714; each 160 GiB persistent root has about 147 GiB free after a build. Owner accepts 300 cores (up to 37 8-core workers) | VM retirement completed in 42629384227; source/config removal and a fresh managed worker image are being delivered. Real coding-task owner acceptance remains; infrastructure canaries make no model calls |
 | Copilot harness | Implemented comparison path and canaries retained; migration parked by owner on 9 November | Keep custom harness as default; no further migration or default switch planned |
 | Current vs Copilot comparison | Both owner widget-plan exercises completed. Current CIRRENT-85 commits 26170110/a796d675 and Copilot commits 4cb08916/7030beb4 verify creation and revision of each same note. Both report first-save refusal followed by success | Both completed with friction; Copilot found the scaffold branch. Further harness comparison parked by owner. Shared refusal/routing diagnosis remains relevant to Current |
 | Notes redesign | Build 84 sidebar freeze and missing phrase/Overview addressed in #1653; qualified and delivered in build 85 | Owner confirmed Notes fixed on 8 November. Preserve this and accepted header/footer transparency |
 | Home Today workout totals | #1654 merged as ef783da2; all 533 Core tests, CI, CodeQL and native compilation passed, including Today/7d/14d/30d and no duplicated measurements | Build 86 uploaded successfully in 42515467682; owner retest Today against Health once it appears in TestFlight |
 | Apple Watch | Companion and four complications merged. Owner corrected both App Group assignments. Build 88 passed that signing step but exposed arm64_32 integer overflow; #1679 fixes it, with physical-Watch, Simulator and paired-iPhone compilation passing | Next signed iPhone/Watch upload, installation, voice/background/complication checks |
-| Intelligent notifications | #1669 reviewed: saved health/nutrition goals, current notes and memory inform model-written insights. Priority/receipt handling and native-only reminders corrected; three new notification UI interactions passed. Migration 0076 and deployment pending | Existing APNs key 367DAUWL3Z is Push-enabled. Confirm Key Vault secrets, activate delivery, release iPhone and test actual receipt/taps |
+| Intelligent notifications | #1669 reviewed: saved health/nutrition goals, current notes and memory inform model-written insights. Priority/receipt handling and native-only reminders corrected; three new notification UI interactions passed. Merged as f1cc32f9 after CI 42633607539 and CodeQL passed; Deploy 42635181674 is applying migration 0076 | Owner portal list has no APNs secrets. Configure the matching private key, activate delivery, install build 89 and test actual receipt/taps |
 | CarPlay | Owner submitted entitlement request to Apple; reply pending (8 November) | Apple decision; entitlement activation and device verification remain pending |
 | Consecutive tool activity | #1656 merged and integrated into build 87. Shared grouping in ordinary and isolated test chat; real call counts and refusals/failures retained. Three focused native interactions passed and captures inspected | Build 87 failed signing; successful replacement upload and owner checks on both surfaces remain pending |
 | Background 3 / Ember | Shared dark background merged and native page chrome verified | Same TestFlight delivery and owner visual acceptance as Notes |
-| Latest TestFlight bundle | Build 86 remains the latest successful upload. Builds 87/88 failed; both identified causes have been corrected. The next bundle includes Watch, tool grouping and intelligent-notification finding navigation | Exact-source CI, signed upload and Apple processing, then installed-device testing |
+| Latest TestFlight bundle | Build 86 remains the latest successful upload. Builds 87/88 failed; both identified causes have been corrected. Build 89 (42635187842) is signing Watch, tool grouping and intelligent-notification finding navigation | Signed upload and Apple processing, then installed-device testing |
 
 The owner now explicitly requests implementation and delivery of all five items.
 This supersedes the earlier hold while collecting additions. Notes and Ember are

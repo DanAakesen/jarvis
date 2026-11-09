@@ -126,8 +126,6 @@ jobs:
           az bicep install --version v0.44.1
           az bicep build --file infra/main.bicep --stdout >"$RUNNER_TEMP/infra.json"
           az bicep lint --file infra/main.bicep
-          az bicep build --file infra/factory-worker.bicep --stdout >"$RUNNER_TEMP/factory-worker.json"
-          az bicep lint --file infra/factory-worker.bicep
           az bicep build --file infra/factory-sandboxes.bicep --stdout >"$RUNNER_TEMP/factory-sandboxes.json"
           az bicep lint --file infra/factory-sandboxes.bicep
       - name: Reject unresolved interpolation in compiled alert queries

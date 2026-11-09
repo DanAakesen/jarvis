@@ -1,5 +1,25 @@
 # Factory concurrency correction — 9 November 2026
 
+## Current managed Factory delivery — 9 November 2026
+
+Azure Container Apps Sandboxes is active for new Factory work. Live production-
+adapter runs 42620552706 and 42625011714 each passed five concurrent isolated
+workers, credential delivery, restart lookup, idle stop, disk-mode resume and
+cleanup. The qualified profile is 8 vCPUs, 16 GiB memory and a 160 GiB persistent
+root, with about 147 GiB free after the build probe. The accepted 300-core quota
+supports up to 37 such running workers, subject to other usage and provider limits.
+No further quota request or 100-worker load test is authorized.
+
+These canaries make no model calls: they establish worker transport and lifecycle,
+not five concurrent real coding tasks. Owner Factory task acceptance remains.
+Run 42629384227 passed all five worker/lifecycle checks, cutover readiness and
+final VM retirement. Inventory confirmed no dedicated VM resources remain; the
+legacy mailbox and deployment record were removed. PR #1674 now removes the
+obsolete VM implementation and configuration. Its source cleanup still requires
+a fresh managed worker image and five-worker qualification after deployment.
+Shared backend and Foundry chat, voice, research/image and login routes remain.
+Earlier dated sections below record the investigation stages, not current status.
+
 Previous runtime result: 42607263687 failed during worker command delivery with
 five allocated sandboxes. Cleanup passed; managed activation and VM retirement
 did not run. The separate storage/build qualification remains passed. The runtime
@@ -147,6 +167,20 @@ admission contracts. The temporary storage role is scoped to that test account;
 workers still receive only their individual container SAS. Account removal follows
 confirmed cleanup of the five owned sandboxes and volumes.
 
+## Dedicated VM retirement
+
+`cutover.py` first requires the exact accepted backend release and passing evidence
+for five managed workers. It enables managed routing, verifies the ready revision,
+then removes only the deallocated legacy VM, its OS/data disks, NIC, outbound IP,
+VNet, NSG, identity grants, obsolete mailbox and deployment record. Shared backend,
+registry, vault, storage account and Foundry services remain. Resource deletion is
+not claimed until the retained evidence confirms it.
+
+The source cleanup removes the VM-specific Bicep, quota and provisioning scripts,
+workflow inputs, ARM power calls and backend environment preservation. Sandbox
+mailboxes accept only their own rotating container-scoped credentials. Historical
+VM evidence remains documentation, not an active deployment procedure.
+
 ## Private image import and acceptance receipts
 
 Run 42589074806 confirmed group data-plane access, then failed with HTTP 401 at
@@ -221,12 +255,37 @@ also checks the Microsoft.Quota catalogue without submitting a request. Do not
 claim 100-worker capacity until quota and the matching configuration are verified.
 The managed route remains inactive and VM retirement is held pending acceptance.
 
-The main-only `Request 800 Factory sandbox cores` workflow is prepared for the
-approved capacity target. It discovers the canonical SandboxCores quota, submits
+The main-only `Factory sandbox quota` workflow defaults to read-only inspection.
+Its optional future increase discovers the canonical SandboxCores quota and submits
 one fixed 800-core request only if needed, and verifies the actual regional usage
 limit. It never allocates workers, lowers a larger limit, guesses a missing quota
 name or automatically replays an uncertain PUT. Submission and approval are
-separate evidence fields. Live submission/approval remain pending.
+separate evidence fields. The earlier PUT failed; no increase is confirmed. The
+owner has since accepted 300 cores for now, so do not submit another increase
+without a new owner instruction.
+
+### Live storage acceptance — 9 November, 11:13 UTC
+
+[42606694866](https://github.com/DanAakesen/jarvis/actions/runs/42606694866) passed
+with exactly five 8-core / 16 GiB / 160 GiB sandboxes. Each measured
+157728206848 bytes free after a sample .NET restore/build. All five execution
+windows overlapped; POSIX checks, credential access, stop/resume persistence and
+owned cleanup passed. [Retained evidence](factory-managed-storage-evidence.json)
+records the scope: no model calls or SQL task/provider concurrency proof.
+Quota PUT 42606699111 failed with an opaque diagnostic; readback 42607004866
+still reports 300 SandboxCores. The quota workflow defaults to inspecting request
+history before another submission, and preserves bounded redacted service details.
+Managed transport acceptance, cutover and VM retirement remain pending.
+
+### Accepted initial capacity — 9 November, 11:47 UTC
+
+The owner accepts the existing 300-core quota: up to 37 simultaneous workers at
+8 cores each, subject to other regional sandbox usage and provider limits. The
+five-worker test consumes 40 cores, confirmed by readback 42611441981. The
+100-worker architecture target remains, but no additional quota request or
+100-worker load test is currently required. Finish the five-worker qualification
+and dedicated VM retirement within the existing quota.
+
 
 
 ## Managed worker credential ownership — 9 November 2026

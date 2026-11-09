@@ -13,38 +13,30 @@ from pathlib import Path
 from urllib.parse import parse_qsl
 
 import httpx
-from azure.identity import DefaultAzureCredential
 
-SCOPE = "https://storage.azure.com/.default"
 MAX_BYTES = 1024 * 1024
 
 
 class Mailbox:
-    def __init__(self, url=None, *, credential=None, client=None):
+    def __init__(self, url=None, *, client=None):
         self.url = url or os.environ["JARVIS_FACTORY_WORKER_BLOB_URL"]
-        if not re.fullmatch(r"https://[a-z0-9]{3,24}\.blob\.core\.windows\.net/(?:factory-worker|factory-sbx-[a-f0-9]{32})", self.url):
+        if not re.fullmatch(r"https://[a-z0-9]{3,24}\.blob\.core\.windows\.net/factory-sbx-[a-f0-9]{32}", self.url):
             raise ValueError("Invalid worker mailbox")
         self.sas_file = os.environ.get("JARVIS_FACTORY_MAILBOX_SAS_FILE")
-        if "/factory-sbx-" in self.url and not self.sas_file:
+        if not self.sas_file:
             raise ValueError("Managed worker requires a scoped mailbox credential")
-        self.credential = credential or (None if self.sas_file else DefaultAzureCredential())
         self.client = client or httpx.Client(timeout=20, follow_redirects=False)
 
     def request(self, method, key="", *, query=None, data=None, headers=None, missing=False):
         if key and not re.fullmatch(r"[a-zA-Z0-9_./-]{1,250}", key):
             raise ValueError("Invalid mailbox key")
-        auth = {}
         params = dict(query or {})
-        if self.sas_file:
-            sas = dict(parse_qsl(Path(self.sas_file).read_text().strip()))
-            if sas.get("sr") != "c" or not sas.get("sig") or sas.get("spr") != "https":
-                raise ValueError("Invalid scoped mailbox credential")
-            params.update(sas)
-        else:
-            auth["Authorization"] = "Bearer " + self.credential.get_token(SCOPE).token
+        sas = dict(parse_qsl(Path(self.sas_file).read_text().strip()))
+        if sas.get("sr") != "c" or not sas.get("sig") or sas.get("spr") != "https":
+            raise ValueError("Invalid scoped mailbox credential")
+        params.update(sas)
         response = self.client.request(method, self.url + ("/" + key if key else ""),
             params=params, content=data, headers={
-                **auth,
                 "x-ms-version": "2023-11-03",
                 "x-ms-date": datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT"),
                 **(headers or {}),
@@ -79,8 +71,6 @@ class Mailbox:
 
     def close(self):
         self.client.close()
-        if self.credential:
-            self.credential.close()
 
 
 def installation_token(task_id, session_id):

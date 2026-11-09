@@ -13,7 +13,7 @@ SUB = '00000000-0000-4000-8000-000000000001'
 
 
 class SandboxQuotaTests(unittest.TestCase):
-    def run_request(self, limits, catalogue, *, put_error=False):
+    def run_request(self, limits, catalogue, *, put_error=False, inspect_only=False):
         calls = []
         def call(method, url, body=None):
             calls.append((method, url, body))
@@ -27,7 +27,7 @@ class SandboxQuotaTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory) / 'state.json'
             try:
-                quota.request(SUB, state, make_client=lambda _: ('quota', 'usage', call), pause=lambda _: None)
+                quota.request(SUB, state, make_client=lambda _: ('quota', 'usage', call), pause=lambda _: None, inspect_only=inspect_only)
             except RuntimeError:
                 pass
             result = json.loads(state.read_text())
@@ -79,3 +79,15 @@ class SandboxQuotaTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     call('PUT', url, body)
             run.assert_not_called()
+
+    def test_inspection_never_submits_a_request(self):
+        result, calls = self.run_request([300], [{'properties': {'name': {'value': 'SandboxCores'}}}], inspect_only=True)
+        self.assertTrue(result['inspectOnly'])
+        self.assertFalse(result['requestAttempted'])
+        self.assertTrue(all(call[0] == 'GET' for call in calls))
+
+    def test_quota_diagnostics_preserve_reason_without_credentials(self):
+        text = quota.sanitized_detail('ERROR: BadRequest: Contact support for quota 800. Bearer private-value token=private-value https://host?sig=private-value')
+        self.assertIn('Contact support for quota 800.', text)
+        self.assertNotIn('private-value', text)
+        self.assertNotIn('https://', text)

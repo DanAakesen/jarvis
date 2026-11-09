@@ -1,3 +1,14 @@
+## 9 November 2026 — Keep the current 300-core sandbox quota
+
+The owner accepts 300 SandboxCores for now. The qualified persistent-root profile
+uses 8 cores per worker, so the quota permits up to 37 simultaneously allocated
+workers when no other regional sandboxes consume it. Stopped workers release
+their core allocation. Keep live qualification at five workers, finish managed
+Factory cutover and retire the dedicated VM. Do not submit another quota increase
+without a new owner instruction. The design can retain its 100-worker ceiling;
+800 cores and model-provider capacity would be needed to operate that full target.
+Readback 42611441981 confirms limit 300 and usage 40 during the five-worker test.
+
 ## Managed Factory delivery update — 9 November 2026
 
 The owner has authorized Azure Container Apps Sandboxes as the managed JIT
@@ -20,6 +31,9 @@ sandbox/disk after the worker is idle. The group retains up to 1,000 sandbox
 resources separately from SQL’s configurable admission limit (up to 100); stopped bindings
 skip management polling. Partial disk cleanup is retried after sandbox deletion.
 This runtime code is not yet deployed or live-tested.
+The separately prepared retirement change removes the VM template, quota workflow,
+launcher/inspection scripts, shared-mailbox identity access and VM routing/config.
+It must not be merged until managed cutover and dedicated-resource cleanup pass.
 See [qualification and evidence](factory-concurrency-correction.md).
 
 ## 8 November 2026 — Retain workout measurements when combining Home sources
@@ -12195,6 +12209,19 @@ also checks the Microsoft.Quota catalogue without submitting a request. Do not
 claim 100-worker capacity until quota and the matching configuration are verified.
 The managed route remains inactive and VM retirement is held pending acceptance.
 
+### Live storage acceptance — 9 November, 11:13 UTC
+
+[42606694866](https://github.com/DanAakesen/jarvis/actions/runs/42606694866) passed
+with exactly five 8-core / 16 GiB / 160 GiB sandboxes. Each measured
+157728206848 bytes free after a sample .NET restore/build. All five execution
+windows overlapped; POSIX checks, credential access, stop/resume persistence and
+owned cleanup passed. [Retained evidence](factory-managed-storage-evidence.json)
+records the scope: no model calls or SQL task/provider concurrency proof.
+Quota PUT 42606699111 failed with an opaque diagnostic; readback 42607004866
+still reports 300 SandboxCores. The quota workflow defaults to inspecting request
+history before another submission, and preserves bounded redacted service details.
+Managed transport acceptance, cutover and VM retirement remain pending.
+
 ## 2026-11-09 — Intelligent cross-app notifications, direct owner testing
 
 The owner accepts research items 1–3: connect relevant data, compute accurate facts and use intelligence to choose useful notifications. Items 4–5 (additional delivery-policy stage and feedback learning) and shadow mode are explicitly declined. The sole-owner app should include useful actual details rather than add privacy-redacted messages. Reuse existing proactive engine, controls, receipts and native APNs infrastructure; broaden normal informational insights and add no automatic task writes from new context. Keep current schedule and existing source/goal semantics. Implementation is PR #1669; integration/deployment/device acceptance remain primary responsibilities. This supersedes the earlier research proposal's privacy-redaction and shadow-rollout recommendations, without authorizing production configuration or unrelated Daily automation.
@@ -12252,6 +12279,18 @@ The fix supplies `--yes` for only the authorized legacy mailbox. Recovery first
 verifies the VM and all dedicated named resources are absent, then removes only
 the old mailbox and deployment record. Any remaining dedicated resource stops
 recovery for inspection. Final inventory/evidence and source cleanup are pending.
+
+## Managed Factory retirement accepted — 9 November 2026
+
+Five-worker production-adapter run 42629384227 passed delivery, overlap,
+restart routing, idle stop, disk persistence/resume, owned cleanup, activation
+and dedicated VM retirement. Retained evidence is in
+`docs/factory-managed-runtime-evidence.json`. No model calls were made.
+Remove VM templates, scripts, quota workflow, runtime fallback and configuration;
+retain shared backend and Foundry chat/voice/research/image/login services.
+The cleanup release requires a fresh worker image before final source retirement
+is claimed live. The owner accepts the current 300-core limit for up to 37
+8-core workers; further quota requests and a 100-worker test remain out of scope.
 
 ## APNs metadata access correction — 9 November 2026
 
