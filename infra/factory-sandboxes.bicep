@@ -32,15 +32,24 @@ resource vault 'Microsoft.KeyVault/vaults@2023-07-01' existing = { name: keyVaul
 resource copilot 'Microsoft.KeyVault/vaults/secrets@2023-07-01' existing = { parent: vault, name: 'jarvis-copilot' }
 resource codex 'Microsoft.KeyVault/vaults/secrets@2023-07-01' existing = { parent: vault, name: 'codex-login' }
 var dataOwner = 'c24cf47c-5077-412d-a19c-45202126392c'
-resource callers 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for principal in [deployPrincipalId, backend.properties.principalId]: {
-  name: guid(group.id, principal, dataOwner)
+resource deployAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(group.id, deployPrincipalId, dataOwner)
   scope: group
   properties: {
-    principalId: principal
+    principalId: deployPrincipalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', dataOwner)
   }
-}]
+}
+resource backendAccess 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(group.id, backend.id, dataOwner)
+  scope: group
+  properties: {
+    principalId: backend.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', dataOwner)
+  }
+}
 resource pull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(registry.id, identity.id, 'pull')
   scope: registry
