@@ -17,7 +17,7 @@ def az(*args):
     result = subprocess.run(['az', *args, '--subscription', os.environ['SUBSCRIPTION_ID'],
         '--only-show-errors', '--output', 'json'], capture_output=True, text=True, timeout=900)
     if result.returncode:
-        raise RuntimeError('Azure operation failed: ' + args[0])
+        raise RuntimeError('Azure operation failed: ' + ' '.join(args[:3]))
     return json.loads(result.stdout) if result.stdout.strip() else None
 
 
@@ -111,7 +111,13 @@ def retire_vm(evidence, outputs, root):
     inventory = az('vm', 'list', '--resource-group', 'rg-jarvis')
     vm = next((value for value in inventory if value['name'] == name), None)
     if vm is None:
-        raise RuntimeError('VM absent; inspect any remaining resources before declaring retirement')
+        # Recovery after an earlier run deleted compute/network but failed at
+        # mailbox cleanup. Never guess how to delete partially remaining resources.
+        remaining = az('resource', 'list', '--resource-group', 'rg-jarvis')
+        if any(value['name'].startswith(name) for value in remaining):
+            raise RuntimeError('VM absent but dedicated resources remain; inspect before retirement')
+        finish_retirement(evidence, outputs, root)
+        return
     current = az('vm', 'get-instance-view', '--resource-group', 'rg-jarvis', '--name', name)
     if not any(value.get('code') == 'PowerState/deallocated' for value in current['instanceView']['statuses']):
         raise RuntimeError('Inspect/drain the existing VM before retirement; it is not deallocated')
@@ -136,12 +142,25 @@ def retire_vm(evidence, outputs, root):
         az('disk', 'delete', '--ids', disk, '--yes')
     for kind, suffix in [('nic', 'nic'), ('public-ip', 'outbound'), ('vnet', 'vnet'), ('nsg', 'nsg')]:
         az('network', kind, 'delete', '--resource-group', 'rg-jarvis', '--name', name + '-' + suffix)
-    az('storage', 'container-rm', 'delete', '--resource-group', 'rg-jarvis',
-       '--storage-account', outputs['storageAccountName']['value'], '--name', 'factory-worker')
-    az('deployment', 'group', 'delete', '--resource-group', 'rg-jarvis', '--name', 'jarvis-factory-worker')
     remaining = az('resource', 'list', '--resource-group', 'rg-jarvis')
     if any(value['name'].startswith(name) for value in remaining):
         raise RuntimeError('Dedicated VM resources remain after retirement')
+    finish_retirement(evidence, outputs, root)
+
+
+def finish_retirement(evidence, outputs, root):
+    storage = outputs['storageAccountName']['value']
+    containers = az('storage', 'container-rm', 'list', '--resource-group', 'rg-jarvis', '--storage-account', storage)
+    if any(value['name'] == 'factory-worker' for value in containers):
+        az('storage', 'container-rm', 'delete', '--resource-group', 'rg-jarvis',
+           '--storage-account', storage, '--name', 'factory-worker', '--yes')
+    deployments = az('deployment', 'group', 'list', '--resource-group', 'rg-jarvis',
+                     '--query', "[?name=='jarvis-factory-worker'].name")
+    if deployments:
+        az('deployment', 'group', 'delete', '--resource-group', 'rg-jarvis', '--name', 'jarvis-factory-worker')
+    containers = az('storage', 'container-rm', 'list', '--resource-group', 'rg-jarvis', '--storage-account', storage)
+    if any(value['name'] == 'factory-worker' for value in containers):
+        raise RuntimeError('Legacy Factory mailbox remains after retirement')
     evidence['vmResourcesRetired'] = True
     (root/'pool-canary.json').write_text(json.dumps(evidence, indent=2) + '\n')
 
