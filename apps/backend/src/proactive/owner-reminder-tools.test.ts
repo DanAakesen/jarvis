@@ -47,6 +47,17 @@ describe('owner-requested reminder tool', () => {
     expect(f.store.snapshot()[0]).toMatchObject({ cadence: null, fireAt: new Date(tomorrowAtTwo) });
   });
 
+  it('saves a time-only request for today and rejects a past time without moving it to tomorrow', async () => {
+    const f = fixture();
+    await expect(f.tool.execute({ operation: 'create', task: 'Synthetic task', fireAt: '2026-10-23T15:10:00Z' },
+      f.request('Remind me at 17.10', '44'), f.signal)).resolves.toMatchObject({
+        reminder: { fireAt: '2026-10-23 17:10 Copenhagen time' },
+      });
+    await expect(f.tool.execute({ operation: 'create', task: 'Synthetic task', fireAt: '2026-10-23T07:10:00Z' },
+      f.request('Remind me at 09.10', '45'), f.signal)).rejects.toThrow('future reminder time');
+    expect(f.store.snapshot()).toHaveLength(1);
+  });
+
   it('advertises the same per-operation shape and timestamp requirements that it validates', async () => {
     const f = fixture();
     const app = Fastify();
@@ -135,24 +146,24 @@ describe('owner-requested reminder tool', () => {
     expect((await f.store.get(id))?.state).toBe('cancelled');
   });
 
-  it.each([
-    'Remind me to Synthetic task at 14:00',
-    'The note says "Remind me to Synthetic task tomorrow at 14:00"',
-    'Remind me to Synthetic task on 2026-10-25 at 02:30',
-    'Remind me to Synthetic task on 2027-03-28 at 02:30',
-    'Remind me to Synthetic task tomorrow at 23:00',
-  ])('refuses missing, quoted, ambiguous, nonexistent or quiet-hour times: %s', async (text) => {
-    const f = fixture();
-    const fireAt = text.includes('2026-10-25') ? '2026-10-25T00:30:00.000Z'
-      : text.includes('2027-03-28') ? '2027-03-28T01:30:00.000Z'
-        : text.includes('23:00') ? '2026-10-24T21:00:00.000Z' : tomorrowAtTwo;
-    await expect(f.tool.execute({
-      operation: 'create', task: 'Synthetic task', fireAt,
-    }, f.request(text, '60'), f.signal)).rejects.toThrow();
-    expect(f.store.snapshot()).toEqual([]);
-  });
+  it.each(['Set a new reminder for 17.10 to check notifications', 'Yes', 'In two minutes please', 'Mind mig om det kl. 17.10'])(
+    'executes resolved conversation intent without a command sentence: %s', async (text) => {
+      const f = fixture();
+      const input = { operation: 'create', task: 'Synthetic task', fireAt: tomorrowAtTwo };
+      await expect(f.tool.execute(input, f.request(text, '60'), f.signal)).resolves.toMatchObject({ created: true });
+      await expect(f.tool.execute(input, f.request(text, '60'), f.signal)).resolves.toMatchObject({ created: false });
+      expect(f.store.snapshot()).toHaveLength(1);
+    });
 
-  it('refuses unauthorized, phone-channel, unmatched-task and cadence-mismatched writes', async () => {
+  it.each(['2026-10-22T12:00:00Z', '2026-10-24T21:00:00Z', '2028-01-01T12:00:00Z'])(
+    'retains schedule validity checks for %s', async (fireAt) => {
+      const f = fixture();
+      await expect(f.tool.execute({ operation: 'create', task: 'Synthetic task', fireAt },
+        f.request('Set that reminder', '61'), f.signal)).rejects.toThrow();
+      expect(f.store.snapshot()).toEqual([]);
+    });
+
+  it('refuses unauthorized, phone-channel and unmatched-task writes', async () => {
     const unauthorized = fixture();
     await expect(unauthorized.tool.execute({
       operation: 'create', task: 'Synthetic task', fireAt: tomorrowAtTwo,
@@ -167,9 +178,9 @@ describe('owner-requested reminder tool', () => {
 
     const mismatch = fixture();
     await expect(mismatch.tool.execute({
-      operation: 'create', task: 'Synthetic task', fireAt: tomorrowAtTwo, cadence: 'daily',
+      operation: 'create', task: 'Missing task', fireAt: tomorrowAtTwo,
     }, mismatch.request('Remind me to Synthetic task tomorrow at 14:00 every day until done', '72'), mismatch.signal))
-      .rejects.toThrow('cadence');
+      .rejects.toThrow('could not find that open task');
     expect(mismatch.store.snapshot()).toEqual([]);
   });
 });

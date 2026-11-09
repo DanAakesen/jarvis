@@ -1,3 +1,14 @@
+## Conversational reminder execution — 9 November 2026
+
+The agent resolves reminder intent from the conversation into structured tool
+arguments. The owner_reminders backend no longer re-parses the latest message
+with a separate natural-language command grammar. It still verifies source owner
+message/session, validates schedule fields, resolves saved task identity and
+persists with retry deduplication. The task writer defaults omitted scope to
+Personal; agent and shared chat/voice instructions default date-free times to
+today in Europe/Copenhagen. Other action-family approval implementations are
+still separate and pending removal under the updated owner policy.
+
 ## Notification conversation context — 9 November 2026
 
 Native taps call authenticated `POST /proactive/items/:id/conversation` before

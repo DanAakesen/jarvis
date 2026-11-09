@@ -9,7 +9,7 @@ import {
 
 export interface TaskCreateInput {
   text: string;
-  scope: 'personal' | 'work';
+  scope?: 'personal' | 'work';
   due?: string;
   time?: string;
   priority?: 'high' | 'medium' | 'normal';
@@ -52,7 +52,7 @@ export const taskCreateSchema = {
     priority: { type: 'string', enum: ['high', 'medium', 'normal'] },
     remindAtDue: { type: 'boolean', description: 'Notify at the task time, not the automatic one-hour lead. Requires due, time and high priority.' },
   },
-  required: ['text', 'scope'],
+  required: ['text'],
   dependencies: { time: ['due'] },
   allOf: [{
     if: { properties: { remindAtDue: { const: true } }, required: ['remindAtDue'] },
@@ -116,7 +116,7 @@ function validIdentity(value: Record<string, unknown>): boolean {
 
 export function validateTaskCreateInput(value: unknown): value is TaskCreateInput {
   return record(value) && onlyKeys(value, ['text', 'scope', 'due', 'time', 'priority', 'remindAtDue']) &&
-    boundedText(value.text, 400) && (value.scope === 'personal' || value.scope === 'work') &&
+    boundedText(value.text, 400) && (value.scope === undefined || value.scope === 'personal' || value.scope === 'work') &&
     (!('time' in value) || 'due' in value) &&
     (value.remindAtDue !== true || ('due' in value && 'time' in value && (!('priority' in value) || value.priority === 'high'))) &&
     (!('due' in value) || validDate(value.due)) && (!('time' in value) || validTime(value.time)) &&
@@ -290,7 +290,7 @@ export function createTaskWriter(options: TaskWriterOptions) {
     async create(input: TaskCreateInput, signal = AbortSignal.timeout(30_000), sourceMessageId?: string): Promise<TaskWriteResult> {
       let folder = 'other';
       return run(() => folder, async () => {
-        if (!validateTaskCreateInput(input)) throw new TaskWriteError(400, 'Invalid task input. Supply text, Personal or Work scope, and a valid optional date and time.');
+        if (!validateTaskCreateInput(input)) throw new TaskWriteError(400, 'Invalid task input. Supply text and a valid optional date and time; scope defaults to Personal.');
         folder = input.scope === 'work' ? 'Work' : 'Personal';
         const text = cleanText(input.text);
         const path = options.validateWritePath(`${folder}/Inbox.md`);
@@ -300,7 +300,7 @@ export function createTaskWriter(options: TaskWriterOptions) {
         if (input.remindAtDue && (!input.due || !input.time || input.priority !== 'high')) {
           throw new TaskWriteError(400, 'An exact-time reminder needs due (YYYY-MM-DD), time (HH:mm in Copenhagen) and priority high.');
         }
-        const stableId = sourceMessageId ? createHash('sha256').update(JSON.stringify([sourceMessageId, input.scope, text, input.due, input.time, input.priority, input.remindAtDue === true])).digest('hex').slice(0, 24) : undefined;
+        const stableId = sourceMessageId ? createHash('sha256').update(JSON.stringify([sourceMessageId, input.scope ?? 'personal', text, input.due, input.time, input.priority, input.remindAtDue === true])).digest('hex').slice(0, 24) : undefined;
         const taskLine = `- [ ] ${text}${priority}${input.due ? ` 📅 ${input.due}${input.time ? ` ${input.time}` : ''}` : ''}${input.remindAtDue ? ' [reminder:: at_due_time]' : ''}${stableId ? ` 🆔 ${stableId}` : ''}`;
         for (let attempt = 0; attempt < 2; attempt += 1) {
           signal.throwIfAborted();

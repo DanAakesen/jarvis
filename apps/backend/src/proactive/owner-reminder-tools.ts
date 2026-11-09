@@ -4,7 +4,7 @@ import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry
 import { explainedArgumentsMessage } from '../core/tool-arguments.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { readVaultTasks } from './todo-discovery.js';
-import { dayKey, isQuietHour, localDateTimeInstant, localTimeLabel } from './time.js';
+import { dayKey, isQuietHour, localTimeLabel } from './time.js';
 import type {
   NewOwnerReminder,
   OwnerReminderCadence,
@@ -58,23 +58,6 @@ const inputSchema = {
     operationSchema('cancel', ['id', 'task']),
   ],
 } as const;
-
-type ReminderIntent = {
-  action: 'create';
-  task: string;
-  fireAt: Date;
-  cadence: OwnerReminderCadence | null;
-  untilTaskDone: boolean;
-} | {
-  action: 'update' | 'snooze';
-  task: string;
-  fireAt: Date;
-  cadence: OwnerReminderCadence | 'once' | null;
-  untilTaskDone: boolean;
-} | {
-  action: 'cancel';
-  task: string;
-};
 
 type ReminderInput =
   | { operation: 'read' }
@@ -150,84 +133,6 @@ function parseInput(value: unknown): ReminderInput | undefined {
   return result as ReminderInput;
 }
 
-function dateTokenToLocalDate(token: string, now: Date): string | undefined {
-  const value = token.toLocaleLowerCase('en');
-  if (/^\d{4}-\d{2}-\d{2}$/u.test(value)) return value;
-  const today = dayKey(now);
-  if (value === 'today' || value === 'i dag') return today;
-  if (value === 'tomorrow' || value === 'i morgen') {
-    const [year, month, day] = today.split('-').map(Number);
-    return new Date(Date.UTC(year!, month! - 1, day! + 1)).toISOString().slice(0, 10);
-  }
-  return undefined;
-}
-
-function resolveLocalDateTime(dateToken: string | undefined, timeToken: string, now: Date): Date | undefined {
-  if (!dateToken) return undefined;
-  const date = dateTokenToLocalDate(dateToken, now);
-  if (!date) return undefined;
-  const time = /^\d{1,2}:\d{2}$/u.test(timeToken) && timeToken.length === 4 ? `0${timeToken}` : timeToken;
-  let instant: Date;
-  try {
-    instant = localDateTimeInstant(date, time);
-  } catch {
-    return undefined;
-  }
-  for (const offset of [-60, 60]) {
-    const alternate = new Date(instant.getTime() + offset * 60_000);
-    if (dayKey(alternate) === date && localTimeLabel(alternate) === time) return undefined;
-  }
-  return instant;
-}
-
-function parseCreateIntent(text: string, now: Date): ReminderIntent | undefined {
-  const en = /^(?:please\s+)?remind me (?:to|about) (?<task>.+?)\s+(?:(?:on\s+)?(?<date>today|tomorrow|\d{4}-\d{2}-\d{2})\s+)?at (?<time>\d{1,2}:\d{2})(?:\s+(?<cadence>daily|every day|weekly|every week|once|one time)(?:\s+(?<until>until (?:it's )?done|until complete))?)?[.!?]?$/iu.exec(text.trim());
-  const da = /^mind mig om (?<task>.+?)\s+(?:(?:den\s+)?(?<date>i dag|i morgen|\d{4}-\d{2}-\d{2})\s+)?kl\.? (?<time>\d{1,2}:\d{2})(?:\s+(?<cadence>dagligt|hver dag|ugentligt|hver uge|én gang|en gang)(?:\s+(?<until>indtil (?:opgaven er )?færdig))?)?[.!?]?$/iu.exec(text.trim());
-  const match = en ?? da;
-  if (!match?.groups?.task || !match.groups.time) return undefined;
-  const fireAt = resolveLocalDateTime(match.groups.date, match.groups.time, now);
-  if (!fireAt) return undefined;
-  const cadenceText = match.groups.cadence?.toLocaleLowerCase('en');
-  const cadence: OwnerReminderCadence | null = cadenceText === 'daily' || cadenceText === 'every day' ||
-    cadenceText === 'dagligt' || cadenceText === 'hver dag' ? 'daily'
-    : cadenceText === 'weekly' || cadenceText === 'every week' || cadenceText === 'ugentligt' ||
-      cadenceText === 'hver uge' ? 'weekly' : null;
-  return {
-    action: 'create',
-    task: match.groups.task.trim(),
-    fireAt,
-    cadence,
-    untilTaskDone: match.groups.until !== undefined,
-  };
-}
-
-function parseMutationIntent(text: string, action: 'update' | 'snooze' | 'cancel', now: Date): ReminderIntent | undefined {
-  if (action === 'cancel') {
-    const en = /^(?:please\s+)?cancel (?:my )?reminder (?:for|about) (?<task>.+?)[.!?]?$/iu.exec(text.trim());
-    const da = /^(?:annullér|aflys) (?:min )?påmindelse om (?<task>.+?)[.!?]?$/iu.exec(text.trim());
-    const match = en ?? da;
-    return match?.groups?.task ? { action, task: match.groups.task.trim() } : undefined;
-  }
-  const en = /^(?:please\s+)?(?<verb>snooze|postpone|change|reschedule|move) (?:my )?reminder (?:for|about) (?<task>.+?) (?:until|to) (?:(?:on\s+)?(?<date>today|tomorrow|\d{4}-\d{2}-\d{2})\s+)?at (?<time>\d{1,2}:\d{2})(?:\s+(?<cadence>daily|every day|weekly|every week|once|one time)(?:\s+(?<until>until (?:it's )?done|until complete))?)?[.!?]?$/iu.exec(text.trim());
-  const da = /^(?<verb>udsæt|udskyd|ændr|flyt) (?:min )?påmindelse om (?<task>.+?) til (?:(?:den\s+)?(?<date>i dag|i morgen|\d{4}-\d{2}-\d{2})\s+)?kl\.? (?<time>\d{1,2}:\d{2})(?:\s+(?<cadence>dagligt|hver dag|ugentligt|hver uge|én gang|en gang)(?:\s+(?<until>indtil (?:opgaven er )?færdig))?)?[.!?]?$/iu.exec(text.trim());
-  const match = en ?? da;
-  if (!match?.groups?.task || !match.groups.time) return undefined;
-  const verb = match.groups.verb!.toLocaleLowerCase('da');
-  const isSnooze = /^(?:snooze|postpone|udsæt|udskyd)$/iu.test(verb);
-  if ((action === 'snooze') !== isSnooze) return undefined;
-  const cadenceText = match.groups.cadence?.toLocaleLowerCase('da');
-  if (action === 'snooze' && cadenceText) return undefined;
-  const cadence: OwnerReminderCadence | 'once' | null = cadenceText === 'daily' || cadenceText === 'every day' ||
-    cadenceText === 'dagligt' || cadenceText === 'hver dag' ? 'daily'
-    : cadenceText === 'weekly' || cadenceText === 'every week' || cadenceText === 'ugentligt' ||
-      cadenceText === 'hver uge' ? 'weekly'
-      : cadenceText ? 'once' : null;
-  const fireAt = resolveLocalDateTime(match.groups.date, match.groups.time, now);
-  return fireAt ? {
-    action, task: match.groups.task.trim(), fireAt, cadence, untilTaskDone: match.groups.until !== undefined,
-  } : undefined;
-}
-
 async function ownerMessage(request: FastifyRequest, ownerObjectId: string, signal: AbortSignal): Promise<{ id: string; text: string }> {
   const direct = request.jarvisConversationMessage;
   const authorized = request.principal?.objectId.toLowerCase() === ownerObjectId.toLowerCase() ||
@@ -286,7 +191,7 @@ export function createOwnerReminderTool(options: {
 }): JarvisTool {
   return {
     name: 'owner_reminders',
-    description: 'Create, list, reschedule, snooze or cancel owner-requested reminders for existing open vault tasks. Writes require a matching direct owner message with the exact task, action, explicit Copenhagen date/time and recurrence. Choose a future time within a year, outside 22:00–07:00 Copenhagen. Read first to obtain IDs for changes. Reminder times never change task deadlines.',
+    description: 'Create, list, reschedule, snooze or cancel owner-requested reminders for existing open vault tasks. Execute the owner’s request using the conversation context, including follow-up times and affirmative replies. Do not request another approval or prescribed sentence. Resolve natural dates, relative times and 17.10-style times to fireAt using Copenhagen time. A time without a date means TODAY, not tomorrow; if it has passed, report that instead of silently moving the date. Ask only for essential missing information. Use the saved task title from read/search, not a verbatim match to the owner’s wording. Choose a future time within a year, outside 22:00–07:00 Copenhagen. Read first to obtain IDs for changes. Reminder times never change task deadlines.',
     inputSchema,
     sensitive: true,
     validateInput: (input) => parseInput(input) !== undefined,
@@ -312,20 +217,15 @@ export function createOwnerReminderTool(options: {
 
       const message = await ownerMessage(request, options.ownerObjectId, signal);
       const now = options.now();
-      const intent = input.operation === 'create'
-        ? parseCreateIntent(message.text, now)
-        : parseMutationIntent(message.text, input.operation, now);
-      if (!intent || intent.action !== input.operation || normalize(intent.task) !== normalize(input.task)) {
-        throw new ToolRefusal('Please state the reminder action, exact task and Copenhagen date/time clearly. Nothing was changed.');
-      }
-      if ('fireAt' in input && 'fireAt' in intent && intent.fireAt.toISOString() !== input.fireAt) {
-        throw new ToolRefusal('The requested time is missing or ambiguous. Use an explicit date and Copenhagen local time. Nothing was changed.');
-      }
+      // The conversational agent resolves meaning; the server validates authenticated
+      // provenance, structured fields, resource identity and persistence. Owner prose
+      // is not a second command language and a follow-up need not repeat the request.
+      const intent = input.operation === 'cancel'
+        ? { action: input.operation, task: input.task }
+        : { action: input.operation, task: input.task, fireAt: new Date(input.fireAt),
+          cadence: 'cadence' in input ? input.cadence ?? null : null, untilTaskDone: 'untilTaskDone' in input ? input.untilTaskDone ?? false : false };
       if (input.operation === 'create') {
-        if (intent.action !== 'create' || intent.cadence !== (input.cadence ?? null) ||
-            intent.untilTaskDone !== (input.untilTaskDone ?? false)) {
-          throw new ToolRefusal('The schedule cadence and repeat-until-complete choice must match your request. Nothing was changed.');
-        }
+        if (intent.action !== 'create') throw new ToolRefusal('Invalid reminder operation.');
         if (intent.untilTaskDone && !intent.cadence) {
           throw new ToolRefusal('Please choose a repeat cadence before asking to repeat until the task is completed.');
         }
@@ -355,7 +255,7 @@ export function createOwnerReminderTool(options: {
           fireAt: intent.fireAt,
           localTime: localTimeLabel(intent.fireAt),
           anchorDate: intent.cadence === null ? null : dayKey(intent.fireAt),
-          cadence: intent.cadence,
+          cadence: intent.cadence === 'once' ? null : intent.cadence,
           untilTaskDone: intent.untilTaskDone,
         };
         try {
@@ -403,14 +303,6 @@ export function createOwnerReminderTool(options: {
           }),
           ...(input.untilTaskDone === undefined ? {} : { untilTaskDone: input.untilTaskDone }),
         };
-      if (input.operation === 'update' && (
-        (input.cadence !== undefined && intent.cadence !== input.cadence) ||
-        (input.untilTaskDone !== undefined && intent.untilTaskDone !== input.untilTaskDone) ||
-        (intent.cadence !== null && input.cadence === undefined) ||
-        (intent.untilTaskDone && input.untilTaskDone === undefined)
-      )) {
-        throw new ToolRefusal('The updated cadence must match your direct request. Nothing was changed.');
-      }
       try {
         const updated = await options.store.updateScheduled(schedule.id, update);
         if (!updated) throw new ToolRefusal('That reminder is no longer scheduled.');

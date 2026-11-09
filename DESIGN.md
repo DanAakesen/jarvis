@@ -1,3 +1,11 @@
+## Direct owner action feedback — 9 November 2026
+
+A clear reminder request should produce a concise saved result, without a
+Personal/Work question, date question for a time-only request, or another approval.
+Personal and today in Copenhagen are the defaults. Follow-ups retain context;
+errors identify the actual missing information rather than prescribe a sentence.
+No visual layout change is part of this backend correction.
+
 ## Approved push-to-chat continuity — 9 November 2026
 
 The owner selected direct continuity into normal chat and retained its existing
