@@ -25,6 +25,7 @@ interface Binding {
   booted?: boolean;
   bootedAt?: number;
   deleted?: boolean;
+  suspended?: boolean;
 }
 interface Options {
   storage: BlobServiceClient;
@@ -163,9 +164,13 @@ export class FactorySandboxPool {
         if (task && (task.state === 'Done' || task.state === 'Cancelled')) deleting = {session};
       }
       if (!binding.sandboxId && !queued && !binding.createAttempted) return;
+      if (binding.suspended && !queued && !deleting) return;
       const labels = {'jarvis-purpose': 'factory', 'jarvis-session': session};
       let box: Sandbox | undefined;
-      if (binding.sandboxId) box = await this.group.sandboxes.get(binding.sandboxId, {abortSignal: signal});
+      if (binding.sandboxId) {
+        try { box = await this.group.sandboxes.get(binding.sandboxId, {abortSignal: signal}); }
+        catch (error) { if (!deleting || !status(error, 404)) throw error; }
+      }
       else {
         const matches: Sandbox[] = [];
         for await (const candidate of this.group.sandboxes.list({labels, abortSignal: signal})) {
@@ -201,23 +206,26 @@ export class FactorySandboxPool {
         }
         if (box) { binding.sandboxId = box.id; await this.write(`sessions/${session}.json`, binding, lease); }
       }
-      if (!box) return;
-      if (box.labels['jarvis-session'] !== session || box.labels['jarvis-purpose'] !== 'factory') throw new Error('Sandbox ownership mismatch');
+      if (box && (box.labels['jarvis-session'] !== session || box.labels['jarvis-purpose'] !== 'factory')) throw new Error('Sandbox ownership mismatch');
       if (deleting) {
-        await this.group.sandboxes.beginDelete(box.id, {abortSignal: signal}).pollUntilDone();
-        await this.group.volumes.delete(sandboxMailboxName(session), {abortSignal: signal});
+        if (box) await this.group.sandboxes.beginDelete(box.id, {abortSignal: signal}).pollUntilDone();
+        try { await this.group.volumes.beginDelete(sandboxMailboxName(session), {abortSignal: signal}).pollUntilDone(); }
+        catch (error) { if (!status(error, 404)) throw error; }
         binding.deleted = true;
         await this.write(`sessions/${session}.json`, binding, lease);
         return;
       }
+      if (!box) return;
       if (queued && ['Stopped', 'Suspended', 'Idle'].includes(box.state ?? '')) {
         box = await this.group.sandboxes.beginResume(box.id, {abortSignal: signal}).pollUntilDone();
         binding.booted = false;
+        binding.suspended = false;
       }
       if (box.state !== 'Running') return;
       if (!queued && health?.['idle'] === true && typeof health['at'] === 'number' && Date.now() / 1000 - health['at'] < 60) {
         await this.group.sandboxes.beginStop(box.id, {abortSignal: signal}).pollUntilDone();
         binding.booted = false;
+        binding.suspended = true;
         await this.write(`sessions/${session}.json`, binding, lease);
         return;
       }

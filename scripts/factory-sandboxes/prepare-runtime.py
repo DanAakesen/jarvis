@@ -5,6 +5,7 @@ from pathlib import Path
 
 from azure.containerapps.sandbox import SandboxGroupClient, endpoint_for_region
 from azure.identity import AzureCliCredential
+from qualify import failure_details
 
 root = Path(os.environ['RUNNER_TEMP'])
 infra = json.loads((root / 'infra.json').read_text())
@@ -26,7 +27,7 @@ try:
         'apiScope': bootstrap['api']['identifierUri'] + '/.default'}
     (root / 'pool-config.json').write_text(json.dumps(config, indent=2) + '\n')
 except Exception as error:
-    print('Image import failed:', type(error).__name__, getattr(error, 'status_code', None))
+    print(json.dumps(failure_details(error, 'image-import')))
     raise SystemExit(1) from None
 finally:
     credential.close()

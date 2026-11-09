@@ -41,7 +41,10 @@ function fixture() {
   const client = {
     sandboxes: {
       async *list() { yield* boxes.values(); },
-      get: vi.fn(async (id: string) => boxes.get(id)),
+      get: vi.fn(async (id: string) => { if (!boxes.has(id)) throw {statusCode: 404}; return boxes.get(id); }),
+      beginStop: vi.fn((id: string) => ({pollUntilDone: async () => { const box = boxes.get(id)!; box.state = 'Stopped'; return box; }})),
+      beginResume: vi.fn((id: string) => ({pollUntilDone: async () => { const box = boxes.get(id)!; box.state = 'Running'; return box; }})),
+      beginDelete: vi.fn((id: string) => ({pollUntilDone: async () => { boxes.delete(id); }})),
       beginCreate: (body: Record<string, unknown>) => ({pollUntilDone: async () => {
         creates.push(body);
         await gate;
@@ -52,16 +55,16 @@ function fixture() {
       }}),
       exec: vi.fn(async () => ({exitCode: 0, stdout: '', stderr: ''})),
     },
-    volumes: {get: async () => {throw {statusCode: 404};}, create: vi.fn(async () => undefined)},
+    volumes: {get: async () => {throw {statusCode: 404};}, create: vi.fn(async () => undefined), beginDelete: vi.fn(() => ({pollUntilDone: async () => undefined}))},
     files: {write: vi.fn(async (id: string, path: string, body: string) => {uploads.push({id, path, body});})},
   };
   const options = {storage: storage as unknown as BlobServiceClient, client: client as unknown as SandboxGroupClient,
     credential: {getToken: async () => null}, subscriptionId: '00000000-0000-4000-8000-000000000001', region: 'swedencentral',
     resourceGroup: 'rg-jarvis', group: 'jarvis-factory', diskImageId: 'qualified-image', identityClientId: 'test-client',
     vaultUri: 'https://testvault.vault.azure.net/', backendUrl: 'https://backend.invalid', apiScope: 'api://test/.default',
-    enabled: true, tasks: {getActiveRepository: async () => undefined, recordEvent: async () => undefined} as unknown as TaskStore,
+    enabled: true, tasks: {get: async () => ({state: 'Paused'}), getActiveRepository: async () => undefined, recordEvent: async () => undefined} as unknown as TaskStore,
     issueToken: async () => 'unused', ownsInvocation: async () => false, onError: (error: unknown) => {errors.push(error);}};
-  return {pool: new FactorySandboxPool(options), data, boxes, errors, uploads, creates, release, options};
+  return {pool: new FactorySandboxPool(options), client, data, boxes, errors, uploads, creates, release, options};
 }
 const start = {operation: 'start', path: 'protocols/invocations', method: 'POST',
   body: {agent: 'codex', task_id: '23'}, sessionId: undefined, options: {}};
@@ -118,4 +121,45 @@ describe('managed Factory routing', () => {
     expect(t.data.size).toBe(0); expect(t.creates).toHaveLength(0);
     await t.pool.stop();
   });
+  it('stops idle compute, skips repeated management reads, and resumes the same sandbox', async () => {
+    const t = fixture();
+    const result = await t.pool.transport(start) as {session_id: string};
+    t.release(); await t.pool.stop();
+    const mailbox = sandboxMailboxName(result.session_id);
+    for (const key of t.data.keys()) if (key.startsWith(`${mailbox}/commands/`)) t.data.delete(key);
+    t.data.set(`${mailbox}/health.json`, JSON.stringify({idle: true, at: Date.now() / 1000}));
+    vi.useFakeTimers();
+    try {
+      t.pool.start();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(t.client.sandboxes.beginStop).toHaveBeenCalledTimes(1);
+      const reads = t.client.sandboxes.get.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(15000);
+      expect(t.client.sandboxes.get).toHaveBeenCalledTimes(reads);
+      await t.pool.transport({...start, operation: 'resume', sessionId: result.session_id});
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(t.client.sandboxes.beginResume).toHaveBeenCalledTimes(1);
+      expect(t.creates).toHaveLength(1);
+      expect(t.errors).toEqual([]);
+    } finally { await t.pool.stop(); vi.useRealTimers(); }
+  });
+  it('finishes disk cleanup after the sandbox was deleted but disk deletion failed', async () => {
+    const t = fixture();
+    const result = await t.pool.transport(start) as {session_id: string};
+    t.release(); await t.pool.stop();
+    t.data.set(`factory-sandbox-pool/delete/${result.session_id}.json`, JSON.stringify({session: result.session_id}));
+    t.client.volumes.beginDelete.mockImplementationOnce(() => ({pollUntilDone: async () => {throw {statusCode: 409};}}));
+    vi.useFakeTimers();
+    try {
+      t.pool.start();
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(t.boxes.size).toBe(0);
+      expect(t.errors).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(t.client.volumes.beginDelete).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(t.data.get(`factory-sandbox-pool/sessions/${result.session_id}.json`)!)).toMatchObject({deleted: true});
+      expect(t.client.sandboxes.beginDelete).toHaveBeenCalledTimes(1);
+    } finally { await t.pool.stop(); vi.useRealTimers(); }
+  });
+
 });

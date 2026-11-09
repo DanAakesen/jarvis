@@ -111,9 +111,12 @@ subsequently passed the complete checks. Local check:
 
 ## Managed sandbox qualification implementation
 
-`infra/factory-sandboxes.bicep` creates a group with a 100-sandbox cap, a dedicated
+`infra/factory-sandboxes.bicep` creates a group with a 1,000 retained-sandbox cap, a dedicated
 registry/secret identity and group-scoped management access for backend/deploy.
-The group cap allocates no workers. `Factory managed sandboxes` imports the
+SQL admission retains its separately configurable limit of up to 100 active tasks; stopped sessions do not consume
+active core quota. The larger resource cap leaves room for retained sessions and
+allocates no workers. Stopped bindings skip repeated sandbox API polling until
+new work or deletion arrives. `Factory managed sandboxes` imports the
 immutable qualified .NET image and creates at most five sandboxes, each with a
 128 GiB DataDisk, 2 vCPUs and 4 GiB memory. It checks mounted capacity, POSIX
 operations, Git, .NET restore/build, five-way execution overlap, credential access
