@@ -386,3 +386,41 @@ describe('proactive alert hook', () => {
     expect(JSON.stringify([fixture.logger.info.mock.calls, fixture.logger.warn.mock.calls])).not.toContain(canary);
   });
 });
+
+describe('model-selected normal insight alerts', () => {
+  it('sends the first eligible model opportunity and skips delivered ones on later checks', async () => {
+    const fixture = setup();
+    const first = await saveFinding(fixture.store, 'insight-first', 'suggestion', { urgency: 'normal', body: '2 of 3 saved sessions are recorded.' });
+    const second = await saveFinding(fixture.store, 'insight-second', 'prep', { urgency: 'normal' });
+    const context = contextFor([first, second], { trigger: 'manual' });
+    context.findings.forEach(finding => { finding.modelGenerated = true; });
+    await fixture.hook(context);
+    expect(fixture.send).toHaveBeenCalledTimes(1);
+    expect(fixture.send.mock.calls[0]![0]).toMatchObject({ kind: 'insight', itemId: first.id,
+      details: [{ title: first.title, body: first.body, dueAt: null }] });
+    await fixture.hook(context);
+    expect(fixture.send).toHaveBeenCalledTimes(2);
+    expect(fixture.send.mock.calls[1]![0]).toMatchObject({ kind: 'insight', count: 1, itemId: second.id });
+    await fixture.hook(context);
+    expect(fixture.send).toHaveBeenCalledTimes(2);
+  });
+  it.each(['seen', 'dismiss', 'snooze'] as const)('skips a first insight already marked %s', async (action) => {
+    const fixture = setup();
+    const first = await saveFinding(fixture.store, 'old-insight', 'suggestion', { urgency: 'normal' });
+    const second = await saveFinding(fixture.store, 'new-insight', 'prep', { urgency: 'normal' });
+    await fixture.store.items.applyFeedback(first.id, action);
+    const context = contextFor([first, second], { trigger: 'manual' });
+    context.findings.forEach(finding => { finding.modelGenerated = true; });
+    await fixture.hook(context);
+    expect(fixture.send).toHaveBeenCalledWith(expect.objectContaining({ kind: 'insight', count: 1, itemId: second.id }), context.signal);
+  });
+  it('allows a native-only owner without requiring a browser subscription', async () => {
+    const fixture = setup({ subscriptionList: [] });
+    const item = await saveFinding(fixture.store, 'native-insight', 'suggestion', { urgency: 'normal' });
+    const hook = createProactiveAlertHook({ store: fixture.store, ledger: fixture.ledger, pushStore: fixture.pushStore,
+      ownerObjectId: OWNER, send: fixture.send, now: () => NOW, hasNativeRecipients: async () => true });
+    const context = contextFor([item]); context.findings[0]!.modelGenerated = true;
+    await hook(context);
+    expect(fixture.send).toHaveBeenCalledWith(expect.objectContaining({ kind: 'insight' }), context.signal);
+  });
+});

@@ -42,6 +42,7 @@ export interface FindingsStoredContext {
   now: Date;
   signal: AbortSignal;
   findings: {
+    modelGenerated?: boolean;
     itemId: string;
     dedupeKey: string;
     evidenceRefs: string[];
@@ -237,7 +238,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
           ? [{ ...finding, suggestionScope, relatedCategories, cited }]
           : [];
       });
-      const pending: (FindingInput & { suggestedTodo?: string; evidenceRefs: string[] })[] =
+      const pending: (FindingInput & { modelGenerated?: boolean; suggestedTodo?: string; evidenceRefs: string[] })[] =
         eligibleDeterministic.map(({ cited, ...finding }) => ({
           ...finding,
           evidenceRefs: finding.evidence,
@@ -284,6 +285,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
             finding.category !== 'travel' ? ['travel' as const] : [];
           if (!findingAllowed(settings, finding.category, suggestionScope, relatedCategories)) continue;
           pending.push({
+            modelGenerated: true,
             title: finding.title, body: finding.body, category: finding.category,
             suggestionScope, relatedCategories,
             urgency: finding.urgency, dueAt: finding.dueAt ?? null,
@@ -291,7 +293,8 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
             evidenceRefs: finding.evidence,
             evidence: cited.map((fact) => ({ source: fact.source, label: fact.label, observedAt: fact.observedAt })),
             language, runId: run.id,
-            ...(finding.suggestedTodo === undefined ? {} : { suggestedTodo: finding.suggestedTodo }),
+            ...(finding.suggestedTodo === undefined || cited.some(fact => fact.kind === 'commitment' || ['health', 'nutrition', 'notes', 'memory'].includes(fact.source))
+              ? {} : { suggestedTodo: finding.suggestedTodo }),
           });
         }
         if (reason && pending.length === 0) {
@@ -301,7 +304,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
       }
       await current();
       const stored: FindingsStoredContext['findings'] = [];
-      for (const { suggestedTodo, evidenceRefs, ...finding } of pending) {
+      for (const { modelGenerated, suggestedTodo, evidenceRefs, ...finding } of pending) {
         await current();
         let item: Item;
         try {
@@ -314,6 +317,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
         }
         findingCount++;
         stored.push({
+          ...(modelGenerated ? { modelGenerated: true } : {}),
           itemId: item.id, dedupeKey: finding.dedupeKey, evidenceRefs, category: finding.category,
           suggestionScope: item.suggestionScope,
           ...(item.relatedCategories === undefined ? {} : { relatedCategories: item.relatedCategories }),

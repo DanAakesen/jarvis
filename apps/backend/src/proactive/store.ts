@@ -21,6 +21,10 @@ export const sourceLabels: Record<SourceId, string> = {
   news: 'News',
   travel: 'Travel',
   x: 'X',
+  health: 'Health and training',
+  nutrition: 'Nutrition',
+  notes: 'Notes',
+  memory: 'Memory',
 };
 
 export function defaultProactiveSettings(): ProactiveSettings {
@@ -36,6 +40,10 @@ export function defaultProactiveSettings(): ProactiveSettings {
       news: true,
       travel: true,
       x: false,
+      health: true,
+      nutrition: true,
+      notes: true,
+      memory: true,
     },
     categories: Object.fromEntries(findingCategories.map((category) => [category, true])) as Record<FindingCategory, boolean>,
     suggestionScope: 'all',

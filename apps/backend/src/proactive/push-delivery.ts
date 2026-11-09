@@ -2,7 +2,7 @@ import { generateVapidKeyPair, sendWebPush, type PushSendOrigin, type VapidKeyPa
 import type { PushStore, StoredPushSubscription } from '../database/push-store.js';
 import { copenhagenDayStart, dayKey, isQuietHour, localTimeLabel } from './time.js';
 
-export type SystemPushKind = 'alert' | 'due_soon' | 'overdue' | 'mixed' | 'owner_reminder';
+export type SystemPushKind = 'alert' | 'due_soon' | 'overdue' | 'mixed' | 'owner_reminder' | 'insight';
 
 export interface SystemPushRequest {
   kind: SystemPushKind;
@@ -10,7 +10,7 @@ export interface SystemPushRequest {
   language: 'da' | 'en';
   itemId: string;
   origin: 'proactive_alert' | 'proactive_reminder';
-  details?: readonly { title: string; dueAt: string | null }[];
+  details?: readonly { title: string; body?: string; dueAt: string | null }[];
 }
 
 export interface SystemPushOutcome {
@@ -50,6 +50,7 @@ function countHeadline(request: SystemPushRequest): string {
   const { kind, count, language } = request;
   const da = language === 'da';
   switch (kind) {
+    case 'insight': return '';
     case 'owner_reminder': return da ? 'Påmindelse' : 'Reminder';
     case 'alert': return da
       ? count === 1 ? '1 tidskritisk ting kræver din opmærksomhed' : `${count} tidskritiske ting kræver din opmærksomhed`
@@ -66,6 +67,12 @@ function countHeadline(request: SystemPushRequest): string {
 
 export function buildPushPayload(request: SystemPushRequest, now = new Date()): Buffer {
   const da = request.language === 'da';
+  if (request.kind === 'insight') {
+    const detail = request.details?.[0];
+    return Buffer.from(JSON.stringify({ v: 2, title: shorten(singleLine(detail?.title ?? ''), 80),
+      body: shorten(singleLine(detail?.body ?? ''), 400), itemId: request.itemId, kind: request.kind,
+      count: request.count, lang: request.language }));
+  }
   const details = (request.details ?? []).slice(0, 3).map((detail) => ({
     title: singleLine(detail.title),
     due: detail.dueAt === null ? null : new Date(detail.dueAt),
@@ -174,6 +181,7 @@ export async function deliverToSubscriptions(input: {
 export function createSystemPushSender(dependencies: {
   store: PushStore;
   ownerObjectId: string;
+  nativeSend?: (request: SystemPushRequest, signal: AbortSignal) => Promise<SystemPushOutcome | undefined>;
   publicOrigin: string;
   now?: () => Date;
   transport?: WebPushTransport;
@@ -207,6 +215,8 @@ export function createSystemPushSender(dependencies: {
     if (signal.aborted) return outcome('skipped', 'aborted');
     if (isQuietHour(now())) return outcome('skipped', 'quiet_hours');
     try {
+      const native = await dependencies.nativeSend?.(request, signal);
+      if (native) return outcome(native.status, native.reason, native.attempted, native.accepted, native.statusCode);
       const subscriptions = await dependencies.store.listSubscriptions(dependencies.ownerObjectId);
       if (subscriptions.length === 0) return outcome('skipped', 'no_subscription');
       if (signal.aborted) return outcome('skipped', 'aborted');

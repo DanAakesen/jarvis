@@ -3,6 +3,7 @@ import UserNotifications
 import UIKit
 
 extension Notification.Name {
+    static let jarvisProactiveNotificationOpened = Notification.Name("JarvisProactiveNotificationOpened")
     static let jarvisApprovalActionCompleted = Notification.Name("JarvisApprovalActionCompleted")
 }
 
@@ -12,6 +13,8 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
     static let actionResultKey = "jarvis.lockScreenApprovalAction"
 
     private static let categoryID = "jarvis.approval"
+    static let pendingProactiveItemKey = "jarvis.proactive.pendingItemID"
+    private static let proactiveCategoryID = "jarvis.proactive"
     private static let replyCategoryID = "jarvis.reply"
     private static let privateCategoryID = "jarvis.approval.private"
     private static let approveActionID = "jarvis.approval.approve"
@@ -34,6 +37,7 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
 
     private func registerCategory(language: JarvisAppLanguage) {
         center.setNotificationCategories([
+            UNNotificationCategory(identifier: Self.proactiveCategoryID, actions: [], intentIdentifiers: [], options: []),
             UNNotificationCategory(
                 identifier: Self.categoryID,
                 actions: [
@@ -178,6 +182,14 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
     ) {
         Task { @MainActor in
             defer { completionHandler() }
+            if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
+               response.notification.request.content.categoryIdentifier == Self.proactiveCategoryID,
+               let id = response.notification.request.content.userInfo["proactiveItemID"] as? String,
+               UUID(uuidString: id) != nil {
+                UserDefaults.standard.set(id, forKey: Self.pendingProactiveItemKey)
+                NotificationCenter.default.post(name: .jarvisProactiveNotificationOpened, object: nil)
+                return
+            }
             guard let decision = Self.decision(for: response.actionIdentifier),
                   let id = response.notification.request.content.userInfo["confirmationID"] as? String else {
                 return

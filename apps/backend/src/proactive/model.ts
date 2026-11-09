@@ -95,7 +95,7 @@ export function validateModelFindings(value: unknown, facts: SourceFact[]): Vali
       return [];
     }
   });
-  if (!findings.length) throw new InvalidModelOutput();
+  if (!findings.length && root.findings.length > 0) throw new InvalidModelOutput();
   return findings;
 
   function validateFinding(raw: unknown): ValidatedModelFinding {

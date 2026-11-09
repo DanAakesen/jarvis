@@ -21,6 +21,7 @@ async function fixture(options: {
   anchorDate?: string | null;
   localTime?: string;
   subscribed?: boolean;
+  nativeRecipient?: boolean;
   automatic?: ReminderRow;
   send?: (request: SystemPushRequest) => Promise<SystemPushOutcome>;
 } = {}) {
@@ -68,6 +69,7 @@ async function fixture(options: {
     ownerReminders: schedules,
     vault,
     pushStore,
+    hasNativeRecipients: async () => options.nativeRecipient === true,
     ledger: createMemoryAlertLedgerStore(),
     ownerObjectId: owner,
     send,
@@ -219,6 +221,14 @@ describe('owner reminder ticker', () => {
     expect(f.send).not.toHaveBeenCalled();
     expect(f.schedules.snapshot()[0]).toMatchObject({ state: 'suppressed', reason: 'no_subscription' });
     expect(f.pushStore.updateItemDelivery).not.toHaveBeenCalled();
+  });
+
+  it('delivers an explicit reminder to a native recipient without a browser subscription', async () => {
+    const f = await fixture({ subscribed: false, nativeRecipient: true });
+    await f.ticker.tick();
+    expect(f.send).toHaveBeenCalledOnce();
+    expect(f.send.mock.calls[0]![0].kind).toBe('owner_reminder');
+    expect(f.schedules.snapshot()[0]).toMatchObject({ state: 'completed', lastDelivery: 'provider_accepted' });
   });
 
   it('recovers an expired delivery lease after restart without creating another schedule', async () => {

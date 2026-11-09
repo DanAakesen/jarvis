@@ -160,6 +160,10 @@ struct ContentView: View {
         .ignoresSafeArea(.container)
         .preferredColorScheme(themeColorScheme)
         .onDisappear { workspaceRuntime.resetSession() }
+        .onAppear { openProactiveNotificationIfNeeded() }
+        .onReceive(NotificationCenter.default.publisher(for: .jarvisProactiveNotificationOpened)) { _ in
+            openProactiveNotificationIfNeeded()
+        }
         .onReceive(navigation.navigationRequested) { request in
             prepareNavigation(to: request.to, from: request.from)
         }
@@ -407,6 +411,11 @@ struct ContentView: View {
             bottom: max(fallback.bottom, insets.bottom),
             trailing: max(fallback.trailing, insets.right)
         )
+    }
+
+    private func openProactiveNotificationIfNeeded() {
+        if let id = UserDefaults.standard.string(forKey: JarvisApprovalNotificationCoordinator.pendingProactiveItemKey),
+           UUID(uuidString: id) != nil { navigate(to: .proactive) }
     }
 
     private func navigate(to destination: JarvisDestination) {

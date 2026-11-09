@@ -7913,6 +7913,10 @@ requires `inspect_only=false`; actual usage-limit readback establishes approval.
 The workflow creates no workers. Five-worker storage acceptance is retained in
 `docs/factory-managed-storage-evidence.json`; Factory transport/cutover is separate.
 
+## Intelligent proactive notification handoff — 9 November 2026
+
+PR #1669 implements only the owner's accepted context/computation/intelligence scope. Read docs/research/intelligent-proactive-notifications.md before integration. Migration 0076 expands source/alert constraints and retains history on downgrade. Deploy backend only after migration; coordinate new source IDs with the iPhone build. Existing proactive/push/APNs/Health switches and notification permission apply, with no production changes by this secondary. Local checks: backend build/lint; `npm test --workspace @jarvis/backend -- src/proactive src/push`; web build/lint/push tests; Swift 6.2 JarvisCore tests; isolated loopback SQL `test:database`. Owner wants direct installed use and iteration, not shadow mode or additional policy/feedback-learning work. Primary alone owns deployment/installation and physical receipt qualification.
+
 ## Native APNs configuration inspection — 9 November 2026
 
 The main-only `Native push readiness` workflow reads the existing backend's
@@ -7934,3 +7938,17 @@ and waits for the ready backend revision. Ordinary Bicep deployments preserve
 the enabled state and the three references. No private-key read is needed by
 the workflow, and it sends no test notification. Installed receipt/tap testing
 remains separate. Activation has not run.
+
+## APNs metadata access correction — 9 November 2026
+
+Readiness run 42627268441 confirmed the backend is ready with proactive, alert,
+Web Push and Health switches enabled; native APNs registration/delivery is off
+and its four runtime settings are absent. The deployment identity could not list
+Key Vault secrets through the data-plane API, so secret storage remains unknown.
+Use the existing ARM deployment metadata API for secret names and enabled flags,
+without fetching values or granting new data-plane access. The official
+`azure-mgmt-keyvault` 14.1.0 SDK defines the list endpoint at API 2026-05-15 and
+explicitly states SecretProperties.value is never returned by that service.
+Project only names/enabled flags, bound pagination to the same vault, and retain
+missing/disabled-key rejection before any APNs configuration write. Six focused
+checks pass; live metadata readback and activation remain pending.

@@ -72,6 +72,8 @@ function withoutReadColumns(row: Record<string, unknown>) {
 export class HealthReadModel {
   private constructor(private readonly pool: sql.ConnectionPool, private readonly owner: string) {}
   static forRequest(pool: sql.ConnectionPool, request: FastifyRequest) { return new HealthReadModel(pool, ownerId(resolveHealthOwner(request))); }
+  /** Server-owned background reads; never pass an owner from request input. */
+  static forOwner(pool: sql.ConnectionPool, owner: string) { return new HealthReadModel(pool, ownerId(owner)); }
 
   async sync(signal: AbortSignal) {
     return healthSqlTransaction(this.pool, this.owner, signal, async (tx, bounded) => {

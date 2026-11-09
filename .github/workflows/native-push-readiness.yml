@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: jarvis-production-deploy
+  group: ${{ inputs.enable_delivery && 'jarvis-production-deploy' || 'jarvis-native-push-inspect' }}
   cancel-in-progress: false
   queue: max
 jobs:

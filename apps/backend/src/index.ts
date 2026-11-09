@@ -150,6 +150,7 @@ import {
 } from './push/approval-notifications.js';
 import { createPushLedger } from './push/push-ledger.js';
 import { registerPushRoutes } from './push/routes.js';
+import { createNativeProactiveDelivery } from './proactive/native-delivery.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
 import { composeHealth } from './health/composition.js';
 import { registerProactive } from './proactive/composition.js';
@@ -1330,9 +1331,13 @@ try {
       database && config.staticWebAppOrigin
     ? createPushStore(database.pool)
     : undefined;
+  const nativeProactive = approvalNotifications
+    ? createNativeProactiveDelivery(config.auth.ownerObjectId, approvalNotifications, () => new Date())
+    : undefined;
   const alertPushSender = alertPushStore && config.staticWebAppOrigin
     ? createSystemPushSender({
       store: alertPushStore,
+      ...(nativeProactive ? { nativeSend: nativeProactive.send } : {}),
       ownerObjectId: config.auth.ownerObjectId,
       publicOrigin: config.staticWebAppOrigin,
       now: () => new Date(),
@@ -1340,6 +1345,9 @@ try {
     })
     : undefined;
   if (config.proactiveEnabled) registerProactive(app, {
+    healthEnabled: config.healthEnabled === true,
+    ...(nativeProactive ? { hasNativeRecipients: nativeProactive.hasRecipients } : {}),
+    ...(memoryStore ? { memoryStore } : {}),
     vaultMirrorStatusReader,
     enabled: config.proactiveEnabled,
     ownerObjectId: config.auth.ownerObjectId,

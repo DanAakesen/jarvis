@@ -1,4 +1,5 @@
 import type sql from 'mssql';
+import type { ContextDependencies } from './sources/context.js';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { GoogleApiClient } from '../google/api-client.js';
@@ -36,7 +37,7 @@ import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
 const uuidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
 type GitHubVaultClient = ReturnType<typeof createGitHubVaultClient>;
 
-export interface ProactiveCompositionOptions {
+export interface ProactiveCompositionOptions extends ContextDependencies {
   enabled: boolean;
   ownerObjectId: string;
   store?: ProactiveStore;
@@ -62,6 +63,7 @@ export interface ProactiveCompositionOptions {
   pushEnabled?: boolean;
   todoWritesEnabled?: boolean;
   alertsEnabled?: boolean;
+  hasNativeRecipients?: () => Promise<boolean>;
   now?: () => Date;
   logger?: FastifyBaseLogger;
   vaultMirrorStatusReader?: NonNullable<ProactiveEngineOptions['vaultMirrorStatusReader']>;
@@ -124,6 +126,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       pushStore: options.pushStore!,
       ownerObjectId: options.ownerObjectId,
       ledger: alertLedger,
+      ...(options.hasNativeRecipients ? { hasNativeRecipients: options.hasNativeRecipients } : {}),
       send: options.systemPushSender!,
       now,
       ...(options.logger ? { logger: options.logger } : {}),
@@ -142,6 +145,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ...(ownerReminderReady ? { ownerReminders: options.ownerReminderStore } : {}),
       vault: options.vaultClient,
       pushStore: options.pushStore,
+      ...(options.hasNativeRecipients ? { hasNativeRecipients: options.hasNativeRecipients } : {}),
       ...(alertLedger ? { ledger: alertLedger } : {}),
       ownerObjectId: options.ownerObjectId,
       send: options.systemPushSender,

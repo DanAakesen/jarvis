@@ -28,6 +28,7 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
     private var sourceEnabled: [String: Bool] = [
         "todos": true, "calendar": true, "mail": true, "weather": true,
         "factory": true, "news": false, "travel": true, "x": false,
+        "health": true, "nutrition": true, "notes": true, "memory": true,
     ]
     private var categoryEnabled: [String: Bool] = [
         "deadline": true, "clash": true, "travel": true, "todo": true, "prep": true,
@@ -63,6 +64,11 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
         case (.get, "/proactive/settings"): return Self.response(200, settings())
         case (.patch, "/proactive/settings"): return patchSettings(request.body)
         default:
+            if request.method == .get, path.hasPrefix("/proactive/items/"),
+               let id = path.split(separator: "/").last,
+               let index = Self.itemIDs.firstIndex(of: String(id)) {
+                return Self.response(200, item(index))
+            }
             if request.method == .post, path.hasPrefix("/proactive/items/"), path.hasSuffix("/feedback") {
                 return feedback(path: path, body: request.body)
             }
@@ -235,7 +241,7 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
     }
 
     private func proactiveStatus() -> [String: Any] {
-        let order = ["todos", "calendar", "mail", "weather", "factory", "news", "travel", "x"]
+        let order = ["todos", "calendar", "mail", "weather", "factory", "news", "travel", "x", "health", "nutrition", "notes", "memory"]
         let sources: [[String: Any]] = order.map { id in
             let enabled = sourceEnabled[id] ?? false
             var value: [String: Any] = ["id": id, "enabled": enabled]
@@ -291,7 +297,7 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
     }
 
     private func settings() -> [String: Any] {
-        let sources = ["todos", "calendar", "mail", "weather", "factory", "news", "travel", "x"]
+        let sources = ["todos", "calendar", "mail", "weather", "factory", "news", "travel", "x", "health", "nutrition", "notes", "memory"]
         let categories = ["deadline", "clash", "travel", "todo", "prep", "news", "weather", "status", "suggestion"]
         return [
             "paused": paused,
