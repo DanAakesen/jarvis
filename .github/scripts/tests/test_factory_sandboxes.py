@@ -9,6 +9,18 @@ spec.loader.exec_module(module)
 
 
 class QualificationTests(unittest.TestCase):
+    def test_diagnostics_cannot_request_unbounded_capacity(self):
+        for profile, size in [('100cpu', '128GiB'), ('2cpu', '128TiB'), ('8cpu', '20Gi')]:
+            with self.subTest(profile=profile, size=size), self.assertRaises(ValueError):
+                module.storage_configuration(profile, size)
+
+    def test_large_profile_leaves_disk_budget_for_128_gib_workspace(self):
+        profile = module.storage_configuration('8cpu', '128GiB')
+        cores = int(profile['cpu'].removesuffix('m')) / 1000
+        root = int(profile['disk_size'].removesuffix('Gi'))
+        self.assertLessEqual(root + 128, cores * 20)
+        self.assertEqual(module.WORKERS, 5)
+
     def results(self):
         return [{'worker': str(i), 'workspaceBytes': 128 * 1024**3,
                  'startedAt': i, 'finishedAt': 40 + i,
