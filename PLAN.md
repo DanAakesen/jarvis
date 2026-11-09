@@ -4545,6 +4545,28 @@ The runner image is unchanged. Nine adapter tests and backend typechecking pass;
 live requalification is pending.
 
 
+## Native APNs configuration inspection — 9 November 2026
+
+The main-only `Native push readiness` workflow reads the existing backend's
+notification switches and APNs configuration presence. It emits booleans and
+matching Key Vault secret names only, never key contents or device tokens.
+Inspection makes no configuration changes and sends no notification. Use it to identify
+missing server wiring before claiming intelligent notifications are available
+on an installed iPhone; Apple Developer capability enablement alone is insufficient.
+
+The owner identified existing Apple APNs key `367DAUWL3Z` (Jarvis APNs key).
+Reuse its downloaded private key if APNs access is enabled; do not create or
+revoke a key merely because server setup is incomplete. Store its contents in
+`apns-signing-key`, with metadata in `apns-key-id` and `apns-team-id`.
+
+After the owner stores those enabled secrets, primary may dispatch Native push
+readiness with `enable_delivery=true` from qualified main. Activation uses only
+Key Vault references with the existing backend identity, sets production APNs,
+and waits for the ready backend revision. Ordinary Bicep deployments preserve
+the enabled state and the three references. No private-key read is needed by
+the workflow, and it sends no test notification. Installed receipt/tap testing
+remains separate. Activation has not run.
+
 ## Managed Factory cutover — 9 November 2026
 
 Run 42620552706 passed five production-adapter workers, credential access,
@@ -4559,3 +4581,14 @@ role assignments through ARM, including child scopes, and retains the exact
 identity/resource filters before deleting grants. Pagination cannot leave the
 resource group. VM retirement and source cleanup remain pending live execution.
 The owner accepts 300 sandbox cores for now; no further quota request is authorized.
+
+
+## Factory VM cleanup finalization — 9 November 2026
+
+Runtime 42625011714 again passed five workers and managed cutover. Its ordered
+teardown completed role, VM, disk and network deletion, then stopped because
+`storage container-rm delete` requires explicit CLI confirmation in automation.
+The fix supplies `--yes` for only the authorized legacy mailbox. Recovery first
+verifies the VM and all dedicated named resources are absent, then removes only
+the old mailbox and deployment record. Any remaining dedicated resource stops
+recovery for inspection. Final inventory/evidence and source cleanup are pending.

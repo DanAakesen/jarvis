@@ -16,7 +16,7 @@ def az(*args):
     result = subprocess.run(['az', *args, '--subscription', os.environ['SUBSCRIPTION_ID'],
         '--only-show-errors', '--output', 'json'], capture_output=True, text=True, timeout=900)
     if result.returncode:
-        raise RuntimeError('Azure operation failed: ' + args[0])
+        raise RuntimeError('Azure operation failed: ' + ' '.join(args[:3]))
     return json.loads(result.stdout) if result.stdout.strip() else None
 
 

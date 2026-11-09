@@ -9271,6 +9271,17 @@ The runner image is unchanged. Nine adapter tests and backend typechecking pass;
 live requalification is pending.
 
 
+## Native APNs delivery configuration — 9 November 2026
+
+Use the owner's existing APNs key through three Key Vault secrets (`apns-team-id`,
+`apns-key-id`, `apns-signing-key`). The explicit main-only activation workflow
+requires exact source qualification and enabled secret metadata before changing
+the existing backend. Container Apps resolves protected references using its
+already-authorized managed identity. Infrastructure deployments preserve this
+activation; startup validates the key before becoming ready. Inspection reports
+configuration presence only. No key is committed, logged or read by the workflow.
+The owner is preparing the secrets; live activation and device receipt are pending.
+
 ## Managed Factory cutover — 9 November 2026
 
 Run 42620552706 passed five production-adapter workers, credential access,
@@ -9285,3 +9296,14 @@ role assignments through ARM, including child scopes, and retains the exact
 identity/resource filters before deleting grants. Pagination cannot leave the
 resource group. VM retirement and source cleanup remain pending live execution.
 The owner accepts 300 sandbox cores for now; no further quota request is authorized.
+
+
+## Factory VM cleanup finalization — 9 November 2026
+
+Runtime 42625011714 again passed five workers and managed cutover. Its ordered
+teardown completed role, VM, disk and network deletion, then stopped because
+`storage container-rm delete` requires explicit CLI confirmation in automation.
+The fix supplies `--yes` for only the authorized legacy mailbox. Recovery first
+verifies the VM and all dedicated named resources are absent, then removes only
+the old mailbox and deployment record. Any remaining dedicated resource stops
+recovery for inspection. Final inventory/evidence and source cleanup are pending.
