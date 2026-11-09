@@ -42,7 +42,9 @@ if [[ "$1 $2 $3" == "deployment group show" ]]; then
     echo '{}'
   fi
 elif [[ "$1 $2" == "containerapp list" ]]; then
-  if [[ "${FAKE_COPILOT_CONFIG:-}" == valid ]]; then
+  if [[ -n "${FAKE_WORKER_ENABLED:-}" ]]; then
+    jq -cn --arg flag "$FAKE_WORKER_ENABLED" --arg id "${FAKE_WORKER_ID:-/subscriptions/subscription/resourcegroups/rg-test/providers/Microsoft.Compute/virtualMachines/vm-jarvis-factory}" '[{name:"ca-jarvis-backend-test",worker:[{name:"JARVIS_FACTORY_WORKER_RESOURCE_ID",value:$id},{name:"JARVIS_FACTORY_WORKER_ENABLED",value:$flag}]}]'
+  elif [[ "${FAKE_COPILOT_CONFIG:-}" == valid ]]; then
     echo '[{"name":"ca-jarvis-backend-test","image":"backend:existing","copilot":[{"name":"FOUNDRY_COPILOT_AGENT_NAME","value":"jarvis-main-copilot-preview"},{"name":"FOUNDRY_COPILOT_AGENT_VERSION","value":"1"},{"name":"FOUNDRY_COPILOT_DEFINITION_SHA256","value":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}]' | jq --arg receipt "${FAKE_COPILOT_POLICY_RECEIPT:-}" 'if $receipt == "" then . else .[0].copilot += [{"name":"FOUNDRY_COPILOT_POLICY_COMPATIBILITY","value":$receipt}] end'
   elif [[ "${FAKE_COPILOT_CONFIG:-}" == partial ]]; then
     echo '[{"name":"ca-jarvis-backend-test","image":"backend:existing","copilot":[{"name":"FOUNDRY_COPILOT_AGENT_NAME","value":"jarvis-main-copilot-preview"}]}]'
@@ -132,6 +134,22 @@ fi
         self.assertIn("foundryCopilotAgentName=jarvis-main-copilot-preview", log)
         self.assertIn("foundryCopilotAgentVersion=1", log)
         self.assertIn("foundryCopilotDefinitionSha256=" + "a" * 64, log)
+
+    def test_arm_boolean_casing_and_resource_id_casing_preserve_worker(self):
+        for flag in ('True', 'true', 'False', 'false'):
+            with self.subTest(flag=flag):
+                result, log = self.deploy(FAKE_WORKER_ENABLED=flag)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('factoryWorkerEnabled=' + flag.lower(), log)
+
+    def test_invalid_worker_identity_or_flag_still_blocks_deployment(self):
+        for env in ({'FAKE_WORKER_ENABLED': 'enabled'},
+                    {'FAKE_WORKER_ENABLED': 'true', 'FAKE_WORKER_ID': '/subscriptions/other/resourceGroups/rg-test/providers/Microsoft.Compute/virtualMachines/vm-jarvis-factory'}):
+            with self.subTest(env=env):
+                result, log = self.deploy(**env)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('Invalid Factory worker configuration', result.stdout)
+                self.assertNotIn('deployment group create', log)
 
     def test_policy_receipt_survives_normal_deployment_and_malformed_evidence_stays_closed(self):
         result, log = self.deploy(FAKE_COPILOT_CONFIG="valid", FAKE_COPILOT_POLICY_RECEIPT="b" * 64)

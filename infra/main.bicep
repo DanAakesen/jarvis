@@ -952,7 +952,7 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             }
             {
               name: 'JARVIS_FACTORY_WORKER_ENABLED'
-              value: string(factoryWorkerEnabled)
+              value: factoryWorkerEnabled ? 'true' : 'false'
             }
             ...map(items(factorySandboxConfiguration), setting => {
               name: setting.key

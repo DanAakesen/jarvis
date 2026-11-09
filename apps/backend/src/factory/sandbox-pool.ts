@@ -222,7 +222,9 @@ export class FactorySandboxPool {
         binding.suspended = false;
       }
       if (box.state !== 'Running') return;
-      if (!queued && health?.['idle'] === true && typeof health['at'] === 'number' && Date.now() / 1000 - health['at'] < 60) {
+      // Idle means the managed consumer has exited its claim loop. Stop even
+      // when a new command arrived since its last queue read; resume next poll.
+      if (binding.booted && health?.['idle'] === true) {
         await this.group.sandboxes.beginStop(box.id, {abortSignal: signal}).pollUntilDone();
         binding.booted = false;
         binding.suspended = true;
@@ -234,6 +236,9 @@ export class FactorySandboxPool {
       const heartbeatAt = typeof health?.['at'] === 'number' ? health['at'] * 1000 : (binding.bootedAt ?? Date.now());
       if (binding.booted && Date.now() - heartbeatAt > 180_000) binding.booted = false;
       if (!binding.booted || Date.now() - (binding.sasRenewedAt ?? 0) > 4 * 3600_000) {
+        // A stopped consumer's idle marker must not stop its successor. Preserve
+        // the live heartbeat when this is only a credential rotation.
+        if (!binding.booted) await container.getBlobClient('health.json').deleteIfExists(io());
         const startsOn = new Date(Date.now() - 5 * 60_000);
         const expiresOn = new Date(Date.now() + 7 * 3600_000);
         const key = await this.options.storage.getUserDelegationKey(startsOn, expiresOn, io());

@@ -213,13 +213,14 @@ class Worker:
         active = any(state.worker and not state.worker.done() for state in runner.tasks.values())
         if active or keys:
             self.last_busy = time.monotonic()
-        if time.monotonic() - self.last_health >= 20:
+        idle = not active and not keys and time.monotonic() - self.last_busy >= 120
+        if idle or time.monotonic() - self.last_health >= 20:
             disk = runner._disk_snapshot()
             await self.io("put", "health.json", {"at": time.time(), "instance": self.instance_id,
                 "active": active, "queued": len(keys),
-                "idle": not active and not keys and time.monotonic() - self.last_busy >= 120, **disk})
+                "idle": idle, **disk})
             self.last_health = time.monotonic()
-        return not active and not keys and time.monotonic() - self.last_busy >= 120
+        return idle
 
     async def deallocate(self):
         resource_id = os.environ["JARVIS_FACTORY_WORKER_RESOURCE_ID"]
@@ -237,7 +238,11 @@ class Worker:
         runner.WORK_ROOT.mkdir(parents=True, exist_ok=True)
         while True:
             try:
-                if await self.tick() and os.environ.get("JARVIS_FACTORY_MANAGED_SANDBOX") != "true":
+                if await self.tick():
+                    if os.environ.get("JARVIS_FACTORY_MANAGED_SANDBOX") == "true":
+                        # Publishing idle hands ownership back to the controller.
+                        # Never claim a newly queued turn while it stops this box.
+                        return
                     await self.deallocate()
                     # ARM can take time. Never claim billing stopped based on this response.
                     await asyncio.sleep(10)

@@ -81,9 +81,10 @@ parameters+=(factorySandboxConfiguration="$sandbox_configuration")
 
 worker_id=$(jq -r '.[0].worker // [] | map(select(.name == "JARVIS_FACTORY_WORKER_RESOURCE_ID"))[0].value // ""' <<<"$backend_apps")
 worker_enabled=$(jq -r '.[0].worker // [] | map(select(.name == "JARVIS_FACTORY_WORKER_ENABLED"))[0].value // "false"' <<<"$backend_apps")
+worker_enabled="${worker_enabled,,}"
 if [[ -n "$worker_id" ]]; then
   expected_worker="/subscriptions/$SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Compute/virtualMachines/vm-jarvis-factory"
-  [[ "$worker_id" == "$expected_worker" && "$worker_enabled" =~ ^(true|false)$ ]] || { echo '::error::Invalid Factory worker configuration'; exit 1; }
+  [[ "${worker_id,,}" == "${expected_worker,,}" && "$worker_enabled" =~ ^(true|false)$ ]] || { echo '::error::Invalid Factory worker configuration'; exit 1; }
   parameters+=(factoryWorkerResourceId="$worker_id" factoryWorkerEnabled="$worker_enabled")
 fi
 
