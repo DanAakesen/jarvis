@@ -102,7 +102,7 @@ def targets(bootstrap: dict, web: dict) -> dict:
 class Azure:
     def __init__(self, subscription: str, run=subprocess.run, clock=time.monotonic):
         self.subscription, self.run, self.clock = subscription, run, clock
-        self.deadline = clock() + 90
+        self.deadline = clock() + 180
         self.calls = 0
 
     def get(self, resource: str, version: str, query: str | None = None, parameters: dict | None = None):
@@ -113,7 +113,7 @@ class Azure:
     def _read(self, url: str, query: str | None):
         self.calls += 1
         remaining = self.deadline - self.clock()
-        require(self.calls <= 32 and remaining > 0, "preflight_limit")
+        require(self.calls <= 128 and remaining > 0, "preflight_limit")
         args = ["az", "rest", "--method", "get", "--url", url, "--subscription", self.subscription,
                 "--output", "json", "--only-show-errors"]
         if query:
@@ -208,7 +208,7 @@ def inspect(expected: dict, azure: Azure) -> dict:
 
     def read_role(identifier):
         if identifier not in roles:
-            require(len(roles) < 12, "role_inventory_limit")
+            require(len(roles) < 64, "role_inventory_limit")
             definition = azure.get(expected["workspace_id"] + "/providers/Microsoft.Authorization/roleDefinitions/" + identifier, "2022-04-01")
             require(isinstance(definition, dict), "invalid_role_inventory")
             roles[identifier] = definition
