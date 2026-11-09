@@ -75,11 +75,11 @@ def failure_details(error: Exception, stage: str) -> dict:
 
 
 def qualify(args) -> None:
-    from azure.containerapps.sandbox import SandboxGroupClient, SandboxVolume, endpoint_for_region
+    from azure.containerapps.sandbox import SandboxGroupClient, SandboxVolume, RegistryCredentials, endpoint_for_region
+    from image_auth import acr_credentials
     from azure.identity import AzureCliCredential
 
     outputs = json.loads(args.outputs.read_text())
-    identity = outputs['identityResourceId']['value']
     client_id = outputs['identityClientId']['value']
     run = 'q-' + uuid4().hex
     labels = {'jarvis-purpose': 'qualification', 'jarvis-run': run}
@@ -104,10 +104,13 @@ def qualify(args) -> None:
                 if getattr(error, 'status_code', None) != 403 or attempt == 12:
                     raise
                 time.sleep(10)
+        stage = 'registry-login'
+        registry_credentials = RegistryCredentials(**acr_credentials(args.image, args.subscription))
         stage = 'image-import'
         image = group.begin_create_disk_image(args.image, name='factory-qualified-' + args.image[-16:],
-            managed_identity_resource_id=identity, entrypoint=['/bin/sh', '-c'], cmd=['sleep infinity'],
+            registry_credentials=registry_credentials, entrypoint=['/bin/sh', '-c'], cmd=['sleep infinity'],
             polling_timeout=1200).result()
+        registry_credentials.token = ''
         evidence['diskImageId'] = image.id
         save()
         # Create one, inspect its disk/build, then add four. Never run six or 100.

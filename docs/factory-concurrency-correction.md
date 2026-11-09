@@ -136,3 +136,19 @@ admission ran against production tasks. CI covers the existing SQL ownership and
 admission contracts. The temporary storage role is scoped to that test account;
 workers still receive only their individual container SAS. Account removal follows
 confirmed cleanup of the five owned sandboxes and volumes.
+
+## Private image import and acceptance receipts
+
+Run 42589074806 confirmed group data-plane access, then failed with HTTP 401 at
+private image import. The import path now uses `az acr login --expose-token`
+under the existing deployment identity, restricted to a digest-pinned Jarvis
+runner image. The short-lived credential is passed only to Azure's image import;
+it is never written to an artifact or worker. Registry admin login remains off.
+Runtime vault access still uses the sandbox group's managed identity.
+
+Cutover requires the exact current accepted release receipt. A backend image
+reused by that release is valid only with its preserved image/revision provenance;
+a receipt for another source is rejected. VM role cleanup is scoped to rg-jarvis
+and includes the backend's obsolete VM wake grant, preserving its shared access.
+Failed image preparation releases the disposable storage before workers exist;
+failed worker cleanup retains the storage and bounded failure diagnostics.
