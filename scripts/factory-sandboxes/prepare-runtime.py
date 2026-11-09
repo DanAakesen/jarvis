@@ -3,7 +3,8 @@ import json
 import os
 from pathlib import Path
 
-from azure.containerapps.sandbox import SandboxGroupClient, endpoint_for_region
+from azure.containerapps.sandbox import SandboxGroupClient, RegistryCredentials, endpoint_for_region
+from image_auth import acr_credentials
 from azure.identity import AzureCliCredential
 from qualify import failure_details
 
@@ -14,11 +15,15 @@ bootstrap = json.loads(Path('infra/bootstrap.output.json').read_text())
 credential = AzureCliCredential()
 client = SandboxGroupClient(endpoint_for_region('swedencentral'), credential,
     subscription_id=os.environ['SUBSCRIPTION_ID'], resource_group='rg-jarvis', sandbox_group='jarvis-factory', retry_total=0)
+stage = 'registry-login'
 try:
+    registry_credentials = RegistryCredentials(**acr_credentials(os.environ['WORKER_IMAGE'], os.environ['SUBSCRIPTION_ID']))
+    stage = 'image-import'
     image = client.begin_create_disk_image(os.environ['WORKER_IMAGE'],
         name='factory-' + os.environ['GITHUB_SHA'][:16],
-        managed_identity_resource_id=group_outputs['identityResourceId']['value'],
+        registry_credentials=registry_credentials,
         entrypoint=['/bin/sh', '-c'], cmd=['sleep infinity'], polling_timeout=1200).result()
+    registry_credentials.token = ''
     config = {'subscription': os.environ['SUBSCRIPTION_ID'], 'storage': os.environ['QA_STORAGE'],
         'imageId': image.id, 'image': os.environ['WORKER_IMAGE'], 'source': os.environ['GITHUB_SHA'],
         'identityClientId': group_outputs['identityClientId']['value'],
@@ -27,7 +32,7 @@ try:
         'apiScope': bootstrap['api']['identifierUri'] + '/.default'}
     (root / 'pool-config.json').write_text(json.dumps(config, indent=2) + '\n')
 except Exception as error:
-    print(json.dumps(failure_details(error, 'image-import')))
+    print(json.dumps(failure_details(error, stage)))
     raise SystemExit(1) from None
 finally:
     credential.close()

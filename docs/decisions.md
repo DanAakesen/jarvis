@@ -6,9 +6,10 @@ The production concurrency target remains 100 with 128 GiB isolated workspaces.
 After managed Factory acceptance and cutover, remove the VM and all dedicated
 resources, roles, runtime code and configuration. Preserve shared backend and
 Foundry chat/voice services. Existing Factory test tasks need no migration.
-Group provisioning succeeded in workflow 42585522896. Its two qualification
-attempts returned HTTP 401 before a worker passed; sanitized operation diagnostics
-are being added. Factory cutover, live acceptance and VM retirement remain pending.
+Group provisioning succeeded in workflow 42585522896. Qualification 42589074806
+identified HTTP 401 during private image import (registry/managed-identity auth).
+Image import now uses a short-lived ACR token from the existing deployment login;
+no registry admin account is enabled. Worker runtime identity is unchanged. Factory cutover, live acceptance and VM retirement remain pending.
 The runtime implementation now adds a durable per-session sandbox assignment,
 independent Blob mailboxes with rotating container-scoped user-delegation SAS,
 lease-fenced allocation, progress/token forwarding and independent idle stop.
