@@ -810,7 +810,7 @@ describe('conversation routes', () => {
     }));
   });
 
-  it('resolves a natural food reply without aborting or replaying the active model/tool round', async () => {
+  it('executes a requested food action without an approval turn or replay', async () => {
     const service = createOwnerInteractionService({ ownerObjectId: config.auth.ownerObjectId,
       conversationStore: { getDanMessagesAfter: vi.fn(async () => [{ id: '43', text: 'yes, log that', language: 'en' }]) }, store: {
       createConfirmation: vi.fn(async () => {}),
@@ -820,35 +820,23 @@ describe('conversation routes', () => {
       expireConfirmation: vi.fn(async () => false),
       expirePendingConfirmations: vi.fn(async () => {}),
     } });
-    const approval = { id: '43', text: 'yes, log that', language: 'en' as const };
-    const store = storeFixture({
-      addMessage: vi.fn(async input => ({ ...message, at: new Date(),
-        id: input.role === 'dan' && input.text === approval.text ? '43' : '42', role: input.role, text: input.text })),
-      getDanMessagesAfter: vi.fn(async ({ after }) => BigInt(after) < 43n ? [approval] : []),
-    });
+    const store = storeFixture();
     const action = vi.fn(async () => 'Logged.');
-    const appRef: { current?: ReturnType<typeof buildApp> } = {};
     const chatAgent = { stream: vi.fn(async function* (_input, _auth, signal: AbortSignal) {
       const pending = service.runConfirmed('other', 'Log synthetic portion: 200 kcal.', action, signal,
         { channel: 'browser', lifetimeSeconds: 120, foodEstimate: { sessionId: '41', sourceMessageId: '42' } });
-      await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
-      const response = await appRef.current!.inject({
-        method: 'POST', url: '/conversation/sessions/41/steer', headers,
-        payload: { text: approval.text, language: 'en' },
-      });
-      expect(response.statusCode).toBe(202);
       expect(signal.aborted).toBe(false);
       yield await pending;
     }) };
     const app = createApp(store, { ownerInteractions: service, conversationAgent: chatAgent });
-    appRef.current = app;
     const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
-      payload: { text: 'Review synthetic portion.' } });
+      payload: { text: 'Log synthetic portion.' } });
     expect(response.body).toContain('event: done');
     expect(response.body).toContain('Logged.');
     expect(response.body).not.toContain('event: interrupted');
     expect(chatAgent.stream).toHaveBeenCalledOnce();
     expect(action).toHaveBeenCalledOnce();
+    expect(service.pendingBrowserConfirmations()).toEqual([]);
   });
 
   it.each(['complete', 'cancel', 'disconnect_after_commit'] as const)('recovers a disconnected direct owner action: %s', async decision => {
