@@ -955,9 +955,9 @@ describe('normal insight provenance', () => {
 
 
 describe('new context sources are notification-only', () => {
-  it('does not turn a health insight into an automatic task write', async () => {
+  it.each(['health', 'commitment'] as const)('does not turn new %s context into an automatic task write', async (kind) => {
     const hook = vi.fn<(context: FindingsStoredContext) => Promise<void>>(async () => {});
-    const fixture = setup({ sources: [source('health', [fact({ kind: 'health', dueAt: null })])], onFindingsStored: [hook] });
+    const fixture = setup({ sources: [source(kind === 'health' ? 'health' : 'todos', [fact({ kind, dueAt: null })])], onFindingsStored: [hook] });
     await fixture.run();
     expect(hook.mock.calls[0]![0].findings[0]).toMatchObject({ modelGenerated: true });
     expect(hook.mock.calls[0]![0].findings[0]).not.toHaveProperty('suggestedTodo');

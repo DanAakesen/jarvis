@@ -293,7 +293,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
             evidenceRefs: finding.evidence,
             evidence: cited.map((fact) => ({ source: fact.source, label: fact.label, observedAt: fact.observedAt })),
             language, runId: run.id,
-            ...(finding.suggestedTodo === undefined || cited.some(fact => ['health', 'nutrition', 'notes', 'memory'].includes(fact.source))
+            ...(finding.suggestedTodo === undefined || cited.some(fact => fact.kind === 'commitment' || ['health', 'nutrition', 'notes', 'memory'].includes(fact.source))
               ? {} : { suggestedTodo: finding.suggestedTodo }),
           });
         }
