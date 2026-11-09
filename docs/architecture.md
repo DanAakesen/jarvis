@@ -9013,6 +9013,12 @@ See [Factory concurrency correction](factory-concurrency-correction.md) for the
 managed candidate, discovery workflow and acceptance requirements. No fleet or
 routing change is delivered by that discovery workflow.
 
+Read-only discovery 42580034945 on 9 November confirms the managed sandbox
+catalogue includes Sweden Central and API 2026-07-01. The regional SandboxCores
+quota is 300 with zero usage, and rg-jarvis has no sandbox groups. This supplies
+enough CPU quota for 100 two-core sandboxes, but runtime placement, 128 GiB mounted
+storage, task lifecycle and provider concurrency are not yet qualified.
+
 ## Established chat stream lifetime (8 November 2026)
 
 The Foundry invocation adapter bounds authentication/connection setup at 210 seconds

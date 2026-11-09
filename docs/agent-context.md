@@ -7,6 +7,12 @@ to fit that host or claim 100 queued tasks prove 100 running workers. Managed
 execution is preferred. Read docs/factory-concurrency-correction.md before any
 worker routing/provisioning change; do not decommission the Foundry runner as part
 of the earlier VM-only direction until the replacement preserves concurrency.
+Read-only inspection 42580034945 at 08:33 Copenhagen confirms sandboxGroups in
+Sweden Central, stable API 2026-07-01 and SandboxCores quota 300 / usage 0. There
+are no sandbox groups in rg-jarvis. Do not ask Dan to increase VM CPU quota for
+this managed candidate or claim another quota blocker without a new observation.
+Data-plane permission, the actual 128 GiB mount and concurrent runner execution
+still need qualification. PR #1670 delivered discovery, not a worker cutover.
 
 Copilot harness migration/comparison is parked: Dan prefers control of the custom
 harness and sees insufficient gain. Keep Current as default; retain existing test

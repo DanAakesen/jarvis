@@ -12136,3 +12136,14 @@ cutover, quota increase, new worker or 100-agent load run occurs in this change.
 Read-only catalogue inspection supports that qualification; a visible catalogue
 is not a working sandbox or proof of available capacity. See
 docs/factory-concurrency-correction.md for sources and acceptance requirements.
+
+### Managed capacity readback — 9 November, 08:33 Copenhagen
+
+After #1670 merged as 1d9f3074 with full CI 42579005933 and CodeQL 42579005892,
+GET-only inspection 42580034945 confirms Microsoft.App Registered, sandboxGroups
+available in Sweden Central with API 2026-07-01, and no groups yet in rg-jarvis.
+SandboxCores is limit 300 / usage 0. This is sufficient CPU quota for 100 two-core
+workers; it is not proof of a 128 GiB volume at that size, data-plane permission,
+actual resource placement, completed builds or 100 live Codex/Copilot sessions.
+No resources, role assignments, quota or routing were changed. The current VM
+route still handles one coding task at a time. Retain the qualification distinction.

@@ -6,7 +6,11 @@ route serializes tasks and does not meet the existing parallel-work requirement.
 Workspace provisioning remains verified; Factory capacity is incomplete. Prefer
 managed execution; qualify Container Apps Sandboxes and its larger disks before
 choosing a replacement. Read-only subscription discovery is implemented, not
-worker provisioning or fleet execution. See
+worker provisioning or fleet execution. Live inspection 42580034945 confirms
+Sweden Central availability in the subscription catalogue and SandboxCores quota
+300 / usage 0, sufficient CPU quota for 100 two-core workers. No sandbox group
+exists yet; mounted 128 GiB storage, integration and concurrent execution remain
+unverified. See
 [scope, evidence and acceptance](docs/factory-concurrency-correction.md).
 
 Copilot harness migration and further comparison are parked. Keep the custom

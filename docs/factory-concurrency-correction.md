@@ -91,7 +91,17 @@ the parked Copilot-harness migration is unrelated.
 - 128 GiB VM storage: provisioned and measured.
 - Concurrent execution through that VM route: one active coding task.
 - Managed replacement: documented candidate; integration not implemented.
-- Read-only availability inspection: implemented; live observation pending.
+- Read-only availability inspection: passed in
+  [run 42580034945](https://github.com/DanAakesen/jarvis/actions/runs/42580034945)
+  at 08:33 Copenhagen on 9 November. Microsoft.App is registered; sandboxGroups
+  lists Sweden Central and stable API 2026-07-01. The resource group currently has
+  no sandbox groups. Regional SandboxCores quota is 300, usage 0. This is enough
+  CPU quota for 100 workers at 2 cores each, but does not prove resource placement,
+  a 128 GiB volume at that size, build performance or provider concurrency.
 - 100-agent capacity: required; neither deployed nor demonstrated.
 
-Local check: `python -m unittest discover -s .github/scripts/tests -p test_inspect_factory_capacity.py -v`.
+PR #1670 merged as 1d9f3074 after full CI 42579005933 and CodeQL 42579005892.
+All 13 inspection tests and 15 pipeline-impact tests passed locally. The full
+local pipeline suite encountered 15 missing-Ruby errors; the equipped CI runner
+subsequently passed the complete checks. Local check:
+`python -m unittest discover -s .github/scripts/tests -p test_inspect_factory_capacity.py -v`.
