@@ -12320,3 +12320,18 @@ explicitly states SecretProperties.value is never returned by that service.
 Project only names/enabled flags, bound pagination to the same vault, and retain
 missing/disabled-key rejection before any APNs configuration write. Six focused
 checks pass; live metadata readback and activation remain pending.
+# Home brief and daily activity semantics — 9 November 2026
+
+Dan requests a useful configurable Home phrase, an owner instruction and a
+maximum-line preference, with all owner-editable Jarvis instructions accessible
+in one settings destination. Primary will investigate and provide the secondary
+implementation brief; secondary must not deploy. Proposed organization is
+Settings → General → Jarvis → Instructions, preserving separate identity,
+general-style, presence-mode and Home scopes and existing stored values.
+Active kcal must include activity outside recorded workouts. Source inspection
+confirms Home currently sums workout measurements for all periods. Use daily
+active energy and define time as Apple exercise minutes, with honest labels and
+shared Home/Health semantics. The time definition and initial 1–6 line range
+(default 3) are implementation recommendations, not an already selected owner
+preference. See `docs/ios/design/home-brief-activity-handoff.md` for evidence.
+No Home implementation or live-device data verification is claimed.

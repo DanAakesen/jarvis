@@ -1,3 +1,14 @@
+## Home brief and daily activity semantics — 9 November 2026
+
+The owner requests a configurable, useful Home phrase with its instruction and
+maximum visible lines in one central Jarvis Instructions destination. Source
+inspection confirms fixed calendar/task greeting templates and no line setting.
+Home's Active time/kcal still sum recorded workouts; the earlier build-86 merge
+fix did not supply all-day activity. Health's Active time also uses workout
+duration. Daily HealthKit active energy/exercise minutes are already readable
+and synced, but Home does not use them. Secondary implementation is requested,
+not delivered. See [source findings and acceptance](docs/ios/design/home-brief-activity-handoff.md).
+
 ## Current managed Factory delivery — 9 November 2026
 
 Azure Container Apps Sandboxes is active for new Factory work. Live production-
