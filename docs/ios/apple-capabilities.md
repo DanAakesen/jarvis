@@ -27,7 +27,9 @@ The owner also associated `group.com.danaakesen.jarvis` with both Watch App IDs:
 `com.danaakesen.jarvis.watchkitapp.widgets`. Signed TestFlight attempt 88
 (42613537731) advanced past the previous App Group provisioning failure and then
 failed on shared-code integer overflow for watchOS arm64_32. PR #1679 fixes that
-separate compilation issue.
+separate compilation issue. Signed iPhone/Watch build 89 uploaded successfully
+in run 42635187842 on 9 November. Apple processing and physical-device acceptance
+remain separate checks.
 
 Current iPhone source uses Push Notifications, HealthKit, shared App Groups and
 the Microsoft authentication keychain group. APNs uses signing-key authentication;
@@ -53,22 +55,24 @@ separate from these candidates. They reuse existing APNs registrations and saved
 Jarvis data; they do not establish new Watch background health uploads.
 
 
-## Existing APNs key confirmed
+## Production APNs activated — 9 November 2026
 
-The owner confirmed that **Jarvis APNs key**, Key ID `367DAUWL3Z`, already has
-Push enabled. Reuse its downloaded `.p8` private key; no replacement is needed
-for this integration if that file is available and the key permits production
-Jarvis delivery. Store the key only in Azure Key Vault as `apns-signing-key`,
-with `apns-key-id` and `apns-team-id`. The private key is not part of this record.
-The existing signed-build configuration confirms Team ID `KCA96N89FA`.
-Use that value for `apns-team-id` and `367DAUWL3Z` for `apns-key-id` in
-`kv-jarvis-rmw7kae3bza6a`.
-The primary has merged server configuration support; secret storage, activation
-and installed receipt are not yet confirmed.
+The owner created a replacement APNs key after the private file for the earlier
+key could not be located. The replacement Key ID is held in Key Vault; it was not
+read into this record. Do not reuse the previously discussed IDs `367DAUWL3Z` or
+`PAUD5A32KG` from old instructions.
 
-The owner has a downloaded `.p8`, but the shown filename is
-`AuthKey_PAUD5A32KG.p8`, which indicates a different Key ID. Matching
-`AuthKey_367DAUWL3Z.p8` or confirmation that PAUD5A32KG is an active APNs key is
-still needed before choosing its runtime Key ID. Do not relabel a different key.
-Readiness run 42627268441 confirms APNs is not wired into the backend yet;
-Key Vault secret presence remains unverified because metadata listing failed.
+Run 42635939897 verified all three secrets in `kv-jarvis-rmw7kae3bza6a` through
+ARM metadata: `apns-team-id`, `apns-key-id` and `apns-signing-key`. Team ID
+`KCA96N89FA` is confirmed by the signed-build configuration. Private key values
+were not retrieved or logged.
+
+Activation run 42636282777 passed at 14:47 UTC. Backend revision `0000565` is
+ready with production APNs and protected Key Vault references. Native approval
+notifications, proactive checks/alerts, push and Health are enabled. Deployment
+42635181674 also passed readiness and live conversation acceptance for the
+intelligent-notification release, including startup migration 0076.
+
+Actual APNs acceptance, phone receipt and notification-tap routing still require
+an installed-device check. Watch notification mirroring is also a device check;
+this does not establish Watch background HealthKit upload or workout recording.

@@ -1,3 +1,15 @@
+## Current Watch and notification delivery — 9 November 2026
+
+Build 89 signed and uploaded in 42635187842. Notification deployment 42635181674
+passed readiness and live conversation acceptance, including startup migration
+0076. Owner-created APNs secrets were verified by metadata and activation
+42636282777 passed on ready backend revision `0000565`. Keep key values in Key
+Vault; use `docs/ios/apple-capabilities.md` rather than earlier key-ID instructions.
+Actual receipt/taps, Apple processing and physical Watch checks remain. See
+`docs/ios/design/p15-build89-release.md` for focused device checks and the three
+known pre-existing Notes native-test failures. Factory testing stays on hold
+until its complete managed image rollout is ready; no temporary compatibility.
+
 ## Current managed Factory delivery — 9 November 2026
 
 Azure Container Apps Sandboxes is active for new Factory work. Live production-

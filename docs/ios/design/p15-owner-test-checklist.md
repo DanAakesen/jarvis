@@ -1,13 +1,16 @@
 # Saved owner testing checklist
 
-Updated 8 November 2026. Check only items actually exercised on the device.
+Updated 9 November 2026. Check only items actually exercised on the device.
 Automated/native passes and a TestFlight upload are not owner acceptance.
 
 ## Short next session
 
-Build 86 uploaded successfully in 42515467682 with the Home Today workout totals
-correction. Once it appears in TestFlight, perform the Home check below. The owner
-has already confirmed the Notes correction is fixed after build 85.
+Build 89 uploaded successfully in 42635187842 with Apple Watch, consecutive-tool
+grouping and intelligent-notification routing. Production notifications and APNs
+are enabled. Apple processing/device availability remains unverified. Follow the
+[build 89 checks](p15-build89-release.md) once it appears in TestFlight.
+The Home Today totals correction from build 86 is included. The owner has already
+confirmed the Notes correction is fixed after build 85.
 
 Build 84 uploaded successfully in 42503950006 on 8 November at 17:22 UTC. The owner confirmed using build 84 on device. It includes the Chat progress,
 Factory navigation, transparent chrome, native selection and lift-editing fixes,
@@ -43,10 +46,10 @@ every additional optional Notes check below was separately exercised.
   without a duplicate above the Now bar. Open/close tools and select text; keep
   separate messages clear.
 
-- [ ] **Factory navigation, build 84:** tap Task 23 from Notifications,
-  including an expanded older update, and open P11-13 from the board. Confirm the
-  task and history load. An issue-only card should open its GitHub issue. Do not
-  press Recover while the quota/capacity blocker remains.
+- [ ] **Factory navigation:** after the managed rollout is confirmed ready, use
+  a fresh test task to check notification → task/history navigation and board
+  navigation. An issue-only card should open its GitHub issue. Issue #1634 was
+  closed as an obsolete test; do not recover Task 23 for this check.
 
 - [ ] **Jarvis gym logging, Current backend deployed:** send one explicit lift/session
   request with exercise, kg, reps, sets, date and session. Verify the returned values
@@ -91,9 +94,16 @@ every additional optional Notes check below was separately exercised.
 
 ## Deferred or blocked
 
-- **Apple Watch:** PR #1652 merged after primary review and native qualification. Build 87 failed signing because both Watch App IDs lack the shared App Group association. Wait for a successful replacement build before physical Watch tests.
+- **Apple Watch:** build 89 successfully signed and uploaded after the App Group
+  and arm64_32 fixes. Install after Apple processing, then check the four
+  complications, phone connection, dictation/voice and background return.
 - **Copilot comparison — parked by owner on 9 November after both combined exercises completed.** The saved [comparison guide](../../runtime-comparison-owner-test.md) records independently verified note creation/revision for both. Current's post-repair rerun now delivers its final reply. Both report an initial save refusal; refusal/routing diagnosis and matched speed/cost evidence remain open. Current stays default; no repeat is needed just to prove this case.
-- **Factory end-to-end — ready for a fresh representative task.** The 128 GiB worker is provisioned and activated in 42530882044; disk, credentials, backend readiness and actual idle deallocation passed. Owner confirms existing tasks are tests and need no migration/recovery. Verify delivery PR/checks and subsequent idle shutdown on a fresh representative task; no test tasks have been deleted.
+- **Factory end-to-end — hold until the full managed rollout finishes.** Five
+  concurrent managed sandbox lifecycle tests passed and the VM was retired in
+  42629384227. The final source cleanup still needs deployment and a fresh worker
+  image qualification. The owner will leave Factory unused until primary confirms
+  readiness. Existing test tasks need no migration/recovery; GitHub test issue
+  #1634 is closed. A real coding task remains distinct from infrastructure canaries.
 - **Approval friction:** after Factory is ready, confirm a clear authorized coding
   instruction proceeds without a redundant yes and a plan-only request stays a
   proposal. Backend acceptance passed; owner end-to-end confirmation is pending.

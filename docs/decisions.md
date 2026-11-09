@@ -1,3 +1,13 @@
+## 9 November 2026 — Complete Factory rollout before owner testing
+
+The owner will leave Factory unused until the permanent managed-worker rollout
+is complete. Do not add a temporary compatibility path for the outgoing image.
+Release the cleaned source, build and qualify its fresh image with five concurrent
+workers, then activate it before requesting owner testing. Existing Factory tasks
+are disposable tests; the owner also requested removal of legacy GitHub tasks and
+issues. Issue #1634 was closed as not planned and its execution label removed;
+this does not assert that its separate SQL task record was deleted.
+
 ## 9 November 2026 — Keep the current 300-core sandbox quota
 
 The owner accepts 300 SandboxCores for now. The qualified persistent-root profile
