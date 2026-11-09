@@ -9254,3 +9254,19 @@ The managed route remains inactive and VM retirement is held pending acceptance.
 ## Cross-app proactive context and native delivery — 9 November 2026
 
 The existing proactive registry reads health/training and nutrition via canonical owner-scoped stores, current note excerpts via the configured vault/index, and explicit durable memory via MemoryStore. Pure helpers compute recorded-goal progress, Copenhagen periods, metric trends and logged nutrition progress. Ordinary tasks use model-only commitment facts so deterministic reminder semantics remain. The existing bounded model prompt interleaves sources and accepts silence. Stored hook context marks model-generated findings for normal insight delivery; new context cannot invoke the legacy suggested-todo writer. The existing alert ledger stores class `insight` (migration 0076). APNs reuses registered owner devices and the existing alert transport, with browser delivery only when no native recipient exists. Native payload `proactiveItemID` routes to the authenticated detail endpoint and existing Proactive row. Schedule, pause, budget, preferences and quiet hours remain; no shadow runner, feedback-learning system or new event scheduler is added.
+
+
+## Managed worker credential ownership — 9 November 2026
+
+Runtime qualification 42617745859 identified `worker_boot_failed` in all five
+sandboxes. The upload API creates `.mailbox-sas.next` as root (0644) within
+worker-owned `/files/jarvis` (0700), while exec runs as UID 1000. The previous
+chmod therefore failed before starting the consumer. All test workers and
+temporary storage were cleaned up; cutover and VM retirement did not run.
+
+The adapter now copies the upload into a worker-owned 0600 staging file, atomically
+renames it to the live credential path, and removes the upload. Credential values
+remain out of command arguments and logs; the containing directory stays private.
+This also supports renewal without exposing a partially written live credential.
+The runner image is unchanged. Nine adapter tests and backend typechecking pass;
+live requalification is pending.

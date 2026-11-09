@@ -12198,3 +12198,19 @@ The managed route remains inactive and VM retirement is held pending acceptance.
 ## 2026-11-09 — Intelligent cross-app notifications, direct owner testing
 
 The owner accepts research items 1–3: connect relevant data, compute accurate facts and use intelligence to choose useful notifications. Items 4–5 (additional delivery-policy stage and feedback learning) and shadow mode are explicitly declined. The sole-owner app should include useful actual details rather than add privacy-redacted messages. Reuse existing proactive engine, controls, receipts and native APNs infrastructure; broaden normal informational insights and add no automatic task writes from new context. Keep current schedule and existing source/goal semantics. Implementation is PR #1669; integration/deployment/device acceptance remain primary responsibilities. This supersedes the earlier research proposal's privacy-redaction and shadow-rollout recommendations, without authorizing production configuration or unrelated Daily automation.
+
+
+## Managed worker credential ownership — 9 November 2026
+
+Runtime qualification 42617745859 identified `worker_boot_failed` in all five
+sandboxes. The upload API creates `.mailbox-sas.next` as root (0644) within
+worker-owned `/files/jarvis` (0700), while exec runs as UID 1000. The previous
+chmod therefore failed before starting the consumer. All test workers and
+temporary storage were cleaned up; cutover and VM retirement did not run.
+
+The adapter now copies the upload into a worker-owned 0600 staging file, atomically
+renames it to the live credential path, and removes the upload. Credential values
+remain out of command arguments and logs; the containing directory stays private.
+This also supports renewal without exposing a partially written live credential.
+The runner image is unchanged. Nine adapter tests and backend typechecking pass;
+live requalification is pending.
