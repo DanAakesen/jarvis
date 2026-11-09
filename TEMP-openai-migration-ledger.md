@@ -47,3 +47,11 @@ invalid base64/data, oversized response, cancellation and no automatic retry;
 artifact persistence/display errors and saved-ID recovery; owner-only artifact
 routes and prompt/URL exclusion from durable tool audit; configuration validation.
 Proactive diagnostic tests verify stage classification without model-text logging.
+
+Proactive follow-up: reproduced a valid Foundry text response being rejected
+because `tool_calls: null` / `function_call: null` were treated as attempted
+tool execution. Microsoft's 2024-05-01-preview API example explicitly returns
+null tool calls. The repair accepts absent/null/empty tool metadata and still
+rejects actual or malformed tool calls, refusals, incomplete responses and
+invalid findings. Regression tests failed before the fix. This is a confirmed
+compatibility bug, not proof of the historical 18:00 response's contents.

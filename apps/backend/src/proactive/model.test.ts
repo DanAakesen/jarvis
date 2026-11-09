@@ -216,6 +216,14 @@ describe('Foundry proactive model', () => {
     expect(JSON.stringify(logger.warn.mock.calls)).not.toContain('private');
   });
 
+  it.each([{ toolCalls: null }, { toolCalls: [] }])('accepts Foundry no-tool response metadata %j', async ({ toolCalls }) => {
+    const { model, fetcher } = setup();
+    const result = envelope();
+    Object.assign(result.choices[0]!.message, { tool_calls: toolCalls, function_call: null });
+    fetcher.mockResolvedValue(Response.json(result));
+    expect(await model.summarize(input, signal())).toMatchObject({ findings: [finding] });
+  });
+
   it('rejects multiple choices and a missing assistant role while retaining usage', async () => {
     const { model, fetcher } = setup();
     const response = envelope();
@@ -234,7 +242,7 @@ describe('Foundry proactive model', () => {
     { choice: { finish_reason: 'length' } },
     { choice: { finish_reason: 'tool_calls' } },
     { message: { refusal: 'Cannot comply' } },
-    { message: { tool_calls: [] } },
+    { message: { tool_calls: [{ id: 'unexpected', type: 'function', function: { name: 'write', arguments: '{}' } }] } },
     { message: { function_call: {} } },
     { message: { content: '' } },
     { message: { content: 'not json' } },

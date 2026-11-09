@@ -247,7 +247,8 @@ export function createFoundryProactiveModel(options: FoundryProactiveModelOption
           const message = object(choice.message);
           stage = 'completion_incomplete';
           if (choice.finish_reason !== 'stop' || message.role !== 'assistant' || message.refusal != null ||
-              message.tool_calls !== undefined || message.function_call !== undefined ||
+              (message.tool_calls != null && (!Array.isArray(message.tool_calls) || message.tool_calls.length > 0)) ||
+              message.function_call != null ||
               typeof message.content !== 'string' || !message.content.trim()) throw new InvalidModelOutput();
           stage = 'invalid_json';
           let decoded: unknown;
