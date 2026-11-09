@@ -1,6 +1,6 @@
 import importlib.util
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 PATH = Path(__file__).resolve().parents[3] / 'scripts/factory-sandboxes/qualify.py'
 spec = importlib.util.spec_from_file_location('sandbox_qualification', PATH)
@@ -9,20 +9,13 @@ spec.loader.exec_module(module)
 
 
 class QualificationTests(unittest.TestCase):
-    def test_diagnostics_cannot_request_unbounded_capacity(self):
-        for profile, size in [('100cpu', '128GiB'), ('2cpu', '128TiB'), ('8cpu', '20Gi')]:
-            with self.subTest(profile=profile, size=size), self.assertRaises(ValueError):
-                module.storage_configuration(profile, size)
-
-    def test_large_profile_leaves_disk_budget_for_128_gib_workspace(self):
-        profile = module.storage_configuration('8cpu', '128GiB')
-        cores = int(profile['cpu'].removesuffix('m')) / 1000
-        root = int(profile['disk_size'].removesuffix('Gi'))
-        self.assertLessEqual(root + 128, cores * 20)
+    def test_profile_reserves_root_capacity_beyond_the_workspace(self):
         self.assertEqual(module.WORKERS, 5)
+        self.assertEqual(module.ALLOCATION['cpu'], '8000m')
+        self.assertGreater(int(module.ALLOCATION['disk_size'].removesuffix('Gi')), 128)
 
     def results(self):
-        return [{'worker': str(i), 'workspaceBytes': 128 * 1024**3,
+        return [{'worker': str(i), 'workspaceBytes': 160 * 1024**3, 'freeBytes': 140 * 1024**3,
                  'startedAt': i, 'finishedAt': 40 + i,
                  'posixPassed': True, 'buildPassed': True} for i in range(5)]
 
@@ -48,6 +41,12 @@ class QualificationTests(unittest.TestCase):
     def test_small_root_disk_is_not_a_workspace(self):
         results = self.results()
         results[4]['workspaceBytes'] = 40 * 1024**3
+        with self.assertRaises(ValueError):
+            module.validate_results(results)
+
+    def test_large_disk_with_insufficient_free_workspace_is_rejected(self):
+        results = self.results()
+        results[0]['freeBytes'] = 110 * 1024**3
         with self.assertRaises(ValueError):
             module.validate_results(results)
 
@@ -84,8 +83,8 @@ class QualificationTests(unittest.TestCase):
         self.assertNotIn('https', str(result))
 
     def test_problem_details_preserve_only_safe_volume_constraints(self):
-        from types import SimpleNamespace
         import json
+        from types import SimpleNamespace
         error = RuntimeError('Bad request')
         error.status_code = 400
         error.response = SimpleNamespace(text=lambda: json.dumps({
@@ -100,8 +99,8 @@ class QualificationTests(unittest.TestCase):
         self.assertNotIn('hidden', str(result))
 
     def test_storage_diagnostics_preserve_size_units_but_remove_auth_and_urls(self):
-        from types import SimpleNamespace
         import json
+        from types import SimpleNamespace
         error = RuntimeError('Do not publish this exception or request headers')
         error.response = SimpleNamespace(text=lambda: json.dumps({'detail':
             'Invalid disk size 128Gi; use 128GiB. Bearer private-value token=another-private-value '
@@ -112,3 +111,9 @@ class QualificationTests(unittest.TestCase):
         self.assertNotIn('https://', str(result))
         self.assertNotIn('aaaaaaaa', str(result))
         self.assertNotIn('validationDetail', module.failure_details(error, 'image-import'))
+
+    def test_non_problem_storage_error_is_still_redacted_and_actionable(self):
+        error = RuntimeError('Root disk must not exceed 160Gi. Bearer private-value token=private-value')
+        result = module.failure_details(error, 'sandbox-create')
+        self.assertIn('Root disk must not exceed 160Gi.', result['validationDetail'])
+        self.assertNotIn('private-value', str(result))

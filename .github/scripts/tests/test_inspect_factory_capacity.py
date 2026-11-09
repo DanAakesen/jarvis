@@ -28,7 +28,7 @@ class FactoryCapacityTests(unittest.TestCase):
                 return self.provider()
             return {'state': 'observed', 'value': {'value': [{'name': 'private-name'}]}}
         result = capacity.inspect(SUB, get=get)
-        self.assertEqual(len(calls), 3)
+        self.assertEqual(len(calls), 4)
         self.assertTrue(calls[1][1].endswith('?api-version=2026-01-01'))
         self.assertTrue(result['sandboxGroups']['regionListed'])
         self.assertEqual(result['groupRead']['countOnThisPage'], 1)
@@ -46,7 +46,7 @@ class FactoryCapacityTests(unittest.TestCase):
                 return {'state': 'observed', 'value': {'resourceTypes': []}}
             result = capacity.inspect(SUB, get=get)
             self.assertEqual(result['sandboxGroups']['state'], 'not_listed')
-            self.assertEqual(len(calls), 2)
+            self.assertEqual(len(calls), 3)
             self.assertNotIn('groupRead', result)
             unused.assert_not_called()
 
@@ -56,7 +56,7 @@ class FactoryCapacityTests(unittest.TestCase):
 
     def test_empty_catalogue_is_distinct_from_unreadable_catalogue(self):
         for state in ['unavailable', 'invalid_response', 'response_too_large']:
-            result = capacity.inspect(SUB, get=lambda *_: {'state': state})
+            result = capacity.inspect(SUB, get=lambda *_, state=state: {'state': state})
             self.assertEqual(result['sandboxGroups'], {'state': state})
             self.assertFalse(result['capacityVerified'])
 
@@ -82,7 +82,7 @@ class FactoryCapacityTests(unittest.TestCase):
                 'value': [], 'nextLink': 'https://untrusted.invalid/private'}}
         result = capacity.inspect(SUB, get=get)
         self.assertTrue(result['groupRead']['morePages'])
-        self.assertEqual(len(calls), 3)
+        self.assertEqual(len(calls), 4)
         self.assertNotIn('untrusted', json.dumps(result))
 
     def test_quota_exports_only_sandbox_counters_without_inferring_available_capacity(self):
@@ -104,6 +104,14 @@ class FactoryCapacityTests(unittest.TestCase):
         result = capacity.quota_observations({'state': 'observed', 'value': {'value': []}})
         self.assertEqual(result['state'], 'not_listed')
         self.assertEqual(result['quotas'], [])
+
+    def test_quota_request_catalogue_exports_only_canonical_sandbox_names(self):
+        result = capacity.requestable_quotas({'state': 'observed', 'value': {'value': [
+            {'properties': {'name': {'value': 'SandboxCores'}}},
+            {'properties': {'name': {'value': 'OtherCores'}}},
+            {'properties': {'name': {'value': 'Sandbox/../other'}}},
+        ], 'nextLink': 'https://untrusted.invalid'}})
+        self.assertEqual(result, {'state': 'observed', 'names': ['SandboxCores'], 'morePages': True})
 
     def test_transport_is_get_only_and_does_not_export_provider_errors(self):
         response = subprocess.CompletedProcess([], 1, '', 'private-provider-body')
