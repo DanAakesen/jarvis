@@ -22,7 +22,8 @@ function mergedPoints(points: Point[], metric: string): Point[] {
   return points;
 }
 function stats(points: Point[], metric: string) {
-  const daily = points.some(point => point.row.healthkitDailyTotal === true);
+  const daily = ['step_count', 'active_energy_burned', 'active_energy', 'apple_exercise_time'].includes(metric)
+    && points.some(point => point.row.healthkitDailyTotal === true);
   const scaled = (point: Point, ...keys: string[]) => { const v = firstNumber(...keys.map(k => point.row[k])); return v === null ? null : rounded(v * point.factor); };
   const values = points.map(p => scaled(p, 'qty', 'Avg', 'avg', 'average', 'value'));
   const strategy = metricStrategy(metric);

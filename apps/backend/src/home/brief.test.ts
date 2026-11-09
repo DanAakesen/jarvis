@@ -58,6 +58,33 @@ describe('grounded Home brief', () => {
     expect(f.model).toHaveBeenCalledTimes(3);
     f.service.close();
   });
+  it('refreshes at a commitment transition without hashing every clock tick', async () => {
+    const f = fixture();
+    vi.mocked(f.sources[0]!.read).mockResolvedValue({
+      source: 'calendar', state: 'ok', reason: null, observedAt: '2026-11-02T13:00:00Z',
+      facts: [{ kind: 'event', ref: 'calendar', label: 'Review', text: 'Review at 13:01',
+        startsAt: '2026-11-02T13:01:00Z', endsAt: '2026-11-02T14:00:00Z',
+        observedAt: '2026-11-02T13:00:00Z' }],
+    });
+    await f.service.read('en');
+    f.advance(10_000);
+    await f.service.read('en');
+    expect(f.model).toHaveBeenCalledTimes(1);
+    f.advance(120_000);
+    await f.service.read('en');
+    expect(f.model).toHaveBeenCalledTimes(2);
+    f.service.close();
+  });
+  it('rereads context across Copenhagen midnight even inside the source cache lifetime', async () => {
+    const f = fixture();
+    f.advance(10 * 60 * 60_000 - 10_000);
+    await f.service.read('en');
+    f.advance(20_000);
+    await f.service.read('en');
+    expect(f.sources[0]!.read).toHaveBeenCalledTimes(2);
+    expect(f.model).toHaveBeenCalledTimes(2);
+    f.service.close();
+  });
   it('never treats a failed commitment source as a clear day', async () => {
     const f = fixture();
     vi.mocked(f.sources[0]!.read).mockRejectedValue(new Error('offline'));
