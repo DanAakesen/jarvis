@@ -1,3 +1,15 @@
+## Managed Factory delivery update — 9 November 2026
+
+The owner has authorized Azure Container Apps Sandboxes as the managed JIT
+replacement and limited live qualification to **five concurrent workers**.
+The production concurrency target remains 100 with 128 GiB isolated workspaces.
+After managed Factory acceptance and cutover, remove the VM and all dedicated
+resources, roles, runtime code and configuration. Preserve shared backend and
+Foundry chat/voice services. Existing Factory test tasks need no migration.
+Group provisioning and bounded qualification are implemented; actual provisioning,
+Factory routing, live acceptance and VM retirement remain pending.
+See [qualification and evidence](docs/factory-concurrency-correction.md).
+
 ## Direct Home send recovery (7 November 2026)
 
 Home and Chat share streaming acceptance and recovery. Small accepted/progress

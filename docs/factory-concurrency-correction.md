@@ -78,19 +78,22 @@ the parked Copilot-harness migration is unrelated.
    ceiling; retain project-level limits. Stop/suspend each idle worker independently.
    Expose startup, quota/provider throttling and queue status honestly. Infrastructure
    quota and provider limits must be checked before claiming the target is available.
-5. Validate 2, then 10, then 100 overlapping workers using synthetic jobs, including
-   duplicates, one crashed worker, cancellation and scale-down. Separately qualify
-   simultaneous real Codex/Copilot execution under the actual account limits.
-   Synthetic process concurrency is not proof of 100 simultaneous model sessions.
-6. Switch new work only after storage and concurrency acceptance. Existing test
-   tasks do not require migration. Migrate future research/image/credential-renewal
-   functions before retiring the old runner. Retain a tested rollback route.
+5. The owner explicitly caps live qualification at **five concurrent workers**.
+   Validate five overlapping workers, isolation, cancellation and scale-down.
+   The production design remains capable of 100; do not run a 100-worker load test.
+   Synthetic process concurrency is not proof of simultaneous model sessions.
+6. Switch Factory after managed storage, concurrency and task-lifecycle acceptance.
+   Then remove the VM, dedicated disks/network/roles and VM-specific code/config.
+   This retirement is owner-authorized; existing test tasks need no migration.
+   Preserve the backend Container App and Foundry custom chat/voice. Separate
+   Foundry research/image/login operations are not VM resources.
 
 ## Current status
 
 - 128 GiB VM storage: provisioned and measured.
 - Concurrent execution through that VM route: one active coding task.
-- Managed replacement: documented candidate; integration not implemented.
+- Managed replacement: authorized. Group/identity Bicep and a main-only, fixed-five
+  qualification workflow are implemented; provisioning and task routing are pending.
 - Read-only availability inspection: passed in
   [run 42580034945](https://github.com/DanAakesen/jarvis/actions/runs/42580034945)
   at 08:33 Copenhagen on 9 November. Microsoft.App is registered; sandboxGroups
@@ -105,3 +108,17 @@ All 13 inspection tests and 15 pipeline-impact tests passed locally. The full
 local pipeline suite encountered 15 missing-Ruby errors; the equipped CI runner
 subsequently passed the complete checks. Local check:
 `python -m unittest discover -s .github/scripts/tests -p test_inspect_factory_capacity.py -v`.
+
+## Managed sandbox qualification implementation
+
+`infra/factory-sandboxes.bicep` creates a group with a 100-sandbox cap, a dedicated
+registry/secret identity and group-scoped management access for backend/deploy.
+The group cap allocates no workers. `Factory managed sandboxes` imports the
+immutable qualified .NET image and creates at most five sandboxes, each with a
+128 GiB DataDisk, 2 vCPUs and 4 GiB memory. It checks mounted capacity, POSIX
+operations, Git, .NET restore/build, five-way execution overlap, credential access
+and disk persistence across stop/resume. Sanitized evidence is retained. Cleanup
+uses this run’s labels only, including reconciling ambiguous creates. This workflow
+does not switch production routing or delete the VM. Those steps follow separate
+Factory integration acceptance. No 100-worker or model concurrency claim follows
+from this synthetic qualification.
