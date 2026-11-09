@@ -91,7 +91,7 @@ def failure_details(error: Exception, stage: str) -> dict:
         detail = problem['detail'][:4096]
         detail = re.sub(r'https?://\S+', '[url]', detail, flags=re.I)
         detail = re.sub(r'\b(?:Bearer|Basic)\s+\S+', '[credential]', detail, flags=re.I)
-        detail = re.sub(r'\b(?:[\w-]*(?:token|password|secret|signature)|api[_-]?key|sig)\s*[:=]\s*["\']?[^\s"\',;]+', '[credential]', detail, flags=re.I)
+        detail = re.sub(r'\b(?:[\w-]*(?:token|password|secret|signature)|api[_-]?key|sig)["\']?\s*[:=]\s*["\']?[^\s"\',;]+', '[credential]', detail, flags=re.I)
         detail = re.sub(r'[A-Za-z0-9_/+=.-]{24,}', '[identifier]', detail)
         details['validationDetail'] = ' '.join(detail.split())[:1000]
     return details

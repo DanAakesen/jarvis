@@ -93,7 +93,7 @@ class QualificationTests(unittest.TestCase):
         error = RuntimeError('Do not publish this exception or request headers')
         error.response = SimpleNamespace(text=lambda: json.dumps({'detail':
             'Invalid disk size 128Gi; use 128GiB. Bearer private-value token=another-private-value '
-            'https://host/path?sig=private aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'}))
+            'https://host/path?sig=private aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "password": "private-word"'}))
         result = module.failure_details(error, 'volume-create')
         self.assertIn('Invalid disk size 128Gi; use 128GiB.', result['validationDetail'])
         self.assertNotIn('private', str(result))
