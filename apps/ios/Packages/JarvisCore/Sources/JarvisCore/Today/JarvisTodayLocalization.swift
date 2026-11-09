@@ -1,6 +1,9 @@
 import Foundation
 
 public enum JarvisTodayLocalizationKey: String, CaseIterable, Sendable {
+    case briefStale = "today.briefStale"
+    case briefLoading = "today.briefLoading"
+    case briefUnavailable = "today.briefUnavailable"
     case greetingMorning = "today.greeting.morning"
     case greetingAfternoon = "today.greeting.afternoon"
     case greetingEvening = "today.greeting.evening"
@@ -32,6 +35,9 @@ public enum JarvisTodayLocalizationKey: String, CaseIterable, Sendable {
     case markDone = "today.markDone"
     case workouts = "today.workouts"
     case activeTime = "today.activeTime"
+    case activityUnavailable = "today.activityUnavailable"
+    case activityPartial = "today.activityPartial"
+    case activityStale = "today.activityStale"
     case activeKcal = "today.activeKcal"
     case workoutsByType = "today.workoutsByType"
     case workoutsEmpty = "today.workoutsEmpty"

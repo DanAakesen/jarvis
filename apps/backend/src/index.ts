@@ -69,7 +69,7 @@ import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
 import { createChatAcceptanceProbes } from './core/chat-canary.js';
 import { FOUNDRY_SCOPE, FoundryClient } from './foundry/client.js';
 import { createApprovalInterpreter } from './core/approval-interpreter.js';
-import { chooseApprovalModel, createFoundryApprovalModel } from './core/approval-interpreter-foundry.js';
+import { chooseApprovalModel, createFoundryApprovalModel, createFoundryJsonCompletion } from './core/approval-interpreter-foundry.js';
 import { createJevPcActPlanner } from './pc-bridge/pc-act.js';
 import { createJevRecipePlanner } from './core/task-recipes.js';
 import { createRecipeModule } from './core/recipe-management.js';
@@ -154,6 +154,8 @@ import { createNativeProactiveDelivery } from './proactive/native-delivery.js';
 import { createSystemPushSender } from './proactive/push-delivery.js';
 import { composeHealth } from './health/composition.js';
 import { registerProactive } from './proactive/composition.js';
+import { buildSourceRegistry } from './proactive/sources/registry.js';
+import { registerHomeBriefRoutes } from './home/brief.js';
 import { createProactiveStore } from './database/proactive-store.js';
 import { createOwnerReminderStore } from './database/owner-reminder-store.js';
 import { createMemoryProactiveStore } from './proactive/store.js';
@@ -1378,6 +1380,32 @@ try {
     alertsEnabled: config.proactiveAlertsEnabled,
     now: () => new Date(),
     logger,
+  });
+  if (settingsStore) registerHomeBriefRoutes(app, {
+    ownerObjectId: config.auth.ownerObjectId,
+    settingsStore,
+    sources: buildSourceRegistry({
+      ownerObjectId: config.auth.ownerObjectId, healthEnabled: config.healthEnabled === true,
+      ...(database ? { pool: database.pool } : {}),
+      ...(googleApiClient ? { googleApiClient } : {}),
+      ...(vaultClient ? { vaultClient } : {}),
+      settingsStore,
+    }),
+    ...(approvalEndpoint && credential && usageStore?.recordFoundryUsage ? {
+      model: createFoundryJsonCompletion({
+        endpoint: approvalEndpoint, scope: FOUNDRY_SCOPE,
+        getToken: async (scope, signal) => {
+          const token = await credential.getToken(scope, { abortSignal: signal });
+          if (!token) throw new Error('Home brief model unavailable');
+          return token.token;
+        },
+        selectModel: async () => {
+          const catalogue = await modelCatalogue.read();
+          return chooseApprovalModel(catalogue, (await readSettings(settingsStore, catalogue)).roles.chat.model);
+        },
+        recordUsage: usage => usageStore.recordFoundryUsage!(usage),
+      }),
+    } : {}),
   });
   runtime.app = app;
   if (factoryWorker) {

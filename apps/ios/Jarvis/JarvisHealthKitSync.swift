@@ -10,9 +10,7 @@ struct JarvisHealthKitReader {
         (.distanceWalkingRunning, "walking_running_distance", .meterUnit(with: .kilo), "km"),
         (.distanceCycling, "cycling_distance", .meterUnit(with: .kilo), "km"),
         (.flightsClimbed, "flights_climbed", .count(), "count"),
-        (.activeEnergyBurned, "active_energy", .kilocalorie(), "kcal"),
         (.basalEnergyBurned, "basal_energy_burned", .kilocalorie(), "kcal"),
-        (.appleExerciseTime, "apple_exercise_time", .minute(), "min"),
         (.heartRate, "heart_rate", HKUnit.count().unitDivided(by: .minute()), "count/min"),
         (.restingHeartRate, "resting_heart_rate", HKUnit.count().unitDivided(by: .minute()), "count/min"),
         (.heartRateVariabilitySDNN, "heart_rate_variability", .secondUnit(with: .milli), "ms"),
@@ -47,6 +45,17 @@ struct JarvisHealthKitReader {
             read.append("step_count")
         } catch {
             unread.append("step_count")
+        }
+
+        for (identifier, name, unit, label) in [
+            (HKQuantityTypeIdentifier.activeEnergyBurned, "active_energy_burned", HKUnit.kilocalorie(), "kcal"),
+            (.appleExerciseTime, "apple_exercise_time", .minute(), "min"),
+        ] {
+            do {
+                samples += try await JarvisHealthKitActivitySource.dailySamples(store: store,
+                    identifier: identifier, metric: name, unit: unit, unitName: label, from: recentStart, to: now)
+                read.append(name)
+            } catch { unread.append(name) }
         }
 
         for (identifier, name, unit, label) in Self.quantities {
@@ -157,7 +166,7 @@ struct JarvisHealthKitReader {
                         id: "steps-\(Int(statistic.startDate.timeIntervalSince1970))",
                         metric: "step_count", unit: "count", start: statistic.startDate,
                         end: min(statistic.endDate, end), value: quantity.doubleValue(for: .count()),
-                        source: "Apple Health merged statistics"
+                        source: "Apple Health merged statistics", aggregation: .dailyTotal
                     ))
                 }
                 continuation.resume(returning: days)

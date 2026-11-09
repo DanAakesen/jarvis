@@ -20,6 +20,8 @@ struct JarvisTodayScreen: View {
     }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var briefVersion = 0
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject var model: JarvisTodayModel
     let language: JarvisAppLanguage
@@ -96,6 +98,7 @@ struct JarvisTodayScreen: View {
             healthSyncState = await onSyncAppleHealth?()
             guard !Task.isCancelled else { return }
             await model.refresh(force: true)
+            briefVersion += 1
         }
         .scrollDismissesKeyboard(.interactively)
         .safeAreaInset(edge: .bottom, spacing: 0) { composer }
@@ -118,6 +121,23 @@ struct JarvisTodayScreen: View {
             }
 #endif
         }
+        .task(id: "\(language.rawValue)-\(briefVersion)") {
+            await model.refreshBrief(language: language, force: briefVersion > 0)
+        }
+        .onChange(of: model.taskData.value) { _, _ in briefVersion += 1 }
+        .onChange(of: model.calendar.value) { _, _ in briefVersion += 1 }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await model.refresh(); briefVersion += 1 } }
+        }
+        .task {
+            guard !fixtureMode else { return }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                guard scenePhase == .active else { continue }
+                await model.refresh()
+                briefVersion += 1
+            }
+        }
         .sheet(item: $sheet) { presented in
             sheetContent(presented)
         }
@@ -131,6 +151,8 @@ struct JarvisTodayScreen: View {
             Text(attributedGreeting(value))
                 .font(.system(size: greetingSize, weight: .semibold))
                 .lineSpacing(4)
+                .lineLimit(model.briefMaxVisibleLines)
+                .truncationMode(.tail)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 12)

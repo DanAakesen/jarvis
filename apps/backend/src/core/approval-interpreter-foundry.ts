@@ -78,7 +78,7 @@ async function boundedJson(response: Response): Promise<unknown> {
  * recorded under the chat role before the output is judged, so a billed but rejected call is still accounted for.
  * No message text, proposal text or token reaches a log or an error.
  */
-export function createFoundryApprovalModel(options: FoundryApprovalModelOptions): ApprovalModelPort {
+export function createFoundryJsonCompletion(options: FoundryApprovalModelOptions): ApprovalModelPort {
   const fetcher = options.fetcher ?? fetch;
   return async (prompt, signal) => {
     signal.throwIfAborted();
@@ -134,3 +134,6 @@ export function createFoundryApprovalModel(options: FoundryApprovalModelOptions)
     return message.content;
   };
 }
+
+// Backwards-compatible name for the approval interpreter; Home reuses the same bounded transport.
+export const createFoundryApprovalModel = createFoundryJsonCompletion;

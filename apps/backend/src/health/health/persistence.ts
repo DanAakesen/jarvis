@@ -37,6 +37,13 @@ async function upsert(tx: sql.Transaction, owner: string, id: string, acceptedAt
   const join = definition.key.map(k => `t.[${k}]=s.[${k}]${definition.fields[k]!.startsWith('nvarchar') ? ' COLLATE Latin1_General_100_BIN2' : ''}`).join(' AND ');
   const assignments = columns.filter(k => !definition.key.includes(k)).map(k => `t.[${k}]=s.[${k}]`).join(',');
   const fields = columns.map(k => `[${k}]`).join(','); const select = columns.map(k => `s.[${k}]`).join(',');
+  const dailyAuthority = definition.table === 'health_daily_metrics'
+    ? `AND (COALESCE(JSON_VALUE(t.fields_json, '$.healthkit_daily_total'), 'false') <> 'true'
+          OR JSON_VALUE(s.fields_json, '$.healthkit_daily_total') = 'true')
+       AND (COALESCE(JSON_VALUE(t.fields_json, '$.healthkit_daily_total'), 'false') <> 'true'
+          OR JSON_VALUE(s.fields_json, '$.healthkit_daily_total') <> 'true'
+          OR TRY_CONVERT(datetimeoffset, s.end_at) >= TRY_CONVERT(datetimeoffset, t.end_at)
+          OR t.end_at IS NULL)` : '';
   const children = definition.key.includes('workout_id') ? `DELETE s FROM #health_rows s WHERE NOT EXISTS(SELECT 1 FROM daily.health_workouts w WHERE w.owner_object_id=@owner AND w.id=s.workout_id COLLATE Latin1_General_100_BIN2 AND w.ingestion_id=@ingestion);` : '';
   await healthSqlQuery(new sql.Request(tx).input('owner', sql.UniqueIdentifier, owner).input('ingestion', sql.NVarChar(256), id)
     .input('accepted', sql.DateTimeOffset(3), acceptedAt).input('updated', sql.NVarChar(64), acceptedAt.toISOString()).input('rows', sql.NVarChar(sql.MAX), JSON.stringify(rows)),
@@ -46,7 +53,7 @@ async function upsert(tx: sql.Transaction, owner: string, id: string, acceptedAt
      THROW 51047,'Health target timestamp invalid',1;
    UPDATE t SET ${assignments}${assignments ? ',' : ''}t.ingestion_id=@ingestion,t.updated_at=@updated
      FROM daily.[${definition.table}] t JOIN #health_rows s ON ${join}
-     WHERE t.owner_object_id=@owner AND TRY_CONVERT(datetimeoffset,t.updated_at)<=@accepted;
+     WHERE t.owner_object_id=@owner AND TRY_CONVERT(datetimeoffset,t.updated_at)<=@accepted ${dailyAuthority};
    INSERT daily.[${definition.table}](owner_object_id,${fields},ingestion_id,updated_at)
      SELECT @owner,${select},@ingestion,@updated FROM #health_rows s
      WHERE NOT EXISTS(SELECT 1 FROM daily.[${definition.table}] t WHERE t.owner_object_id=@owner AND ${join});

@@ -6,6 +6,8 @@ import FoundationNetworking
 /// One HealthKit quantity reading, already converted to the unit named in `unit`.
 public struct JarvisHealthSample: Equatable, Sendable {
     public let id: String
+    public enum Aggregation: String, Sendable { case dailyTotal = "daily_total" }
+    public let aggregation: Aggregation?
     public let metric: String
     public let unit: String
     public let start: Date
@@ -13,9 +15,10 @@ public struct JarvisHealthSample: Equatable, Sendable {
     public let value: Double
     public let source: String?
 
-    public init(id: String, metric: String, unit: String, start: Date, end: Date, value: Double, source: String? = nil) {
+    public init(id: String, metric: String, unit: String, start: Date, end: Date, value: Double, source: String? = nil, aggregation: Aggregation? = nil) {
         self.id = id
         self.metric = metric
+        self.aggregation = aggregation
         self.unit = unit
         self.start = start
         self.end = end
@@ -148,6 +151,7 @@ public struct JarvisHealthSyncRequest: Equatable, Sendable {
                     "start": Self.iso(sample.start), "end": Self.iso(sample.end), "value": sample.value,
                 ]
                 if let source = sample.source { row["source"] = source }
+                if let aggregation = sample.aggregation { row["aggregation"] = aggregation.rawValue }
                 return row
             },
             "sleep": sleep.sorted { $0.id < $1.id }.map { segment -> [String: Any] in
