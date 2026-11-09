@@ -210,3 +210,10 @@ for the five-worker test but insufficient for the full target. Quota discovery
 also checks the Microsoft.Quota catalogue without submitting a request. Do not
 claim 100-worker capacity until quota and the matching configuration are verified.
 The managed route remains inactive and VM retirement is held pending acceptance.
+
+The main-only `Request 800 Factory sandbox cores` workflow is prepared for the
+approved capacity target. It discovers the canonical SandboxCores quota, submits
+one fixed 800-core request only if needed, and verifies the actual regional usage
+limit. It never allocates workers, lowers a larger limit, guesses a missing quota
+name or automatically replays an uncertain PUT. Submission and approval are
+separate evidence fields. Live submission/approval remain pending.

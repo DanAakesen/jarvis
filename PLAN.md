@@ -4491,3 +4491,10 @@ The owner registered Microsoft.Compute (Microsoft.Quota was already registered).
 ### 8 November — quota usage value investigation
 
 Run 42529215408 resolves both approved resource names but fails at usage_decode with ValueError before writes. Retain only numeric counter values/types (including negative sentinels) from the two approved quota resources; arbitrary provider text and structured bodies are excluded. The unknown usage remains rejected rather than assumed zero. This is diagnostic evidence only, not a quota increase or workspace activation.
+
+The main-only `Request 800 Factory sandbox cores` workflow is prepared for the
+approved capacity target. It discovers the canonical SandboxCores quota, submits
+one fixed 800-core request only if needed, and verifies the actual regional usage
+limit. It never allocates workers, lowers a larger limit, guesses a missing quota
+name or automatically replays an uncertain PUT. Submission and approval are
+separate evidence fields. Live submission/approval remain pending.

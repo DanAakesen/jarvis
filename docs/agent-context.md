@@ -7914,3 +7914,10 @@ workspace marker. Managed activation and VM retirement remain gated on successfu
 qualification. 100 workers at this profile require 800 SandboxCores; the last
 observed 300-core quota only supports 37. `factory-capacity.yml` reads usage and
 the quota-request catalogue; it changes no quota or worker resources.
+
+The main-only `Request 800 Factory sandbox cores` workflow is prepared for the
+approved capacity target. It discovers the canonical SandboxCores quota, submits
+one fixed 800-core request only if needed, and verifies the actual regional usage
+limit. It never allocates workers, lowers a larger limit, guesses a missing quota
+name or automatically replays an uncertain PUT. Submission and approval are
+separate evidence fields. Live submission/approval remain pending.
