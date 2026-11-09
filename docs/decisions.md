@@ -1,3 +1,12 @@
+## 2026-11-09 — Owner requests do not need a second approval
+
+The owner explicitly rejects repeated approvals and prescribed command wording.
+Personal is the default unless Work is stated or an existing work item is referenced.
+A time without a date means today in Copenhagen, not tomorrow. Use conversational
+context for follow-ups. Keep authentication, resource permissions and write integrity.
+Reminder parser removal and task defaults are implemented locally; shared/Google/
+Factory approval removal remains pending. No claim of complete deployment yet.
+
 ## 9 November 2026 — Keep notification continuity inside normal chat
 
 The owner approved direct push-to-chat continuity with the existing chat page.

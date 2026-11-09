@@ -85,6 +85,15 @@ describe('task write input validation', () => {
 });
 
 describe('shared task writer', () => {
+  it('defaults omitted scope to Personal without another question', async () => {
+    const state = fixture(null);
+    expect(validateTaskCreateInput({ text: 'Check notifications' })).toBe(true);
+    await expect(state.writer.create({ text: 'Check notifications' }, undefined, '901'))
+      .resolves.toMatchObject({ path: 'Personal/Inbox.md' });
+    await state.writer.create({ text: 'Check notifications', scope: 'personal' }, undefined, '901');
+    expect(state.client.write).toHaveBeenCalledOnce();
+  });
+
   it.each(['high', 'medium', 'normal'] as const)('persists the selected %s priority when creating a task', async (priority) => {
     const state = fixture(null);
     const result = await state.writer.create({ text: 'Prepare next release', scope: 'personal', priority });

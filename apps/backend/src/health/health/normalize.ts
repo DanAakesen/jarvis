@@ -11,7 +11,7 @@ export interface NormalizedHealth {
 type Point = { row: HealthObject; unit: string | null; factor: number; order: string };
 const metricStrategy = (n: string) => /(^|_)(body_mass|body_weight|weight|height|body_mass_index|bmi|body_fat_percentage|lean_body_mass|waist_circumference|temperature|blood_glucose)$/u.test(n) ? 'latest' :
   /(^|_)(step_count|flights_climbed|(active|basal|resting|total)_energy(_burned)?|(walking_running|walking_and_running|cycling|swimming|wheelchair)_distance|distance|(exercise|stand|move)_time|(swimming_)?stroke_count|push_count)$/u.test(n) ? 'sum' : 'average';
-function stats(points: Point[], metric: string) {
+function mergedPoints(points: Point[], metric: string): Point[] {
   const daily = ['step_count', 'active_energy_burned', 'active_energy', 'apple_exercise_time'].includes(metric)
     ? points.filter(point => point.row.healthkitDailyTotal === true) : [];
   if (daily.length) {
@@ -19,6 +19,10 @@ function stats(points: Point[], metric: string) {
     points = [daily.reduce((latest, point) =>
       String(point.row.endDate ?? point.order) >= String(latest.row.endDate ?? latest.order) ? point : latest)];
   }
+  return points;
+}
+function stats(points: Point[], metric: string) {
+  const daily = points.some(point => point.row.healthkitDailyTotal === true);
   const scaled = (point: Point, ...keys: string[]) => { const v = firstNumber(...keys.map(k => point.row[k])); return v === null ? null : rounded(v * point.factor); };
   const values = points.map(p => scaled(p, 'qty', 'Avg', 'avg', 'average', 'value'));
   const strategy = metricStrategy(metric);
@@ -28,7 +32,7 @@ function stats(points: Point[], metric: string) {
     min_value: extreme(points.map(p => scaled(p, 'Min', 'min', 'minimum', 'qty', 'value')), 'min'),
     avg_value: mean(points.map(p => scaled(p, 'Avg', 'avg', 'average', 'qty', 'value'))),
     max_value: extreme(points.map(p => scaled(p, 'Max', 'max', 'maximum', 'qty', 'value')), 'max'), sample_count: points.length,
-    fields_json: { aggregation: strategy, ...(daily.length ? { healthkit_daily_total: true } : {}), sources: [...new Set(points.map(p => text(p.row.source, p.row.sourceName)).filter(Boolean))],
+    fields_json: { aggregation: strategy, ...(daily ? { healthkit_daily_total: true } : {}), sources: [...new Set(points.map(p => text(p.row.source, p.row.sourceName)).filter(Boolean))],
       latest: points.at(-1)?.row ?? null, latest_value_is_source_units: true, latest_conversion_factor: points.at(-1)?.factor ?? null } };
 }
 function optionalRange(values: (string | null)[], end = false): string | null { const valid = values.filter((v): v is string => v !== null).sort(); return (end ? valid.at(-1) : valid[0]) ?? null; }
@@ -182,6 +186,7 @@ export function normalizeHealth(payload: unknown): NormalizedHealth {
   }
   for (const bucket of grouped.values()) {
     bucket.points.sort((a, b) => a.order.localeCompare(b.order));
+    bucket.points = mergedPoints(bucket.points, bucket.metric);
     output.metrics.push({ metric_name: bucket.metric, metric_date: bucket.date, ...stats(bucket.points, bucket.metric),
       start_at: optionalRange(bucket.points.map(p => optionalInstant(p.row.startDate, p.row.sleepStart))),
       end_at: optionalRange(bucket.points.map(p => optionalInstant(p.row.endDate, p.row.sleepEnd) ?? (p.row.date && String(p.row.date).length > 10 ? instant(p.row.date) : null)), true) });

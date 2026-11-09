@@ -2,6 +2,17 @@
 
 GET /home/brief is owner-scoped and reuses existing settings, context sources and bounded Foundry JSON completion transport. Context reads coalesce and cache for 60 seconds; evidence/instruction/day/language/model fingerprints cache generation for 15 minutes. Home preferences persist in existing settings and are exposed through get_settings/update_settings. HealthKit cumulative daily statistics carry daily_total provenance; normalized daily rows replace previous coverage and cannot be overwritten by legacy raw sums. Home and Health share JarvisDailyActivitySnapshot and Copenhagen calendar periods.
 
+## Conversational reminder execution — 9 November 2026
+
+The agent resolves reminder intent from the conversation into structured tool
+arguments. The owner_reminders backend no longer re-parses the latest message
+with a separate natural-language command grammar. It still verifies source owner
+message/session, validates schedule fields, resolves saved task identity and
+persists with retry deduplication. The task writer defaults omitted scope to
+Personal; agent and shared chat/voice instructions default date-free times to
+today in Europe/Copenhagen. Other action-family approval implementations are
+still separate and pending removal under the updated owner policy.
+
 ## Notification conversation context — 9 November 2026
 
 Native taps call authenticated `POST /proactive/items/:id/conversation` before

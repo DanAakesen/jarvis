@@ -2,6 +2,16 @@
 
 Implemented in PR #1689 on feature/home-brief-daily-activity; qualification is in progress. Primary owns integration and deployment. Remaining installed-device checks include HealthKit authorization/no-data ambiguity, midnight/DST, late Watch sync and actual model output in English/Danish. No deployment or owner acceptance is claimed.
 
+## Owner action friction — 9 November 2026
+
+Implemented locally: Personal default in task schema/writer and chat/voice
+instructions; today's date for time-only reminder instructions; removal of the
+reminder backend's exact-sentence parser. Structured schedule validation, verified
+owner-message provenance, resource checks and retry deduplication remain.
+The reminder and task regression suite passes. Broader shared, Google and Factory
+confirmation paths remain to be migrated to the owner's no-second-approval policy.
+This change is not yet deployed; do not report all approval gates removed.
+
 ## Push-to-chat continuity — 9 November 2026
 
 Implemented on `feature/push-chat-continuity`: owner-scoped durable notification
