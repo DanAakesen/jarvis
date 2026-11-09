@@ -114,9 +114,6 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
           }]
           : [];
       });
-      // Keep the model's order for normal insights; existing time-critical alerts retain priority.
-      const critical = candidates.filter(candidate => candidate.alertClass !== 'insight').sort(compareCandidates);
-      candidates.splice(0, candidates.length, ...(critical.length ? critical.slice(0, 99) : candidates.slice(0, 1)));
       if (candidates.length === 0) return;
       const subscriptions: StoredPushSubscription[] = await options.pushStore.listSubscriptions(options.ownerObjectId);
       if (subscriptions.length === 0 && !await options.hasNativeRecipients?.()) {
@@ -168,6 +165,11 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
         ) && proactiveEvidenceSourcesAllowed(latestSettings, sources);
       });
       if (active.length === 0) return;
+      // Select only after receipts, item states and preferences are checked. An
+      // already-delivered first insight must not starve a later useful finding.
+      const critical = active.filter(({ candidate }) => candidate.alertClass !== 'insight')
+        .sort((left, right) => compareCandidates(left.candidate, right.candidate));
+      active = critical.length ? critical.slice(0, 99) : active.slice(0, 1);
       const details = await Promise.all(active.slice(0, 3).map(async ({ candidate }) => {
         try {
           const item = await options.store.items.get(candidate.itemId, false);

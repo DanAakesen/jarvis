@@ -423,6 +423,45 @@ final class ComponentGalleryUITests: XCTestCase {
     }
 
     // Separate cases keep each three-page capture below the runner's per-test timeout.
+    func testProactiveNotificationOpensWithActionsAndCanBeDismissed() {
+        let id = "6f1c0d5a-0b0e-4d6b-9d0e-000000000001"
+        app.launchArguments = ["--ui-test-navigation", "-jarvis.appLanguage", "en", "-jarvis.appTheme", "dark",
+                               "-jarvis.proactive.pendingItemID", id]
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.staticTexts["proactive.body.\(id)"].waitForExistence(timeout: 12))
+        for action in ["addTask", "snooze", "dismiss"] {
+            XCTAssertTrue(app.buttons["proactive.\(action).\(id)"].exists)
+        }
+        let dismiss = app.buttons["proactive.dismiss.\(id)"]
+        for _ in 0..<3 { if dismiss.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(dismiss.isHittable)
+        attach(app.screenshot(), named: "Proactive-notification-open-actions-dark-en")
+        dismiss.tap()
+        let removed = NSPredicate { _, _ in !self.app.buttons["proactive.dismiss.\(id)"].exists }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: removed, object: nil)], timeout: 6), .completed)
+    }
+
+    func testHistoricalProactiveNotificationIsReadOnly() {
+        let id = "6f1c0d5a-0b0e-4d6b-9d0e-000000000004"
+        app.launchArguments = ["--ui-test-navigation", "-jarvis.appLanguage", "en", "-jarvis.appTheme", "dark",
+                               "-jarvis.proactive.pendingItemID", id]
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.staticTexts["proactive.body.\(id)"].waitForExistence(timeout: 12))
+        XCTAssertFalse(app.buttons["proactive.dismiss.\(id)"].exists)
+        XCTAssertFalse(app.buttons["proactive.addTask.\(id)"].exists)
+        attach(app.screenshot(), named: "Proactive-notification-history-dark-en")
+    }
+
+    func testTransientProactiveNotificationFailureShowsRecovery() {
+        app.launchArguments = ["--ui-test-navigation", "--ui-test-insights=error", "-jarvis.appLanguage", "en",
+                               "-jarvis.proactive.pendingItemID", "11111111-1111-4111-8111-111111111111"]
+        app.launch()
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["proactive.notification.error.retry"].waitForExistence(timeout: 12))
+    }
+
     func testSharedPageOrderDarkEnglish() { captureSharedPages(language: "en", theme: "dark") }
     func testSharedPageOrderLightEnglish() { captureSharedPages(language: "en", theme: "light") }
     func testSharedPageOrderDarkDanish() { captureSharedPages(language: "da", theme: "dark") }

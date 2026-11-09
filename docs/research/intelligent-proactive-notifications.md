@@ -42,3 +42,16 @@ Local checks passed with Node 22.23.3 and Swift 6.2:
 Native iPhone/Watch compilation uses the existing PR-only workflow; see the PR for exact revision and final result. It caught an iPhone-only source-icon switch missing the new cases, corrected before handoff. Fixture screenshots in that workflow cover Watch, not actual notification receipt or the new Proactive flow. No physical-device delivery, model usefulness or notification UI screenshot is claimed here.
 
 Local tests use synthetic data and an isolated loopback SQL Server container only. No production data, cloud resources or live Factory tasks were touched. Primary owns integration, migration execution, deployment, installation and final acceptance.
+
+
+## Primary review corrections — 9 November 2026
+
+Reserve the bounded task context for high-priority tasks before ordinary
+commitments, including a high-priority duplicate discovered later. Apply delivery
+receipt and item-state eligibility before selecting the first normal insight so
+a delivered or dismissed finding cannot starve a new one. Open notification
+findings retain Add to tasks, Snooze and Dismiss, and opening marks them seen;
+historical findings remain read-only. Transient finding-load failures have Retry.
+Focused backend regressions pass (29 tests); native action, historical-open and
+transient-error cases are added to the existing simulator suite. Integrated
+qualification and installed-device push acceptance remain pending.

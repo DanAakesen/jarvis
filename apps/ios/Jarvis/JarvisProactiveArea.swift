@@ -51,6 +51,7 @@ struct JarvisProactiveArea: View {
     @AppStorage(JarvisApprovalNotificationCoordinator.pendingProactiveItemKey) private var pendingNotificationID = ""
     @State private var notificationItem: JarvisProactiveItem?
     @State private var notificationFailure: JarvisInsightsFailure?
+    @State private var notificationRetryID = ""
     @State private var expandedID: String?
     @State private var busyIDs: Set<String> = []
     @State private var addedTaskIDs: Set<String> = []
@@ -75,9 +76,13 @@ struct JarvisProactiveArea: View {
                             phrase: JarvisProactivePagePhrase.make(status: loaded, openItems: openItems.count, language: language, firstTitle: openItems.first?.title)
                         )
                     }
-                    if let notificationItem { itemRow(notificationItem, actionable: false) }
+                    if let notificationItem {
+                        itemRow(notificationItem, actionable: notificationItem.state == .new || notificationItem.state == .seen)
+                    }
                     if let notificationFailure {
-                        JarvisInsightsStateView(kind: .failure(notificationFailure), language: language, identifier: "proactive.notification.error")
+                        JarvisInsightsStateView(kind: .failure(notificationFailure), language: language, identifier: "proactive.notification.error") {
+                            pendingNotificationID = notificationRetryID
+                        }
                     }
                     content
                 }
@@ -576,14 +581,18 @@ struct JarvisProactiveArea: View {
     private func openNotification() async {
         let id = pendingNotificationID
         guard !id.isEmpty, let client else { return }
+        notificationItem = nil
         notificationFailure = nil
+        notificationRetryID = ""
         do {
             let value = try await client.item(id: id)
             guard pendingNotificationID == id else { return }
             notificationItem = value
             expandedID = value.id
+            if value.state == .new { await perform(.seen, on: value) }
         } catch {
-            if Task.isCancelled { return }
+            if Task.isCancelled || pendingNotificationID != id { return }
+            notificationRetryID = id
             notificationFailure = JarvisInsightsFailure(error)
         }
         if pendingNotificationID == id { pendingNotificationID = "" }
@@ -609,8 +618,10 @@ struct JarvisProactiveArea: View {
             await JarvisAppCache.invalidate(.proactive, scope: "items")
             if case .seen = action {
                 if let index = openItems.firstIndex(where: { $0.id == item.id }) { openItems[index] = updated }
+                if notificationItem?.id == item.id { notificationItem = updated }
             } else {
                 openItems.removeAll { $0.id == item.id }
+                if notificationItem?.id == item.id { notificationItem = nil }
                 if expandedID == item.id { expandedID = nil }
                 earlierItems = .loading
             }

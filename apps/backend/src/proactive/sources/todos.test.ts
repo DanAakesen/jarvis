@@ -24,6 +24,26 @@ function vault(content = '- [ ] synthetic todo', path = 'Tasks.md') {
 afterEach(() => vi.useRealTimers());
 
 describe('proactive todos source', () => {
+  it('reserves the bounded context for urgent tasks before ordinary commitments', async () => {
+    const ordinary = Array.from({ length: 40 }, (_, index) => `- [ ] Ordinary ${index} 📅 2026-10-20 15:00`);
+    const result = await createTodosSource(vault([...ordinary,
+      '- [ ] Urgent 📅 2026-10-21 10:00 [priority:: P1 - High]'].join('\n')), true).read(context());
+    expect(result.facts).toHaveLength(40);
+    expect(result.facts[0]).toMatchObject({ text: 'Urgent', kind: 'todo', highPriority: true });
+    expect(detectFindings(result.facts, now, 'en')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ category: 'deadline' }),
+    ]));
+  });
+
+  it('preserves high priority when an ordinary duplicate appears first', async () => {
+    const result = await createTodosSource(vault([
+      '- [ ] Same task 📅 2026-10-21 10:00',
+      '- [ ] Same task 📅 2026-10-21 10:00 [priority:: P1 - High]',
+    ].join('\n')), true).read(context());
+    expect(result.facts).toHaveLength(1);
+    expect(result.facts[0]).toMatchObject({ highPriority: true, kind: 'todo' });
+  });
+
   it('prioritizes the 24-hour-before through 72-hour-after window and caps facts at 40', async () => {
     const overdue = Array.from({ length: 50 }, (_, index) =>
       `- [ ] Old ${index} due: 2026-08-01 [priority:: P1 - High]`).join('\n');

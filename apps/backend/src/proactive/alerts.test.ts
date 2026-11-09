@@ -388,7 +388,7 @@ describe('proactive alert hook', () => {
 });
 
 describe('model-selected normal insight alerts', () => {
-  it('sends only the first model opportunity with actual content on Check now, and retains existing deduplication', async () => {
+  it('sends the first eligible model opportunity and skips delivered ones on later checks', async () => {
     const fixture = setup();
     const first = await saveFinding(fixture.store, 'insight-first', 'suggestion', { urgency: 'normal', body: '2 of 3 saved sessions are recorded.' });
     const second = await saveFinding(fixture.store, 'insight-second', 'prep', { urgency: 'normal' });
@@ -399,7 +399,20 @@ describe('model-selected normal insight alerts', () => {
     expect(fixture.send.mock.calls[0]![0]).toMatchObject({ kind: 'insight', itemId: first.id,
       details: [{ title: first.title, body: first.body, dueAt: null }] });
     await fixture.hook(context);
-    expect(fixture.send).toHaveBeenCalledTimes(1);
+    expect(fixture.send).toHaveBeenCalledTimes(2);
+    expect(fixture.send.mock.calls[1]![0]).toMatchObject({ kind: 'insight', count: 1, itemId: second.id });
+    await fixture.hook(context);
+    expect(fixture.send).toHaveBeenCalledTimes(2);
+  });
+  it.each(['seen', 'dismiss', 'snooze'] as const)('skips a first insight already marked %s', async (action) => {
+    const fixture = setup();
+    const first = await saveFinding(fixture.store, 'old-insight', 'suggestion', { urgency: 'normal' });
+    const second = await saveFinding(fixture.store, 'new-insight', 'prep', { urgency: 'normal' });
+    await fixture.store.items.applyFeedback(first.id, action);
+    const context = contextFor([first, second], { trigger: 'manual' });
+    context.findings.forEach(finding => { finding.modelGenerated = true; });
+    await fixture.hook(context);
+    expect(fixture.send).toHaveBeenCalledWith(expect.objectContaining({ kind: 'insight', count: 1, itemId: second.id }), context.signal);
   });
   it('allows a native-only owner without requiring a browser subscription', async () => {
     const fixture = setup({ subscriptionList: [] });
