@@ -51,3 +51,14 @@ Factory, Watch and intelligent-notification release.
 Intelligent notifications are current authorized implementation work in PR #1669,
 separate from these candidates. They reuse existing APNs registrations and saved
 Jarvis data; they do not establish new Watch background health uploads.
+
+
+## Existing APNs key confirmed
+
+The owner confirmed that **Jarvis APNs key**, Key ID `367DAUWL3Z`, already has
+Push enabled. Reuse its downloaded `.p8` private key; no replacement is needed
+for this integration if that file is available and the key permits production
+Jarvis delivery. Store the key only in Azure Key Vault as `apns-signing-key`,
+with `apns-key-id` and `apns-team-id`. The private key is not part of this record.
+The primary has merged server configuration support; secret storage, activation
+and installed receipt are not yet confirmed.

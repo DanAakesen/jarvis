@@ -121,6 +121,7 @@ export function createReminderTicker(options: {
   ownerReminders?: OwnerReminderStore;
   vault: VaultReader;
   pushStore: Pick<PushStore, 'listSubscriptions' | 'updateItemDelivery'>;
+  hasNativeRecipients?: () => Promise<boolean>;
   ledger?: Pick<AlertLedgerStore, 'get'>;
   ownerObjectId: string;
   send: (request: SystemPushRequest, signal: AbortSignal) => Promise<SystemPushOutcome>;
@@ -190,7 +191,7 @@ export function createReminderTicker(options: {
     if (!proactiveSourceAllowed(settings, 'todos') || !settings.categories.todo) return;
 
     const subscriptions = await options.pushStore.listSubscriptions(options.ownerObjectId);
-    if (subscriptions.length === 0) {
+    if (subscriptions.length === 0 && !await options.hasNativeRecipients?.()) {
       await Promise.all(remaining.map((row) =>
         update(row, { state: 'suppressed', reason: 'no_subscription' })));
       return;
@@ -389,7 +390,7 @@ export function createReminderTicker(options: {
       if (signal.aborted) return;
       const stillClaimed = await schedules.get(schedule.id);
       if (stillClaimed?.state !== 'sending' || stillClaimed.claimToken !== schedule.claimToken) continue;
-      if (subscriptions.length === 0) {
+      if (subscriptions.length === 0 && !await options.hasNativeRecipients?.()) {
         await schedules.finishClaim(schedule.id, schedule.claimToken!, {
           state: 'suppressed',
           reason: 'no_subscription',

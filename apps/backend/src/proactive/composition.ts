@@ -145,6 +145,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ...(ownerReminderReady ? { ownerReminders: options.ownerReminderStore } : {}),
       vault: options.vaultClient,
       pushStore: options.pushStore,
+      ...(options.hasNativeRecipients ? { hasNativeRecipients: options.hasNativeRecipients } : {}),
       ...(alertLedger ? { ledger: alertLedger } : {}),
       ownerObjectId: options.ownerObjectId,
       send: options.systemPushSender,

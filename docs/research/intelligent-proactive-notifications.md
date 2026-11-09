@@ -55,3 +55,10 @@ historical findings remain read-only. Transient finding-load failures have Retry
 Focused backend regressions pass (29 tests); native action, historical-open and
 transient-error cases are added to the existing simulator suite. Integrated
 qualification and installed-device push acceptance remain pending.
+
+
+Native reminder integration review also found that both automatic and explicitly
+requested reminders still checked only browser subscriptions. They now use the
+same native-recipient availability check as intelligent insights, without changing
+explicit reminder timing, preferences, claim ownership or duplicate suppression.
+The 26 focused reminder/composition tests, backend typecheck and lint pass.
