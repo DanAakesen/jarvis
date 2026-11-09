@@ -62,6 +62,14 @@ class SandboxQuotaTests(unittest.TestCase):
         self.assertTrue(result['submitted'])
         self.assertFalse(result['approved'])
 
+    def test_integral_usage_limit_accepts_json_decimal_representation(self):
+        self.assertEqual(quota.actual_limit({'value': [{'name': {'value': 'SandboxCores'}, 'limit': 800.0}]}), 800)
+
+    def test_invalid_usage_limit_cannot_claim_approval(self):
+        for limit in (True, '800', 800.5, float('inf'), -1):
+            with self.subTest(limit=limit), self.assertRaises(ValueError):
+                quota.actual_limit({'value': [{'name': {'value': 'SandboxCores'}, 'limit': limit}]})
+
     def test_other_services_or_quota_targets_never_reach_azure(self):
         base, _, call = quota.client(SUB)
         with patch.object(quota.subprocess, 'run') as run:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import subprocess
 import time
@@ -54,9 +55,12 @@ def actual_limit(value):
     matches = [r for r in value.get('value', []) if isinstance(r, dict)
                and isinstance(r.get('name'), dict) and isinstance(r['name'].get('value'), str)
                and r['name']['value'].casefold() == 'sandboxcores']
-    if len(matches) != 1 or type(matches[0].get('limit')) is not int or matches[0]['limit'] < 0:
+    if len(matches) != 1:
         raise ValueError('SandboxCores usage limit is missing or ambiguous')
-    return matches[0]['limit']
+    limit = matches[0].get('limit')
+    if type(limit) not in (int, float) or not math.isfinite(limit) or not 0 <= limit <= 2**53 or int(limit) != limit:
+        raise ValueError('SandboxCores usage limit is invalid')
+    return int(limit)
 
 
 def request(subscription, state, *, make_client=client, pause=time.sleep):
