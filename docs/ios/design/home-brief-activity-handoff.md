@@ -1,0 +1,97 @@
+# Home brief and activity totals — secondary implementation handoff
+
+Investigated against main `6601dbb8ca074e3f8059300f34fc9d8a4733bfcb` on
+9 November 2026. This is a source investigation and implementation brief, not an
+implemented change or a read of the owner's current HealthKit data.
+
+## Confirmed source behavior
+
+- `JarvisTodayModel.greeting` supplies the next calendar event and today's due
+  tasks to `JarvisTodayGreeting.make` in `JarvisTodayLogic.swift`. The result is
+  fixed localized copy, not a model-generated briefing. Missing calendar/tasks
+  currently become empty collections or zero before this call; consequently
+  “Your day is clear” can also appear without a successful read.
+- `JarvisTodayScreen.greeting` has no configurable line limit. It uses the
+  accepted text/accent treatment and shared page geometry.
+- Native Settings → General → Jarvis currently has separate Personality and
+  Identity editors. Personality includes `personality.customInstructions`.
+  Backend settings also persist `personality.modeInstructions` for Present,
+  Away and On the move; web edits those in `Presence.tsx`. There is no existing
+  Home-brief instruction or maximum-line setting.
+- `JarvisTodayActivityDisplay` sums `JarvisGymLogEntry.durationMinutes` and
+  `activeKilocalories` for **every** selected range. Empty workout history gives
+  zero for both totals. The earlier build-86 correction preserved measurements
+  when merging workout sources; it did not change these metric definitions.
+- `JarvisHealthKitAccess` already requests `activeEnergyBurned` and
+  `appleExerciseTime`. `JarvisHealthKitReader` uploads their quantity samples as
+  `active_energy` in kcal and `apple_exercise_time` in minutes. Home currently
+  consumes steps and workouts, not these daily activity metrics.
+- Health's `JarvisHealthRingsSection.activeSeconds` also sums workout duration.
+  Its current Active time label is therefore not an independent exercise-time
+  reference. Do not silently give identically named metrics different meanings.
+- Daily steps already use merged HealthKit statistics. The other quantity sync
+  path reads raw samples; extending totals must handle overlapping sources,
+  late uploads and replacement totals rather than blindly summing samples.
+
+## Requested outcome
+
+1. A useful, data-grounded Home brief guided by an owner-editable instruction and
+   a maximum number of visible lines. Consolidate owner-editable Jarvis
+   instructions into **Settings → General → Jarvis → Instructions** on iPhone,
+   with equivalent web access. Keep identity, general style, presence modes and
+   Home instructions as separate scopes backed by the existing settings store;
+   consolidate navigation, not their runtime meanings. Inventory other existing
+   instruction editors and link/reuse their canonical editor instead of copying
+   values into a second store. Preserve saved settings and old navigation links.
+2. Active kcal must represent Apple Health's active energy across the selected
+   day/period, including activity outside recorded workouts and excluding basal
+   energy. Keep the donut as a workout count. Use Apple exercise minutes for the
+   time metric, label that definition clearly, and align Health where the same
+   metric is shown. Exercise minutes are not every minute of incidental movement.
+
+## Implementation boundaries
+
+- Secondary implements, designs, builds and tests in its own feature branch.
+  Primary session `01a1adc7-aebe-76f2-b63d-a852c887204f` (Jarvis2 primary) owns
+  review, integration, migrations, signing and deployment. No secondary merge,
+  deployment, live-setting change or infrastructure change.
+- Read repository instructions and relevant product/architecture/design context.
+  Leave Factory, notification rollout and Watch implementation outside this task.
+- Extend authenticated settings validation, persistence, native/web clients and
+  `get_settings`/`update_settings` so chat/voice can make the same authorized
+  preference changes as the UI. Home-specific instructions must not leak into
+  ordinary chat behavior or grant permissions. Preserve separate reset scopes.
+- Suggested initial UI bounds: 1–6 lines, default 3. These are implementation
+  defaults, not values the owner has already selected. Respect Dynamic Type,
+  VoiceOver, English/Danish, Reduce Motion and accepted transparent chrome.
+- Generate the brief through existing backend/model infrastructure using real
+  permitted data and source availability. Cache/reuse it without a model call on
+  each render; refresh on material data, day, language or instruction changes.
+  Avoid a blank blocking screen, stale success claims, invented plans, generic
+  filler and “day is clear” when relevant sources failed. Enforce the visible
+  line limit in the UI as well as a concise generation budget.
+- Reuse and extend existing HealthKit/statistics, health contracts and sync.
+  Have one shared definition across Today/7d/14d/30d and matching Health values.
+  Keep workout totals separate: do not add workout calories to daily active
+  energy or add cached/server totals to the same local readings. Ensure the
+  chosen calendar/timezone is consistent across local and server views, with
+  explicit Copenhagen and DST tests. Re-read revised recent days appropriately.
+- Preserve true zero, unavailable, stale and partial states. HealthKit does not
+  disclose per-type read denial; an authorization request succeeding does not
+  prove data access, and no samples do not establish a measured zero.
+
+## Required evidence and handoff
+
+- Synthetic no-workout day with positive active kcal/exercise minutes displays
+  those values while the donut remains zero; measured zero and missing data have
+  distinct states. A workout must not double-count daily activity totals.
+- Verify Today/7d/14d/30d, midnight/DST, late Watch data, repeat sync and refresh,
+  overlapping sources, offline/stale recovery and Home/Health agreement.
+- Verify instruction/max-line save and readback, chat/voice settings parity,
+  retained existing instructions, reset scopes, absent-source fallback and
+  bounded generation refresh. Inspect short/long text at normal/accessibility
+  sizes in both languages without regressing transparency or scrolling.
+- Run relevant backend/contracts/Swift checks and native builds/UI checks when
+  available. Update affected project docs; open a draft PR and report exact
+  commit, tests, captures and device-only limitations. No live health-data writes
+  or fabricated owner acceptance.

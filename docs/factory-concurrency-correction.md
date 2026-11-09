@@ -14,9 +14,13 @@ These canaries make no model calls: they establish worker transport and lifecycl
 not five concurrent real coding tasks. Owner Factory task acceptance remains.
 Run 42629384227 passed all five worker/lifecycle checks, cutover readiness and
 final VM retirement. Inventory confirmed no dedicated VM resources remain; the
-legacy mailbox and deployment record were removed. PR #1674 now removes the
-obsolete VM implementation and configuration. Its source cleanup still requires
-a fresh managed worker image and five-worker qualification after deployment.
+legacy mailbox and deployment record were removed. PR #1674 merged as
+`6601dbb8`; production deployment 42639280047 and runner deployment 42639280048
+passed. Fresh-image runtime 42644583506 passed all five worker checks, cleanup
+and activation on ready backend revision `0000568`. Each worker had 146.9 GiB
+free. Factory is ready for the owner's fresh end-to-end coding task; no model
+calls were made by the infrastructure canary. See
+`docs/factory-clean-runtime-evidence.json` (repository-root path).
 Shared backend and Foundry chat, voice, research/image and login routes remain.
 Earlier dated sections below record the investigation stages, not current status.
 

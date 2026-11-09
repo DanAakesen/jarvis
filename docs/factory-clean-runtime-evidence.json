@@ -1,0 +1,52 @@
+{
+  "workflowRun": 42644583506,
+  "source": "6601dbb8ca074e3f8059300f34fc9d8a4733bfcb",
+  "scope": "Fresh cleaned worker image through five production-adapter workers; no model calls or real SQL coding tasks.",
+  "workersRequested": 5,
+  "sessions": [
+    {
+      "session": "sbx128-380a412b-42a8-46c1-aecc-82f3c1339b84",
+      "invocation": "sbx128-d3350c69-7f82-4d6d-8aec-2b6bc5b8e060",
+      "workspaceBytes": 168906596352,
+      "freeBytes": 157729046528
+    },
+    {
+      "session": "sbx128-77601e1c-369b-4788-b25b-447d08b4c60f",
+      "invocation": "sbx128-2620f1fb-8428-437d-aeb0-f874233426c6",
+      "workspaceBytes": 168906596352,
+      "freeBytes": 157729046528
+    },
+    {
+      "session": "sbx128-d0f93320-c381-4f8e-a637-72df785185cf",
+      "invocation": "sbx128-13dde98a-49f7-4e75-9f7f-20df4edbac46",
+      "workspaceBytes": 168906596352,
+      "freeBytes": 157729046528
+    },
+    {
+      "session": "sbx128-1ab21c2d-27c0-4051-80da-9fa77d6c9e22",
+      "invocation": "sbx128-950b2a87-3879-4092-b28e-04fc24475e3f",
+      "workspaceBytes": 168906596352,
+      "freeBytes": 157729046528
+    },
+    {
+      "session": "sbx128-4e6d9922-5716-4e1e-977c-67713a173df9",
+      "invocation": "sbx128-6c409506-b7fc-4a9d-abc6-45ae09abcbbc",
+      "workspaceBytes": 168906596352,
+      "freeBytes": 157729046528
+    }
+  ],
+  "passed": true,
+  "cleanupPassed": true,
+  "modelCalls": 0,
+  "poolErrors": [],
+  "commandDeliveryPassed": true,
+  "restartRoutingPassed": true,
+  "workerProbePassed": true,
+  "overlappingWorkers": 5,
+  "idleShutdownPassed": true,
+  "diskPersistencePassed": true,
+  "resumePassed": true,
+  "cleanupErrors": [],
+  "cutoverReadyRevision": "ca-jarvis-backend-rmw7kae3bza6a--0000568",
+  "cutoverPassed": true
+}

@@ -12,9 +12,13 @@ These canaries make no model calls: they establish worker transport and lifecycl
 not five concurrent real coding tasks. Owner Factory task acceptance remains.
 Run 42629384227 passed all five worker/lifecycle checks, cutover readiness and
 final VM retirement. Inventory confirmed no dedicated VM resources remain; the
-legacy mailbox and deployment record were removed. PR #1674 now removes the
-obsolete VM implementation and configuration. Its source cleanup still requires
-a fresh managed worker image and five-worker qualification after deployment.
+legacy mailbox and deployment record were removed. PR #1674 merged as
+`6601dbb8`; production deployment 42639280047 and runner deployment 42639280048
+passed. Fresh-image runtime 42644583506 passed all five worker checks, cleanup
+and activation on ready backend revision `0000568`. Each worker had 146.9 GiB
+free. Factory is ready for the owner's fresh end-to-end coding task; no model
+calls were made by the infrastructure canary. See
+`docs/factory-clean-runtime-evidence.json` (repository-root path).
 Shared backend and Foundry chat, voice, research/image and login routes remain.
 Earlier dated sections below record the investigation stages, not current status.
 
@@ -9276,6 +9280,12 @@ The managed route remains inactive and VM retirement is held pending acceptance.
 
 ## Cross-app proactive context and native delivery — 9 November 2026
 
+Production deployment 42635181674 passed readiness/live acceptance. Startup
+migration 0076 precedes server listen. APNs activation 42636282777 uses backend
+managed-identity Key Vault references to the three owner-provided secrets;
+production environment and ready revision `0000565` were verified. Provider
+acceptance and installed-device receipt/taps remain separate acceptance checks.
+
 The existing proactive registry reads health/training and nutrition via canonical owner-scoped stores, current note excerpts via the configured vault/index, and explicit durable memory via MemoryStore. Pure helpers compute recorded-goal progress, Copenhagen periods, metric trends and logged nutrition progress. Ordinary tasks use model-only commitment facts so deterministic reminder semantics remain. The existing bounded model prompt interleaves sources and accepts silence. Stored hook context marks model-generated findings for normal insight delivery; new context cannot invoke the legacy suggested-todo writer. The existing alert ledger stores class `insight` (migration 0076). APNs reuses registered owner devices and the existing alert transport, with browser delivery only when no native recipient exists. Native payload `proactiveItemID` routes to the authenticated detail endpoint and existing Proactive row. Schedule, pause, budget, preferences and quiet hours remain; no shadow runner, feedback-learning system or new event scheduler is added.
 
 
@@ -9331,3 +9341,7 @@ The fix supplies `--yes` for only the authorized legacy mailbox. Recovery first
 verifies the VM and all dedicated named resources are absent, then removes only
 the old mailbox and deployment record. Any remaining dedicated resource stops
 recovery for inspection. Final inventory/evidence and source cleanup are pending.
+
+Read-only readiness 42646690853 confirmed production APNs and all delivery flags
+remain configured on ready revision `0000568` after the final Factory cutover.
+This configuration check did not send a push notification.
