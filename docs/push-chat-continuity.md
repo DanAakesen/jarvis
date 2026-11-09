@@ -6,7 +6,8 @@ voice follow-up. Normal chat layout, bubbles and composer are unchanged. No gree
 duplicate message, automatic send, context card/banner or extra conversation is added.
 
 Implementation branch: `feature/push-chat-continuity`, based on main
-`6601dbb8ca074e3f8059300f34fc9d8a4733bfcb`. PR: [#1686](https://github.com/DanAakesen/jarvis/pull/1686). Primary owns review and integration.
+`6601dbb8ca074e3f8059300f34fc9d8a4733bfcb` and refreshed with documentation-only
+main `d4e4dfe1b836ed08d4d8876897cbdbc454a6f6de` before handoff. PR: [#1686](https://github.com/DanAakesen/jarvis/pull/1686). Primary owns review and integration.
 
 ## Data flow
 

@@ -9,6 +9,21 @@ A new selection replaces the previous one; repeated taps retain its identity and
 Primary owns integration/deployment; implementation, tests and owner acceptance
 remain separate stages. This supersedes opening Proactive for normal insight pushes.
 
+## 9 November 2026 — Complete Factory rollout before owner testing
+
+The owner will leave Factory unused until the permanent managed-worker rollout
+is complete. Do not add a temporary compatibility path for the outgoing image.
+Release the cleaned source, build and qualify its fresh image with five concurrent
+workers, then activate it before requesting owner testing. Existing Factory tasks
+are disposable tests; the owner also requested removal of legacy GitHub tasks and
+issues. Issue #1634 was closed as not planned and its execution label removed;
+this does not assert that its separate SQL task record was deleted.
+
+The owner reported the app-wide parallel-task limit was 3, then chose 37 to match
+the accepted Azure quota. The owner is changing the setting; saving/readback is
+not independently verified. Existing project limits also constrain admission and
+must be checked through the owner app/tool path before claiming 37 task throughput.
+
 ## 9 November 2026 — Keep the current 300-core sandbox quota
 
 The owner accepts 300 SandboxCores for now. The qualified persistent-root profile
@@ -12316,3 +12331,31 @@ explicitly states SecretProperties.value is never returned by that service.
 Project only names/enabled flags, bound pagination to the same vault, and retain
 missing/disabled-key rejection before any APNs configuration write. Six focused
 checks pass; live metadata readback and activation remain pending.
+# Home brief and daily activity semantics — 9 November 2026
+
+Dan requests a useful configurable Home phrase, an owner instruction and a
+maximum-line preference, with all owner-editable Jarvis instructions accessible
+in one settings destination. Primary will investigate and provide the secondary
+implementation brief; secondary must not deploy. Proposed organization is
+Settings → General → Jarvis → Instructions, preserving separate identity,
+general-style, presence-mode and Home scopes and existing stored values.
+Active kcal must include activity outside recorded workouts. Source inspection
+confirms Home currently sums workout measurements for all periods. Use daily
+active energy and define time as Apple exercise minutes, with honest labels and
+shared Home/Health semantics. The time definition and initial 1–6 line range
+(default 3) are implementation recommendations, not an already selected owner
+preference. See `docs/ios/design/home-brief-activity-handoff.md` for evidence.
+No Home implementation or live-device data verification is claimed.
+
+## Final managed Factory rollout — 9 November 2026
+
+Cleanup PR #1674 merged as 6601dbb8. Production deployment 42639280047 and
+runner deployment 42639280048 passed. Fresh-image qualification 42644583506
+passed five concurrent isolated workers, command delivery, restart routing,
+credential/storage probes, idle shutdown, persistent-disk resume, cleanup and
+activation on ready backend revision 0000568. Each worker had 146.9 GiB free.
+No temporary compatibility setting was shipped. VM retirement remains proven by
+42629384227; the active VM implementation/configuration is now removed too.
+Factory is ready for the owner's fresh coding-task acceptance, which is distinct
+from these zero-model-call canaries. Preserve the accepted 300-core quota and
+owner/project admission limits; no 100-worker test or extra quota is authorized.
