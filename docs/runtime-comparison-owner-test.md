@@ -1,5 +1,9 @@
 # Compare Current and Copilot
 
+**Parked by owner on 9 November 2026.** Retain the custom harness and its control;
+no further migration/comparison or default switch is planned. Preserve the results
+below as reference. Existing test UI/code is not removed by this decision.
+
 Updated 9 November 2026 Copenhagen time (8 November UTC). Both isolated owner
 widget-plan tests now completed: Copilot before the repair, Current after #1658.
 The two versions of each labelled note were independently verified in the vault.

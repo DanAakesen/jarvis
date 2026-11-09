@@ -16,7 +16,22 @@ credentialsAccessible=true, idleDeallocationVerified=true and backendReadyVerifi
 The VM stops compute billing while deallocated. Workspace disk, OS disk and
 outbound IP remain allocated. The separate backend Container App remains running.
 
-## Remaining end-to-end acceptance
+## Owner clarification — 9 November 2026
+
+Existing tasks are tests and do not need migration or recovery. Task 23 recovery
+is no longer a required acceptance step. A fresh representative Factory task can
+verify delivery on the worker. The recovery prompt below is retained as historical
+reference only; no existing tasks were deleted or replayed.
+
+Retiring the old Foundry runner is a separate follow-up: `FoundryClient` sends
+`codex-tool` (web research, HTML reports, images) and `renew-codex` to Foundry
+because `FactoryWorkerMailbox` only intercepts new `start` operations and IDs
+owned by the VM. `runner/worker.py` also does not accept those operation names.
+The shared runner already implements the underlying modes; routing, scheduling,
+status/cancel/cleanup and live acceptance still need adaptation. This is migrating
+functions that will be used again, not transferring old task data.
+
+## Earlier end-to-end acceptance proposal (superseded)
 
 The saved Task 23 branch remains jarvis/task-23 at
 3ace0ad86092026e99a52f5f791c9fdb376afcc1, with no delivery PR at the latest check.

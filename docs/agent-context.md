@@ -1,3 +1,14 @@
+## Active owner decisions — 9 November 2026
+
+Copilot harness migration/comparison is parked: Dan prefers control of the custom
+harness and sees insufficient gain. Keep Current as default; retain existing test
+code and evidence without further migration or resource deletion.
+Existing Factory tasks are tests and do not need migration/recovery. Retiring the
+old worker route instead requires moving future web research/HTML reports, image
+generation and Codex login renewal to the VM, then checking their lifecycle and
+outputs. That implementation/decommissioning has not occurred. Do not require
+Task 23 recovery as a prerequisite or treat this clarification as bulk deletion.
+
 ## Home Today workout totals and Notes acceptance (8 November 2026)
 
 Owner confirmed Notes fixed after build 85. Home Today still counted workouts but

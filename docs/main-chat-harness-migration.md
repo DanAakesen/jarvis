@@ -1,5 +1,21 @@
 # Main chat harness migration (#1350)
 
+## Owner decision — parked, 9 November 2026
+
+Dan prefers retaining control of the custom harness and sees insufficient benefit
+from continuing the Copilot migration. Park further migration, comparison rounds
+and default-cutover work. Current remains the main harness. Retain completed
+implementation/evidence; this decision does not itself disable the test selector,
+delete the managed agent or remove Azure resources. The original stages below
+are historical, not active instructions.
+
+The separate worker-route simplification is unrelated to this parked migration.
+Existing tasks are test data and need not be migrated or recovered for cutover.
+New web research/HTML reports, image generation and Codex credential renewal still
+use the old Foundry runner; those functions require routing and lifecycle work
+before that runner can retire. No task migration, cleanup or resource deletion
+was performed as part of recording this decision.
+
 Replace the custom main chat harness with the managed Microsoft Copilot harness
 in Foundry. The frontend, backend, native voice relay, identity, tools,
 permissions/approvals, SQL memory, blob artifacts and separate subscription-backed
