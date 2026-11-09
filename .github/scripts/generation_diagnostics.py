@@ -6,7 +6,7 @@ import subprocess
 import urllib.request
 from pathlib import Path
 
-from backend_log_preflight import Azure, guid, require, targets
+from backend_log_preflight import Azure, PreflightBlocked, guid, require, targets
 from native_push_readiness import azure, secret_metadata
 
 EVENTS = {'proactive.failed', 'proactive.model_failed', 'image_generation.failed',
@@ -56,8 +56,8 @@ def main():
         metadata = secret_metadata(outputs['keyVaultName']['value'])
         report['openaiSecretNames'] = [item['name'] for item in metadata
                                       if re.fullmatch(r'[A-Za-z0-9-]{1,127}', item['name'])
-                                      and re.search(r'openai', item['name'], re.I)]
-    except Exception:
+                                      and re.search(r'openai', item['name'], re.IGNORECASE)]
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.TimeoutExpired, PreflightBlocked):
         report['secretMetadata'] = 'unavailable'
     try:
         expected = targets(json.loads(Path('infra/bootstrap.output.json').read_text()),
@@ -75,7 +75,7 @@ def main():
             body = response.read(1024 * 1024 + 1)
         require(len(body) <= 1024 * 1024, 'query_size_limit')
         report['events'] = safe_rows(json.loads(body))
-    except Exception:
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.TimeoutExpired, PreflightBlocked):
         report['logs'] = 'unavailable'
     print(json.dumps(report))
 
