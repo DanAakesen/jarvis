@@ -1,13 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { isWorkspaceCommand, type WorkspaceCommand } from '@jarvis/contracts';
-import type {
-  CodexToolRequest,
-  InvocationAccepted,
-  InvocationSnapshot,
-  RequestOptions,
-} from '../foundry/client.js';
-import { FoundryClientError } from '../foundry/client.js';
+import type { ImageGenerator } from './openai-images.js';
 import type { BackendModule } from '../modules.js';
 import {
   WorkspaceArtifactNotFound,
@@ -20,10 +14,7 @@ import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
 const promptLengthLimit = 4096;
 const uploadBodyLimit = 7_100_000;
-const maxStatusRetries = 2;
-const statusRetryDelayMs = 250;
 const jobTimeoutMs = 270_000;
-const pollIntervalMs = 1_000;
 const inputSchema = {
   type: 'object',
   properties: {
@@ -33,21 +24,11 @@ const inputSchema = {
   additionalProperties: false,
 } as const;
 
-interface CodexToolRunner {
-  startCodexTool(request: CodexToolRequest, options?: RequestOptions): Promise<InvocationAccepted>;
-  status(invocationId: string, options?: RequestOptions): Promise<InvocationSnapshot>;
-  cancel(invocationId: string, options?: RequestOptions): Promise<unknown>;
-  deleteSession(sessionId: string, options?: RequestOptions): Promise<void>;
-}
-
 export interface ImageGenerationOptions {
-  readonly runner: CodexToolRunner;
+  readonly generator: ImageGenerator;
   readonly artifacts: WorkspaceArtifactStore;
-  readonly model: string;
   readonly workspaceItems?: WorkspaceItemsStore;
   readonly timeoutMs?: number;
-  readonly pollIntervalMs?: number;
-  readonly wait?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
 }
 
 interface UploadBody {
@@ -58,76 +39,6 @@ interface UploadBody {
 
 function record(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function validArtifactResult(value: unknown, expectedId: string): value is {
-  artifact_id: string;
-  content_type: 'image/png' | 'image/jpeg';
-  size_bytes: number;
-} {
-  return record(value) && value.artifact_id === expectedId &&
-    (value.content_type === 'image/png' || value.content_type === 'image/jpeg') &&
-    Number.isSafeInteger(value.size_bytes) && (value.size_bytes as number) > 0 &&
-    (value.size_bytes as number) <= workspaceImageSizeLimit;
-}
-
-function defaultWait(milliseconds: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new FoundryClientError('aborted', 'codex-tool-status'));
-      return;
-    }
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort);
-      resolve();
-    }, milliseconds);
-    const onAbort = () => {
-      clearTimeout(timer);
-      signal.removeEventListener('abort', onAbort);
-      reject(new FoundryClientError('aborted', 'codex-tool-status'));
-    };
-    signal.addEventListener('abort', onAbort, { once: true });
-  });
-}
-
-function retryableStatusError(error: unknown): boolean {
-  return error instanceof FoundryClientError &&
-    (error.kind === 'timeout' || error.kind === 'transport' ||
-      error.kind === 'http' && (error.statusCode === 429 || (error.statusCode ?? 0) >= 500));
-}
-
-async function getStatus(
-  runner: CodexToolRunner,
-  invocationId: string,
-  signal: AbortSignal,
-  wait: (milliseconds: number, signal: AbortSignal) => Promise<void>,
-): Promise<InvocationSnapshot> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await runner.status(invocationId, { signal });
-    } catch (error) {
-      if (attempt >= maxStatusRetries || !retryableStatusError(error)) throw error;
-      await wait(statusRetryDelayMs * (2 ** attempt), signal);
-    }
-  }
-}
-
-async function waitForJob(
-  runner: CodexToolRunner,
-  invocationId: string,
-  signal: AbortSignal,
-  timeoutAt: number,
-  wait: (milliseconds: number, signal: AbortSignal) => Promise<void>,
-  intervalMs: number,
-): Promise<InvocationSnapshot> {
-  for (;;) {
-    signal.throwIfAborted();
-    if (Date.now() >= timeoutAt) throw new ToolFailure('Image generation timed out.');
-    const snapshot = await getStatus(runner, invocationId, signal, wait);
-    if (['completed', 'failed', 'cancelled'].includes(snapshot.status)) return snapshot;
-    const remaining = timeoutAt - Date.now();
-    await wait(Math.min(intervalMs, remaining), signal);
-  }
 }
 
 function imageView(url: string, at: string) {
@@ -142,12 +53,10 @@ function imageView(url: string, at: string) {
 }
 
 function imageTool(options: ImageGenerationOptions): BackendModule['tools'][number] {
-  const wait = options.wait ?? defaultWait;
   const timeoutMs = options.timeoutMs ?? jobTimeoutMs;
-  const pollEveryMs = options.pollIntervalMs ?? pollIntervalMs;
   return {
     name: 'image_generation',
-    description: 'Generate one image from Dan’s description using his ChatGPT/Codex subscription and open it in the active workspace.',
+    description: 'Generate one image from Dan’s description using the OpenAI Images API and open it in the active workspace.',
     inputSchema,
     sensitive: true,
     async execute(input, request, requestSignal) {
@@ -165,35 +74,12 @@ function imageTool(options: ImageGenerationOptions): BackendModule['tools'][numb
       const timeoutController = new AbortController();
       const timeout = setTimeout(() => timeoutController.abort(), timeoutMs);
       const signal = AbortSignal.any([requestSignal, timeoutController.signal]);
-      let accepted: InvocationAccepted | undefined;
-      let runnerFinished = false;
+      let saved = false;
       try {
-        accepted = await options.runner.startCodexTool({
-          task: input.prompt,
-          model: options.model,
-          artifactUploadKey: upload.uploadKey,
-        }, { signal });
-        const completed = await waitForJob(
-          options.runner,
-          accepted.invocationId,
-          signal,
-          Date.now() + timeoutMs,
-          wait,
-          pollEveryMs,
-        );
-        runnerFinished = true;
-        if (completed.status === 'failed') {
-          if (completed.error === 'Codex usage limit reached') {
-            throw new ToolFailure('Codex usage limit reached.');
-          }
-          throw new ToolFailure('Codex image generation failed. No image was saved.');
-        }
-        if (completed.status === 'cancelled') {
-          throw new ToolFailure('Image generation was cancelled. No image was saved.');
-        }
-        if (!validArtifactResult(completed.result, upload.artifactId)) {
-          throw new ToolFailure('Codex did not return a valid saved image artifact.');
-        }
+        const image = await options.generator.generate(input.prompt, signal);
+        signal.throwIfAborted();
+        await options.artifacts.upload(upload.uploadKey, image.contentType, image.bytes, signal);
+        saved = true;
         const promptSummary = input.prompt.replace(/\s+/gu, ' ').trim();
         await options.workspaceItems?.record(ownerObjectId, {
           id: `image:${upload.artifactId}`,
@@ -226,26 +112,17 @@ function imageTool(options: ImageGenerationOptions): BackendModule['tools'][numb
           confirmation: `Generated image opened in the workspace. Artifact ID: ${upload.artifactId}.`,
         };
       } catch (error) {
+        if (saved) {
+          if (error instanceof ToolFailure) throw error;
+          throw new ToolFailure(`Image artifact ${upload.artifactId} was saved, but could not be displayed. Do not regenerate it.`);
+        }
         if (requestSignal.aborted) throw new ToolFailure('Image generation was cancelled.');
         if (timeoutController.signal.aborted) throw new ToolFailure('Image generation timed out.');
         if (error instanceof ToolFailure || error instanceof ToolRefusal) throw error;
-        throw new ToolFailure('Image generation failed before an artifact could be shown.');
+        request.log.warn({ reason: 'artifact_storage_failed' }, 'image_generation.failed');
+        throw new ToolFailure('Image generation failed while saving its artifact.');
       } finally {
         clearTimeout(timeout);
-        if (accepted) {
-          if (!runnerFinished) {
-            try {
-              await options.runner.cancel(accepted.invocationId);
-            } catch {
-              request.log.warn('codex.image_cancel_failed');
-            }
-          }
-          try {
-            await options.runner.deleteSession(accepted.sessionId);
-          } catch {
-            request.log.warn('codex.image_session_cleanup_failed');
-          }
-        }
         options.artifacts.releaseUpload(upload.uploadKey);
       }
     },

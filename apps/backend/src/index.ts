@@ -124,6 +124,7 @@ import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recogn
 import { createAwayModeStore } from './database/away-mode-store.js';
 import { createPhoneCallModule } from './phone/calls.js';
 import { parsePhoneAllowlist } from './phone/caller.js';
+import { createOpenAIImageGenerator } from './core/openai-images.js';
 import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
 import { attachmentRetentionDays, ConversationAttachmentStore } from './database/conversation-attachment-store.js';
@@ -911,11 +912,15 @@ try {
     store: phoneSessionStore ?? null,
   });
   const browserAgentModule = browserAgent ? createBrowserAgentModule(browserAgent) : undefined;
-  const imageGenerationModule = workspaceArtifacts && config.foundryEndpoints && config.foundryRunnerAgentName
+  const imageSecrets = config.keyVaultUri && credential ? new SecretClient(config.keyVaultUri, credential) : undefined;
+  const imageGenerationModule = workspaceArtifacts && imageSecrets
     ? createImageGenerationModule({
-      runner: clientFor(config.foundryRunnerAgentName),
+      generator: createOpenAIImageGenerator({
+        model: config.imageModel,
+        getApiKey: async signal => (await imageSecrets.getSecret(config.openaiImageSecretName, { abortSignal: signal })).value,
+        logger,
+      }),
       artifacts: workspaceArtifacts,
-      model: config.codexImageModel,
       ...(workspaceItemsStore ? { workspaceItems: workspaceItemsStore } : {}),
     })
     : undefined;

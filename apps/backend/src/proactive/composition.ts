@@ -91,6 +91,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
   if (options.settingsStore && options.modelCatalogue && options.getCredentialToken && options.foundryProjectEndpoint) {
     const getToken = options.getCredentialToken;
     model = createFoundryProactiveModel({
+      ...(options.logger ? { logger: options.logger } : {}),
       settingsStore: options.settingsStore,
       modelCatalogue: options.modelCatalogue,
       foundryProjectEndpoint: options.foundryProjectEndpoint,

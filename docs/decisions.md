@@ -12390,3 +12390,33 @@ from the backend's last 24 hours and OpenAI-named Key Vault secret metadata via 
 It reads no secret values, prompts, image bytes or model text, performs no writes
 and does not replay jobs. Historical proactive output validation did not retain
 the specific failing field; this inspection must not imply otherwise.
+
+## Image API repair and proactive diagnostics — 9 November 2026
+
+Owner requested replacement of failed subscription-backed image generation with
+the current OpenAI API. Official API documentation lists GPT Image 2.6 Sunburst
+and Flare; the implementation selects Sunburst for detailed mock-ups. The backend
+uses its existing Key Vault identity and private artifact storage, without a
+Factory worker. Required secret defaults to `openai-api-key`; an alternate name
+can be set with `JARVIS_OPENAI_IMAGE_SECRET_NAME`. Credential presence and live
+API generation have not yet been verified. No new key is created by this change.
+
+The 18:00 proactive message maps to `invalid_model_output`, not an owner approval.
+Historical code collapsed response truncation/refusal, invalid JSON and finding
+validation into the same reason. New content-free diagnostic stages distinguish
+these paths; this does not prove which caused the historical failure or claim it
+is fixed. Chat/voice harness behavior and proactive validation remain unchanged.
+
+Proactive follow-up: reproduced a valid Foundry text response being rejected
+because `tool_calls: null` / `function_call: null` were treated as attempted
+tool execution. Microsoft's 2024-05-01-preview API example explicitly returns
+null tool calls. The repair accepts absent/null/empty tool metadata and still
+rejects actual or malformed tool calls, refusals, incomplete responses and
+invalid findings. Regression tests failed before the fix. This is a confirmed
+compatibility bug, not proof of the historical 18:00 response's contents.
+
+Image timeout follow-up: the agent sent image calls with the ordinary 30-second
+read timeout despite the backend's 270-second generation budget. Two regression
+tests reproduced the default/configured mismatch. Image calls now use the existing
+long-tool setting (320 seconds by default), like web research. This requires
+releasing the Jarvis agent as well as the backend. No total chat deadline is added.

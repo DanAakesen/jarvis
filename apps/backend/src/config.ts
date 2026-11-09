@@ -21,7 +21,8 @@ export interface BackendConfig {
   };
   foundryAccountResourceId?: string;
   foundryRunnerAgentName?: string;
-  codexImageModel: string;
+  imageModel: string;
+  openaiImageSecretName: string;
   foundryChatAgentName?: string;
   foundryCopilot?: { agentName: string; version: string; fingerprint: string };
   foundryCopilotPolicyCompatibility?: string;
@@ -179,6 +180,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$/u.test(codexToolModel) || codexToolModel === 'gpt-6.1-sol') {
     throw new ConfigurationError('JARVIS_CODEX_TOOL_MODEL must be a supported ChatGPT Codex model');
   }
+  const imageModel = env.JARVIS_IMAGE_MODEL ?? 'gpt-image-2.6-sunburst';
+  if (!['gpt-image-2.6-sunburst', 'gpt-image-2.6-flare'].includes(imageModel)) {
+    throw new ConfigurationError('JARVIS_IMAGE_MODEL must be gpt-image-2.6-sunburst or gpt-image-2.6-flare');
+  }
+  const openaiImageSecretName = env.JARVIS_OPENAI_IMAGE_SECRET_NAME ?? 'openai-api-key';
+  if (!/^[A-Za-z0-9-]{1,127}$/u.test(openaiImageSecretName)) {
+    throw new ConfigurationError('JARVIS_OPENAI_IMAGE_SECRET_NAME must be a Key Vault secret name');
+  }
   const githubAppId = env.GITHUB_APP_ID;
   if (githubAppId !== undefined && !/^[1-9][0-9]{0,19}$/u.test(githubAppId)) {
     throw new ConfigurationError('GITHUB_APP_ID must be a positive decimal identifier');
@@ -280,7 +289,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
     codexToolModel,
-    codexImageModel: codexToolModel,
+    imageModel,
+    openaiImageSecretName,
     ...(githubAppId === undefined ? {} : { githubAppId }),
     ...(googleTimeZone === undefined ? {} : { googleTimeZone }),
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),

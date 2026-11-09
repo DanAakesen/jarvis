@@ -5140,10 +5140,10 @@ configured, the backend uses its shared `DefaultAzureCredential`, selected with
 and Foundry runner configuration, and uses the SQL credential lease; the task
 dispatcher must start Codex work through `TaskStore.transition` so both
 operations serialize. Bicep retains one `Foundry User` assignment for the
-backend identity at project scope. P7-15 image generation uses the same runner
-and adds `JARVIS_CODEX_TOOL_MODEL` (default `gpt-5.5`); it is a model name, not a
-credential. The hosted runner uses its existing Key Vault Codex login. No API
-key or paid image API is configured.
+backend identity at project scope. Image generation instead uses the OpenAI Images API directly with
+`JARVIS_IMAGE_MODEL=gpt-image-2.6-sunburst` and the existing backend identity to
+read `JARVIS_OPENAI_IMAGE_SECRET_NAME=openai-api-key` from Key Vault. The Codex
+model setting now applies only to subscription-backed research/report tools.
 
 Backend authentication defaults to the nonsecret identities in
 `infra/bootstrap.output.json`. `ENTRA_TENANT_ID`, `ENTRA_API_CLIENT_ID` and
@@ -5507,16 +5507,12 @@ recognizer and do not prove microphone, model accuracy, or Chrome focus.
   backend restart, list/history, correction and forgetting. Confirm forgetting
   prevents recall while original conversation records remain. Never use sensitive
   real data for the smoke test.
-- P7-15 image generation needs no new service or secret. The backend uses its
-  existing Foundry runner agent and Blob managed identity; migration `0017`
-  creates owner-scoped image metadata, and `0018` allows refused tool outcomes
-  to be recorded for the daily per-tool Usage count. `JARVIS_CODEX_TOOL_MODEL`
-  defaults to `gpt-5.5`; Dan locally verified Codex CLI 0.157.1 with his ChatGPT
-  login, but deployed Codex behavior is unverified. After merge, the coordinator
-  should ask for one approved image, verify its private Blob artifact in both
-  chat and the workspace, and confirm usage-limit errors remain visible. This
-  consumes the shared ChatGPT/Codex allowance; it is not a cost counter or a
-  per-image API charge. Video is deferred; retention has no automatic cleanup.
+- Image generation needs an OpenAI API credential in the existing Key Vault
+  (default secret name `openai-api-key`). No new Azure service or worker is needed.
+  The backend reuses the private Blob/SQL artifact store (migrations 0017/0018).
+  Verify one requested image in chat/workspace after deploying the API repair;
+  live credential/model access and display are pending. Tool-call counts do not
+  estimate per-image API cost. Video is deferred; retention has no automatic cleanup.
 
 Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
@@ -8015,3 +8011,33 @@ from the backend's last 24 hours and OpenAI-named Key Vault secret metadata via 
 It reads no secret values, prompts, image bytes or model text, performs no writes
 and does not replay jobs. Historical proactive output validation did not retain
 the specific failing field; this inspection must not imply otherwise.
+
+## Image API repair and proactive diagnostics — 9 November 2026
+
+Owner requested replacement of failed subscription-backed image generation with
+the current OpenAI API. Official API documentation lists GPT Image 2.6 Sunburst
+and Flare; the implementation selects Sunburst for detailed mock-ups. The backend
+uses its existing Key Vault identity and private artifact storage, without a
+Factory worker. Required secret defaults to `openai-api-key`; an alternate name
+can be set with `JARVIS_OPENAI_IMAGE_SECRET_NAME`. Credential presence and live
+API generation have not yet been verified. No new key is created by this change.
+
+The 18:00 proactive message maps to `invalid_model_output`, not an owner approval.
+Historical code collapsed response truncation/refusal, invalid JSON and finding
+validation into the same reason. New content-free diagnostic stages distinguish
+these paths; this does not prove which caused the historical failure or claim it
+is fixed. Chat/voice harness behavior and proactive validation remain unchanged.
+
+Proactive follow-up: reproduced a valid Foundry text response being rejected
+because `tool_calls: null` / `function_call: null` were treated as attempted
+tool execution. Microsoft's 2024-05-01-preview API example explicitly returns
+null tool calls. The repair accepts absent/null/empty tool metadata and still
+rejects actual or malformed tool calls, refusals, incomplete responses and
+invalid findings. Regression tests failed before the fix. This is a confirmed
+compatibility bug, not proof of the historical 18:00 response's contents.
+
+Image timeout follow-up: the agent sent image calls with the ordinary 30-second
+read timeout despite the backend's 270-second generation budget. Two regression
+tests reproduced the default/configured mismatch. Image calls now use the existing
+long-tool setting (320 seconds by default), like web research. This requires
+releasing the Jarvis agent as well as the backend. No total chat deadline is added.
