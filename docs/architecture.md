@@ -6177,6 +6177,9 @@ runner upload route remains compatible with already-running invocations, but no
 new image requests are routed to that worker.
 
 The tool propagates cancellation and retains its 270-second generation bound.
+The agent uses the existing long-tool HTTP read timeout (default 320 seconds)
+rather than the ordinary 30-second tool timeout, so the transport can wait for
+normal image completion.
 There is no automatic retry of a paid or uncertain request. Credential, HTTP,
 transport and malformed-image errors are classified without logging prompts,
 keys or provider bodies. If saving succeeded but display failed, the error gives

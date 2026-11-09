@@ -4733,3 +4733,9 @@ null tool calls. The repair accepts absent/null/empty tool metadata and still
 rejects actual or malformed tool calls, refusals, incomplete responses and
 invalid findings. Regression tests failed before the fix. This is a confirmed
 compatibility bug, not proof of the historical 18:00 response's contents.
+
+Image timeout follow-up: the agent sent image calls with the ordinary 30-second
+read timeout despite the backend's 270-second generation budget. Two regression
+tests reproduced the default/configured mismatch. Image calls now use the existing
+long-tool setting (320 seconds by default), like web research. This requires
+releasing the Jarvis agent as well as the backend. No total chat deadline is added.

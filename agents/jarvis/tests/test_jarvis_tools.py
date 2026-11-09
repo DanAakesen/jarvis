@@ -520,6 +520,7 @@ async def test_calls_a_tool_with_identity_and_message_id_and_relays_the_backend_
     [
         ("create_task", 45.0),
         ("web_research", 240.0),
+        ("image_generation", 240.0),
         ("health_food_review", 210.0),
         ("health_saved_food", 210.0),
         ("health_nutrition_targets", 210.0),
@@ -691,6 +692,7 @@ async def test_backend_refusals_are_reported_as_errors(status: int, expected: st
     ("name", "read_timeout"),
     [
         ("web_research", 320.0),
+        ("image_generation", 320.0),
         ("create_task", 30.0),
         ("health_food_review", 210.0),
         ("health_saved_food", 210.0),
