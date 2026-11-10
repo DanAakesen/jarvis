@@ -58,9 +58,6 @@ struct JarvisActivitySheet: View {
                                 .accessibilityAddTraits(.updatesFrequently)
                         }
                         pageHead(feed)
-                        if !feed.confirmations.isEmpty {
-                            confirmationSection(feed.confirmations)
-                        }
                         if !feed.running.isEmpty {
                             runningSection(feed.running)
                         }
@@ -137,7 +134,7 @@ struct JarvisActivitySheet: View {
     private func pageHead(_ feed: JarvisNowFeed) -> some View {
         VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
             JarvisPageHeadline(phrase: JarvisNotificationsPagePhrase.make(
-                needsYou: feed.confirmations.count + model.backgroundPresentation.actionable.count,
+                needsYou: model.backgroundPresentation.actionable.count,
                 running: feed.running.count + model.backgroundPresentation.running.count,
                 updates: feed.items.count,
                 language: appLanguage
@@ -145,7 +142,7 @@ struct JarvisActivitySheet: View {
             JarvisPageHeroCard(title: copy(.activityOverview)) {
                 JarvisPageStatGrid(
                     stats: [
-                        JarvisPageStat(id: "needs", value: feed.confirmations.count + model.backgroundPresentation.actionable.count, label: copy(.activityNeedsYou), systemImage: "bell", tint: JarvisDesignTokens.primaryAccent),
+                        JarvisPageStat(id: "needs", value: model.backgroundPresentation.actionable.count, label: copy(.activityNeedsYou), systemImage: "bell", tint: JarvisDesignTokens.primaryAccent),
                         JarvisPageStat(id: "running", value: feed.running.count + model.backgroundPresentation.running.count, label: copy(.activityRunning), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent),
                         JarvisPageStat(id: "updates", value: feed.items.count, label: copy(.activityUpdates), systemImage: "tray"),
                     ],
@@ -224,66 +221,6 @@ struct JarvisActivitySheet: View {
             label: String(format: copy(.dismissLabel), task.title),
             isEnabled: !model.fixtureMode && !model.dismissingBackgroundTaskIDs.contains(task.id)
         ) { Task { await model.dismissBackgroundTask(task) } }
-    }
-
-    private func confirmationSection(_ confirmations: [PendingConfirmation]) -> some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            JarvisSectionHeadline(copy(.activityPending))
-                .accessibilityIdentifier("confirmation-section-heading")
-            ForEach(confirmations, id: \.id) { confirmation in
-                VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    Text(confirmation.actionKind == .calendarChange
-                         ? copy(.activityCalendarChange)
-                         : confirmation.actionKind.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
-                        .font(.subheadline.weight(.semibold))
-                        .accessibilityIdentifier("confirmation-kind-\(confirmation.id)")
-                    Text(confirmation.summary)
-                        .font(.body)
-                        .accessibilityIdentifier("confirmation-review-\(confirmation.id)")
-                    Text(String(format: JarvisApprovalLocalization.string(.expires, language: appLanguage),
-                                timeString(confirmation.expiresAt)))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("confirmation-expiry-\(confirmation.id)")
-                    HStack {
-                        JarvisLabelledButton(
-                            title: model.isResolving(confirmation, decision: .reject)
-                                ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
-                                : JarvisApprovalLocalization.string(.decline, language: appLanguage),
-                            identifier: "confirmation-decline-\(confirmation.id)",
-                            isDisabled: model.fixtureMode || model.isResolving(confirmation),
-                            hint: model.fixtureMode
-                                ? copy(.activityFixtureApproval)
-                                : ""
-                        ) {
-                            Task { await model.resolve(confirmation, decision: .reject) }
-                        }
-                        Spacer()
-                        JarvisLabelledButton(
-                            title: model.isResolving(confirmation, decision: .approve)
-                                ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
-                                : JarvisApprovalLocalization.string(.approve, language: appLanguage),
-                            identifier: "confirmation-approve-\(confirmation.id)",
-                            isDisabled: model.fixtureMode || model.isResolving(confirmation),
-                            hint: model.fixtureMode
-                                ? copy(.activityFixtureApproval)
-                                : ""
-                        ) {
-                            Task { await model.resolve(confirmation, decision: .approve) }
-                        }
-                    }
-                    if model.fixtureMode && confirmation.actionKind == .calendarChange {
-                        Text(copy(.activityFixtureApproval))
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("confirmation-fixture-reason")
-                    }
-                }
-                .padding(JarvisDesignTokens.chatGlassInset)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.chatBubbleRadius)
-            }
-        }
     }
 
     private func runningSection(_ tasks: [NowFeedRunningTask]) -> some View {
