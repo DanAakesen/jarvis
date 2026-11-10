@@ -232,7 +232,7 @@ describe('shared proactive push delivery', () => {
     '2026-10-25T00:30:00Z', '2026-10-25T01:30:00Z', '2026-10-25T06:00:00Z'])(
     'allows only verified individual owner reminders to reach Web Push at %s', async (at) => {
       const fixture = storeFixture([subscription('one')]);
-      const send = vi.fn(async (_subscription: StoredPushSubscription, _payload: Buffer) => ({ attempted: 1, accepted: true, statusCode: 201, removed: false }));
+      const send = vi.fn<(subscription: StoredPushSubscription, payload: Buffer) => Promise<WebPushResult>>(async () => ({ attempted: 1, accepted: true, statusCode: 201, removed: false }));
       const sender = createSystemPushSender({ store: fixture.store, ownerObjectId: owner,
         publicOrigin: 'https://jarvis.example', now: () => new Date(at), send });
       const explicit: SystemPushRequest = { ...request, kind: 'owner_reminder',

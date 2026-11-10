@@ -189,13 +189,14 @@ export function createReminderTicker(options: {
 
     const settings = await options.store.settings.read();
     if (settings.paused) {
-      await Promise.all(remaining.map((row) => update(row, { state: 'suppressed', reason: 'paused' })));
+      if (!quiet) await Promise.all(remaining.map((row) => update(row, { state: 'suppressed', reason: 'paused' })));
       return;
     }
     if (!proactiveSourceAllowed(settings, 'todos') || !settings.categories.todo) return;
 
     const subscriptions = await options.pushStore.listSubscriptions(options.ownerObjectId);
-    if (subscriptions.length === 0 && !await options.hasNativeRecipients?.()) {
+    const hasRecipients = subscriptions.length > 0 || await options.hasNativeRecipients?.() === true;
+    if (!hasRecipients && !quiet) {
       await Promise.all(remaining.map((row) =>
         update(row, { state: 'suppressed', reason: 'no_subscription' })));
       return;
@@ -213,7 +214,8 @@ export function createReminderTicker(options: {
           ownerRequested: todo.remindAtDue === true,
         }]));
     } catch {
-      if (signal.aborted) return;
+      // Automatic rows remain untouched at night when current provenance cannot be read.
+      if (signal.aborted || quiet) return;
       const verifiedAt = options.now();
       for (const row of remaining) {
         const verifyAttempts = Math.min(255, row.verifyAttempts + 1);
@@ -242,6 +244,10 @@ export function createReminderTicker(options: {
       }
     }
     if (sendable.length === 0 || signal.aborted) return;
+    if (!hasRecipients) {
+      await Promise.all(sendable.map((row) => update(row, { state: 'suppressed', reason: 'no_subscription' })));
+      return;
+    }
 
     const eligible: ReminderRow[] = [];
     if (!options.ledger) return;

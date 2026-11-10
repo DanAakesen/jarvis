@@ -725,6 +725,22 @@ describe('explicit vault reminder timing', () => {
       expect(test.reminders.snapshot().find(({ title }) => title === 'Explicit request')?.state).toBe('sent');
     });
 
+  it('holds automatic rows at night when vault verification fails or browser registration is temporarily absent', async () => {
+    const dueAt = localDateTimeInstant('2026-10-24', '23:30');
+    for (const subscribed of [true, false]) {
+      const test = fixture({ at: dueAt, subscriptions: subscribed ? [subscription] : [],
+        content: todoText('Automatic deadline', dueAt) });
+      await startWith(test, [planned('Automatic deadline', dueAt)]);
+      if (subscribed) test.vault.tree.mockRejectedValue(new Error('Synthetic unavailable vault'));
+      for (let i = 0; i < 4; i += 1) {
+        test.setNow(new Date(dueAt.getTime() + i * 5 * 60_000));
+        await test.ticker.tick();
+      }
+      expect(test.send).not.toHaveBeenCalled();
+      expect(test.reminders.snapshot()[0]).toMatchObject({ state: 'pending', verifyAttempts: 0 });
+    }
+  });
+
   it('claims an explicit pending row once across concurrent ticker instances and duplicate planning', async () => {
     const dueAt = localDateTimeInstant('2026-10-24', '23:00');
     const test = fixture({ at: dueAt, content: `${todoText('Explicit request', dueAt)} [reminder:: at_due_time]` });
