@@ -1,3 +1,11 @@
+## Watch complications and home exploration — 10 November 2026
+
+The owner approved nutrition option 3 and task-list option 1, and selected
+home-phrase option 1 with orange words and body-fat option 1 with a top-left
+title. The two refinements and three new scrollable Watch home directions await
+visual approval. See [design record](docs/ios/design/watch/next-complications-and-home-2026-11-10.md).
+This is a design record, not an implementation or device verification claim.
+
 ## Watch startup connection feedback — 9 November 2026
 
 Keep the approved Watch layout and controls. Startup and idle connectivity changes use the existing quiet connection status. History read failures stay inside the chat scroll area. The modal Jarvis alert is reserved for actual user-action/interruption feedback.

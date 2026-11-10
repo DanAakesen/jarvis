@@ -1,3 +1,11 @@
+## Watch complication selections — 10 November 2026
+
+The owner approved nutrition option 3 and task-list option 1 for a future batch,
+and selected home phrase option 1 with orange words and body-fat option 1 with
+a top-left title. The refined versions are pending visual approval. See
+[design record](ios/design/watch/next-complications-and-home-2026-11-10.md).
+The new Watch home dashboard remains an unselected design exploration.
+
 ## Watch startup connection feedback — 9 November 2026
 
 An initial unreachable WCSession callback is connection status, not evidence that a send failed. Reserve interrupted-action alerts for actual active interactions. Keep passive history errors inline and discard obsolete read results. Preserve pending drafts, acknowledgement boundaries and manual recovery; do not add an offline queue or automatic resend.
