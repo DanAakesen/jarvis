@@ -37,6 +37,23 @@ describe('native proactive delivery', () => {
     expect(await send(request, new AbortController().signal)).toMatchObject({ status: 'sent' });
     expect(listSubscriptions).not.toHaveBeenCalled();
   });
+  it.each(['2026-10-24T20:00:00Z', '2026-10-24T22:00:00Z',
+    '2026-10-25T00:30:00Z', '2026-10-25T01:30:00Z', '2026-10-25T06:00:00Z'])(
+    'delivers verified timed reminders through the system sender to APNs at %s', async (at) => {
+      const { services } = fixture();
+      const clock = () => new Date(at);
+      const native = createNativeProactiveDelivery('owner', services, clock);
+      const listSubscriptions = vi.fn();
+      const send = createSystemPushSender({ ownerObjectId: 'owner', publicOrigin: 'https://example.test',
+        store: { listSubscriptions } as never, nativeSend: native.send, now: clock });
+      expect(await send({ ...request, kind: 'owner_reminder', ownerRequested: true,
+        origin: 'proactive_reminder', details: [{ title: 'Requested task', dueAt: null }] }, new AbortController().signal))
+        .toMatchObject({ status: 'sent', accepted: 1 });
+      expect(JSON.parse(vi.mocked(services.sender.send).mock.calls[0]![1].toString()))
+        .toMatchObject({ aps: { alert: { title: 'Reminder', body: 'Requested task' } }, kind: 'owner_reminder' });
+      expect(listSubscriptions).not.toHaveBeenCalled();
+    });
+
   it('keeps existing quiet hours before any native send', async () => {
     const nativeSend = vi.fn();
     const send = createSystemPushSender({ ownerObjectId: 'owner', publicOrigin: 'https://example.test',

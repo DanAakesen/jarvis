@@ -4,7 +4,7 @@ import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry
 import { explainedArgumentsMessage } from '../core/tool-arguments.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { readVaultTasks } from './todo-discovery.js';
-import { dayKey, isQuietHour, localTimeLabel } from './time.js';
+import { dayKey, localTimeLabel } from './time.js';
 import type {
   NewOwnerReminder,
   OwnerReminderCadence,
@@ -191,7 +191,7 @@ export function createOwnerReminderTool(options: {
 }): JarvisTool {
   return {
     name: 'owner_reminders',
-    description: 'Create, list, reschedule, snooze or cancel owner-requested reminders for existing open vault tasks. Execute the owner’s request using the conversation context, including follow-up times and affirmative replies. Do not request another approval or prescribed sentence. Resolve natural dates, relative times and 17.10-style times to fireAt using Copenhagen time. A time without a date means TODAY, not tomorrow; if it has passed, report that instead of silently moving the date. Ask only for essential missing information. Use the saved task title from read/search, not a verbatim match to the owner’s wording. Choose a future time within a year, outside 22:00–07:00 Copenhagen. Read first to obtain IDs for changes. Reminder times never change task deadlines.',
+    description: 'Create, list, reschedule, snooze or cancel owner-requested reminders for existing open vault tasks. Execute the owner’s request using the conversation context, including follow-up times and affirmative replies. Do not request another approval or prescribed sentence. Resolve natural dates, relative times and 17.10-style times to fireAt using Copenhagen time. A time without a date means TODAY, not tomorrow; if it has passed, report that instead of silently moving the date. Ask only for essential missing information. Use the saved task title from read/search, not a verbatim match to the owner’s wording. Choose a future time within a year. Explicitly requested reminder times are allowed during 22:00–07:00 Copenhagen quiet hours. Read first to obtain IDs for changes. Reminder times never change task deadlines.',
     inputSchema,
     sensitive: true,
     validateInput: (input) => parseInput(input) !== undefined,
@@ -234,9 +234,6 @@ export function createOwnerReminderTool(options: {
         }
         if (intent.fireAt.getTime() > now.getTime() + 366 * 24 * 60 * 60_000) {
           throw new ToolRefusal('Choose a reminder time within the next year.');
-        }
-        if (isQuietHour(intent.fireAt)) {
-          throw new ToolRefusal('That time falls within the 22:00–07:00 Copenhagen quiet window. Choose another time; no reminder was created.');
         }
         let todos;
         try {
@@ -287,8 +284,8 @@ export function createOwnerReminderTool(options: {
         return { operation: 'cancel', cancelled: true, reminder: scheduleResult({ ...schedule, state: 'cancelled' }) };
       }
       if (intent.action !== input.operation || intent.fireAt.getTime() <= now.getTime() ||
-          isQuietHour(intent.fireAt) || intent.fireAt.getTime() > now.getTime() + 366 * 24 * 60 * 60_000) {
-        throw new ToolRefusal('Choose a future, non-quiet Copenhagen time and state the matching reminder change. Nothing was changed.');
+          intent.fireAt.getTime() > now.getTime() + 366 * 24 * 60 * 60_000) {
+        throw new ToolRefusal('Choose a future Copenhagen time and state the matching reminder change. Nothing was changed.');
       }
       const update = input.operation === 'snooze'
         ? { fireAt: intent.fireAt }

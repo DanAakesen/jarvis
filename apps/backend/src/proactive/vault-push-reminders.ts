@@ -2,7 +2,6 @@ import type { ProactiveSource } from './types.js';
 import type { ProactiveStore } from './store.js';
 import type { ProactiveReminderStore } from './reminder-store.js';
 import { planTodoReminders } from './reminders.js';
-import { isQuietHour } from './time.js';
 import { classifySuggestionScope, proactiveSourceAllowed } from './policy.js';
 
 const passTimeoutMs = 60_000;
@@ -59,11 +58,6 @@ export function createVaultPushReminderPass(options: {
   }
 
   async function execute(signal: AbortSignal, startedAt: number): Promise<void> {
-    const initialNow = options.now();
-    if (isQuietHour(initialNow)) {
-      log('info', 'vault_push_quiet_hours', startedAt);
-      return;
-    }
     const settings = await abortable(options.store.settings.read(), signal);
     if (signal.aborted) {
       logAbort(signal, startedAt);
@@ -78,10 +72,6 @@ export function createVaultPushReminderPass(options: {
       return;
     }
     const now = options.now();
-    if (isQuietHour(now)) {
-      log('info', 'vault_push_quiet_hours', startedAt);
-      return;
-    }
     const result = await abortable(options.todos.read({ now, signal, settings }), signal);
     if (signal.aborted) {
       logAbort(signal, startedAt);

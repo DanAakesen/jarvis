@@ -37,7 +37,7 @@ export interface ProactiveReminderStore {
   earliestPendingFireAt(): Promise<Date | null>;
   listDue(now: Date, limit: number): Promise<ReminderRow[]>;
   countSent(dayKey: string): Promise<number>;
-  updatePending(id: string, update: ReminderUpdate): Promise<boolean>;
+  updatePending(id: string, update: ReminderUpdate, expectedFireAt?: Date): Promise<boolean>;
 }
 
 export function createMemoryProactiveReminderStore(
@@ -101,9 +101,9 @@ export function createMemoryProactiveReminderStore(
     async countSent(dayKey) {
       return [...rows.values()].filter(({ state, sentDayKey }) => state === 'sent' && sentDayKey === dayKey).length;
     },
-    async updatePending(id, update) {
+    async updatePending(id, update, expectedFireAt) {
       const row = [...rows.values()].find((candidate) => candidate.id === id && candidate.state === 'pending');
-      if (!row) return false;
+      if (!row || expectedFireAt && row.fireAt.getTime() !== expectedFireAt.getTime()) return false;
       Object.assign(row, update, { updatedAt: new Date() });
       return true;
     },
