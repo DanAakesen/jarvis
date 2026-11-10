@@ -1,3 +1,100 @@
+## Direct-main chat/loading handoff — 10 November 2026 (#1726)
+
+Delivery PR #1727 targets **main**, not a source branch. This supersedes the
+stacked/child delivery directions in the historical #1715/#1718 handoffs below.
+Do not merge, close or retarget source PRs, deploy, or touch live Factory task 24.
+The orchestrator owns final check acceptance, merge and release.
+
+Verified remote revisions before integration:
+
+| Source | SHA |
+| --- | --- |
+| current main | `ddc626ff60a78580059a8376fa0e658703cf3545` |
+| #1719 complete chat integration | `1f154ca3973b2ac5d0c1d80f08ee60872ae6fec9` |
+| common ancestor | `741e03782c8d887c5da6f67263b10d43f0c65af1` |
+| true merge commit | `e6329ee063f80452ee8ebabb2ffea7f4820dee8e` |
+
+Actual conflicts were only `PLAN.md`, this file and `docs/decisions.md`; both
+sides' entries were retained. `JarvisChatModel` automatically retains main's
+`activityRefreshID`, independent feed/jobs refresh and retained error/data state,
+plus #1719's attachment metadata and owner-authorized photo loading. Factory
+task/history/loading sources are unchanged from main. All main native test
+selections remain; `ChatPhotoLoaderTests` is added. No assertions, timeout limits,
+draft gates or failure reporting were relaxed.
+
+### CI evidence inspected during integration
+
+- #1719 head `1f154ca`: [CI 42874120945](https://github.com/DanAakesen/jarvis/actions/runs/42874120945)
+  completed successfully. Earlier [CI 42873020916](https://github.com/DanAakesen/jarvis/actions/runs/42873020916)
+  failed in `CI result` / `pipeline_evidence.py` despite successful component
+  jobs; the inspected log does not establish a more specific cause.
+- At inspection, [source Simulator 42874121366](https://github.com/DanAakesen/jarvis/actions/runs/42874121366)
+  (job `130032793210`) and [main Simulator 42877998951](https://github.com/DanAakesen/jarvis/actions/runs/42877998951)
+  (job `130046372428`, head `ddc626f`) were still running UI tests/captures.
+  Both native build steps succeeded. Unfinished runs are not passes, and neither
+  run tests this combined delivery.
+- Older main [Simulator 42802233122](https://github.com/DanAakesen/jarvis/actions/runs/42802233122)
+  failed; its logs were retrieved. Keep the historical Today/Factory findings
+  below separate from exact-final-head qualification.
+
+### Combined-tree qualification
+
+The Linux runner has Swift 6.2.1 but no Xcode, iPhone Simulator, camera/library
+hardware or VoiceOver. Syntax parsing and Core tests cannot establish native
+compilation, rendered geometry, motion, accessibility or device acceptance.
+Local checks on the combined tree (merge `e6329ee` plus the selection regression
+and documentation follow-up; no subsequent production-code change):
+
+- `swift test -j 2 --filter 'ChatFollowStateTests|JarvisChatClientTests|JarvisDesignSystemGuardTests'`
+  in the Core package: **46 passed**.
+- `swift build -j 2` and `swift test -j 2` in the Core package:
+  **build passed, 611 tests passed**, including loading/cache/Factory coverage.
+- `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -p test_pipeline.py -k ios`:
+  **28 passed**; full script discovery without the final two filters:
+  **341 passed**.
+- `npm test --workspace @jarvis/backend -- src/core/conversation.test.ts src/core/attachment-files.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts src/factory/dispatcher.test.ts`:
+  **322 passed**, including owner-scoped attachment authorization/fallback and
+  Factory behavior.
+- `npm test --workspace @jarvis/web -- src/ConversationHistory.test.tsx src/RuntimeTestConversation.test.tsx`:
+  **138 passed**. Existing jsdom canvas warnings remain; no web runtime edits.
+- In the web workspace, `npm exec -- eslint src/ConversationHistory.test.tsx --max-warnings 0`
+  and `npm exec -- tsc --noEmit`: **passed**.
+- Changed Swift files passed `swiftc -frontend -parse`; `git diff --check`
+  passed. A set comparison confirmed **all 23 main native selections** and all
+  six source selections survive in the combined workflow's 24 selections.
+  Factory detail/history sources and `ios-simulator.yml` are unchanged from main.
+- Independent read-only integration review found no significant issues.
+  The merge's changed-file secret scan passed; final security analysis is pending.
+
+On merge `e6329ee`, [CI 42879297219](https://github.com/DanAakesen/jarvis/actions/runs/42879297219)
+and [Simulator 42879297425](https://github.com/DanAakesen/jarvis/actions/runs/42879297425)
+were **skipped** because #1727 is draft, not passed. The referenced synthetic
+merge was `899e1925739e52923387971321260d34b64f375c`; skipped jobs establish no
+checkout/build/test evidence. Title job `130050947820` failed because the
+generated WIP title has no task ID or accepted prefix. Required handoff title:
+**fix-main: Integrate approved chat with current iOS loading**. The orchestrator
+must apply that title and ensure fresh aggregate **and separate Simulator** runs
+on the final head after readiness. The current automatic ready workflow explicitly
+dispatches aggregate CI only; do not assume it also started Simulator.
+
+The approved generated #1712 image was inspected from the design branch (blob
+`f474aa4e52c73f7e691fc827731a39c4e6088f10`); the pinned reference in `DESIGN.md`
+is preserved. This is reference inspection, not a combined-tree screenshot or
+before/after visual acceptance.
+
+Require both aggregate CI and the separate `ios-simulator.yml` on the published
+final #1727 head. Draft-gated/skipped jobs are not qualification: make the delivery
+ready for review and verify job execution without weakening gates. Record run
+URLs, head SHA, checkout SHA/tree and artifact IDs; if checkout is a synthetic
+merge, compare its tree with the intended final tree. Repeat after base/source
+changes. The workflow retains every loading/Factory selection and both native
+chat/photo suites; use its full selection, not only the narrower diagnostic
+commands in the historical handoffs. Inspect retained captures against the
+approved #1712 reference and exercise combined photo/follow fixtures, selection,
+history opt-out/resume, tool-only growth, failures/final reply, keyboard/multiline
+dock geometry, Now visibility, Dynamic Type and reduced motion. Verify real
+camera/library, upload retry, account isolation, dictation and voice separately.
+
 ## iOS loading / Factory integration handoff — 10 November 2026 (#1715)
 
 Requested child PR: **fix-main: Integrate iOS loading and Factory task details**,

@@ -1,3 +1,13 @@
+## Combined chat/loading delivery (#1726; 10 November 2026)
+
+The direct-main integration retains the existing boundaries: `JarvisChatModel`
+owns independent, request-guarded Now/feed and background-job refresh alongside
+sent attachment metadata; `JarvisChatFollowLatest` owns viewport-local following;
+photo previews obtain owner-authorized short-lived read URLs through
+`JarvisChatClient` and download without API credentials or persistent caching.
+Factory task history, HTTP pagination and SSE replay remain main's implementation.
+No new API, storage, authorization or deployment boundary is introduced.
+
 ## Native chat follow ownership (#1707; 10 November 2026)
 
 `JarvisChatFollowLatest` owns viewport-local following for normal chat and the

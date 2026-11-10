@@ -1,3 +1,24 @@
+## Direct-main chat/loading integration — 10 November 2026 (#1726)
+
+Merged approved chat head `1f154ca3973b2ac5d0c1d80f08ee60872ae6fec9`
+into current main `ddc626ff60a78580059a8376fa0e658703cf3545` on delivery
+PR #1727. Merge `e6329ee063f80452ee8ebabb2ffea7f4820dee8e` retains both
+histories. All three documentation conflicts retain both entries; the model
+automatically combines loading refresh guards with photo metadata and previews.
+Every main native selection remains, alongside `ChatPhotoLoaderTests`.
+The selection regression now requires chat/photo and loading/Factory together.
+
+This supersedes the older child/stacked delivery directions below: #1727 targets
+main directly. Source PRs and live Factory task 24 remain untouched.
+Local combined-tree checks pass: 611 Core, 341 script, 322 backend attachment/
+Factory and 138 web chat tests; Core build, web typecheck/scoped lint and changed
+Swift syntax parsing pass. Independent integration review found no significant
+issues. Next: security review and exact-head CI/Simulator evidence. #1727's draft
+gate skipped both workflows and its generated title failed the title check;
+use `fix-main: Integrate approved chat with current iOS loading` and run both
+workflows after readiness. Native captures, device acceptance and release remain
+unqualified; see the current handoff in `docs/agent-context.md`.
+
 ## iOS loading / Factory child integration — 10 November 2026 (#1715)
 
 Integrated #1704 head `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9` into the

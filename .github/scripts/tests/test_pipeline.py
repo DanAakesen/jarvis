@@ -747,11 +747,13 @@ class SafeFailureTests(unittest.TestCase):
         self.assertEqual(scheme_evidence["with"]["path"], "${{ runner.temp }}/ios-scheme.xcresult")
         self.assertEqual(scheme_evidence["with"]["retention-days"], 14)
 
-    def test_ios_loading_regressions_are_selected_for_native_execution(self):
+    def test_ios_loading_and_chat_regressions_are_selected_for_native_execution(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         capture = next(step for step in workflow["jobs"]["macos"]["steps"]
                        if step.get("name") == "Boot iPhone Simulator and capture screenshots")
         cases = {
+            "ChatComposerUITests": [],
+            "ChatPhotoLoaderTests": [],
             "FactoryTaskDetailUITests": [],
             "FactoryLoadingUITests": [],
             "WorkspacesLoadingUITests": [],

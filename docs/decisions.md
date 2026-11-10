@@ -1,3 +1,20 @@
+## 10 November 2026 — Deliver existing chat integration directly to main (#1726)
+
+Use main `ddc626ff60a78580059a8376fa0e658703cf3545` plus complete #1719 head
+`1f154ca3973b2ac5d0c1d80f08ee60872ae6fec9`, retaining both histories and both
+implementations rather than restarting either feature. Delivery #1727 targets
+main; older child/stacked target instructions below are historical. Source PRs,
+Factory task 24 and release remain unchanged.
+
+Preserve the automatically combined chat model: main's independent Now/jobs
+refresh and stale-response guards coexist with photo metadata and owner-scoped
+read URLs. Keep shared design, selection-aware layout following and the approved
+#1712 reference. Retain every main loading/Factory native selection and the chat/
+photo suites, including `ChatPhotoLoaderTests`; enforce their coexistence in the
+existing workflow regression. Preserve both sides of documentation conflicts.
+Native acceptance requires a run of the combined final tree, not inherited
+green source checks or skipped draft runs.
+
 ## 10 November 2026 — Integrate loading and Factory details in a child (#1715)
 
 Retain #1704's app-wide static structure, retained refresh and context/account
