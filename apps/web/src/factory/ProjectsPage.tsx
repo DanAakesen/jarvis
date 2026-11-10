@@ -3,7 +3,6 @@ import { backendFetch } from '../backend-request';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Modal } from '../Modal';
 import { useConversationIntents } from '../conversation-intents';
-import { Loader } from '../Loader';
 import { StateMessage } from '../StateMessage';
 import { CollapsibleSection } from '../CollapsibleSection';
 import { formatDateTime } from '../format/date-time';
