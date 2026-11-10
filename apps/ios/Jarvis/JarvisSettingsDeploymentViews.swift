@@ -10,7 +10,6 @@ struct JarvisDeploymentsSettingsView: View {
     @State private var catalogue: JarvisModelCatalogue?
     @State private var loading = true
     @State private var removing: String?
-    @State private var pendingRemoval: JarvisModelDeployment?
     @State private var error: String?
     @State private var notice: String?
 
@@ -116,7 +115,6 @@ struct JarvisDeploymentsSettingsView: View {
             self.error = copy(.requestFailed)
             onFailure(error)
         }
-        pendingRemoval = nil
         removing = nil
     }
 }
