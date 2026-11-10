@@ -221,6 +221,86 @@ final class WatchTaskFlowTests: XCTestCase {
         XCTAssertNil(recovered.record.update)
     }
 
+    @MainActor func testEditConflictRequiresRefreshAndKeepsLockedUpdate() throws {
+        let directory = testArtifactDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("edit.json")
+        let original = fixtureTask()
+        let store = try WatchTaskDraftStore(fileURL: url, editing: original)
+        var draft = store.record.draft
+        draft.fields.text = "Call dentist and hygienist"
+        try store.update(
+            draft: draft, selectedDue: now, customDue: true,
+            includeTime: true, remindAtDue: false
+        )
+        let update = WatchTaskUpdateRequest(task: original, fields: draft.fields, timeZone: zone)
+        try store.beginEdit(update)
+        try store.finishFailure(rejectedWithoutSaving: true, editRequiresRefresh: true)
+
+        let recovered = try WatchTaskDraftStore(fileURL: url, editing: original)
+        XCTAssertEqual(recovered.record.phase, .requiresRefresh)
+        XCTAssertEqual(recovered.record.draft, draft)
+        XCTAssertEqual(recovered.record.update, update)
+        XCTAssertEqual(recovered.record.source, original)
+
+        let rejectedURL = directory.appendingPathComponent("edit-rejected.json")
+        let rejected = try WatchTaskDraftStore(fileURL: rejectedURL, editing: original)
+        try rejected.update(
+            draft: draft, selectedDue: now, customDue: true,
+            includeTime: true, remindAtDue: false
+        )
+        try rejected.beginEdit(update)
+        try rejected.finishFailure(rejectedWithoutSaving: true)
+        XCTAssertEqual(rejected.record.phase, .editing)
+        XCTAssertNil(rejected.record.update)
+        XCTAssertEqual(rejected.record.draft, draft)
+    }
+
+    @MainActor func testSavedEditReceiptReopensForOriginalSavedAndThirdVersions() throws {
+        let directory = testArtifactDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let original = fixtureTask()
+        let saved = taskCopy(
+            original, text: "Call dentist and hygienist",
+            version: String(repeating: "c", count: 64)
+        )
+        let third = taskCopy(
+            original, text: "Changed again on iPhone",
+            version: String(repeating: "d", count: 64)
+        )
+
+        for (name, supplied, expectedPhase, expectedSource) in [
+            ("original", original, WatchTaskEditorRecord.Phase.saved, original),
+            ("saved", saved, .editing, saved),
+            ("third", third, .editing, third)
+        ] {
+            let url = directory.appendingPathComponent("\(name).json")
+            let store = try WatchTaskDraftStore(fileURL: url, editing: original)
+            var draft = store.record.draft
+            draft.fields.text = saved.text
+            try store.update(
+                draft: draft, selectedDue: now, customDue: true,
+                includeTime: true, remindAtDue: false
+            )
+            try store.beginEdit(
+                WatchTaskUpdateRequest(task: original, fields: draft.fields, timeZone: zone)
+            )
+            try store.saveResult(saved)
+
+            let reopened = try WatchTaskDraftStore(fileURL: url, editing: supplied)
+            XCTAssertEqual(reopened.record.phase, expectedPhase, name)
+            XCTAssertEqual(reopened.record.source, expectedSource, name)
+            if expectedPhase == .saved {
+                XCTAssertEqual(reopened.record.savedTask, saved, name)
+                XCTAssertNotNil(reopened.record.update, name)
+            } else {
+                XCTAssertNil(reopened.record.savedTask, name)
+                XCTAssertNil(reopened.record.update, name)
+                XCTAssertEqual(reopened.record.draft.fields.text, supplied.text, name)
+            }
+        }
+    }
+
     @MainActor func testUncertainEditRecognizesAlreadySavedPayloadAfterRefresh() throws {
         let directory = testArtifactDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

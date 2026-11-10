@@ -679,7 +679,12 @@ struct WatchPersonalTaskEditor: View {
                 }
             } else if store?.record.phase == .submitting {
                 do {
-                   try store?.finishFailure(rejectedWithoutSaving: definitelyRejected)
+                   let editConflict = task != nil &&
+                       (detail?.code == "task_conflict" || detail?.code == "http_409")
+                   try store?.finishFailure(
+                       rejectedWithoutSaving: definitelyRejected,
+                       editRequiresRefresh: editConflict
+                   )
                    if let store { apply(store.record) }
                 } catch {
                    storageUnavailable()

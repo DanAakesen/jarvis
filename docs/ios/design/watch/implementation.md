@@ -339,11 +339,16 @@ Final Core/persistence and exact-head native/security results must be distinguis
 from those checkpoints in the PR evidence. Draft-skipped CI is not a pass.
 No live model call, real user write, deployment or device send was performed.
 
-Task persistence qualification adds eight regressions: both mode drafts and native
+Task persistence qualification adds ten regressions: both mode drafts and native
 field state, termination before acknowledgement, byte-identical create retry after
 clock/timezone change, definite rejection and deliberate revision, edit refresh
 and reapplication, saved receipts and fail-closed corrupt/unwritable storage.
 The persistence owner reports Core build and 37 combined focused tests passed.
+Review then identified two persistence bugs: definite edit conflicts failed to
+offer Refresh, and saved edit receipts could mask a subsequently changed task.
+Both are corrected with regressions for conflict retention and original/saved/
+third-version reopening; the persistence owner reports 36 task-flow tests, Core
+build and DEBUG/Release parsing passed after those corrections.
 Its full 650-test run reported six source-literal assertion failures caused by
 the parent's shared-URL/action receipt refactor, not a clean full-suite pass;
 the affected source guards now check shared enum use and destination cases.
@@ -359,3 +364,11 @@ interrupted edit requires refreshing the existing source. Confirmed saved result
 remain terminal on disk until deliberately starting another create; a storage
 failure cannot silently replace a pending write. Synthetic fixtures bypass those
 files. This is local state/test evidence, not physical process-kill acceptance.
+
+The post-commit security scan of `0f86f224` found no Actions alerts; Swift
+database creation failed, and the overall scan timed out before all languages
+completed. This is incomplete security coverage, not a clean application scan.
+The exact-head native run 42874479453 was still queued when checked. No intended
+new captures or successful external URL delivery are established by that run.
+Child PR #1722 has the correct Home base; its generated `[WIP]` title still needs
+the requested `fix-main:` prefix. This environment has no PR metadata-write tool.

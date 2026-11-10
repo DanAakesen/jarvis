@@ -161,10 +161,15 @@ public struct WatchTaskEditorRecord: Codable, Equatable, Sendable {
             guard recovered.kind == .edit, recovered.source?.id == task.id else {
                 throw WatchFailure.invalidRequest
             }
-            if recovered.phase == .saved, recovered.savedTask?.version == task.version {
-                let next = WatchTaskEditorRecord(editing: task)
-                try Self.write(next, to: fileURL)
-                record = next
+            if recovered.phase == .saved {
+                if recovered.savedTask?.version == task.version ||
+                    recovered.source?.version != task.version {
+                    let next = WatchTaskEditorRecord(editing: task)
+                    try Self.write(next, to: fileURL)
+                    record = next
+                } else {
+                    record = recovered
+                }
             } else {
                 var next = recovered
                 if next.phase == .editing, next.source?.version != task.version {
@@ -220,7 +225,9 @@ public struct WatchTaskEditorRecord: Codable, Equatable, Sendable {
         try persist(next)
     }
 
-    public func finishFailure(rejectedWithoutSaving: Bool) throws {
+    public func finishFailure(
+        rejectedWithoutSaving: Bool, editRequiresRefresh: Bool = false
+    ) throws {
         guard record.phase == .submitting else { return }
         var next = record
         switch next.kind {
@@ -228,7 +235,7 @@ public struct WatchTaskEditorRecord: Codable, Equatable, Sendable {
             next.submissions.finish(rejectedWithoutSaving: rejectedWithoutSaving)
             next.phase = rejectedWithoutSaving ? .rejected : .uncertain
         case .edit:
-            if rejectedWithoutSaving {
+            if rejectedWithoutSaving && !editRequiresRefresh {
                 next.update = nil
                 next.phase = .editing
             } else {
