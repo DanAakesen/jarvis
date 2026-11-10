@@ -1,7 +1,66 @@
-Current delivery is **#1731 → main (#1730)**; #1729 is preserved source evidence.
+Current delivery continues **#1735 → main**, preserving exact #1733
+`b14d7556149a90a62b61c1df2e27e6c62394d09d`; previous targets below are historical.
 The historical combined qualification section
 at the end supersedes historical child/stacked directions and separates source
 evidence from final-head acceptance.
+
+## External URL and small-Watch evidence — 10 November 2026 (#1735)
+
+[Run 42891349643/job 130093247782](https://github.com/DanAakesen/jarvis/actions/runs/42891349643/job/130093247782)
+failed `small-log-lift` at 20:18:41 and actual Tasks URL dispatch at 20:19:00
+(error 115). Artifact 13801390669 contains rendered task detail/edit and the
+failed small lift form; this was not another task-detail Priority failure.
+
+Exact-source [run 42894231414/job 130103184643](https://github.com/DanAakesen/jarvis/actions/runs/42894231414/job/130103184643)
+completed **failure**, not pending: Watch simulator, Watch Release architecture
+and paired-iPhone **builds** passed. [Artifact 13801702242](https://github.com/DanAakesen/jarvis/actions/runs/42894231414/artifacts/13801702242)
+was downloaded; its SHA-256
+`e9a981e2977b5426fc4b281ec6c81ae88ed207d613935ef78f71fffe991b80f4`
+matches GitHub. `watch-head.txt` records exact `b14d755`. It contains 36 PNGs.
+
+The actual `small-log-lift-failed.png` was visually inspected: title, Lift details,
+Bench press/80 kg/4 reps and mic render; substantial input space precedes a Save
+button clipped at the bottom. OCR recognizes the form but reads the partial
+action as “COvO.” Capture fails at 20:37:16 and reaches its eight-minute step
+timeout at 20:37:20. The generic “launch-spinner” log is misleading for this image.
+Only Log lift's minimum multiline height is reduced 90→54 points. Text can grow
+and scroll; Save's shared target and all required OCR anchors remain. Corrected
+small-Watch full-button visibility and large-text interaction remain unverified.
+
+At 20:37:59, `simulator.log:801–805` records an untargeted URL open, followed by
+`ERROR: There is no registered handler for URL scheme jarvis-watch` and error 115.
+`tasks-openurl-status.txt` contains 115. Built and installed Info.plist JSON match,
+including `WKApplication`, companion dependence and `jarvis-watch` URL types.
+This is a LaunchServices lookup failure **before demonstrated app delivery**,
+not evidence of a parser failure. The original loop exited before Log lift.
+The earlier Carousel `reason openURL` belongs to app launch, not this route.
+
+Apple's [WidgetKit deep-link guidance](https://developer.apple.com/documentation/widgetkit/linking-to-specific-app-scenes-from-your-widget-or-live-activity)
+says widget interaction activates the containing app and passes its URL to
+`onOpenURL`; [`widgetURL`](https://developer.apple.com/documentation/swiftui/view/widgeturl(_:))
+does not establish generic scheme discovery. Apple lists
+[`CFBundleURLTypes`](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundleurltypes)
+on watchOS and [requires the companion for dependent apps](https://developer.apple.com/documentation/watchos-apps/creating-independent-watchos-apps).
+Our CI installed only the Watch before checking delivery, compiling the phone
+afterward. Pair/install that existing companion first; capture pair metadata,
+installed app registration and installation-window logs. This corrects setup
+but is **not yet a demonstrated error-115 fix**. Production routing and companion
+independence stay unchanged.
+
+Each route now has an independent real dispatch attempt, retained status,
+available receipts and failure image. Either failure keeps the step red.
+Positive acceptance still requires matching nonce/PID/URL, destination receipt
+and rendered-content OCR. A general watchOS simulator limitation is **not proven**:
+there is no known-good control or actual WidgetKit delivery comparison yet.
+Require installed Tasks and Log lift complication taps, warm/cold launch,
+corrected-head screenshots and physical Watch acceptance independently.
+
+Source [iPhone run 42894768049](https://github.com/DanAakesen/jarvis/actions/runs/42894768049)
+still runs without artifacts at inspection. No fresh native compact-X image or
+passing removal/accessibility/loading/chat result is available. Preserve its
+24 selections/two workers and the dark-mode off-glyph removal test; source
+geometry is not visual acceptance. The orchestrator owns final CI, merge,
+backend and TestFlight. No source PR or live Factory task was changed.
 
 ## Native repair qualification — 10 November 2026 (#1730)
 

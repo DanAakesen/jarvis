@@ -40,7 +40,13 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS' -configuration Release -derivedDataPath "$RUNNER_TEMP/WatchDeviceBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/watch-device-build.log"
-      - name: Boot and inspect isolated Watch simulator
+      - name: Build paired iPhone bridge without signing
+        if: ${{ !cancelled() }}
+        working-directory: apps/ios
+        run: |
+          set -o pipefail
+          xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/PhoneBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/phone-build.log"
+      - name: Boot and inspect paired Watch simulator
         timeout-minutes: 4
         run: |
           set -euo pipefail
@@ -49,6 +55,24 @@ jobs:
           echo "WATCH_ID=$WATCH_ID" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/watch-screenshots"
           xcrun simctl list devices available --json > "$RUNNER_TEMP/watch-screenshots/devices.json"
+          xcrun simctl list pairs --json > "$RUNNER_TEMP/watch-screenshots/pairs-before.json"
+          PHONE_ID="$(jq -r --arg watch "$WATCH_ID" --slurpfile devices "$RUNNER_TEMP/watch-screenshots/devices.json" '[.pairs[] | select(.watch.udid == $watch) | .phone.udid | select(. as $id | any($devices[0].devices[][]; .udid == $id))][0] // empty' "$RUNNER_TEMP/watch-screenshots/pairs-before.json")"
+          if [[ -z "$PHONE_ID" ]]; then
+            if jq -e --arg watch "$WATCH_ID" 'any(.pairs[]; .watch.udid == $watch)' "$RUNNER_TEMP/watch-screenshots/pairs-before.json" >/dev/null; then
+              echo "::error::Existing Watch companion is unavailable; refusing to replace its pair"
+              exit 1
+            fi
+            PHONE_ID="$(jq -r --slurpfile pairs "$RUNNER_TEMP/watch-screenshots/pairs-before.json" '[.devices[][] | select(.name | startswith("iPhone")) | select(.udid as $id | all($pairs[0].pairs[]; .phone.udid != $id))][0].udid // empty' "$RUNNER_TEMP/watch-screenshots/devices.json")"
+            test -n "$PHONE_ID" || { echo "::error::Available unpaired iPhone simulator required"; exit 1; }
+            xcrun simctl pair "$WATCH_ID" "$PHONE_ID"
+          fi
+          echo "PHONE_ID=$PHONE_ID" >> "$GITHUB_ENV"
+          xcrun simctl list pairs --json > "$RUNNER_TEMP/watch-screenshots/pairs-installed.json"
+          jq -e --arg watch "$WATCH_ID" --arg phone "$PHONE_ID" 'any(.pairs[]; .watch.udid == $watch and .phone.udid == $phone)' "$RUNNER_TEMP/watch-screenshots/pairs-installed.json"
+          if ! jq -e --arg id "$PHONE_ID" '.devices[][] | select(.udid == $id and .state == "Booted")' "$RUNNER_TEMP/watch-screenshots/devices.json" >/dev/null; then
+            xcrun simctl boot "$PHONE_ID"
+          fi
+          xcrun simctl bootstatus "$PHONE_ID" -b
           if ! jq -e --arg id "$WATCH_ID" '.devices[][] | select(.udid == $id and .state == "Booted")' "$RUNNER_TEMP/watch-screenshots/devices.json" >/dev/null; then
             xcrun simctl boot "$WATCH_ID"
           fi
@@ -56,10 +80,13 @@ jobs:
           APP="$RUNNER_TEMP/WatchBuild/Build/Products/Debug-watchsimulator/JarvisWatch.app"
           plutil -convert json -o "$RUNNER_TEMP/watch-screenshots/built-info.json" "$APP/Info.plist"
           jq -e '.WKApplication == true and any(.CFBundleURLTypes[].CFBundleURLSchemes[]; . == "jarvis-watch")' "$RUNNER_TEMP/watch-screenshots/built-info.json"
+          xcrun simctl install "$PHONE_ID" "$RUNNER_TEMP/PhoneBuild/Build/Products/Debug-iphonesimulator/Jarvis.app"
+          xcrun simctl get_app_container "$PHONE_ID" com.danaakesen.jarvis app > "$RUNNER_TEMP/watch-screenshots/companion-installed.txt"
           xcrun simctl install "$WATCH_ID" "$APP"
           INSTALLED="$(xcrun simctl get_app_container "$WATCH_ID" com.danaakesen.jarvis.watchkitapp app)"
           plutil -convert json -o "$RUNNER_TEMP/watch-screenshots/installed-info.json" "$INSTALLED/Info.plist"
           cmp "$RUNNER_TEMP/watch-screenshots/built-info.json" "$RUNNER_TEMP/watch-screenshots/installed-info.json"
+          xcrun simctl listapps "$WATCH_ID" > "$RUNNER_TEMP/watch-screenshots/registered-apps.plist"
       - name: Capture intended Watch screens with fresh-process receipts
         timeout-minutes: 8
         run: |
@@ -144,7 +171,11 @@ jobs:
           BUNDLE=com.danaakesen.jarvis.watchkitapp
           swiftc .github/scripts/verify_watch_capture.swift -o "$RUNNER_TEMP/verify-watch-capture"
           CONTAINER="$(xcrun simctl get_app_container "$WATCH_ID" "$BUNDLE" data)"
+          URL_STATUS=0
           for ROUTE in tasks log-lift; do
+            set +e
+            (
+            set -e
             NONCE="$(uuidgen)"
             rm -f "$CONTAINER/Documents/watch-open-url.json" "$CONTAINER/Documents/watch-capture.json"
             OUTPUT="$(xcrun simctl launch --terminate-running-process "$WATCH_ID" "$BUNDLE" --watch-fixture "--watch-capture-id=$NONCE" "--watch-expect-url=jarvis-watch://$ROUTE")"
@@ -195,7 +226,23 @@ jobs:
               echo "::error::Watch URL-test process did not exit"
               exit 1
             fi
+            )
+            ROUTE_STATUS=$?
+            set -e
+            echo "$ROUTE_STATUS" > "$RUNNER_TEMP/watch-screenshots/$ROUTE-delivery-status.txt"
+            for RECEIPT in watch-open-url watch-capture; do
+              if [[ -f "$CONTAINER/Documents/$RECEIPT.json" ]]; then
+                cp "$CONTAINER/Documents/$RECEIPT.json" "$RUNNER_TEMP/watch-screenshots/$ROUTE-attempt-$RECEIPT.json"
+              fi
+            done
+            if [[ "$ROUTE_STATUS" != 0 ]]; then
+              URL_STATUS="$ROUTE_STATUS"
+              if ! xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/$ROUTE-delivery-failed.png"; then
+                echo "::error::Could not capture failed $ROUTE attempt"
+              fi
+            fi
           done
+          exit "$URL_STATUS"
       - name: Preserve simulator failure diagnostics
         if: ${{ failure() && env.WATCH_ID != '' }}
         timeout-minutes: 2
@@ -207,13 +254,7 @@ jobs:
               cp "$CONTAINER/Documents/$RECEIPT.json" "$RUNNER_TEMP/watch-screenshots/failure-$RECEIPT.json"
             fi
           done
-          xcrun simctl spawn "$WATCH_ID" log show --last 3m --style compact --predicate 'eventMessage CONTAINS "com.danaakesen.jarvis.watchkitapp" OR eventMessage CONTAINS "jarvis-watch" OR subsystem CONTAINS[c] "launchservices" OR process == "Carousel"' > "$RUNNER_TEMP/watch-screenshots/simulator.log"
-      - name: Build paired iPhone bridge without signing
-        if: ${{ !cancelled() }}
-        working-directory: apps/ios
-        run: |
-          set -o pipefail
-          xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/PhoneBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/phone-build.log"
+          xcrun simctl spawn "$WATCH_ID" log show --last 20m --style compact --predicate 'eventMessage CONTAINS "com.danaakesen.jarvis.watchkitapp" OR eventMessage CONTAINS "jarvis-watch" OR subsystem CONTAINS[c] "launchservices" OR process == "Carousel"' > "$RUNNER_TEMP/watch-screenshots/simulator.log"
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

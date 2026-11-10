@@ -447,6 +447,38 @@ history opt-out/resume, tool-only growth, failures/final reply, keyboard/multili
 dock geometry, Now visibility, Dynamic Type and reduced motion. Verify real
 camera/library, upload retry, account isolation, dictation and voice separately.
 
+## Watch delivery continuation — 10 November 2026 (#1735)
+
+Current work preserves exact #1733 `b14d7556149a90a62b61c1df2e27e6c62394d09d`
+as a merge parent on main `ddc626ff`. Do not modify source PRs, deploy, or call
+live Factory task 24. The 10-point composer X, 20-point background, independent
+44-point target, 24 native selections and two workers remain unchanged.
+
+Watch run 42894231414/job 130103184643 completed **failure**, with all three
+unsigned builds successful. Artifact 13801702242 has matching built/installed
+scheme declarations, but `simulator.log:801–805` reports no registered handler
+before error 115. The actual small-Watch PNG shows clipped Save, not a spinner.
+The previous run 42891349643/job 130093247782 has the same two failures.
+See `docs/ios/design/watch/implementation.md` for exact artifacts and Apple sources.
+
+The workflow now builds/installs the required paired phone before Watch checks,
+captures pair/registration metadata and extends logs to the installation window.
+Both external routes execute even if one fails; each archives its available
+receipts, failure image and exit status before the next launch. No fixture or
+zero transport status bypasses real delivery/rendered-content checks.
+
+Verified Linux commands from the repository root:
+`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -p test_watch_build.py`
+(13 passed), and `swiftc -frontend -parse apps/ios/Watch/WatchTextInput.swift apps/ios/Watch/WatchLiftCaptureView.swift`.
+From `apps/ios/Packages/JarvisCore`,
+`swift test -j 2 --filter 'WatchAppLinkTests|WatchLiftCaptureTests|WatchDashboardSourceTests|ChatFollowStateTests|JarvisDesignSystemGuardTests'`
+(48 passed). Neither syntax parsing nor portable tests typecheck Apple UI frameworks.
+This Linux host has no Xcode, Watch/iPhone simulator or VoiceOver.
+Exact-source iPhone 42894768049/job 130104861410 remains in progress with no
+artifacts at inspection. Fresh dark X, off-glyph removal, loading/chat results,
+corrected-head Watch fit/URLs, installed complication taps and device acceptance
+remain open. Do not call the combined release qualified.
+
 ## iOS loading / Factory integration handoff — 10 November 2026 (#1715)
 
 Requested child PR: **fix-main: Integrate iOS loading and Factory task details**,

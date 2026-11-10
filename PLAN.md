@@ -1,3 +1,25 @@
+## Watch delivery continuation — 10 November 2026 (#1735)
+
+- [x] Preserve current main `ddc626ff` and exact approved #1733 `b14d755` as
+  ancestry; no source PR changes or live Factory calls.
+- [x] Inspect completed Watch logs/artifacts and the actual small-Watch image:
+  intended Log lift form, clipped Save, separate missing URL-handler failure.
+- [x] Compact only Log lift's minimum input height; preserve Save OCR, text,
+  scrolling and shared actions. Correct missing companion setup and independently
+  attempt both real URLs, retaining per-attempt evidence and failure status.
+- [ ] Qualify the corrected head on macOS, inspect small-Watch fit/large-text
+  reachability and fresh dark composer captures, and resolve any remaining
+  loading/chat failures from actual native evidence.
+- [ ] Complete actual WidgetKit warm/cold Tasks/Log lift and physical-device
+  acceptance before orchestrator-owned release.
+
+Local checks currently pass: 13 Watch automation tests, 48 targeted Core tests,
+edited Swift syntax and diff checks. These are not native/device acceptance.
+Source iPhone run 42894768049 remains running without artifacts at inspection;
+no passing native X/removal/loading/chat claim follows. Full evidence and remaining
+limitations are in `docs/ios/design/watch/implementation.md` and
+`docs/agent-context.md`. No general simulator limitation or error-115 fix is proven.
+
 ## Composer correction and qualification continuation — 10 November 2026 (#1732)
 
 Current work continues from exact #1731 `1bf93adb264cff0d95182b77c04cfb42b03b0d33`

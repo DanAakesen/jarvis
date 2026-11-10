@@ -133,7 +133,7 @@ struct WatchLiftCaptureView: View {
                     WatchTextInput(title: "Lift details", text: Binding(
                         get: { capture.draft.text },
                         set: { capture.updateText($0) }
-                    ), multiline: true, alignment: .bottom)
+                    ), multiline: true, alignment: .bottom, minimumMultilineHeight: 54)
                     .padding(10).modifier(WatchSurface())
                     .disabled(!capture.draft.canEdit || !capture.storageAvailable)
                     if capture.draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {

@@ -1,3 +1,14 @@
+## Watch delivery qualification continuation (#1735; 10 November 2026)
+
+Preserve exact #1733 `b14d7556149a90a62b61c1df2e27e6c62394d09d` on current
+main, including the compact composer X, all loading/chat/Factory/Watch behavior,
+24 native selections and two workers. Qualify the companion-dependent Watch
+with its existing paired iPhone installed. Both Tasks and Log lift external URLs
+must be attempted independently and fail closed without actual delivery and
+rendered destinations. Fixture navigation never establishes link acceptance.
+The orchestrator owns final native/device acceptance, merge and release;
+source PRs and live Factory task 24 remain untouched.
+
 ## Composer correction and release continuation (#1732; 10 November 2026)
 
 Continue from #1731 head `1bf93adb264cff0d95182b77c04cfb42b03b0d33` without

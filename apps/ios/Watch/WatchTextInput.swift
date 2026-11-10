@@ -7,6 +7,7 @@ struct WatchTextInput: View {
     @Binding var text: String
     var multiline = false
     var alignment: VerticalAlignment = .center
+    var minimumMultilineHeight: CGFloat = 90
     @State private var editing = false
     @State private var failure: String?
     var body: some View {
@@ -16,7 +17,7 @@ struct WatchTextInput: View {
                     VStack(alignment: .leading, spacing: 2) {
                         if !text.isEmpty { Text(title).font(.caption).foregroundStyle(.secondary) }
                         Text(text.isEmpty ? title : text).font(.body).lineLimit(multiline ? nil : 2)
-                            .frame(maxWidth: .infinity, minHeight: multiline ? 90 : 38, alignment: .topLeading)
+                            .frame(maxWidth: .infinity, minHeight: multiline ? minimumMultilineHeight : 38, alignment: .topLeading)
                     }.contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityLabel(title)
                     .accessibilityValue(text.isEmpty ? "Empty" : text)

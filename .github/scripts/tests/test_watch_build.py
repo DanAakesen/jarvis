@@ -1,6 +1,8 @@
 import json
+import os
 from pathlib import Path
 import plistlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -60,6 +62,111 @@ class WatchBuildTests(unittest.TestCase):
         self.assertIn("tasks log-lift", delivery)
         self.assertLess(delivery.index('test "$READY" = true'), delivery.index('simctl openurl'))
 
+    def test_companion_is_built_paired_and_installed_before_watch_registration(self):
+        names = [step.get("name", "") for step in self.steps]
+        boot_name = "Boot and inspect paired Watch simulator"
+        self.assertLess(names.index("Build paired iPhone bridge without signing"), names.index(boot_name))
+        boot = self.steps[names.index(boot_name)]["run"]
+        self.assertIn('simctl pair "$WATCH_ID" "$PHONE_ID"', boot)
+        self.assertIn('simctl bootstatus "$PHONE_ID" -b', boot)
+        self.assertLess(boot.index('simctl install "$PHONE_ID"'), boot.index('simctl install "$WATCH_ID"'))
+        self.assertIn('simctl get_app_container "$PHONE_ID" com.danaakesen.jarvis app', boot)
+        self.assertIn("pairs-before.json", boot)
+        self.assertIn("pairs-installed.json", boot)
+        self.assertIn("registered-apps.plist", boot)
+
+    @unittest.skipUnless(shutil.which("jq"), "jq required for simulator workflow")
+    def test_pair_selection_reuses_available_companion_or_selects_only_unpaired_phone(self):
+        boot = next(step["run"] for step in self.steps if step.get("name", "").startswith("Boot and inspect"))
+        queries = re.findall(r'PHONE_ID="\$\((jq -r .*)\)"', boot)
+        self.assertEqual(len(queries), 2)
+        guard_start = boot.index("if jq -e --arg watch")
+        unavailable_guard = boot[guard_start:boot.index('PHONE_ID="$(jq', guard_start)]
+        with tempfile.TemporaryDirectory() as directory:
+            screenshots = Path(directory) / "watch-screenshots"
+            screenshots.mkdir()
+            (screenshots / "devices.json").write_text(json.dumps({"devices": {"runtime": [
+                {"name": "Apple Watch Ultra", "udid": "watch"},
+                {"name": "iPhone 17", "udid": "paired-phone"},
+                {"name": "iPhone 17 Pro", "udid": "free-phone"},
+            ]}}))
+            for watch, phone, expected_existing, expected_free in [
+                ("watch", "paired-phone", "paired-phone", "free-phone"),
+                ("watch", "unavailable-phone", "", "paired-phone"),
+                ("other-watch", "paired-phone", "", "free-phone"),
+            ]:
+                with self.subTest(watch=watch, phone=phone):
+                    (screenshots / "pairs-before.json").write_text(json.dumps({"pairs": {
+                        "pair": {"watch": {"udid": watch}, "phone": {"udid": phone}},
+                    }}))
+                    for query, expected in zip(queries, [expected_existing, expected_free]):
+                        result = subprocess.run(
+                            ["bash", "-c", query], check=True, capture_output=True, text=True,
+                            env={**os.environ, "RUNNER_TEMP": directory, "WATCH_ID": "watch"},
+                        )
+                        self.assertEqual(result.stdout.strip(), expected)
+                    result = subprocess.run(
+                        ["bash", "-c", unavailable_guard], capture_output=True, text=True,
+                        env={**os.environ, "RUNNER_TEMP": directory, "WATCH_ID": "watch"},
+                    )
+                    self.assertEqual(result.returncode, 1 if watch == "watch" else 0)
+                    if watch == "watch":
+                        self.assertIn("refusing to replace its pair", result.stdout)
+
+    @unittest.skipUnless(shutil.which("jq"), "jq required for simulator workflow")
+    def test_both_real_urls_are_attempted_and_each_failure_still_fails_the_step(self):
+        delivery = next(step["run"] for step in self.steps if step.get("name", "").startswith("Verify external URL"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "Documents").mkdir()
+            (root / "watch-screenshots").mkdir()
+            prelude = r'''
+swiftc() { :; }
+uuidgen() { echo "nonce"; }
+sleep() { :; }
+xcrun() {
+  case "$2" in
+    get_app_container) echo "$RUNNER_TEMP" ;;
+    launch)
+      printf '{"captureID":"nonce","screen":"dashboard","pid":"99999999"}' > "$RUNNER_TEMP/Documents/watch-capture.json"
+      if [[ "$MOCK_LAUNCH_FAILURE" == 1 ]]; then return 42; fi
+      echo "watch: 99999999" ;;
+    openurl)
+      echo "$4" >> "$RUNNER_TEMP/attempted-urls.txt"
+      [[ "$4" != "jarvis-watch://$MOCK_FAILED_ROUTE" ]] || return 115 ;;
+  esac
+}
+'''
+            for failed_route in ["tasks", "log-lift"]:
+                with self.subTest(failed_route=failed_route):
+                    attempted = root / "attempted-urls.txt"
+                    attempted.unlink(missing_ok=True)
+                    result = subprocess.run(
+                        ["bash", "-c", prelude + delivery], capture_output=True, text=True,
+                        env={**os.environ, "RUNNER_TEMP": directory, "WATCH_ID": "watch",
+                             "MOCK_FAILED_ROUTE": failed_route, "MOCK_LAUNCH_FAILURE": "0"},
+                    )
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(attempted.read_text().splitlines(), [
+                        "jarvis-watch://tasks", "jarvis-watch://log-lift",
+                    ])
+                    self.assertEqual((root / "watch-screenshots" / f"{failed_route}-delivery-status.txt").read_text().strip(), "115")
+                    other = "log-lift" if failed_route == "tasks" else "tasks"
+                    # A zero transport exit without real receipts/rendered content is not success.
+                    self.assertEqual((root / "watch-screenshots" / f"{other}-delivery-status.txt").read_text().strip(), "1")
+            attempted.unlink()
+            result = subprocess.run(
+                ["bash", "-c", prelude + delivery], capture_output=True, text=True,
+                env={**os.environ, "RUNNER_TEMP": directory, "WATCH_ID": "watch",
+                     "MOCK_FAILED_ROUTE": "tasks", "MOCK_LAUNCH_FAILURE": "1"},
+            )
+            self.assertEqual(result.returncode, 42)
+            self.assertFalse(attempted.exists(), "A failed app launch must stop that route before URL dispatch")
+            for route in ["tasks", "log-lift"]:
+                self.assertEqual((root / "watch-screenshots" / f"{route}-delivery-status.txt").read_text().strip(), "42")
+                archived = root / "watch-screenshots" / f"{route}-attempt-watch-capture.json"
+                self.assertEqual(json.loads(archived.read_text())["captureID"], "nonce")
+
     def test_fixture_destinations_are_initial_state_not_launch_time_push_and_sheet_chains(self):
         app = (ROOT / "apps/ios/Watch/JarvisWatchApp.swift").read_text()
         start = app.index("struct WatchRoot")
@@ -97,6 +204,19 @@ class WatchBuildTests(unittest.TestCase):
         self.assertIn('verify-watch-capture" "$ROUTE-deep-link"', delivery)
         self.assertIn('.captureID == $id and .pid == $pid and .url == $url', delivery)
 
+    def test_quick_lift_reduces_only_empty_input_space_not_text_or_save_target(self):
+        input_view = (ROOT / "apps/ios/Watch/WatchTextInput.swift").read_text()
+        lift = (ROOT / "apps/ios/Watch/WatchLiftCaptureView.swift").read_text()
+        controls = (ROOT / "apps/ios/Watch/WatchDesign.swift").read_text()
+        self.assertIn("var minimumMultilineHeight: CGFloat = 90", input_view)
+        self.assertIn("minHeight: multiline ? minimumMultilineHeight : 38", input_view)
+        self.assertIn(".lineLimit(multiline ? nil : 2)", input_view)
+        self.assertIn("alignment: .bottom, minimumMultilineHeight: 54", lift)
+        self.assertIn("ScrollView {", lift)
+        self.assertIn('WatchPrimaryAction(title: saveTitle)', lift)
+        self.assertIn("minHeight: 44", controls)
+        self.assertNotIn(".clipped()", lift)
+
     @unittest.skipUnless(shutil.which("swiftc"), "Swift compiler required for screenshot content matcher")
     def test_destination_content_rejects_startup_wrong_scene_and_wrapped_tabs(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -114,6 +234,8 @@ class WatchBuildTests(unittest.TestCase):
                 ("task-edit", "Edit task Title Call dentist", True),
                 ("project", "Fixture project No tasks", True),
                 ("tasks", "Today Upcoming Pay phone bill", True),
+                ("small-log-lift", "Log lift Lift details Bench press, 80 kg, 4 reps", False),
+                ("small-log-lift", "Log lift Lift details Bench press, 80 kg, 4 reps Save", True),
                 ("unknown-scene", "Jarvis", False),
             ]:
                 result = subprocess.run([verifier, "--recognized-text", name, text], capture_output=True)

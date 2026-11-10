@@ -1,3 +1,13 @@
+## Small-Watch Log lift fit (#1735; 10 November 2026)
+
+Exact-head native `small-log-lift-failed.png` shows the intended form with unused
+input space and Save clipped at the bottom. Reduce only Log lift's multiline
+minimum from 90 to 54 points; retain natural unlimited text growth, native
+editing/dictation, scrolling and the shared Save target. Other inputs keep their
+90-point default. Keep the Save OCR requirement; corrected-head fit and
+large-text reachability still require native inspection. The approved visual
+direction and 10/20/44-point composer removal control are unchanged.
+
 ## Composer photo removal correction (#1732; 10 November 2026)
 
 The shared `JarvisIconButton` compact treatment uses a 10-point X in a 20-point

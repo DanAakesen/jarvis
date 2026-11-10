@@ -1,3 +1,24 @@
+## 10 November 2026 — Diagnose Watch registration without waiving delivery (#1735)
+
+Preserve exact #1733 as a merge parent on current main. Artifact 13801702242
+proves generic LaunchServices lookup reports no registered scheme handler,
+despite matching built/installed plist declarations; it does not prove that
+watchOS cannot deliver custom URLs or that WidgetKit taps fail.
+
+Apple documents [`widgetURL`](https://developer.apple.com/documentation/swiftui/view/widgeturl(_:))
+as opening the containing app, with [delivery to `onOpenURL`](https://developer.apple.com/documentation/widgetkit/linking-to-specific-app-scenes-from-your-widget-or-live-activity).
+[`CFBundleURLTypes`](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundleurltypes)
+is available on watchOS. [Companion-dependent apps require the iPhone app](https://developer.apple.com/documentation/watchos-apps/creating-independent-watchos-apps).
+Correct the isolated CI setup to pair/install that existing companion, retaining
+real fail-closed URL checks and installation-time evidence. Whether this resolves
+registration is open pending native execution. Do not invent a routing handler,
+force registration mappings or change independence without evidence.
+
+The actual small-Watch image shows unused input space and clipped Save. Reduce
+only its minimum input height, not text, action geometry or acceptance anchors.
+Reference comparison, installed-widget taps, accessibility and device acceptance
+remain independent requirements; see the Watch implementation record.
+
 ## 10 November 2026 — Separate photo-remove chrome from its target (#1732)
 
 Continue exact #1731 `1bf93adb264cff0d95182b77c04cfb42b03b0d33` on the prepared

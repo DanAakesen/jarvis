@@ -1,3 +1,15 @@
+## Watch qualification setup (#1735; 10 November 2026)
+
+The Watch remains companion-dependent. Native CI now builds the existing phone
+bridge first, reuses an available Watch/iPhone pair or creates one with an
+unpaired phone, and installs the companion before the Watch. Pair metadata,
+installed-app registration and installation-window LaunchServices logs accompany
+the evidence. Each real URL attempt runs independently with its own status,
+failure image and available receipts archived before the next attempt; either
+failure fails the gate. Nonce/PID/URL/destination/OCR requirements are unchanged.
+This corrects incomplete test setup, not a proven error-115 repair. Production
+WidgetKit URLs, `onOpenURL`, credentials and companion independence are unchanged.
+
 ## Combined-release compatibility and qualification (#1730; 10 November 2026)
 
 The web vault-task decoder accepts the same 400-Unicode-code-point title bound as
