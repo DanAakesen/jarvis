@@ -552,12 +552,20 @@ async function runOperation(
       throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
     }
   }
+  // Only persisted messages from the same authenticated owner session can
+  // provide project context. Tool results and assistant text are not authority.
+  const recentOwnerMessages = source && request.server.conversationStore
+    ? (await request.server.conversationStore.getHistory({
+      sessionId: source.sessionId, before: source.id, limit: 20,
+    })).messages.filter((message) => message.role === 'dan' && message.sessionId === source.sessionId)
+      .map((message) => message.text)
+    : [];
   let selectedProject: Awaited<ReturnType<typeof resolveProjectForMessage>> | undefined;
   if (writes && selector !== undefined) {
-    selectedProject = await resolveProjectForMessage(selector, source?.text ?? '', request.server.projectStore ?? null);
+    selectedProject = await resolveProjectForMessage(selector, source?.text ?? '', request.server.projectStore ?? null, recentOwnerMessages);
   } else if (writes && typeof input.repository === 'string' && request.server.projectStore) {
     try {
-      selectedProject = await resolveProjectForMessage(input.repository, source?.text ?? '', request.server.projectStore);
+      selectedProject = await resolveProjectForMessage(input.repository, source?.text ?? '', request.server.projectStore, recentOwnerMessages);
     } catch (error) {
       if (!(error instanceof ProjectNotFound) || requiresProjectSelector(source?.text ?? '')) throw error;
     }
