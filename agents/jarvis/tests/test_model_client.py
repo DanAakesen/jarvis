@@ -229,7 +229,7 @@ def test_builtin_presence_behavior_is_salient_with_empty_or_custom_preferences(m
             assert "one very short sentence" in statement
             assert "never ask him to paste, type, copy, open or read anything" in statement
             assert "or look at a screen" in statement
-            assert "single-word confirmations" in statement
+            assert "without asking for another approval" in statement
             assert "say 'read it'" in statement
 
 
