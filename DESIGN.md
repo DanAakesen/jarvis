@@ -1,3 +1,7 @@
+## Approved Watch quick lift capture — 10 November 2026 (#1705)
+
+Use the three owner-approved generated references in `docs/ios/design/watch/log-lift/` at commit `009750f0932e6d49af370af73618160ed8ef6fae`. The circular shortcut vertically stacks a horizontally centred plus and dumbbell. Place Log lift below Gym/Run in the existing Workouts section without removing See more. Both shortcuts open Log lift: editable multiline text with a mic at its lower right, then full-width amber Save and dark Voice actions stacked vertically. Reuse shared Watch controls and native text input. Opening the complication does not start the microphone. Draft, missing-detail, pending, failure/uncertain and actual saved-value states must remain readable and accessible. Visual approval does not establish installed-complication, dictation or Ultra 2 device acceptance.
+
 ## Direct owner requests — 10 November 2026
 
 Task cancellation and recovery, routine/memory deletion, workspace removal, deployment removal and Watch lift deletion act from the selected control. Surface failures and retain busy-state protection. Legacy approval cards and composer buttons do not displace current chat or activity; real task alerts remain visible. Sign-out dialogs stay.

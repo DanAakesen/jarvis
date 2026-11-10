@@ -186,6 +186,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             guard try await health.capabilities().availableSources.contains(JarvisHealthSource.lifts.rawValue) else { throw WatchFailure.healthUnavailable }
             let result = try await health.query(.init(source: .lifts, limit: 30))
             return try encode(WatchHealthHistory.items(from: result))
+        case .captureLift:
+            guard let capture = r.liftCapture else { throw WatchFailure.invalidRequest }
+            return try encode(try await health.captureLift(capture))
         case .saveLift:
             guard let data = r.data, let value = try? JSONDecoder().decode(WatchLiftInput.self, from: data), value.isValid else { throw WatchFailure.invalidRequest }
             if let id = r.itemID {

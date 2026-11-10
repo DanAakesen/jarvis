@@ -14,7 +14,12 @@ struct JarvisWatchApp: App {
     }
 }
 
-enum WatchRoute: String, Hashable { case chat, menu, tasks, health, workouts, lifts, factory }
+enum WatchRoute: String, Hashable {
+    case chat, menu, tasks, health, workouts, lifts, factory, logLift
+    #if DEBUG
+    case logLiftComplication
+    #endif
+}
 struct WatchRoot: View {
     @EnvironmentObject private var model: WatchModel
     @EnvironmentObject private var connection: WatchConnection
@@ -38,6 +43,7 @@ struct WatchRoot: View {
                         path.append(.chat); pendingDictation = true
                     }
                     JarvisWatchAction(title: "Factory", kind: .factory) { path.append(.factory) }
+                    WatchLiftHomeSummary()
                     if !connection.reachable { Text("Open Jarvis on your iPhone to connect.").font(.caption).foregroundStyle(.secondary) }
                 }
             }.toolbar(.hidden, for: .navigationBar)
@@ -58,6 +64,16 @@ struct WatchRoot: View {
                 case .workouts: WatchHealthList(lifts: false)
                 case .lifts: WatchHealthList(lifts: true)
                 case .factory: WatchFactoryView()
+                case .logLift:
+                    WatchLiftCaptureView {
+                        path.append(.chat); Task { await model.startVoice() }
+                    }
+                #if DEBUG
+                case .logLiftComplication:
+                    WatchLogLiftComplicationView().frame(width: 52, height: 52)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .navigationTitle("Log lift")
+                #endif
                 }
             }
         }
@@ -70,6 +86,9 @@ struct WatchRoot: View {
             if ProcessInfo.processInfo.arguments.contains("--watch-screen=health") { path = [.health] }
             if ProcessInfo.processInfo.arguments.contains("--watch-screen=lifts") || ProcessInfo.processInfo.arguments.contains("--watch-screen=new-lift") { path = [.lifts] }
             if ProcessInfo.processInfo.arguments.contains("--watch-screen=new-task") || ProcessInfo.processInfo.arguments.contains("--watch-screen=project") { path = [.factory] }
+            if ProcessInfo.processInfo.arguments.contains("--watch-screen=log-lift") { path = [.logLift] }
+            if ProcessInfo.processInfo.arguments.contains("--watch-screen=log-lift-complication"),
+               ProcessInfo.processInfo.arguments.contains("--watch-fixture") { path = [.logLiftComplication] }
             #endif
         }
         .onOpenURL { url in
@@ -79,6 +98,7 @@ struct WatchRoot: View {
             case "voice": path = [.chat]; Task { await model.startVoice() }
             case "tasks": path = [.tasks]
             case "health": path = [.health]
+            case "log-lift": path = [.logLift]
             case "chat": path = [.chat]
             case "end-voice": Task { await model.endVoice() }
             default: path = [.menu]

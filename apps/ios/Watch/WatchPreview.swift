@@ -22,6 +22,9 @@ import JarvisCore
         case .factoryTasks: return try encoded(factoryTasks)
         case .lifts: return try encoded(lifts)
         case .workouts: return try encoded([[String: JSONValue]]())
+        case .captureLift:
+            guard let capture = request.liftCapture else { throw WatchFailure.invalidRequest }
+            return try encoded(WatchLiftCaptureFixture.result(for: capture))
         case .createFactoryTask:
             if let previous = created[request.id] { return previous }
             guard let value = request.factorySubmission else { throw WatchFailure.invalidRequest }

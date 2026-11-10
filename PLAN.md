@@ -1,3 +1,7 @@
+## Watch quick lift logging — 10 November 2026 (#1705)
+
+Implemented on this branch: additive shared capture/complication, owner-authenticated natural-language extraction into existing lift history, durable duplicate-safe retry, recorded-value voice receipts and explicit recovery for a confirmed deleted operation. Focused backend/Core checks pass; acceptance remains open. PR #1703 remains separate: integrate into its Workouts section and preserve its dashboard, task flows, Today/Upcoming semantics and existing complications. Primary owns integration/release; do not touch active Factory acceptance task #24. Native builds, simulator interactions/captures, installed Ultra 2 dictation/voice/complication and real history readback remain acceptance work until evidence is recorded in `docs/ios/design/watch/implementation.md`.
+
 ## Direct owner requests — 10 November 2026
 
 The approval-cleanup branch implements direct request handling and removes selected repeat prompts. Qualification and integration are in progress; see `docs/approval-cleanup-2026-11-10.md` for actual status. No production or device acceptance is implied by this entry.

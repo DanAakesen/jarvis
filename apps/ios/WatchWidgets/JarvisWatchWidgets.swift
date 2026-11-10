@@ -57,7 +57,16 @@ struct JarvisWatchVoiceWidget: Widget {
         }.configurationDisplayName("Voice Session").description("Start or resume a spoken conversation.").supportedFamilies([.accessoryCircular])
     }
 }
+struct JarvisWatchLogLiftWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "jarvis.watch.logLift", provider: WatchProvider()) { _ in
+            WatchLogLiftComplicationView()
+                .containerBackground(.black, for: .widget).widgetURL(URL(string: "jarvis-watch://log-lift"))
+        }.configurationDisplayName("Log lift").description("Type or dictate a lift, then save explicitly.")
+            .supportedFamilies([.accessoryCircular])
+    }
+}
 @main
 struct JarvisWatchWidgetBundle: WidgetBundle {
-    var body: some Widget { JarvisWatchHealthWidget(); JarvisWatchTasksWidget(); JarvisWatchDictateWidget(); JarvisWatchVoiceWidget() }
+    var body: some Widget { JarvisWatchHealthWidget(); JarvisWatchTasksWidget(); JarvisWatchDictateWidget(); JarvisWatchVoiceWidget(); JarvisWatchLogLiftWidget() }
 }

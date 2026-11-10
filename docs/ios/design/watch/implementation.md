@@ -1,3 +1,55 @@
+## Quick lift capture and integration handoff — 10 November 2026 (#1705)
+
+The approved generated references were retrieved from `009750f0932e6d49af370af73618160ed8ef6fae`; they are not screenshots of this implementation. Quick capture adds a shared `jarvis-watch://log-lift` destination, editable native text/dictation, explicit Save and the existing Voice experience. The backend extracts only one lift through the existing JSON model port and creates it through existing lift storage. Missing details do not write. The operation key persists before sending; an unknown outcome locks the submitted text for same-operation manual retry rather than offering an unsafe fresh save. A server-confirmed deleted operation is a terminal failure, not success or an unknown outcome: retain the original input and permit a fresh operation only through explicit Log another lift.
+
+### Coordination with #1703
+
+PR #1703 was inspected at `b9e5ee86a824092eccff594419271a31448af219`; it was not merged. Preserve its Today/Upcoming filtering, task submissions/store/migration, backend wiring, dashboard, full views and all existing widget kinds.
+
+A read-only `git merge-file -p` rehearsal against common base `3358ea6d0d64eff1b68e15103bd2172b37526ffb` found textual conflicts in `Watch/JarvisWatchApp.swift`, Core `Watch/WatchContract.swift`, `WatchWidgets/JarvisWatchWidgets.swift` and `.github/workflows/watch-build.yml`. The bridge, text input, preview and backend composition merged textually in that rehearsal; this does not establish semantic or native-build compatibility. Temporary merge outputs remained outside the repository; no branch merge was performed.
+
+- `Watch/JarvisWatchApp.swift`: combine the additive `logLift` route, destination and URL case with #1703's `TabView`, dashboard/action pages and all its routes. Do not replace its root with the pre-dashboard root.
+- `Watch/WatchLiftCaptureView.swift`: `WatchLiftHomeSummary` is only the minimal live-data Workouts section for this branch's pre-dashboard base. During integration, remove that fallback and insert **only** `WatchLogLiftShortcut()` immediately after `workouts(now: context.date)` inside #1703's existing `WatchDashboardSection(title: "Workouts", route: .workouts)` in `WatchDashboardViews.swift`. Keep See more and the existing Gym/Run summary; do not retain two summaries.
+- `WatchWidgets/JarvisWatchWidgets.swift`: retain #1703's provider/dashboard changes and widget bundle entries; append the new Log lift circular widget, preserving all stable existing kinds.
+- `Packages/JarvisCore/Sources/JarvisCore/Watch/WatchContract.swift` and `Jarvis/JarvisWatchBridge.swift`: union the new capture action/validation/handler with #1703's task/dashboard actions and handlers.
+- `Watch/WatchTextInput.swift`: preserve #1703's additions alongside the capture-specific multiline options. `WatchDesign.swift` owns shared Watch glyph/action changes.
+- `apps/backend/src/index.ts`: retain both #1703's task-capture composition and the lift-capture model injection. Neither replaces the other's backend.
+- `.github/workflows/watch-build.yml`: retain #1703's captures and these additional lift-state captures.
+
+Observed integration risk: #1703's native run [42836136120](https://github.com/DanAakesen/jarvis/actions/runs/42836136120), at the inspected head, failed paired-phone compilation in `WatchComplicationViews.swift:60:62` with “the compiler is unable to type-check this expression in reasonable time.” This is evidence for that separate revision, not a result for the combined code. Primary must qualify the integrated head. No active Factory task, including acceptance task #24, was started, changed or recovered here.
+
+### Apple sources reviewed
+
+Direct retrieval from `developer.apple.com` failed DNS resolution in this runner. The official pages' indexed API/HIG excerpts were read through the available web-search tool:
+
+- [WatchKit text input](https://developer.apple.com/documentation/watchkit/wkinterfacecontroller/presenttextinputcontroller(withsuggestions:allowedinputmode:completion:)): modal text gathering, accepted text in completion, called on the main thread. A mic action opens this system interface; the API does not guarantee dictation starts immediately.
+- [WidgetKit scene linking](https://developer.apple.com/documentation/widgetkit/linking-to-specific-app-scenes-from-your-widget-or-live-activity): `widgetURL` opens the matching scene through `onOpenURL`. The Log lift complication only navigates; it never starts recording directly.
+- [Accessory widgets and complications](https://developer.apple.com/documentation/widgetkit/creating-accessory-widgets-and-watch-complications) and [HIG Complications](https://developer.apple.com/design/human-interface-guidelines/complications): use the circular family and a compact, legible launcher. The approved static launcher intentionally serves quick entry rather than displaying fabricated live lift data.
+- [WCSession](https://developer.apple.com/documentation/watchconnectivity/wcsession): activate the session before messaging; `isReachable` represents availability for live messages. Preserve the existing phone-authenticated, no-offline-queue model.
+- [Recording permission](https://developer.apple.com/documentation/avfaudio/avaudioapplication/requestrecordpermission(completionhandler:)): explicit microphone permission and a usage description are required; denied access needs Settings recovery. Voice reuses the existing permission-aware audio engine.
+
+### Verification boundaries
+
+The existing workflow-impact check passed: `cd .github/scripts && PYTHONPATH=tests python -m unittest tests.test_pipeline.ImpactTests` (16 tests). The first invocation without the helper path failed import and is not counted as a pass.
+
+Backend agent verification (not repeated by the parent):
+
+- Final targeted command: `npm test --workspace @jarvis/backend -- src/health/lifts src/health/routes/lifts.test.ts src/health/tools/gym.test.ts src/health/composition.test.ts src/health/index.test.ts src/core/tool-calls.test.ts --maxWorkers=1` — **156 tests / 8 files passed**, including the final typed HTTP 410 / `lift_deleted` response.
+- `npm run build --workspace @jarvis/backend` and `npm run lint --workspace @jarvis/backend` — passed after that change.
+- Earlier broader command: `npm test --workspace @jarvis/backend -- src/health src/core/tool-calls.test.ts src/core/approval-interpreter-foundry.test.ts src/voice/realtime.test.ts src/voice/relay.test.ts --maxWorkers=1` — **1,532 tests / 70 files passed** before the surgical terminal-outcome change. The parallel invocation encountered two health-upload startup timing failures; the serial rerun passed unchanged.
+- Tests use injected model/store doubles and existing SQL-query mocks. No live Foundry parsing, real SQL transaction, spoken request or real history write/readback was performed. CodeQL and final Core/native results are recorded separately.
+
+Watch/Core agent final verification (not repeated by the parent):
+
+- `swift build --package-path apps/ios/Packages/JarvisCore -j 2` and `swift test --package-path apps/ios/Packages/JarvisCore -j 2` — build passed and **588 tests passed**. Local `TMPDIR` was redirected to ignored `.build` for this runner's filesystem restrictions; tests use Foundation's temporary-directory API.
+- `swiftc -frontend -parse`, with and without `-D DEBUG`, over Watch sources, the widget and iPhone bridge — passed. Parsing is not Apple-SDK type checking.
+- `swiftc -typecheck -D DEBUG -I apps/ios/Packages/JarvisCore/.build/x86_64-unknown-linux-gnu/debug/Modules apps/ios/Watch/WatchLiftCaptureFixture.swift` — passed for the isolated fixture, not SwiftUI.
+- Read-only review found and resolved the terminal-deletion lock; the final review reported no significant issues. Only verified HTTP 410 plus `code: "lift_deleted"` becomes the internal bridge `.deleted` result; other failures keep the exact request locked. Backend HTTP 200 remains saved/needsDetails only.
+
+This Linux runner has Swift but no Xcode, `xcrun`, Apple simulator or physical Watch. The existing native workflow now requests synthetic Log lift draft/saved/missing/uncertain/deleted and complication-preview captures, followed by a deep-link launch. The capture shell block also passed `bash -n`. A requested capture is not a successful capture; a fixture is not a real save or installed complication.
+
+Still required on the integrated native build: inspect actual captures and exercise Home/complication → capture, native typing/editing/dictation/cancellation, Save/clarification/error/reconnect/relaunch and existing See more/lift editing/chat navigation. On an installed Ultra 2, verify complication picker/launch, readability, Dynamic Type/VoiceOver, microphone denial/recovery, English/Danish voice with 3, 4 and other reps, one actual saved set with unchanged dumbbell weight, and the same record in real iPhone and Watch history. No physical-device, actual speech, installed-complication or live history-write verification is claimed. Primary owns merge, installation and release.
+
 ## Startup alert follow-up — 9 November 2026
 
 The owner reproduced the modal "iPhone unavailable. Reconnect and check history before sending again." on ordinary Watch launch, including launches unrelated to notifications. The root cause is the unconditional WatchModel disconnect alert combined with initial WCSession activation reporting not reachable.

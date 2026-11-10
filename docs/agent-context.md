@@ -1,3 +1,9 @@
+## Watch quick lift capture — 10 November 2026 (#1705)
+
+Quick capture uses the paired-phone `captureLift` action and owner-only `/health/lifts/capture`; no Watch credentials or offline sends. Input is bounded to 2,000 UTF-16 units with unsupported controls rejected before submission. Never rotate the persisted operation key after an uncertain result. Missing details permit editing the retained text under that key; only a confirmed terminal result permits explicitly starting another lift. Preserve both sides of PR #1703's shared Watch root/contract/bridge/widget changes and use its existing Workouts section rather than duplicate the dashboard. The implementation handoff in `docs/ios/design/watch/implementation.md` lists exact integration anchors, Apple sources, tests and remaining native/device checks. Primary owns integration/release; do not interact with active Factory acceptance task #24.
+
+The existing Watch CI capture step includes synthetic quick-lift states and a deep-link launch. Local Linux Swift tests/parsing do not compile SwiftUI against watchOS, install a complication or exercise speech. Treat native build/capture results and installed Ultra 2 acceptance separately.
+
 ## Direct owner requests — 10 November 2026
 
 For the approval cleanup, run backend, web, agent Python, iOS and Watch checks against the final combined head. Verify direct repository follow-ups, intent-based sensitive saves, food writes, task recovery and legacy pending activity, including real-device acceptance after release. See `docs/approval-cleanup-2026-11-10.md`; current branch results are not deployment evidence.

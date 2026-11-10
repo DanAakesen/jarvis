@@ -24,7 +24,7 @@ public enum WatchCodec {
 
 /// Paired-device protocol. No credentials, arbitrary URLs or backend paths cross this boundary.
 public enum WatchAction: String, Codable, Sendable {
-    case snapshot, history, sendTurn, tasks, workouts, lifts, saveLift, deleteLift
+    case snapshot, history, sendTurn, tasks, workouts, lifts, saveLift, deleteLift, captureLift
     case projects, factoryTasks, createFactoryTask, startVoice, voiceHeartbeat, audio, muteVoice, playbackCompleted, endVoice
 }
 
@@ -42,7 +42,8 @@ public struct WatchRequest: Codable, Equatable, Sendable {
     public var isValid: Bool {
         version == 1 && (text?.utf8.count ?? 0) <= 8_000 && (itemID?.utf8.count ?? 0) <= 200 &&
         (data?.count ?? 0) <= WatchLimits.payloadBytes && (action != .sendTurn || !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) &&
-            (action != .createFactoryTask || factorySubmission != nil)
+            (action != .createFactoryTask || factorySubmission != nil) &&
+            (action != .captureLift || liftCapture != nil)
     }
 }
 

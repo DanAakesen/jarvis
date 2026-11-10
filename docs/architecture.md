@@ -1,3 +1,9 @@
+## Watch quick lift capture — 10 November 2026 (#1705)
+
+Quick logging follows Watch → allow-listed WatchConnectivity request → authenticated iPhone JarvisClient → owner-only `POST /health/lifts/capture`. Text extraction reuses the configured Foundry JSON model port without giving it mutation tools. The server validates extracted exercise/weight/reps, defaults unspecified sets to one, and writes through the existing owner-scoped LiftEntriesStore/Gym log path. Durable idempotency lookup precedes extraction, so uncertain retries return the original persisted result rather than reinterpreting or overwriting it. Clarifications do not write. The Watch preserves its draft and operation identity; Voice remains the existing WatchModel/paired-phone voice session with the existing gym tool. No new credentials, storage table, workout-session service or offline queue.
+
+PR #1703 independently extends the same Watch root, bridge, contract and widget bundle. Integration must preserve its additions and insert the quick-lift shortcut inside its existing Workouts section rather than retain two Home summaries. See `docs/ios/design/watch/implementation.md` for integration and verification evidence.
+
 ## Direct owner requests — 10 November 2026
 
 Owner tool operations execute a resolved request under the existing authenticated route and resource authorization. Same-session owner messages may resolve a recent project for a follow-up; external content is never authority. Resource revisions, secret checks and duplicate/uncertain-write recovery remain separate from interactive approval. Legacy confirmation endpoints remain for compatibility but are not advertised to normal chat or voice.

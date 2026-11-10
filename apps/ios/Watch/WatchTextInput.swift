@@ -5,16 +5,18 @@ import WatchKit
 struct WatchTextInput: View {
     var title: String
     @Binding var text: String
+    var multiline = false
+    var alignment: VerticalAlignment = .center
     @State private var editing = false
     @State private var failure: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
+            HStack(alignment: alignment, spacing: 6) {
                 Button { editing = true } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         if !text.isEmpty { Text(title).font(.caption).foregroundStyle(.secondary) }
-                        Text(text.isEmpty ? title : text).font(.body).lineLimit(2)
-                            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+                        Text(text.isEmpty ? title : text).font(.body).lineLimit(multiline ? nil : 2)
+                            .frame(maxWidth: .infinity, minHeight: multiline ? 90 : 38, alignment: .topLeading)
                     }.contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityLabel(title)
                     .accessibilityValue(text.isEmpty ? "Empty" : text)
@@ -22,20 +24,23 @@ struct WatchTextInput: View {
             }
             if let failure { Text(failure).font(.caption).foregroundStyle(.secondary) }
         }
-        .sheet(isPresented: $editing) { NavigationStack { WatchTextEditor(title: title, text: $text) } }
+        .sheet(isPresented: $editing) { NavigationStack { WatchTextEditor(title: title, text: $text, multiline: multiline) } }
     }
 }
 
 struct WatchTextEditor: View {
     var title: String
     @Binding var text: String
+    var multiline = false
     @Environment(\.dismiss) private var dismiss
     @State private var failure: String?
     @FocusState private var focused: Bool
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 6) {
-                TextField(title, text: $text).font(.body).focused($focused).accessibilityLabel(title)
+                TextField(title, text: $text, axis: multiline ? .vertical : .horizontal)
+                    .lineLimit(multiline ? 3...8 : 1...1)
+                    .font(.body).focused($focused).accessibilityLabel(title)
                 WatchDictateButton(title: title, text: $text, failure: $failure)
             }
             if let failure { Text(failure).font(.caption) }

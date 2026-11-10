@@ -1051,6 +1051,22 @@ try {
       enabled: config.healthEnabled === true,
       pool: database?.pool,
       ownerObjectId: config.auth.ownerObjectId,
+      ...(approvalEndpoint && credential && settingsStore && usageStore?.recordFoundryUsage ? {
+        liftCaptureModel: createFoundryJsonCompletion({
+          endpoint: approvalEndpoint, scope: FOUNDRY_SCOPE,
+          getToken: async (scope, signal) => {
+            const token = await credential.getToken(scope, { abortSignal: signal });
+            if (!token) throw new Error('Lift capture model unavailable');
+            return token.token;
+          },
+          selectModel: async () => {
+            const catalogue = await modelCatalogue.read();
+            const selected = chooseApprovalModel(catalogue, (await readSettings(settingsStore, catalogue)).roles.chat.model);
+            return selected ? { ...selected, maxCompletionTokens: Math.max(selected.maxCompletionTokens, 512) } : undefined;
+          },
+          recordUsage: usage => usageStore.recordFoundryUsage!(usage),
+        }),
+      } : {}),
       ...(vaultClient ? { gymVault: { vault: vaultClient, logger } } : {}),
     }),
     proactive: proactiveToolsModule,
