@@ -1,3 +1,21 @@
+## Explicit timed reminders — 10 November 2026 (#1706)
+
+Owner reminder schedules and current vault `remindAtDue` tasks bypass Copenhagen
+quiet hours. Automatic deadlines and suggestions keep the quiet window. No
+migration, production configuration, live reminder replay or device send is part
+of this change. Existing pending rows are re-verified; terminal rows stay terminal.
+The vault store uses an expected-fire-time compare-and-set delivery lease before
+provider calls, using existing columns. Owner schedules retain their own leases.
+
+Focused checks: `npm test --workspace @jarvis/backend -- src/proactive src/push
+src/vault/task-writes.test.ts`, backend build and lint. Backend build and lint passed. The full suite is being rerun with loopback
+socket access after a sandbox `listen EPERM: 127.0.0.1` failure. The end-to-end `timed-reminder-delivery.test.ts` uses synthetic
+owner requests/vaults, real scheduling/ticker/shared delivery and mocked APNs/Web
+Push transports. This establishes provider-acceptance handling, not device display.
+SQL regression: `npm run test:database --workspace @jarvis/backend --
+src/database/proactive-reminder-store.integration.test.ts`. Local invocation stops
+at the isolation guard because no loopback SQL Server is configured; run in CI.
+
 ## Direct owner requests — 10 November 2026
 
 For the approval cleanup, run backend, web, agent Python, iOS and Watch checks against the final combined head. Verify direct repository follow-ups, intent-based sensitive saves, food writes, task recovery and legacy pending activity, including real-device acceptance after release. See `docs/approval-cleanup-2026-11-10.md`; current branch results are not deployment evidence.
@@ -1735,7 +1753,8 @@ the top of this file) sets the alert flag in production. The
 planner runs for every trigger after the successful todo read. The ticker is
 constructed only when its vault, reminder store, alert ledger, push store and
 shared sender dependencies are available. It has no database, vault or push
-work while idle or during Copenhagen quiet hours. P13-21 reminder details come
+work while idle. During Copenhagen quiet hours it processes verified explicit
+reminders only (#1706); automatic reminders wait for daytime. P13-21 reminder details come
 from rows already in memory; alert details use read-only item lookups without
 marking items loaded or seen, and failed/missing detail reads still send the
 count headline. Details go only into the encrypted push payload, never logs or

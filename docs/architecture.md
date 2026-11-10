@@ -3908,7 +3908,12 @@ before the title, keeping the time visible when long titles are truncated.
 Sanitization strips controls, collapses whitespace and truncates on
 code-point boundaries with an ellipsis. Alert pushes use one-hour TTL/high urgency; reminders use 30-minute
 TTL/high urgency; user tests retain the original five-minute/normal headers.
-System sends are rejected inside quiet hours at the sender boundary. The worker
+System sends are rejected inside quiet hours at the sender boundary except for
+individual `owner_reminder` requests carrying the server-verified `ownerRequested`
+marker, reminder origin and count one. Owner schedules and current `remindAtDue`
+tasks are the only producers of that exception; kind, source run ID, null alert
+key or a due time alone cannot grant it. Native and web delivery share this gate.
+The worker
 validates and clamps v2 title/body text; legacy payloads use fixed count
 headlines with empty bodies. Unknown or malformed payloads show `New item`.
 Todo/finding details go only into the encrypted payload, never logs, metrics,
@@ -3930,14 +3935,16 @@ The verified GitHub webhook mapping for a push to the vault repository's
 configured default branch also starts a separate todos-only pass through the
 existing `createTodosSource`. The webhook and notes-index refresh share one
 default-branch push predicate; the webhook does not wait for reminder planning.
-This pass checks pause, the todos source setting and Copenhagen quiet hours
-before reading the vault. It runs the same reminder planning core with
+This pass checks pause and the todos source setting before reading the vault.
+During Copenhagen quiet hours the shared planner selects only `remindAtDue`
+facts, retaining automatic deadlines for daytime planning. It runs the same
+reminder planning core with
 `planned_run_id = null` and no run, findings, model, alert, todo write or
 Background work entry. Overlapping and rapid pushes collapse to one trailing
 pass, starts stay at least 60 seconds apart, and shutdown or the 60-second
 deadline aborts active work. A newly inserted earliest fire time wakes the
 existing ticker. Scheduled planning remains idempotent through the reminder
-key, and pushes during quiet hours are not queued.
+key; an explicit reminder created during quiet hours does not wait for a morning check.
 
 The owner-scoped `proactive_reminders` table is added by migration 0059, with a
 unique owner/key index and pending-fire and sent-day indexes. Planning inserts
@@ -3945,10 +3952,23 @@ and retention cleanup share one owner-locked transaction; SQL read paths use
 `databaseReadRequest`. The in-memory store follows the same caps and terminal
 state behavior for tests.
 
+Before a vault provider send, `updatePending` compares the expected fire time
+and moves it two minutes forward as an atomic delivery claim. Competing tickers
+cannot claim that same version; completion/retry updates compare the lease time
+to fence stale workers. This uses existing columns and needs no migration.
+Terminal rows are not reopened; no historical schedules are rewritten or replayed.
+As with existing owner schedule leases, provider acceptance followed by a process
+crash before durable completion remains an uncertain outcome, not an exactly-once
+provider guarantee.
+
 The self-rescheduling, unreferenced ticker reads the earliest pending time once
-at startup. Future or absent work and the Copenhagen quiet window are pure
-in-memory checks; after a due scan it refreshes the wake time once. Errors back
-off five minutes. For due rows it expires late work, applies pause and
+at startup. Future or absent work stays in memory; after a due scan it refreshes
+the wake time once. Owner schedules are claimed during quiet hours. For vault
+reminders, the night scan reads up to the queue cap of 100 rows so earlier
+automatic deadlines cannot hide explicit work. It re-verifies `remindAtDue` from
+the current task and its marker-specific reminder key before admitting a night
+send. Explicit rows are individual sends, separate from automatic batches.
+Errors back off five minutes. For due rows it expires late work, applies pause and
 subscription suppression, then verifies the wider task set through shared
 SHA-cached discovery with a 20-second bound. Moving a task between notes or
 duplicating it with the same normalized text and due instant does not change its
@@ -8515,7 +8535,9 @@ Proactive item delivery record. The schedule distinguishes scheduled,
 suppressed, provider-accepted and failed outcomes; no device acknowledgement is
 inferred. A task's automatic due reminder is suppressed only when it matches the
 explicit task identity and falls within five minutes of that explicit
-occurrence. Quiet-hour requests are refused rather than silently shifted.
+occurrence. Quiet-hour requests are accepted at their specified future instant;
+the ticker never moves them to 07:00. Recurrence retains Copenhagen calendar
+time, including DST offset changes and the existing nonexistent-time skip rule.
 
 The SQL store serializes creation per owner, deduplicates by source message,
 limits active schedules, and atomically claims due rows; expired leases permit

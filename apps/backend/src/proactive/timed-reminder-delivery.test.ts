@@ -30,7 +30,7 @@ describe.each(['owner_schedule', 'vault_at_due'] as const)('%s scheduling to pro
       '2027-03-28T01:30:00Z', // 03:30 after spring transition
     // Vault tasks store local HH:mm without an offset; the existing resolver uses
     // the second autumn 02:30. Offset-qualified owner schedules cover both instants.
-    ].filter((instant) => path === 'owner_schedule' || instant !== '2026-10-25T00:30:00Z'))('plans inside quiet hours and delivers once at %s', async (instant) => {
+    ].filter((instant) => path === 'owner_schedule' || instant !== '2026-10-25T00:30:00Z'))('plans before the deadline and delivers once at %s', async (instant) => {
       const fireAt = new Date(instant);
       let now = new Date(fireAt.getTime() - 60_000);
       const clock = () => new Date(now);
