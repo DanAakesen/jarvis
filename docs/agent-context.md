@@ -3,13 +3,19 @@
 Local checks passed: `swift test -j 2` in `apps/ios/Packages/JarvisCore` (574 tests);
 `npm test -- src/ConversationHistory.test.tsx src/RuntimeTestConversation.test.tsx`
 in `apps/web` (138 tests); scoped ESLint, TypeScript and changed Swift syntax
-parsing. Linux cannot compile SwiftUI/UIKit or run the iPhone simulator.
+parsing. All 25 existing iOS pipeline source-contract checks also pass with
+`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -p test_pipeline.py -k ios`.
+Linux cannot compile SwiftUI/UIKit or run the iPhone simulator. Secret scanning
+passed. CodeQL could not create the Swift database and skipped JavaScript because
+its database was too large; this is not a successful security analysis.
 
 `ChatComposerUITests` (already selected by the simulator workflow) adds held-open
 tool-only SSE updates, grouped disclosures/failures, dock-edge geometry, wrapped
 draft changes, history reading/resume and native selection checks. Launch with
 `--screenshot-chat-fixture --ui-test-chat-feedback --ui-test-chat-follow`; add
-`--ui-test-chat-follow-now` for a visible synthetic Now item. Darwin notifications
+`--ui-test-chat-follow-now` for a visible synthetic Now item and
+`--ui-test-chat-follow-reduced-motion` to inject the native Reduce Motion
+environment in the simulator-only feedback fixture. Darwin notifications
 `com.jarvis.uitests.{tools,fail-tool,progress,stream,finish}-chat-feedback` advance it
 without live services or timers. Captures are retained as XCTest attachments;
 none have been produced or inspected here. Actual Now transitions, simulator

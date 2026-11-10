@@ -37,7 +37,7 @@ private struct RenderedChatRow: Identifiable {
 
 
 struct JarvisChatScreen: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
@@ -73,6 +73,11 @@ struct JarvisChatScreen: View {
     @State private var expandedTools = Set<String>()
     @State private var selectedTimestampID: String?
     @State private var liveToolsExpanded = true
+
+    private var reduceMotion: Bool {
+        systemReduceMotion || (JarvisChatFeedbackFixtureTransport.isEnabled &&
+            ProcessInfo.processInfo.arguments.contains("--ui-test-chat-follow-reduced-motion"))
+    }
 
     init(
         client: JarvisClient?,
@@ -263,6 +268,7 @@ struct JarvisChatScreen: View {
 
     var body: some View {
         attachmentPickers
+        .environment(\.accessibilityReduceMotion, reduceMotion)
         .jarvisAmbientBackground(transparentNavigationBar: true)
         .onAppear(perform: refreshScreenSharing)
         .onChange(of: liveSource) { _, _ in updateLiveStream() }

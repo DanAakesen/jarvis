@@ -16,6 +16,7 @@ extension EnvironmentValues {
 struct JarvisChatFollowLatest: ViewModifier {
     let proxy: ScrollViewProxy
     let bottomID: String
+    var isEnabled = true
     @Environment(\.scenePhase) private var scenePhase
     @State private var follow = ChatFollowState()
     @State private var revision = 0
@@ -48,7 +49,7 @@ struct JarvisChatFollowLatest: ViewModifier {
                 follow.selectionChanged(messageID: id, isSelected: selected)
                 revision += 1
             }
-            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .defaultScrollAnchor(isEnabled ? .bottom : nil, for: .initialOffset)
             .onScrollGeometryChange(for: Metrics.self) { Metrics($0) } action: { old, new in
                 if !old.hasSameLayout(as: new), follow.shouldFollow { revision += 1 }
             }
@@ -56,6 +57,7 @@ struct JarvisChatFollowLatest: ViewModifier {
                 switch new {
                 case .tracking, .interacting, .decelerating:
                     follow.interactionBegan()
+                    revision += 1
                 case .idle:
                     if old != .animating {
                         follow.interactionEnded(distanceFromBottom: old == .tracking ? nil :
@@ -65,12 +67,18 @@ struct JarvisChatFollowLatest: ViewModifier {
                 default: break
                 }
             }
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active { revision += 1 }
+            .onChange(of: scenePhase) { _, _ in
+                revision += 1
+            }
+            .onChange(of: isEnabled) { _, enabled in
+                if enabled {
+                    follow = ChatFollowState()
+                    revision += 1
+                }
             }
             .task(id: revision) {
                 await Task.yield()
-                guard !Task.isCancelled, follow.shouldFollow, scenePhase == .active else { return }
+                guard !Task.isCancelled, isEnabled, follow.shouldFollow, scenePhase == .active else { return }
                 // Continuous activity follows without animation, including Reduce Motion.
                 var transaction = Transaction(animation: nil)
                 transaction.disablesAnimations = true

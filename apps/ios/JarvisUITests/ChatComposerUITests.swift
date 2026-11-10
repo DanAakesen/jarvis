@@ -13,9 +13,14 @@ final class ChatComposerUITests: XCTestCase {
             let input = app.textViews["chat.input"]
             XCTAssertTrue(input.waitForExistence(timeout: 10))
             input.tap()
-            input.typeText("Run the synthetic tool checks")
+            input.typeText("?")
             app.buttons["chat.send"].tap()
             XCTAssertTrue(app.buttons["chat.turn.status"].waitForExistence(timeout: 5))
+            let shortBubble = app.descendants(matching: .any).matching(NSPredicate(
+                format: "identifier == %@ AND label == %@", "chat.message.user", "You: ?"
+            )).firstMatch
+            XCTAssertTrue(shortBubble.exists)
+            XCTAssertLessThan(shortBubble.frame.width, 120, "Native selection must retain content-fit user bubbles")
             XCTAssertEqual(app.buttons["chat.now"].exists, showsNow)
 
             signalFollowFixture("tools")
@@ -56,9 +61,8 @@ final class ChatComposerUITests: XCTestCase {
 
     func testToolUpdatesDoNotPullHistoryReaderAndResumeAtBottom() {
         let app = followApp(showsNow: true)
-        // Foundation launch overrides are also used by the existing accessibility captures.
-        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM",
-                                "-UIAccessibilityReduceMotionEnabled", "YES"]
+        app.launchArguments += ["--ui-test-chat-follow-reduced-motion",
+                                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
         app.launch()
         defer { app.terminate() }
         let input = app.textViews["chat.input"]

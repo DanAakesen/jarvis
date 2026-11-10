@@ -271,7 +271,8 @@ struct JarvisRuntimeTestSheet: View {
                 .safeAreaInset(edge: .bottom) {
                     if model.session != nil { composer }
                 }
-                .modifier(JarvisChatFollowLatest(proxy: proxy, bottomID: "runtimeTest.bottom"))
+                .modifier(JarvisChatFollowLatest(proxy: proxy, bottomID: "runtimeTest.bottom",
+                                                isEnabled: model.session != nil))
             }
             .navigationTitle(model.session?.runtimeTest.map { "\(label($0)) · \(copy(.runtimeTitle))" } ?? copy(.runtimeTest))
             .navigationBarTitleDisplayMode(.inline)
@@ -334,7 +335,8 @@ struct JarvisRuntimeTestSheet: View {
                         .font(.caption2).foregroundStyle(.secondary)
                         .accessibilityIdentifier("runtimeTest.timestamp.\(message.id)")
                 }
-                JarvisSelectableReply(text: message.text, identifier: "runtimeTest.reply.\(message.id)") {
+                JarvisSelectableReply(text: message.text, identifier: "runtimeTest.reply.\(message.id)",
+                                      rendersMarkdown: message.role == .jarvis) {
                     selectedTimestampID = selectedTimestampID == message.id ? nil : message.id
                 }
                 .accessibilityAction(named: copy(.turnShowTime)) {
