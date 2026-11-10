@@ -564,7 +564,7 @@ async function runOperation(
       });
       const recentOwnerMessages = page.messages
         .filter((message) => message.role === 'dan' && message.sessionId === source.sessionId)
-        .map((message) => message.text);
+        .reverse().map((message) => message.text);
       return resolveProjectForMessage(
         project, source.text, request.server.projectStore ?? null, recentOwnerMessages,
       );
