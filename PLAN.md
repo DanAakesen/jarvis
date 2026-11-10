@@ -4286,13 +4286,17 @@ fixture sheet's light/dark capture hook. Next: existing Mac compile and simulato
 review. Before/after screenshots remain pending: #1448's light Chat image is
 gate-obscured and its artifact contains no open-sheet baseline.
 
-P15-26 / [#1450](https://github.com/DanAakesen/jarvis/issues/1450) retains the
-working automatic signing and existing secrets; the rejected manual P12/profile
-approach is removed. An always-run main-only API cleanup revokes only visible
-Apple/iOS development certificates, never distribution certificates. Focused
-offline tests pass. Next: verify the existing key's certificate API permissions
-and live cleanup on an owner-started run. Draft status was requested until then;
-the available browser is signed out, so owner draft conversion remains pending.
+P15-26 / [#1450](https://github.com/DanAakesen/jarvis/issues/1450) is superseded
+by [#1724](https://github.com/DanAakesen/jarvis/issues/1724): signing now creates
+one run-owned development identity with the existing API key, uses it for the
+paired iPhone/Watch archive, and cleans up only development certificates whose
+public key matches that run's key. Automatic provisioning/distribution export
+remain; no new secrets. Unrelated development and all distribution certificates
+are preserved. Quota exhaustion fails for administrator ownership review.
+14 signing tests and 78 pipeline tests pass offline. Next: review PR #1725,
+then owner-started Mac signing/upload verification; no release dispatched here.
+Hard termination/cleanup failure can strand quota without cross-run ownership
+proof. Ongoing feature integration PRs are untouched.
 
 ## Factory canonical-status parity (16 October 2026)
 

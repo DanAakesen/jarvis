@@ -9,6 +9,7 @@ require 'uri'
 class TestFlightCertificateCleanup
   API = 'https://api.appstoreconnect.apple.com'
   DEVELOPMENT_TYPES = %w[DEVELOPMENT IOS_DEVELOPMENT].freeze
+  class CertificateCreationFailed < StandardError; end
 
   def initialize(key, key_id, issuer_id)
     raise 'Missing API credentials' if [key, key_id, issuer_id].any? { |value| value.nil? || value.empty? }
@@ -31,7 +32,40 @@ class TestFlightCertificateCleanup
     @token = "#{message}.#{encode.call(signature)}"
   end
 
-  def run
+  def prepare(directory)
+    Dir.mkdir(directory, 0o700)
+    key = OpenSSL::PKey::RSA.new(2048)
+    # Persist ownership proof before the non-idempotent request, including a lost response.
+    File.write(File.join(directory, 'private-key.pem'), key.to_pem, mode: 'wx', perm: 0o600)
+    csr = OpenSSL::X509::Request.new
+    csr.version = 0
+    csr.subject = OpenSSL::X509::Name.parse('/CN=Jarvis TestFlight automation')
+    csr.public_key = key.public_key
+    csr.sign(key, OpenSSL::Digest::SHA256.new)
+    body = JSON.generate(data: { type: 'certificates',
+                                attributes: { certificateType: 'DEVELOPMENT', csrContent: csr.to_pem } })
+    record = JSON.parse(request('POST', URI("#{API}/v1/certificates"), body)).fetch('data')
+    certificate = owned_certificate(record, key)
+    raise 'Created certificate did not match signing key' unless certificate
+
+    password = OpenSSL::Random.random_bytes(32).unpack1('H*')
+    p12 = OpenSSL::PKCS12.create(password, 'Jarvis TestFlight', key, certificate)
+    { 'identity.p12' => p12.to_der, 'password' => password,
+      'identity' => OpenSSL::Digest::SHA1.hexdigest(certificate.to_der).upcase }.each do |name, value|
+      File.binwrite(File.join(directory, name), value, mode: 'wx', perm: 0o600)
+    end
+    puts 'Run-owned development signing identity prepared.'
+  end
+
+  def owned_certificate(record, key)
+    attributes = record.fetch('attributes')
+    return nil unless DEVELOPMENT_TYPES.include?(attributes.fetch('certificateType'))
+
+    certificate = OpenSSL::X509::Certificate.new(Base64.strict_decode64(attributes.fetch('certificateContent')))
+    certificate if certificate.public_key.to_der == key.public_key.to_der
+  end
+
+  def run(key)
     certificates = {}
     seen = Set.new
     url = "#{API}/v1/certificates?limit=200"
@@ -55,36 +89,41 @@ class TestFlightCertificateCleanup
                attributes.is_a?(Hash) && attributes['certificateType'].is_a?(String)
           raise 'Invalid certificate record'
         end
-        certificate_type = attributes['certificateType']
-        if certificates.key?(id) && certificates[id] != certificate_type
-          raise 'Inconsistent certificate type'
+        if certificates.key?(id) && certificates[id] != certificate
+          raise 'Inconsistent certificate record'
         end
-        certificates[id] = certificate_type
+        certificates[id] = certificate
       end
       raise 'Too many certificates' if certificates.size > 2000
 
       url = page.fetch('links', {})['next']
       raise 'Invalid next page' unless url.nil? || url.is_a?(String)
     end
-    certificates.each do |id, type|
-      next unless DEVELOPMENT_TYPES.include?(type)
-
+    owned = certificates.select { |_id, record| owned_certificate(record, key) }
+    owned.each_key do |id|
       request('DELETE', URI("#{API}/v1/certificates/#{id}"))
     end
-    puts 'Development certificate cleanup completed; distribution certificates preserved.'
+    puts 'Run-owned certificate cleanup completed; unrelated and distribution certificates preserved.'
   end
 
-  def request(method, uri)
+  def request(method, uri, body = nil)
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = true
     http.open_timeout = 10
     http.read_timeout = 30
-    request = method == 'DELETE' ? Net::HTTP::Delete.new(uri) : Net::HTTP::Get.new(uri)
+    request = { 'DELETE' => Net::HTTP::Delete, 'GET' => Net::HTTP::Get,
+                'POST' => Net::HTTP::Post }.fetch(method).new(uri)
     request['Authorization'] = ['Bearer', @token].join(' ')
     request['Accept'] = 'application/json'
+    if body
+      request['Content-Type'] = 'application/json'
+      request.body = body
+    end
     body = +''
     http.request(request) do |response|
-      expected = method == 'DELETE' ? '204' : '200'
+      expected = { 'DELETE' => '204', 'GET' => '200', 'POST' => '201' }.fetch(method)
+      raise CertificateCreationFailed if method == 'POST' && response.code != expected
+
       raise 'App Store Connect request failed' unless response.code == expected
 
       response.read_body do |chunk|
@@ -99,13 +138,32 @@ end
 if $PROGRAM_NAME == __FILE__
   begin
     Timeout.timeout(240) do
-      TestFlightCertificateCleanup.new(
+      mode, directory = ARGV
+      raise 'Invalid operation' unless %w[prepare cleanup].include?(mode) && directory
+
+      key_path = File.join(directory, 'private-key.pem')
+      if mode == 'cleanup' && !File.exist?(key_path)
+        puts 'No run-owned signing key; certificate cleanup skipped.'
+        exit 0
+      end
+      client = TestFlightCertificateCleanup.new(
         ENV['APP_STORE_CONNECT_KEY_P8'], ENV['APP_STORE_CONNECT_KEY_ID'],
         ENV['APP_STORE_CONNECT_ISSUER_ID']
-      ).run
+      )
+      if mode == 'prepare'
+        client.prepare(directory)
+      else
+        key = OpenSSL::PKey.read(File.read(key_path))
+        raise 'Invalid signing key' unless key.is_a?(OpenSSL::PKey::RSA) && key.private?
+
+        client.run(key)
+      end
     end
+  rescue TestFlightCertificateCleanup::CertificateCreationFailed
+    warn '::error::Signing certificate creation rejected. Check certificate quota and API permissions. An account administrator must verify ownership before freeing quota; no unrelated certificates were revoked. No automatic creation retry.'
+    exit 1
   rescue StandardError
-    warn '::error::Development certificate cleanup failed. Check App Store Connect certificate permissions/connectivity; no identifiers or API diagnostics are logged.'
+    warn '::error::TestFlight signing preparation or certificate cleanup failed. Check API permissions/connectivity. Cleanup may be incomplete and an administrator may need to verify orphan ownership. No identifiers or API diagnostics are logged.'
     exit 1
   end
 end

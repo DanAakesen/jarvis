@@ -88,13 +88,30 @@ jobs:
           umask 077
           printf '%s' "$APP_STORE_CONNECT_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
           chmod 600 "$RUNNER_TEMP/AuthKey.p8"
-      - name: Revoke stale development certificates before archive
+      - name: Prepare run-owned development signing
         timeout-minutes: 5
         env:
           APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: ruby .github/scripts/testflight_certificate_cleanup.rb
+        run: |
+          umask 077
+          ruby .github/scripts/testflight_certificate_cleanup.rb prepare "$RUNNER_TEMP/testflight-signing"
+          if ! (
+            KEYCHAIN="$RUNNER_TEMP/testflight-signing/signing.keychain-db"
+            signing_passphrase="$(cat "$RUNNER_TEMP/testflight-signing/password")" &&
+            security create-keychain -p "$signing_passphrase" "$KEYCHAIN" &&
+            security set-keychain-settings -lut 21600 "$KEYCHAIN" &&
+            security unlock-keychain -p "$signing_passphrase" "$KEYCHAIN" &&
+            security import "$RUNNER_TEMP/testflight-signing/identity.p12" \
+              -k "$KEYCHAIN" -P "$signing_passphrase" -T /usr/bin/codesign -T /usr/bin/security &&
+            security set-key-partition-list -S apple-tool:,apple:,codesign: \
+              -s -k "$signing_passphrase" "$KEYCHAIN" &&
+            security list-keychains -d user -s "$KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
+          ) > "$RUNNER_TEMP/signing.log" 2>&1; then
+            echo "::error::Temporary signing keychain setup failed; private diagnostics withheld."
+            exit 1
+          fi
       - name: Archive with automatic signing
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
@@ -105,6 +122,7 @@ jobs:
           JARVIS_ENTRA_AUTHORITY_URL: ${{ secrets.JARVIS_ENTRA_AUTHORITY_URL }}
           JARVIS_ENTRA_API_SCOPE: ${{ secrets.JARVIS_ENTRA_API_SCOPE }}
         run: |
+          umask 077
           if ! xcodebuild \
             -project apps/ios/Jarvis.xcodeproj \
             -scheme Jarvis \
@@ -115,6 +133,7 @@ jobs:
             -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
             CODE_SIGN_STYLE=Automatic \
+            CODE_SIGN_IDENTITY="$(cat "$RUNNER_TEMP/testflight-signing/identity")" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             JARVIS_API_BASE_URL="$JARVIS_API_BASE_URL" \
@@ -122,26 +141,7 @@ jobs:
             JARVIS_ENTRA_AUTHORITY_URL="$JARVIS_ENTRA_AUTHORITY_URL" \
             JARVIS_ENTRA_API_SCOPE="$JARVIS_ENTRA_API_SCOPE" \
             archive > "$RUNNER_TEMP/archive.log" 2>&1; then
-            echo "::error::Archive failed. A sanitised excerpt of the log follows; identifiers are masked."
-            ERRS=$(grep -E ' error: ' "$RUNNER_TEMP/archive.log" | sed -E -e "s|${RUNNER_TEMP}[^[:space:]]*|<runner-temp>|g" -e 's|/Users/runner/work/jarvis/jarvis/||g' -e 's/%/%25/g' | awk '!seen[$0]++' | head -n 15 | paste -sd '#' -); echo "::error::COMPILE ERRORS: ${ERRS}"
-            grep -E -i -e 'error:' -e 'Provisioning profile' -e 'No profile' \
-              -e 'requires a development team' -e 'Communication with Apple' \
-              -e 'No Accounts' -e 'not registered' -e 'No signing certificate' \
-              -e 'Automatic signing' -e 'entitlement' -e 'capabilit' \
-              -e 'App Store Connect' -e 'authentication' -e 'not authorized' -e 'failed' -e 'fatal' -e 'cannot' -e 'Undefined' -e 'Invalid' -e 'duplicate' -e 'Segmentation' -e 'crash' -e 'unable' -e 'missing' \
-              -e 'bundle identifier' -e 'App ID' -e 'cloud signing' \
-              "$RUNNER_TEMP/archive.log" \
-              | sed -E \
-                -e "s|${RUNNER_TEMP}[^[:space:]]*|<runner-temp>|g" \
-                -e 's/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/<guid>/g' \
-                -e 's/[[:<:]][A-Z0-9]{10}[[:>:]]/<id>/g' \
-                -e 's/%/%25/g' \
-                -e 's/^[[:space:]]+//' \
-              | awk '!seen[$0]++' \
-              | head -n 80 \
-              | while IFS= read -r line; do
-                  echo "::error::${line}"
-                done || true
+            echo "::error::Archive failed. Check source qualification, signing quota, and iPhone/Watch capabilities. Private Xcode diagnostics withheld."
             exit 1
           fi
       - name: Prepare export options
@@ -167,6 +167,7 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
+          umask 077
           if ! xcodebuild \
             -exportArchive \
             -archivePath "$RUNNER_TEMP/Jarvis.xcarchive" \
@@ -177,24 +178,7 @@ jobs:
             -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
             > "$RUNNER_TEMP/export.log" 2>&1; then
-            echo "::error::Export or upload failed. A sanitised excerpt of the log follows; identifiers are masked."
-            grep -E -i -e 'error' -e 'Provisioning profile' -e 'No profile' \
-              -e 'Communication with Apple' -e 'No Accounts' -e 'No signing certificate' \
-              -e 'distribution' -e 'entitlement' -e 'capabilit' -e 'App Store Connect' \
-              -e 'authentication' -e 'not authorized' -e 'bundle identifier' \
-              -e 'App ID' -e 'cloud signing' -e 'upload' -e 'validat' -e 'version' \
-              "$RUNNER_TEMP/export.log" \
-              | sed -E \
-                -e "s|${RUNNER_TEMP}[^[:space:]]*|<runner-temp>|g" \
-                -e 's/[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}/<guid>/g' \
-                -e 's/[[:<:]][A-Z0-9]{10}[[:>:]]/<id>/g' \
-                -e 's/%/%25/g' \
-                -e 's/^[[:space:]]+//' \
-              | awk '!seen[$0]++' \
-              | head -n 80 \
-              | while IFS= read -r line; do
-                  echo "::error::${line}"
-                done || true
+            echo "::error::Export or upload failed. Check App Store Connect permissions, distribution signing, and iPhone/Watch profiles. Private Xcode diagnostics withheld."
             exit 1
           fi
       - name: Add preview build notes
@@ -208,14 +192,26 @@ jobs:
             echo
             echo "This TestFlight build is a preview; it does not create a release tag."
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Revoke development certificates
-        if: always() && github.ref == 'refs/heads/main'
+      - name: Revoke only run-owned development certificates
+        if: always()
         timeout-minutes: 5
         env:
           APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-        run: ruby .github/scripts/testflight_certificate_cleanup.rb
+        run: ruby .github/scripts/testflight_certificate_cleanup.rb cleanup "$RUNNER_TEMP/testflight-signing"
       - name: Delete App Store Connect key
         if: always()
-        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+        run: |
+          status=0
+          KEYCHAIN="$RUNNER_TEMP/testflight-signing/signing.keychain-db"
+          if [[ -f "$KEYCHAIN" ]]; then
+            security delete-keychain "$KEYCHAIN" > /dev/null 2>&1 || status=1
+          fi
+          rm -rf "$RUNNER_TEMP/testflight-signing"
+          rm -f "$RUNNER_TEMP/AuthKey.p8" "$RUNNER_TEMP/signing.log" \
+            "$RUNNER_TEMP/archive.log" "$RUNNER_TEMP/export.log" "$RUNNER_TEMP/ExportOptions.plist"
+          if [[ "$status" != 0 ]]; then
+            echo "::error::Temporary signing keychain deletion failed."
+            exit 1
+          fi

@@ -1527,12 +1527,19 @@ The manually dispatched iOS TestFlight workflow retains automatic signing and
 its existing App Store Connect key in the `ios-testflight` environment. An
 explicit branch input must match the selected workflow ref and Git branch
 syntax. It accepts `main` and environment-approved preview branches; non-main
-build notes identify previews, which do not create release tags. Its final main-only
-certificate cleanup uses that key through Ruby standard-library ES256/HTTPS,
-validates the full paginated listing, and revokes only
-`DEVELOPMENT`/`IOS_DEVELOPMENT` certificates. Distribution and other
-certificate types are preserved. API output is withheld; cleanup failure fails
-the step, and a separate always-run step removes the local key.
+build notes identify previews, which do not create release tags. Ruby
+standard-library ES256/HTTPS creates a development identity from a fresh
+run-local CSR, imported into a temporary keychain and explicitly selected for
+the paired iPhone/Watch archive. Automatic provisioning and distribution
+export/upload remain enabled with the existing secrets. Final cleanup on main
+and previews validates the full paginated listing and revokes development
+certificates only when their public key matches the persisted run-local key.
+All unrelated and distribution certificates are preserved. Creation is not
+retried; quota exhaustion requires administrator ownership review, not blanket
+revocation. API/Xcode/keychain diagnostics are withheld; cleanup failures fail
+the job, and a separate always-run step removes local keys, keychain and logs.
+Hard termination or lost proof can leave quota-consuming orphans; there is no
+cross-run reclamation registry. Offline-tested; live signing remains unverified.
 
 | Area | Choice | Status |
 | --- | --- | --- |

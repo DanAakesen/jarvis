@@ -10142,6 +10142,31 @@ TestFlight availability. No run is started by this change.
 
 ## 31 October 2026 — P15-26 automatic signing with development cleanup
 
+**Superseded by issue #1724 on 10 November 2026:** the team-wide revocation
+below is historical and must not be used. The current workflow creates one
+run-owned development identity using the existing Team API key and a fresh RSA
+CSR; automatic provisioning and cloud distribution export remain. Cleanup on
+main and previews requires an exact certificate-public-key match against the
+private key persisted before creation. Type/name/age or list-difference guesses
+are insufficient. Distribution and unrelated development certificates are never
+revoked. No new secrets or dependencies are added.
+
+Build 11's quota failure was confirmed in run `41243519928`; recent successful
+paired-app releases (including build 91, run `42778163816`) used the old unsafe
+cleanup and do not validate this replacement. A full account now fails visibly
+without reclaiming unrelated certificates. Lost responses are reconciled using
+the persisted key, with no creation retry. Hard termination or cleanup failure
+can leave orphans requiring administrator-verified ownership; no persistent
+cross-run registry is introduced. Cleanup failure after upload must not trigger
+a blind re-upload. Raw signing/API diagnostics are withheld instead of relying
+on identifier-pattern redaction. Local private material is always removed.
+
+Verification: 14 focused signing tests and 78 existing pipeline tests passed
+offline with synthetic certificates/stubbed HTTP; Ruby and workflow shell syntax
+checked. No live Apple operations, release dispatch, merge or feature-PR changes.
+The first owner-started Mac archive/export/upload with this path remains pending.
+Concurrent Watch/chat/Factory integration PRs are outside this signing-only change.
+
 Build 11 hit the development-certificate limit under automatic signing.
 The owner rejected manual distribution signing because they have no Mac to
 export its private key; adding P12/profile secrets would block working uploads.

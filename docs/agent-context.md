@@ -7308,26 +7308,45 @@ builds as previews, and does not create release tags.
 It captures `xcodebuild` output rather than logging signing identifiers, writes
 the key with mode 600, and deletes it in an always-run cleanup step.
 
-P15-26 retains automatic archive/export signing and the existing secrets.
-After export (including archive/export failure), an always-run main-only step
-uses Ruby's standard OpenSSL/HTTP libraries and the existing API key to list
-App Store Connect certificates and revoke only `DEVELOPMENT` and
-`IOS_DEVELOPMENT` types. All distribution, Mac-specific and unknown types are
-preserved. This deliberately cleans all visible Apple/iOS development
-certificates, including ones predating the run or used by another app; their
-development profiles may need automatic renewal. No certificate/key identifiers,
-JWTs or raw API errors are logged. Listing is paginated and bounded; failure
-is reported rather than treated as success. The API key file is deleted even
-if certificate cleanup fails. No P12/private-key export or profile secrets are
-required. The existing key needs permission to list and revoke certificates;
-verify that on the next owner-started run. If the account is already at its
-limit, the first archive may fail, but final cleanup can free capacity for the
-next run. A hard runner termination may prevent always-run cleanup.
+Issue #1724 supersedes P15-26's blanket revocation. Ruby standard-library
+OpenSSL/HTTPS creates one `DEVELOPMENT` certificate from a fresh run-local RSA
+CSR, persisting its private key before the single, non-retried creation request.
+The identity is imported through a temporary P12 into a temporary keychain;
+no exported Mac identity, new secret, profile secret or dependency is required.
+Automatic provisioning remains enabled. The archive explicitly selects this
+identity for the iPhone app, embedded Watch app and extensions; automatic
+App Store Connect distribution export/upload is unchanged.
+
+After export, an always-run step on main **and previews** validates the complete
+bounded certificate listing before deleting only `DEVELOPMENT`/`IOS_DEVELOPMENT`
+records whose certificate public key matches the run-local key. Names, ages,
+type alone and before/after list differences are not ownership evidence.
+Unrelated development certificates and all distribution/other types are preserved.
+The saved key also permits cleanup after a lost creation response or failed
+keychain import/archive/export. Missing ownership proof skips API mutation;
+malformed proof/listings, API failures and deletion failures fail visibly.
+API responses, generated identities, P12 passwords and raw Xcode/keychain
+diagnostics are withheld. A separate always-run step deletes the API key,
+temporary identity/keychain and private logs, even after remote cleanup fails.
+
+The existing Team key now needs certificate create/list/revoke permission.
+If quota is full, creation fails without deleting any unrelated certificate;
+an administrator must verify ownership before freeing capacity. A hard runner
+termination, lost local proof or failed cleanup can leave an orphan consuming
+quota. There is no cross-run ownership registry and no safe automatic reclamation
+of legacy certificates. Never guess ownership or retry an upload blindly:
+cleanup can fail after upload succeeded, so inspect App Store Connect first.
 
 Use **Actions → iOS TestFlight → Run workflow**, select `main` or the intended
 PR source branch, and enter the same value in the `branch` input. A merge or
-pull request does not upload anything automatically. The certificate-cleanup API permissions and real
-cleanup remain unverified; see the setup checklist and disabled
+pull request does not upload anything automatically. Offline verification on
+10 November 2026: 14 certificate/signing tests and 78 pipeline tests passed,
+using synthetic keys/certificates and stubbed HTTP only. Run these with
+`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -p test_testflight_certificate_cleanup.py`
+and the same command with `-p test_pipeline.py`. No real Apple read/write or
+release dispatch was performed. Xcode/keychain integration, the key's create
+permission, and paired iPhone/Watch upload through this new path remain
+unverified until the owner starts a run; see the setup checklist and disabled
 `xcrun altool --upload-app` fallback in [`docs/ios/build-plan.md`](ios/build-plan.md).
 
 ## iOS release train (P15-50)
