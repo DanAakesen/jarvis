@@ -8,6 +8,16 @@ the initial merged tree equals that source tree. Main was verified at
 Watch implementation/reference and loading/Factory guard. No source PR mutation,
 live Factory task 24 action, merge or TestFlight was performed.
 
+Implementation checkpoint: **`61abd21b233e00a26bdaf1a25c6016c7edd620b7`**.
+Final read-only review found no significant issues, secret scanning passed and
+the working tree was clean. CodeQL repeated on that committed implementation:
+Python has no alerts, Actions is unchanged from the prior no-alert analysis,
+Swift database creation still fails and JavaScript is still skipped for size.
+Native iPhone **42890925501** skipped while draft; Watch **42890925363** is
+running at this exact implementation, not passed. The following handoff-only
+documentation update changes no runtime or test selection. Recheck final-head
+workflows after the orchestrator's ready/run step; no native success is claimed.
+
 ### Confirmed compatibility repair and available checks
 
 - The integrated Watch/backend allows 400-character task titles; web previously

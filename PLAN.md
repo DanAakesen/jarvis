@@ -25,6 +25,9 @@ significant issues; local CodeQL has no Actions/Python alerts but lacks Swift
 database/JavaScript analysis coverage.
 
 **Active step:** complete exact-head native qualification and review.
+Implementation checkpoint `61abd21` passed final focused review and secret scans;
+CodeQL retains Swift/JavaScript coverage gaps. Its iPhone run 42890925501 is
+draft-skipped and Watch 42890925363 is running, not accepted.
 Source chat run 42874121366 has 18 failures,
 not a passing capture result. Ten ComponentGallery failures reproduce on current
 main; all four Today failures also reproduce on a verified code-equivalent
