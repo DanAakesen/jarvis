@@ -6,11 +6,12 @@ struct WatchTextInput: View {
     var title: String
     @Binding var text: String
     var multiline = false
+    var alignment: VerticalAlignment = .center
     @State private var editing = false
     @State private var failure: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
+            HStack(alignment: alignment, spacing: 6) {
                 Button { editing = true } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         if !text.isEmpty { Text(title).font(.caption).foregroundStyle(.secondary) }

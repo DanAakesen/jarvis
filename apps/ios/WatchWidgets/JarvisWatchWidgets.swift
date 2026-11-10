@@ -103,6 +103,15 @@ struct JarvisWatchBodyFatWidget: Widget {
             .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
     }
 }
+struct JarvisWatchLogLiftWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "jarvis.watch.logLift", provider: WatchProvider()) { _ in
+            WatchLogLiftComplicationView()
+                .containerBackground(.black, for: .widget).widgetURL(URL(string: "jarvis-watch://log-lift"))
+        }.configurationDisplayName("Log lift").description("Type or dictate a lift, then save explicitly.")
+            .supportedFamilies([.accessoryCircular])
+    }
+}
 @main
 struct JarvisWatchWidgetBundle: WidgetBundle {
     var body: some Widget {
@@ -114,5 +123,6 @@ struct JarvisWatchWidgetBundle: WidgetBundle {
         JarvisWatchHomeWidget()
         JarvisWatchTaskListWidget()
         JarvisWatchBodyFatWidget()
+        JarvisWatchLogLiftWidget()
     }
 }

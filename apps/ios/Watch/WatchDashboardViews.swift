@@ -36,6 +36,7 @@ struct WatchDashboardView: View {
                         Divider()
                         WatchDashboardSection(title: "Workouts", route: .workouts) {
                             workouts(now: context.date)
+                            WatchLogLiftShortcut()
                         }
                         Divider()
                         WatchDashboardSection(title: "Body Fat", route: .bodyFat) {

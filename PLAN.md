@@ -36,6 +36,10 @@ Watch, including Ultra 2. Exact nutrition/task-list complication image transfer
 remains a visual sign-off blocker. Dashboard and task-screen approvals in the issue supersede
 PR #1700's older unapproved-dashboard note.
 
+## Watch quick lift logging — 10 November 2026 (#1705)
+
+Implemented on this branch: additive shared capture/complication, owner-authenticated natural-language extraction into existing lift history, durable duplicate-safe retry, recorded-value voice receipts and explicit recovery for a confirmed deleted operation. Focused backend/Core checks pass; acceptance remains open. PR #1703 remains separate: integrate into its Workouts section and preserve its dashboard, task flows, Today/Upcoming semantics and existing complications. Primary owns integration/release; do not touch active Factory acceptance task #24. Native builds, simulator interactions/captures, installed Ultra 2 dictation/voice/complication and real history readback remain acceptance work until evidence is recorded in `docs/ios/design/watch/implementation.md`.
+
 ## Explicit reminder quiet-hours repair — 10 November 2026 (#1706)
 
 Implemented on the existing task branch: owner create/update/snooze accepts night

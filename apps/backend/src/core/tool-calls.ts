@@ -32,6 +32,29 @@ export interface ToolCallStore {
  */
 export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: unknown): string {
   if (outcome === 'ok') {
+    if (tool === 'gym_lifts') {
+      const saved = result as { entry?: unknown; replayed?: unknown } | null;
+      if (saved && typeof saved === 'object' && 'entry' in saved) {
+        const entry = saved.entry as {
+          exerciseName?: unknown; weightKg?: unknown; reps?: unknown; sets?: unknown; deletedAt?: unknown; vault?: unknown;
+        } | null;
+        if (typeof entry?.exerciseName !== 'string' || entry.exerciseName.trim().length === 0 || entry.exerciseName.length > 80 ||
+            /[\p{Cc}\p{Cf}]/u.test(entry.exerciseName) || typeof entry.weightKg !== 'number' ||
+            !Number.isFinite(entry.weightKg) || entry.weightKg < 0 || entry.weightKg > 1000 ||
+            typeof entry.reps !== 'number' || !Number.isSafeInteger(entry.reps) || entry.reps < 1 || entry.reps > 1000 ||
+            typeof entry.sets !== 'number' || !Number.isSafeInteger(entry.sets) || entry.sets < 1 || entry.sets > 100) {
+          return 'The lift result could not be verified. Check history before retrying.';
+        }
+        if (entry.deletedAt !== null && entry.deletedAt !== undefined) {
+          return saved.replayed === true
+            ? 'This lift was deleted; it was not saved again.'
+            : `Deleted lift: ${entry.exerciseName}.`;
+        }
+        return `${saved.replayed === true ? 'Already saved lift' : 'Saved lift'}: ${entry.exerciseName}, ${entry.weightKg} kg, ` +
+          `${entry.reps} ${entry.reps === 1 ? 'rep' : 'reps'}, ${entry.sets} ${entry.sets === 1 ? 'set' : 'sets'}.` +
+          (entry.vault === 'pending' ? ' Vault copy is pending.' : '');
+      }
+    }
     if (tool === 'health_food' || tool === 'health_food_review' || tool === 'health_food_lookup') {
       const presentation = (result as { presentation?: unknown } | null)?.presentation;
       if (typeof presentation === 'string' && presentation.length <= 2000) return presentation;

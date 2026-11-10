@@ -103,6 +103,31 @@ describe('LiftEntriesStore.create', () => {
     expect(f.publish.mock.invocationCallOrder[0]).toBeGreaterThan(f.transaction.commit.mock.invocationCallOrder[0]!);
   });
 
+  describe('LiftEntriesStore.findByIdempotencyKey', () => {
+    it('returns the durable original including soft deletion, scoped by owner and key', async () => {
+      const f = fixture();
+      f.request.query.mockResolvedValueOnce({ recordset: [{ ...stored(), deleted_at: updatedAt }] });
+      expect(await f.store.findByIdempotencyKey(key, signal())).toMatchObject({
+        id, weightKg: 80, reps: 4, sets: 3, deletedAt: updatedAt.toISOString(), vault: 'pending',
+      });
+      const command = String(f.request.query.mock.calls[0]?.[0]);
+      expect(command).toContain('owner_object_id = @owner AND idempotency_key = @idempotencyKey');
+      expect(command).not.toContain('deleted_at IS NULL');
+      expect(f.request.input).toHaveBeenCalledWith('owner', sql.UniqueIdentifier, owner);
+      expect(f.request.input).toHaveBeenCalledWith('idempotencyKey', sql.UniqueIdentifier, key);
+      expect(f.transaction.begin).not.toHaveBeenCalled();
+      expect(f.publish).not.toHaveBeenCalled();
+    });
+
+    it('returns null for new keys and fails closed on SQL errors', async () => {
+      const f = fixture();
+      expect(await f.store.findByIdempotencyKey(key, signal())).toBeNull();
+      f.request.query.mockRejectedValueOnce(new Error('private SQL details'));
+      await expect(f.store.findByIdempotencyKey(key, signal())).rejects.toThrow('Lift save status is unavailable');
+      await expect(f.store.findByIdempotencyKey('invalid', signal())).rejects.toThrow('Invalid lift idempotency key');
+    });
+  });
+
   it('returns the original row on an idempotent retry without inserting again', async () => {
     const f = fixture();
     f.request.query.mockResolvedValueOnce({ recordset: [stored()] });

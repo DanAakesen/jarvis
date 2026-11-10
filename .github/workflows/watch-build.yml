@@ -92,6 +92,20 @@ jobs:
           else
             echo "::warning::No 40–42 mm Watch simulator is available; smaller-size screenshots were not captured."
           fi
+          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=log-lift
+          sleep 2
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/log-lift.png"
+          for STATE in saved missing uncertain deleted; do
+            xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=log-lift "--watch-lift-state=$STATE"
+            sleep 2
+            xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/log-lift-$STATE.png"
+          done
+          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=log-lift-complication
+          sleep 2
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/log-lift-complication.png"
+          xcrun simctl openurl "$WATCH_ID" 'jarvis-watch://log-lift'
+          sleep 2
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/log-lift-deep-link.png"
       - name: Build paired iPhone bridge without signing
         if: ${{ !cancelled() }}
         working-directory: apps/ios

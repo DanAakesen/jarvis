@@ -15,9 +15,9 @@ struct JarvisWatchApp: App {
 }
 
 enum WatchRoute: String, Hashable {
-    case chat, menu, tasks, health, workouts, lifts, factory, agenda, bodyFat, notes, home, nutrition
+    case chat, menu, tasks, health, workouts, lifts, factory, agenda, bodyFat, notes, home, nutrition, logLift
     #if DEBUG
-    case complications
+    case complications, logLiftComplication
     #endif
 }
 struct WatchRoot: View {
@@ -62,8 +62,16 @@ struct WatchRoot: View {
                 case .notes: WatchNotesView()
                 case .home: WatchHomeBriefView()
                 case .nutrition: WatchNutritionView()
+                case .logLift:
+                    WatchLiftCaptureView {
+                        path.append(.chat); Task { await model.startVoice() }
+                    }
                 #if DEBUG
                 case .complications: WatchComplicationPreviewView()
+                case .logLiftComplication:
+                    WatchLogLiftComplicationView().frame(width: 52, height: 52)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .navigationTitle("Log lift")
                 #endif
                 }
             }
@@ -91,6 +99,9 @@ struct WatchRoot: View {
                ProcessInfo.processInfo.arguments.contains("--watch-fixture") { path = [.complications] }
             if ProcessInfo.processInfo.arguments.contains("--watch-screen=lifts") || ProcessInfo.processInfo.arguments.contains("--watch-screen=new-lift") { path = [.lifts] }
             if ProcessInfo.processInfo.arguments.contains("--watch-screen=new-task") || ProcessInfo.processInfo.arguments.contains("--watch-screen=project") { path = [.factory] }
+            if ProcessInfo.processInfo.arguments.contains("--watch-screen=log-lift") { path = [.logLift] }
+            if ProcessInfo.processInfo.arguments.contains("--watch-screen=log-lift-complication"),
+               ProcessInfo.processInfo.arguments.contains("--watch-fixture") { path = [.logLiftComplication] }
             #endif
         }
         .onOpenURL { url in
@@ -106,6 +117,7 @@ struct WatchRoot: View {
             case "home": path = [.home]
             case "nutrition": path = [.nutrition]
             case "dashboard": page = 0; path = []
+            case "log-lift": path = [.logLift]
             case "chat": path = [.chat]
             case "end-voice": Task { await model.endVoice() }
             default: path = [.menu]

@@ -25,6 +25,10 @@ phrase/Body Fat visuals and device fit are not separately accepted. The exact
 nutrition/task-list complication reference images still require transfer from the
 design conversation before final visual sign-off. No merge or deployment is authorized.
 
+## Watch quick lift logging — 10 November 2026 (#1705)
+
+Watch Home's Workouts section and a circular Log lift complication open the same capture screen. Native dictation fills editable text; only Save submits it. Voice opens the existing paired-phone voice experience and a complete spoken request needs no second approval. Record the actual exercise, kilograms and reps in existing lift history, defaulting to one set unless explicitly specified. Never estimate a one-rep maximum, double dumbbell weight or invent missing values. Ask for missing details while retaining the input; report recorded values, actual failures and uncertain outcomes. Manual retry must preserve the operation identity across reconnect/relaunch. No standalone Watch credentials, offline send queue, workout tracker or rest timer. Preserve PR #1703's dashboard, Today/Upcoming semantics, task flows, complications and Workouts See more. Approved generated references at `009750f0932e6d49af370af73618160ed8ef6fae` are not native/device acceptance.
+
 ## Direct owner requests — 10 November 2026
 
 A clear, authenticated owner instruction authorizes the requested operation without a second yes. Ask only for details needed to identify the intended action or target. Keep device and all-device sign-out confirmations. Treat credentials as non-storable and distinguish requested sensitive saves from automatic capture.

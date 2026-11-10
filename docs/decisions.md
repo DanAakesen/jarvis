@@ -19,6 +19,10 @@ SwiftUI DisclosureGroup is unavailable on watchOS; returning keeps the active dr
 Native/device validation and exact nutrition/task-list image transfer remain
 separate from concept approval. No merge or release is part of this issue.
 
+## 2026-11-10 — Watch quick logging is one actual lift, not a workout session (#1705)
+
+The owner approved all three quick-lift references and the direct logging flow. Reuse existing SQL lift history and paired-iPhone authentication; the Watch carries no credentials. Dictation edits a draft and explicit Save authorizes capture; Voice uses the existing conversation/tool path without a second approval for complete requests. Missing essential data requires clarification, not guessed values. One set is the default, with actual reps/weight and no dumbbell doubling or estimated maximum. Retry identity must survive uncertain completion and relaunch. Integrate the shortcut into PR #1703's Workouts section, preserving its dashboard, existing complications and task/backend changes. Primary owns integration and release; Factory acceptance task #24 is outside this work.
+
 ## 10 November 2026 — Explicit timed reminders bypass quiet hours (#1706)
 
 Supersedes the quiet-window refusal in #1239 and the all-reminder night gate in
