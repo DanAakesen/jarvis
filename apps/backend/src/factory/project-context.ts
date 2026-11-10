@@ -163,7 +163,8 @@ export function resolveProjectFromList(selector: string, projects: readonly Proj
       !weakTerms.some((term) => description.slice(Math.max(0, description.indexOf(term) - 4),
         description.indexOf(term)).some((word) => ['not', 'no', 'never', 'ikke', 'ingen'].includes(word)));
   });
-  if (descriptionMatches.length) throw ambiguousProject(descriptionMatches);
+  if (descriptionMatches.length === 1) return descriptionMatches[0]!;
+  if (descriptionMatches.length > 1) throw ambiguousProject(descriptionMatches);
   throw projectNotFound(value, activeProjects);
 }
 
