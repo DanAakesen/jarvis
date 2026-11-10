@@ -21,6 +21,15 @@ src/ConversationHistory.test.tsx src/RuntimeTestConversation.test.tsx` passed 13
 The full existing workflow/script suite (`PYTHONPATH=.github/scripts python3 -m
 unittest discover -s .github/scripts/tests -v`) passed 339 tests.
 
+Secret scanning passed. CodeQL reported no Python alerts, but Swift database
+creation failed and JavaScript analysis was skipped for database size; neither
+is a successful analysis. Independent diff review found no significant issues.
+On implementation head `aaf71314`, CI `42872380073` and Simulator `42872380299`
+were skipped by the draft gate. Title job `130026700159` failed on the automatic
+WIP title; the orchestrator must apply the `fix-main:` title above and mark ready
+for fresh qualification. Watch run `42872380143` was still running when checked.
+No native pass is claimed from those states.
+
 ### Exact-head native follow/photo capture plan
 
 Use the existing macOS CI setup (Xcode 26.6, pinned XcodeGen), not a web mock.
