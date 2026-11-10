@@ -235,7 +235,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
   const tools = [
     {
       name: 'memory_remember',
-      description: 'Save a confirmed preference, project fact, decision or unfinished task that Dan clearly stated. Do not infer facts. Never save a secret or credential. Set sourceIntent to requested when Dan asks to save this information, including a contextual follow-up; otherwise use automatic. Do not automatically capture sensitive health or financial details. Use a stable key; first search existing memories and preserve corrections under the same key.',
+      description: 'Save a preference, project fact, decision or unfinished task that Dan clearly stated. Do not infer facts. Never save a secret or credential. Set sourceIntent to requested when Dan asks to save this information, including a contextual follow-up; otherwise use automatic. Do not automatically capture sensitive health or financial details. Use a stable key; first search existing memories and preserve corrections under the same key.',
       inputSchema: {
         type: 'object',
         properties: {

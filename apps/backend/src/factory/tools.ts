@@ -1236,7 +1236,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'create_task',
-    description: 'Create a linked GitHub issue and Ready Factory task for confirmed non-code work. For my own repository and all project-code changes, use create_issue so owner-instruction verification, P11 allocation and executor handoff run.',
+    description: 'Create a linked GitHub issue and Ready Factory task for requested non-code work. For my own repository and all project-code changes, use create_issue so owner-instruction verification, P11 allocation and executor handoff run.',
     execution: { defaultEffect: 'action' },
     inputSchema: {
       type: 'object',
