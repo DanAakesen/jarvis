@@ -383,6 +383,32 @@ describe('GitHub App capability tools', () => {
     expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
   });
 
+  it('resolves a generic repo follow-up from owner history without a project argument', async () => {
+    const projectStore = { list: vi.fn(async () => [registeredProject]) } as unknown as ProjectStore;
+    const fetchImpl = vi.fn<typeof fetch>(async (_request, init) => Response.json(init?.method === 'PUT'
+      ? { commit: { sha: 'b'.repeat(40) }, content: { path: 'requirements.md' } }
+      : { default_branch: 'main', private: false }));
+    const { app } = fixture(fetchImpl, { contents: 'write' }, true,
+      'Save the requirements in the repo.', projectStore, ['We are working on Greeting project.']);
+    const response = await callTool(app, 'file_write', {
+      path: 'requirements.md', branch: 'main', content: 'Requirements', message: 'Save requirements',
+    });
+    expect(response.json().outcome).toBe('ok');
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
+  });
+
+  it('does not map a different unnamed project to older context', async () => {
+    const projectStore = { list: vi.fn(async () => [registeredProject]) } as unknown as ProjectStore;
+    const fetchImpl = vi.fn<typeof fetch>();
+    const { app } = fixture(fetchImpl, { contents: 'write' }, true,
+      'Save this in another project.', projectStore, ['We are working on Greeting project.']);
+    const response = await callTool(app, 'file_write', {
+      path: 'requirements.md', branch: 'main', content: 'Requirements', message: 'Save requirements',
+    });
+    expect(response.json().outcome).toBe('refused');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('writes the requested default-branch file directly without an approval round trip', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (_request, init) => Response.json(init?.method === 'PUT'
       ? { commit: { sha: 'b'.repeat(40) }, content: { path: 'notes.txt' } }
