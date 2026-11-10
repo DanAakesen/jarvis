@@ -10,6 +10,12 @@ The owner approved the amber vertical-stem steps concept after rejecting small t
 
 The owner requests a Factory plus after project selection, typing/dictation for every free-text field, dictatable exercise and swipe/Crown reps/sets. Extend the old read-only Factory boundary for explicit task creation only, via the existing authenticated iPhone Factory client and idempotent submission contract. Replace oversized steppers with native pickers and treat valid empty health history as empty rather than disconnected. Preserve the primary's separate #1697 startup/steps integration. Secondary tests use isolated fixtures and never execute live Factory work. Implementation/CI/device acceptance are distinct; all 555 Core tests, CI, CodeQL and all three unsigned native builds passed at e4a5ab28. Four native views were inspected; selected-project visual verification and real device interaction remain open.
 
+## 9 November 2026 — Configurable Home brief and independent daily activity
+
+The owner requests a model-generated, evidence-grounded Home brief with an editable instruction and 1–6 visible lines (default 3). Consolidate identity, general/personality, presence-mode and Home editors in one Instructions destination while preserving separate scopes and stored values; expose the same preferences through web and existing settings tools. Home guidance must not become ordinary chat instructions.
+
+Active kcal means merged HealthKit activeEnergyBurned, including activity outside workouts and excluding basal energy. Exercise minutes means appleExerciseTime, independently of workout count. Home and Health share these definitions across Today/7d/14d/30d in Copenhagen time. Missing readings remain unknown; explicit zero is preserved. Repeated daily sync replaces coverage rather than adding another source. Secondary implementation and qualification are tracked in PR #1689; primary owns integration/deployment and device acceptance.
+
 ## 2026-11-09 — Execute resolved owner requests directly
 
 Dan explicitly rejected approval cards, repeated confirmation turns, prescribed

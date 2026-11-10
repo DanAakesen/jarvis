@@ -18,6 +18,7 @@ function pageLimit(value: number): number { if (!Number.isInteger(value) || valu
 const sourceColumns = (column: string, path: string) => Array.from({ length: 6 }, (_, index) =>
   `JSON_VALUE(${column}, N'${path}[${index}]') AS read_source_${index + 1}`).join(',');
 const metricFieldsSql = `JSON_VALUE(fields_json, N'$.aggregation') AS read_aggregation,
+  JSON_VALUE(fields_json, N'$.healthkit_daily_total') AS read_merged_daily_total,
   ${sourceColumns('fields_json', '$.sources')},
   COALESCE(JSON_VALUE(fields_json, N'$.latest.date'), JSON_VALUE(fields_json, N'$.latest.endDate'),
     JSON_VALUE(fields_json, N'$.latest.sleepEnd'), JSON_VALUE(fields_json, N'$.latest.startDate')) AS read_latest_at,
@@ -51,6 +52,7 @@ function fields(row: Record<string, unknown>) {
     ? row.read_aggregation as 'latest' | 'sum' | 'average' : null;
   return {
     aggregation,
+    ...(row.read_merged_daily_total === 'true' ? { mergedDailyTotal: true } : {}),
     ...sourceNames(row),
     latestSample: {
       observedAt: safeTimestamp(row.read_latest_at),

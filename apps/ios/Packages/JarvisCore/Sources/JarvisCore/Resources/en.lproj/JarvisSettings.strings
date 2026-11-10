@@ -175,3 +175,11 @@
 "settings.goal.protein" = "Protein (g)";
 "settings.goal.carbs" = "Carbs (g)";
 "settings.goal.fat" = "Fat (g)";
+
+"settings.instructionsRow" = "Instructions";
+"settings.generalInstructions" = "General style instructions";
+"settings.presentInstructions" = "Present · extra instructions";
+"settings.awayInstructions" = "Away · extra instructions";
+"settings.onTheMoveInstructions" = "On the move · extra instructions";
+"settings.homeBriefInstruction" = "Home brief instructions";
+"settings.homeBriefLines" = "Maximum visible lines (1–6)";

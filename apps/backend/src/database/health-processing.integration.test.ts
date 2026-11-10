@@ -584,3 +584,31 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     await applyMigrations(pool, await migrations());
   });
 });
+
+describe('merged daily activity replacement on isolated SQL Server', () => {
+  it('replaces repeated totals, ignores late older coverage and blocks raw overlap overwrites', async () => {
+    const device = await provision();
+    const value = (qty: number, end: string, merged = true) => ({ data: { metrics: [{
+      name: 'active_energy_burned', units: 'kcal', data: [{
+        qty, date: '2026-10-13', startDate: '2026-10-12T22:00:00Z', endDate: end,
+        ...(merged ? { healthkitDailyTotal: true } : {}),
+      }],
+    }] } });
+    for (const [qty, end, merged] of [
+      [200, '2026-10-13T10:00:00Z', true],
+      [420, '2026-10-13T15:00:00Z', true],
+      [420, '2026-10-13T15:00:00Z', true],
+      [250, '2026-10-13T11:00:00Z', true],
+      [900, '2026-10-13T16:00:00Z', false],
+    ] as const) {
+      clock += 1_000;
+      await accept(device, value(qty, end, merged));
+      await processor().processNext(signal());
+    }
+    const activity = (await rows('health_daily_metrics')).filter(row => row.metric_name === 'active_energy_burned');
+    expect(activity).toHaveLength(1);
+    expect(activity[0].value).toBe(420);
+    expect(JSON.parse(activity[0].fields_json).healthkit_daily_total).toBe(true);
+    expect(await rows('health_workouts')).toHaveLength(0);
+  });
+});

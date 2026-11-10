@@ -86,6 +86,15 @@ struct JarvisHealthHeroCarousel<Accessory: View>: View {
                 }
             }
             .accessibilityIdentifier("health.hero.dots")
+            // Keep variable status copy outside the fixed-height pages so their headers stay aligned.
+            if page == .training,
+               let issue = JarvisHealthRingsSection(data: data, period: period, language: language).activityIssue {
+                Text(copy.text(issue))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("health.activity.issue")
+            }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: page)
     }

@@ -110,6 +110,11 @@ struct JarvisHealthDashboardData {
     var capabilities: JarvisHealthCapabilities?
     var workouts = JarvisHealthRead.loading
     var steps = JarvisHealthRead.loading
+    var activeEnergy = JarvisHealthRead.loading
+    var exerciseTime = JarvisHealthRead.loading
+    var dailyActivity: JarvisDailyActivitySnapshot?
+    var dailyActivityStale = false
+    var activityNow = Date()
     var nutritionDays = JarvisHealthRead.loading
     var meals = JarvisHealthRead.loading
     var sleep = JarvisHealthRead.loading
@@ -125,7 +130,7 @@ struct JarvisHealthDashboardData {
 
     var hasFailure: Bool {
         failure != nil || trainingTargetFailure != nil || nutritionTargetFailure != nil ||
-            [workouts, steps, nutritionDays, meals, sleep, metricCatalog, sync]
+            [workouts, steps, activeEnergy, exerciseTime, nutritionDays, meals, sleep, metricCatalog, sync]
             .contains { $0.failure != nil } || bodyMetrics.contains { $0.read.failure != nil }
     }
 
@@ -133,12 +138,12 @@ struct JarvisHealthDashboardData {
         failure != nil && capabilities != nil ||
             trainingTargetFailure != nil && trainingTargets != nil ||
             nutritionTargetFailure != nil && nutritionTargets != nil ||
-            [workouts, steps, nutritionDays, meals, sleep, metricCatalog, sync]
+            [workouts, steps, activeEnergy, exerciseTime, nutritionDays, meals, sleep, metricCatalog, sync]
                 .contains { $0.isStale } || bodyMetrics.contains { $0.read.isStale }
     }
 
     var isPartial: Bool {
-        [workouts, steps, nutritionDays, meals, sleep, metricCatalog, sync]
+        [workouts, steps, activeEnergy, exerciseTime, nutritionDays, meals, sleep, metricCatalog, sync]
             .contains { $0.hasMore } || bodyMetrics.contains { $0.read.hasMore }
     }
 
@@ -190,6 +195,7 @@ struct JarvisHealthCopy {
         case .today: text(.today)
         case .yesterday: text(.yesterday)
         case .sevenDays: text(.sevenDays)
+        case .fourteenDays: text(.fourteenDays)
         case .thirtyDays: text(.thirtyDays)
         }
     }
@@ -227,6 +233,9 @@ struct JarvisHealthArea: View {
     @State private var vaultLiftsFailed = false
     @State private var deviceWorkouts: [JarvisGymLogEntry]?
     @State private var deviceWorkoutsFailed = false
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var deviceActivity: JarvisDailyActivitySnapshot?
+    @State private var deviceActivityFailed = false
     @State private var deviceSteps: JarvisStepsSnapshot?
     @State private var pastExercises: [[String: JSONValue]] = []
     @State private var exercisesPartial = false
@@ -384,6 +393,21 @@ struct JarvisHealthArea: View {
         .task(id: refreshVersion) { await loadVaultLifts() }
         .task(id: refreshVersion) { await loadDeviceWorkouts() }
         .task(id: refreshVersion) { await loadDeviceSteps() }
+        .task(id: refreshVersion) { await loadDeviceActivity() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, observeRefreshEvents { refreshVersion += 1 }
+        }
+        .task {
+            guard observeRefreshEvents else { return }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                guard scenePhase == .active else { continue }
+                let previous = JarvisHealthPeriod.make(.today, now: now).startDate
+                now = Date()
+                await loadDeviceActivity()
+                if previous != JarvisHealthPeriod.make(.today, now: now).startDate { refreshVersion += 1 }
+            }
+        }
         .sheet(item: $editedLift, onDismiss: { refreshVersion += 1 }) { lift in
             JarvisLiftEditorSheet(lift: lift, language: language) { edit in
                 try await saveLift(lift, edit: edit)
@@ -432,7 +456,8 @@ struct JarvisHealthArea: View {
         async let vault: Void = loadVaultLifts()
         async let workouts: Void = loadDeviceWorkouts()
         async let steps: Void = loadDeviceSteps()
-        _ = await (lifts, vault, workouts, steps)
+        async let activity: Void = loadDeviceActivity()
+        _ = await (lifts, vault, workouts, steps, activity)
     }
 
     private var header: some View {
@@ -640,8 +665,29 @@ struct JarvisHealthArea: View {
         }
     }
 
+    @MainActor
+    private func loadDeviceActivity() async {
+        guard observeRefreshEvents else { return }
+        if let gymModel {
+            await gymModel.refreshActivity()
+            deviceActivity = gymModel.dailyActivity.value
+            deviceActivityFailed = gymModel.dailyActivity.failure != nil
+        } else {
+            do {
+                deviceActivity = try await JarvisHealthKitActivitySource().activity(now: now, days: 30)
+                deviceActivityFailed = false
+            } catch { deviceActivityFailed = true }
+        }
+    }
+
     private func withDeviceWorkouts(_ original: JarvisHealthDashboardData) -> JarvisHealthDashboardData {
         var data = original
+        data.activityNow = now
+        if let deviceActivity {
+            // Home and Health use the same root-owned snapshot, including retained/missing states.
+            data.dailyActivity = deviceActivity
+            data.dailyActivityStale = deviceActivityFailed
+        }
         let formatter = ISO8601DateFormatter()
         if let deviceSteps, !deviceSteps.daily.isEmpty {
             let hadRetainedDays = !data.steps.items.isEmpty
@@ -839,6 +885,7 @@ struct JarvisHealthArea: View {
     /// normal pass refreshes only what is stale. `force` (pull to refresh, a saved workout, a sync event) refreshes
     /// everything.
     private func loadDashboard(force: Bool = false) async {
+        if observeRefreshEvents { now = Date() }
         isLoading = true
         defer { isLoading = false }
         if dashboard == nil {
@@ -901,6 +948,19 @@ struct JarvisHealthArea: View {
             .metrics, period: chartPeriod(selectedPeriod), metric: "step_count", limit: 500,
             capabilities: next.capabilities, previous: previous?.steps, client: client, mode: mode
         )
+        guard !Task.isCancelled else { return }
+        next.activeEnergy = await read(
+            .metrics, period: selectedPeriod, metric: "active_energy_burned", limit: 100,
+            capabilities: next.capabilities, previous: previous?.activeEnergy, client: client, mode: mode
+        )
+        next.exerciseTime = await read(
+            .metrics, period: selectedPeriod, metric: "apple_exercise_time", limit: 100,
+            capabilities: next.capabilities, previous: previous?.exerciseTime, client: client, mode: mode
+        )
+        next.activityNow = now
+        next.dailyActivity = .server(rows: next.activeEnergy.items + next.exerciseTime.items, fetchedAt: now)
+        next.dailyActivityStale = next.activeEnergy.isStale || next.exerciseTime.isStale
+            || next.activeEnergy.failure != nil || next.exerciseTime.failure != nil
         guard !Task.isCancelled else { return }
         next.nutritionDays = await read(
             .nutritionDays, period: chartPeriod(selectedPeriod), limit: 400,

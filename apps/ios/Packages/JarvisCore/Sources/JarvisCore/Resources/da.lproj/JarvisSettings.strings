@@ -175,3 +175,11 @@
 "settings.goal.protein" = "Protein (g)";
 "settings.goal.carbs" = "Kulhydrater (g)";
 "settings.goal.fat" = "Fedt (g)";
+
+"settings.instructionsRow" = "Instruktioner";
+"settings.generalInstructions" = "Generelle stilinstruktioner";
+"settings.presentInstructions" = "Til stede · ekstra instruktioner";
+"settings.awayInstructions" = "Væk · ekstra instruktioner";
+"settings.onTheMoveInstructions" = "På farten · ekstra instruktioner";
+"settings.homeBriefInstruction" = "Instruktioner til Home-overblik";
+"settings.homeBriefLines" = "Maksimalt antal synlige linjer (1–6)";

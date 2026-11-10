@@ -3,6 +3,26 @@ import XCTest
 @testable import JarvisCore
 
 final class JarvisSettingsClientTests: XCTestCase {
+    func testInstructionScopesAndHomeLineBoundsAreValidatedIndependently() throws {
+        for lines in 1...6 {
+            XCTAssertNoThrow(try JarvisSettingsLogic.validateSettingsPatch(
+                JarvisSettingsPatch(area: "homeBrief", key: "maxVisibleLines", value: .integer(lines))))
+        }
+        for lines in [0, 7] {
+            XCTAssertThrowsError(try JarvisSettingsLogic.validateSettingsPatch(
+                JarvisSettingsPatch(area: "homeBrief", key: "maxVisibleLines", value: .integer(lines))))
+        }
+        XCTAssertNoThrow(try JarvisSettingsLogic.validateSettingsPatch(
+            JarvisSettingsPatch(area: "homeBrief", key: "instruction", value: .string(String(repeating: "ø", count: 2_000)))))
+        XCTAssertThrowsError(try JarvisSettingsLogic.validateSettingsPatch(
+            JarvisSettingsPatch(area: "homeBrief", key: "instruction", value: .string(String(repeating: "x", count: 2_001)))))
+        for mode in ["present", "away", "on_the_move"] {
+            XCTAssertNoThrow(try JarvisSettingsLogic.validateSettingsPatch(
+                JarvisSettingsPatch(area: "personality", key: "modeInstructions",
+                    value: .object([mode: .string("Keep this distinct")]))))
+        }
+    }
+
     func testEverySettingsLabelHasDanishAndEnglishCopy() {
         XCTAssertEqual(JarvisAppLanguage.default, .da)
         for key in JarvisSettingsLocalizationKey.allCases {

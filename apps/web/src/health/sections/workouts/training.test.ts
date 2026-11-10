@@ -68,11 +68,11 @@ describe('training from synthetic retained rows', () => {
       { metric_name: 'step_count', metric_date: '2026-10-25', value: 0, unit: 'count' },
       { metric_name: 'step_count', metric_date: '2026-10-26', value: null, avg_value: 999, unit: 'count' },
       { metric_name: 'step_count', metric_date: '2026-10-23', value: 999, unit: 'count' },
-      { metric_name: 'active_energy_burned', metric_date: '2026-10-24', value: 50, unit: 'kcal' },
-      { metric_name: 'apple_exercise_time', metric_date: '2026-10-24', value: 10, unit: 'min' },
+      { metric_name: 'active_energy_burned', metric_date: '2026-10-24', value: 50, unit: 'kcal', fields: { mergedDailyTotal: true } },
+      { metric_name: 'apple_exercise_time', metric_date: '2026-10-24', value: 10, unit: 'min', fields: { mergedDailyTotal: true } },
       { metric_name: 'exercise_time', metric_date: '2026-10-25', value: 1, unit: 'hours' },
       { metric_name: 'exercise_time', metric_date: '2026-10-26', value: 60, unit: 's' },
-    ], period)).toEqual({ steps: 100, energy: 50, seconds: 4260 });
+    ], period)).toEqual({ steps: 100, energy: 50, seconds: 600 });
     expect(activityFigures([
       { metric_name: 'step_count', metric_date: '2026-10-24', value: 99, unit: null },
       { metric_name: 'active_energy_burned', metric_date: '2026-10-24', value: -1, unit: 'kcal' },

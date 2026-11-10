@@ -2,6 +2,10 @@
 
 Ordinary Watch startup, foreground connection warm-up and passive history refresh must not display an interrupted-send alert. Show connection/history status inline. Actual user-action failures and interrupted active chat/voice still report errors; preserve unsent drafts and never automatically resend an accepted request.
 
+## Home brief and daily activity implementation — 9 November 2026
+
+Home briefs are grounded in available calendar/tasks and optional nutrition/weather context, generated through the existing model infrastructure. The owner edits Home instructions and a 1–6 visible-line limit (default 3) in the canonical Instructions destination. All-day Active kcal uses merged HealthKit activeEnergyBurned; exercise minutes uses appleExerciseTime. Workout counts remain separate.
+
 ## Owner action policy — current, 9 November 2026
 
 The signed-in owner's clear request authorizes the resolved action in chat and

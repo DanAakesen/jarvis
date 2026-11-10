@@ -142,7 +142,7 @@ export function WorkoutOverview({ pages, rows, ...props }: HealthSectionProps & 
         <dl className="workouts-class-figures">
           <Figure label="Steps" value={amount(activity.steps, 'steps')} loading={metricsLoading} />
           <Figure label="Active energy" value={amount(activity.energy, 'kcal')} loading={metricsLoading} />
-          <Figure label="Activity time" value={activity.seconds === null ? null : formatDuration(activity.seconds)} loading={metricsLoading} />
+          <Figure label="Exercise minutes" value={activity.seconds === null ? null : amount(activity.seconds / 60, 'min')} loading={metricsLoading} />
         </dl>
         <ReadStatus pages={metrics} served={hasMetrics} name="activity metrics" />
         <p className="workouts-summary-note">Metrics per day, not a sum of workouts. Known values only; missing days are not zero.</p>

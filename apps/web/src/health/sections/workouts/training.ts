@@ -69,17 +69,32 @@ export function activityFigures(rows: readonly Workout[], period: HealthPeriod) 
     const date = workoutDate(row.metric_date);
     return date !== null && date >= period.startDate && date <= period.endDate;
   });
-  const total = (names: string[], convert: (row: Workout) => number | null) =>
-    sumKnown(selected.filter(row => names.includes(String(row.metric_name))).map(convert));
+  const total = (names: string[], convert: (row: Workout) => number | null, requireMerged = false) => {
+    const byDay = new Map<string, { rank: number; updated: string; value: number }>();
+    for (const row of selected) {
+      const rank = names.length - names.indexOf(String(row.metric_name));
+      if (rank > names.length || rank <= 0) continue;
+      const fields = row.fields;
+      if (requireMerged && (typeof fields !== 'object' || fields === null || Array.isArray(fields)
+        || fields.mergedDailyTotal !== true)) continue;
+      const value = convert(row);
+      const date = workoutDate(row.metric_date);
+      if (value === null || date === null) continue;
+      const updated = typeof row.updated_at === 'string' ? row.updated_at : '';
+      const previous = byDay.get(date);
+      if (!previous || rank > previous.rank || (rank === previous.rank && updated > previous.updated)) {
+        byDay.set(date, { rank, updated, value });
+      }
+    }
+    return sumKnown([...byDay.values()].map(day => day.value));
+  };
   return {
     steps: total(['step_count', 'steps'], row => row.unit === 'count' ? nonnegative(row.value) : null),
-    energy: total(['active_energy_burned', 'active_energy'], row => calories(row.value, row.unit)),
+    energy: total(['active_energy_burned', 'active_energy'], row => row.unit === 'kcal' ? nonnegative(row.value) : null, true),
     seconds: total(['apple_exercise_time', 'exercise_time'], row => {
       const value = nonnegative(row.value);
-      return value === null ? null : ['min', 'minutes'].includes(String(row.unit)) ? value * 60
-        : ['s', 'sec', 'seconds'].includes(String(row.unit)) ? value
-          : ['h', 'hr', 'hours'].includes(String(row.unit)) ? value * 3600 : null;
-    }),
+      return value !== null && row.unit === 'min' ? value * 60 : null;
+    }, true),
   };
 }
 

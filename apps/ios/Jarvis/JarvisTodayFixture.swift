@@ -10,6 +10,38 @@ struct JarvisTodayFixture {
     let notes: [VaultNoteSummary]
     let steps: JarvisStepsSnapshot
     let gymEntries: [JarvisGymLogEntry]
+    var dailyActivity: JarvisDailyActivitySnapshot {
+        let calendar = JarvisHealthSyncWindow.calendar
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        var days: [String: JarvisDailyActivityDay] = [:]
+        for offset in 0..<30 {
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: now) else { continue }
+            days[formatter.string(from: date)] = JarvisDailyActivityDay(
+                activeKilocalories: offset == 0 ? 420 : 360,
+                exerciseMinutes: offset == 0 ? 24 : 30,
+                observedAt: now
+            )
+        }
+        return JarvisDailyActivitySnapshot(days: days, fetchedAt: now)
+    }
+
+    var maxBriefLines: Int {
+        let value = ProcessInfo.processInfo.arguments.first { $0.hasPrefix("--home-brief-lines=") }
+            .flatMap { Int($0.dropFirst("--home-brief-lines=".count)) } ?? 3
+        return min(6, max(1, value))
+    }
+    func brief(language: JarvisAppLanguage) -> JarvisHomeBrief {
+        let long = ProcessInfo.processInfo.arguments.contains("--home-brief-long")
+        let text = language == .da
+            ? "Design review begynder kl. 15. Du har to opgaver med frist i dag."
+            : "Design review starts at 15:00. You have two tasks due today."
+        return JarvisHomeBrief(text: long ? Array(repeating: text, count: 8).joined(separator: " ") : text,
+            maxVisibleLines: maxBriefLines, language: language.rawValue,
+            generatedAt: "2026-11-02T13:30:00Z", highlights: ["Design review"])
+    }
 
     /// Monday 2 November 2026, 14:30 in the device time zone.
     static func make() -> JarvisTodayFixture {

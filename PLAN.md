@@ -2,6 +2,10 @@
 
 Implemented on fix/watch-startup-connectivity-alert: suppress bootstrap/idle disconnect alerts, guard passive history reads, retain inline history errors and preserve explicit action recovery. Four composer recovery regression scenarios are added. CI/native builds and physical startup/reconnection checks remain unverified until their results are recorded in the PR. Primary owns integration and deployment.
 
+## Home brief and daily activity implementation — 9 November 2026
+
+Implemented in draft PR #1689 on feature/home-brief-daily-activity. General CI and three native builds passed at the code revision recorded in docs/ios/design/home-brief-activity-handoff.md. Native UI measurements/screenshots remain queued; installed-device checks include HealthKit authorization/no-data ambiguity, midnight/DST, late Watch sync and actual model output in English/Danish. Primary owns integration and deployment. No deployment or owner acceptance is claimed.
+
 ## Direct owner actions — 9 November 2026
 
 Shared owner actions, Google writes and Factory/GitHub writes now execute the

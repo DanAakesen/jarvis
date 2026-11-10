@@ -37,6 +37,10 @@ struct JarvisTodayActivityCard: View {
         VStack(alignment: .leading, spacing: 6) {
             header
             workoutsBlock(display)
+            if !model.dailyActivity.isLoading, let issue = activityIssue(display) {
+                Text(issue).font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("today.activity.issue")
+            }
             Divider().accessibilityHidden(true)
             Text(copy(.steps))
                 .font(.subheadline.weight(.semibold))
@@ -92,6 +96,7 @@ struct JarvisTodayActivityCard: View {
                     retry: model.workouts.failure != .unavailable
                 )
             }
+            summary(display)
         } else {
             let layout = isLargeText
                 ? AnyLayout(VStackLayout(spacing: JarvisPageHeaderMetrics.spacing))
@@ -193,19 +198,32 @@ struct JarvisTodayActivityCard: View {
     private func summary(_ display: JarvisTodayActivityDisplay) -> some View {
         VStack(spacing: 0) {
             summaryValue(
-                JarvisTodayLocalization.durationText(minutes: display.activeMinutes, language: language),
+                activityValue(display.exerciseTotal),
                 label: copy(.activeTime),
                 identifier: "today.summary.time"
             )
             Divider().accessibilityHidden(true)
             summaryValue(
-                JarvisNumberFormat.compact(display.activeKilocalories, language: language),
+                activityValue(display.energyTotal),
                 label: copy(.activeKcal),
                 identifier: "today.summary.kcal"
             )
         }
         .frame(maxWidth: .infinity)
         .frame(height: isLargeText ? nil : donutSize)
+    }
+
+    private func activityValue(_ total: JarvisActivityTotal) -> String {
+        guard let raw = total.value, let value = Int(exactly: raw.rounded()) else { return "—" }
+        return (total.availability == .partial ? "≥ " : "") + JarvisNumberFormat.compact(value, language: language)
+    }
+
+    private func activityIssue(_ display: JarvisTodayActivityDisplay) -> String? {
+        let states = [display.energyTotal.availability, display.exerciseTotal.availability]
+        if states.contains(.stale) { return copy(.activityStale) }
+        if states.contains(.unavailable) { return copy(.activityUnavailable) }
+        if states.contains(.partial) { return copy(.activityPartial) }
+        return nil
     }
 
     private func summaryValue(_ value: String, label: String, identifier: String) -> some View {

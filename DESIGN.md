@@ -2,6 +2,10 @@
 
 Keep the approved Watch layout and controls. Startup and idle connectivity changes use the existing quiet connection status. History read failures stay inside the chat scroll area. The modal Jarvis alert is reserved for actual user-action/interruption feedback.
 
+## Home brief and daily activity implementation — 9 November 2026
+
+Preserve the accepted Home layout, typography, shared glass surfaces and transparent chrome. The brief uses its configured visible-line limit at every Dynamic Type size; its full text remains available to accessibility. Settings → General → Jarvis → Instructions keeps identity, general/personality, presence modes and Home instructions in distinct saved scopes. Unknown activity is an em dash, partial coverage is identified, and stale retained readings are labeled.
+
 ## Owner actions without approval interruptions — 9 November 2026
 
 Requested actions return progress and a truthful completion or failure receipt.
