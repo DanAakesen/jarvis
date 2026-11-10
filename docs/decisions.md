@@ -1,3 +1,30 @@
+## 10 November 2026 — Native Factory task detail (#1708)
+
+Use the owner-requested Actions / Details / Request / Timeline / Usage / Artifacts
+order. Cap Request at five rendered lines and measure real overflow. Condense
+adjacent ACP transport noise and preserve exact public message chunks, error
+visibility and loaded counts; keep expanded history separate from the compact
+task page. Diagnostics must not expose raw ACP parameters, thoughts or tool
+inputs/outputs. Removing the Disk section does not remove monitoring or alerts.
+
+Source inspection confirms the publisher's top-level fallback produces
+“acp notification” while public text is nested in
+`data.params.update.content.text` for `session/update` / `agent_message_chunk`.
+Production event distribution was not measured, and live task 24 was not touched.
+Preserve PR #1704's task-detail structure/retention/request guards from head
+`0bffc61d30ae5d66a6203684aa8f53d975e8d1c7`; the primary orchestrator owns final
+main integration and release. Simulator captures and device acceptance are not
+claimed from the Linux development environment.
+
+Review follow-up (#1710, comment 5845353676): use the explicitly permitted
+incomplete-history presentation rather than adding a backend latest-page API.
+Oldest-first HTTP history may omit recent updates while SSE is delayed/offline;
+even successful `ready` covers active SQL events only. Keep the localized
+coverage warning until HTTP pagination reaches the end, preserving older pages.
+Batch replay in groups of at most 100, yield between groups, and refresh task
+status once at `ready`, not once for every replayed state change. Keep live
+delivery immediate and retain validated short batches on connection failure.
+
 ## 10 November 2026 — Explicit timed reminders bypass quiet hours (#1706)
 
 Supersedes the quiet-window refusal in #1239 and the all-reminder night gate in

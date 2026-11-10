@@ -1756,6 +1756,25 @@ or invent a combined board.
 The board invalidation listener consumes the existing `/now/events` `board`
 frames and refreshes only the matching project. Task detail resumes its existing
 task-event stream with `Last-Event-ID`; Core bounds and decodes both streams.
+Native task detail uses `FactoryTaskHistory` to merge unique event IDs while
+tracking the oldest-first HTTP page offset separately from the SSE cursor.
+Refresh retains fetched history; replay starts at the beginning until SSE has
+established a cursor, so a partially fetched page cannot skip unseen events.
+Task-detail replay publishes at most 100 records per batch and yields between
+batches, merging each batch into view state once. Live records remain immediate;
+the existing per-event client method retains immediate delivery. A short batch
+is flushed before `ready`, EOF or a non-cancellation failure without advancing
+the cursor beyond delivered records. Replayed state changes do not each trigger
+HTTP/Live Activity updates; task detail refreshes once at `ready` and on new live
+state changes. The server replays active SQL rows only, not archived records.
+Consequently, a persistent partial-history notice follows HTTP `hasMore` even
+after `ready`; reconnect/offline status is independent of that coverage warning.
+`FactoryTaskTimeline` derives adjacent public ACP message chunks, protocol
+tool titles/status and plan entries, grouped low-level notifications and a
+bounded preview. Diagnostic disclosure exposes identifiers, types, sources,
+timestamps and truncation notices, not raw ACP params or private reasoning.
+The history sheet paginates on demand within the existing API offset limit;
+no runner publication, backend storage or low-disk safety contract changes.
 Task grouping/filtering, default Done collapse, control availability,
 confirmation handling, release-linked task IDs and task submission validation
 remain in `JarvisCore`. A create retry retains the same generated submission UUID

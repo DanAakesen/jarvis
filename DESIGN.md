@@ -3136,6 +3136,20 @@ Settings frames. Chat and the shared orb are outside this alignment change.
 
 ## Native iOS Software Factory (P15-19; 31 October 2026)
 
+Task-detail simplification (#1708, 10 November 2026) retains the native list and
+shared controls. Actions precede Details, the five-rendered-line expandable
+Request, compact Timeline, Usage and Artifacts. Request overflow is measured
+at the current width and Dynamic Type size, not estimated by character count.
+Timeline rows disclose full readable activity and permitted event metadata.
+Six recent loaded activities and any earlier latest attention event keep Usage
+reachable; a separate history sheet exposes grouped records and pagination.
+Counts explicitly describe loaded data, not an assumed total. No standalone
+Disk panel is shown; disk-low alerts remain timeline activity.
+Partial history includes a persistent, localized text-and-icon notice that
+recent activity may be missing. It stays visible even when live replay finishes,
+until HTTP pagination reaches its end. Live catch-up is labelled separately from
+reconnecting/offline, rather than suggesting the oldest loaded page is current.
+
 The approved Factory screen uses the existing Notes chrome: a Software Factory
 title and refresh control, one glass Board / Releases switcher, and a fixed
 glass search field plus round create button. The narrowed switcher sits above

@@ -9,44 +9,35 @@ struct JarvisFactoryTaskDetailView: View {
     var showSteeringAtLaunch = false
 
     @State private var task: FactoryTaskRecord?
-    @State private var events: [FactoryTaskEvent] = []
+    @State private var history: FactoryTaskHistory?
     @State private var usage: [FactoryTaskUsage] = []
-    @State private var loading = true
     @State private var loadFailed = false
     @State private var actionFailed = false
-    @State private var taskConnection: FactoryTaskConnection = .connected
+    @State private var taskConnection: FactoryTaskConnection = .catchingUp
     @State private var eventRetryCount = 0
-    @State private var lastEventID: String?
     @State private var loadingMoreEvents = false
-    @State private var hasMoreEvents = false
+    @State private var historyFailed = false
+    @State private var historyPresented = false
     @State private var busyAction: FactoryTaskControl?
     @State private var steeringPresented = false
     @State private var actionCompleted = false
+    @State private var loadRequest = UUID()
+    @State private var loadedTaskID: String?
 
     private var copy: JarvisFactoryCopy { JarvisFactoryCopy(language: language) }
-    private var streamIdentity: String { task == nil ? "waiting" : "ready-\(taskID)" }
+    private var streamIdentity: String { loadedTaskID == taskID ? "ready-\(taskID)" : "waiting-\(taskID)" }
+    private var events: [FactoryTaskEvent] { history?.taskID == taskID ? history?.events ?? [] : [] }
+    private var timeline: [FactoryTimelineEntry] {
+        FactoryTaskTimeline.entries(events: events, taskID: taskID, language: language)
+    }
 
     var body: some View {
-        Group {
-            if loading && task == nil {
-                FactoryLoadingView(copy: copy, releases: false)
-            } else if loadFailed && task == nil {
-                FactoryStateMessage(
-                    title: copy.text(.actionFailed),
-                    actionTitle: copy.text(.retry),
-                    action: { Task { await loadTask() } }
-                )
-            } else if let task {
-                detailContent(task)
-            } else {
-                FactoryStateMessage(title: copy.text(.taskDetail))
-            }
-        }
+        detailContent(loadedTaskID == taskID ? task : nil)
         .safeAreaInset(edge: .top, spacing: 0) {
             JarvisTaskActivityNotice(language: language)
         }
         .jarvisAmbientBackground()
-        .navigationTitle(task?.title ?? copy.text(.taskDetail))
+        .navigationTitle(loadedTaskID == taskID ? task?.title ?? copy.text(.taskDetail) : copy.text(.taskDetail))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .environment(\.locale, language.locale)
@@ -59,13 +50,27 @@ struct JarvisFactoryTaskDetailView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $historyPresented) {
+            timelineHistory
+                .environment(\.locale, language.locale)
+        }
         .accessibilityIdentifier("factory.taskDetail")
     }
 
     @ViewBuilder
-    private func detailContent(_ task: FactoryTaskRecord) -> some View {
+    private func detailContent(_ task: FactoryTaskRecord?) -> some View {
+        let events = self.events
+        let timeline = FactoryTaskTimeline.entries(events: events, taskID: taskID, language: language)
         JarvisList {
+            if loadFailed {
+                FactoryStateMessage(
+                    title: copy.text(.actionFailed),
+                    actionTitle: copy.text(.retry),
+                    action: { Task { await loadTask() } }
+                )
+            }
             Section(copy.text(.actions)) {
+                if let task {
                 if JarvisFactoryPresentation.availableControls(
                     state: task.state,
                     latestSessionEndReason: task.latestSessionEndReason
@@ -103,20 +108,19 @@ struct JarvisFactoryTaskDetailView: View {
                 }
                 if liveUpdatesEnabled && taskConnection != .connected {
                     Label(
-                        copy.text(taskConnection == .offline ? .offline : .eventReconnecting),
+                        copy.text(taskConnection == .offline ? .offline :
+                            taskConnection == .catchingUp ? .eventCatchingUp : .eventReconnecting),
                         systemImage: taskConnection == .offline ? "wifi.slash" : "arrow.triangle.2.circlepath"
                     )
                     .foregroundStyle(.secondary)
                 }
-            }
-
-            Section(copy.text(.request)) {
-                Text(task.request)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    detailPlaceholder
+                }
             }
 
             Section(copy.text(.metadata)) {
+                if let task {
                 LabeledContent(copy.text(.projectLabel), value: task.projectId)
                 LabeledContent(copy.text(.agentLabel), value: copy.agent(task.agent))
                 LabeledContent(copy.text(.state), value: copy.state(task.state))
@@ -149,28 +153,62 @@ struct JarvisFactoryTaskDetailView: View {
                     )
                 }
                 LabeledContent(copy.text(.attempts), value: task.attemptCount.formatted(.number.locale(language.locale)))
+                } else {
+                    ForEach([JarvisFactoryLocalizationKey.projectLabel, .agentLabel, .state, .created, .attempts], id: \.self) { key in
+                        LabeledContent(copy.text(key), value: "—")
+                    }
+                }
+            }
+
+            Section(copy.text(.request)) {
+                if let task {
+                    JarvisFactoryRequestView(request: task.request, copy: copy)
+                        .id(task.id)
+                } else {
+                    detailPlaceholder
+                }
             }
 
             Section(copy.text(.timeline)) {
-                if events.isEmpty {
+                if task != nil, history?.hasMore == true {
+                    incompleteHistoryNotice
+                }
+                if task == nil {
+                    detailPlaceholder
+                } else if events.isEmpty {
                     Text(copy.text(.noEvents))
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(events) { event in
-                        FactoryTaskEventRow(event: event, copy: copy, language: language)
+                    Text(String(format: copy.text(.timelineCount), locale: language.locale, events.count, timeline.count))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if timeline.contains(where: \.needsAttention) {
+                        Label(
+                            String(
+                                format: copy.text(.timelineAttentionCount), locale: language.locale,
+                                timeline.filter(\.needsAttention).reduce(0) { $0 + $1.events.count }
+                            ),
+                            systemImage: "exclamationmark.triangle"
+                        )
+                        .accessibilityIdentifier("factory.timeline.attention")
+                    }
+                    ForEach(FactoryTaskTimeline.preview(timeline)) { entry in
+                        FactoryTimelineRow(entry: entry, copy: copy)
                     }
                 }
-                if hasMoreEvents {
+                if task != nil, !events.isEmpty || history?.canLoadMore == true {
                     JarvisLabelledButton(
-                        title: copy.text(.loadMore),
-                        isBusy: loadingMoreEvents,
+                        title: copy.text(.timelineHistory),
+                        identifier: "factory.timeline.history",
                         isFullWidth: true
-                    ) { Task { await loadMoreEvents() } }
+                    ) { historyPresented = true }
                 }
             }
 
             Section(copy.text(.usage)) {
-                if usage.isEmpty {
+                if task == nil {
+                    detailPlaceholder
+                } else if usage.isEmpty {
                     Text(copy.text(.noUsage))
                         .foregroundStyle(.secondary)
                 } else {
@@ -180,19 +218,10 @@ struct JarvisFactoryTaskDetailView: View {
                 }
             }
 
-            Section(copy.text(.disk)) {
-                if diskEvents.isEmpty {
-                    Text(copy.text(.noDisk))
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(diskEvents) { event in
-                        FactoryDiskEventRow(event: event, copy: copy, language: language)
-                    }
-                }
-            }
-
             Section(copy.text(.artifacts)) {
-                if artifactEvents.isEmpty {
+                if task == nil {
+                    detailPlaceholder
+                } else if artifactEvents.isEmpty {
                     Text(copy.text(.noArtifacts))
                         .foregroundStyle(.secondary)
                 } else {
@@ -204,6 +233,59 @@ struct JarvisFactoryTaskDetailView: View {
         }
         .listStyle(.insetGrouped)
         .refreshable { await loadTask() }
+    }
+
+    @ViewBuilder
+    private var detailPlaceholder: some View {
+        if loadFailed {
+            Text(copy.text(.actionFailed)).foregroundStyle(.secondary)
+        } else {
+            JarvisLoadingView(title: copy.text(.loadingTasks), size: .inline)
+        }
+    }
+
+    private var incompleteHistoryNotice: some View {
+        Label(copy.text(.historyIncomplete), systemImage: "clock.badge.exclamationmark")
+            .font(.callout)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("factory.timeline.incomplete")
+    }
+
+    private var timelineHistory: some View {
+        let timeline = self.timeline
+        return JarvisPageScaffold(
+            title: copy.text(.timeline),
+            language: language,
+            actions: {
+                JarvisSheetCloseButton(title: copy.text(.showLess)) { historyPresented = false }
+            },
+            headline: { EmptyView() },
+            hero: { EmptyView() }
+        ) {
+            LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.factoryRowSpacing) {
+                if history?.hasMore == true {
+                    incompleteHistoryNotice
+                }
+                ForEach(timeline) { entry in
+                    FactoryTimelineRow(entry: entry, copy: copy)
+                    Divider()
+                }
+                if historyFailed {
+                    Label(copy.text(.historyLoadFailed), systemImage: "exclamationmark.triangle")
+                }
+                if history?.canLoadMore == true {
+                    JarvisLabelledButton(
+                        title: copy.text(historyFailed ? .retry : .loadMore),
+                        identifier: "factory.timeline.loadMore",
+                        isBusy: loadingMoreEvents,
+                        isFullWidth: true
+                    ) { Task { await loadMoreEvents() } }
+                } else if history?.hasMore == true {
+                    Text(copy.text(.historyTruncated)).foregroundStyle(.secondary)
+                }
+            }
+        }
+        .accessibilityIdentifier("factory.timeline.detail")
     }
 
     @ViewBuilder
@@ -242,88 +324,106 @@ struct JarvisFactoryTaskDetailView: View {
     }
 
     private func loadTask() async {
-        loading = true
+        let requestedTaskID = taskID
+        let request = UUID()
+        loadRequest = request
+        if loadedTaskID != requestedTaskID {
+            task = nil
+            history = FactoryTaskHistory(taskID: requestedTaskID)
+            usage = []
+            historyFailed = false
+            historyPresented = false
+            steeringPresented = false
+            actionFailed = false
+            actionCompleted = false
+            taskConnection = .catchingUp
+            eventRetryCount = 0
+        }
         loadFailed = false
         do {
-            let detail = try await client.task(id: taskID)
-            guard !Task.isCancelled else { return }
+            let detail = try await client.task(id: requestedTaskID)
+            guard !Task.isCancelled, loadRequest == request, taskID == requestedTaskID else { return }
+            let firstLoad = loadedTaskID != requestedTaskID
             task = detail.task
-            events = detail.events.sorted { $0.at < $1.at }
+            loadedTaskID = requestedTaskID
+            history?.mergePage(detail.events, offset: 0)
             usage = detail.usage
-            hasMoreEvents = detail.events.count == 100
-            lastEventID = events.last?.id
-            taskConnection = .connected
             await JarvisFactoryLiveActivityController.update(task: detail.task, language: language)
-            if showSteeringAtLaunch {
+            if firstLoad && showSteeringAtLaunch {
                 steeringPresented = true
             }
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, loadRequest == request, taskID == requestedTaskID else { return }
             loadFailed = true
         }
-        loading = false
     }
 
     private func loadMoreEvents() async {
-        guard !loadingMoreEvents else { return }
+        guard !loadingMoreEvents, let history, history.taskID == taskID, history.canLoadMore else { return }
+        let requestedTaskID = taskID
+        let offset = history.nextOffset
         loadingMoreEvents = true
+        historyFailed = false
         defer { loadingMoreEvents = false }
         do {
-            let detail = try await client.task(id: taskID, eventLimit: 100, eventOffset: events.count)
-            let knownIDs = Set(events.map(\.id))
-            events = (detail.events.filter { !knownIDs.contains($0.id) } + events).sorted { $0.at < $1.at }
-            hasMoreEvents = detail.events.count == 100
+            let detail = try await client.task(id: requestedTaskID, eventLimit: 100, eventOffset: offset)
+            guard !Task.isCancelled, loadedTaskID == requestedTaskID, taskID == requestedTaskID else { return }
+            self.history?.mergePage(detail.events, offset: offset)
         } catch {
-            actionFailed = true
+            guard !Task.isCancelled, loadedTaskID == requestedTaskID, taskID == requestedTaskID else { return }
+            historyFailed = true
         }
     }
 
     private func listenForEvents() async {
-        guard liveUpdatesEnabled, task != nil else { return }
+        guard liveUpdatesEnabled, task != nil, loadedTaskID == taskID else { return }
+        let requestedTaskID = taskID
         var retrySeconds = 1
         while !Task.isCancelled {
             do {
-                try await client.listenForTaskEvents(taskId: taskID, after: lastEventID) { event in
-                    let (stateChanged, currentTask) = await MainActor.run {
-                        taskConnection = .connected
-                        eventRetryCount = 0
-                        lastEventID = event.id
-                        if !events.contains(where: { $0.id == event.id }) {
-                            events.append(event)
-                            events.sort { $0.at < $1.at }
+                try await client.listenForTaskEventBatches(
+                    taskId: requestedTaskID,
+                    after: history?.streamCursor,
+                    onReplayComplete: {
+                        let current = await MainActor.run {
+                            guard !Task.isCancelled, taskID == requestedTaskID,
+                                  loadedTaskID == requestedTaskID else { return false }
+                            taskConnection = .connected
+                            eventRetryCount = 0
+                            return true
                         }
-                        return (event.type == "state_changed", task)
+                        if current { await refreshTaskAfterEvents(taskID: requestedTaskID) }
+                    }
+                ) { batch, replaying in
+                    let (stateChanged, currentTask) = await MainActor.run {
+                        guard !Task.isCancelled, taskID == requestedTaskID, loadedTaskID == requestedTaskID,
+                              var updatedHistory = history else {
+                            return (false, Optional<FactoryTaskRecord>.none)
+                        }
+                        var stateChanged = false
+                        for event in batch {
+                            let inserted = updatedHistory.receive(event)
+                            stateChanged = stateChanged || (inserted && event.type == "state_changed")
+                        }
+                        history = updatedHistory
+                        return (!replaying && stateChanged, replaying ? nil : task)
                     }
                     if let currentTask {
                         await JarvisFactoryLiveActivityController.update(
                             task: currentTask,
-                            activityText: event.summary,
+                            activityText: batch.last?.summary,
                             language: language
                         )
                     }
                     if stateChanged {
-                        do {
-                            let detail = try await client.task(id: taskID)
-                            await MainActor.run {
-                                task = detail.task
-                                usage = detail.usage
-                                let knownIDs = Set(events.map(\.id))
-                                events = (detail.events.filter { !knownIDs.contains($0.id) } + events)
-                                    .sorted { $0.at < $1.at }
-                            }
-                            await JarvisFactoryLiveActivityController.update(
-                                task: detail.task,
-                                language: language
-                            )
-                        } catch {
-                            await MainActor.run { actionFailed = true }
-                        }
+                        await refreshTaskAfterEvents(taskID: requestedTaskID)
                     }
                 }
+                guard !Task.isCancelled, taskID == requestedTaskID, loadedTaskID == requestedTaskID else { return }
                 eventRetryCount += 1
                 taskConnection = .reconnecting
             } catch {
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, taskID == requestedTaskID, loadedTaskID == requestedTaskID else { return }
                 eventRetryCount += 1
                 taskConnection = eventRetryCount >= 3 ? .offline : .reconnecting
             }
@@ -336,28 +436,53 @@ struct JarvisFactoryTaskDetailView: View {
         }
     }
 
+    private func refreshTaskAfterEvents(taskID requestedTaskID: String) async {
+        let refreshRequest = loadRequest
+        do {
+            let detail = try await client.task(id: requestedTaskID)
+            let applied = await MainActor.run {
+                guard !Task.isCancelled, taskID == requestedTaskID,
+                      loadedTaskID == requestedTaskID, loadRequest == refreshRequest else { return false }
+                task = detail.task
+                usage = detail.usage
+                history?.mergePage(detail.events, offset: 0)
+                return true
+            }
+            if applied {
+                await JarvisFactoryLiveActivityController.update(task: detail.task, language: language)
+            }
+        } catch {
+            await MainActor.run {
+                guard !Task.isCancelled, taskID == requestedTaskID,
+                      loadedTaskID == requestedTaskID, loadRequest == refreshRequest else { return }
+                actionFailed = true
+            }
+        }
+    }
+
     private func perform(_ request: FactoryTaskControlRequest) async {
-        guard busyAction == nil else { return }
+        guard busyAction == nil, taskID == request.taskId, loadedTaskID == request.taskId else { return }
+        loadRequest = UUID()
         busyAction = request.action
         actionFailed = false
         actionCompleted = false
         defer { busyAction = nil }
         do {
-            task = try await client.controlTask(request, confirm: false)
+            let result = try await client.controlTask(request, confirm: false)
+            guard !Task.isCancelled, taskID == request.taskId, loadedTaskID == request.taskId else { return }
+            loadRequest = UUID()
+            task = result
             actionCompleted = true
         } catch {
+            guard !Task.isCancelled, taskID == request.taskId, loadedTaskID == request.taskId else { return }
             actionFailed = true
         }
     }
 
     private func sendSteering(_ message: String) async -> Bool {
-        guard let task else { return false }
+        guard let task, task.id == taskID, loadedTaskID == taskID else { return false }
         await perform(FactoryTaskControlRequest(taskId: task.id, action: .steer, message: message))
         return !actionFailed
-    }
-
-    private var diskEvents: [FactoryTaskEvent] {
-        events.filter { $0.type.localizedCaseInsensitiveContains("disk") }
     }
 
     private var artifactEvents: [FactoryTaskEvent] {
@@ -406,44 +531,69 @@ struct JarvisFactoryTaskDetailView: View {
 }
 
 private enum FactoryTaskConnection: Equatable {
+    case catchingUp
     case connected
     case reconnecting
     case offline
 }
 
-private struct FactoryTaskEventRow: View {
-    let event: FactoryTaskEvent
+private struct FactoryTimelineRow: View {
+    let entry: FactoryTimelineEntry
     let copy: JarvisFactoryCopy
-    let language: JarvisAppLanguage
+    @State private var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.factoryRowSpacing) {
-            Text(event.summary ?? copy.text(.timeline))
+            DisclosureGroup(isExpanded: $expanded) {
+                Text(verbatim: entry.text)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                DisclosureGroup(copy.text(.eventDiagnostics)) {
+                    ForEach(entry.events) { event in
+                        VStack(alignment: .leading) {
+                            Text(verbatim: "#\(event.id) · \(event.type) · \(event.source.rawValue)")
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                            Text(timestamp(event.at))
+                                .font(.caption)
+                            if FactoryTaskTimeline.payloadUnavailable(event) {
+                                Text(copy.text(.eventPayloadTruncated)).font(.caption)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                Label {
+                    Text(verbatim: entry.text)
+                        .lineLimit(3)
+                } icon: {
+                    Image(systemName: entry.needsAttention ? "exclamationmark.triangle" : "text.bubble")
+                }
                 .font(.body)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(JarvisFactoryLocalization.formattedDate(event.at, language: language))
+            }
+            .accessibilityIdentifier("factory.timeline.entry.\(entry.id)")
+            Text(timestamp(entry.events.first?.at ?? ""))
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            if event.payloadTruncated {
-                Text(copy.text(.eventPayloadTruncated))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                DisclosureGroup(copy.text(.eventPayload)) {
-                    Text(payloadText)
-                        .font(.caption.monospaced())
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .font(.caption)
+            if let last = entry.events.last, last.at != entry.events.first?.at {
+                Text("– \(timestamp(last.at))")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if entry.events.count > 1 {
+                Text(String(format: copy.text(.eventCount), locale: copy.language.locale, entry.events.count))
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, JarvisDesignTokens.factoryRowSpacing)
     }
 
-    private var payloadText: String {
-        guard let data = try? JSONEncoder().encode(event.payload) else { return "" }
-        return String(decoding: data, as: UTF8.self)
+    private func timestamp(_ value: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions.insert(.withFractionalSeconds)
+        let date = formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+        return date?.formatted(
+            .dateTime.year().month(.abbreviated).day().hour().minute().second().locale(copy.language.locale)
+        ) ?? value
     }
 }
 
@@ -496,58 +646,6 @@ private struct FactoryUsageRow: View {
         case .premiumRequests: copy.text(.premiumRequests)
         }
     }
-}
-
-private struct FactoryDiskEventRow: View {
-    let event: FactoryTaskEvent
-    let copy: JarvisFactoryCopy
-    let language: JarvisAppLanguage
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.factoryRowSpacing) {
-            if let summary = event.summary {
-                Text(summary)
-            }
-            ForEach(diskValues) { value in
-                LabeledContent(copy.text(value.label), value: value.bytes.formatted(.byteCount(style: .file).locale(language.locale)))
-            }
-            Text(JarvisFactoryLocalization.formattedDate(event.at, language: language))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, JarvisDesignTokens.factoryRowSpacing)
-    }
-
-    private var diskValues: [FactoryDiskMeasurement] {
-        guard case .object(let payload) = event.payload else { return [] }
-        let value: [String: FactoryJSONValue]
-        if case .object(let data)? = payload["data"] {
-            value = data
-        } else {
-            value = payload
-        }
-        return [
-            ("freeBytes", .freeDisk),
-            ("usedBytes", .usedDisk),
-            ("totalBytes", .totalDisk),
-        ].compactMap { key, label in
-            guard case .number(let number)? = value[key],
-                  number.isFinite,
-                  number >= 0,
-                  number < Double(Int64.max) else { return nil }
-            return FactoryDiskMeasurement(
-                id: key,
-                label: label,
-                bytes: Int64(number)
-            )
-        }
-    }
-}
-
-private struct FactoryDiskMeasurement: Identifiable {
-    let id: String
-    let label: JarvisFactoryLocalizationKey
-    let bytes: Int64
 }
 
 private struct JarvisFactorySteerSheet: View {

@@ -20,11 +20,31 @@ struct JarvisFactoryScreenshotConfiguration {
 }
 
 enum JarvisFactoryFixtureScenario {
+    static var taskDetailLiveUpdatesEnabled: Bool {
+#if DEBUG && targetEnvironment(simulator)
+        let arguments = ProcessInfo.processInfo.arguments
+        return ["--ui-test-navigation", "--ui-test-notification-tasks", "--ui-test-factory-long-detail"]
+            .allSatisfy(arguments.contains) &&
+            ["--ui-test-factory-live-replay", "--ui-test-factory-offline-replay"]
+            .contains(where: arguments.contains)
+#else
+        return false
+#endif
+    }
+
     static func makeClient(state: JarvisFactoryPreviewState) throws -> JarvisFactoryClient {
         let scenario = Data(scenario(for: state).utf8)
+        var history = Data(#"{"version":1,"interactions":[\#(taskDetailResponse)]}"#.utf8)
+#if DEBUG && targetEnvironment(simulator)
+        let arguments = ProcessInfo.processInfo.arguments
+        if ["--ui-test-navigation", "--ui-test-notification-tasks", "--ui-test-factory-long-detail"]
+            .allSatisfy(arguments.contains) {
+            history = try longTaskHistory()
+        }
+#endif
         let transport = try TaskHistoryFixtureTransport(
             base: FixtureTransport(scenario: scenario),
-            history: Data(#"{"version":1,"interactions":[\#(taskDetailResponse)]}"#.utf8)
+            history: history
         )
         let client = try JarvisClient(
             configuration: JarvisClientConfiguration(
@@ -201,6 +221,135 @@ enum JarvisFactoryFixtureScenario {
         return text
     }
 
+#if DEBUG && targetEnvironment(simulator)
+    private static func longTaskHistory() throws -> Data {
+        let original = try JSONSerialization.jsonObject(with: Data(taskDetailResponse.utf8)) as! [String: Any]
+        var body = (original["response"] as! [String: Any])["body"] as! [String: Any]
+        body["request"] = """
+        Synthetic native task-detail acceptance request. Use only example/example and fixture task 21.
+
+        Review the release branch before preparing a pull request. Read the existing implementation and preserve the original request exactly, including paragraph breaks, punctuation, and the Danish words æble, øvelse, and åbning.
+
+        Trace the public runner messages separately from private thought chunks and low-level notifications. Keep useful check results, task transitions, artifact references, and earlier failures visible without flooding the main task page.
+
+        An earlier workspace reported disk_low. Retain that historical error even after newer progress arrives; do not mistake a later disk snapshot for proof that the failure never happened.
+
+        Verify the recorded sandbox minutes and provider usage. Missing prices, token totals, and premium requests are unavailable, not zero. Do not invent measurements or contact a live runner.
+
+        Check the collapsed request, expand it to read every paragraph, and collapse it again. The original source must remain unchanged after history pagination and pull-to-refresh.
+
+        Acceptance ends here: synthetic task 21 only; no production task may be opened, changed, resumed, or retried.
+        """
+        let formatter = ISO8601DateFormatter()
+        let start = Date(timeIntervalSince1970: 1_793_347_200)
+        let events: [[String: Any]] = (0..<1_200).map { offset in
+            let page = offset / 100 + 1
+            let position = offset % 100
+            var type = "acp_notification"
+            var summary = "Synthetic runner notification"
+            var payload: [String: Any] = [
+                "invocationId": "fixture-invocation-\(page)",
+                "data": [
+                    "method": "session/update",
+                    "params": [
+                        "sessionId": "fixture-session",
+                        "update": [
+                            "sessionUpdate": "agent_thought_chunk",
+                            "content": ["type": "text", "text": "PRIVATE_THOUGHT_SENTINEL_1708"]
+                        ]
+                    ]
+                ]
+            ]
+            switch position {
+            case 0:
+                type = "state_changed"
+                summary = "Synthetic progress page \(page)"
+                payload = ["from": "Ready", "to": "Running"]
+            case 1:
+                type = offset == 1 ? "disk_low" : "disk_snapshot"
+                summary = offset == 1 ? "Synthetic earlier disk_low: workspace needs attention" : "Synthetic workspace disk snapshot"
+                payload = ["data": ["freeBytes": 1_073_741_824, "usedBytes": 2_147_483_648, "totalBytes": 3_221_225_472]]
+            case 80...82:
+                let chunks = ["Synthetic public progress \(page): ", "reviewed the release.\n", "Checks and artifacts follow."]
+                payload = [
+                    "invocationId": "fixture-invocation-\(page)",
+                    "data": [
+                        "method": "session/update",
+                        "params": [
+                            "sessionId": "fixture-session",
+                            "update": [
+                                "sessionUpdate": "agent_message_chunk",
+                                "content": ["type": "text", "text": chunks[position - 80]]
+                            ]
+                        ]
+                    ]
+                ]
+            case 90:
+                payload = [
+                    "invocationId": "fixture-invocation-\(page)",
+                    "data": [
+                        "method": "session/update",
+                        "params": [
+                            "sessionId": "fixture-session",
+                            "update": [
+                                "sessionUpdate": "tool_call_update",
+                                "title": "Synthetic workspace inspection \(page)", "status": "completed",
+                                "rawOutput": "LOW_LEVEL_SENTINEL_1708"
+                            ]
+                        ]
+                    ]
+                ]
+            case 91:
+                type = "checks_started"
+                summary = "Synthetic checks started \(page)"
+                payload = ["checks": "pending"]
+            case 92:
+                type = "checks_completed"
+                summary = "Synthetic checks passed \(page)"
+                payload = ["conclusion": "success"]
+            case 93:
+                type = "pull_request_updated"
+                summary = "Synthetic pull request #19 updated \(page)"
+                payload = ["number": 19, "url": "https://github.com/example/example/pull/19"]
+            case 94:
+                type = "artifact_created"
+                summary = "Synthetic test report page \(page)"
+                payload = ["name": "fixture-report-\(page).xml"]
+            default:
+                if position.isMultiple(of: 3) || position >= 95 {
+                    payload = [
+                        "invocationId": "fixture-invocation-\(page)",
+                        "data": [
+                            "method": "session/heartbeat",
+                            "params": ["sessionId": "fixture-session", "metadata": "LOW_LEVEL_SENTINEL_1708"]
+                        ]
+                    ]
+                }
+            }
+            if offset == 1_199, taskDetailLiveUpdatesEnabled {
+                type = "task_result"
+                summary = "Synthetic latest progress 1200"
+                payload = ["result": summary]
+            }
+            return [
+                "id": String(offset + 1), "taskId": "21", "type": type, "summary": summary,
+                "payload": payload, "payloadTruncated": false, "source": "runner",
+                "at": formatter.string(from: start.addingTimeInterval(Double(offset)))
+            ]
+        }
+        // The real API is oldest-first with 100-record pages; include the empty terminal page.
+        let interactions: [[String: Any]] = stride(from: 0, through: events.count, by: 100).map { offset in
+            var interaction = original
+            var page = body
+            page["events"] = Array(events.dropFirst(offset).prefix(100))
+            interaction["query"] = ["eventLimit": "100", "eventOffset": String(offset)]
+            interaction["response"] = ["statusCode": 200, "body": page]
+            return interaction
+        }
+        return try JSONSerialization.data(withJSONObject: ["version": 1, "interactions": interactions])
+    }
+#endif
+
     private static let taskDetailResponse = #"""
     {
       "method":"GET","path":"/api/factory/tasks/21",
@@ -239,15 +388,103 @@ private struct TaskHistoryFixtureTransport: HTTPTransport {
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         if request.url.path == "/api/factory/tasks/21" {
-            return try await FixtureTransport(scenario: history).send(request)
+            guard let scenario = try JSONSerialization.jsonObject(with: history) as? [String: Any],
+                  let interactions = scenario["interactions"] as? [[String: Any]] else {
+                throw FixtureTransportError.invalidScenario
+            }
+            var query: [String: String] = [:]
+            for item in URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems ?? [] {
+                guard let value = item.value, query[item.name] == nil else {
+                    throw FixtureTransportError.requestMismatch
+                }
+                query[item.name] = value
+            }
+            let matches = interactions.filter {
+                $0["method"] as? String == request.method.rawValue &&
+                $0["path"] as? String == request.url.path &&
+                ($0["query"] as? [String: String] ?? [:]) == query
+            }
+            guard matches.count == 1 else { throw FixtureTransportError.requestMismatch }
+            // FixtureTransport is ordered and single-use; select this page before replaying it.
+            let page = try JSONSerialization.data(withJSONObject: [
+                "version": scenario["version"] ?? 1, "interactions": matches
+            ])
+            return try await FixtureTransport(scenario: page).send(request)
         }
         return try await base.send(request)
     }
 
     func stream(_ request: HTTPRequest) async throws -> HTTPStreamResponse {
-        try await base.stream(request)
+#if DEBUG && targetEnvironment(simulator)
+        if JarvisFactoryFixtureScenario.taskDetailLiveUpdatesEnabled,
+           request.url.path == "/api/factory/tasks/21/events" {
+            guard request.method == .get else { throw FixtureTransportError.requestMismatch }
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-factory-offline-replay") {
+                throw HTTPTransportFailure.network
+            }
+            let cursorValue = request.headers.first {
+                $0.key.caseInsensitiveCompare("Last-Event-ID") == .orderedSame
+            }?.value ?? "0"
+            guard let cursor = Int(cursorValue), (0...1_200).contains(cursor),
+                  let scenario = try JSONSerialization.jsonObject(with: history) as? [String: Any],
+                  let interactions = scenario["interactions"] as? [[String: Any]] else {
+                throw FixtureTransportError.invalidScenario
+            }
+            let events = try interactions.flatMap { interaction -> [[String: Any]] in
+                guard let response = interaction["response"] as? [String: Any],
+                      let body = response["body"] as? [String: Any],
+                      let events = body["events"] as? [[String: Any]] else {
+                    throw FixtureTransportError.invalidScenario
+                }
+                return events
+            }
+            let frames: [Data] = try events.compactMap { event in
+                guard let id = event["id"] as? String, let number = Int(id) else {
+                    throw FixtureTransportError.invalidScenario
+                }
+                guard number > cursor else { return nil }
+                let json = try JSONSerialization.data(withJSONObject: event, options: [.sortedKeys])
+                return Data("event: task\nid: \(id)\ndata: \(String(decoding: json, as: UTF8.self))\n\n".utf8)
+            }
+            let batches = stride(from: 0, to: frames.count, by: 100).map { offset in
+                frames.dropFirst(offset).prefix(100).reduce(into: Data()) { $0.append($1) }
+            }
+            let playback = FactoryTaskReplayPlayback(
+                chunks: batches + [Data("event: ready\ndata: {}\n\n".utf8)]
+            )
+            return HTTPStreamResponse(
+                statusCode: 200,
+                headers: ["Content-Type": "text/event-stream"],
+                body: AsyncThrowingStream(unfolding: { try await playback.next() })
+            )
+        }
+#endif
+        return try await base.stream(request)
     }
 }
+
+#if DEBUG && targetEnvironment(simulator)
+private actor FactoryTaskReplayPlayback {
+    let chunks: [Data]
+    private var index = 0
+
+    init(chunks: [Data]) { self.chunks = chunks }
+
+    func next() async throws -> Data? {
+        try Task.checkCancellation()
+        // Leave time to inspect the oldest HTTP page and use navigation before replay.
+        try await Task.sleep(for: index == 0 ? .seconds(30) : .milliseconds(500))
+        if index < chunks.count {
+            let chunk = chunks[index]
+            index += 1
+            return chunk
+        }
+        // A ready signal is not EOF. Keep the stream alive until its consumer cancels.
+        try await Task.sleep(for: .seconds(30))
+        return Data(": synthetic task 21 keepalive\n\n".utf8)
+    }
+}
+#endif
 
 private actor FactoryScreenshotTokenStore: TokenStore {
     func read() async throws -> String? { "fixture.owner.token" }

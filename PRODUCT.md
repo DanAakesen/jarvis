@@ -1480,6 +1480,22 @@ The task timeline remains complete as older events move from SQL to private Blob
 
 The detail page initially loads a bounded event page and offers further pages on demand. It combines those records with authenticated live updates without duplicate timeline entries; event-type filtering starts with every event visible, and payloads can be expanded. Task controls are state-aware and call the authenticated backend control route. Pull-request, check, artifact, and CI-log links stay unavailable until their integrations provide them; the Usage section is reserved for P2-12.
 
+The native iPhone task page orders Actions, Details, Request, Timeline, Usage and
+Artifacts. Request initially shows at most five rendered lines, with Show more /
+Show less only when needed; the unchanged original remains selectable. Timeline
+initially shows six recent loaded activities plus the latest earlier attention
+event, with real loaded-event/activity counts and an attention count. Full loaded
+history, grouped event identifiers and further history pages are available on
+demand. Public ACP message chunks are joined without trimming; low-level ACP
+notifications are condensed without publishing private reasoning or raw tool
+payloads. The standalone Disk section is removed only from this native page;
+recorded disk monitoring, low-disk protection and failure/attention events remain.
+An oldest-first page is not presented as the current tail: while further HTTP
+history remains, the native page and history sheet explicitly warn that recent
+activity may be missing. Loading all HTTP pages removes that coverage warning.
+Live catch-up, reconnecting and offline status remain separate; receiving a
+replay `ready` signal does not establish complete archived history.
+
 The runner sends each task-scoped event to authenticated `POST /factory/sandbox-events`
 using its managed identity. The backend accepts only the separately assigned runner
 events role and records the event through `TaskStore.recordEvent`, which persists it

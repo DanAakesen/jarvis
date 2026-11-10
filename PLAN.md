@@ -4072,6 +4072,23 @@ rename waits for all of them. The rows above keep their original working titles.
 
 ## P15 — iOS app
 
+Issue #1708 native Factory task-detail implementation: section reordering,
+measured five-line Request disclosure, condensed public ACP activity and compact
+history preview are implemented. Keep PR #1704's loading/retention/context-safety
+changes in the shared task-detail file. Local qualification: 565 selected Core
+tests, 242 targeted backend tests and four runner message/disk-safety tests pass.
+Native simulator interaction/capture and final combined-main qualification
+remain pending with the primary orchestrator. Do not disturb #1706 task 24 for
+reproduction.
+
+PR #1710 review follow-up: partial oldest-first history now explicitly warns
+that recent activity may be missing, independently of live stream readiness.
+Replay batches bound view publications and defer historical state refresh to
+the ready boundary. Delayed/failed 1,200-event replay, reconnect, cancellation
+and archived-only ready regressions are added; native offline/live capture and
+interaction scenarios remain selected in the existing simulator job. Linux
+checks and native evidence limitations are recorded under #1708 in agent context.
+
 P15-41 / [#1484](https://github.com/DanAakesen/jarvis/issues/1484): sidebar input
 recovery and repeated bilingual iPhone navigation tests are implemented, with
 results retained by the existing iOS gate. Run 41286956749 compiled the app and
