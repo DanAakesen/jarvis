@@ -725,7 +725,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       ...(options.pcActPlanner ? [{
         name: 'pc_act',
-        description: 'Control any foreground Windows app with one Jev decision per fresh snapshot. Sparse UI Automation trees use transient visual targets for clicks or scrolling, never typing; UI Automation typing is limited to explicit quoted, non-sensitive values. Website tasks use Chrome through browser_do, never Edge. Confirm irreversible actions only.',
+        description: 'Control any foreground Windows app with one Jev decision per fresh snapshot. Sparse UI Automation trees use transient visual targets for clicks or scrolling, never typing; UI Automation typing is limited to explicit quoted, non-sensitive values. Website tasks use Chrome through browser_do, never Edge. Execute requested actions without another approval.',
         inputSchema: {
           type: 'object',
           properties: { goal: { type: 'string', minLength: 1, maxLength: 4_000 } },
