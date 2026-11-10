@@ -25,7 +25,7 @@ public enum WatchCodec {
 /// Paired-device protocol. No credentials, arbitrary URLs or backend paths cross this boundary.
 public enum WatchAction: String, Codable, Sendable {
     case snapshot, history, sendTurn, tasks, workouts, lifts, saveLift, deleteLift
-    case projects, factoryTasks, startVoice, voiceHeartbeat, audio, muteVoice, playbackCompleted, endVoice
+    case projects, factoryTasks, createFactoryTask, startVoice, voiceHeartbeat, audio, muteVoice, playbackCompleted, endVoice
 }
 
 public struct WatchRequest: Codable, Equatable, Sendable {
@@ -41,15 +41,17 @@ public struct WatchRequest: Codable, Equatable, Sendable {
     }
     public var isValid: Bool {
         version == 1 && (text?.utf8.count ?? 0) <= 8_000 && (itemID?.utf8.count ?? 0) <= 200 &&
-        (data?.count ?? 0) <= WatchLimits.payloadBytes && (action != .sendTurn || !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        (data?.count ?? 0) <= WatchLimits.payloadBytes && (action != .sendTurn || !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) &&
+            (action != .createFactoryTask || factorySubmission != nil)
     }
 }
 
 public enum WatchFailure: String, Error, Codable, Sendable {
-    case unavailable, signInRequired, invalidRequest, failed, busy
+    case unavailable, healthUnavailable, signInRequired, invalidRequest, failed, busy
     public var message: String {
         switch self {
         case .unavailable: "Connect to your iPhone and open Jarvis."
+        case .healthUnavailable: "Health history is unavailable. Try again on your iPhone."
         case .signInRequired: "Sign in to Jarvis on your iPhone."
         case .invalidRequest: "Check the entered values."
         case .failed: "The request failed. Check your iPhone before trying again."

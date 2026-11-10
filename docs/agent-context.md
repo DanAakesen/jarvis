@@ -8041,3 +8041,10 @@ read timeout despite the backend's 270-second generation budget. Two regression
 tests reproduced the default/configured mismatch. Image calls now use the existing
 long-tool setting (320 seconds by default), like web research. This requires
 releasing the Jarvis agent as well as the backend. No total chat deadline is added.
+
+
+## Watch Factory/lift input follow-up — 10 November 2026
+
+Use existing isolated Actions Core and unsigned native workflows. WatchInputFlowTests cover stable retry identity, project/request binding, limits, attempt bounds and valid empty versus unavailable history. The existing Watch preview step also captures Lifts, New lift, Reps and New task using --watch-fixture; the DEBUG responder never calls live Factory/Health. Only test captures are extended; no infrastructure provisioning, deployment workflow, entitlement or live settings change.
+
+Primary owns #1697 steps/startup integration and must preserve its WatchContract/Chat/Connection changes when combining this branch. Native keyboard/dictation availability, Digital Crown behavior, large text, actual disconnected/empty/error states and real paired-device round trips remain device checks. Never test by starting/recovering live Factory tasks in this secondary thread.

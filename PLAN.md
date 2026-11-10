@@ -4751,3 +4751,10 @@ listener-disposal race on the first attempt and passed on retry. PR #1694 merged
 as 9eb1e87f. Production deployment 42685720635 passed: backend and Jarvis
 agent activation, deterministic readiness and live conversation acceptance.
 No native build is required. Live image generation remains unverified until the credential exists.
+
+
+## Watch Factory/lift follow-up — 10 November 2026
+
+Branch feature/watch-factory-lift-inputs starts from latest main cb360ca7. Implemented: selected-project new-task plus/form, bounded/idempotent Factory submissions through iPhone, reusable typing/dictation fields, reps/sets wheel pickers, preserved form drafts, and correct empty history handling with reconnect reads. Six focused Core regressions and isolated Watch captures are added; checks/builds remain pending.
+
+Primary is already integrating steps/startup recovery in #1697. Do not duplicate, merge or deploy that work. This branch has separate edits in WatchContract, WatchChatView and WatchConnection that primary must preserve alongside #1697; no startup recovery code is copied here. Remaining: CI/native qualification, screenshot review, draft PR handoff and owner-device input/transport acceptance. No live task execution is used for testing.

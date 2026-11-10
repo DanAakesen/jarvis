@@ -43,7 +43,7 @@ struct WatchChatView: View {
         .navigationTitle("Jarvis").navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $editingDraft) {
             VStack {
-                TextField("Message", text: $model.draft)
+                WatchTextInput(title: "Message", text: $model.draft)
                     .accessibilityLabel("Message draft")
                 Button("Done") { editingDraft = false }
             }.navigationTitle("Message")

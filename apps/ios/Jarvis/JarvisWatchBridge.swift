@@ -178,16 +178,14 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         case .tasks:
             return try encode(try await todayTasks(client: client))
         case .workouts:
-            guard try await health.capabilities().availableSources.contains(JarvisHealthSource.workouts.rawValue) else { throw WatchFailure.unavailable }
+            guard try await health.capabilities().availableSources.contains(JarvisHealthSource.workouts.rawValue) else { throw WatchFailure.healthUnavailable }
             let period = JarvisHealthPeriod.make(.sevenDays)
             let result = try await health.query(.init(source: .workouts, period: period, limit: 30))
-            guard result.status == "available" else { throw WatchFailure.unavailable }
-            return try encode(result.items)
+            return try encode(WatchHealthHistory.items(from: result))
         case .lifts:
-            guard try await health.capabilities().availableSources.contains(JarvisHealthSource.lifts.rawValue) else { throw WatchFailure.unavailable }
+            guard try await health.capabilities().availableSources.contains(JarvisHealthSource.lifts.rawValue) else { throw WatchFailure.healthUnavailable }
             let result = try await health.query(.init(source: .lifts, limit: 30))
-            guard result.status == "available" else { throw WatchFailure.unavailable }
-            return try encode(result.items)
+            return try encode(WatchHealthHistory.items(from: result))
         case .saveLift:
             guard let data = r.data, let value = try? JSONDecoder().decode(WatchLiftInput.self, from: data), value.isValid else { throw WatchFailure.invalidRequest }
             if let id = r.itemID {
@@ -203,6 +201,14 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         case .factoryTasks:
             guard let id = r.itemID else { throw WatchFailure.invalidRequest }
             return try encode(try await JarvisFactoryClient(client: client).tasks(projectId: id, limit: 10).tasks.map(WatchFactoryTask.init))
+        case .createFactoryTask:
+            guard let submission = r.factorySubmission else { throw WatchFailure.invalidRequest }
+            let factory = JarvisFactoryClient(client: client)
+            guard try await factory.projects().contains(where: { $0.id == submission.projectId }) else {
+                throw WatchFailure.invalidRequest
+            }
+            let task = try await factory.createTask(submission)
+            return try encode(WatchFactoryTask(task))
         case .startVoice:
             guard !startingVoice else { throw WatchFailure.busy }
             startingVoice = true; defer { startingVoice = false }

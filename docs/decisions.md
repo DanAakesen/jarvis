@@ -1,3 +1,7 @@
+## 2026-11-10 — Watch task creation and native form inputs
+
+The owner requests a Factory plus after project selection, typing/dictation for every free-text field, dictatable exercise and swipe/Crown reps/sets. Extend the old read-only Factory boundary for explicit task creation only, via the existing authenticated iPhone Factory client and idempotent submission contract. Replace oversized steppers with native pickers and treat valid empty health history as empty rather than disconnected. Preserve the primary's separate #1697 startup/steps integration. Secondary tests use isolated fixtures and never execute live Factory work. Implementation/CI/device acceptance are distinct; current new-source checks remain pending.
+
 ## 2026-11-09 — Execute resolved owner requests directly
 
 Dan explicitly rejected approval cards, repeated confirmation turns, prescribed
