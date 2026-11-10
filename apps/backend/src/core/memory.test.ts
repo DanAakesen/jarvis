@@ -152,30 +152,35 @@ describe('long-term memory tools', () => {
     expect(store.save).toHaveBeenCalledWith(expect.objectContaining({ sourceMessageId: source.messageId }), expect.any(AbortSignal));
   });
 
-  it('requires the explicit word remember before retaining sensitive information', async () => {
-    const store = memoryStore();
+  it('accepts requested sensitive memories without a magic word, but blocks automatic capture and credentials', async () => {
+    const store = memoryStore({
+      getSourceMessage: vi.fn(async () => ({ ...source, text: 'Please save that I have a bank account.' })),
+    });
     const { app } = appFor(store);
-    const response = await app.inject({
-      method: 'POST',
-      url: '/tools/memory_remember',
-      headers: userHeaders,
-      payload: { category: 'preference', key: 'bank', content: 'Dan has a bank account.' },
+    const payload = { category: 'preference', key: 'bank', content: 'Dan has a bank account.' };
+    const automatic = await app.inject({
+      method: 'POST', url: '/tools/memory_remember', headers: userHeaders,
+      payload: { ...payload, sourceIntent: 'automatic' },
     });
-
-    expect(response.json()).toMatchObject({ outcome: 'refused' });
+    expect(automatic.json()).toMatchObject({ outcome: 'refused' });
     expect(store.save).not.toHaveBeenCalled();
+    const requested = await app.inject({
+      method: 'POST', url: '/tools/memory_remember', headers: userHeaders,
+      payload: { ...payload, sourceIntent: 'requested' },
+    });
+    expect(requested.json()).toMatchObject({ outcome: 'ok' });
+    expect(store.save).toHaveBeenCalledOnce();
 
-    const explicitStore = memoryStore({
-      getSourceMessage: vi.fn(async () => ({ ...source, text: 'Remember that this is my bank account.' })),
+    const secretStore = memoryStore({
+      getSourceMessage: vi.fn(async () => ({ ...source, text: 'Remember my password.' })),
     });
-    const explicitApp = appFor(explicitStore).app;
-    const explicit = await explicitApp.inject({
-      method: 'POST',
-      url: '/tools/memory_remember',
-      headers: userHeaders,
-      payload: { category: 'preference', key: 'bank', content: 'Dan has a bank account.' },
+    const secretApp = appFor(secretStore).app;
+    const secret = await secretApp.inject({
+      method: 'POST', url: '/tools/memory_remember', headers: userHeaders,
+      payload: { category: 'preference', key: 'credential', content: 'A password.', sourceIntent: 'requested' },
     });
-    expect(explicit.json()).toMatchObject({ outcome: 'ok' });
+    expect(secret.json()).toMatchObject({ outcome: 'refused' });
+    expect(secretStore.save).not.toHaveBeenCalled();
   });
 
   it('corrects the existing stable key and forgets only the selected memory', async () => {
