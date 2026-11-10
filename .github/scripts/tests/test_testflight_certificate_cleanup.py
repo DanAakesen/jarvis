@@ -219,7 +219,7 @@ Dir.mktmpdir do |root|
     end
     failed = false
     begin
-      client.prepare(directory)
+      client.prepare(directory, 'synthetic-temporary-passphrase-0000')
     rescue StandardError
       failed = true
     end
@@ -228,7 +228,7 @@ Dir.mktmpdir do |root|
     raise unless File.stat(key_path).mode & 0o777 == 0o600
     raise unless File.stat(directory).mode & 0o777 == 0o700
     if scenario == 'success'
-      passphrase = File.read(File.join(directory, 'password'))
+      passphrase = 'synthetic-temporary-passphrase-0000'
       p12 = OpenSSL::PKCS12.new(File.binread(File.join(directory, 'identity.p12')), passphrase)
       raise unless p12.certificate.public_key.to_der == p12.key.public_key.to_der
       raise unless File.read(File.join(directory, 'identity')) ==
@@ -241,7 +241,7 @@ Dir.mktmpdir do |root|
     end
     original_key = File.read(key_path)
     begin
-      client.prepare(directory)
+      client.prepare(directory, 'synthetic-temporary-passphrase-0000')
       raise 'Unexpected repeated creation'
     rescue Errno::EEXIST
       raise unless File.read(key_path) == original_key && calls == ['POST']
@@ -307,8 +307,8 @@ end
                        if step.get("name") == "Prepare run-owned development signing")
         harness = r"""
 ruby() {
+  [[ -n "$TESTFLIGHT_SIGNING_PASSPHRASE" ]] || return 1
   mkdir "$RUNNER_TEMP/testflight-signing"
-  printf '%s' 'synthetic-passphrase' > "$RUNNER_TEMP/testflight-signing/password"
 }
 security() {
   printf '%s\n' "$1" >> "$RUNNER_TEMP/calls"

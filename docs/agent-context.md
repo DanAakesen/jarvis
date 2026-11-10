@@ -7312,6 +7312,7 @@ Issue #1724 supersedes P15-26's blanket revocation. Ruby standard-library
 OpenSSL/HTTPS creates one `DEVELOPMENT` certificate from a fresh run-local RSA
 CSR, persisting its private key before the single, non-retried creation request.
 The identity is imported through a temporary P12 into a temporary keychain;
+its run-generated passphrase is passed in process memory, never a password file.
 no exported Mac identity, new secret, profile secret or dependency is required.
 Automatic provisioning remains enabled. The archive explicitly selects this
 identity for the iPhone app, embedded Watch app and extensions; automatic

@@ -32,7 +32,9 @@ class TestFlightCertificateCleanup
     @token = "#{message}.#{encode.call(signature)}"
   end
 
-  def prepare(directory)
+  def prepare(directory, password)
+    raise 'Missing temporary signing passphrase' unless password.is_a?(String) && password.bytesize >= 32
+
     Dir.mkdir(directory, 0o700)
     key = OpenSSL::PKey::RSA.new(2048)
     # Persist ownership proof before the non-idempotent request, including a lost response.
@@ -48,9 +50,8 @@ class TestFlightCertificateCleanup
     certificate = owned_certificate(record, key)
     raise 'Created certificate did not match signing key' unless certificate
 
-    password = OpenSSL::Random.random_bytes(32).unpack1('H*')
     p12 = OpenSSL::PKCS12.create(password, 'Jarvis TestFlight', key, certificate)
-    { 'identity.p12' => p12.to_der, 'password' => password,
+    { 'identity.p12' => p12.to_der,
       'identity' => OpenSSL::Digest::SHA1.hexdigest(certificate.to_der).upcase }.each do |name, value|
       File.binwrite(File.join(directory, name), value, mode: 'wx', perm: 0o600)
     end
@@ -151,7 +152,7 @@ if $PROGRAM_NAME == __FILE__
         ENV['APP_STORE_CONNECT_ISSUER_ID']
       )
       if mode == 'prepare'
-        client.prepare(directory)
+        client.prepare(directory, ENV['TESTFLIGHT_SIGNING_PASSPHRASE'])
       else
         key = OpenSSL::PKey.read(File.read(key_path))
         raise 'Invalid signing key' unless key.is_a?(OpenSSL::PKey::RSA) && key.private?

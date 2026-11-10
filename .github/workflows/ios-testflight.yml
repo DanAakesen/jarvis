@@ -96,10 +96,11 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           umask 077
-          ruby .github/scripts/testflight_certificate_cleanup.rb prepare "$RUNNER_TEMP/testflight-signing"
+          signing_passphrase="$(openssl rand -hex 32)"
+          TESTFLIGHT_SIGNING_PASSPHRASE="$signing_passphrase" \
+            ruby .github/scripts/testflight_certificate_cleanup.rb prepare "$RUNNER_TEMP/testflight-signing"
           if ! (
             KEYCHAIN="$RUNNER_TEMP/testflight-signing/signing.keychain-db"
-            signing_passphrase="$(cat "$RUNNER_TEMP/testflight-signing/password")" &&
             security create-keychain -p "$signing_passphrase" "$KEYCHAIN" &&
             security set-keychain-settings -lut 21600 "$KEYCHAIN" &&
             security unlock-keychain -p "$signing_passphrase" "$KEYCHAIN" &&
