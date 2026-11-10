@@ -6806,6 +6806,8 @@ passed four tests, including low-disk turn shutdown. Native task-detail source
 parsed with `swiftc -frontend -parse`; this is not SwiftUI typechecking or a native
 build. No simulator screenshots, width/VoiceOver inspection, live-task read or
 physical-device verification were performed here.
+Secret scanning found no secrets. CodeQL reported no Actions alerts, but Swift
+database creation failed, so Swift CodeQL analysis is unverified.
 
 `JarvisFactoryFixtureScenario` in `apps/ios/Jarvis/` supplies the Factory
 previews and simulator screenshots through `FixtureTransport`; its project,
