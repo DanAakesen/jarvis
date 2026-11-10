@@ -60,8 +60,11 @@ struct JarvisTodayFixture {
         {"items":[
           {"id":"t1","text":"Send the invoice","done":false,"dueDate":"2026-11-02","dueTime":null,"dueAt":null,"priority":"normal","path":"Personal/Tasks.md","line":1,"heading":null,"version":"v1"},
           {"id":"t2","text":"Book the flights","done":false,"dueDate":"2026-11-02","dueTime":null,"dueAt":null,"priority":"normal","path":"Personal/Tasks.md","line":2,"heading":null,"version":"v1"},
-          {"id":"t3","text":"Renew the passport","done":false,"dueDate":"2026-11-05","dueTime":null,"dueAt":null,"priority":"normal","path":"Personal/Tasks.md","line":3,"heading":null,"version":"v1"}
-        ],"readAt":"2026-11-02T14:30:00.000Z","today":"2026-11-02","total":3,"truncated":false}
+          {"id":"t3","text":"Renew the passport","done":false,"dueDate":"2026-11-05","dueTime":null,"dueAt":null,"priority":"normal","path":"Personal/Tasks.md","line":3,"heading":null,"version":"v1"},
+          {"id":"t4","text":"Return the library book","done":false,"dueDate":"2026-11-01","dueTime":null,"dueAt":null,"priority":"normal","path":"Personal/Tasks.md","line":4,"heading":null,"version":"v1"},
+          {"id":"t5","text":"Completed task","done":true,"dueDate":"2026-11-01","dueTime":null,"dueAt":null,"priority":"normal","path":"Personal/Tasks.md","line":5,"heading":null,"version":"v1"},
+          {"id":"t6","text":"Undated task","done":false,"dueDate":null,"dueTime":null,"dueAt":null,"priority":"normal","path":"Personal/Tasks.md","line":6,"heading":null,"version":"v1"}
+        ],"readAt":"2026-11-02T14:30:00.000Z","today":"2026-11-02","total":6,"truncated":false}
         """
         let list = try? JSONDecoder().decode(VaultTaskList.self, from: Data(taskJSON.utf8))
         let noteJSON = """

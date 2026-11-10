@@ -108,6 +108,7 @@ const healthRoutes: readonly Probe[] = [
   { method: 'PATCH', url: '/health/nutrition-targets', payload: { restingKcal: 1750 } },
   { method: 'GET', url: '/health/training-targets' },
   { method: 'PATCH', url: '/health/training-targets', payload: { gymSessionsPerWeek: 3 } },
+  { method: 'POST', url: '/health/lifts/capture', payload: { idempotencyKey: owner, text: 'Bench 80 kg for 3 reps' } },
 ];
 const send = (app: App, { method, url, payload }: Probe, kind?: string) => app.inject({
   method, url, ...(kind ? { headers: headers(kind) } : {}), ...(payload ? { payload } : {}),
@@ -188,7 +189,7 @@ describe('Health composition', () => {
     const on = fixture(module);
     const baselineRoutes = await routeTable(baseline);
     const onRoutes = await routeTable(on);
-    const healthRoutes = ['capabilities', 'lifts', 'lifts/:id', 'nutrition-targets', 'training-targets', 'query', 'sync', 'workouts', 'workouts/:id'];
+    const healthRoutes = ['capabilities', 'lifts', 'lifts/:id', 'lifts/capture', 'nutrition-targets', 'training-targets', 'query', 'sync', 'workouts', 'workouts/:id'];
     expect([...onRoutes].filter((url) => !baselineRoutes.has(url)).sort()).toEqual([
       ...healthRoutes.flatMap((route) => [`/health/${route}`, `/daily/${route}`]),
       ...healthToolNames.map((name) => `/tools/${name}`),

@@ -14,7 +14,7 @@
 "today.tomorrow" = "I morgen";
 "today.overdue" = "Forfalden";
 "today.tab.today" = "I dag";
-"today.tab.due" = "Opgaver";
+"today.tab.due" = "Kommende";
 "today.agendaAndTasks" = "I dag og opgaver";
 "today.add" = "Tilføj";
 "today.newTask" = "Opgave";
@@ -23,7 +23,7 @@
 "today.showMore" = "Vis %ld mere";
 "today.nothingPlanned" = "Intet planlagt";
 "today.nothingToday" = "Intet i dag";
-"today.nothingDue" = "Intet forfalder";
+"today.nothingDue" = "Ingen kommende opgaver";
 "today.calendarUnavailable" = "Kalenderen er endnu ikke koblet til appen, så der vises ingen aftaler. Spørg Jarvis i chatten om din kalender.";
 "today.tasksUnavailable" = "Opgaver ikke tilgængelige";
 "today.markDone" = "Markér som udført";

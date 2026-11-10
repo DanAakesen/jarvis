@@ -65,6 +65,16 @@ describe('createFoundryApprovalModel', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('allows an explicitly bounded larger task JSON without changing the approval default or exposing tools', async () => {
+    const text = JSON.stringify({ text: 'Task title', notes: 'æ'.repeat(2000) });
+    const larger = setup(() => respond(completion(text)), { maxContentBytes: 16 * 1024 });
+    await expect(larger.call(prompt, larger.signal)).resolves.toBe(text);
+    expect(JSON.parse(String(larger.fetcher.mock.calls[0]?.[1]?.body))).not.toHaveProperty('tools');
+    const original = setup(() => respond(completion(text)));
+    await expect(original.call(prompt, original.signal)).resolves.toBeUndefined();
+    expect(() => setup(undefined, { maxContentBytes: 16 * 1024 + 1 })).toThrow('content limit');
+  });
+
   it('does not send a request larger than 40 KiB', async () => {
     const { call, fetcher, signal } = setup();
     await expect(call({ system: 'System text', user: 'x'.repeat(41 * 1024) }, signal)).resolves.toBeUndefined();

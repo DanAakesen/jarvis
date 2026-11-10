@@ -1,3 +1,47 @@
+## Combined release evidence (#1728; 10 November 2026)
+
+This integration introduces no new visual direction. The exact approved chat
+photo, Watch dashboard/task and quick-lift PNGs are restored from their recorded
+approval revisions at `docs/ios/design/chat/photo-preview-approved.png`,
+`docs/ios/design/watch/watch-home-approved-revision.png`,
+`docs/ios/design/watch/{tasks-today-screen,task-detail-screen,task-create-auto,task-create-manual}-proposal.png`
+and `docs/ios/design/watch/log-lift/`. “Proposal” filenames do not revoke the
+recorded task-screen approval. Nutrition/task-list complication reference images
+remain missing; earlier descriptive requirements are retained, not new approval.
+
+Source-run 42875315079 attempt 2 captures were visually compared with the
+references: dashboard shows only Up Next, so lower sections remain unverified;
+Tasks shows Today/Overdue but Upcoming wraps and reference count/chevrons differ;
+project/task-detail are startup scenes despite receipts. New task is the Factory
+form, not personal Auto/Manual. No edit, personal-create, installed complication
+or external-URL acceptance follows from those artifacts. Exact combined-head
+images, interactions, accessibility/reduced-motion and physical-device checks
+remain outstanding. See the Watch implementation record for hashes and limits.
+
+The follow-up gives Today/Upcoming full width with single-line compact labels
+and an accessible vertical fallback, moves + to the native top-right toolbar,
+uses the actual loaded Today count (with “+” while pagination is incomplete),
+and restores explicit row chevrons. Counts hide when unavailable rather than
+reusing a sample number. Task titles remain readable at large sizes.
+Dashboard now uses small amber section markers, an amber current-time timeline
+guide, a three-hour scale and prominent relative event timing. Native system clock
+and bottom page indicators remain instead of duplicating reference header dots;
+the ornamental vertical section connector is intentionally omitted under the
+no-accent-border rule. These are implementation choices, not post-change native
+visual acceptance. All four lower sections have isolated capture entry points.
+
+## Chat follow-latest (#1707; 10 November 2026)
+
+Preserve the approved transparent header/footer, floating glass and shared dock.
+Following responds to laid-out content and safe-area changes rather than reply
+tokens alone, without adding an opaque footer or fixed-height spacer. Continuous
+following is unanimated; user scrolls and native reply selections take priority.
+Tool grouping, disclosure controls, failure labels and links retain their design.
+Native rendering and interaction evidence is still required.
+## Approved Watch quick lift capture — 10 November 2026 (#1705)
+
+Use the three owner-approved generated references in `docs/ios/design/watch/log-lift/` at commit `009750f0932e6d49af370af73618160ed8ef6fae`. The circular shortcut vertically stacks a horizontally centred plus and dumbbell. Place Log lift below Gym/Run in the existing Workouts section without removing See more. Both shortcuts open Log lift: editable multiline text with a mic at its lower right, then full-width amber Save and dark Voice actions stacked vertically. Reuse shared Watch controls and native text input. Opening the complication does not start the microphone. Draft, missing-detail, pending, failure/uncertain and actual saved-value states must remain readable and accessible. Visual approval does not establish installed-complication, dictation or Ultra 2 device acceptance.
+
 ## Direct owner requests — 10 November 2026
 
 Task cancellation and recovery, routine/memory deletion, workspace removal, deployment removal and Watch lift deletion act from the selected control. Surface failures and retain busy-state protection. Legacy approval cards and composer buttons do not displace current chat or activity; real task alerts remain visible. Sign-out dialogs stay.
@@ -3039,6 +3083,18 @@ symbol, not a white fill, in both full-screen and minimized controls.
 
 ## Native iOS Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
+For #1712, use the owner's [approved photo reference](https://github.com/DanAakesen/jarvis/blob/c3d69b5d78c51131e2b71aca24d55cf88a9fcd8d/docs/ios/design/chat/photo-preview-approved.png):
+a compact rounded thumbnail above the composer draft with removal at its top
+right; a larger rounded photo below the amber user bubble, aligned right. The
+reference is generated design guidance, not evidence of the running app.
+Geometry lives in `JarvisDesignTokens`: a compact composer square crops without
+stretching, while the sent preview fits the original aspect ratio inside a
+stable, top-right-aligned slot. Preview decoding never changes upload bytes.
+Use the shared icon control and its existing usable touch target for removal;
+keep filenames in VoiceOver labels, not overlaid on available photos. Loading
+uses `JarvisLoadingView`; unavailable photos use semantic text and retry, not
+color alone. No composer controls, glass surfaces or scroll-follow rules change.
+
 The approved `docs/ios/design/board.html?screen=chat` frames guide composition,
 not literal data or dimensions. Keep Chat as the shell root: the transcript
 scrolls above a pinned composer, the compact Now bar sits immediately above it,
@@ -3832,3 +3888,42 @@ Native capture correction: Watch toolbar primary actions were not visible, so Ad
 ## Watch steps-only revision — 10 November 2026
 
 Use one large white rounded step count above a full-width amber curve, with fine vertical gradient stems beneath it and a thin dashed white daily-goal reference on the same scale. No other visible text, axes or footer. Preserve real hourly positions; do not stretch an incomplete day or invent future readings. VoiceOver describes steps and goal. This supersedes the previous rectangular daily/weekly composition only. Approved concept: [amber stem reference](docs/ios/design/watch/steps-approved-2026-11-10.png) from the secondary design conversation. Native installed-size acceptance remains open.
+
+## Watch dashboard and task flow — 10 November 2026 (#1701)
+
+The owner approved the [scrolling dashboard](https://github.com/DanAakesen/jarvis/blob/f344cdf5a30771fdb3b8a39cd61fbbf8357a758d/docs/ios/design/watch/watch-home-approved-revision.png)
+and the Today, task-detail, Auto and Manual screen concepts in design PR #1700 at
+`ada3116a996d13de689d3e1d26dcf701205bb4c6`. These are illustrative concepts, not
+working-build evidence. Keep black/amber styling, readable native text, larger section
+headings and vertical scrolling rather than compressing the whole dashboard into
+one viewport. The original action screen is the second horizontal page.
+
+Up Next places the next event time at the heading's right, then a horizontal time
+chart and event title/timing; the whole section opens the agenda. Workouts, Body Fat,
+Tasks and Recent Notes use right-aligned See more. Today includes overdue tasks with
+an explicit Overdue label, never color alone. The task plus opens Auto by default;
+the multiline draft contains its mic action and Save sits below. Manual and Edit
+use the same scrollable explicit-field form; Edit has no Auto/Manual toggle.
+Vault source metadata and the current saved task comparison open read-only native
+detail lists; inspecting them preserves the editor draft. watchOS does not support
+SwiftUI DisclosureGroup.
+
+Nutrition uses CARB/FAT/PROT segmented bars; task titles use outlined amber squares
+and white text. Home text derives from the actual configured Home brief, retaining
+data-grounded amber highlights. Body Fat has its title, current percentage and a
+percentage-labelled trend over the preceding three calendar months. The revised Home/Body Fat
+images have not received separate visual approval. Exact nutrition/task-list
+complication images remain absent from PR #1700 and this repository: descriptions
+do not replace those references. Final visual sign-off and physical Ultra 2/smaller
+Watch fit, large text, Always On/tint and interaction checks remain open.
+## Integrated Watch shortcuts — 10 November 2026 (#1721)
+
+Retain #1701's approved scrolling Home and second horizontal actions page.
+Place the approved #1705 Log lift shortcut directly below the existing Gym/Run
+summary in Workouts, without a second Workouts block or replacing See more.
+Use the existing shared capture screen and circular plus/dumbbell artwork.
+The three #1705 source images were retrieved and compared with the older failed
+native artifact: its Home shows the old launcher, its capture is a launch spinner,
+and its complication is only an in-app artwork preview. None establishes
+integrated visual acceptance. See the implementation handoff for exact evidence,
+missing #1701 nutrition/task-list references and physical-device limits.

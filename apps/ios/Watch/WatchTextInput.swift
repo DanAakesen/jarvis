@@ -5,16 +5,18 @@ import WatchKit
 struct WatchTextInput: View {
     var title: String
     @Binding var text: String
+    var multiline = false
+    var alignment: VerticalAlignment = .center
     @State private var editing = false
     @State private var failure: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
+            HStack(alignment: alignment, spacing: 6) {
                 Button { editing = true } label: {
                     VStack(alignment: .leading, spacing: 2) {
                         if !text.isEmpty { Text(title).font(.caption).foregroundStyle(.secondary) }
-                        Text(text.isEmpty ? title : text).font(.body).lineLimit(2)
-                            .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+                        Text(text.isEmpty ? title : text).font(.body).lineLimit(multiline ? nil : 2)
+                            .frame(maxWidth: .infinity, minHeight: multiline ? 90 : 38, alignment: .topLeading)
                     }.contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityLabel(title)
                     .accessibilityValue(text.isEmpty ? "Empty" : text)
@@ -22,20 +24,23 @@ struct WatchTextInput: View {
             }
             if let failure { Text(failure).font(.caption).foregroundStyle(.secondary) }
         }
-        .sheet(isPresented: $editing) { NavigationStack { WatchTextEditor(title: title, text: $text) } }
+        .sheet(isPresented: $editing) { NavigationStack { WatchTextEditor(title: title, text: $text, multiline: multiline) } }
     }
 }
 
 struct WatchTextEditor: View {
     var title: String
     @Binding var text: String
+    var multiline = false
     @Environment(\.dismiss) private var dismiss
     @State private var failure: String?
     @FocusState private var focused: Bool
     var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 6) {
-                TextField(title, text: $text).font(.body).focused($focused).accessibilityLabel(title)
+                TextField(title, text: $text, axis: multiline ? .vertical : .horizontal)
+                    .lineLimit(multiline ? 3...8 : 1...1)
+                    .font(.body).focused($focused).accessibilityLabel(title)
                 WatchDictateButton(title: title, text: $text, failure: $failure)
             }
             if let failure { Text(failure).font(.caption) }
@@ -86,6 +91,7 @@ struct WatchCountPicker: View {
                 .accessibilityLabel(title)
             Button("Done") { dismiss() }
         }.navigationTitle(title)
+            .watchCaptureReady("new-lift")
     }
 }
 
@@ -109,5 +115,53 @@ struct WatchAddButton: View {
     var body: some View {
         Button(action: action) { Image(systemName: "plus").font(.title3).frame(width: 44, height: 44) }
             .buttonStyle(.plain).foregroundStyle(WatchStyle.amber).accessibilityLabel(title)
+    }
+}
+
+struct WatchChoiceBar<Value: Hashable>: View {
+    let choices: [(Value, String)]
+    @Binding var selection: Value
+    var compact = false
+    var counts: [Value: String] = [:]
+    var body: some View {
+        if compact {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 4) { buttons }
+                VStack(spacing: 4) { buttons }
+            }
+        } else {
+            HStack(spacing: 4) { buttons }
+        }
+    }
+
+    private var buttons: some View {
+        ForEach(choices.indices, id: \.self) { index in
+            let (value, title) = choices[index]
+            Button { selection = value } label: {
+                HStack(spacing: 4) {
+                    if compact {
+                        Text(title).fixedSize(horizontal: true, vertical: false)
+                    } else {
+                        Text(title)
+                    }
+                    if let count = counts[value] {
+                        Text(count).font(.caption2).monospacedDigit()
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(WatchStyle.amber.opacity(0.18), in: Capsule())
+                    }
+                }
+                .font(.system(compact ? .caption : .body, design: .rounded, weight: .semibold))
+                .frame(maxWidth: .infinity, minHeight: compact ? 44 : 40)
+                .contentShape(Rectangle())
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(selection == value ? WatchStyle.surface : .clear)
+                }
+            }.buttonStyle(.plain)
+                .foregroundStyle(selection == value ? WatchStyle.amber : WatchStyle.stone)
+                .accessibilityLabel(title)
+                .accessibilityValue(counts[value].map { "\($0) open tasks" } ?? "")
+                .accessibilityAddTraits(selection == value ? .isSelected : [])
+        }
     }
 }

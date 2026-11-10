@@ -53,6 +53,18 @@ function fixture() {
 }
 
 describe('owner gym actions shared with the app', () => {
+  it.each([3, 4, 8, 1, 1000])('defaults to exactly one actual set at %i reps without changing dumbbell weight', async reps => {
+    const f = fixture();
+    f.session.channel = 'voice';
+    const values = { exerciseName: 'Shoulder press (db)', weightKg: 24, reps };
+    expect(f.lift.validateInput!({ operation: 'create', values })).toBe(true);
+    expect(await f.lift.execute({ operation: 'create', values }, f.request, signal()))
+      .toMatchObject({ entry: { ...values, sets: 1 } });
+    expect(f.lift.description).toContain('Default to ONE set');
+    expect(f.lift.description).toContain('Never calculate or record an estimated one-rep max');
+    expect(f.lift.description).toContain('never double');
+  });
+
   it.each(['owner', 'hosted agent'] as const)('saves the reported chest session and exact dumbbell lift through %s with no extra approval', async kind => {
     const f = fixture();
     if (kind === 'hosted agent') {
@@ -156,7 +168,14 @@ describe('owner gym actions shared with the app', () => {
     const result = JSON.parse(await executeRealtimeCapabilityCall({ type: 'response.function_call_arguments.done', name: VOICE_CAPABILITY_EXECUTION_TOOL,
       call_id: 'gym-save', arguments: JSON.stringify({ capability: 'gym_lifts', arguments: { operation: 'create', values: liftValues } }) },
     registry, f.request, signal(), discovered, undefined, false));
-    expect(result).toMatchObject({ outcome: 'ok', result: { entry: liftValues } });
+    expect(result).toMatchObject({ outcome: 'ok', result: { entry: liftValues },
+      confirmation: 'Saved lift: Shoulder press (db), 24 kg, 4 reps, 3 sets.' });
+    f.lifts.create.mockRejectedValueOnce(new ToolFailure('Save uncertain; inspect history.'));
+    const failed = JSON.parse(await executeRealtimeCapabilityCall({ type: 'response.function_call_arguments.done', name: VOICE_CAPABILITY_EXECUTION_TOOL,
+      call_id: 'gym-save-failure', arguments: JSON.stringify({ capability: 'gym_lifts', arguments: { operation: 'create', values: liftValues } }) },
+    registry, f.request, signal(), discovered, undefined, false));
+    expect(failed).toMatchObject({ outcome: 'error', confirmation: expect.stringContaining('Not done: gym_lifts failed.') });
+    expect(failed.confirmation).not.toContain('Saved lift');
     for (const tool of f.tools) { expect(tool.sensitive).toBe(true); expect(tool.denyOnPhone).toBe(true); }
   });
 });

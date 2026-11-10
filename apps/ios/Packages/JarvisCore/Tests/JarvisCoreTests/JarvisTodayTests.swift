@@ -315,21 +315,43 @@ final class JarvisTodayTests: XCTestCase {
         XCTAssertEqual(JarvisStepsSnapshot(hourly: Array(repeating: -5, count: 24), daily: [:]).hourly.max(), 0)
     }
 
-    func testTaskListsSplitTodayFromOverdueAndUpcoming() throws {
-        func task(_ id: String, due: String?) throws -> VaultTask {
+    func testTaskListsIncludeOverdueInTodayAndExcludeCompletedAndUndated() throws {
+        func task(_ id: String, due: String?, done: Bool = false) throws -> VaultTask {
             let dueJSON = due.map { "\"\($0)\"" } ?? "null"
             let json = """
-            {"id":"\(id)","text":"Task \(id)","done":false,"dueDate":\(dueJSON),"dueTime":null,"dueAt":null,
+            {"id":"\(id)","text":"Task \(id)","done":\(done),"dueDate":\(dueJSON),"dueTime":null,"dueAt":null,
             "priority":"normal","path":"Personal/t.md","line":1,"heading":null,"version":"v"}
             """
             return try JSONDecoder().decode(VaultTask.self, from: Data(json.utf8))
         }
+        let tasks = [try task("a", due: "2026-11-02"), try task("b", due: "2026-11-01"),
+                     try task("c", due: "2026-11-05"), try task("d", due: nil),
+                     try task("doneToday", due: "2026-11-02", done: true),
+                     try task("doneOverdue", due: "2026-11-01", done: true),
+                     try task("doneUpcoming", due: "2026-11-05", done: true)]
         let lists = JarvisTodayTaskLists(
-            tasks: [try task("a", due: "2026-11-02"), try task("b", due: "2026-11-01"),
-                    try task("c", due: "2026-11-05"), try task("d", due: nil)],
+            tasks: tasks,
             today: "2026-11-02"
         )
-        XCTAssertEqual(lists.today.map(\.id), ["a"])
-        XCTAssertEqual(lists.due.map(\.id), ["b", "c"])
+        XCTAssertEqual(lists.today.map(\.id), ["b", "a"])
+        XCTAssertEqual(lists.upcoming.map(\.id), ["c"])
+        XCTAssertEqual(JarvisNotesLogic.taskGroups(tasks, today: "2026-11-02").noDate.map(\.id), ["d"])
+        XCTAssertEqual(JarvisTodayTaskLists(tasks: tasks, now: now, calendar: calendar), lists)
+    }
+
+    func testTaskDayBoundariesUseOwnerCalendarAcrossMidnightAndDST() {
+        let formatter = ISO8601DateFormatter()
+        for (instant, expected) in [
+            ("2026-11-01T23:30:00Z", "2026-11-02"),
+            ("2026-03-29T00:30:00Z", "2026-03-29"),
+            ("2026-03-29T01:30:00Z", "2026-03-29"),
+            ("2026-10-25T00:30:00Z", "2026-10-25"),
+            ("2026-10-25T01:30:00Z", "2026-10-25"),
+        ] {
+            XCTAssertEqual(JarvisTodayTaskLists.dayKey(formatter.date(from: instant)!, calendar: calendar), expected)
+        }
+        var pacific = calendar
+        pacific.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        XCTAssertEqual(JarvisTodayTaskLists.dayKey(formatter.date(from: "2026-11-02T00:30:00Z")!, calendar: pacific), "2026-11-01")
     }
 }

@@ -214,6 +214,33 @@ public final class JarvisHealthClient: JarvisHealthSyncSender, Sendable {
         return try decode(response.body)
     }
 
+    /// One explicit capture per call. Retries are user initiated with the same
+    /// persisted operation key and text, never an automatic network resend.
+    public func captureLift(_ request: JarvisLiftCaptureRequest) async throws -> JarvisLiftCaptureResult {
+        guard request.isValid else { throw JarvisClientError.invalidRequest }
+        let response = try await client.performAuthenticatedRequest(
+            method: .post,
+            path: ["health", "lifts", "capture"],
+            body: try JSONEncoder().encode(request),
+            idempotent: false,
+            additionalSuccessStatuses: [410]
+        )
+        if response.statusCode == 410 {
+            struct DeletedEnvelope: Decodable { let code: String }
+            let deleted: DeletedEnvelope = try decode(response.body)
+            guard deleted.code == "lift_deleted" else { throw JarvisHealthClientError.invalidResponse }
+            return .deleted
+        }
+        guard response.statusCode == 200 || response.statusCode == 201 else {
+            throw JarvisHealthClientError.invalidResponse
+        }
+        let result: JarvisLiftCaptureResult = try decode(response.body)
+        // The bridge uses a typed deleted result, but only the authenticated
+        // endpoint's specific 410/code pair can establish this terminal state.
+        if case .deleted = result { throw JarvisHealthClientError.invalidResponse }
+        return result
+    }
+
     @discardableResult
     public func createLift(_ draft: JarvisLiftDraft) async throws -> JarvisVaultState {
         guard draft.isValid else { throw JarvisClientError.invalidRequest }

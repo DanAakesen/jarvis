@@ -1,3 +1,53 @@
+## One qualified iPhone/Watch release (#1728; 10 November 2026)
+
+Deliver the complete approved chat live-follow/photo and Watch dashboard/tasks/
+complications/quick-lift implementations together with current-main loading and
+Factory behavior. #1728 supersedes separate or stacked delivery instructions,
+not the underlying #1707/#1712/#1701/#1705/#1702/#1708 requirements. #1701's
+Today semantics include overdue tasks. Preserve account, security, accessibility,
+explicit-save and duplicate-safety guards. Merge and release remain orchestrator
+owned; deployment and TestFlight are authorized once the combined tree qualifies.
+Do not add an owner-approval gate or exercise live Factory task 24.
+
+## Chat follow-latest (#1707; 10 November 2026)
+
+Normal and test chat should follow live tools, progress and replies while the
+owner is at or near the latest content. Keep the latest row above the actual
+composer/Now dock, including viewport and text-size changes. Pause during user
+scrolling and text selection; returning to the latest content resumes following.
+Keep tool activity in the transcript and retain transparent, floating controls.
+Native simulator and physical-iPhone acceptance remain pending.
+## Watch dashboard and personal tasks — 10 November 2026 (#1701)
+
+The Watch opens on a vertically scrolling dashboard: Up Next calendar, weekly Gym/Run
+counts, Body Fat, Today tasks and Recent Notes. The existing Voice/Dictate/Factory
+screen remains one horizontal swipe to the right. The entire calendar block opens
+the agenda; the other headings have See more actions. Four additional rectangular
+complications show nutrition macros, a grounded Home brief, actual Today task titles
+and Body Fat. The approved steps complication and existing actions remain.
+
+Today means incomplete tasks due today **or overdue**; Upcoming means incomplete tasks
+due after today. Counts and lists use the same local-day boundary on iPhone Home and
+Watch; undated tasks keep their existing separate handling. Both Watch task entry
+points open Today. Tasks open full details and a prefilled explicit-field editor.
+The top-right plus opens New task in Auto mode; Manual uses native field controls.
+Typing and dictation only change the draft; Save creates the task without another
+confirmation. Auto parses English/Danish through the existing backend model, defaulting
+only omitted date/time to submission time plus one hour and omitted priority to Low.
+Retries retain the submission identity, owner timezone and resolved due timestamp.
+These defaults do not change other task/reminder policies.
+
+Use real sources and explicit loading/empty/unavailable/stale states. Body Fat uses
+the preceding three calendar months, one of the owner's permitted periods.
+The dashboard and four task-screen concepts are owner-approved; the refined Home
+phrase/Body Fat visuals and device fit are not separately accepted. The exact
+nutrition/task-list complication reference images still require transfer from the
+design conversation before final visual sign-off. No merge or deployment is authorized.
+
+## Watch quick lift logging — 10 November 2026 (#1705)
+
+Watch Home's Workouts section and a circular Log lift complication open the same capture screen. Native dictation fills editable text; only Save submits it. Voice opens the existing paired-phone voice experience and a complete spoken request needs no second approval. Record the actual exercise, kilograms and reps in existing lift history, defaulting to one set unless explicitly specified. Never estimate a one-rep maximum, double dumbbell weight or invent missing values. Ask for missing details while retaining the input; report recorded values, actual failures and uncertain outcomes. Manual retry must preserve the operation identity across reconnect/relaunch. No standalone Watch credentials, offline send queue, workout tracker or rest timer. Preserve PR #1703's dashboard, Today/Upcoming semantics, task flows, complications and Workouts See more. Approved generated references at `009750f0932e6d49af370af73618160ed8ef6fae` are not native/device acceptance.
+
 ## Direct owner requests — 10 November 2026
 
 A clear, authenticated owner instruction authorizes the requested operation without a second yes. Ask only for details needed to identify the intended action or target. Keep device and all-device sign-out confirmations. Treat credentials as non-storable and distinguish requested sensitive saves from automatic capture.
@@ -317,6 +367,15 @@ Frost the background behind both speakers' chat bubbles like the Plus menu,
 retaining sharp text, translucency, existing layout and the desktop top-edge fade.
 
 ## iPhone Chat screen (P15-10; owner-approved concept, 30 October 2026)
+
+Photo previews (#1712, approved 10 November 2026) apply to all chat image
+attachments, including camera and library inputs. Pending photos appear inside
+the composer above the editable draft, with filename-labelled removal controls.
+Sent photos sit below the user text, aligned right; existing image-only history
+renders without an empty text bubble. Multiple images and mixed files remain
+supported; text is still required to send. Available saved photos reload through
+owner-authorized attachments; unavailable photos show a labelled retry fallback.
+No upload, retention, dictation, voice or live-follow policy changes are intended.
 
 P15-41 / #1484 requires reliable sidebar and bottom-control input across repeated
 screen changes, sheets, keyboard use, and full-screen/minimized voice sessions.
@@ -2786,3 +2845,14 @@ Every Watch free-text field, including exercise name and chat draft, supports ty
 ## Watch steps complication — 10 November 2026
 
 The owner approved the amber vertical-stem steps design (second concept in the final steps exploration). The rectangular complication shows only a large daily step count and a full-width cumulative steps chart with a dashed goal reference. Remove the target text, time labels, calorie footer and weekly workout column. Small complications stay unchanged. Weekly workout concepts are deferred, not approved for implementation.
+## Integrated Watch delivery — 10 November 2026 (#1721)
+
+Combine #1701 Home/complications/tasks and #1705 quick lift logging without
+replacing either scope. The Workouts section keeps its summary and See more,
+with Log lift underneath; its shortcut and circular complication open the same
+capture screen. Keep task and lift drafts across dismissal/restart, including
+frozen request identity, payload, timestamp and timezone after an uncertain save.
+Restoration never sends automatically. A local storage failure must prevent a
+fresh unsafe write and explain recovery. Preserve edit source-version checking.
+Concept approval, actual intended simulator rendering, installed-complication
+routing and physical Watch dictation/voice acceptance remain separate criteria.
