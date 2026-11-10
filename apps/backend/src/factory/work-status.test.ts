@@ -239,6 +239,16 @@ describe('get_work_status evidence and restart safety', () => {
     expect(response.statusCode).toBe(200);
     expect(f.control).toHaveBeenCalledWith('42', { action: 'recover' });
   });
+  it.each(['closed', 'open'] as const)('executes a direct request for a %s issue when prior delivery lookup fails', async (state) => {
+    const f = fixture(); f.issue.state = state;
+    f.releases.read.mockRejectedValue(new Error('private release error'));
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('private actions error'); }));
+    const response = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers,
+      payload: { action: 'recover' } });
+    expect(response.statusCode).toBe(200);
+    expect(f.control).toHaveBeenCalledWith('42', { action: 'recover' });
+    expect(response.body).not.toContain('private');
+  });
   it('returns 503 when historical PR safety cannot be verified', async () => {
     const f = fixture(); f.issue.state = 'open';
     f.board.issuePullRequests.mockRejectedValue(new Error('private provider error'));
