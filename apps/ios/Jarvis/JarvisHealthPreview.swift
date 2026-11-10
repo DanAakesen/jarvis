@@ -414,6 +414,9 @@ private actor JarvisHealthPreviewTransport: HTTPTransport {
          "weightKg": [80, 120, 60][index], "reps": 5, "sets": 3, "performedAt": "2026-10-30T09:00:00Z"]
     }
     private let interactions: [[String: Any]]
+    private var readCounts: [String: Int] = [:]
+    private let slowLoading = ProcessInfo.processInfo.arguments.contains("--ui-test-health-loading")
+    private let failRefresh = ProcessInfo.processInfo.arguments.contains("--ui-test-health-refresh-failure")
 
     init(scenario: Data) throws {
         let root = try JSONSerialization.jsonObject(with: scenario) as? [String: Any]
@@ -425,6 +428,29 @@ private actor JarvisHealthPreviewTransport: HTTPTransport {
         try Task.checkCancellation()
         let body = try request.body.map { try JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? nil
         let source = body?["source"] as? String
+        let readKey = [request.url.path, source ?? "", body?["metric"] as? String ?? "",
+                       body?["startDate"] as? String ?? "", body?["endDate"] as? String ?? "",
+                       body?["lastPerExercise"] as? Bool == true ? "last" : "history"].joined(separator: ":")
+        readCounts[readKey, default: 0] += 1
+        let count = readCounts[readKey, default: 0]
+        if slowLoading {
+            if request.url.path == "/api/health/capabilities", count == 1 {
+                try await Task.sleep(for: .seconds(4))
+            } else if request.url.path == "/api/health/training-targets" {
+                try await Task.sleep(for: .seconds(8))
+            } else if source == "daily.health.sleep" {
+                try await Task.sleep(for: .seconds(4))
+            }
+        }
+        if failRefresh, request.url.path == "/api/health/query", count == 2 {
+            return HTTPResponse(statusCode: 503, headers: [:], body: Data())
+        }
+        if slowLoading || failRefresh, source == "daily.health.metrics",
+           let metric = body?["metric"] as? String,
+           metric == "active_energy_burned" || metric == "apple_exercise_time" {
+            return try response(["source": source!, "items": [], "status": "empty",
+                                 "coverage": ["returned": 0, "hasMore": false, "next": NSNull()]])
+        }
         if request.method == .post, request.url.path == "/api/health/query", source == "daily.health.lifts" {
             let items = lifts
             return try response(["source": source!, "items": items, "status": "available",

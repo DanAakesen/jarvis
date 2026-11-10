@@ -52,12 +52,10 @@ struct JarvisNotesOverviewHero: View {
 
     var body: some View {
         JarvisPageHeroCard(title: title) {
-            if let linkCount {
-                Text("\(JarvisNumberFormat.compact(linkCount, language: language)) \(linksLabel)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("notes.hero.links")
-            }
+            Text("\(linkCount.map { JarvisNumberFormat.compact($0, language: language) } ?? "—") \(linksLabel)")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("notes.hero.links")
         } content: {
             VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
                 columns
@@ -80,11 +78,17 @@ struct JarvisNotesOverviewHero: View {
                         .accessibilityHidden(true)
                 }
                 VStack(spacing: 4) {
-                    Text(JarvisNumberFormat.compact(stat.value, language: language))
-                        .font(.title.weight(.semibold))
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
+                    if let value = stat.value {
+                        Text(JarvisNumberFormat.compact(value, language: language))
+                            .font(.title.weight(.semibold))
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.6)
+                    } else if stat.isLoading {
+                        JarvisLoadingView(title: JarvisNotesCopy(language: language).loading, size: .inline)
+                    } else {
+                        Text("—").font(.title.weight(.semibold))
+                    }
                     Image(systemName: stat.systemImage)
                         .font(.subheadline)
                         .foregroundStyle(JarvisDesignTokens.primaryAccent)
@@ -97,7 +101,7 @@ struct JarvisNotesOverviewHero: View {
                 }
                 .frame(maxWidth: .infinity)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(stat.label), \(stat.value.formatted(.number.locale(language.locale)))")
+                .accessibilityLabel("\(stat.label), \(stat.value.map { $0.formatted(.number.locale(language.locale)) } ?? (stat.isLoading ? JarvisNotesCopy(language: language).loading : JarvisNotesCopy(language: language).unavailable))")
             }
         }
         .fixedSize(horizontal: false, vertical: true)

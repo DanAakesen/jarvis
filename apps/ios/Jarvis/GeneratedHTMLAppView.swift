@@ -13,24 +13,25 @@ struct HTMLAppRenderer: View {
     @State private var attempt = 0
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
             if let artifact, artifact.id.caseInsensitiveCompare(artifactId) == .orderedSame {
                 SandboxedHTMLApp(artifact: artifact)
                     .frame(height: 560)
-            } else if failedArtifactID == artifactId {
+            }
+            if failedArtifactID == artifactId {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.rowSpacing) {
                     Text(text(.htmlAppLoadFailed))
                         .foregroundStyle(.secondary)
                     JarvisLabelledButton(title: text(.retry)) { attempt += 1 }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
+            } else if artifact?.id.caseInsensitiveCompare(artifactId) != .orderedSame {
                 JarvisLoadingView(title: text(.htmlAppLoading))
                     .frame(maxWidth: .infinity, minHeight: 160)
             }
         }
         .task(id: "\(artifactId)-\(attempt)") {
-            artifact = nil
+            if artifact?.id.caseInsensitiveCompare(artifactId) != .orderedSame { artifact = nil }
             failedArtifactID = nil
             do {
                 let loadedArtifact = try await runtime.loadHTMLArtifact(id: artifactId)

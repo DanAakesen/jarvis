@@ -13,6 +13,7 @@ struct WorkspacesView: View {
     @State private var reloadID = 0
     @State private var loadedFilterKey = ""
     @State private var hasLoadedPage = false
+    @State private var loadRequestID = UUID()
     @State private var busyItems: Set<String> = []
     @State private var loadingOlder = false
     @State private var hasMore = false
@@ -32,23 +33,22 @@ struct WorkspacesView: View {
         .jarvisAmbientBackground()
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            if hasLoadedPage {
-                searchField
-                    .padding(.top, JarvisDesignTokens.contentSpacing / 2)
-                    .padding(.bottom, JarvisDesignTokens.contentSpacing / 2)
-            }
+            searchField
+                .padding(.top, JarvisDesignTokens.contentSpacing / 2)
+                .padding(.bottom, JarvisDesignTokens.contentSpacing / 2)
         }
         .task(id: "\(query)|\(selectedKind?.rawValue ?? "")|\(reloadID)") {
             do {
                 let filterKey = "\(query)|\(selectedKind?.rawValue ?? "")"
                 if loadedFilterKey != filterKey {
                     items = []
+                    hasLoadedPage = false
                     notice = nil
                     hasMore = false
                     loadState = .loading
                 }
                 try await Task.sleep(for: .milliseconds(JarvisDesignTokens.searchDebounceMilliseconds))
-                await load()
+                await load(force: reloadID > 0)
             } catch {
                 return
             }
@@ -133,40 +133,47 @@ struct WorkspacesView: View {
         .padding(.bottom, JarvisDesignTokens.contentSpacing / 2)
     }
 
-    private var isInitialLoading: Bool { loadState == .loading && items.isEmpty && !hasLoadedPage }
+    private var filterKey: String { "\(query)|\(selectedKind?.rawValue ?? "")" }
+    private var isCurrentFilter: Bool { loadedFilterKey == filterKey }
+    private var isInitialLoading: Bool { !isCurrentFilter || (loadState == .loading && !hasLoadedPage) }
 
     @ViewBuilder private var pageHead: some View {
-        if hasLoadedPage || !items.isEmpty {
-            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-                if loadState == .ready || loadState == .stale {
+        VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+            if isCurrentFilter && hasLoadedPage {
                 JarvisPageHeadline(phrase: JarvisPagePhrase(markup: formatted(.pageSummary, items.count)))
-                JarvisPageHeroCard(title: jarvisInsightsText(.overview, language)) {
-                    JarvisPageStatGrid(
-                        stats: SavedWorkspaceKind.allCases.map { kind in
-                            JarvisPageStat(id: kind.rawValue, value: items.filter { $0.kind == kind }.count,
-                                          label: kindLabel(kind), systemImage: symbol(for: kind))
-                        },
-                        language: language
-                    )
-                }
-                .accessibilityIdentifier("workspaces.hero")
-                }
-                connectionStatus
-                kindFilters
-                if loadState == .loading {
-                    JarvisLoadingView(title: text(.loading), size: .inline)
-                        .accessibilityIdentifier("workspaces.refreshing")
-                }
-                if let notice {
-                    Text(notice).font(.footnote).foregroundStyle(.secondary)
-                        .accessibilityAddTraits(.updatesFrequently)
-                }
             }
-            .padding(.horizontal, JarvisPageHeaderMetrics.inset)
-        } else if isInitialLoading {
-            JarvisPageLoadingView(title: text(.loading), identifier: "workspaces.loading")
-                .padding(.horizontal, JarvisPageHeaderMetrics.inset)
+            JarvisPageHeroCard(title: jarvisInsightsText(.overview, language)) {
+                JarvisPageStatGrid(
+                    stats: SavedWorkspaceKind.allCases.map { kind in
+                        JarvisPageStat(
+                            id: kind.rawValue,
+                            value: isCurrentFilter && hasLoadedPage ? items.filter { $0.kind == kind }.count : nil,
+                            label: kindLabel(kind), systemImage: symbol(for: kind),
+                            isLoading: loadState == .loading || !isCurrentFilter
+                        )
+                    },
+                    language: language
+                )
+            }
+            .accessibilityIdentifier("workspaces.hero")
+            connectionStatus
+            kindFilters
+            if isInitialLoading {
+                JarvisLoadingView(title: text(.loading), size: .inline)
+                    .accessibilityIdentifier("workspaces.loading")
+            } else if loadState == .loading {
+                JarvisLoadingView(title: text(.loading), size: .inline)
+                    .accessibilityIdentifier("workspaces.refreshing")
+            }
+            if let notice {
+                Text(notice).font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
+            if loadState == .stale {
+                JarvisLabelledButton(title: text(.retry)) { refresh() }
+            }
         }
+        .padding(.horizontal, JarvisPageHeaderMetrics.inset)
     }
 
     private var results: some View {
@@ -213,7 +220,7 @@ struct WorkspacesView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .refreshable { await load() }
+        .refreshable { await load(force: true) }
     }
 
     @ViewBuilder
@@ -349,7 +356,16 @@ struct WorkspacesView: View {
         reloadID += 1
     }
 
-    private func load() async {
+    private func load(force: Bool = false) async {
+        let requestedFilter = filterKey
+        let requestID = UUID()
+        loadRequestID = requestID
+        if !isCurrentFilter {
+            items = []
+            hasLoadedPage = false
+            hasMore = false
+            loadedFilterKey = requestedFilter
+        }
         guard let client = runtime.workspacesClient else {
             loadState = .error
             return
@@ -357,22 +373,42 @@ struct WorkspacesView: View {
         loadState = .loading
         signInRequired = false
         notice = nil
-        do {
-            let page = try await client.search(query: normalizedQuery(query), kind: selectedKind)
-            guard !Task.isCancelled else { return }
-            items = page
-            hasLoadedPage = true
-            hasMore = page.count >= JarvisWorkspacesClient.pageSize
-            loadedFilterKey = "\(query)|\(selectedKind?.rawValue ?? "")"
-            loadState = .ready
-        } catch is CancellationError {
-            return
-        } catch {
-            guard !Task.isCancelled else { return }
-            signInRequired = (error as? JarvisClientError) == .signInRequired
-            loadState = items.isEmpty ? .error : .stale
-            notice = items.isEmpty ? nil : text(.offlineNotice)
+        let requestedQuery = normalizedQuery(query)
+        let requestedKind = selectedKind
+        let repository: JarvisRepository<[SavedWorkspaceItem]> = await JarvisAppCache.repository(.workspaces, scope: requestedFilter) { _ in
+            .modified(try await client.search(query: requestedQuery, kind: requestedKind), validator: nil)
         }
+        guard !Task.isCancelled, loadRequestID == requestID, filterKey == requestedFilter else { return }
+        for await update in repository.updates(force: force) {
+            guard !Task.isCancelled, loadRequestID == requestID, filterKey == requestedFilter else { return }
+            switch update {
+            case .cached(let page, let isStale):
+                if !hasLoadedPage { applyFirstPage(page) }
+                else if !isStale { loadState = .ready }
+            case .fresh(let page):
+                applyFirstPage(page)
+            case .refreshing:
+                break
+            case .failed(let error, _):
+                signInRequired = (error as? JarvisClientError) == .signInRequired
+                loadState = hasLoadedPage ? .stale : .error
+                notice = hasLoadedPage ? text(.offlineNotice) : nil
+            }
+        }
+        if !Task.isCancelled, loadRequestID == requestID, filterKey == requestedFilter, loadState == .loading {
+            loadState = hasLoadedPage ? .stale : .error
+        }
+    }
+
+    private func applyFirstPage(_ page: [SavedWorkspaceItem]) {
+        let freshIDs = Set(page.map(\.id))
+        let boundary = page.map { date(from: $0.createdAt) }.min()
+        let older = hasLoadedPage && page.count >= JarvisWorkspacesClient.pageSize
+            ? items.filter { !freshIDs.contains($0.id) && date(from: $0.createdAt) <= (boundary ?? .distantPast) } : []
+        items = page + older
+        hasLoadedPage = true
+        if older.isEmpty { hasMore = page.count >= JarvisWorkspacesClient.pageSize }
+        loadState = .ready
     }
 
     private func loadOlder() async {
@@ -392,6 +428,7 @@ struct WorkspacesView: View {
             hasMore = page.count >= JarvisWorkspacesClient.pageSize
             notice = nil
         } catch {
+            guard !Task.isCancelled, requestedFilter == filterKey else { return }
             notice = text(.olderLoadFailed)
         }
     }
@@ -417,11 +454,17 @@ struct WorkspacesView: View {
 
     private func setPinned(_ item: SavedWorkspaceItem, pinned: Bool) async {
         guard let client = runtime.workspacesClient else { return }
+        let requestedFilter = filterKey
         setBusy(item.id, true)
         defer { setBusy(item.id, false) }
         do {
             let updated = try await client.setPinned(item, pinned: pinned)
+            if filterKey == requestedFilter {
+                loadRequestID = UUID()
+                loadState = .ready
+            }
             replace(updated)
+            await JarvisAppCache.invalidateAll(.workspaces)
             notice = nil
         } catch {
             if let workspaceError = error as? WorkspacesClientError,
@@ -436,6 +479,7 @@ struct WorkspacesView: View {
 
     private func rename() async {
         guard let item = renameTarget, let client = runtime.workspacesClient else { return }
+        let requestedFilter = filterKey
         setBusy(item.id, true)
         defer {
             setBusy(item.id, false)
@@ -443,7 +487,12 @@ struct WorkspacesView: View {
         }
         do {
             let updated = try await client.rename(item, title: renameTitle)
+            if filterKey == requestedFilter {
+                loadRequestID = UUID()
+                loadState = .ready
+            }
             replace(updated)
+            await JarvisAppCache.invalidateAll(.workspaces)
             notice = nil
         } catch {
             if let workspaceError = error as? WorkspacesClientError,
@@ -458,13 +507,19 @@ struct WorkspacesView: View {
 
     private func remove(_ item: SavedWorkspaceItem) async {
         guard let client = runtime.workspacesClient, !busyItems.contains(item.id) else { return }
+        let requestedFilter = filterKey
         setBusy(item.id, true)
         defer {
             setBusy(item.id, false)
         }
         do {
             try await client.remove(item)
+            if filterKey == requestedFilter {
+                loadRequestID = UUID()
+                loadState = .ready
+            }
             items.removeAll { $0.id == item.id }
+            await JarvisAppCache.invalidateAll(.workspaces)
             if openedItemID == item.id {
                 openedFeedbackTask?.cancel()
                 openedItemID = nil

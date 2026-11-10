@@ -341,15 +341,17 @@ struct JarvisNoteEditorView: View {
     @discardableResult
     private func saveDraft(sha: String) async -> Bool {
         guard let client, hasChanges, !saving else { return false }
+        let path = note.path
         let submitted = draft
         saving = true
         status = copy.saving
         defer { saving = false }
         do {
-            _ = try await client.saveNote(path: note.path, content: submitted, sha: sha)
+            _ = try await client.saveNote(path: path, content: submitted, sha: sha)
             await JarvisAppCache.invalidateAll(.notes)
             do {
-                let refreshed = try await client.readNote(path: note.path)
+                let refreshed = try await client.readNote(path: path)
+                guard !Task.isCancelled, note.path == path else { return false }
                 note = refreshed
                 if draft == submitted {
                     draft = refreshed.content
@@ -360,17 +362,22 @@ struct JarvisNoteEditorView: View {
                 onSaved(refreshed)
                 return draft == refreshed.content
             } catch {
+                guard !Task.isCancelled, note.path == path else { return false }
                 status = copy.savedNeedsRefresh
                 needsReload = true
                 activeAlert = .info(copy.savedNeedsRefresh)
             }
         } catch let error as JarvisNotesClientError {
+            guard !Task.isCancelled, note.path == path else { return false }
             switch error {
             case .noteConflict:
                 status = copy.conflict
                 do {
-                    latestConflict = try await client.readNote(path: note.path)
+                    let latest = try await client.readNote(path: path)
+                    guard !Task.isCancelled, note.path == path else { return false }
+                    latestConflict = latest
                 } catch {
+                    guard !Task.isCancelled, note.path == path else { return false }
                     latestConflict = nil
                     needsReload = true
                     activeAlert = .info(copy.conflict)
@@ -387,6 +394,7 @@ struct JarvisNoteEditorView: View {
                 activeAlert = .info(copy.unavailable)
             }
         } catch {
+            guard !Task.isCancelled, note.path == path else { return false }
             status = copy.unavailable
             activeAlert = .info(copy.unavailable)
         }
@@ -406,11 +414,16 @@ struct JarvisNoteEditorView: View {
 
     private func reloadLatest() async {
         guard let client, !saving else { return }
+        let path = note.path
+        let submitted = draft
         saving = true
         defer { saving = false }
         do {
-            applyLatest(try await client.readNote(path: note.path))
+            let latest = try await client.readNote(path: path)
+            guard !Task.isCancelled, note.path == path, draft == submitted else { return }
+            applyLatest(latest)
         } catch {
+            guard !Task.isCancelled, note.path == path else { return }
             activeAlert = .info(copy.unavailable)
         }
     }

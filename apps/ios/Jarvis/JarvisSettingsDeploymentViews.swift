@@ -8,6 +8,7 @@ struct JarvisDeploymentsSettingsView: View {
     let onFailure: (Error) -> Void
 
     @State private var catalogue: JarvisModelCatalogue?
+    @State private var loadGeneration = 0
     @State private var loading = true
     @State private var removing: String?
     @State private var error: String?
@@ -45,6 +46,7 @@ struct JarvisDeploymentsSettingsView: View {
                                     isDisabled: readOnly || removing != nil,
                                     tint: .red
                                 ) { Task { await remove(deployment) } }
+                                .accessibilityHint(readOnly ? copy(.readOnly) : "")
                             }
                         }
                         Text("\(deployment.model) · \(deployment.version) · \(deployment.sku)")
@@ -61,47 +63,65 @@ struct JarvisDeploymentsSettingsView: View {
                     }
                     .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
                 }
-                if let error {
+                if error != nil {
                     JarvisLabelledButton(
                         title: copy(.retry),
                         isDisabled: loading || removing != nil
-                    ) { Task { await load() } }
+                    ) { Task { await load(force: true) } }
                 }
             } else {
-                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
+                JarvisLabelledButton(title: copy(.retry), isDisabled: loading) { Task { await load(force: true) } }
             }
         }
         .listStyle(.insetGrouped)
         .jarvisAmbientBackground()
         .navigationTitle(copy(.deploymentsRow))
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await load() }
+        .refreshable { await load(force: true) }
         .task {
             if catalogue == nil { await load() }
         }
+        .onDisappear { loadGeneration += 1; loading = false }
 
     }
 
-    private func load() async {
+    private func load(force: Bool = true) async {
+        guard removing == nil else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
+        defer { if loadGeneration == generation { loading = false } }
         guard let client else {
             error = copy(.unavailable)
             loading = false
             return
         }
         loading = true
-        do {
-            catalogue = try await client.loadModels()
-            error = nil
-        } catch {
-            self.error = copy(.loadFailed)
-            onFailure(error)
+        let repository: JarvisRepository<JarvisModelCatalogue> = await JarvisAppCache.repository(.settings, scope: "deployments") { _ in
+            .modified(try await client.loadModels(), validator: nil)
+        }
+        guard !Task.isCancelled, loadGeneration == generation else { return }
+        for await update in repository.updates(force: force) {
+            guard !Task.isCancelled, loadGeneration == generation else { return }
+            switch update {
+            case .cached(let fresh, _), .fresh(let fresh):
+                catalogue = fresh
+                error = nil
+            case .refreshing: break
+            case .failed(let failure, _):
+                error = copy(.loadFailed)
+                onFailure(failure)
+            }
         }
         loading = false
     }
 
     private func remove(_ deployment: JarvisModelDeployment) async {
         guard let client, !readOnly, removing == nil else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
+        loading = false
         removing = deployment.name
+        defer { removing = nil }
         error = nil
         notice = nil
         do {
@@ -109,7 +129,10 @@ struct JarvisDeploymentsSettingsView: View {
             if result.status == "approval_pending" {
                 notice = copy(.approvalPending)
             } else {
-                catalogue = try await client.loadModels()
+                await JarvisAppCache.invalidate(.settings, scope: "deployments")
+                let fresh = try await client.loadModels()
+                guard !Task.isCancelled, loadGeneration == generation else { return }
+                catalogue = fresh
             }
         } catch {
             self.error = copy(.requestFailed)
@@ -181,8 +204,9 @@ struct JarvisNewDeploymentView: View {
                 JarvisSheetConfirmButton(
                     title: copy(.requestDeployment),
                     isWorking: saving,
-                    isDisabled: readOnly || submitted || !validDraft
+                    isDisabled: client == nil || readOnly || submitted || !validDraft
                 ) { Task { await requestDeployment() } }
+                .accessibilityHint(client == nil ? copy(.unavailable) : (readOnly ? copy(.readOnly) : ""))
             }
             .sharedBackgroundVisibility(.hidden)
         }
@@ -208,6 +232,7 @@ struct JarvisNewDeploymentView: View {
                 submitted = true
                 notice = copy(.approvalPending)
             } else {
+                await JarvisAppCache.invalidate(.settings, scope: "deployments")
                 dismiss()
             }
         } catch {

@@ -74,6 +74,13 @@ final class JarvisDesignSystemGuardTests: XCTestCase {
         XCTAssertEqual(try offenders(#"\.redacted\(reason:\s*\.placeholder"#, allowing: ["JarvisLoadingView.swift"]), [])
     }
 
+    func testScreensKeepStaticStructureOutsideLoadingPlaceholders() throws {
+        XCTAssertEqual(
+            try offenders(#"\bJarvisPageLoadingView\("#, allowing: ["JarvisComponentGallery.swift"]),
+            []
+        )
+    }
+
     func testNoScreenDefinesAButtonStyle() throws {
         XCTAssertEqual(try offenders(#":\s*(?:[A-Za-z]+,\s*)*ButtonStyle\b"#, allowing: Self.sharedLayer), [])
     }

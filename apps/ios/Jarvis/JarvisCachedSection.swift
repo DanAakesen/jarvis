@@ -21,16 +21,18 @@ struct JarvisCachedSection<Value: Codable & Sendable & Equatable, Content: View>
     @State private var handledToken = 0
     @State private var handledRetry = 0
     @State private var loadedScope: String?
+    @State private var loadedKind: JarvisRepositoryKind?
 
     private struct LoadKey: Hashable {
         let reload: Int
         let retry: Int
         let scope: String
+        let kind: JarvisRepositoryKind
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-            switch state {
+            switch loadedScope == scope && loadedKind == kind ? state : .loading {
             case .loading:
                 JarvisInsightsStateView(kind: .loading, language: language, identifier: "\(identifier).loading")
             case .failed(let error):
@@ -45,26 +47,32 @@ struct JarvisCachedSection<Value: Codable & Sendable & Equatable, Content: View>
             case .loaded(let value, let refreshFailed):
                 content(value)
                 if refreshFailed {
-                    Text(jarvisInsightsText(.refreshFailedShowingSaved, language))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("\(identifier).refreshFailed")
+                    VStack(alignment: .leading) {
+                        Text(jarvisInsightsText(.refreshFailedShowingSaved, language))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("\(identifier).refreshFailed")
+                        JarvisLabelledButton(title: jarvisInsightsText(.retry, language)) {
+                            retryToken += 1
+                        }
+                    }
                 }
             }
         }
-        .task(id: LoadKey(reload: reloadToken, retry: retryToken, scope: scope)) { await load() }
+        .task(id: LoadKey(reload: reloadToken, retry: retryToken, scope: scope, kind: kind)) { await load() }
     }
 
     private func load() async {
+        if loadedScope != scope || loadedKind != kind { state = .loading }
+        loadedScope = scope
+        loadedKind = kind
         guard let fetch else {
-            state = .failed(JarvisClientError.invalidBaseURL)
+            state.apply(.failed(JarvisClientError.invalidBaseURL, cached: nil))
             return
         }
         let force = handledToken != reloadToken || handledRetry != retryToken
         handledToken = reloadToken
         handledRetry = retryToken
-        if loadedScope != scope { state = .loading }
-        loadedScope = scope
         let repository = await JarvisAppCache.repository(kind, scope: scope, fetch: fetch)
         for await update in repository.updates(force: force) {
             if Task.isCancelled { return }

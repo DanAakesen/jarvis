@@ -135,6 +135,7 @@ final class JarvisChatModel: ObservableObject {
     private var observationSuspended = false
     private var didLoad = false
     private var fixtureTurnUsed = false
+    private var activityRefreshID = UUID()
     let fixtureMode: Bool
     let startupError: String?
 
@@ -420,32 +421,47 @@ final class JarvisChatModel: ObservableObject {
             activityError = startupError ?? chatCopy(.activityUnavailableMessage)
             return
         }
+        let requestID = UUID()
+        activityRefreshID = requestID
+        async let feedError = refreshNowFeed(nowClient, requestID: requestID)
+        async let jobsError = refreshBackgroundTasks(nowClient, requestID: requestID)
+        let errors = await (feedError, jobsError)
+        guard !Task.isCancelled, activityRefreshID == requestID else { return }
+        activityError = errors.0 ?? errors.1
+        await JarvisFactoryLiveActivityController.synchronize(
+            nowFeed?.running ?? [], backgroundTasks: backgroundTasks,
+            factoryClient: factoryClient, language: appLanguage
+        )
+        guard !Task.isCancelled, activityRefreshID == requestID else { return }
+        await JarvisApprovalNotificationCoordinator.shared.synchronize(
+            nowFeed?.confirmations ?? [], language: appLanguage
+        )
+        consumeLockScreenApprovalResult()
+    }
+
+    private func refreshNowFeed(_ client: JarvisNowFeedClient, requestID: UUID) async -> String? {
         do {
-            replaceNowFeed(try await nowClient.load())
-            activityError = nil
-            let language = JarvisAppLanguage(
-                rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-            ) ?? .default
-            let liveBackgroundTasks: [BackgroundTaskRecord]
-            do {
-                liveBackgroundTasks = try await nowClient.backgroundTasks()
-                backgroundTasks = liveBackgroundTasks
-            } catch {
-                // Keep existing approvals and Factory updates independent of job storage.
-                liveBackgroundTasks = []
-                activityError = message(for: error)
-            }
-            await JarvisFactoryLiveActivityController.synchronize(
-                nowFeed?.running ?? [], backgroundTasks: liveBackgroundTasks,
-                factoryClient: factoryClient, language: language
-            )
-            await JarvisApprovalNotificationCoordinator.shared.synchronize(
-                nowFeed?.confirmations ?? [],
-                language: language
-            )
-            consumeLockScreenApprovalResult()
+            let feed = try await client.load()
+            guard !Task.isCancelled, activityRefreshID == requestID else { return nil }
+            replaceNowFeed(feed)
+            return nil
         } catch {
+            guard !Task.isCancelled, activityRefreshID == requestID else { return nil }
             activityError = message(for: error)
+            return activityError
+        }
+    }
+
+    private func refreshBackgroundTasks(_ client: JarvisNowFeedClient, requestID: UUID) async -> String? {
+        do {
+            let tasks = try await client.backgroundTasks()
+            guard !Task.isCancelled, activityRefreshID == requestID else { return nil }
+            backgroundTasks = tasks
+            return nil
+        } catch {
+            guard !Task.isCancelled, activityRefreshID == requestID else { return nil }
+            activityError = message(for: error)
+            return activityError
         }
     }
 

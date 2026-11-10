@@ -11,7 +11,6 @@ struct JarvisFactoryTaskDetailView: View {
     @State private var task: FactoryTaskRecord?
     @State private var events: [FactoryTaskEvent] = []
     @State private var usage: [FactoryTaskUsage] = []
-    @State private var loading = true
     @State private var loadFailed = false
     @State private var actionFailed = false
     @State private var taskConnection: FactoryTaskConnection = .connected
@@ -22,31 +21,19 @@ struct JarvisFactoryTaskDetailView: View {
     @State private var busyAction: FactoryTaskControl?
     @State private var steeringPresented = false
     @State private var actionCompleted = false
+    @State private var loadRequest = UUID()
+    @State private var loadedTaskID: String?
 
     private var copy: JarvisFactoryCopy { JarvisFactoryCopy(language: language) }
     private var streamIdentity: String { task == nil ? "waiting" : "ready-\(taskID)" }
 
     var body: some View {
-        Group {
-            if loading && task == nil {
-                FactoryLoadingView(copy: copy, releases: false)
-            } else if loadFailed && task == nil {
-                FactoryStateMessage(
-                    title: copy.text(.actionFailed),
-                    actionTitle: copy.text(.retry),
-                    action: { Task { await loadTask() } }
-                )
-            } else if let task {
-                detailContent(task)
-            } else {
-                FactoryStateMessage(title: copy.text(.taskDetail))
-            }
-        }
+        detailContent(loadedTaskID == taskID ? task : nil)
         .safeAreaInset(edge: .top, spacing: 0) {
             JarvisTaskActivityNotice(language: language)
         }
         .jarvisAmbientBackground()
-        .navigationTitle(task?.title ?? copy.text(.taskDetail))
+        .navigationTitle(loadedTaskID == taskID ? task?.title ?? copy.text(.taskDetail) : copy.text(.taskDetail))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)
         .environment(\.locale, language.locale)
@@ -63,9 +50,17 @@ struct JarvisFactoryTaskDetailView: View {
     }
 
     @ViewBuilder
-    private func detailContent(_ task: FactoryTaskRecord) -> some View {
+    private func detailContent(_ task: FactoryTaskRecord?) -> some View {
         JarvisList {
+            if loadFailed {
+                FactoryStateMessage(
+                    title: copy.text(.actionFailed),
+                    actionTitle: copy.text(.retry),
+                    action: { Task { await loadTask() } }
+                )
+            }
             Section(copy.text(.actions)) {
+                if let task {
                 if JarvisFactoryPresentation.availableControls(
                     state: task.state,
                     latestSessionEndReason: task.latestSessionEndReason
@@ -108,15 +103,23 @@ struct JarvisFactoryTaskDetailView: View {
                     )
                     .foregroundStyle(.secondary)
                 }
+                } else {
+                    detailPlaceholder
+                }
             }
 
             Section(copy.text(.request)) {
+                if let task {
                 Text(task.request)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    detailPlaceholder
+                }
             }
 
             Section(copy.text(.metadata)) {
+                if let task {
                 LabeledContent(copy.text(.projectLabel), value: task.projectId)
                 LabeledContent(copy.text(.agentLabel), value: copy.agent(task.agent))
                 LabeledContent(copy.text(.state), value: copy.state(task.state))
@@ -149,10 +152,17 @@ struct JarvisFactoryTaskDetailView: View {
                     )
                 }
                 LabeledContent(copy.text(.attempts), value: task.attemptCount.formatted(.number.locale(language.locale)))
+                } else {
+                    ForEach([JarvisFactoryLocalizationKey.projectLabel, .agentLabel, .state, .created, .attempts], id: \.self) { key in
+                        LabeledContent(copy.text(key), value: "—")
+                    }
+                }
             }
 
             Section(copy.text(.timeline)) {
-                if events.isEmpty {
+                if task == nil {
+                    detailPlaceholder
+                } else if events.isEmpty {
                     Text(copy.text(.noEvents))
                         .foregroundStyle(.secondary)
                 } else {
@@ -170,7 +180,9 @@ struct JarvisFactoryTaskDetailView: View {
             }
 
             Section(copy.text(.usage)) {
-                if usage.isEmpty {
+                if task == nil {
+                    detailPlaceholder
+                } else if usage.isEmpty {
                     Text(copy.text(.noUsage))
                         .foregroundStyle(.secondary)
                 } else {
@@ -181,7 +193,9 @@ struct JarvisFactoryTaskDetailView: View {
             }
 
             Section(copy.text(.disk)) {
-                if diskEvents.isEmpty {
+                if task == nil {
+                    detailPlaceholder
+                } else if diskEvents.isEmpty {
                     Text(copy.text(.noDisk))
                         .foregroundStyle(.secondary)
                 } else {
@@ -192,7 +206,9 @@ struct JarvisFactoryTaskDetailView: View {
             }
 
             Section(copy.text(.artifacts)) {
-                if artifactEvents.isEmpty {
+                if task == nil {
+                    detailPlaceholder
+                } else if artifactEvents.isEmpty {
                     Text(copy.text(.noArtifacts))
                         .foregroundStyle(.secondary)
                 } else {
@@ -204,6 +220,15 @@ struct JarvisFactoryTaskDetailView: View {
         }
         .listStyle(.insetGrouped)
         .refreshable { await loadTask() }
+    }
+
+    @ViewBuilder
+    private var detailPlaceholder: some View {
+        if loadFailed {
+            Text(copy.text(.actionFailed)).foregroundStyle(.secondary)
+        } else {
+            JarvisLoadingView(title: copy.text(.loadingTasks), size: .inline)
+        }
     }
 
     @ViewBuilder
@@ -242,15 +267,27 @@ struct JarvisFactoryTaskDetailView: View {
     }
 
     private func loadTask() async {
-        loading = true
+        let requestedTaskID = taskID
+        let request = UUID()
+        loadRequest = request
+        if loadedTaskID != requestedTaskID {
+            task = nil
+            events = []
+            usage = []
+            hasMoreEvents = false
+            lastEventID = nil
+        }
         loadFailed = false
         do {
-            let detail = try await client.task(id: taskID)
-            guard !Task.isCancelled else { return }
+            let detail = try await client.task(id: requestedTaskID)
+            guard !Task.isCancelled, loadRequest == request, taskID == requestedTaskID else { return }
+            let refreshedEventIDs = Set(detail.events.map(\.id))
+            let retainedEvents = events.filter { !refreshedEventIDs.contains($0.id) }
             task = detail.task
-            events = detail.events.sorted { $0.at < $1.at }
+            loadedTaskID = requestedTaskID
+            events = (retainedEvents + detail.events).sorted { $0.at < $1.at }
             usage = detail.usage
-            hasMoreEvents = detail.events.count == 100
+            if retainedEvents.isEmpty { hasMoreEvents = detail.events.count == 100 }
             lastEventID = events.last?.id
             taskConnection = .connected
             await JarvisFactoryLiveActivityController.update(task: detail.task, language: language)
@@ -258,10 +295,9 @@ struct JarvisFactoryTaskDetailView: View {
                 steeringPresented = true
             }
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, loadRequest == request, taskID == requestedTaskID else { return }
             loadFailed = true
         }
-        loading = false
     }
 
     private func loadMoreEvents() async {
@@ -270,21 +306,27 @@ struct JarvisFactoryTaskDetailView: View {
         defer { loadingMoreEvents = false }
         do {
             let detail = try await client.task(id: taskID, eventLimit: 100, eventOffset: events.count)
+            guard !Task.isCancelled, loadedTaskID == taskID else { return }
             let knownIDs = Set(events.map(\.id))
             events = (detail.events.filter { !knownIDs.contains($0.id) } + events).sorted { $0.at < $1.at }
             hasMoreEvents = detail.events.count == 100
         } catch {
+            guard !Task.isCancelled else { return }
             actionFailed = true
         }
     }
 
     private func listenForEvents() async {
         guard liveUpdatesEnabled, task != nil else { return }
+        let requestedTaskID = taskID
         var retrySeconds = 1
         while !Task.isCancelled {
             do {
                 try await client.listenForTaskEvents(taskId: taskID, after: lastEventID) { event in
                     let (stateChanged, currentTask) = await MainActor.run {
+                        guard !Task.isCancelled, loadedTaskID == requestedTaskID else {
+                            return (false, Optional<FactoryTaskRecord>.none)
+                        }
                         taskConnection = .connected
                         eventRetryCount = 0
                         lastEventID = event.id
@@ -305,6 +347,7 @@ struct JarvisFactoryTaskDetailView: View {
                         do {
                             let detail = try await client.task(id: taskID)
                             await MainActor.run {
+                                guard !Task.isCancelled, loadedTaskID == requestedTaskID else { return }
                                 task = detail.task
                                 usage = detail.usage
                                 let knownIDs = Set(events.map(\.id))
@@ -316,7 +359,10 @@ struct JarvisFactoryTaskDetailView: View {
                                 language: language
                             )
                         } catch {
-                            await MainActor.run { actionFailed = true }
+                            await MainActor.run {
+                                guard !Task.isCancelled, loadedTaskID == requestedTaskID else { return }
+                                actionFailed = true
+                            }
                         }
                     }
                 }
@@ -338,14 +384,19 @@ struct JarvisFactoryTaskDetailView: View {
 
     private func perform(_ request: FactoryTaskControlRequest) async {
         guard busyAction == nil else { return }
+        loadRequest = UUID()
         busyAction = request.action
         actionFailed = false
         actionCompleted = false
         defer { busyAction = nil }
         do {
-            task = try await client.controlTask(request, confirm: false)
+            let result = try await client.controlTask(request, confirm: false)
+            guard !Task.isCancelled, loadedTaskID == request.taskId else { return }
+            loadRequest = UUID()
+            task = result
             actionCompleted = true
         } catch {
+            guard !Task.isCancelled, loadedTaskID == request.taskId else { return }
             actionFailed = true
         }
     }

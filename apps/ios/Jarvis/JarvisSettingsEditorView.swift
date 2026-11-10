@@ -33,17 +33,16 @@ struct JarvisSettingsEditorView: View {
     @State private var error: String?
 
     private var fields: [JarvisSettingsField] {
-        guard let response else { return [] }
         switch detail {
         case .appearance:
             return [
-                choice("appearance.theme", .theme, response.options["themes"]?.arrayValues ?? []),
+                choice("appearance.theme", .theme, response?.options["themes"]?.arrayValues ?? []),
             ]
         case .instructions, .personality, .identity:
             return [
                 multiline("identity.description", .identityDescription, maximumLength: 2_000),
-                choice("personality.tone", .tone, response.options["personalityTones"]?.arrayValues ?? []),
-                choice("personality.responseStyle", .responseStyle, response.options["personalityResponseStyles"]?.arrayValues ?? []),
+                choice("personality.tone", .tone, response?.options["personalityTones"]?.arrayValues ?? []),
+                choice("personality.responseStyle", .responseStyle, response?.options["personalityResponseStyles"]?.arrayValues ?? []),
                 multiline("personality.customInstructions", .generalInstructions, maximumLength: 2_000),
                 multiline("personality.modeInstructions.present", .presentInstructions, maximumLength: 2_000),
                 multiline("personality.modeInstructions.away", .awayInstructions, maximumLength: 2_000),
@@ -54,31 +53,31 @@ struct JarvisSettingsEditorView: View {
             ]
         case .voice:
             return [
-                choice("voice.defaultLanguage", .defaultLanguage, response.options["languages"]?.arrayValues ?? []),
-                choice("voice.speechToTextModel", .speechToText, response.options["speechToTextModels"]?.arrayValues ?? []),
-                choice("voice.englishModel", .englishModel, response.options["englishModels"]?.arrayValues ?? []),
-                choice("voice.englishVoice", .englishVoice, response.options["englishVoices"]?.arrayValues ?? []),
-                choice("voice.danishVoice", .danishVoice, response.options["danishVoices"]?.arrayValues ?? []),
+                choice("voice.defaultLanguage", .defaultLanguage, response?.options["languages"]?.arrayValues ?? []),
+                choice("voice.speechToTextModel", .speechToText, response?.options["speechToTextModels"]?.arrayValues ?? []),
+                choice("voice.englishModel", .englishModel, response?.options["englishModels"]?.arrayValues ?? []),
+                choice("voice.englishVoice", .englishVoice, response?.options["englishVoices"]?.arrayValues ?? []),
+                choice("voice.danishVoice", .danishVoice, response?.options["danishVoices"]?.arrayValues ?? []),
             ]
         case .research:
             return [
-                choice("research.depth", .researchDepth, response.options["researchDepths"]?.arrayValues ?? []),
+                choice("research.depth", .researchDepth, response?.options["researchDepths"]?.arrayValues ?? []),
                 number("research.maxSources", .maximumSources, integer: true),
             ]
         case .jarvisModel:
             return [
-                choice("jarvis.model", .model, response.options["jarvisModels"]?.arrayValues ?? []),
-                choice("jarvis.reasoning", .reasoning, response.options["reasoningEfforts"]?.arrayValues ?? []),
+                choice("jarvis.model", .model, response?.options["jarvisModels"]?.arrayValues ?? []),
+                choice("jarvis.reasoning", .reasoning, response?.options["reasoningEfforts"]?.arrayValues ?? []),
             ]
         case .decisions:
-            return [choice("decisions.provider", .provider, response.options["decisionProviders"]?.arrayValues ?? [])]
+            return [choice("decisions.provider", .provider, response?.options["decisionProviders"]?.arrayValues ?? [])]
         case .roleModels:
-            return roleFields(response)
+            return response.map(roleFields) ?? []
         case .codingAgents:
             return [
-                choice("codex.model", .codex, response.options["codexModels"]?.arrayValues ?? []),
-                choice("codex.reasoning", .reasoning, response.options["codexReasoningEfforts"]?.arrayValues ?? []),
-                choice("copilot.model", .copilot, response.options["copilotModels"]?.arrayValues ?? []),
+                choice("codex.model", .codex, response?.options["codexModels"]?.arrayValues ?? []),
+                choice("codex.reasoning", .reasoning, response?.options["codexReasoningEfforts"]?.arrayValues ?? []),
+                choice("copilot.model", .copilot, response?.options["copilotModels"]?.arrayValues ?? []),
             ]
         case .limits:
             return [
@@ -91,10 +90,10 @@ struct JarvisSettingsEditorView: View {
         case .projectDefaults:
             return [
                 text("newProjects.owner", .projectOwner, maximumLength: 39),
-                choice("newProjects.visibility", .visibility, response.options["projectVisibilities"]?.arrayValues ?? []),
+                choice("newProjects.visibility", .visibility, response?.options["projectVisibilities"]?.arrayValues ?? []),
                 text("newProjects.templatesRepository", .templatesRepository, maximumLength: 140),
-                choice("newProjects.defaultAgent", .defaultAgent, response.options["projectAgents"]?.arrayValues ?? []),
-                choice("newProjects.policy", .projectPolicy, response.options["projectPolicies"]?.arrayValues ?? []),
+                choice("newProjects.defaultAgent", .defaultAgent, response?.options["projectAgents"]?.arrayValues ?? []),
+                choice("newProjects.policy", .projectPolicy, response?.options["projectPolicies"]?.arrayValues ?? []),
                 number("newProjects.maxParallelTasks", .maxProjectTasks, integer: true),
                 text("newProjects.defaultBranch", .defaultBranch, maximumLength: 255),
             ]
@@ -153,7 +152,8 @@ struct JarvisSettingsEditorView: View {
             }
             ForEach(fields) { field in
                 fieldRow(field)
-                    .disabled(readOnly || saving)
+                    .disabled(response == nil || readOnly || saving)
+                    .accessibilityHint(response == nil ? copy(.unavailable) : (readOnly ? copy(.readOnly) : ""))
             }
         }
         .navigationTitle(title)
@@ -164,20 +164,23 @@ struct JarvisSettingsEditorView: View {
                 JarvisSheetConfirmButton(
                     title: copy(.save),
                     isWorking: saving,
-                    isDisabled: readOnly || !hasChanges || !validDraft
+                    isDisabled: client == nil || response == nil || readOnly || !hasChanges || !validDraft
                 ) { Task { await save() } }
+                .accessibilityHint(client == nil || response == nil ? copy(.unavailable) : (readOnly ? copy(.readOnly) : ""))
             }
             .sharedBackgroundVisibility(.hidden)
         }
-        .task {
-            if draft.isEmpty {
-                draft = Dictionary(uniqueKeysWithValues: fields.map { ($0.id, initialValue(for: $0.id)) })
-                editState = JarvisSettingsEditState(response?.settings ?? .object([:]))
-            }
-        }
+        .task { initializeDraft() }
+        .onChange(of: response) { _, _ in initializeDraft() }
         .onChange(of: readOnly) { _, isReadOnly in
             if isReadOnly { error = copy(.readOnly) }
         }
+    }
+
+    private func initializeDraft() {
+        guard let response, editState == nil else { return }
+        draft = Dictionary(uniqueKeysWithValues: fields.map { ($0.id, initialValue(for: $0.id)) })
+        editState = JarvisSettingsEditState(response.settings)
     }
 
     @ViewBuilder
@@ -332,7 +335,7 @@ struct JarvisSettingsEditorView: View {
     }
 
     private func save() async {
-        guard let client, validDraft, let patch = editState?.changes else { return }
+        guard let client, !readOnly, !saving, hasChanges, validDraft, let patch = editState?.changes else { return }
         saving = true
         error = nil
         do {

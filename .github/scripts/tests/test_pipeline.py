@@ -747,6 +747,36 @@ class SafeFailureTests(unittest.TestCase):
         self.assertEqual(scheme_evidence["with"]["path"], "${{ runner.temp }}/ios-scheme.xcresult")
         self.assertEqual(scheme_evidence["with"]["retention-days"], 14)
 
+    def test_ios_loading_regressions_are_selected_for_native_execution(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        cases = {
+            "FactoryLoadingUITests": [],
+            "WorkspacesLoadingUITests": [],
+            "HealthHeroUITests": ["testStaticStructureAndControlsPrecedeSlowHealthSources",
+                                 "testFailedRefreshRetainsHeroAndCanRetry",
+                                 "testTrackWorkoutSectionsExistBeforeCapabilitiesLoad"],
+            "InsightsPagesTests": ["testUsageKeepsStaticOverviewAndPeriodOnFirstLoad",
+                                  "testUsageFailedRefreshKeepsBreakdownSelectionAndOffersRetry",
+                                  "testStatusFilterIsVisibleBeforeChecksArriveInDanish",
+                                  "testProactiveControlsAndItemsAreNotBlockedByStatusLoading",
+                                  "testProactiveStatusFailureDoesNotHideIndependentSuggestions",
+                                  "testSettingsFirstLoadKeepsLabelsAndDisablesUnavailableEdits"],
+            "NotesRedesignUITests": ["testStaticStructureAndTasksDoNotWaitForSlowGraph",
+                                    "testFailedRefreshRetainsLibraryAndOffersRetry"],
+            "SettingsFieldUITests": ["testStaticSettingsStructureAndLocalLanguageBeforeDataArrives",
+                                    "testTargetLabelsRemainVisibleDuringFirstLoadAndFailureThenRetry",
+                                    "testFailedRootRefreshRetainsRowsAndOffersRetry",
+                                    "testMemorySearchHidesPreviousContextBeforeNewResultsArrive"],
+        }
+        for suite, methods in cases.items():
+            source = (ROOT / f"apps/ios/JarvisUITests/{suite}.swift").read_text()
+            for method in methods or [""]:
+                selection = f"JarvisUITests/{suite}" + (f"/{method}" if method else "")
+                self.assertIn(f"-only-testing:{selection} \\", capture["run"])
+                self.assertIn(f"func {method}(" if method else f"class {suite}:", source)
+
     def test_ios_chat_launcher_hit_shape_covers_its_plain_button_label(self):
         source = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
         button = source.split("struct JarvisSidebarMenuButton: View {", 1)[1].split(
