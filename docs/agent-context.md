@@ -6833,6 +6833,8 @@ excluded from agent-authored UI scope. Backend
 49 task-route tests. Updated task-detail source parsed with
 `swiftc -frontend -parse`; native typechecking, simulator captures and
 VoiceOver/physical-device interaction remain unverified.
+The follow-up secret scan found no secrets. Swift CodeQL database creation
+failed again, so no successful Swift CodeQL analysis is claimed.
 
 `JarvisFactoryFixtureScenario` in `apps/ios/Jarvis/` supplies the Factory
 previews and simulator screenshots through `FixtureTransport`; its project,
