@@ -101,7 +101,6 @@ struct JarvisRoutinesSettingsView: View {
     @State private var routines: [JarvisRoutine] = []
     @State private var loading = true
     @State private var error: String?
-    @State private var pendingDeletion: JarvisRoutine?
     @State private var deleting = false
 
     private func copy(_ key: JarvisSettingsLocalizationKey) -> String {
@@ -181,7 +180,6 @@ struct JarvisRoutinesSettingsView: View {
             self.error = copy(.deleteFailed)
             onFailure(error)
         }
-        pendingDeletion = nil
         deleting = false
     }
 }
