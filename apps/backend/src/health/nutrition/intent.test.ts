@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { exactLabelIntent, favoriteIntent } from './intent.js';
 
 describe('source-grounded internal intake', () => {
-  it.each(['Log my favourite Synthetic Dinner.', 'Please log saved favorite synthetic dinner', 'Registrer min favorit Synthetic Dinner', 'Can you log Synthetic Dinner?', 'Log Synthetic Dinner?', 'Kan du log Synthetic Dinner i dag?'])('binds the whole explicit favourite request: %s', message => {
+  it.each(['Log my favourite Synthetic Dinner.', 'Please log saved favorite synthetic dinner', 'Registrer min favorit Synthetic Dinner', 'Can you log Synthetic Dinner?', 'Log Synthetic Dinner?', 'Kan du logge Synthetic Dinner i dag?'])('binds the whole explicit favourite request: %s', message => {
     expect(favoriteIntent(message).toLowerCase()).toBe('synthetic dinner');
   });
   it.each([
