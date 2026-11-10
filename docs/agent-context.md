@@ -7,6 +7,13 @@ passed for the changed native Swift sources. Existing workflow/script tests
 (`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v`)
 passed 338 tests. Syntax parsing is not an iOS build.
 
+Secret scanning passed. CodeQL reported no Actions alerts; Swift database
+creation failed in this environment, so no successful Swift CodeQL analysis is
+claimed. GitHub runs on implementation commit `a2feaf94` skipped aggregate CI and
+Simulator while the PR was draft. The PR-title log requires a task ID or
+`fix-main:` prefix; primary should use `fix-main: Show iOS chat photo previews`
+and run fresh qualification after marking ready. Do not treat skipped runs as passes.
+
 `ChatComposerUITests` adds synthetic photo draft/removal, multiple sent photos,
 mixed file labels, photo-only history, unavailable/retry, reload, geometry and
 retained screenshot cases. `ChatPhotoLoaderTests` covers credential-free Blob
