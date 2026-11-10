@@ -8,13 +8,13 @@ struct WatchDashboardView: View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Jarvis").font(.system(.headline, design: .rounded))
                         Spacer()
                         NavigationLink(value: WatchRoute.menu) {
                             Image(systemName: "line.3.horizontal").foregroundStyle(WatchStyle.amber)
-                                .frame(width: 36, height: 36).modifier(WatchSurface(radius: 18))
+                                .frame(width: 44, height: 44)
                         }.buttonStyle(.plain).accessibilityLabel("Menu")
                     }
                     if loading && connection.dashboard == nil {
@@ -42,7 +42,7 @@ struct WatchDashboardView: View {
                         Divider()
                         WatchDashboardSection(title: "Body Fat", route: .bodyFat) {
                             bodyFat(snapshot?.bodyFat)
-                        }
+                        }.id("body-fat")
                         Divider()
                         WatchDashboardSection(title: "Tasks", route: .tasks) {
                             if let preview = snapshot?.todayTasks {
@@ -59,7 +59,7 @@ struct WatchDashboardView: View {
                                     .font(.caption).foregroundStyle(.secondary)
                                 if count > 0 { missing("Task titles unavailable. Open the full list.") }
                             } else { missing(loading ? "Loading today's tasks…" : "Today's tasks unavailable") }
-                        }
+                        }.id("tasks")
                         Divider()
                         WatchDashboardSection(title: "Recent Notes", route: .notes) {
                             if let notes = snapshot?.notes {
@@ -78,7 +78,7 @@ struct WatchDashboardView: View {
                                     }.buttonStyle(.plain)
                                 }
                             } else { missing(loading ? "Loading recent notes…" : "Recent notes unavailable") }
-                        }
+                        }.id("notes")
                     }
                     if snapshot == nil && !loading && connection.dashboardError == nil {
                         missing("Dashboard unavailable. Open Jarvis on iPhone, then refresh.")
@@ -89,9 +89,11 @@ struct WatchDashboardView: View {
             .task {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("--watch-fixture"),
-                   ProcessInfo.processInfo.arguments.contains("--watch-dashboard-section=workouts") {
+                   let section = ["workouts", "body-fat", "tasks", "notes"].first(where: {
+                       ProcessInfo.processInfo.arguments.contains("--watch-dashboard-section=\($0)")
+                   }) {
                     await Task.yield()
-                    proxy.scrollTo("workouts", anchor: .top)
+                    proxy.scrollTo(section, anchor: .top)
                 }
                 WatchPreview.captureReady("dashboard")
                 #endif
@@ -107,7 +109,7 @@ struct WatchDashboardView: View {
                 let entries = snapshot?.agenda?.filter { $0.end > now } ?? []
                 let next = entries.first
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Up Next").font(.system(.headline, design: .rounded)).accessibilityAddTraits(.isHeader)
+                    WatchDashboardHeading(title: "Up Next")
                     Spacer(minLength: 3)
                     if let next, snapshot?.isCurrent(at: now) == true { Text(next.start, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(WatchStyle.amber) }
                 }
@@ -118,13 +120,14 @@ struct WatchDashboardView: View {
                 } else if snapshot?.agenda != nil {
                     WatchAgendaTimeline(intervals: entries.map { DateInterval(start: $0.start, end: max($0.start, $0.end)) }, now: now)
                     if let next {
-                        Text(next.title).font(.system(.body, design: .rounded, weight: .medium)).lineLimit(3)
+                        Text(next.title).font(.system(.body, design: .rounded, weight: .semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(next.start > now ? next.start.formatted(.relative(presentation: .named)) : "Happening now")
+                            .font(.system(.body, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.amber)
                         Text(next.start.formatted(date: .omitted, time: .shortened) + "–" +
                              next.end.formatted(date: Calendar.current.isDate(next.start, inSameDayAs: next.end) ? .omitted : .abbreviated,
                                                 time: .shortened))
                             .font(.caption).foregroundStyle(.secondary)
-                        Text(next.start > now ? next.start.formatted(.relative(presentation: .named)) : "Happening now")
-                            .font(.caption2).foregroundStyle(.secondary)
                     } else { missing("No more events today") }
                 } else { missing("Agenda unavailable") }
             }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
@@ -189,6 +192,18 @@ enum WatchBodyFatSummary {
     }
 }
 
+struct WatchDashboardHeading: View {
+    let title: String
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "circle.fill").font(.system(size: 6))
+                .foregroundStyle(WatchStyle.amber).accessibilityHidden(true)
+            Text(title).font(.system(.headline, design: .rounded))
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+}
+
 struct WatchDashboardSection<Content: View>: View {
     let title: String
     let route: WatchRoute
@@ -199,7 +214,7 @@ struct WatchDashboardSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(title).font(.system(.headline, design: .rounded)).accessibilityAddTraits(.isHeader)
+                WatchDashboardHeading(title: title)
                 Spacer(minLength: 0)
                 NavigationLink("See more", value: route)
                     .font(.caption2).foregroundStyle(WatchStyle.amber)
@@ -251,7 +266,7 @@ struct WatchAgendaTimeline: View {
     private var start: Date {
         Calendar.current.dateInterval(of: .hour, for: now)?.start ?? now
     }
-    private var end: Date { start.addingTimeInterval(6 * 3600) }
+    private var end: Date { start.addingTimeInterval(3 * 3600) }
     var body: some View {
         VStack(spacing: 4) {
             Canvas { context, size in
@@ -276,15 +291,14 @@ struct WatchAgendaTimeline: View {
                 let x = width * CGFloat(max(0, min(1, fraction)))
                 marker.move(to: CGPoint(x: x, y: 0))
                 marker.addLine(to: CGPoint(x: x, y: height))
-                context.stroke(marker, with: .color(.white), lineWidth: 1)
+                context.stroke(marker, with: .color(WatchStyle.amber), lineWidth: 1)
             }.frame(height: 17)
             HStack {
-                Text(start, format: .dateTime.hour().minute())
-                Spacer()
-                Text(start.addingTimeInterval(3 * 3600), format: .dateTime.hour().minute())
-                Spacer()
-                Text(end, format: .dateTime.hour().minute())
-            }.font(.system(size: 9, weight: .medium, design: .rounded)).foregroundStyle(.secondary)
+                ForEach(0..<4) { hour in
+                    if hour > 0 { Spacer(minLength: 0) }
+                    Text(start.addingTimeInterval(Double(hour) * 3600), format: .dateTime.hour())
+                }
+            }.font(.system(.caption2, design: .rounded)).foregroundStyle(.secondary)
         }.accessibilityHidden(true)
     }
 }

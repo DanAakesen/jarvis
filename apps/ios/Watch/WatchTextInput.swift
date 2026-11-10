@@ -121,21 +121,47 @@ struct WatchAddButton: View {
 struct WatchChoiceBar<Value: Hashable>: View {
     let choices: [(Value, String)]
     @Binding var selection: Value
+    var compact = false
+    var counts: [Value: String] = [:]
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(choices.indices, id: \.self) { index in
-                let (value, title) = choices[index]
-                Button { selection = value } label: {
-                    Text(title).font(.system(.body, design: .rounded, weight: .semibold))
-                        .frame(maxWidth: .infinity, minHeight: 40)
-                        .background {
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(selection == value ? WatchStyle.surface : .clear)
-                        }
-                }.buttonStyle(.plain)
-                    .foregroundStyle(selection == value ? WatchStyle.amber : WatchStyle.stone)
-                    .accessibilityAddTraits(selection == value ? .isSelected : [])
+        if compact {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 4) { buttons }
+                VStack(spacing: 4) { buttons }
             }
+        } else {
+            HStack(spacing: 4) { buttons }
+        }
+    }
+
+    private var buttons: some View {
+        ForEach(choices.indices, id: \.self) { index in
+            let (value, title) = choices[index]
+            Button { selection = value } label: {
+                HStack(spacing: 4) {
+                    if compact {
+                        Text(title).fixedSize(horizontal: true, vertical: false)
+                    } else {
+                        Text(title)
+                    }
+                    if let count = counts[value] {
+                        Text(count).font(.caption2).monospacedDigit()
+                            .padding(.horizontal, 5).padding(.vertical, 2)
+                            .background(WatchStyle.amber.opacity(0.18), in: Capsule())
+                    }
+                }
+                .font(.system(compact ? .caption : .body, design: .rounded, weight: .semibold))
+                .frame(maxWidth: .infinity, minHeight: compact ? 44 : 40)
+                .contentShape(Rectangle())
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(selection == value ? WatchStyle.surface : .clear)
+                }
+            }.buttonStyle(.plain)
+                .foregroundStyle(selection == value ? WatchStyle.amber : WatchStyle.stone)
+                .accessibilityLabel(title)
+                .accessibilityValue(counts[value].map { "\($0) open tasks" } ?? "")
+                .accessibilityAddTraits(selection == value ? .isSelected : [])
         }
     }
 }

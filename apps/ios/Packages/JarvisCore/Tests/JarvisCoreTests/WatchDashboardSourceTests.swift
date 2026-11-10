@@ -43,6 +43,23 @@ final class WatchDashboardSourceTests: XCTestCase {
         XCTAssertFalse(agenda.contains("See more"))
     }
 
+    func testDebugCaptureCanScrollToEveryLowerDashboardSection() throws {
+        let dashboard = try source("apps/ios/Watch/WatchDashboardViews.swift")
+        for section in ["workouts", "body-fat", "tasks", "notes"] {
+            XCTAssertTrue(dashboard.contains(".id(\"\(section)\")"))
+        }
+        let debugStart = try XCTUnwrap(dashboard.range(of: "#if DEBUG"))
+        let debugEnd = try XCTUnwrap(dashboard.range(of: "#endif", range: debugStart.upperBound..<dashboard.endIndex))
+        let debug = String(dashboard[debugStart.upperBound..<debugEnd.lowerBound])
+        XCTAssertTrue(debug.contains("ProcessInfo.processInfo.arguments.contains(\"--watch-fixture\")"))
+        XCTAssertTrue(debug.contains("[\"workouts\", \"body-fat\", \"tasks\", \"notes\"]"))
+        XCTAssertTrue(debug.contains("--watch-dashboard-section=\\($0)"))
+        XCTAssertTrue(debug.contains("proxy.scrollTo(section, anchor: .top)"))
+        let scroll = try XCTUnwrap(debug.range(of: "proxy.scrollTo"))
+        let ready = try XCTUnwrap(debug.range(of: "WatchPreview.captureReady(\"dashboard\")"))
+        XCTAssertLessThan(scroll.lowerBound, ready.lowerBound)
+    }
+
     func testFourNewRectangularComplicationsHaveDistinctDestinations() throws {
         let widgets = try source("apps/ios/WatchWidgets/JarvisWatchWidgets.swift")
         let registrations = [
@@ -109,6 +126,65 @@ final class WatchDashboardSourceTests: XCTestCase {
         let input = try source("apps/ios/Watch/WatchTextInput.swift")
         XCTAssertTrue(input.contains("\n}\n\nstruct WatchChoiceBar<Value: Hashable>: View {"))
         XCTAssertTrue(input.contains(".accessibilityAddTraits(selection == value ? .isSelected : [])"))
+    }
+
+    func testCompactTaskTabsKeepWholeLabelsAndAdaptWithoutChangingEditorDefaults() throws {
+        let input = try source("apps/ios/Watch/WatchTextInput.swift")
+        let tasks = try source("apps/ios/Watch/WatchTasksView.swift")
+        XCTAssertTrue(input.contains("var compact = false"))
+        XCTAssertTrue(input.contains("var counts: [Value: String] = [:]"))
+        XCTAssertTrue(input.contains("ViewThatFits(in: .horizontal)"))
+        XCTAssertTrue(input.contains("VStack(spacing: 4) { buttons }"))
+        XCTAssertTrue(input.contains("Text(title).fixedSize(horizontal: true, vertical: false)"))
+        XCTAssertTrue(input.contains("minHeight: compact ? 44 : 40"))
+        XCTAssertFalse(input.contains("minimumScaleFactor"), "Use a vertical fallback instead of shrinking accessible labels")
+        XCTAssertTrue(tasks.contains("selection: $tab, compact: true, counts: tabCounts"))
+        XCTAssertTrue(tasks.contains("choices: [(.auto, \"Auto\"), (.manual, \"Manual\")], selection: modeBinding"))
+    }
+
+    func testTaskCountUsesTodayGroupAndDoesNotClaimUnknownOrPartialTotals() throws {
+        let tasks = try source("apps/ios/Watch/WatchTasksView.swift")
+        XCTAssertTrue(tasks.contains("guard !loading, failure == nil, connection.reachable else { return [:] }"))
+        XCTAssertTrue(tasks.contains("return [.today: \"\\(groups.today.count)\" + (hasMore ? \"+\" : \"\")]"))
+        XCTAssertTrue(tasks.contains("tab == .today ? groups.today : groups.upcoming"))
+        XCTAssertTrue(tasks.contains("today: taskDay ?? JarvisTodayTaskLists.dayKey(Date())"))
+        XCTAssertTrue(tasks.contains("Button(\"Load more tasks\")"))
+    }
+
+    func testTaskHeaderKeepsAddOutsideTabsAndRowsExposeDetailAffordance() throws {
+        let tasks = try source("apps/ios/Watch/WatchTasksView.swift")
+        let toolbar = try XCTUnwrap(tasks.range(of: "ToolbarItem(placement: .topBarTrailing)"))
+        let add = try XCTUnwrap(tasks.range(of: "WatchAddButton(title: \"New task\")"))
+        XCTAssertLessThan(toolbar.lowerBound, add.lowerBound)
+        XCTAssertTrue(tasks.contains(".navigationBarTitleDisplayMode(.inline)"))
+        XCTAssertTrue(tasks.contains(".accessibilityHint(\"Opens task details\")"))
+        let rowStart = try XCTUnwrap(tasks.range(of: "struct WatchPersonalTaskRow"))
+        let detailStart = try XCTUnwrap(tasks.range(of: "struct WatchTaskDetailView"))
+        let row = String(tasks[rowStart.lowerBound..<detailStart.lowerBound])
+        XCTAssertTrue(row.contains("Image(systemName: \"chevron.right\")"))
+        XCTAssertTrue(row.contains(".accessibilityElement(children: .combine)"))
+        XCTAssertTrue(row.contains("minHeight: 44"))
+        XCTAssertFalse(row.contains(".lineLimit(2)"), "Larger text and long task titles must remain readable")
+    }
+
+    func testUpNextPrioritizesRelativeTimingAndUsesSectionMarkersWithoutAccentRail() throws {
+        let dashboard = try source("apps/ios/Watch/WatchDashboardViews.swift")
+        let upNext = try XCTUnwrap(dashboard.range(of: "private func upNext"))
+        let workouts = try XCTUnwrap(dashboard.range(of: "private func workouts"))
+        let agenda = String(dashboard[upNext.lowerBound..<workouts.lowerBound])
+        XCTAssertTrue(agenda.contains("WatchDashboardHeading(title: \"Up Next\")"))
+        let relative = try XCTUnwrap(agenda.range(of: "next.start.formatted(.relative"))
+        let interval = try XCTUnwrap(agenda.range(of: "Text(next.start.formatted(date:"))
+        XCTAssertLessThan(relative.lowerBound, interval.lowerBound)
+        XCTAssertTrue(agenda.contains(".font(.system(.body, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.amber)"))
+        XCTAssertTrue(dashboard.contains("WatchDashboardHeading(title: title)"))
+        XCTAssertTrue(dashboard.contains("Image(systemName: \"circle.fill\")"))
+        XCTAssertFalse(dashboard.contains(".border("))
+        XCTAssertFalse(dashboard.contains("WatchSurface(radius: 18)"), "The menu should not add a competing ornamental surface")
+        XCTAssertTrue(dashboard.contains("start.addingTimeInterval(3 * 3600)"))
+        XCTAssertTrue(dashboard.contains("ForEach(0..<4)"))
+        XCTAssertTrue(dashboard.contains("context.stroke(marker, with: .color(WatchStyle.amber), lineWidth: 1)"),
+                      "Amber marks the actual current time inside the data timeline, not a decorative section rail")
     }
 
     func testTaskSourceAndConflictDetailsUseWatchSupportedNavigation() throws {

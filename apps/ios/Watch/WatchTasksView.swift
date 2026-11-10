@@ -20,13 +20,17 @@ struct WatchTasksView: View {
         .init(tasks: tasks, today: taskDay ?? JarvisTodayTaskLists.dayKey(Date()))
     }
     private var visible: [VaultTask] { tab == .today ? groups.today : groups.upcoming }
+    private var tabCounts: [Tab: String] {
+        guard !loading, failure == nil, connection.reachable else { return [:] }
+        return [.today: "\(groups.today.count)" + (hasMore ? "+" : "")]
+    }
 
     var body: some View {
         List {
-            HStack {
-                WatchChoiceBar(choices: [(.today, "Today"), (.upcoming, "Upcoming")], selection: $tab)
-                WatchAddButton(title: "New task") { showCreate = true }
-            }.listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+            WatchChoiceBar(
+                choices: [(.today, "Today"), (.upcoming, "Upcoming")],
+                selection: $tab, compact: true, counts: tabCounts
+            ).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             if loading { ProgressView("Loading tasks").listRowBackground(Color.clear) }
             if let failure {
                 VStack(alignment: .leading, spacing: 8) {
@@ -45,6 +49,8 @@ struct WatchTasksView: View {
                         Task { await load(); await connection.refresh() }
                     }
                 } label: { WatchPersonalTaskRow(task: task, today: taskDay) }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens task details")
                     .listRowBackground(Color.clear)
             }
             if hasMore {
@@ -56,6 +62,12 @@ struct WatchTasksView: View {
             }
         }
         .navigationTitle(tab == .today ? "Today" : "Upcoming")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                WatchAddButton(title: "New task") { showCreate = true }
+            }
+        }
         .task(id: connection.reachable) { await load() }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await load() } }
@@ -123,10 +135,15 @@ struct WatchPersonalTaskRow: View {
             Image(systemName: task.done ? "checkmark.square" : "square")
                 .foregroundStyle(WatchStyle.amber).padding(.top, 2).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
-                Text(task.text).font(.system(.body, design: .rounded, weight: .semibold)).lineLimit(2)
+                Text(task.text).font(.system(.body, design: .rounded, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(WatchTaskPresentation.due(task, today: today)).font(.caption).foregroundStyle(WatchStyle.stone)
             }
-        }.padding(.vertical, 4)
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.caption)
+                .foregroundStyle(.secondary).accessibilityHidden(true)
+        }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.vertical, 4).contentShape(Rectangle())
             .accessibilityElement(children: .combine)
     }
 }

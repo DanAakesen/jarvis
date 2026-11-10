@@ -4,6 +4,8 @@ on:
     paths:
       - 'apps/ios/**'
       - '.github/workflows/watch-build.yml'
+      - '.github/scripts/verify_watch_capture.swift'
+      - '.github/scripts/tests/test_watch_build.py'
 permissions:
   contents: read
 concurrency:
@@ -62,6 +64,7 @@ jobs:
         timeout-minutes: 8
         run: |
           set -euo pipefail
+          swiftc .github/scripts/verify_watch_capture.swift -o "$RUNNER_TEMP/verify-watch-capture"
           BUNDLE=com.danaakesen.jarvis.watchkitapp
           PREVIOUS_PID=""
           capture() {
@@ -91,21 +94,26 @@ jobs:
             for attempt in {1..30}; do
               if [[ -f "$container/Documents/watch-capture.json" ]] &&
                 jq -e --arg id "$nonce" --arg screen "$screen" --arg pid "$pid" '.captureID == $id and .screen == $screen and .pid == $pid' "$container/Documents/watch-capture.json" >/dev/null; then
-                cp "$container/Documents/watch-capture.json" "$RUNNER_TEMP/watch-screenshots/$name.json"
-                sleep 2 # Let the system launch transition settle after the destination appeared.
-                xcrun simctl io "$device" screenshot "$RUNNER_TEMP/watch-screenshots/$name.png"
-                return
+                xcrun simctl io "$device" screenshot "$RUNNER_TEMP/watch-screenshots/$name-pending.png"
+                if "$RUNNER_TEMP/verify-watch-capture" "$name" "$RUNNER_TEMP/watch-screenshots/$name-pending.png" > "$RUNNER_TEMP/watch-screenshots/$name-recognized.txt" 2>&1; then
+                  cp "$container/Documents/watch-capture.json" "$RUNNER_TEMP/watch-screenshots/$name.json"
+                  mv "$RUNNER_TEMP/watch-screenshots/$name-pending.png" "$RUNNER_TEMP/watch-screenshots/$name.png"
+                  shasum -a 256 "$RUNNER_TEMP/watch-screenshots/$name.png" > "$RUNNER_TEMP/watch-screenshots/$name.sha256"
+                  return
+                fi
               fi
               sleep 1
             done
-            echo "::error::No fresh destination receipt for $name; refusing a launch-spinner capture"
+            echo "::error::No fresh rendered destination for $name; refusing a launch-spinner capture"
             xcrun simctl io "$device" screenshot "$RUNNER_TEMP/watch-screenshots/$name-failed.png"
             return 1
           }
           for SCREEN in dashboard actions chat health lifts new-lift new-task project tasks task-detail task-edit personal-new-task agenda body-fat notes home nutrition complications log-lift log-lift-complication; do
             capture "$WATCH_ID" "$SCREEN" "$SCREEN"
           done
-          capture "$WATCH_ID" dashboard dashboard-workouts --watch-dashboard-section=workouts
+          for SECTION in workouts body-fat tasks notes; do
+            capture "$WATCH_ID" dashboard "dashboard-$SECTION" "--watch-dashboard-section=$SECTION"
+          done
           capture "$WATCH_ID" new-lift reps-picker --watch-picker=reps
           capture "$WATCH_ID" personal-new-task personal-new-task-manual --watch-task-mode=manual
           for STATE in saved missing uncertain deleted; do
@@ -134,6 +142,7 @@ jobs:
         run: |
           set -euo pipefail
           BUNDLE=com.danaakesen.jarvis.watchkitapp
+          swiftc .github/scripts/verify_watch_capture.swift -o "$RUNNER_TEMP/verify-watch-capture"
           CONTAINER="$(xcrun simctl get_app_container "$WATCH_ID" "$BUNDLE" data)"
           for ROUTE in tasks log-lift; do
             NONCE="$(uuidgen)"
@@ -156,17 +165,19 @@ jobs:
             DELIVERED=false
             for ATTEMPT in {1..30}; do
               if [[ -f "$CONTAINER/Documents/watch-open-url.json" ]] &&
-                jq -e --arg id "$NONCE" --arg url "jarvis-watch://$ROUTE" '.captureID == $id and .url == $url' "$CONTAINER/Documents/watch-open-url.json" >/dev/null &&
+                jq -e --arg id "$NONCE" --arg pid "$PID" --arg url "jarvis-watch://$ROUTE" '.captureID == $id and .pid == $pid and .url == $url' "$CONTAINER/Documents/watch-open-url.json" >/dev/null &&
                 [[ -f "$CONTAINER/Documents/watch-capture.json" ]] &&
-                jq -e --arg id "$NONCE" --arg screen "$ROUTE" '.captureID == $id and .screen == $screen' "$CONTAINER/Documents/watch-capture.json" >/dev/null; then
-                DELIVERED=true; break
+                jq -e --arg id "$NONCE" --arg pid "$PID" --arg screen "$ROUTE" '.captureID == $id and .pid == $pid and .screen == $screen' "$CONTAINER/Documents/watch-capture.json" >/dev/null; then
+                xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/$ROUTE-deep-link-pending.png"
+                if "$RUNNER_TEMP/verify-watch-capture" "$ROUTE-deep-link" "$RUNNER_TEMP/watch-screenshots/$ROUTE-deep-link-pending.png" > "$RUNNER_TEMP/watch-screenshots/$ROUTE-deep-link-recognized.txt" 2>&1; then
+                  mv "$RUNNER_TEMP/watch-screenshots/$ROUTE-deep-link-pending.png" "$RUNNER_TEMP/watch-screenshots/$ROUTE-deep-link.png"
+                  DELIVERED=true; break
+                fi
               fi
               sleep 1
             done
             test "$DELIVERED" = true || { echo "::error::URL did not reach its destination"; exit 1; }
             cp "$CONTAINER/Documents/watch-open-url.json" "$RUNNER_TEMP/watch-screenshots/$ROUTE-open-url.json"
-            sleep 2
-            xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/$ROUTE-deep-link.png"
             xcrun simctl terminate "$WATCH_ID" "$BUNDLE"
             for ATTEMPT in {1..30}; do
               kill -0 "$PID" 2>/dev/null || break

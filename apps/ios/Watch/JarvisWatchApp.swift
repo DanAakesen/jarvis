@@ -18,7 +18,7 @@ struct JarvisWatchApp: App {
 enum WatchRoute: String, Hashable {
     case chat, menu, tasks, health, workouts, lifts, factory, agenda, bodyFat, notes, home, nutrition, logLift
     #if DEBUG
-    case complications, logLiftComplication, taskDetail, taskEdit, personalNewTask
+    case complications, logLiftComplication, taskDetail, taskEdit, personalNewTask, project, factoryNewTask, newLift
     #endif
 }
 struct WatchRoot: View {
@@ -49,8 +49,10 @@ struct WatchRoot: View {
         if arguments.contains("--watch-screen=home") { path = [.home] }
         if arguments.contains("--watch-screen=nutrition") { path = [.nutrition] }
         if arguments.contains("--watch-screen=complications") { path = [.complications] }
-        if arguments.contains("--watch-screen=lifts") || arguments.contains("--watch-screen=new-lift") { path = [.lifts] }
-        if arguments.contains("--watch-screen=new-task") || arguments.contains("--watch-screen=project") { path = [.factory] }
+        if arguments.contains("--watch-screen=lifts") { path = [.lifts] }
+        if arguments.contains("--watch-screen=new-lift") { path = [.newLift] }
+        if arguments.contains("--watch-screen=new-task") { path = [.factoryNewTask] }
+        if arguments.contains("--watch-screen=project") { path = [.project] }
         if arguments.contains("--watch-screen=log-lift") { path = [.logLift] }
         if arguments.contains("--watch-screen=log-lift-complication") { path = [.logLiftComplication] }
         _path = State(initialValue: path)
@@ -108,6 +110,11 @@ struct WatchRoot: View {
                 case .taskDetail: WatchTaskDetailView(task: WatchPreview.captureTask()) { _ in }
                 case .taskEdit: WatchPersonalTaskEditor(task: WatchPreview.captureTask()) { _ in }
                 case .personalNewTask: WatchPersonalTaskEditor { _ in }
+                case .newLift: WatchLiftEditor { }
+                case .project:
+                    if let project = try? WatchPreview.project() { WatchFactoryTasks(project: project) }
+                case .factoryNewTask:
+                    if let project = try? WatchPreview.project() { WatchFactoryTaskEditor(project: project) { } }
                 #endif
                 }
             }

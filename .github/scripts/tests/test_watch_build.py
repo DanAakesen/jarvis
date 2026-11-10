@@ -1,7 +1,9 @@
 import json
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
+import tempfile
 import unittest
 
 
@@ -40,9 +42,10 @@ class WatchBuildTests(unittest.TestCase):
         self.assertIn(".captureID == $id and .screen == $screen and .pid == $pid", capture)
         self.assertLess(capture.index("watch-capture.json"), capture.index('simctl io "$device" screenshot'))
         self.assertIn("return 1", capture)
-        for screen in ["task-detail", "task-edit", "personal-new-task-manual", "dashboard-workouts",
+        for screen in ["task-detail", "task-edit", "personal-new-task-manual", "workouts body-fat tasks notes",
                        "log-lift-complication", "saved missing uncertain deleted", "small-$SCREEN"]:
             self.assertIn(screen, capture)
+        self.assertIn('"dashboard-$SECTION" "--watch-dashboard-section=$SECTION"', capture)
 
     def test_url_delivery_failure_is_not_replaced_by_fixture_navigation(self):
         step = next(step for step in self.steps if step.get("name", "").startswith("Verify external URL"))
@@ -66,8 +69,37 @@ class WatchBuildTests(unittest.TestCase):
         self.assertIn('arguments.contains("--watch-screen=task-edit") { path = [.taskEdit] }', initializer)
         self.assertIn('case .taskEdit: WatchPersonalTaskEditor(task: WatchPreview.captureTask())', app)
         self.assertIn('case .personalNewTask: WatchPersonalTaskEditor', app)
+        self.assertIn('arguments.contains("--watch-screen=project") { path = [.project] }', initializer)
+        self.assertIn('case .project:', app)
         capture = next(step["run"] for step in self.steps if step.get("name", "").startswith("Capture intended"))
         self.assertIn('$name-failed.png', capture)
+
+    def test_receipt_alone_cannot_publish_a_screenshot(self):
+        capture = next(step["run"] for step in self.steps if step.get("name", "").startswith("Capture intended"))
+        self.assertIn('verify-watch-capture" "$name"', capture)
+        self.assertLess(capture.index('verify-watch-capture" "$name"'), capture.index('mv "$RUNNER_TEMP/watch-screenshots/$name-pending.png"'))
+        delivery = next(step["run"] for step in self.steps if step.get("name", "").startswith("Verify external URL"))
+        self.assertIn('verify-watch-capture" "$ROUTE-deep-link"', delivery)
+        self.assertIn('.captureID == $id and .pid == $pid and .url == $url', delivery)
+
+    @unittest.skipUnless(shutil.which("swiftc"), "Swift compiler required for screenshot content matcher")
+    def test_destination_content_rejects_startup_wrong_scene_and_wrapped_tabs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            verifier = str(Path(directory) / "verify-watch-capture")
+            subprocess.run(["swiftc", str(ROOT / ".github/scripts/verify_watch_capture.swift"), "-o", verifier], check=True)
+            for name, text, accepted in [
+                ("task-detail", "Jarvis", False),
+                ("project", "Jarvis", False),
+                ("task-edit", "Today Upcoming Call dentist", False),
+                ("tasks", "Today Upcom- ing Call dentist", False),
+                ("task-detail", "Task Edit Call dentist Priority Low", True),
+                ("task-edit", "Edit task Title Call dentist", True),
+                ("project", "Fixture project No tasks", True),
+                ("tasks", "Today Upcoming Pay phone bill", True),
+                ("unknown-scene", "Jarvis", False),
+            ]:
+                result = subprocess.run([verifier, "--recognized-text", name, text], capture_output=True)
+                self.assertEqual(result.returncode == 0, accepted, (name, text))
 
     def test_actual_watch_target_registers_the_same_url_scheme(self):
         with (ROOT / "apps/ios/Watch/Info.plist").open("rb") as file:
