@@ -1,6 +1,69 @@
 import XCTest
 
 final class ChatComposerUITests: XCTestCase {
+    func testPhotoThumbnailsRemoveOnlyTheChosenItemAndPreserveDraft() {
+        let app = launch(language: "en", extraArguments: ["--ui-test-chat-photos"])
+        defer { app.terminate() }
+        let input = app.textViews["chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        let removePortrait = app.buttons["Remove Synthetic portrait.jpg"]
+        let removeLandscape = app.buttons["Remove Synthetic landscape.jpg"]
+        XCTAssertTrue(removeLandscape.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.images["Synthetic landscape.jpg"].waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(removeLandscape.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(removeLandscape.frame.height, 44)
+        removeLandscape.tap()
+        XCTAssertFalse(removeLandscape.exists)
+        XCTAssertTrue(removePortrait.exists)
+        XCTAssertTrue(app.buttons["Remove Synthetic notes.txt"].exists)
+        XCTAssertEqual(input.value as? String, "Synthetic photo draft")
+        removePortrait.tap()
+        app.buttons["Remove Synthetic notes.txt"].tap()
+        XCTAssertEqual(input.value as? String, "Synthetic photo draft")
+        XCTAssertTrue(app.buttons["chat.send"].isEnabled)
+        capturePhotos(app, name: "photo-removal-preserves-editable-draft")
+    }
+
+    func testPhotosRenderBelowSentTextAndReloadWithUnavailableHistoryFallback() {
+        let app = launch(language: "en", extraArguments: ["--ui-test-chat-photos"])
+        defer { app.terminate() }
+        XCTAssertTrue(app.textViews["chat.input"].waitForExistence(timeout: 10))
+        let retry = app.buttons["Retry"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 5), "Expired photo-only history must offer a fallback.")
+        retry.tap()
+        XCTAssertTrue(app.staticTexts["Photo unavailable"].waitForExistence(timeout: 5))
+        capturePhotos(app, name: "photo-only-history-unavailable-and-pending-thumbnails")
+        app.buttons["chat.send"].tap()
+        XCTAssertTrue(app.textViews["chat.reply.45"].waitForExistence(timeout: 10))
+        let image = app.images["Synthetic landscape.jpg"]
+        XCTAssertTrue(image.waitForExistence(timeout: 5))
+        let bubble = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label == %@", "You: Synthetic photo draft")
+        ).firstMatch
+        let transcript = app.scrollViews["chat.transcript"]
+        transcript.swipeDown()
+        XCTAssertTrue(bubble.exists)
+        XCTAssertGreaterThan(image.frame.minY, bubble.frame.maxY)
+        XCTAssertLessThanOrEqual(image.frame.maxX, transcript.frame.maxX)
+        XCTAssertTrue(app.staticTexts["Synthetic notes.txt"].exists)
+        XCTAssertFalse(app.buttons["Remove Synthetic landscape.jpg"].exists)
+        capturePhotos(app, name: "sent-text-multiple-photos-and-file")
+        // A new launch loads saved fixture history, including an available portrait and an expired image.
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["Retry"].waitForExistence(timeout: 10))
+        app.scrollViews["chat.transcript"].swipeDown()
+        XCTAssertTrue(app.images["Synthetic saved portrait.jpg"].waitForExistence(timeout: 5))
+        capturePhotos(app, name: "reloaded-photo-only-history")
+    }
+
+    private func capturePhotos(_ app: XCUIApplication, name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }

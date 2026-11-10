@@ -6,7 +6,7 @@ import JarvisCore
 actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     static var isEnabled: Bool {
 #if DEBUG && targetEnvironment(simulator)
-        ProcessInfo.processInfo.arguments.contains("--ui-test-chat-feedback")
+        ProcessInfo.processInfo.arguments.contains("--ui-test-chat-feedback") || JarvisChatPhotoFixture.isEnabled
 #else
         false
 #endif
@@ -18,15 +18,25 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     private var listeners: [UUID: AsyncThrowingStream<Data, any Error>.Continuation] = [:]
     private var activity: [[String: Any]] = []
     private var language = "en"
+    private var photoUploads: [[String: Any]] = []
     private var completionObserver: ChatFixtureCompletionObserver?
     private var acknowledgmentObserver: ChatFixtureCompletionObserver?
     private var progressObserver: ChatFixtureCompletionObserver?
 
-    init(base: any HTTPTransport) { self.base = base }
+    init(base: any HTTPTransport) {
+        self.base = base
+        if JarvisChatPhotoFixture.isEnabled { history = JarvisChatPhotoFixture.history }
+    }
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         guard Self.isEnabled else { return try await base.send(request) }
         switch request.url.path {
+        case "/api/conversation/attachments" where JarvisChatPhotoFixture.isEnabled:
+            guard let body = request.body, let upload = JarvisChatPhotoFixture.upload(body) else {
+                return HTTPResponse(statusCode: 400)
+            }
+            photoUploads.append(upload)
+            return try json(upload, status: 201)
         case "/api/conversation/history": return try json(["messages": history, "nextCursor": NSNull()])
         case "/api/conversation/turns/active": return try json(["turns": []])
         case "/api/conversation/sessions":
@@ -64,12 +74,17 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
         registerTestCompletion()
         let requestBody = try JSONSerialization.jsonObject(with: request.body!) as! [String: Any]
         var saved = message(id: "42", role: "dan", text: requestBody["text"] as! String)
+        if JarvisChatPhotoFixture.isEnabled {
+            let ids = requestBody["attachmentIds"] as? [String] ?? []
+            saved["attachments"] = photoUploads.filter { ids.contains($0["id"] as? String ?? "") }
+        }
         saved["toolCalls"] = [["id": "tool-42", "tool": "repo_read", "outcome": "ok"]]
         history.append(saved)
         let body = AsyncThrowingStream<Data, any Error> { continuation in
             turn = continuation
             continuation.yield(event("user", saved))
         }
+        if JarvisChatPhotoFixture.isEnabled { finishTurn() }
         return HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: body)
     }
 

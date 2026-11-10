@@ -1,3 +1,44 @@
+## iOS chat photo preview qualification — 10 November 2026 (#1712)
+
+Local checks: `swift test` in `apps/ios/Packages/JarvisCore` passed 573 tests;
+`npm test --workspace @jarvis/backend -- src/core/conversation.test.ts
+src/core/attachment-files.test.ts` passed 80 tests. `swiftc -frontend -parse`
+passed for the changed native Swift sources. Existing workflow/script tests
+(`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v`)
+passed 338 tests. Syntax parsing is not an iOS build.
+
+`ChatComposerUITests` adds synthetic photo draft/removal, multiple sent photos,
+mixed file labels, photo-only history, unavailable/retry, reload, geometry and
+retained screenshot cases. `ChatPhotoLoaderTests` covers credential-free Blob
+requests, no-cache policy, failure/size/MIME rejection, bounded decoding and
+EXIF orientation. Both classes are selected by `.github/workflows/ios-ci.yml`;
+the loader source is also included in the native test target.
+Launch `--screenshot-chat-fixture --ui-test-chat-photos` on a Debug simulator
+for explicitly labelled synthetic portrait/landscape inputs. The fixture
+bypasses live downloads; it is not evidence of production access or camera/
+library hardware. Loader and shared authorization tests exercise those boundaries
+separately. No native build, simulator screenshots, before/after comparison,
+VoiceOver, Dynamic Type or physical-device checks ran on this Linux runner.
+Run and inspect these on macOS, then verify real camera/library selection,
+upload interruption/retry, navigation, owner isolation, dictation and voice.
+
+Apple direct retrieval failed (DNS/network restriction). Reviewed indexed
+official excerpts, not full pages:
+
+- [SwiftUI scaledToFit](https://developer.apple.com/documentation/swiftui/view/scaledtofit()): preserve aspect ratio.
+- [ImageIO thumbnails](https://developer.apple.com/documentation/imageio/cgimagesourcecreatethumbnailatindex(_:_:_:)):
+  derive a thumbnail without altering the source.
+- [Thumbnail orientation](https://developer.apple.com/documentation/imageio/kcgimagesourcecreatethumbnailwithtransform):
+  apply source orientation/aspect ratio; bound maximum pixel size.
+- [URLSession.AsyncBytes](https://developer.apple.com/documentation/foundation/urlsession/asyncbytes):
+  access the transfer task to cancel rejected/abandoned reads.
+- [HIG Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility):
+  perceivable, adaptable interfaces and assistive-technology auditing.
+
+Integration: preserve #1704's independent Now/jobs refresh and stale-response
+guards and #1713/#1707's live-follow, scrolling and viewport changes. These edits
+do not alter those policies. Primary owns integration, assignment and release.
+
 ## Explicit timed reminders — 10 November 2026 (#1706)
 
 Owner reminder schedules and current vault `remindAtDue` tasks bypass Copenhagen

@@ -1824,6 +1824,20 @@ no contract gap requiring backend work was found.
 
 ### iOS Chat screen (P15-10)
 
+Photo previews (#1712) resolve fresh read capabilities using the existing
+authenticated, owner-scoped `GET /conversation/attachments/:id/url` path.
+`JarvisChatClient.attachmentURL` validates attachment IDs and HTTPS Azure Blob
+origins. `JarvisChatPhotoLoader` downloads without API credentials, cookies,
+redirects or persistent caching; it bounds response bytes and cancels abandoned
+transfers. An ImageIO actor decodes orientation-correct, bounded thumbnails from
+pending or downloaded bytes without changing the upload. Decoded images belong
+only to their mounted preview; no attachment URL or photo is written to the
+repository cache. The existing session-epoch screen identity discards preview
+state on account changes. Backend ownership checks and retention remain authoritative.
+Accepted outgoing messages retain attachment metadata until final history
+replaces it. A failed/expired read or failed decode renders a filename-accessible
+fallback; retry obtains a fresh capability rather than reusing a signed URL.
+
 P15-38 centralizes native backdrop rendering in `JarvisDesignSystem.swift`:
 The reconciled implementation reuses main's `JarvisScreenBackground`, already
 used by the `JarvisGateAmbientBackground` wrapper, for the light/dark ambient

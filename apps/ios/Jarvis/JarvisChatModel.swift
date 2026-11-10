@@ -42,7 +42,7 @@ struct JarvisChatRow: Identifiable, Equatable {
         attachments = []
     }
 
-    init(_ message: ChatMessage) {
+    init(_ message: ChatMessage, attachments: [ChatHistoryAttachment] = []) {
         id = message.id
         sessionID = message.sessionId
         channel = .chat
@@ -51,7 +51,7 @@ struct JarvisChatRow: Identifiable, Equatable {
         at = message.at
         interrupted = false
         toolCalls = []
-        attachments = []
+        self.attachments = attachments
     }
 }
 
@@ -130,6 +130,8 @@ final class JarvisChatModel: ObservableObject {
     private var language: ChatLanguage
     private var activeMessageID: String?
     private var uploadedAttachmentIDs: [UUID: String] = [:]
+    private var sentTurnAttachments: [ChatHistoryAttachment] = []
+    private let photoLoader = JarvisChatPhotoLoader()
     private var locallyResolvedConfirmationIDs = Set<String>()
     private var sendTask: Task<Void, Never>?
     private var observationSuspended = false
@@ -159,6 +161,10 @@ final class JarvisChatModel: ObservableObject {
         self.fixtureMode = fixtureMode
         self.startupError = startupError
         language = .da
+        if fixtureMode && JarvisChatPhotoFixture.isEnabled {
+            pendingAttachments = JarvisChatPhotoFixture.pending
+            draft = "Synthetic photo draft"
+        }
     }
 
     var canSend: Bool {
@@ -277,6 +283,16 @@ final class JarvisChatModel: ObservableObject {
         uploadedAttachmentIDs[attachment.id] = nil
     }
 
+    func attachmentImageData(_ attachment: ChatHistoryAttachment) async throws -> Data {
+        if fixtureMode && JarvisChatPhotoFixture.isEnabled {
+            return try JarvisChatPhotoFixture.imageData(id: attachment.id)
+        }
+        guard let client else { throw JarvisClientError.invalidRequest }
+        let url = try await client.attachmentURL(id: attachment.id)
+        try Task.checkCancellation()
+        return try await photoLoader.data(from: url)
+    }
+
     func setVoiceLanguage(_ language: ChatLanguage) async {
         guard !fixtureMode, !isSending, language != voiceLanguage, let settingsClient else { return }
         do {
@@ -349,6 +365,7 @@ final class JarvisChatModel: ObservableObject {
         turnMessageIDs = []
         let text = composerDraft.consume()
         let attachments = pendingAttachments
+        sentTurnAttachments = []
         thinkingPhrase = ChatThinkingPhrase.phrase(
             forRequest: text,
             hasImage: visualFrame != nil || attachments.contains { $0.contentType.hasPrefix("image/") },
@@ -626,6 +643,7 @@ final class JarvisChatModel: ObservableObject {
         attachments: [PendingChatAttachment],
         visualFrame: PendingVisualFrame?
     ) async {
+        defer { sentTurnAttachments = [] }
         guard let client else {
             isSending = false
             discardOptimisticMessage()
@@ -644,6 +662,11 @@ final class JarvisChatModel: ObservableObject {
                     uploadedAttachmentIDs[attachment.id] = descriptor.id
                     attachmentIDs.append(descriptor.id)
                 }
+            }
+            sentTurnAttachments = zip(attachments, attachmentIDs).map { attachment, id in
+                ChatHistoryAttachment(
+                    id: id, name: attachment.name, contentType: attachment.contentType, size: attachment.data.count
+                )
             }
             if sessionID == nil {
                 statusLine = thinkingPhrase
@@ -793,7 +816,10 @@ final class JarvisChatModel: ObservableObject {
                 if activeMessageID == nil { activeMessageID = message.id }
                 sessionID = message.sessionId
                 discardOptimisticMessage()
-                addOrReplace(JarvisChatRow(message))
+                let attachments = activeMessageID == message.id && !sentTurnAttachments.isEmpty
+                    ? sentTurnAttachments
+                    : messages.first(where: { $0.id == message.id })?.attachments ?? []
+                addOrReplace(JarvisChatRow(message, attachments: attachments))
             case .delta(let text):
                 streamingText += text
             case .acknowledgment(let text):

@@ -1,3 +1,28 @@
+## 10 November 2026 — Native chat photo previews (#1712)
+
+Implement approved design 1 with existing shared composer controls, a removable
+compact thumbnail, and right-aligned sent photos below user text. Fit sent images;
+crop only the compact visual thumbnail, never the uploaded source. Keep
+non-image file labels and existing text-required sending.
+
+Reuse owner-scoped attachment authorization and short-lived private Blob URLs,
+not public links, an additional backend endpoint or a persistent image cache.
+Download without forwarding API credentials and reject redirects. Decode bounded,
+orientation-correct thumbnails off the main actor. Preserve per-item filename
+accessibility, shared loading, and explicit unavailable/retry presentation.
+
+The supplied generated reference was inspected. Apple documentation access was
+blocked; indexed official excerpts were reviewed for SwiftUI `scaledToFit`,
+ImageIO thumbnail creation/orientation, URLSession `AsyncBytes.task`, and HIG
+Accessibility (links and actual checks in `docs/agent-context.md`). This is not a
+full-page Apple review or native visual acceptance.
+
+Inspected #1704 at `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9`: its
+`activityRefreshID` and independent Now/jobs refresh fixes are outside these
+edits. #1707/#1713 owns live-follow/layout handling; this change adds attachment
+subviews without modifying transcript follow triggers or composer controls.
+Primary retains integration and release; simulator/device acceptance is pending.
+
 ## 10 November 2026 — Explicit timed reminders bypass quiet hours (#1706)
 
 Supersedes the quiet-window refusal in #1239 and the all-reminder night gate in

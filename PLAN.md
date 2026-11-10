@@ -1,3 +1,16 @@
+## iOS chat photo previews — 10 November 2026 (#1712)
+
+Implemented composer and sent/history photo previews using the approved reference
+and owner-authorized attachment read URLs. Text-required send eligibility, files,
+upload bytes, dictation/voice, refresh and scrolling policies remain unchanged.
+Local qualification: 573 JarvisCore tests and 80 backend attachment/conversation
+tests pass; changed native Swift sources pass syntax parsing. Native loader and
+composer regression cases, including retained screenshot attachments, are added
+to the existing Simulator selection. Next: execute and inspect those captures on
+macOS, exercise library/camera hardware, Dynamic Type and VoiceOver, and integrate
+with #1713/#1707 and #1704. Linux has no Xcode/simulator; native build, captures,
+device acceptance, integration and release remain outstanding and primary-owned.
+
 ## Explicit reminder quiet-hours repair — 10 November 2026 (#1706)
 
 Implemented on the existing task branch: owner create/update/snooze accepts night

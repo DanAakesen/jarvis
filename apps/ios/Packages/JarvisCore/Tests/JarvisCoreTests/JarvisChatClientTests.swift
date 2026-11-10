@@ -509,6 +509,103 @@ final class JarvisChatClientTests: XCTestCase {
         }
     }
 
+    func testAttachmentReadURLsUseAuthenticatedOwnerPathAndAreNotCached() async throws {
+        let id = "123e4567-e89b-42d3-a456-426614174000"
+        let urls = ["https://example.blob.core.windows.net/attachments/photo.jpg?sig=first",
+                    "https://example.blob.core.windows.net/attachments/photo.jpg?sig=second"]
+        let transport = FakeChatTransport(urls.map { .response(jsonResponse(status: 200, body: ["url": $0])) })
+        let chat = makeChatClient(transport: transport)
+        for expected in urls {
+            let actual = try await chat.attachmentURL(id: id)
+            XCTAssertEqual(actual.absoluteString, expected)
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 2, "A retry or reload must obtain a fresh authorized URL.")
+        for request in requests {
+            XCTAssertEqual(request.method, .get)
+            XCTAssertEqual(request.url.path, "/api/conversation/attachments/\(id)/url")
+            XCTAssertEqual(request.headers["Authorization"], authorization("session.fixture.token"))
+            XCTAssertEqual(request.headers["Cache-Control"], "no-store")
+        }
+    }
+
+    func testAttachmentReadRejectsUnsafeURLs() async throws {
+        for url in [
+            "http://example.blob.core.windows.net/image",
+            "https://example.blob.core.windows.net.evil.invalid/image",
+            "https://evil.invalid/image",
+            "file:///private/image.jpg",
+            "https://viewer@example.blob.core.windows.net/image",
+            "https://example.blob.core.windows.net:8443/image",
+            "https://example.blob.core.windows.net/image#fragment",
+        ] {
+            let chat = makeChatClient(transport: FakeChatTransport([
+                .response(jsonResponse(status: 200, body: ["url": url])),
+            ]))
+            do {
+                _ = try await chat.attachmentURL(id: "123e4567-e89b-42d3-a456-426614174000")
+                XCTFail("Accepted unsafe attachment URL")
+            } catch {
+                XCTAssertEqual(error as? JarvisChatClientError, .invalidResponse)
+            }
+        }
+    }
+
+    func testAttachmentReadRejectsInvalidIDsWithoutSending() async throws {
+        let transport = FakeChatTransport([])
+        let chat = makeChatClient(transport: transport)
+        for id in ["", "../other-owner", "123", "123e4567-e89b-42d3-a456-426614174000/url"] {
+            do {
+                _ = try await chat.attachmentURL(id: id)
+                XCTFail("Expected ID validation")
+            } catch {
+                XCTAssertEqual(error as? JarvisChatClientError, .invalidAttachmentIDs)
+            }
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testAttachmentReadKeepsAuthorizationExpiryAndLoadFailuresVisible() async throws {
+        for (status, expected) in [
+            (401, JarvisClientError.signInRequired),
+            (403, .notOwner),
+            (404, .httpStatus(404)),
+            (503, .serviceUnavailable),
+        ] {
+            let chat = makeChatClient(transport: FakeChatTransport([
+                .response(jsonResponse(status: status, body: ["error": "Unavailable"])),
+            ]))
+            do {
+                _ = try await chat.attachmentURL(id: "123e4567-e89b-42d3-a456-426614174000")
+                XCTFail("A failed read must not produce a preview URL")
+            } catch {
+                XCTAssertEqual(error as? JarvisClientError, expected)
+            }
+        }
+    }
+
+    func testHistoryRetainsImageOnlyAndMixedAttachmentMetadata() async throws {
+        let attachments: [[String: Any]] = [
+            ["id": "123e4567-e89b-42d3-a456-426614174000", "name": "Portrait.jpg",
+             "contentType": "image/jpeg", "size": 20],
+            ["id": "123e4567-e89b-42d3-a456-426614174001", "name": "Notes.txt",
+             "contentType": "text/plain", "size": 5],
+            ["id": "123e4567-e89b-42d3-a456-426614174002", "name": "Landscape.png",
+             "contentType": "image/png", "size": 40],
+        ]
+        let chat = makeChatClient(transport: FakeChatTransport([
+            .response(jsonResponse(status: 200, body: ["messages": [
+                ["id": "42", "sessionId": "12", "channel": "chat", "language": "en", "role": "dan",
+                 "text": "", "at": "2026-11-10T12:00:00Z", "interrupted": false,
+                 "toolCalls": [], "attachments": attachments],
+            ], "nextCursor": NSNull()])),
+        ]))
+        let page = try await chat.history()
+        XCTAssertEqual(page.messages.first?.text, "")
+        XCTAssertEqual(page.messages.first?.attachments.map(\.name), ["Portrait.jpg", "Notes.txt", "Landscape.png"])
+    }
+
     func testUploadsOneMultipartAttachmentWithinSizeLimit() async throws {
         let transport = FakeChatTransport([
             .response(jsonResponse(status: 201, body: [

@@ -3039,6 +3039,18 @@ symbol, not a white fill, in both full-screen and minimized controls.
 
 ## Native iOS Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
+For #1712, use the owner's [approved photo reference](https://github.com/DanAakesen/jarvis/blob/c3d69b5d78c51131e2b71aca24d55cf88a9fcd8d/docs/ios/design/chat/photo-preview-approved.png):
+a compact rounded thumbnail above the composer draft with removal at its top
+right; a larger rounded photo below the amber user bubble, aligned right. The
+reference is generated design guidance, not evidence of the running app.
+Geometry lives in `JarvisDesignTokens`: a compact composer square crops without
+stretching, while the sent preview fits the original aspect ratio inside a
+stable, top-right-aligned slot. Preview decoding never changes upload bytes.
+Use the shared icon control and its existing usable touch target for removal;
+keep filenames in VoiceOver labels, not overlaid on available photos. Loading
+uses `JarvisLoadingView`; unavailable photos use semantic text and retry, not
+color alone. No composer controls, glass surfaces or scroll-follow rules change.
+
 The approved `docs/ios/design/board.html?screen=chat` frames guide composition,
 not literal data or dimensions. Keep Chat as the shell root: the transcript
 scrolls above a pinned composer, the compact Now bar sits immediately above it,

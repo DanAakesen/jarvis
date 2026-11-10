@@ -429,6 +429,8 @@ struct JarvisChatScreen: View {
 
     @ViewBuilder
     private func messageRow(_ row: RenderedChatRow) -> some View {
+        let images = row.message.attachments.filter { $0.contentType.hasPrefix("image/") }
+        let files = row.message.attachments.filter { !$0.contentType.hasPrefix("image/") }
         VStack(alignment: row.message.role == .dan ? .trailing : .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
             if selectedTimestampID == row.id {
                 Text(timeString(row.message.at))
@@ -438,25 +440,38 @@ struct JarvisChatScreen: View {
                     .accessibilityLabel("Message time, \(timeString(row.message.at))")
                     .accessibilityIdentifier("chat.timestamp.\(row.id)")
             }
-            messageBubble(
-                text: row.message.text,
-                role: row.message.role,
-                interrupted: row.message.interrupted,
-                messageID: row.message.id,
-                onTap: { toggleTimestamp(row.id) }
-            )
-            .accessibilityAction(named: copy(.turnShowTime)) { toggleTimestamp(row.id) }
+            if !row.message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                messageBubble(
+                    text: row.message.text,
+                    role: row.message.role,
+                    interrupted: row.message.interrupted,
+                    messageID: row.message.id,
+                    onTap: { toggleTimestamp(row.id) }
+                )
+                .accessibilityAction(named: copy(.turnShowTime)) { toggleTimestamp(row.id) }
+            }
             if !row.replyTools.isEmpty { completedTools(row.replyTools, messageID: row.id) }
             if !row.message.attachments.isEmpty {
-                HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    ForEach(row.message.attachments, id: \.id) { attachment in
-                        Label(
-                            attachment.name,
-                            systemImage: attachment.contentType.hasPrefix("image/") ? "photo" : "doc"
+                VStack(alignment: row.message.role == .dan ? .trailing : .leading,
+                       spacing: JarvisDesignTokens.chatMessageSpacing) {
+                    ForEach(images, id: \.id) { attachment in
+                        JarvisChatPhotoPreview(
+                            name: attachment.name,
+                            size: JarvisDesignTokens.chatMessagePhotoSize,
+                            language: appLanguage,
+                            loadData: { try await model.attachmentImageData(attachment) }
                         )
-                        .font(.caption)
-                        .lineLimit(1)
-                        .accessibilityLabel(attachment.name)
+                        .accessibilityIdentifier("chat.attachment.\(attachment.id)")
+                    }
+                    if !files.isEmpty {
+                        HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                            ForEach(files, id: \.id) { attachment in
+                                Label(attachment.name, systemImage: "doc")
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .accessibilityLabel(attachment.name)
+                            }
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: row.message.role == .dan ? .trailing : .leading)
@@ -672,21 +687,29 @@ struct JarvisChatScreen: View {
                         ScrollView(.horizontal) {
                             HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
                                 ForEach(model.pendingAttachments) { attachment in
-                                    HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
-                                        Image(systemName: attachment.contentType.hasPrefix("image/") ? "photo" : "doc")
-                                            .accessibilityHidden(true)
-                                        Text(attachment.name)
-                                            .lineLimit(1)
-                                        JarvisIconButton(
-                                            title: "Remove \(attachment.name)",
-                                            systemImage: "xmark.circle.fill",
-                                            identifier: "chat.attachment.remove",
-                                            isDisabled: model.isSending
-                                        ) { model.removeAttachment(attachment) }
+                                    if attachment.contentType.hasPrefix("image/") {
+                                        JarvisChatPhotoPreview(
+                                            name: attachment.name,
+                                            size: JarvisDesignTokens.chatComposerPhotoSize,
+                                            language: appLanguage,
+                                            localData: attachment.data
+                                        )
+                                        .overlay(alignment: .topTrailing) {
+                                            attachmentRemoveButton(attachment)
+                                        }
+                                        .accessibilityIdentifier("chat.pendingPhoto.\(attachment.id)")
+                                    } else {
+                                        HStack(spacing: JarvisDesignTokens.chatMessageSpacing) {
+                                            Image(systemName: "doc")
+                                                .accessibilityHidden(true)
+                                            Text(attachment.name)
+                                                .lineLimit(1)
+                                            attachmentRemoveButton(attachment)
+                                        }
+                                        .font(.caption)
+                                        .padding(JarvisDesignTokens.chatMessageSpacing)
+                                        .jarvisGlassSurface()
                                     }
-                                    .font(.caption)
-                                    .padding(JarvisDesignTokens.chatMessageSpacing)
-                                    .jarvisGlassSurface()
                                 }
                             }
                             .padding(.horizontal, JarvisDesignTokens.chatComposerTextInset)
@@ -708,6 +731,15 @@ struct JarvisChatScreen: View {
         if model.isSending { return .thinking }
         if dictation.isListening { return .listening }
         return model.canSend ? .typing : .idle
+    }
+
+    private func attachmentRemoveButton(_ attachment: PendingChatAttachment) -> some View {
+        JarvisIconButton(
+            title: "\(copy(.photoRemove)) \(attachment.name)",
+            systemImage: attachment.contentType.hasPrefix("image/") ? "xmark" : "xmark.circle.fill",
+            identifier: "chat.attachment.remove",
+            isDisabled: model.isSending
+        ) { model.removeAttachment(attachment) }
     }
 
     private var dictateButton: some View {

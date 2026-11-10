@@ -318,6 +318,15 @@ retaining sharp text, translucency, existing layout and the desktop top-edge fad
 
 ## iPhone Chat screen (P15-10; owner-approved concept, 30 October 2026)
 
+Photo previews (#1712, approved 10 November 2026) apply to all chat image
+attachments, including camera and library inputs. Pending photos appear inside
+the composer above the editable draft, with filename-labelled removal controls.
+Sent photos sit below the user text, aligned right; existing image-only history
+renders without an empty text bubble. Multiple images and mixed files remain
+supported; text is still required to send. Available saved photos reload through
+owner-authorized attachments; unavailable photos show a labelled retry fallback.
+No upload, retention, dictation, voice or live-follow policy changes are intended.
+
 P15-41 / #1484 requires reliable sidebar and bottom-control input across repeated
 screen changes, sheets, keyboard use, and full-screen/minimized voice sessions.
 Chat, Health, Notes and Factory provide localized menu launchers as well as the right-edge swipe; tapping
