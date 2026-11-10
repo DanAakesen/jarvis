@@ -1,3 +1,12 @@
+## Chat follow-latest (#1707; 10 November 2026)
+
+Preserve the approved transparent header/footer, floating glass and shared dock.
+Following responds to laid-out content and safe-area changes rather than reply
+tokens alone, without adding an opaque footer or fixed-height spacer. Continuous
+following is unanimated; user scrolls and native reply selections take priority.
+Tool grouping, disclosure controls, failure labels and links retain their design.
+Native rendering and interaction evidence is still required.
+
 ## Direct owner requests — 10 November 2026
 
 Task cancellation and recovery, routine/memory deletion, workspace removal, deployment removal and Watch lift deletion act from the selected control. Surface failures and retain busy-state protection. Legacy approval cards and composer buttons do not displace current chat or activity; real task alerts remain visible. Sign-out dialogs stay.

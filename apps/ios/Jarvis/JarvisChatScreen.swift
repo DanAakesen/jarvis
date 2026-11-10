@@ -37,7 +37,7 @@ private struct RenderedChatRow: Identifiable {
 
 
 struct JarvisChatScreen: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
@@ -73,6 +73,11 @@ struct JarvisChatScreen: View {
     @State private var expandedTools = Set<String>()
     @State private var selectedTimestampID: String?
     @State private var liveToolsExpanded = true
+
+    private var reduceMotion: Bool {
+        systemReduceMotion || (JarvisChatFeedbackFixtureTransport.isEnabled &&
+            ProcessInfo.processInfo.arguments.contains("--ui-test-chat-follow-reduced-motion"))
+    }
 
     init(
         client: JarvisClient?,
@@ -263,6 +268,7 @@ struct JarvisChatScreen: View {
 
     var body: some View {
         attachmentPickers
+        .environment(\.accessibilityReduceMotion, reduceMotion)
         .jarvisAmbientBackground(transparentNavigationBar: true)
         .onAppear(perform: refreshScreenSharing)
         .onChange(of: liveSource) { _, _ in updateLiveStream() }
@@ -390,39 +396,11 @@ struct JarvisChatScreen: View {
                 }
                 .accessibilityIdentifier("chat.transcript")
                 .scrollDismissesKeyboard(.interactively)
-                .defaultScrollAnchor(.bottom)
                 .scrollEdgeEffectHidden()
-                .onChange(of: model.messages.last?.id) { _, _ in
-                    scrollToBottom(proxy, animated: !reduceMotion)
-                }
-                .onChange(of: model.messages.count) { _, _ in
-                    scrollToBottom(proxy, animated: !reduceMotion)
-                }
-                .onChange(of: model.streamingText) { _, _ in
-                    scrollToBottom(proxy, animated: false)
-                }
-                .onChange(of: model.progressUpdates.count) { _, _ in
-                    scrollToBottom(proxy, animated: false)
-                }
+                .modifier(JarvisChatFollowLatest(proxy: proxy, bottomID: "conversation-bottom"))
                 .onChange(of: model.isSending) { _, sending in
                     if sending { liveToolsExpanded = true }
-                    scrollToBottom(proxy, animated: false)
                 }
-            }
-        }
-    }
-
-    private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
-        // Scroll after the list has laid out the new row; scrolling in the same
-        // update targets the previous content size and leaves the newest message hidden.
-        Task { @MainActor in
-            await Task.yield()
-            if animated {
-                withAnimation(.easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration)) {
-                    proxy.scrollTo("conversation-bottom", anchor: .bottom)
-                }
-            } else {
-                proxy.scrollTo("conversation-bottom", anchor: .bottom)
             }
         }
     }
@@ -560,7 +538,6 @@ struct JarvisChatScreen: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("You: \(text)")
                     .accessibilityIdentifier("chat.message.user")
-                    .onTapGesture { onTap?() }
                     .frame(maxWidth: JarvisDesignTokens.chatMessageMaximumWidth, alignment: .trailing)
             } else {
                 content
@@ -571,59 +548,9 @@ struct JarvisChatScreen: View {
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
     }
 
-    @ViewBuilder
     private func messageText(_ text: String, role: ConversationRole, messageID: String, onTap: (() -> Void)?) -> some View {
-        if role == .jarvis && messageID != "streaming" && messageID != "acknowledgment" {
-            JarvisSelectableReply(text: text, identifier: "chat.reply.\(messageID)", onTap: onTap)
-        } else if role == .jarvis {
-            let blocks = ChatMarkdownBlock.parse(text)
-            VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
-                    markdownBlock(block)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("chat-markdown-block-\(messageID)-\(index)")
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            Text(text)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    @ViewBuilder
-    private func markdownBlock(_ block: ChatMarkdownBlock) -> some View {
-        switch block {
-        case .heading(let level, let text):
-            inlineMarkdown(text)
-                .font(headingFont(level))
-                .accessibilityAddTraits(.isHeader)
-        case .paragraph(let text):
-            inlineMarkdown(text)
-        case .listItem(let marker, let text):
-            HStack(alignment: .firstTextBaseline, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                Text(marker)
-                    .accessibilityHidden(true)
-                inlineMarkdown(text)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-    }
-
-    private func inlineMarkdown(_ text: String) -> Text {
-        if let attributedText = try? AttributedString(markdown: text) {
-            return Text(attributedText)
-        }
-        return Text(text)
-    }
-
-    private func headingFont(_ level: Int) -> Font {
-        switch level {
-        case 1: .title2.weight(.semibold)
-        case 2: .title3.weight(.semibold)
-        default: .headline
-        }
+        JarvisSelectableReply(text: text, identifier: "chat.reply.\(messageID)",
+                              rendersMarkdown: role == .jarvis, onTap: onTap)
     }
 
     private var turnStatus: some View {
@@ -725,6 +652,8 @@ struct JarvisChatScreen: View {
                 }
             )
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("chat.dock")
     }
 
     private var rimState: JarvisRimState {

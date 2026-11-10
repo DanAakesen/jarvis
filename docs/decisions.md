@@ -22,6 +22,26 @@ Inspected #1704 at `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9`: its
 edits. #1707/#1713 owns live-follow/layout handling; this change adds attachment
 subviews without modifying transcript follow triggers or composer controls.
 Primary retains integration and release; simulator/device acceptance is pending.
+## 10 November 2026 — Follow chat layout, not only reply events (#1707)
+
+Use the existing safe-area dock plus native scroll geometry/phase observation;
+do not estimate dock height or move progress into Now. Scope the default bottom
+anchor to initial positioning so content-size changes do not override a history
+reader. Coalesce follow requests, cancel superseded work and recheck interaction,
+selection and foreground state before scrolling. Leave `JarvisChatModel` untouched
+to avoid overlap with #1704 and #1712; screen edits cover follow wiring, a dock
+accessibility identifier and shared selection-aware text rendering. Preserve
+literal user text, Markdown replies and short-bubble sizing.
+
+Apple guidance consulted through indexed documentation (direct page retrieval
+was blocked): [onScrollGeometryChange](https://developer.apple.com/documentation/swiftui/view/onscrollgeometrychange(for:of:action:))
+observes transformed geometry, [ScrollPhase](https://developer.apple.com/documentation/swiftui/scrollphase)
+distinguishes tracking/interaction/deceleration from programmatic animation, and
+[defaultScrollAnchor](https://developer.apple.com/documentation/swiftui/view/defaultscrollanchor(_:))
+can otherwise affect content-size repositioning as well as startup.
+[HIG Layout](https://developer.apple.com/design/human-interface-guidelines/layout)
+requires unobscured safe-area content and adaptation to text-size changes.
+Native reproduction/captures are not claimed on the Linux runner.
 
 ## 10 November 2026 — Explicit timed reminders bypass quiet hours (#1706)
 

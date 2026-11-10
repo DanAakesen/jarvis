@@ -45,6 +45,44 @@ official excerpts, not full pages:
 Integration: preserve #1704's independent Now/jobs refresh and stale-response
 guards and #1713/#1707's live-follow, scrolling and viewport changes. These edits
 do not alter those policies. Primary owns integration, assignment and release.
+## Chat follow-latest qualification (#1707; 10 November 2026)
+
+Local checks passed: `swift test -j 2` in `apps/ios/Packages/JarvisCore` (574 tests);
+`npm test -- src/ConversationHistory.test.tsx src/RuntimeTestConversation.test.tsx`
+in `apps/web` (138 tests); scoped ESLint, TypeScript and changed Swift syntax
+parsing. All 25 existing iOS pipeline source-contract checks also pass with
+`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -p test_pipeline.py -k ios`.
+Linux cannot compile SwiftUI/UIKit or run the iPhone simulator. Secret scanning
+passed. CodeQL could not create the Swift database and skipped JavaScript because
+its database was too large; this is not a successful security analysis.
+
+`ChatComposerUITests` (already selected by the simulator workflow) adds held-open
+tool-only SSE updates, grouped disclosures/failures, dock-edge geometry, wrapped
+draft changes, history reading/resume and native selection checks. Launch with
+`--screenshot-chat-fixture --ui-test-chat-feedback --ui-test-chat-follow`; add
+`--ui-test-chat-follow-now` for a visible synthetic Now item and
+`--ui-test-chat-follow-reduced-motion` to inject the native Reduce Motion
+environment in the simulator-only feedback fixture. Darwin notifications
+`com.jarvis.uitests.{tools,fail-tool,progress,stream,finish}-chat-feedback` advance it
+without live services or timers. Captures are retained as XCTest attachments;
+none have been produced or inspected here. Actual Now transitions, simulator
+keyboard behavior, accessibility overrides, reduced motion, link taps and
+physical-device verification remain open.
+
+Web check: mounted the real `ConversationHistory` component in Chromium with
+synthetic history, an explicitly held SSE response and local activity events,
+not the signed-in application shell. At 390×844, twelve tool-only additions kept
+tail gap 0; a reader at scrollTop 8748 stayed at 8748 after a failure update and
+following resumed on returning to bottom. At 390×520 the latest tool bottom was
+404.8px, above composer top 467px; no horizontal overflow. Inspected capture:
+`/tmp/playwright-logs/jarvis-web-tool-only-follow.png` (ephemeral, web only, no Now
+shell). Existing web observers passed the new regression; no web runtime edit.
+The web test conversation has no live tool renderer; its existing tests pass.
+
+Integration: #1704 head `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9` was inspected;
+its model refresh changes are not duplicated or overwritten. Keep concurrent
+#1712/#1714 photo/composer changes; integration and release stay with the
+orchestrator. No work was started on #1706.
 
 ## Explicit timed reminders — 10 November 2026 (#1706)
 

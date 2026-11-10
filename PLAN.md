@@ -10,6 +10,18 @@ to the existing Simulator selection. Next: execute and inspect those captures on
 macOS, exercise library/camera hardware, Dynamic Type and VoiceOver, and integrate
 with #1713/#1707 and #1704. Linux has no Xcode/simulator; native build, captures,
 device acceptance, integration and release remain outstanding and primary-owned.
+## Chat follow-latest — 10 November 2026 (#1707)
+
+Implemented shared geometry-driven following for normal and isolated native
+chat, with user-scroll/selection protection and deterministic tool-only fixtures.
+Local checks: 574 JarvisCore tests, 138 web chat tests, web TypeScript/scoped
+ESLint, Swift syntax parsing and diff checks pass. The web tool-only failure was
+not reproduced in its component fixture; retain its existing observers.
+Next/blocker: macOS simulator compilation, before/after reproduction, dock
+geometry and interaction captures, Now visibility transitions, reduced motion,
+Dynamic Type, link/selection checks and physical-iPhone validation. Do not mark
+native acceptance complete. Orchestrator owns integration and release; preserve
+#1712/#1714 photo changes and #1704's chat-model refresh fixes.
 
 ## Explicit reminder quiet-hours repair — 10 November 2026 (#1706)
 
