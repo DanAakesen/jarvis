@@ -268,7 +268,6 @@ struct JarvisChatScreen: View {
 
     var body: some View {
         attachmentPickers
-        .environment(\.accessibilityReduceMotion, reduceMotion)
         .jarvisAmbientBackground(transparentNavigationBar: true)
         .onAppear(perform: refreshScreenSharing)
         .onChange(of: liveSource) { _, _ in updateLiveStream() }

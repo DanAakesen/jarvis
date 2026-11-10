@@ -65,6 +65,50 @@ final class ChatComposerUITests: XCTestCase {
         add(attachment)
     }
 
+    func testPhotosAndToolOnlyUpdatesShareTheChangingDock() {
+        let app = followApp(showsNow: true)
+        app.launchArguments += ["--ui-test-chat-photos", "--ui-test-chat-follow-reduced-motion"]
+        app.launch()
+        defer { app.terminate() }
+        let input = app.textViews["chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.images["Synthetic saved portrait.jpg"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Retry"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.images["Synthetic landscape.jpg"].waitForExistence(timeout: 5))
+        captureFollow(app, "integrated-photo-history-and-pending-thumbnails")
+        app.buttons["Remove Synthetic landscape.jpg"].tap()
+        XCTAssertTrue(app.buttons["Remove Synthetic portrait.jpg"].exists)
+        XCTAssertTrue(app.buttons["Remove Synthetic notes.txt"].exists)
+        XCTAssertEqual(input.value as? String, "Synthetic photo draft")
+        app.buttons["chat.send"].tap()
+        XCTAssertTrue(app.buttons["chat.turn.status"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.images["Synthetic portrait.jpg"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Synthetic notes.txt"].exists)
+        XCTAssertFalse(app.buttons["Remove Synthetic portrait.jpg"].exists)
+        XCTAssertFalse(app.textViews["chat.reply.45"].exists, "The combined fixture must hold the turn open")
+
+        signalFollowFixture("tools")
+        let group = app.buttons["chat.live.toolGroup.\(followToolID(7))"]
+        assertAboveDock(group, app: app)
+        XCTAssertFalse(app.textViews["chat.reply.streaming"].exists)
+        input.tap()
+        input.typeText("A retained draft that wraps while photo previews and tool-only updates share the composer dock.")
+        assertAboveDock(group, app: app)
+        captureFollow(app, "integrated-photos-tool-only-keyboard-multiline-reduced-motion")
+        group.tap()
+        let lastCall = app.descendants(matching: .any)["chat.live.toolCall.\(followToolID(9))"]
+        signalFollowFixture("fail-tool")
+        let failed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS 'Failed'"), object: lastCall)
+        XCTAssertEqual(XCTWaiter.wait(for: [failed], timeout: 5), .completed)
+        assertAboveDock(lastCall, app: app)
+        signalFollowFixture("finish")
+        XCTAssertTrue(app.textViews["chat.reply.45"].waitForExistence(timeout: 8))
+        assertAboveDock(app.buttons["chat.tools.45"], app: app)
+        XCTAssertTrue(app.images["Synthetic portrait.jpg"].exists)
+        XCTAssertTrue(app.staticTexts["Synthetic notes.txt"].exists)
+        captureFollow(app, "integrated-photos-final-reply")
+    }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }

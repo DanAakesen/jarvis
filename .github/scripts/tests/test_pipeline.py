@@ -846,6 +846,15 @@ class SafeFailureTests(unittest.TestCase):
         tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
         self.assertEqual(tests.count("assertDestinationMenuWorks()"), 5)
 
+    def test_ios_chat_reads_reduce_motion_without_writing_read_only_environment(self):
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn(r"@Environment(\.accessibilityReduceMotion)", chat)
+        self.assertIn("systemReduceMotion ||", chat)
+        self.assertNotRegex(chat, r"\.environment\(\s*\\\.accessibilityReduceMotion\s*,")
+        follow = (ROOT / "apps/ios/Jarvis/JarvisChatFollowLatest.swift").read_text()
+        self.assertIn("Transaction(animation: nil)", follow)
+        self.assertIn("transaction.disablesAnimations = true", follow)
+
     def test_ios_sign_in_preserves_shell_and_sign_out_resets_shared_navigation(self):
         root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
         self.assertNotIn(".id(model.contentEpoch)", root)

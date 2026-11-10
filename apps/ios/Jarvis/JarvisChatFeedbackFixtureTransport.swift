@@ -44,11 +44,13 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
             return try json(upload, status: 201)
         case "/api/conversation/history":
             if !didSeedHistory, ProcessInfo.processInfo.arguments.contains("--ui-test-chat-follow") {
-                history = (1...40).map { index in
+                let photoHistory = JarvisChatPhotoFixture.isEnabled ? JarvisChatPhotoFixture.history : []
+                history = (1...(40 - photoHistory.count)).map { index in
                     message(id: String(index), role: index.isMultiple(of: 2) ? "jarvis" : "dan",
                             text: "Synthetic history \(index). Read the [Apple guide](https://developer.apple.com/documentation/swiftui). " +
                                 String(repeating: "Earlier conversation remains available while tools run. ", count: 4))
                 }
+                history += photoHistory
                 didSeedHistory = true
             }
             return try json(["messages": history, "nextCursor": NSNull()])
@@ -102,7 +104,10 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
             turn = continuation
             continuation.yield(event("user", saved))
         }
-        if JarvisChatPhotoFixture.isEnabled { finishTurn() }
+        if JarvisChatPhotoFixture.isEnabled,
+           !ProcessInfo.processInfo.arguments.contains("--ui-test-chat-follow") {
+            finishTurn()
+        }
         return HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: body)
     }
 

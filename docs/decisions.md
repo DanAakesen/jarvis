@@ -1,3 +1,25 @@
+## 10 November 2026 — Integrate chat features on the photo child (#1718)
+
+Keep #1714 as the delivery PR and merge #1713 into its existing child #1719,
+preserving both source histories. Source heads were unchanged at `08b0e9ab` and
+`6d035394`; latest main `741e0378` is already an ancestor. No source PR is merged,
+closed or retargeted.
+
+Remove the unsupported `.environment` write: Apple's
+[Reduce Motion value](https://developer.apple.com/documentation/swiftui/environmentvalues/accessibilityreducemotion)
+is get-only. Keep the system preference and additive fixture override for screen
+motion, and nonanimated layout following. This matches
+[HIG Motion](https://developer.apple.com/design/human-interface-guidelines/motion):
+motion is purposeful and optional, never the only way to expose activity.
+Official indexed excerpts were read; direct Apple retrieval failed DNS.
+
+#1715/#1716 owns the independent loading/Factory delivery. A non-mutating trial
+merge with its `0c6f242c` head combined `JarvisChatModel` automatically; preserve
+its `activityRefreshID`, independent feed/jobs refresh and retained error/data
+state alongside this branch's attachment metadata and photo loader. Only the
+decision log conflicted in that trial. Repeat against both latest heads before
+release; a trial merge is not native execution or final integration acceptance.
+
 ## 10 November 2026 — Native chat photo previews (#1712)
 
 Implement approved design 1 with existing shared composer controls, a removable

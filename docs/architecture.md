@@ -10,6 +10,12 @@ saved/live replies and plain user text; streaming replacements preserve a still
 matching selection. Plain user text remains literal and short bubbles fit text.
 No chat model, attachment, transport contract or server boundary changes.
 
+The #1718 integration reads the system Reduce Motion preference without trying
+to write its read-only environment key. The screen's explicit fixture override
+only adds reduced motion; continuous layout following uses a nonanimated
+transaction in either mode. Photo and follow fixtures can run together without
+replacing photo history or prematurely completing the held stream.
+
 ## Direct owner requests — 10 November 2026
 
 Owner tool operations execute a resolved request under the existing authenticated route and resource authorization. Same-session owner messages may resolve a recent project for a follow-up; external content is never authority. Resource revisions, secret checks and duplicate/uncertain-write recovery remain separate from interactive approval. Legacy confirmation endpoints remain for compatibility but are not advertised to normal chat or voice.

@@ -1,3 +1,16 @@
+## iOS chat integration — 10 November 2026 (#1718)
+
+Merged #1713 head `6d035394` into the child of #1714 head `08b0e9ab`,
+retaining both histories and features. Removed the unsupported write to the
+read-only Reduce Motion environment value. Combined native fixtures now retain
+photo history and hold tool-only streaming open; a regression covers photos,
+mixed files, removal, keyboard/composer growth, failures and the final reply.
+Local checks pass: 579 Core, 80 backend attachment/conversation, 138 web chat and
+26 iOS source-contract tests; changed native Swift parses successfully.
+Next: exact-final-head macOS build/tests and capture inspection using
+`docs/agent-context.md`, then orchestrator integration with #1715/#1716.
+Native/device acceptance, Swift security analysis and release are not claimed.
+
 ## iOS chat photo previews — 10 November 2026 (#1712)
 
 Implemented composer and sent/history photo previews using the approved reference
