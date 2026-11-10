@@ -173,23 +173,20 @@ describe('inactive hosted nutrition MCP adapter', () => {
     { handler: 'removePlan', change: { operation: 'delete_plan', id: savedPlan.id, expectedRevision: '1' } },
     { handler: 'feedback', change: { operation: 'set_feedback', favoriteId: savedFavorite.id, expectedRevision: '0', preference: 'dislike' } },
   ] as const;
-  it.each(savedChanges)('native-reviews $change.operation and returns only the actual committed safe receipt', async ({ handler, change }) => {
+  it.each(savedChanges)('executes $change.operation directly and returns only the committed safe receipt', async ({ handler, change }) => {
     const f = await fixture();
     const { client, messages } = await f.connect();
     const result = await client.callTool({ name: 'manage_saved_food', arguments: { change } });
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toMatchObject({ status: 'committed', operation: change.operation });
-    expect(messages).toHaveLength(1);
-    expect(messages[0]).toContain('Synthetic');
+    expect(messages).toHaveLength(0);
     expect(f.nutrition[handler]).toHaveBeenCalledOnce();
     expect(JSON.stringify(result)).not.toContain('never-expose');
     expect(f.nutrition.log).not.toHaveBeenCalled();
     expect(f.audit).toHaveBeenLastCalledWith(expect.objectContaining({ tool: 'manage_saved_food', phase: 'ok', outcome: 'ok' }));
   });
-  it.each(savedChanges)('does not execute declined $change.operation or a read-only caller', async ({ handler, change }) => {
+  it.each(savedChanges)('refuses $change.operation for a read-only caller', async ({ handler, change }) => {
     const f = await fixture();
-    const declined = await f.connect('write', 'decline');
-    expect((await declined.client.callTool({ name: 'manage_saved_food', arguments: { change } })).isError).toBe(true);
     const read = await f.connect('read');
     expect((await read.client.callTool({ name: 'manage_saved_food', arguments: { change } })).isError).toBe(true);
     expect(f.nutrition[handler]).not.toHaveBeenCalled();
@@ -205,8 +202,7 @@ describe('inactive hosted nutrition MCP adapter', () => {
     expect((await client.callTool({ name: 'manage_saved_food', arguments: { change } })).isError).not.toBe(true);
     expect(f.nutrition.favorite).toHaveBeenCalledWith(expect.objectContaining({ sourceIdempotencyKey: 'source-key' }),
       expect.objectContaining({ intent: 'save-favorite', expectedRevision: 0n, sourceRevision: 4n, proposalAccepted: true }));
-    expect(messages[0]).toContain('Synthetic source');
-    expect(messages[0]).not.toContain('never-expose');
+    expect(messages).toHaveLength(0);
   });
   it('returns a persisted initial clear revision and refuses missing preference receipts', async () => {
     const f = await fixture();
@@ -215,33 +211,25 @@ describe('inactive hosted nutrition MCP adapter', () => {
     vi.mocked(f.nutrition.feedback).mockResolvedValue({ meal_key: savedFavorite.id, preference: null, revision: 1n });
     const result = await client.callTool({ name: 'manage_saved_food', arguments: { change } });
     expect(result.structuredContent).toMatchObject({ status: 'committed', record: { preference: null, revision: '1' } });
-    expect(messages).toHaveLength(1);
+    expect(messages).toHaveLength(0);
     expect(f.nutrition.feedback).toHaveBeenCalledWith(savedFavorite.id, null, 0n, expect.objectContaining({ intent: 'set-feedback' }));
     vi.mocked(f.nutrition.feedback).mockResolvedValue({});
     const missing = await client.callTool({ name: 'manage_saved_food', arguments: { change } });
     expect(missing.isError).toBe(true);
     expect(JSON.stringify(missing)).toContain('may have committed');
   });
-  it('refuses a changed plan source between native display and acceptance instead of saving new undisplayed totals', async () => {
+  it('binds current favourite revisions to direct plan creation', async () => {
     const f = await fixture();
     const { client, messages } = await f.connect();
-    client.setRequestHandler('elicitation/create', async request => {
-      messages.push(request.params.message);
-      vi.mocked(f.nutrition.favoriteRecords).mockResolvedValue([{ ...savedFavorite, energy_kcal: 999, revision: 2n }]);
-      return { action: 'accept', content: { confirm: true } };
-    });
     const result = await client.callTool({ name: 'manage_saved_food', arguments: { change: savedChanges[1].change } });
-    expect(result.isError).toBe(true);
-    expect(messages[0]).toContain('"energyKcal": 600');
-    expect(f.nutrition.plan).not.toHaveBeenCalled();
+    expect(result.isError).not.toBe(true);
+    expect(messages).toHaveLength(0);
+    expect(f.nutrition.plan).toHaveBeenCalledWith(expect.anything(), 0n,
+      expect.objectContaining({ intent: 'save-plan', reviewedFavorites: expect.any(Map) }));
   });
-  it('replays plan deletion using unchanged semantic content, not the deletion timestamp', async () => {
+  it('passes the expected revision through to direct plan deletion', async () => {
     const f = await fixture();
     const { client } = await f.connect();
-    client.setRequestHandler('elicitation/create', async () => {
-      vi.mocked(f.nutrition.planRecord).mockResolvedValue({ ...savedPlan, revision: 2n, deleted_at: '2026-10-16T21:59:00Z' });
-      return { action: 'accept', content: { confirm: true } };
-    });
     expect((await client.callTool({ name: 'manage_saved_food', arguments: { change: savedChanges[2].change } })).isError).not.toBe(true);
     expect(f.nutrition.removePlan).toHaveBeenCalledWith(savedPlan.id, 1n, expect.objectContaining({ intent: 'delete-plan' }));
   });
@@ -393,41 +381,22 @@ describe('inactive hosted nutrition MCP adapter', () => {
     expect(f.nutrition.lookup).not.toHaveBeenCalled();
   });
 
-  it('requires native review even when a photo claims accurate confidence, freezes the Copenhagen occurrence and returns a committed receipt', async () => {
+  it('logs the requested food without elicitation and returns the committed receipt', async () => {
     const f = await fixture();
-    const { client, messages } = await f.connect();
-    client.setRequestHandler('elicitation/create', async request => {
-      messages.push(request.params.message);
-      expect(f.commits()).toBe(0);
-      f.setTime('2026-10-16T22:01:00Z');
-      return { action: 'accept', content: { confirm: true } };
-    });
+    const { client, messages } = await f.connect('write', 'accept', false);
     const result = await client.callTool({ name: 'log_food', arguments: food });
     expect(result.isError).not.toBe(true);
-    expect(messages).toHaveLength(1);
-    expect(messages[0]).toContain('Synthetic meal');
-    expect(messages[0]).toContain('"captureMethod": "photo"');
+    expect(messages).toHaveLength(0);
     expect(f.commits()).toBe(1);
     expect(f.nutrition.log).toHaveBeenCalledWith(expect.objectContaining({
       occurredAt: '2026-10-16T21:59:00Z', mealDate: '2026-10-16', proteinGrams: null,
       provenance: { source: 'chatgpt-supplied', independentlyVerified: false },
     }), expect.objectContaining({ intent: 'log-intake', proposalRequired: true, proposalAccepted: true }));
     expect(result.structuredContent).toMatchObject({ status: 'committed', revision: '1', energyKcal: 200, proteinGrams: null });
-    expect(result.content?.[0]).toMatchObject({ type: 'text', text: expect.stringContaining('"status":"committed"') });
     expect(JSON.stringify(result)).not.toContain('never-expose-this');
     expect(JSON.stringify(result)).not.toContain(config.auth.ownerObjectId);
     expect(JSON.stringify(f.audit.mock.calls)).not.toContain('Synthetic meal');
-    expect(f.audit.mock.calls.map(([call]) => call.phase)).toContain('awaiting_confirmation');
-  });
-
-  it.each(['decline', 'cancel'] as const)('does not persist or repeatedly request approval after %s', async action => {
-    const f = await fixture();
-    const { client, messages } = await f.connect('write', action);
-    const result = await client.callTool({ name: 'log_food', arguments: food });
-    expect(result.isError).toBe(true);
-    expect(messages).toHaveLength(1);
-    expect(f.commits()).toBe(0);
-    expect(f.nutrition.log).not.toHaveBeenCalled();
+    expect(f.audit.mock.calls.map(([call]) => call.phase)).not.toContain('awaiting_confirmation');
   });
 
   it('does not deserialize a model confirmation, owner or caller-selected meal ID', async () => {
@@ -467,47 +436,12 @@ describe('inactive hosted nutrition MCP adapter', () => {
     expect(f.nutrition.intake).not.toHaveBeenCalled();
   });
 
-  it('refuses unsupported native review, unchecked acceptance and extra confirmation fields without executing a write', async () => {
+  it('does not require an elicitation-capable client for an authorized write', async () => {
     const f = await fixture();
-    const unsupported = await f.connect('write', 'accept', false);
-    await expect(unsupported.client.callTool({ name: 'log_food', arguments: food })).rejects.toThrow();
-    const { client } = await f.connect();
-    client.setRequestHandler('elicitation/create', async () => ({ action: 'accept', content: { confirm: false } }));
-    expect((await client.callTool({ name: 'log_food', arguments: food })).isError).toBe(true);
-    client.setRequestHandler('elicitation/create', async () => ({ action: 'accept', content: { confirm: true, userConfirmed: true } }));
-    expect((await client.callTool({ name: 'log_food', arguments: food })).isError).toBe(true);
-    expect(f.nutrition.log).not.toHaveBeenCalled();
-  });
-
-  it('requires signed review state, refuses changed payload/purpose and rejects tampered or expired state', async () => {
-    const f = await fixture();
-    const { client } = await f.connect('write', 'accept', true, true);
-    const inputResponses = { confirm: { action: 'accept', content: { confirm: true } } };
-    const first = await client.request({
-      method: 'tools/call', params: { name: 'log_food', arguments: food, inputResponses },
-    }, { allowInputRequired: true });
-    expect(isInputRequiredResult(first)).toBe(true);
-    if (!isInputRequiredResult(first) || !first.requestState) throw new Error('Synthetic review state missing');
-    const changed = await client.request({
-      method: 'tools/call', params: { name: 'log_food', arguments: { ...food, energyKcal: 201 }, requestState: first.requestState, inputResponses },
-    }, { allowInputRequired: true });
-    expect(changed).toMatchObject({ isError: true });
-    const repurposed = await client.request({
-      method: 'tools/call',
-      params: { name: 'delete_food', arguments: { idempotencyKey: 'synthetic-key', expectedRevision: '1' }, requestState: first.requestState, inputResponses },
-    }, { allowInputRequired: true });
-    expect(repurposed).toMatchObject({ isError: true });
-    await expect(client.request({
-      method: 'tools/call', params: { name: 'log_food', arguments: food, requestState: first.requestState + 'tampered', inputResponses },
-    }, { allowInputRequired: true })).rejects.toThrow('requestState');
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 601_000);
-    try {
-      await expect(client.request({
-        method: 'tools/call', params: { name: 'log_food', arguments: food, requestState: first.requestState, inputResponses },
-      }, { allowInputRequired: true })).rejects.toThrow('requestState');
-    } finally { clock.mockRestore(); }
-    expect(f.nutrition.log).not.toHaveBeenCalled();
-    expect(f.nutrition.remove).not.toHaveBeenCalled();
+    const { client } = await f.connect('write', 'accept', false);
+    const result = await client.callTool({ name: 'log_food', arguments: food });
+    expect(result.isError).not.toBe(true);
+    expect(f.commits()).toBe(1);
   });
 
   it('replays the same committed intake after the clock changes without creating another meal', async () => {
