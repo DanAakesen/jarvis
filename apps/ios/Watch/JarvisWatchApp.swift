@@ -69,7 +69,7 @@ struct WatchRoot: View {
             if ProcessInfo.processInfo.arguments.contains("--watch-screen=chat") { path = [.chat] }
             if ProcessInfo.processInfo.arguments.contains("--watch-screen=health") { path = [.health] }
             if ProcessInfo.processInfo.arguments.contains("--watch-screen=lifts") || ProcessInfo.processInfo.arguments.contains("--watch-screen=new-lift") { path = [.lifts] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=new-task") { path = [.factory] }
+            if ProcessInfo.processInfo.arguments.contains("--watch-screen=new-task") || ProcessInfo.processInfo.arguments.contains("--watch-screen=project") { path = [.factory] }
             #endif
         }
         .onOpenURL { url in

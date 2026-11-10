@@ -68,6 +68,9 @@ jobs:
           xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=new-task
           sleep 2
           xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/new-task.png"
+          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=project
+          sleep 2
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/project-tasks.png"
       - name: Build paired iPhone bridge without signing
         if: ${{ !cancelled() }}
         working-directory: apps/ios

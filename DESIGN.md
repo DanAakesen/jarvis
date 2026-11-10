@@ -3784,6 +3784,8 @@ shared Retry control without losing the requested finding identifier.
 
 ## Watch forms correction — 10 November 2026
 
-The owner's installed-device photos show clipped, oversized reps/sets steppers and a misleading connection notice in Lifts. Retain existing Watch typography/material, with compact labelled Reps/Sets rows opening dedicated native wheel pickers; values remain editable by vertical swipe/Digital Crown. Keep exercise/weight fields and Save in the scrollable form. Returning from a picker must preserve the entered exercise and weight. Move Add lift into a compact plus toolbar action.
+The owner's installed-device photos show clipped, oversized reps/sets steppers and a misleading connection notice in Lifts. Retain existing Watch typography/material, with compact labelled Reps/Sets rows opening dedicated native wheel pickers; values remain editable by vertical swipe/Digital Crown. Keep exercise/weight fields and Save in the scrollable form. Returning from a picker must preserve the entered exercise and weight. Move Add lift into a compact visible plus action row.
 
 After Factory project selection, show a plus action opening New task with Title, Request and native Agent picker. Reuse WatchTextInput for exercise, title, request and chat draft: native text editing plus an explicit mic action opening the system text-input interface. Dictation appends to the draft and never submits. No new colour theme, large custom control or complication redesign. Native fixtures/captures are synthetic; installed-device acceptance remains open.
+
+Native capture correction: Watch toolbar primary actions were not visible, so Add lift/New task use compact clear-background plus rows within each list. Free-text fields are clean tap-to-edit rows with mic controls; the native typing field lives in a separate editor, avoiding nested field backgrounds. Weight opens its native numeric editor. Reps/Sets share one compact row.

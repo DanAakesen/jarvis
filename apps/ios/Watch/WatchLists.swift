@@ -33,6 +33,10 @@ struct WatchHealthList: View {
     @State private var readID = UUID()
     var body: some View {
         List {
+            if lifts {
+                HStack { Spacer(minLength: 0); WatchAddButton(title: "Add lift") { showAdd = true } }
+                    .listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+            }
             if loading { ProgressView() }
             if let failure {
                 VStack(alignment: .leading, spacing: 8) {
@@ -66,13 +70,6 @@ struct WatchHealthList: View {
             }
             if rows.count == 30 { Text("Showing the latest 30. Open iPhone for full history.").font(.caption2) }
         }.navigationTitle(lifts ? "Lifts" : "Workouts")
-        .toolbar {
-            if lifts {
-                ToolbarItem(placement: .primaryAction) {
-                    WatchAddButton(title: "Add lift") { showAdd = true }
-                }
-            }
-        }
         .task(id: connection.reachable) { await load() }.refreshable { await load() }
         .sheet(isPresented: $showAdd) { NavigationStack { WatchLiftEditor { Task { await load() } } } }
         .task {
@@ -128,17 +125,28 @@ struct WatchLiftEditor: View {
     var body: some View {
         Form {
             WatchTextInput(title: "Exercise", text: $exercise).disabled(busy || unsupportedRecord)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Weight (kg)").font(.caption).foregroundStyle(.secondary)
-                TextField("Weight (kg)", value: $kilograms, format: .number)
-                    .font(.body).accessibilityLabel("Weight in kilograms")
-            }.disabled(busy || unsupportedRecord)
             NavigationLink {
-                WatchCountPicker(title: "Reps", value: $reps, range: 1...1000)
-            } label: { LabeledContent("Reps", value: reps.formatted()) }.disabled(busy || unsupportedRecord)
-            NavigationLink {
-                WatchCountPicker(title: "Sets", value: $sets)
-            } label: { LabeledContent("Sets", value: sets.formatted()) }.disabled(busy || unsupportedRecord)
+                WatchWeightEditor(kilograms: $kilograms)
+            } label: { LabeledContent("Weight", value: "\(kilograms.formatted()) kg") }
+                .disabled(busy || unsupportedRecord)
+            HStack(spacing: 16) {
+                NavigationLink {
+                    WatchCountPicker(title: "Reps", value: $reps, range: 1...1000)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reps").font(.caption).foregroundStyle(.secondary)
+                        Text(reps.formatted()).font(.title3)
+                    }.frame(maxWidth: .infinity, minHeight: 38, alignment: .leading).contentShape(Rectangle())
+                }.accessibilityLabel("Reps").accessibilityValue(reps.formatted())
+                NavigationLink {
+                    WatchCountPicker(title: "Sets", value: $sets)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Sets").font(.caption).foregroundStyle(.secondary)
+                        Text(sets.formatted()).font(.title3)
+                    }.frame(maxWidth: .infinity, minHeight: 38, alignment: .leading).contentShape(Rectangle())
+                }.accessibilityLabel("Sets").accessibilityValue(sets.formatted())
+            }.buttonStyle(.plain).disabled(busy || unsupportedRecord)
             if let failure { Text(failure).font(.caption) }
             Button(busy ? "Saving…" : "Save") { Task { await save() } }
                 .disabled(busy || unsupportedRecord || !value.isValid || !connection.reachable || (!row.isEmpty && id == nil))
@@ -184,6 +192,7 @@ struct WatchFactoryView: View {
     @EnvironmentObject private var connection: WatchConnection
     @State private var projects: [FactoryProject] = []
     @State private var previewProject: FactoryProject?
+    @State private var previewTasks = false
     @State private var error: String?
     @State private var loading = true
     var body: some View {
@@ -194,6 +203,9 @@ struct WatchFactoryView: View {
             ForEach(projects) { project in NavigationLink(project.name) { WatchFactoryTasks(project: project) } }
         }.navigationTitle("Factory").task(id: connection.reachable) { await load() }
         .sheet(item: $previewProject) { project in NavigationStack { WatchFactoryTaskEditor(project: project) {} } }
+        .navigationDestination(isPresented: $previewTasks) {
+            if let project = projects.first { WatchFactoryTasks(project: project) }
+        }
     }
     private func load() async {
         loading = true; error = nil; defer { loading = false }
@@ -201,6 +213,7 @@ struct WatchFactoryView: View {
             projects = try await connection.load(.projects)
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--watch-screen=new-task") { previewProject = projects.first }
+            if ProcessInfo.processInfo.arguments.contains("--watch-screen=project") { previewTasks = true }
             #endif
         }
         catch { self.error = (error as? WatchFailure)?.message ?? "Factory unavailable" }
@@ -215,6 +228,8 @@ struct WatchFactoryTasks: View {
     @State private var loading = true
     var body: some View {
         List {
+            HStack { Spacer(minLength: 0); WatchAddButton(title: "New task") { showCreate = true } }
+                .listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             if loading { ProgressView() }
             if let error { Text(error); Button("Retry") { Task { await load() } } }
             else if !loading && tasks.isEmpty { Text("No tasks") }
@@ -232,11 +247,6 @@ struct WatchFactoryTasks: View {
             }
             if tasks.count == 10 { Text("Latest 10 tasks. Full board on iPhone.").font(.caption2) }
         }.navigationTitle(project.name)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                WatchAddButton(title: "New task") { showCreate = true }
-            }
-        }
         .task(id: connection.reachable) { await load() }.refreshable { await load() }
         .sheet(isPresented: $showCreate) {
             NavigationStack { WatchFactoryTaskEditor(project: project) { Task { await load() } } }
