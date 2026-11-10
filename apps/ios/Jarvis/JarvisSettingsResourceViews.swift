@@ -134,7 +134,7 @@ struct JarvisRoutinesSettingsView: View {
                         identifier: "settings.routine.delete",
                         isDisabled: readOnly || deleting,
                         tint: .red
-                    ) { pendingDeletion = routine }
+                    ) { Task { await delete(routine) } }
                 }
                 .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
             }
@@ -150,20 +150,7 @@ struct JarvisRoutinesSettingsView: View {
         .task {
             if routines.isEmpty { await load() }
         }
-        .confirmationDialog(
-            copy(.routineDeleteConfirm),
-            isPresented: Binding(
-                get: { pendingDeletion != nil },
-                set: { if !$0 { pendingDeletion = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button(copy(.delete), role: .destructive) {
-                guard let pendingDeletion else { return }
-                Task { await delete(pendingDeletion) }
-            }
-            Button(copy(.cancel), role: .cancel) { pendingDeletion = nil }
-        }
+
     }
 
     private func load() async {
@@ -362,7 +349,6 @@ private struct JarvisMemoryEditorView: View {
     @State private var deleting = false
     @State private var error: String?
     @State private var notice: String?
-    @State private var confirmDelete = false
 
     init(
         client: JarvisSettingsClient?,
@@ -416,7 +402,7 @@ private struct JarvisMemoryEditorView: View {
                 title: copy(.delete),
                 isDisabled: readOnly || loading || !loaded || saving || deleting,
                 isDestructive: true
-            ) { confirmDelete = true }
+            ) { Task { await delete() } }
         }
         .navigationTitle(memory.title)
         .navigationBarTitleDisplayMode(.inline)
@@ -427,10 +413,7 @@ private struct JarvisMemoryEditorView: View {
             .sharedBackgroundVisibility(.hidden)
         }
         .task { await load() }
-        .confirmationDialog(copy(.memoryDeleteConfirm), isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button(copy(.delete), role: .destructive) { Task { await delete() } }
-            Button(copy(.cancel), role: .cancel) {}
-        }
+
     }
 
     private var validText: Bool {
