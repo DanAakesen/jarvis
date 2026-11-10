@@ -26,7 +26,7 @@ import { createVisionWatchModule } from './vision/watch.js';
 import { createVoiceRelayModule } from './voice/relay.js';
 import { createProductionModules } from './production-modules.js';
 import { createBackendLogsModule } from './operations/backend-logs.js';
-import { createToolRegistry } from './core/tool-registry.js';
+import { createToolRegistry, isCurrentAssistantTool } from './core/tool-registry.js';
 import { checkAgentContract } from './core/agent-contract.js';
 import { composeHealth } from './health/composition.js';
 import { createMemoryOwnerReminderStore } from './proactive/owner-reminder-store.js';
@@ -179,7 +179,7 @@ describe('production tool catalogue', () => {
     for (const { tools } of rungs) expect(tools.list()).toEqual(registry.list());
     const [initial, fallback] = rungs;
     expect(createRealtimeSessionUpdate(initial!.tools).session.tools.map(({ name }) => name))
-      .toEqual(registry.list().map(({ name }) => name));
+      .toEqual(registry.list().filter(({ name }) => isCurrentAssistantTool(name)).map(({ name }) => name));
     expect(createRealtimeSessionUpdate(
       fallback!.tools, undefined, undefined, 'en', [], undefined, undefined, undefined, 'compact', undefined, 'discovery',
     ).session.tools.map(({ name }) => name))
@@ -270,6 +270,6 @@ describe('production tool catalogue', () => {
 
     expect(registry.list().length).toBeGreaterThan(128);
     expect(registry.list().map(({ name }) => name)).toEqual(expectedNames);
-    expect(createRealtimeSessionUpdate(registry).session.tools.map(({ name }) => name)).toEqual(expectedNames);
+    expect(createRealtimeSessionUpdate(registry).session.tools.map(({ name }) => name)).toEqual(expectedNames.filter(isCurrentAssistantTool));
   });
 });

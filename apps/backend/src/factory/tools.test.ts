@@ -1,3 +1,4 @@
+import { isCurrentAssistantTool } from '../core/tool-registry.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Project, ProjectStore } from './projects.js';
 import { buildApp } from '../app.js';
@@ -266,7 +267,7 @@ describe('Software Factory Jarvis tools', () => {
     const response = await app.inject({ url: '/tools', headers });
     expect(response.statusCode).toBe(200);
     expect(response.json().map(({ name }: { name: string }) => name)).toEqual([
-      ...coreModule.tools.map(({ name }) => name), ...names,
+      ...coreModule.tools.map(({ name }) => name), ...names.filter(isCurrentAssistantTool),
     ]);
     expect(response.json().every(({ inputSchema }: { inputSchema: { type: string } }) =>
       inputSchema.type === 'object')).toBe(true);

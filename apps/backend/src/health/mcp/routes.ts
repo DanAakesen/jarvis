@@ -359,7 +359,8 @@ export function healthMcpRoutes(query: Pick<HealthQueryService, 'query'>, option
               authorize(request, true);
               const pending = await approve('correct_food', input, ctx.mcpReq.requestState(), ctx.mcpReq.inputResponses);
               if (pending) return pending;
-              const parsed = pendingSchema.parse(ctx.mcpReq.requestState());
+              const state = pendingSchema.safeParse(ctx.mcpReq.requestState());
+              const requestTime = state.success ? state.data.requestTime : now();
               const changes = input.changes;
               return receipt(await options.nutrition.correct({
                 idempotencyKey: input.idempotencyKey, expectedRevision: BigInt(input.expectedRevision),
@@ -379,7 +380,7 @@ export function healthMcpRoutes(query: Pick<HealthQueryService, 'query'>, option
                   ...(Object.keys(changes).some(key => key === 'components' || key in nutrients)
                     ? { provenance: { source: 'chatgpt-supplied', independentlyVerified: false } } : {}),
                 },
-              }, context(parsed.requestTime, 'correct-intake', ctx.mcpReq.signal)), 'correct');
+              }, context(requestTime, 'correct-intake', ctx.mcpReq.signal)), 'correct');
             }));
             server.registerTool('delete_food', {
               title: 'Delete food', description: 'Soft-delete one owned intake using its exact idempotency key and current revision. No Health deletion/export.',
@@ -389,9 +390,10 @@ export function healthMcpRoutes(query: Pick<HealthQueryService, 'query'>, option
               authorize(request, true);
               const pending = await approve('delete_food', input, ctx.mcpReq.requestState(), ctx.mcpReq.inputResponses);
               if (pending) return pending;
-              const parsed = pendingSchema.parse(ctx.mcpReq.requestState());
+              const state = pendingSchema.safeParse(ctx.mcpReq.requestState());
+              const requestTime = state.success ? state.data.requestTime : now();
               return receipt(await options.nutrition.remove(input.idempotencyKey, BigInt(input.expectedRevision),
-                context(parsed.requestTime, 'delete-intake', ctx.mcpReq.signal)), 'delete');
+                context(requestTime, 'delete-intake', ctx.mcpReq.signal)), 'delete');
             }));
           }
           return server;

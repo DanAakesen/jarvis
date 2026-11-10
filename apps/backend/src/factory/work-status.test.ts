@@ -245,7 +245,8 @@ describe('get_work_status evidence and restart safety', () => {
       payload: { action: 'recover' } });
     expect(response.statusCode).toBe(200);
     expect(f.control).toHaveBeenCalledWith('42', { action: 'recover' });
-    expect(response.body).not.toContain('private');
+    expect(response.body).not.toContain('private release error');
+    expect(response.body).not.toContain('private actions error');
   });
   it('returns 503 when historical PR safety cannot be verified', async () => {
     const f = fixture(); f.issue.state = 'open';

@@ -2124,7 +2124,7 @@ describe('GitHub vault', () => {
     await expect(tool(health.module, 'vault_write').execute({
       path: 'Personal/health.md', content: 'Diagnosis: sensitive detail.', reason: 'capture',
       automaticCapture: true,
-    }, request, signal())).rejects.toThrow('unless Dan explicitly says “remember”');
+    }, request, signal())).rejects.toThrow('Sensitive details are not saved by automatic capture');
     expect(health.github.calls.some(({ method }) => method === 'PUT')).toBe(false);
 
     const requested = moduleFor({ source: 'Please save my health information.' });

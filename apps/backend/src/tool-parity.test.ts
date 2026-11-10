@@ -1,3 +1,4 @@
+import { isCurrentAssistantTool } from './core/tool-registry.js';
 import { EventEmitter } from 'node:events';
 import type { FastifyRequest } from 'fastify';
 import WebSocket from 'ws';
@@ -262,7 +263,7 @@ describe('voice and chat tool parity', () => {
       discoveredIssueParameters ??= output.result.capabilities.find(({ name }) => name === 'create_issue')?.parameters;
       offset = output.result.nextOffset;
     } while (offset !== null);
-    expect(discovered.sort()).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
+    expect(discovered.sort()).toEqual(f.app.jarvisTools.list().filter(({ name }) => isCurrentAssistantTool(name)).map(({ name }) => name).sort());
     expect(projectSelectorDescription(discoveredIssueParameters)).toContain('Natural references');
 
     await call(VOICE_CAPABILITY_EXECUTION_TOOL, 'advertised',
