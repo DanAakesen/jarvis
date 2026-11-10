@@ -7,18 +7,23 @@
 - [x] Compact only Log lift's minimum input height; preserve Save OCR, text,
   scrolling and shared actions. Correct missing companion setup and independently
   attempt both real URLs, retaining per-attempt evidence and failure status.
+- [x] Repair demonstrated Factory filter, Usage retry and Proactive item
+  accessibility-ID propagation; query Settings' actual selected language button.
 - [ ] Qualify the corrected head on macOS, inspect small-Watch fit/large-text
   reachability and fresh dark composer captures, and resolve any remaining
   loading/chat failures from actual native evidence.
 - [ ] Complete actual WidgetKit warm/cold Tasks/Log lift and physical-device
   acceptance before orchestrator-owned release.
 
-Local checks currently pass: 13 Watch automation tests, 48 targeted Core tests,
-edited Swift syntax and diff checks. These are not native/device acceptance.
+Local checks pass: 354 automation tests, all 703 Core tests including the
+additional loading guard, and 20 targeted loading/design tests; edited Swift
+syntax and diff checks pass. These are not native/device acceptance.
 Source iPhone run 42894768049 remains running without artifacts at inspection;
 no passing native X/removal/loading/chat claim follows. Full evidence and remaining
 limitations are in `docs/ios/design/watch/implementation.md` and
 `docs/agent-context.md`. No general simulator limitation or error-115 fix is proven.
+Workspace revisit still requests an intentionally absent sidebar destination;
+other source loading failures remain unqualified rather than waived.
 
 ## Composer correction and qualification continuation — 10 November 2026 (#1732)
 

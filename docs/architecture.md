@@ -1,5 +1,9 @@
 ## Watch qualification setup (#1735; 10 November 2026)
 
+Loading-screen accessibility groups explicitly contain Factory filter, Usage
+retry and Proactive item children rather than propagating parent identifiers
+onto actions. Data requests, caches and navigation contracts are unchanged.
+
 The Watch remains companion-dependent. Native CI now builds the existing phone
 bridge first, reuses an available Watch/iPhone pair or creates one with an
 unpaired phone, and installs the companion before the Watch. Pair metadata,

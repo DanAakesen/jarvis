@@ -75,7 +75,10 @@ final class SettingsFieldUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["settings.row.appearance"].exists)
         XCTAssertTrue(app.textFields["settings.search"].exists)
         language.tap()
-        XCTAssertTrue(app.staticTexts["English"].waitForExistence(timeout: 2))
+        let english = app.buttons["English"]
+        XCTAssertTrue(english.waitForExistence(timeout: 2))
+        XCTAssertTrue(english.isSelected)
+        XCTAssertTrue(english.isHittable)
         attach(app, "settings-local-language-during-first-load")
     }
 

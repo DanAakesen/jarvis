@@ -62,6 +62,15 @@ passing removal/accessibility/loading/chat result is available. Preserve its
 geometry is not visual acceptance. The orchestrator owns final CI, merge,
 backend and TestFlight. No source PR or live Factory task was changed.
 
+Source loading [run 42874104073](https://github.com/DanAakesen/jarvis/actions/runs/42874104073),
+artifact 13797261356, contains actual hierarchy evidence of parent-ID propagation
+over Factory filters, Usage retry and Proactive item actions. Containing groups
+now preserve those child IDs; the native assertions remain. Settings language
+checks now query the actual selected inline-picker button, also requiring
+hittability. Workspace tests still target an intentionally absent sidebar entry;
+other unroot-caused loading failures remain open. These are source-evidence
+repairs, not passing corrected-head native execution.
+
 ## Native repair qualification — 10 November 2026 (#1730)
 
 Exact #1729 `a39f152` is preserved as an ancestor. Its Watch run **42886195288**

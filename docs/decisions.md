@@ -1,5 +1,13 @@
 ## 10 November 2026 — Diagnose Watch registration without waiving delivery (#1735)
 
+Source loading artifact 13797261356 shows actual controls with overwritten
+identifiers: Factory filter→`factory.segmentRow`, Usage retry→`usage.refreshFailed`,
+and suggestion actions→`proactive.items`. Contain these groups, preserving child
+identities and all native assertions. The Settings language hierarchy exposes a
+selected Button “English”, not StaticText; correct that query and assert selected
+and hittable state. Do not add Workspaces back to the sidebar to satisfy a stale
+test: its exclusion is intentional. Other unexplained loading failures stay open.
+
 Preserve exact #1733 as a merge parent on current main. Artifact 13801702242
 proves generic LaunchServices lookup reports no registered scheme handler,
 despite matching built/installed plist declarations; it does not prove that

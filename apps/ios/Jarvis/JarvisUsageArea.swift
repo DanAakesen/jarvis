@@ -54,6 +54,7 @@ struct JarvisUsageArea: View {
                             reloadToken += 1
                         }
                     }
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("usage.refreshFailed")
                 }
                 content

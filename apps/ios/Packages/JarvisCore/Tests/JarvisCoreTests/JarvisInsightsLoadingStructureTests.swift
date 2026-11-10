@@ -102,4 +102,21 @@ final class JarvisInsightsLoadingStructureTests: XCTestCase {
             XCTAssertTrue(try source(screen).contains("identifier: \"\(identifier)\""), screen)
         }
     }
+
+    func testLoadingGroupsContainRatherThanOverwriteActionIdentifiers() throws {
+        let groups = [
+            ("JarvisFactoryArea", "factory.segmentRow", "factory.filters"),
+            ("JarvisUsageArea", "usage.refreshFailed", "usage.refreshFailed.retry"),
+            ("JarvisProactiveArea", "proactive.items", "proactive.item."),
+        ]
+        for (screen, group, child) in groups {
+            let text = try source(screen)
+            let normalized = text.components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: "\n")
+            XCTAssertTrue(normalized.contains(
+                ".accessibilityElement(children: .contain)\n.accessibilityIdentifier(\"\(group)\")"
+            ), "\(screen) must preserve individual child identifiers")
+            XCTAssertTrue(text.contains(child))
+        }
+    }
 }

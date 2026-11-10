@@ -449,6 +449,17 @@ camera/library, upload retry, account isolation, dictation and voice separately.
 
 ## Watch delivery continuation — 10 November 2026 (#1735)
 
+Source loading run 42874104073's artifact 13797261356 was inspected for its
+actual app hierarchies. FactoryLoading lines 13/29 find the filter under the
+parent `factory.segmentRow`; Insights lines 92/129 similarly show Usage retry
+and all Proactive item buttons with parent IDs. The repaired containing groups
+preserve child IDs, not weaken the tests. Settings line 78 queried StaticText
+although its inline picker renders selected Button “English”; the test now
+checks that button's selected/hittable state. Workspace revisit still requests
+the intentionally excluded `navigation.workspaces`; no production sidebar change
+or timeout workaround was made. Factory/Notes/Health retry and Settings
+memory/root-refresh failures are not yet root-caused or accepted as baseline.
+
 Current work preserves exact #1733 `b14d7556149a90a62b61c1df2e27e6c62394d09d`
 as a merge parent on main `ddc626ff`. Do not modify source PRs, deploy, or call
 live Factory task 24. The 10-point composer X, 20-point background, independent
@@ -478,6 +489,12 @@ Exact-source iPhone 42894768049/job 130104861410 remains in progress with no
 artifacts at inspection. Fresh dark X, off-glyph removal, loading/chat results,
 corrected-head Watch fit/URLs, installed complication taps and device acceptance
 remain open. Do not call the combined release qualified.
+Full automation: 354 passed. Final full Core including the added loading guard:
+703 passed; targeted loading/design tests: 20 passed. Read-only repair review
+found no significant issues. Secret scans
+found no secrets. CodeQL found no Actions/Python alerts; Swift database creation
+failed and JavaScript analysis was skipped for database size. These coverage
+gaps remain, not a clean all-language security claim.
 
 ## iOS loading / Factory integration handoff — 10 November 2026 (#1715)
 

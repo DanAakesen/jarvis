@@ -1,5 +1,10 @@
 ## Small-Watch Log lift fit (#1735; 10 November 2026)
 
+Factory filters, Usage retry and Proactive items retain their individual
+accessibility identities inside containing groups. This changes neither visual
+composition nor loading/retention behavior; native accessibility verification
+remains required.
+
 Exact-head native `small-log-lift-failed.png` shows the intended form with unused
 input space and Save clipped at the bottom. Reduce only Log lift's multiline
 minimum from 90 to 54 points; retain natural unlimited text growth, native
