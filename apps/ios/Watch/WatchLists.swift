@@ -116,7 +116,6 @@ struct WatchLiftEditor: View {
     @State private var submissionID = UUID()
     @State private var busy = false
     @State private var failure: String?
-    @State private var confirmDelete = false
     @State private var initialized = false
     @State private var unsupportedRecord = false
     @State private var previewReps = false
@@ -150,7 +149,7 @@ struct WatchLiftEditor: View {
             if let failure { Text(failure).font(.caption) }
             Button(busy ? "Saving…" : "Save") { Task { await save() } }
                 .disabled(busy || unsupportedRecord || !value.isValid || !connection.reachable || (!row.isEmpty && id == nil))
-            if id != nil { Button("Delete lift", role: .destructive) { confirmDelete = true }.disabled(busy || !connection.reachable) }
+            if id != nil { Button("Delete lift", role: .destructive) { Task { await remove() } }.disabled(busy || !connection.reachable) }
         }.navigationTitle(id == nil ? "New lift" : "Edit lift")
         .onAppear {
             guard !initialized else { return }; initialized = true
@@ -168,9 +167,7 @@ struct WatchLiftEditor: View {
             #endif
         }
         .sheet(isPresented: $previewReps) { NavigationStack { WatchCountPicker(title: "Reps", value: $reps) } }
-        .confirmationDialog("Delete this lift?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { Task { await remove() } }
-        }
+
     }
     private func save() async {
         guard !busy, !unsupportedRecord, value.isValid, connection.reachable else { return }
