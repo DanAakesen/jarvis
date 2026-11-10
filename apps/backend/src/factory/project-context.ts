@@ -171,6 +171,7 @@ export async function resolveProjectForMessage(
   selector: string,
   message: string,
   projectStore: ProjectStore | null,
+  recentOwnerMessages: readonly string[] = [],
 ): Promise<Project> {
   const project = await resolveProject(selector, projectStore);
   const messageName = ` ${normalizedName(message)} `;
@@ -179,7 +180,21 @@ export async function resolveProjectForMessage(
   const selfIntent = project.repo.toLocaleLowerCase('en-US') === JARVIS_REPOSITORY.toLocaleLowerCase('en-US') &&
     /\b(?:your (?:code|repo|repository|source|issues)|yourself|jarvis(?:['’]s)? (?:own )?(?:code|repo|repository|source)|(?:din|dit|dine) (?:kode|repo|repository|kilde|issues)|dig selv)\b/iu
       .test(message);
-  if (!identified && !selfIntent) {
+  let identifiedInContext = false;
+  if (!identified && !selfIntent && recentOwnerMessages.length > 0 && projectStore) {
+    const active = (await projectStore.list()).filter((candidate) => candidate.active);
+    for (const previous of recentOwnerMessages) {
+      const previousName = ` ${normalizedName(previous)} `;
+      const mentioned = active.filter((candidate) =>
+        [candidate.name, candidate.repo].map(normalizedName).filter(Boolean)
+          .some((name) => previousName.includes(` ${name} `)));
+      if (mentioned.length > 0) {
+        identifiedInContext = mentioned.length === 1 && mentioned[0]!.id === project.id;
+        break;
+      }
+    }
+  }
+  if (!identified && !selfIntent && !identifiedInContext) {
     throw new ProjectClarification(
       `Do you mean project "${project.name}" (${project.repo})? No changes were made.`,
       [project],
