@@ -1418,7 +1418,8 @@ class SafeFailureTests(unittest.TestCase):
 
         self.assertIn("if model.shouldShowNowBar {\n                nowBar", screen)
         activity_predicate = model.split("var shouldShowNowBar: Bool", 1)[1].split("var needsYouCount", 1)[0]
-        self.assertIn("activeConfirmation != nil", activity_predicate)
+        self.assertNotIn("activeConfirmation", activity_predicate)
+        self.assertNotIn("approvalBar(", screen)
         self.assertIn("!$0.running.isEmpty", activity_predicate)
         self.assertIn("!$0.items.isEmpty", activity_predicate)
         self.assertNotIn("$0.awayMode", activity_predicate)

@@ -170,15 +170,9 @@ final class JarvisChatModel: ObservableObject {
     var canCancel: Bool { activeMessageID != nil }
     var hasOlderMessages: Bool { historyPaging.nextCursor != nil }
 
-    var activeConfirmation: PendingConfirmation? {
-        nowFeed?.confirmations.first { !locallyResolvedConfirmationIDs.contains($0.id) }
-    }
-
     var shouldShowNowBar: Bool {
         !backgroundPresentation.isEmpty || nowFeed.map {
-            activeConfirmation != nil ||
-                !$0.running.isEmpty ||
-                !$0.items.isEmpty
+            !$0.running.isEmpty || !$0.items.isEmpty
         } == true
     }
 
@@ -189,15 +183,12 @@ final class JarvisChatModel: ObservableObject {
     var needsYouCount: Int {
         guard let nowFeed else { return backgroundPresentation.needsYouCount }
         return backgroundPresentation.needsYouCount
-            + nowFeed.confirmations.filter { !locallyResolvedConfirmationIDs.contains($0.id) }.count + nowFeed.items.filter {
+            + nowFeed.items.filter {
             $0.category == .attention || $0.category == .credential || $0.category == .alert
         }.count
     }
 
     var nowTitle: String {
-        if activeConfirmation != nil {
-            return "Waiting for approval"
-        }
         if let task = nowFeed?.running.first {
             return task.activity.isEmpty ? task.title : task.activity
         }

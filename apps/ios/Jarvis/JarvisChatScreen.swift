@@ -224,10 +224,7 @@ struct JarvisChatScreen: View {
                     pendingActivityTaskID = taskID
                     presentedSheet = nil
                 }
-                    .presentationDetents(
-                        model.nowFeed?.confirmations.contains(where: { $0.actionKind == .calendarChange }) == true
-                            ? [.large] : [.medium, .large]
-                    )
+                    .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
             case .runtimeTest:
@@ -632,9 +629,6 @@ struct JarvisChatScreen: View {
 
     private var composer: some View {
         VStack(spacing: JarvisDesignTokens.chatComposerSpacing) {
-            if let confirmation = model.activeConfirmation {
-                approvalBar(confirmation)
-            }
             if let status = screenShareStatus {
                 Label(status.text, systemImage: status.symbol)
                     .font(.footnote)
@@ -1109,44 +1103,6 @@ struct JarvisChatScreen: View {
             Task { await model.refreshActivity() }
         }
         .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-    }
-
-    private func approvalBar(_ confirmation: PendingConfirmation) -> some View {
-        HStack(spacing: JarvisDesignTokens.chatComposerSpacing) {
-            approvalButton(confirmation, decision: .reject)
-            approvalButton(confirmation, decision: .approve)
-        }
-        .padding(.horizontal, JarvisDesignTokens.chatHorizontalInset)
-    }
-
-    private func approvalButton(
-            _ confirmation: PendingConfirmation,
-            decision: ConfirmationDecision
-    ) -> some View {
-        let isPending = model.isResolving(confirmation, decision: decision)
-        let actionLabel = JarvisApprovalLocalization.string(
-            decision == .approve ? .approve : .decline,
-            language: appLanguage
-        )
-        return JarvisLabelledButton(
-            title: isPending
-                ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
-                : actionLabel,
-            identifier: "now-confirmation-\(decision == .approve ? "approve" : "decline")-\(confirmation.id)",
-            isBusy: isPending,
-            isDisabled: model.fixtureMode || model.isResolving(confirmation),
-            isFullWidth: true,
-            isEmphasised: decision == .approve,
-            hint: model.fixtureMode
-                ? (appLanguage == .da ? "Godkendelse er deaktiveret med eksempeldata." : "Approval actions are disabled with fixture data.")
-                : "",
-            accessibilityTitle: actionLabel,
-            accessibilityValue: isPending
-                ? JarvisApprovalLocalization.string(.sending, language: appLanguage)
-                : ""
-        ) {
-            Task { await model.resolve(confirmation, decision: decision) }
-        }
     }
 
     private func timeString(_ value: String) -> String {
