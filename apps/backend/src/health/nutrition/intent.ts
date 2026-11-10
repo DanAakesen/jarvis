@@ -1,7 +1,7 @@
 import { ToolRefusal } from '../../core/tool-registry.js';
 import { normalizeSearchText, resolveNutrients, text, writeDefinition, type FoodDefinition, type Nutrients } from './model.js';
 
-const command = /^(?:(?:can|could|would)\s+you\s+|kan\s+du\s+)?(?:(?:please|venligst)\s+)?(?:log|record|registrer|registr\u00e9r)\s+(.+?)[.!?]?\s*$/iu;
+const command = /^(?:(?:can|could|would)\s+you\s+|kan\s+du\s+)?(?:(?:please|venligst)\s+)?(?:logge|log|record|registrere|registrer|registr\u00e9r)\s+(.+?)[.!?]?\s*$/iu;
 const uncertain = /\b(?:approx(?:imate(?:ly)?)?|about|roughly|estimate[ds]?|maybe|photo|picture|image|guess|omkring|cirka)\b/iu;
 const qualified = /\b(?:if|unless|when|provided|not|never|don['\u2019]t|instead|but|ikke|aldrig|hvis|men|yesterday|tomorrow|earlier|later|last|next|today|tonight|morgen|tidligere|senere)\b|\bi\s+g\u00e5r\b|\b\d{1,4}[-/]\d{1,2}\b|\b(?:at|kl)\s+\d/iu;
 const quantity = '(\\d{1,5}(?:\\.\\d{1,2})?)';
