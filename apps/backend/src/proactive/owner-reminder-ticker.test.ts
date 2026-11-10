@@ -88,6 +88,17 @@ async function fixture(options: {
 afterEach(async () => { await Promise.all(stoppers.splice(0).map((stop) => stop())); });
 
 describe('owner reminder ticker', () => {
+  it.each(['2026-10-24T20:00:00Z', '2026-10-24T22:00:00Z',
+    '2026-10-25T00:30:00Z', '2026-10-25T01:30:00Z', '2026-10-25T06:00:00Z'])(
+    'processes a one-off at its requested instant, including quiet hours: %s', async (at) => {
+      const f = await fixture({ fireAt: new Date(at) });
+      await Promise.all([f.ticker.tick(), f.ticker.tick()]);
+      await f.ticker.tick();
+      expect(f.send).toHaveBeenCalledOnce();
+      expect(f.send.mock.calls[0]![0]).toMatchObject({ kind: 'owner_reminder', ownerRequested: true });
+      expect(f.schedules.snapshot()[0]).toMatchObject({ state: 'completed', lastDelivery: 'provider_accepted' });
+    });
+
   it('sends an explicit low-priority date-only task reminder independently of proactive preferences', async () => {
     const f = await fixture();
     await f.ticker.tick();
@@ -141,7 +152,7 @@ describe('owner reminder ticker', () => {
     expect(f.updateAutomatic).toHaveBeenCalledWith(automatic.id, {
       state: 'suppressed',
       reason: 'already_alerted',
-    });
+    }, automatic.fireAt);
   });
 
   it('repeats on Copenhagen calendar days and stops once the stable task identity is completed', async () => {
@@ -258,6 +269,32 @@ describe('owner reminder ticker', () => {
     expect(f.send).toHaveBeenCalledOnce();
     expect(f.schedules.snapshot()).toHaveLength(1);
     expect(f.schedules.snapshot()[0]?.state).toBe('completed');
+  });
+
+  it.each([
+    { cadence: 'daily', at: '2026-10-24T20:00:00Z', anchor: '2026-10-24', time: '22:00', next: '2026-10-25T21:00:00Z' },
+    { cadence: 'weekly', at: '2026-10-24T22:00:00Z', anchor: '2026-10-25', time: '00:00', next: '2026-10-31T23:00:00Z' },
+    { cadence: 'daily', at: '2027-03-27T21:00:00Z', anchor: '2027-03-27', time: '22:00', next: '2027-03-28T20:00:00Z' },
+    { cadence: 'weekly', at: '2027-03-27T23:00:00Z', anchor: '2027-03-28', time: '00:00', next: '2027-04-03T22:00:00Z' },
+  ] as const)('delivers $cadence at $time through DST without moving it to morning', async ({ cadence, at, anchor, time, next }) => {
+    const f = await fixture({ fireAt: new Date(at), cadence, anchorDate: anchor, localTime: time });
+    await f.ticker.tick();
+    expect(f.schedules.snapshot()[0]).toMatchObject({ state: 'scheduled', fireAt: new Date(next), localTime: time });
+    f.setNow(new Date(next));
+    await f.ticker.tick();
+    expect(f.send).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not replay a cancelled or expired one-off during quiet hours', async () => {
+    const cancelled = await fixture({ fireAt: new Date('2026-10-24T22:00:00Z') });
+    await cancelled.schedules.cancel(cancelled.schedules.snapshot()[0]!.id);
+    await cancelled.ticker.tick();
+    expect(cancelled.send).not.toHaveBeenCalled();
+    const missed = await fixture({ fireAt: new Date('2026-10-24T22:00:00Z') });
+    missed.setNow(new Date('2026-11-02T23:00:00Z'));
+    await missed.ticker.tick();
+    expect(missed.send).not.toHaveBeenCalled();
+    expect(missed.schedules.snapshot()[0]).toMatchObject({ state: 'suppressed', reason: 'missed_time' });
   });
 
   it('keeps weekly calendar time across the autumn overlap and skips a nonexistent spring occurrence', async () => {

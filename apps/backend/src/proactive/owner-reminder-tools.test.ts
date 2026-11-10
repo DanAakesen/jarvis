@@ -47,6 +47,21 @@ describe('owner-requested reminder tool', () => {
     expect(f.store.snapshot()[0]).toMatchObject({ cadence: null, fireAt: new Date(tomorrowAtTwo) });
   });
 
+  it.each(['2026-10-24T22:00:00+02:00', '2026-10-25T00:00:00+02:00',
+    '2026-10-25T02:30:00+02:00', '2026-10-25T02:30:00+01:00', '2026-10-25T07:00:00+01:00'])(
+    'creates, reschedules and snoozes the exact requested instant %s', async (fireAt) => {
+      const f = fixture();
+      await f.tool.execute({ operation: 'create', task: 'Synthetic task', fireAt },
+        f.request('Remind me at that time', '90'), f.signal);
+      const id = f.store.snapshot()[0]!.id;
+      for (const operation of ['update', 'snooze']) {
+        await f.tool.execute({ operation, id, task: 'Synthetic task', fireAt },
+          f.request('Move it to that time', '91'), f.signal);
+        expect((await f.store.get(id))?.fireAt).toEqual(new Date(fireAt));
+      }
+      expect(f.tool.description).toContain('allowed during 22:00–07:00');
+    });
+
   it('saves a time-only request for today and rejects a past time without moving it to tomorrow', async () => {
     const f = fixture();
     await expect(f.tool.execute({ operation: 'create', task: 'Synthetic task', fireAt: '2026-10-23T15:10:00Z' },
@@ -155,7 +170,7 @@ describe('owner-requested reminder tool', () => {
       expect(f.store.snapshot()).toHaveLength(1);
     });
 
-  it.each(['2026-10-22T12:00:00Z', '2026-10-24T21:00:00Z', '2028-01-01T12:00:00Z'])(
+  it.each(['2026-10-22T12:00:00Z', '2028-01-01T12:00:00Z'])(
     'retains schedule validity checks for %s', async (fireAt) => {
       const f = fixture();
       await expect(f.tool.execute({ operation: 'create', task: 'Synthetic task', fireAt },

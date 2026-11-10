@@ -254,7 +254,7 @@ describe('todo reminder planning', () => {
       now: () => quietNow,
     });
     const dueAt = new Date(quietNow.getTime() + 2 * 60 * 60_000);
-    await planner(context([fact('Synthetic night planning', dueAt.toISOString())], { now: quietNow }));
+    await planner(context([{ ...fact('Synthetic night planning', dueAt.toISOString()), remindAtDue: true }], { now: quietNow }));
     expect(reminders.snapshot().some(({ title }) => title === 'Synthetic old terminal')).toBe(false);
     expect(reminders.snapshot().some(({ title }) => title === 'Synthetic night planning')).toBe(true);
   });
@@ -375,6 +375,7 @@ describe('todo reminder ticker', () => {
 
     const quiet = fixture({ at: localDateTimeInstant('2026-10-20', '22:00') });
     const dueAt = localDateTimeInstant('2026-10-21', '06:30');
+    quiet.setContent(todoText('Synthetic quiet reminder', dueAt));
     await startWith(quiet, [planned('Synthetic quiet reminder', dueAt)]);
     const refresh = vi.mocked(quiet.reminders.earliestPendingFireAt);
     refresh.mockClear();
@@ -382,14 +383,12 @@ describe('todo reminder ticker', () => {
       quiet.setNow(new Date(localDateTimeInstant('2026-10-20', '22:00').getTime() + minute * 60_000));
       await quiet.ticker.tick();
     }
-    expect(refresh).not.toHaveBeenCalled();
-    expect(quiet.reminders.listDue).not.toHaveBeenCalled();
-    expect(quiet.vault.tree).not.toHaveBeenCalled();
-    expect(quiet.pushStore.listSubscriptions).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalled();
+    expect(quiet.reminders.listDue).toHaveBeenCalled();
+    expect(quiet.vault.tree).toHaveBeenCalled();
     expect(quiet.send).not.toHaveBeenCalled();
-    expect(quiet.store.settings.read).not.toHaveBeenCalled();
     expect(quiet.reminders.countSent).not.toHaveBeenCalled();
-    expect(quiet.reminders.updatePending).not.toHaveBeenCalled();
+    expect(quiet.reminders.snapshot().every(({ state }) => state === 'pending')).toBe(true);
   });
 
   it('refreshes the earliest pending time once after processing rows and backs off five minutes on errors', async () => {
@@ -696,6 +695,114 @@ describe('todo reminder ticker', () => {
 
 
 describe('explicit vault reminder timing', () => {
+  it.each(['2026-10-24T20:00:00Z', '2026-10-24T22:00:00Z',
+    '2026-10-25T01:30:00Z', '2026-10-25T06:00:00Z'])(
+    'separates explicit requests from mixed automatic rows at %s', async (at) => {
+      const dueAt = new Date(at);
+      const before = new Date(dueAt.getTime() - 60_000);
+      const test = fixture({ at: before, content: [
+        `${todoText('Explicit request', dueAt)} [reminder:: at_due_time]`,
+        todoText('Automatic deadline', dueAt),
+      ].join('\n') });
+      const explicit = planned('Explicit request', dueAt, {
+        reminderKey: reminderKey('Explicit request', dueAt.toISOString(), true), fireAt: dueAt,
+      });
+      await startWith(test, [explicit, planned('Automatic deadline', dueAt)]);
+      test.setNow(dueAt);
+      await Promise.all([test.ticker.tick(), test.ticker.tick()]);
+      expect(test.send.mock.calls[0]![0]).toMatchObject({ kind: 'owner_reminder', count: 1,
+        ownerRequested: true, details: [{ title: 'Explicit request', dueAt: null }] });
+      const automatic = test.reminders.snapshot().find(({ title }) => title === 'Automatic deadline')!;
+      if (localTimeLabel(dueAt) === '07:00') {
+        expect(test.send).toHaveBeenCalledTimes(2);
+        expect(test.send.mock.calls[1]![0].ownerRequested).toBeUndefined();
+        expect(automatic.state).toBe('sent');
+      } else {
+        expect(test.send).toHaveBeenCalledOnce();
+        expect(automatic.state).toBe('pending');
+      }
+      await test.ticker.tick();
+      expect(test.reminders.snapshot().find(({ title }) => title === 'Explicit request')?.state).toBe('sent');
+    });
+
+  it('holds automatic rows at night when vault verification fails or browser registration is temporarily absent', async () => {
+    const dueAt = localDateTimeInstant('2026-10-24', '23:30');
+    for (const subscribed of [true, false]) {
+      const test = fixture({ at: dueAt, subscriptions: subscribed ? [subscription] : [],
+        content: todoText('Automatic deadline', dueAt) });
+      await startWith(test, [planned('Automatic deadline', dueAt)]);
+      if (subscribed) test.vault.tree.mockRejectedValue(new Error('Synthetic unavailable vault'));
+      for (let i = 0; i < 4; i += 1) {
+        test.setNow(new Date(dueAt.getTime() + i * 5 * 60_000));
+        await test.ticker.tick();
+      }
+      expect(test.send).not.toHaveBeenCalled();
+      expect(test.reminders.snapshot()[0]).toMatchObject({ state: 'pending', verifyAttempts: 0 });
+    }
+  });
+
+  it('claims an explicit pending row once across concurrent ticker instances and duplicate planning', async () => {
+    const dueAt = localDateTimeInstant('2026-10-24', '23:00');
+    const test = fixture({ at: dueAt, content: `${todoText('Explicit request', dueAt)} [reminder:: at_due_time]` });
+    const row = planned('Explicit request', dueAt, {
+      reminderKey: reminderKey('Explicit request', dueAt.toISOString(), true), fireAt: dueAt,
+    });
+    await startWith(test, [row]);
+    await addRows(test.reminders, [row]);
+    const second = createReminderTicker({ store: test.store, reminders: test.reminders,
+      vault: test.vault, pushStore: test.pushStore, ledger: test.ledger,
+      ownerObjectId: OWNER, send: test.send, now: test.now });
+    stopTickers.push(() => second.stop());
+    await second.start();
+    await Promise.all([test.ticker.tick(), second.tick()]);
+    expect(test.send).toHaveBeenCalledOnce();
+    expect(test.reminders.snapshot()).toHaveLength(1);
+    expect(test.reminders.snapshot()[0]).toMatchObject({ state: 'sent' });
+  });
+
+  it('uses a pending-row claim to reject stale completion and preserves terminal rows', async () => {
+    const store = createMemoryProactiveReminderStore();
+    const row = (await addRows(store, [planned('Pending request', NOW)]))[0]!;
+    const lease = new Date(NOW.getTime() + 120_000);
+    expect(await store.updatePending(row.id, { fireAt: lease }, row.fireAt)).toBe(true);
+    expect(await store.updatePending(row.id, { fireAt: lease }, row.fireAt)).toBe(false);
+    expect(await store.updatePending(row.id, { state: 'sent' }, row.fireAt)).toBe(false);
+    expect(await store.updatePending(row.id, { state: 'cancelled' }, lease)).toBe(true);
+    expect(await store.updatePending(row.id, { state: 'sent' }, lease)).toBe(false);
+    await store.plan([planned('Pending request', NOW)], NOW);
+    expect(store.snapshot()).toHaveLength(1);
+    expect(store.snapshot()[0]?.state).toBe('cancelled');
+  });
+
+  it('re-verifies the explicit marker rather than trusting row timestamps, alert keys or source run IDs', async () => {
+    const dueAt = localDateTimeInstant('2026-10-24', '23:00');
+    const test = fixture({ at: dueAt, content: todoText('Changed request', dueAt) });
+    await startWith(test, [planned('Changed request', dueAt, {
+      reminderKey: reminderKey('Changed request', dueAt.toISOString(), true),
+      fireAt: dueAt, deadlineAlertKey: null, plannedRunId: null,
+    })]);
+    await test.ticker.tick();
+    expect(test.send).not.toHaveBeenCalled();
+    expect(test.reminders.snapshot()[0]).toMatchObject({ state: 'cancelled', reason: 'todo_changed' });
+  });
+
+  it('does not let twenty earlier automatic rows hide an explicit reminder at night', async () => {
+    const dueAt = localDateTimeInstant('2026-10-24', '23:00');
+    const test = fixture({ at: dueAt });
+    const automatic = Array.from({ length: 20 }, (_, i) => planned(`Automatic ${i}`, new Date(dueAt.getTime() - 60_000)));
+    const explicit = planned('Explicit request', dueAt, {
+      reminderKey: reminderKey('Explicit request', dueAt.toISOString(), true), fireAt: dueAt,
+    });
+    test.setContent([...automatic.map(({ title, dueAt }) => todoText(title, dueAt)),
+      `${todoText(explicit.title, dueAt)} [reminder:: at_due_time]`].join('\n'));
+    await addRows(test.reminders, automatic, dueAt);
+    await startWith(test, [explicit]);
+    await test.ticker.tick();
+    expect(test.send).toHaveBeenCalledOnce();
+    expect(test.send.mock.calls[0]![0]).toMatchObject({ kind: 'owner_reminder', count: 1 });
+    expect(test.reminders.snapshot().filter(({ state }) => state === 'pending')).toHaveLength(20);
+  });
+
   it('discovers the high-priority vault task, sends at its requested time and cancels a completed task', async () => {
     const dueAt = new Date(NOW.getTime() + 2 * 60 * 60_000);
     const content = `${todoText('Call dentist', dueAt)} [reminder:: at_due_time]`;

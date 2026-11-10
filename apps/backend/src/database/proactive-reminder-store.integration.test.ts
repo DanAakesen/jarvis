@@ -66,6 +66,23 @@ describe('owner-scoped proactive reminder SQL store', () => {
     expect(await createProactiveReminderStore(pool, otherOwner).earliestPendingFireAt()).toBeNull();
   });
 
+  it('atomically fences concurrent delivery claims, isolates owners and rejects stale completion', async () => {
+    const now = new Date('2026-10-20T09:00:00Z');
+    const row = (await store.plan([candidate(42)], now)).inserted[0]!;
+    const other = createProactiveReminderStore(pool, owner);
+    const lease = new Date(now.getTime() + 120_000);
+    expect(await createProactiveReminderStore(pool, otherOwner)
+      .updatePending(row.id, { fireAt: lease }, row.fireAt)).toBe(false);
+    const claims = await Promise.all([store, other].map((worker) =>
+      worker.updatePending(row.id, { fireAt: lease }, row.fireAt)));
+    expect(claims.filter(Boolean)).toHaveLength(1);
+    expect(await store.listDue(now, 100)).toEqual([]);
+    expect(await store.updatePending(row.id, { state: 'sent' }, row.fireAt)).toBe(false);
+    expect(await store.updatePending(row.id, { state: 'cancelled' }, lease)).toBe(true);
+    expect(await other.updatePending(row.id, { state: 'sent' }, lease)).toBe(false);
+    expect((await store.plan([candidate(42)], now)).inserted).toEqual([]);
+  });
+
   it('orders due rows, caps each plan at 20 and pending rows at 100', async () => {
     const firstBatch = await store.plan(Array.from({ length: 25 }, (_, index) =>
       candidate(index + 10, new Date(Date.parse('2026-10-20T10:00:00.000Z') + index * 60_000))),
