@@ -10,6 +10,12 @@ VoiceOver or capture final native screens.
 
 ### Implemented and locally checked
 
+Implementation revision: **`769179353f5cc48d38065faa3ce083128a4067ef`**.
+Read-only review found no significant issues; all 17 changed files passed secret
+scanning. CodeQL on that committed revision reported no Actions/Python alerts;
+Swift database creation failed, so Swift security analysis remains incomplete.
+The subsequent handoff update changes documentation only.
+
 - `JarvisIconButton.isCompact` separates 20-point photo chrome/10-point X from
   the inward 44-point target. Normal glyph/chrome, non-image attachments,
   localized filename labels and disabled/removal behavior are preserved.
@@ -23,6 +29,10 @@ VoiceOver or capture final native screens.
   landscape: x389/y310/w420/h280, resized to 180×120, JPEG quality 90.
   Existing `Synthetic` labels remain. Existing installed `sharp` generated
   the crops; no dependency was added. Missing fixture assets fail explicitly.
+  Verified JPEG metadata and SHA-256: portrait
+  `f4dd2b4d08bda020f15285a0daebd368c5d51e23232df4393e32dfa9bb200aa8`;
+  landscape `45a58d21c22c9ed8ae6686e75782a64f272de53e0592e6020b97a62c80f33938`.
+  This metadata check does not establish final native rendered appearance.
 - `swift test --package-path /home/runner/work/jarvis/jarvis/apps/ios/Packages/JarvisCore -j 2`:
   **702 passed**, including the new compact-chrome source regression.
 - From the repository root,

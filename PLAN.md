@@ -15,7 +15,10 @@ retain their transport status/log and broader LaunchServices diagnostics;
 this is diagnostic coverage, not an error-115 repair.
 
 Local checks: 702 Core tests, 350 automation tests (including 81 pipeline and
-nine Watch guards) passed. Native Swift parsing passed. No Xcode/simulators are
+nine Watch guards) passed. Implementation `7691793` passed focused read-only
+review and secret scanning; CodeQL has no Actions/Python alerts but could not
+create a Swift database. Swift syntax parses with and without DEBUG.
+No Xcode/simulators are
 available here. Parent Watch run 42890925363 is cancelled, not passed; iPhone
 42890925501 is skipped. Final native two-worker execution, dark composer/sent
 captures, VoiceOver, Watch references/interactions and physical-device checks
