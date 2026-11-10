@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+Implemented on fix/watch-startup-connectivity-alert: suppress bootstrap/idle disconnect alerts, guard passive history reads, retain inline history errors and preserve explicit action recovery. Four composer recovery regression scenarios are added. CI/native builds and physical startup/reconnection checks remain unverified until their results are recorded in the PR. Primary owns integration and deployment.
+
 ## Home brief and daily activity implementation — 9 November 2026
 
 Implemented in draft PR #1689 on feature/home-brief-daily-activity. General CI and three native builds passed at the code revision recorded in docs/ios/design/home-brief-activity-handoff.md. Native UI measurements/screenshots remain queued; installed-device checks include HealthKit authorization/no-data ambiguity, midnight/DST, late Watch sync and actual model output in English/Danish. Primary owns integration and deployment. No deployment or owner acceptance is claimed.
@@ -4704,3 +4708,76 @@ explicitly states SecretProperties.value is never returned by that service.
 Project only names/enabled flags, bound pagination to the same vault, and retain
 missing/disabled-key rejection before any APNs configuration write. Six focused
 checks pass; live metadata readback and activation remain pending.
+
+## Generation diagnostics — 9 November 2026
+
+The existing main-only Chat failure diagnostics workflow now accepts the optional
+`generation=true` input. It reads fixed proactive/image failure classifications
+from the backend's last 24 hours and OpenAI-named Key Vault secret metadata via ARM.
+It reads no secret values, prompts, image bytes or model text, performs no writes
+and does not replay jobs. Historical proactive output validation did not retain
+the specific failing field; this inspection must not imply otherwise.
+
+## Image API repair and proactive diagnostics — 9 November 2026
+
+Owner requested replacement of failed subscription-backed image generation with
+the current OpenAI API. Official API documentation lists GPT Image 2.6 Sunburst
+and Flare; the implementation selects Sunburst for detailed mock-ups. The backend
+uses its existing Key Vault identity and private artifact storage, without a
+Factory worker. Required secret defaults to `openai-api-key`; an alternate name
+can be set with `JARVIS_OPENAI_IMAGE_SECRET_NAME`. Azure metadata checks 42681044657 and 42686082051 found no OpenAI-named
+secrets. Live API generation awaits the owner adding `openai-api-key` (or
+identifying an existing key under another name). No new key was created.
+
+The 18:00 proactive message maps to `invalid_model_output`, not an owner approval.
+Historical code collapsed response truncation/refusal, invalid JSON and finding
+validation into the same reason. New content-free diagnostic stages distinguish
+these paths; this does not prove which caused the historical failure or claim it
+is fixed. Chat/voice harness behavior and proactive validation remain unchanged.
+
+Proactive follow-up: reproduced a valid Foundry text response being rejected
+because `tool_calls: null` / `function_call: null` were treated as attempted
+tool execution. Microsoft's 2024-05-01-preview API example explicitly returns
+null tool calls. The repair accepts absent/null/empty tool metadata and still
+rejects actual or malformed tool calls, refusals, incomplete responses and
+invalid findings. Regression tests failed before the fix. This is a confirmed
+compatibility bug, not proof of the historical 18:00 response's contents.
+
+Image timeout follow-up: the agent sent image calls with the ordinary 30-second
+read timeout despite the backend's 270-second generation budget. Two regression
+tests reproduced the default/configured mismatch. Image calls now use the existing
+long-tool setting (320 seconds by default), like web research. This requires
+releasing the Jarvis agent as well as the backend. No total chat deadline is added.
+
+Qualification correction: CI 42682000377 passed 7,421 backend tests and found one
+unregistered-log-event failure. Both new diagnostic events now have explicit
+reason/numeric-field allowlists; stdout and telemetry redaction tests and the
+source-registration check pass locally (239 focused tests). Full agent suite:
+1,319 passed. Final CI 42684036400 and CodeQL 42684036900 passed on
+774b087a, including 7,424 backend tests. An unchanged PC-bridge test hit a
+listener-disposal race on the first attempt and passed on retry. PR #1694 merged
+as 9eb1e87f. Production deployment 42685720635 passed: backend and Jarvis
+agent activation, deterministic readiness and live conversation acceptance.
+No native build is required. Live image generation remains unverified until the credential exists.
+
+
+## Watch Factory/lift follow-up — 10 November 2026
+
+Branch feature/watch-factory-lift-inputs starts from latest main cb360ca7. Implemented: selected-project new-task plus/form, bounded/idempotent Factory submissions through iPhone, reusable typing/dictation fields, reps/sets wheel pickers, preserved form drafts, and correct empty history handling with reconnect reads. Eight focused Core regressions and isolated Watch captures are added; all 555 Core tests, full CI and CodeQL passed at e4a5ab28. Native run 42775120796 attempt 2 passed Watch simulator, physical Watch Release and paired iPhone simulator builds. Four native fixture views were inspected; selected-project capture still shows startup and is not visual proof.
+
+Primary is already integrating steps/startup recovery in #1697. Do not duplicate, merge or deploy that work. This branch has separate edits in WatchContract, WatchChatView and WatchConnection that primary must preserve alongside #1697; no startup recovery code is copied here. Remaining: primary integration with #1697, selected-project visual/device verification, actual typing/dictation/Crown and phone transport acceptance. See docs/ios/design/watch/factory-lift-inputs-handoff-2026-11-10.md. No live task execution is used for testing.
+
+
+## Watch follow-up — 10 November 2026
+
+Implement the approved steps-only rectangular complication on `feature/watch-steps-complication`, based on main cb360ca7. Weekly workout designs are deferred. All 550 Core tests, CI, CodeQL and unsigned Watch simulator/physical Watch Release/paired iPhone builds passed at runtime commit 6490aa2. Final evidence changes add references/docs and correct the picker name/description; fresh checks on that metadata-only follow-up are pending. The startup reconnect alert is already implemented separately in PR #1692 (not merged): exact source 5de65c01 passed 551 Core tests, CI, CodeQL and unsigned Watch simulator/physical architecture/paired iPhone builds. Its broad iPhone suite has six Notes/push-navigation failures; physical Watch acceptance remains open. Primary owns integration and release of both changes.
+
+## Watch combined release — 10 November 2026
+
+Primary integration combines PR #1696 (`afa8f8dc`, approved daily steps) and
+#1692 (`5de65c01`, quiet startup/idle connection recovery) on main `cb360ca7`.
+Combined-source Core/native checks and signing/upload are pending. Existing
+Notes/push-chat iPhone UI failures are documented in the Watch handoff, not
+claimed fixed. Home #1689 and workout design work remain separate. Installed
+Ultra 2 complication, startup, reconnect and active-send/voice checks follow
+TestFlight delivery. See docs/ios/design/watch/steps-reconnect-handoff-2026-11-10.md.

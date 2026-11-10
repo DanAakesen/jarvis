@@ -191,6 +191,22 @@ describe('structured log export', () => {
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
   });
 
+  it.each([
+    { event: 'proactive.model_failed', fields: { reason: 'completion_incomplete', outputTokens: 2048 } },
+    { event: 'image_generation.failed', fields: { reason: 'provider_http_error', status: 429 } },
+  ])('exports only safe generation diagnostics for $event', ({ event, fields }) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.warn({ ...fields, prompt: 'private prompt', content: 'private response', key: 'private credential' }, event);
+    expect(JSON.parse(records[0]!)).toEqual({ level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: event, ...fields });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({ message: event, properties: { service: 'jarvis-backend', ...fields } }));
+    logger.warn({ reason: 'private reason', status: -1, outputTokens: Infinity }, event);
+    expect(JSON.parse(records[1]!)).toEqual({ level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: event });
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it.each(['internal_error', 'hook_failed', 'job_update_failed', 'private-provider-text'])(
     'exports only allowlisted proactive reason codes and run IDs: %s', (reason) => {
       const records: string[] = [];

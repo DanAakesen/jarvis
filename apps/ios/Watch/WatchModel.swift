@@ -14,6 +14,7 @@ final class WatchModel: ObservableObject {
     }
     @Published var busy = false
     @Published var error: String?
+    @Published private(set) var historyError: String?
     @Published var voiceID: UUID?
     @Published var voiceState = ""
     @Published var muted = false
@@ -33,9 +34,12 @@ final class WatchModel: ObservableObject {
         #endif
         connection.onEvent = { [weak self] in self?.receive($0) }
         connection.onDisconnect = { [weak self] in
-            guard let self else { return }
+            guard let self,
+                  self.composer.handleConnectionLoss(
+                    hasInFlightTurn: self.turn != nil, hasVoiceSession: self.voiceID != nil
+                  ) else { return }
             self.stopLocalVoice(state: "Disconnected")
-            self.busy = false; self.turn = nil; self.composer.finishSend(success: false)
+            self.busy = false; self.turn = nil
             self.error = "iPhone unavailable. Reconnect and check history before sending again."
         }
     }
@@ -51,17 +55,21 @@ final class WatchModel: ObservableObject {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
         #endif
-        guard !busy, voiceID == nil else { return }
+        guard !busy, voiceID == nil, connection.reachable else { return }
         let read = UUID(); historyRequest = read
+        historyError = nil
         do {
             let history: [WatchHistoryMessage] = try await connection.load(.history)
             guard read == historyRequest, !busy, voiceID == nil else { return }
             messages = history.map { Message(id: $0.id, user: $0.user, text: $0.text) }
-        } catch { show(error) }
+        } catch {
+            guard read == historyRequest, !busy, voiceID == nil else { return }
+            historyError = (error as? WatchFailure)?.message ?? "History could not refresh. Check Jarvis on your iPhone."
+        }
     }
     func send() async {
         guard !busy, voiceID == nil, let text = composer.beginSend() else { return }
-        historyRequest = UUID()
+        historyRequest = UUID(); historyError = nil
         let request = WatchRequest(action: .sendTurn, text: text)
         busy = true; error = nil; turn = request.id
         let responseID = UUID().uuidString; replyID = responseID
@@ -77,6 +85,7 @@ final class WatchModel: ObservableObject {
     }
     func startVoice() async {
         guard voiceID == nil, !busy else { return }
+        historyRequest = UUID(); historyError = nil
         busy = true; error = nil
         let epoch = UUID(); voiceGeneration = epoch
         defer { busy = false }

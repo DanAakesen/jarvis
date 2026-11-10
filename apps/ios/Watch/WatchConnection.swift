@@ -33,6 +33,9 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     func request(_ request: WatchRequest) async throws -> WatchReply {
         guard reachable else { throw WatchFailure.unavailable }
         guard request.isValid else { throw WatchFailure.invalidRequest }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return try WatchPreview.reply(to: request) }
+        #endif
         guard pending[request.id] == nil else { throw WatchFailure.busy }
         let data = try WatchCodec.encode(WatchWire.request(request))
         return try await withCheckedThrowingContinuation { continuation in
@@ -80,12 +83,13 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         WidgetCenter.shared.reloadAllTimelines()
     }
     private func updateReachability() {
+        let wasReachable = reachable
         reachable = WCSession.default.activationState == .activated && WCSession.default.isReachable
         UserDefaults(suiteName: "group.com.danaakesen.jarvis")?.set(reachable, forKey: "watch.reachable")
         WidgetCenter.shared.reloadAllTimelines()
         if !reachable {
             for id in Array(pending.keys) { complete(id, .failure(WatchFailure.unavailable)) }
-            onDisconnect?()
+            if wasReachable { onDisconnect?() }
         }
     }
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {

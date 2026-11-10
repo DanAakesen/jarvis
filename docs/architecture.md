@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+WatchConnection emits onDisconnect for a reachable-to-unreachable transition while still failing pending requests. WatchModel consults WatchComposer.handleConnectionLoss before presenting interrupted-action feedback. The composer preserves draft/acknowledgement semantics. Passive history reads require reachability, use an independent inline error and discard stale results when a typed/voice action supersedes them. WatchConnectivity wire format, credentials, permissions and infrastructure are unchanged.
+
 ## Home brief and daily activity implementation — 9 November 2026
 
 GET /home/brief is owner-scoped and reuses existing settings, context sources and bounded Foundry JSON completion transport. Context reads coalesce and cache for 60 seconds; evidence/instruction/day/language/model fingerprints cache generation for 15 minutes. Home preferences persist in existing settings and are exposed through get_settings/update_settings. HealthKit cumulative daily statistics carry daily_total provenance; normalized daily rows replace previous coverage and cannot be overwritten by legacy raw sums. Home and Health share JarvisDailyActivitySnapshot and Copenhagen calendar periods.
@@ -6160,44 +6164,36 @@ together with reason `disk_low`; the deployment setting defaults to 1 GiB. The
 runner event, SQL Server integration, and task-detail display are locally covered;
 live Foundry disk measurement remains post-merge.
 
-### P7-15 image generation through the existing Codex login
+### Image generation through the OpenAI Images API
 
-The authenticated Jarvis tool starts one `codex-tool` invocation on the existing
-Foundry runner. The runner checks out no repository, creates an empty temporary
-workspace and Codex home, sends the untrusted prompt as input data to
-`codex exec --skip-git-repo-check -s workspace-write`, and requests the built-in
-`image_generation` feature to write a fixed output file. Its 240-second subprocess
-timeout, bounded output, cancellation, temp cleanup and Codex login are runner
-owned. The model defaults to configurable `JARVIS_CODEX_TOOL_MODEL=gpt-5.5`.
-There is no paid image API or fallback; `Codex usage limit reached` is returned
-visibly, and this allowance is shared with coding tasks.
+The authenticated `image_generation` tool calls `POST https://api.openai.com/v1/images/generations`
+directly from the backend. It no longer starts a Codex/Foundry worker or consumes
+ChatGPT subscription allowance. `JARVIS_IMAGE_MODEL` defaults to
+`gpt-image-2.6-sunburst`; `gpt-image-2.6-flare` is also supported. One request uses
+medium quality, automatic dimensions and PNG output. The existing backend managed
+identity reads `JARVIS_OPENAI_IMAGE_SECRET_NAME` (default `openai-api-key`) from the
+existing Key Vault for each request, allowing rotation without restarting.
+This is separately billed OpenAI API usage; existing Usage tool-call counts are
+not a per-image cost estimate.
 
-The runner accepts only decoded PNG/JPEG images up to 5 MiB, 4096 pixels per
-side and 16 megapixels, then uploads through a runner-role-only backend route
-using a random five-minute one-use key. The backend persists owner, media type
-and size in `dbo.workspace_artifacts` and stores bytes under a UUID path in the
-existing private `artifacts` container. Blob upload is removed if metadata
-insertion fails. The temporary output workspace is deleted after the invocation.
-No generated image prompt or signed URL is written to the durable tool audit;
-only a validated artifact ID is retained to render the image in conversation
-history.
+The response is bounded, its base64 must be canonical, and Sharp fully decodes
+one PNG before storage (5 MiB, 4096 pixels per side, 16 megapixels maximum).
+Original PNG bytes, including provenance metadata, are retained. The existing
+private Blob/SQL artifact store, owner checks, one-use upload registrations,
+workspace display and conversation artifact references are unchanged. The legacy
+runner upload route remains compatible with already-running invocations, but no
+new image requests are routed to that worker.
 
-Status reads are polled to terminal state with a 270-second job bound; only
-transient status reads get at most two retries. Generation itself is never
-retried. Failure, timeout and cancellation remain non-success outcomes. To view
-an artifact, the authenticated owner reads its metadata and receives an
-HTTPS-only, read-only, one-hour user-delegation SAS. The SAS is not persisted;
-the typed `image` workspace view and conversation preview use it only for
-display. Usage shows UTC daily per-tool invocation counts from `tool_calls`,
-including recorded `ok`, `refused` and `error` outcomes; this is not a measure
-of ChatGPT quota consumption or a per-image charge.
-
-Codex CLI 0.157.1 and ChatGPT login/model compatibility were verified locally by
-Dan on 5 October 2026; offline tests cover the runner, backend, Blob/SQL fakes,
-workspace contract and browser preview. Live hosted Codex generation, Azure
-role assignment, Blob upload and deployed rendering remain unverified. Video
-generation is deferred separately. Artifact retention is unresolved and no
-automatic deletion is implemented.
+The tool propagates cancellation and retains its 270-second generation bound.
+The agent uses the existing long-tool HTTP read timeout (default 320 seconds)
+rather than the ordinary 30-second tool timeout, so the transport can wait for
+normal image completion.
+There is no automatic retry of a paid or uncertain request. Credential, HTTP,
+transport and malformed-image errors are classified without logging prompts,
+keys or provider bodies. If saving succeeded but display failed, the error gives
+the saved artifact ID rather than claiming no image exists. Only successful
+artifact references enter the durable tool audit; signed URLs are not persisted.
+Live API access and deployed image display remain pending qualification.
 
 ### P9-66 conversation attachments
 
@@ -9384,3 +9380,15 @@ recovery for inspection. Final inventory/evidence and source cleanup are pending
 Read-only readiness 42646690853 confirmed production APNs and all delivery flags
 remain configured on ready revision `0000568` after the final Factory cutover.
 This configuration check did not send a push notification.
+
+
+## Watch Factory creation and input boundary — 10 November 2026
+
+An additive createFactoryTask action carries the existing FactoryTaskSubmission through the paired allow-list. Watch binds the selected project and request UUID to the payload submission ID, caps request text at 8 KB and retains identities for unchanged/revisited drafts. The phone checks that the project exists, calls the existing authenticated Factory client and returns a compact task receipt. Existing backend submission idempotency and phone reply caching remain in use; no new endpoint, credential, policy, infrastructure or automatic retry.
+
+WatchTextInput uses native SwiftUI text editing and WatchKit system text input for mic entry. Dedicated native pickers own reps/sets bindings. Read history accepts the actual empty status and distinguishes health-source unavailability from transport loss. The additive action/failure require the updated paired iPhone/Watch bundle for full behavior; old peers fail visibly. DEBUG WatchPreview handles fixture calls in memory before any WatchConnectivity send; it never starts a live Factory task.
+
+
+## Watch steps rendering — 10 November 2026
+
+`WatchStepsPlot` in JarvisCore projects the existing bounded 24-hour cumulative snapshot and positive daily goal onto a shared scale with headroom. `WatchStepsChart` draws the chart and gradient stems in SwiftUI Canvas. No new transport, persistence, HealthKit query, credential, entitlement or backend boundary. Existing snapshot freshness and midnight expiry remain authoritative. The separate startup-alert recovery patch is PR #1692, not a dependency of chart rendering.

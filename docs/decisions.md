@@ -1,3 +1,15 @@
+## Watch startup connection feedback — 9 November 2026
+
+An initial unreachable WCSession callback is connection status, not evidence that a send failed. Reserve interrupted-action alerts for actual active interactions. Keep passive history errors inline and discard obsolete read results. Preserve pending drafts, acknowledgement boundaries and manual recovery; do not add an offline queue or automatic resend.
+
+## 2026-11-10 — Simplify the Watch rectangular complication
+
+The owner approved the amber vertical-stem steps concept after rejecting small text on the Ultra 2. Show only the large daily step count, full-width cumulative chart and dashed daily-goal reference; remove all other visible labels and metrics. Preserve missing data and actual hourly coverage. Weekly workout designs are deferred. Startup reconnect recovery remains separate in PR #1692; neither change is merged or deployed by this secondary thread. The actual shared view was inspected in an isolated Ultra-family Health preview; installed watch-face rendering and physical acceptance remain unverified.
+
+## 2026-11-10 — Watch task creation and native form inputs
+
+The owner requests a Factory plus after project selection, typing/dictation for every free-text field, dictatable exercise and swipe/Crown reps/sets. Extend the old read-only Factory boundary for explicit task creation only, via the existing authenticated iPhone Factory client and idempotent submission contract. Replace oversized steppers with native pickers and treat valid empty health history as empty rather than disconnected. Preserve the primary's separate #1697 startup/steps integration. Secondary tests use isolated fixtures and never execute live Factory work. Implementation/CI/device acceptance are distinct; all 555 Core tests, CI, CodeQL and all three unsigned native builds passed at e4a5ab28. Four native views were inspected; selected-project visual verification and real device interaction remain open.
+
 ## 9 November 2026 — Configurable Home brief and independent daily activity
 
 The owner requests a model-generated, evidence-grounded Home brief with an editable instruction and 1–6 visible lines (default 3). Consolidate identity, general/personality, presence-mode and Home editors in one Instructions destination while preserving separate scopes and stored values; expose the same preferences through web and existing settings tools. Home guidance must not become ordinary chat instructions.
@@ -12387,3 +12399,42 @@ No temporary compatibility setting was shipped. VM retirement remains proven by
 Factory is ready for the owner's fresh coding-task acceptance, which is distinct
 from these zero-model-call canaries. Preserve the accepted 300-core quota and
 owner/project admission limits; no 100-worker test or extra quota is authorized.
+
+## Generation diagnostics — 9 November 2026
+
+The existing main-only Chat failure diagnostics workflow now accepts the optional
+`generation=true` input. It reads fixed proactive/image failure classifications
+from the backend's last 24 hours and OpenAI-named Key Vault secret metadata via ARM.
+It reads no secret values, prompts, image bytes or model text, performs no writes
+and does not replay jobs. Historical proactive output validation did not retain
+the specific failing field; this inspection must not imply otherwise.
+
+## Image API repair and proactive diagnostics — 9 November 2026
+
+Owner requested replacement of failed subscription-backed image generation with
+the current OpenAI API. Official API documentation lists GPT Image 2.6 Sunburst
+and Flare; the implementation selects Sunburst for detailed mock-ups. The backend
+uses its existing Key Vault identity and private artifact storage, without a
+Factory worker. Required secret defaults to `openai-api-key`; an alternate name
+can be set with `JARVIS_OPENAI_IMAGE_SECRET_NAME`. Credential presence and live
+API generation have not yet been verified. No new key is created by this change.
+
+The 18:00 proactive message maps to `invalid_model_output`, not an owner approval.
+Historical code collapsed response truncation/refusal, invalid JSON and finding
+validation into the same reason. New content-free diagnostic stages distinguish
+these paths; this does not prove which caused the historical failure or claim it
+is fixed. Chat/voice harness behavior and proactive validation remain unchanged.
+
+Proactive follow-up: reproduced a valid Foundry text response being rejected
+because `tool_calls: null` / `function_call: null` were treated as attempted
+tool execution. Microsoft's 2024-05-01-preview API example explicitly returns
+null tool calls. The repair accepts absent/null/empty tool metadata and still
+rejects actual or malformed tool calls, refusals, incomplete responses and
+invalid findings. Regression tests failed before the fix. This is a confirmed
+compatibility bug, not proof of the historical 18:00 response's contents.
+
+Image timeout follow-up: the agent sent image calls with the ordinary 30-second
+read timeout despite the backend's 270-second generation budget. Two regression
+tests reproduced the default/configured mismatch. Image calls now use the existing
+long-tool setting (320 seconds by default), like web research. This requires
+releasing the Jarvis agent as well as the backend. No total chat deadline is added.

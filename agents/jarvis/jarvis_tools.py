@@ -888,7 +888,7 @@ class BackendToolClient:
                 "health_nutrition_history", "health_coach_status",
             }:
                 read_timeout = FOOD_REVIEW_TIMEOUT_SECONDS
-            elif name == "web_research":
+            elif name in {"web_research", "image_generation"}:
                 read_timeout = self._settings.long_tool_timeout_seconds
             else:
                 read_timeout = self._settings.tool_timeout_seconds

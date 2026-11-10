@@ -27,14 +27,8 @@ function appFor(artifacts: WorkspaceArtifactStore) {
     return { objectId: ownerId, tenantId: config.auth.tenantId, displayName: 'Dan' };
   };
   const module = createImageGenerationModule({
-    runner: {
-      startCodexTool: vi.fn(),
-      status: vi.fn(),
-      cancel: vi.fn(),
-      deleteSession: vi.fn(),
-    },
+    generator: { generate: vi.fn() },
     artifacts,
-    model: 'gpt-5.5',
   });
   const app = buildApp(config, undefined, { auth, modules: [module] });
   appInstances.push(app);
@@ -154,25 +148,8 @@ describe('image artifact routes', () => {
       upload: vi.fn(),
       readUrl: vi.fn(async () => 'https://jarvisstore.blob.core.windows.net/artifacts/image.png?sp=r&spr=https'),
     } as unknown as WorkspaceArtifactStore;
-    const runner = {
-      startCodexTool: vi.fn(async () => ({
-        invocationId: 'image-invocation', sessionId: 'image-session', status: 'queued', agent: 'codex',
-      })),
-      status: vi.fn(async () => ({
-        invocationId: 'image-invocation',
-        sessionId: 'image-session',
-        status: 'completed',
-        agent: 'codex',
-        startedAt: 0,
-        finishedAt: 1,
-        events: [],
-        result: { artifact_id: artifactId, content_type: 'image/png', size_bytes: 100 },
-        error: null,
-      })),
-      cancel: vi.fn(async () => ({ status: 'cancelled' })),
-      deleteSession: vi.fn(async () => {}),
-    };
-    const imageModule = createImageGenerationModule({ runner, artifacts, model: 'gpt-5.5', wait: async () => {} });
+    const generator = { generate: vi.fn(async () => ({ contentType: 'image/png' as const, bytes: Buffer.from('image') })) };
+    const imageModule = createImageGenerationModule({ generator, artifacts });
     const workspaceCommands = {
       isConnected: vi.fn(() => true),
       execute: vi.fn(async () => {}),

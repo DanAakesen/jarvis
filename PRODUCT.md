@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+Ordinary Watch startup, foreground connection warm-up and passive history refresh must not display an interrupted-send alert. Show connection/history status inline. Actual user-action failures and interrupted active chat/voice still report errors; preserve unsent drafts and never automatically resend an accepted request.
+
 ## Home brief and daily activity implementation — 9 November 2026
 
 Home briefs are grounded in available calendar/tasks and optional nutrition/weather context, generated through the existing model infrastructure. The owner edits Home instructions and a 1–6 visible-line limit (default 3) in the canonical Instructions destination. All-day Active kcal uses merged HealthKit activeEnergyBurned; exercise minutes uses appleExerciseTime. Workout counts remain separate.
@@ -1687,11 +1691,11 @@ Dan accepted four additions after reviewing the supplied video transcript:
 - **Web research:** search and retrieve sources, synthesise findings with links
   and supply results to existing dynamic-view consumers through Dan's existing
   ChatGPT/Codex subscription. Bing grounding and pay-per-call search are excluded.
-- **Image generation:** generate images with Dan's ChatGPT/Codex subscription
-  through the existing hosted runner, expose truthful job outcomes, and save
-  private workspace artifacts for chat and workspace display. Usage is shared
-  with coding tasks; no pay-per-image API or fallback is allowed. Video is
-  deferred indefinitely to a separate issue. Artifact retention remains open.
+- **Image generation:** generate images through the OpenAI Images API using GPT
+  Image 2.6 Sunburst by default, expose truthful outcomes, and save private
+  workspace artifacts for chat and workspace display. The backend calls the API
+  directly; this uses separate OpenAI API billing, not coding-task allowance.
+  Video is deferred; artifact retention remains open.
 - **Editable personality:** persist Dan's tone/response-style preferences and
   custom instructions, applying the same configuration to new chat and voice
   sessions. Keep the current butler default until changed; personality does not
@@ -1701,7 +1705,7 @@ Dan accepted four additions after reviewing the supplied video transcript:
 Tasks: P7-14–P7-16, P7-40 and the P8-19 Personality settings UI. P7-14, P7-16,
 P7-40 and P8-19 are implemented and tested offline; live Azure/Codex behavior and
 vault access remain unverified. P7-15 image generation is implemented offline with
-live subscription and Blob acceptance pending; video is deferred and artifact
+live OpenAI credential, model access and Blob acceptance pending; video is deferred and artifact
 retention remains open.
 The existing Microsoft-first service and cost constraints remain in force.
 
@@ -2736,3 +2740,15 @@ Target the owner's Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as wa
 ## Intelligent proactive notifications — 9 November 2026
 
 The owner approves connecting cross-app context, computing facts from saved data/goals, and using the existing model to select and write useful notifications. Health/training, nutrition, notes, memory and ordinary task commitments join existing proactive sources. Notifications show actual useful details to the sole owner. No shadow mode, added delivery-policy stage or feedback-learning feature is required. Existing preferences, pause, quiet hours, budget, source evidence/schema checks and receipts remain. Normal model insights can notify through iPhone APNs or browser fallback, and Check now can exercise that path. New context is read-only and cannot create automatic tasks. This extends earlier deadline-only push scope for normal informational insights, without activating unrelated Daily coaching/writers. See [implementation/handoff](docs/research/intelligent-proactive-notifications.md).
+
+
+## Watch Factory creation and lift input — 10 November 2026
+
+The owner now authorizes creating a Factory task from the selected Watch project through a plus action. This supersedes the read-only Factory scope for creation only; task controls, recovery, policy changes, merge and deployment controls remain absent. Title and request support native typing/dictation; project selection is retained and agent defaults to that project. Explicit Start task submits through the authenticated paired phone and existing Factory API. No automatic sends, offline queue or live Factory test execution.
+
+Every Watch free-text field, including exercise name and chat draft, supports typing and an explicit system mic entry point. Numeric/type selectors remain native. Reps and sets use bounded 1–1,000 reps / 1–100 sets swipe/Crown pickers rather than oversized steppers. Valid empty lift/workout histories show empty states, not a false phone-connection error.
+
+
+## Watch steps complication — 10 November 2026
+
+The owner approved the amber vertical-stem steps design (second concept in the final steps exploration). The rectangular complication shows only a large daily step count and a full-width cumulative steps chart with a dashed goal reference. Remove the target text, time labels, calorie footer and weekly workout column. Small complications stay unchanged. Weekly workout concepts are deferred, not approved for implementation.

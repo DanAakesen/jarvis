@@ -13,7 +13,12 @@ struct WatchChatView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
-                        if !connection.reachable { Text("iPhone unavailable").foregroundStyle(.secondary) }
+                        if !connection.reachable {
+                            Text("iPhone unavailable").foregroundStyle(.secondary)
+                        } else if let error = model.historyError {
+                            Text(error).font(.caption).foregroundStyle(.secondary)
+                                .accessibilityIdentifier("watch.history.error")
+                        }
                         ForEach(model.messages) { message in
                             HStack {
                                 if message.user { Spacer(minLength: 12) }
@@ -42,11 +47,7 @@ struct WatchChatView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Jarvis").navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $editingDraft) {
-            VStack {
-                TextField("Message", text: $model.draft)
-                    .accessibilityLabel("Message draft")
-                Button("Done") { editingDraft = false }
-            }.navigationTitle("Message")
+            NavigationStack { WatchTextEditor(title: "Message", text: $model.draft) }
         }
          .task {
             beginPendingDictation()
