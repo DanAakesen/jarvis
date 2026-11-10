@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { backendFetch } from './backend-request';
-import { Loader } from './Loader';
-import { Modal } from './Modal';
 import { StateMessage } from './StateMessage';
 import { formatDateTime } from './format/date-time';
 
@@ -81,7 +79,6 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
   const [busy, setBusy] = useState<'' | 'saving' | 'forgetting'>('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
-  const [confirmForget, setConfirmForget] = useState(false);
   const [reload, setReload] = useState(0);
 
   const call = useCallback(async (path: string, init?: { method: 'PATCH' | 'DELETE'; body?: unknown }) => {
@@ -177,11 +174,11 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
     try {
       const response = await call(`/memory/${encodeURIComponent(current.id)}`, { method: 'DELETE' });
       if (response.status === 202) {
-        setNotice('Approval pending in Jarvis: approve the request in the conversation to delete this note from your vault.');
+        setNotice('The deletion request is pending. Refresh to check its result.');
       } else if (response.status === 409) {
-        throw new Error('Jarvis is away, so it cannot ask for approval in the browser. Switch to Present and try again.');
+        throw new Error('The memory changed or could not be deleted. Refresh and try again.');
       } else if (response.status === 503) {
-        throw new Error('Approval in the browser is unavailable right now, so nothing was deleted. Try again shortly.');
+        throw new Error('Memory deletion is unavailable right now. Try again shortly.');
       } else if (response.ok) {
         setList((items) => items.status === 'ready' ? { status: 'ready', value: items.value.filter((item) => item.id !== current.id) } : items);
         setSelectedId(null);
@@ -194,7 +191,6 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
       setError(reason instanceof Error ? reason.message : 'Jarvis could not forget this memory. Try again.');
     } finally {
       setBusy('');
-      setConfirmForget(false);
     }
   }
 
@@ -250,22 +246,12 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
                     <div className="memory-actions">
                       <button className="primary-button" type="button" disabled={busy !== '' || redacted || !draft.trim() || draft.trim() === current.text.trim()}
                         onClick={() => { void saveCorrection(); }}>{busy === 'saving' ? 'Saving…' : 'Save correction'}</button>
-                      <button className="secondary-button danger-button" type="button" disabled={busy !== ''} onClick={() => setConfirmForget(true)}>Forget…</button>
+                      <button className="secondary-button danger-button" type="button" disabled={busy !== ''} onClick={() => { void forget(); }}>Forget</button>
                       <span className="memory-item-meta">{draft.length} / 2,000</span>
                     </div>
                     {notice && <p className="settings-feedback" role="status">{notice}</p>}
                     {error && <p className="settings-validation-error" role="alert">{error}</p>}
-                    {confirmForget && <Modal title="Forget this memory?" titleId={`${ids}-forget`} busy={busy !== ''}
-                      onClose={() => setConfirmForget(false)}
-                      footer={<div className="task-dialog-actions button-group">
-                        <button className="secondary-button" type="button" disabled={busy !== ''} onClick={() => setConfirmForget(false)}>Keep it</button>
-                        <button className="primary-button danger-button danger-button--filled memory-forget-confirm" type="button" disabled={busy !== ''} aria-busy={busy === 'forgetting' || undefined} aria-label={busy === 'forgetting' ? 'Forgetting…' : undefined} onClick={() => { void forget(); }}>
-                          <span className="button-label">Forget memory</span>
-                          {busy === 'forgetting' && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Forgetting…" /></span>}
-                        </button>
-                      </div>}>
-                      <p>Jarvis forgets it straight away; it cannot be restored.</p>
-                    </Modal>}
+
                   </>
                 )}
               </div>
