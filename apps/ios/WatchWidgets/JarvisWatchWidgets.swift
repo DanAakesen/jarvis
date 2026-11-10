@@ -23,7 +23,7 @@ struct JarvisWatchHealthWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.health", provider: WatchProvider()) { entry in
             WatchHealthView(entry: entry).privacySensitive().containerBackground(.black, for: .widget).widgetURL(URL(string: "jarvis-watch://health"))
-        }.configurationDisplayName("Daily and weekly health").description("Steps, workouts and active calories from iPhone.")
+        }.configurationDisplayName("Daily steps").description("Daily steps and progress toward your goal from iPhone.")
             .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
     }
 }

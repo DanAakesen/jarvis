@@ -1,6 +1,6 @@
 ## 2026-11-10 — Simplify the Watch rectangular complication
 
-The owner approved the amber vertical-stem steps concept after rejecting small text on the Ultra 2. Show only the large daily step count, full-width cumulative chart and dashed daily-goal reference; remove all other visible labels and metrics. Preserve missing data and actual hourly coverage. Weekly workout designs are deferred. Startup reconnect recovery remains separate in PR #1692; neither change is merged or deployed by this secondary thread. Native rendering and physical acceptance remain unverified.
+The owner approved the amber vertical-stem steps concept after rejecting small text on the Ultra 2. Show only the large daily step count, full-width cumulative chart and dashed daily-goal reference; remove all other visible labels and metrics. Preserve missing data and actual hourly coverage. Weekly workout designs are deferred. Startup reconnect recovery remains separate in PR #1692; neither change is merged or deployed by this secondary thread. The actual shared view was inspected in an isolated Ultra-family Health preview; installed watch-face rendering and physical acceptance remain unverified.
 
 ## 2026-11-09 — Execute resolved owner requests directly
 
