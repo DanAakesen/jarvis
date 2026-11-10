@@ -1054,6 +1054,25 @@ describe('conversation routes', () => {
       expect(classifierSignal?.aborted).toBe(true);
     });
 
+    it('continues through the normal agent when reflex marks an action for confirmation', async () => {
+      const store = storeFixture();
+      const chatAgent = { stream: vi.fn(async function* () { yield 'I will handle it.'; }) };
+      const reflexClassifier: ReflexClassifier = {
+        classify: vi.fn(async () => ({
+          addressed: true, intent: 'action' as const, confidence: 0.99,
+          needsConfirmation: true, completeCommand: true, target: null,
+        })),
+      };
+      const app = createApp(store, { conversationAgent: chatAgent, reflexClassifier });
+      const response = await app.inject({
+        method: 'POST', url: '/conversation/sessions/41/turns', headers,
+        payload: { text: 'Please handle this.' },
+      });
+      expect(response.body).toContain('I will handle it.');
+      expect(response.body).not.toContain('confirmation_required');
+      expect(chatAgent.stream).toHaveBeenCalledOnce();
+    });
+
     it('keeps the agent reply when reflex classification fails', async () => {
       const store = storeFixture();
       const chatAgent = { stream: vi.fn(async function* () { yield 'Hello'; }) };
