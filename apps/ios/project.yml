@@ -112,6 +112,7 @@ targets:
       # Exercise the production URLSession adapter, including real AsyncBytes,
       # from the native test runner with a synthetic URLProtocol.
       - path: Jarvis/URLSessionTransport.swift
+      - path: Jarvis/JarvisChatPhotoLoader.swift
     dependencies:
       - target: Jarvis
       - package: JarvisCore

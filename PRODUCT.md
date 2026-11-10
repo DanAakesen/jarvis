@@ -1,3 +1,12 @@
+## Chat follow-latest (#1707; 10 November 2026)
+
+Normal and test chat should follow live tools, progress and replies while the
+owner is at or near the latest content. Keep the latest row above the actual
+composer/Now dock, including viewport and text-size changes. Pause during user
+scrolling and text selection; returning to the latest content resumes following.
+Keep tool activity in the transcript and retain transparent, floating controls.
+Native simulator and physical-iPhone acceptance remain pending.
+
 ## Direct owner requests — 10 November 2026
 
 A clear, authenticated owner instruction authorizes the requested operation without a second yes. Ask only for details needed to identify the intended action or target. Keep device and all-device sign-out confirmations. Treat credentials as non-storable and distinguish requested sensitive saves from automatic capture.
@@ -317,6 +326,15 @@ Frost the background behind both speakers' chat bubbles like the Plus menu,
 retaining sharp text, translucency, existing layout and the desktop top-edge fade.
 
 ## iPhone Chat screen (P15-10; owner-approved concept, 30 October 2026)
+
+Photo previews (#1712, approved 10 November 2026) apply to all chat image
+attachments, including camera and library inputs. Pending photos appear inside
+the composer above the editable draft, with filename-labelled removal controls.
+Sent photos sit below the user text, aligned right; existing image-only history
+renders without an empty text bubble. Multiple images and mixed files remain
+supported; text is still required to send. Available saved photos reload through
+owner-authorized attachments; unavailable photos show a labelled retry fallback.
+No upload, retention, dictation, voice or live-follow policy changes are intended.
 
 P15-41 / #1484 requires reliable sidebar and bottom-control input across repeated
 screen changes, sheets, keyboard use, and full-screen/minimized voice sessions.

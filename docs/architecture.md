@@ -1,3 +1,31 @@
+## Combined chat/loading delivery (#1726; 10 November 2026)
+
+The direct-main integration retains the existing boundaries: `JarvisChatModel`
+owns independent, request-guarded Now/feed and background-job refresh alongside
+sent attachment metadata; `JarvisChatFollowLatest` owns viewport-local following;
+photo previews obtain owner-authorized short-lived read URLs through
+`JarvisChatClient` and download without API credentials or persistent caching.
+Factory task history, HTTP pagination and SSE replay remain main's implementation.
+No new API, storage, authorization or deployment boundary is introduced.
+
+## Native chat follow ownership (#1707; 10 November 2026)
+
+`JarvisChatFollowLatest` owns viewport-local following for normal chat and the
+isolated test sheet. SwiftUI scroll geometry observes content/container sizes and
+safe-area insets; scroll phases distinguish user navigation from content growth.
+`ChatFollowState` keeps intent sticky across layout changes, pauses during
+interaction/selected replies and resumes within 44 points of the bottom after
+user scrolling. `JarvisSelectableReply` reports native selection lifetime for
+saved/live replies and plain user text; streaming replacements preserve a still
+matching selection. Plain user text remains literal and short bubbles fit text.
+No chat model, attachment, transport contract or server boundary changes.
+
+The #1718 integration reads the system Reduce Motion preference without trying
+to write its read-only environment key. The screen's explicit fixture override
+only adds reduced motion; continuous layout following uses a nonanimated
+transaction in either mode. Photo and follow fixtures can run together without
+replacing photo history or prematurely completing the held stream.
+
 ## Direct owner requests — 10 November 2026
 
 Owner tool operations execute a resolved request under the existing authenticated route and resource authorization. Same-session owner messages may resolve a recent project for a follow-up; external content is never authority. Resource revisions, secret checks and duplicate/uncertain-write recovery remain separate from interactive approval. Legacy confirmation endpoints remain for compatibility but are not advertised to normal chat or voice.
@@ -1842,6 +1870,20 @@ payloads were checked against `apps/web/src/conversation-history.ts`,
 no contract gap requiring backend work was found.
 
 ### iOS Chat screen (P15-10)
+
+Photo previews (#1712) resolve fresh read capabilities using the existing
+authenticated, owner-scoped `GET /conversation/attachments/:id/url` path.
+`JarvisChatClient.attachmentURL` validates attachment IDs and HTTPS Azure Blob
+origins. `JarvisChatPhotoLoader` downloads without API credentials, cookies,
+redirects or persistent caching; it bounds response bytes and cancels abandoned
+transfers. An ImageIO actor decodes orientation-correct, bounded thumbnails from
+pending or downloaded bytes without changing the upload. Decoded images belong
+only to their mounted preview; no attachment URL or photo is written to the
+repository cache. The existing session-epoch screen identity discards preview
+state on account changes. Backend ownership checks and retention remain authoritative.
+Accepted outgoing messages retain attachment metadata until final history
+replaces it. A failed/expired read or failed decode renders a filename-accessible
+fallback; retry obtains a fresh capability rather than reusing a signed URL.
 
 P15-38 centralizes native backdrop rendering in `JarvisDesignSystem.swift`:
 The reconciled implementation reuses main's `JarvisScreenBackground`, already

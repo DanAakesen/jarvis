@@ -747,11 +747,13 @@ class SafeFailureTests(unittest.TestCase):
         self.assertEqual(scheme_evidence["with"]["path"], "${{ runner.temp }}/ios-scheme.xcresult")
         self.assertEqual(scheme_evidence["with"]["retention-days"], 14)
 
-    def test_ios_loading_regressions_are_selected_for_native_execution(self):
+    def test_ios_loading_and_chat_regressions_are_selected_for_native_execution(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         capture = next(step for step in workflow["jobs"]["macos"]["steps"]
                        if step.get("name") == "Boot iPhone Simulator and capture screenshots")
         cases = {
+            "ChatComposerUITests": [],
+            "ChatPhotoLoaderTests": [],
             "FactoryTaskDetailUITests": [],
             "FactoryLoadingUITests": [],
             "WorkspacesLoadingUITests": [],
@@ -924,6 +926,15 @@ xcrun() {
         self.assertNotIn("showsSidebarToolbarButton", chat)
         tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
         self.assertEqual(tests.count("assertDestinationMenuWorks()"), 5)
+
+    def test_ios_chat_reads_reduce_motion_without_writing_read_only_environment(self):
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn(r"@Environment(\.accessibilityReduceMotion)", chat)
+        self.assertIn("systemReduceMotion ||", chat)
+        self.assertNotRegex(chat, r"\.environment\(\s*\\\.accessibilityReduceMotion\s*,")
+        follow = (ROOT / "apps/ios/Jarvis/JarvisChatFollowLatest.swift").read_text()
+        self.assertIn("Transaction(animation: nil)", follow)
+        self.assertIn("transaction.disablesAnimations = true", follow)
 
     def test_ios_sign_in_preserves_shell_and_sign_out_resets_shared_navigation(self):
         root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()

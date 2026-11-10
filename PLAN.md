@@ -1,3 +1,26 @@
+## Direct-main chat/loading integration — 10 November 2026 (#1726)
+
+Merged approved chat head `1f154ca3973b2ac5d0c1d80f08ee60872ae6fec9`
+into current main `ddc626ff60a78580059a8376fa0e658703cf3545` on delivery
+PR #1727. Merge `e6329ee063f80452ee8ebabb2ffea7f4820dee8e` retains both
+histories. All three documentation conflicts retain both entries; the model
+automatically combines loading refresh guards with photo metadata and previews.
+Every main native selection remains, alongside `ChatPhotoLoaderTests`.
+The selection regression now requires chat/photo and loading/Factory together.
+
+This supersedes the older child/stacked delivery directions below: #1727 targets
+main directly. Source PRs and live Factory task 24 remain untouched.
+Local combined-tree checks pass: 611 Core, 341 script, 322 backend attachment/
+Factory and 138 web chat tests; Core build, web typecheck/scoped lint and changed
+Swift syntax parsing pass. Independent integration review found no significant
+issues. Secret scans pass; CodeQL found no Actions/Python alerts, but Swift
+database creation failed and JavaScript analysis was skipped for database size.
+Next: exact-head CI/Simulator evidence. #1727's draft
+gate skipped both workflows and its generated title failed the title check;
+use `fix-main: Integrate approved chat with current iOS loading` and run both
+workflows after readiness. Native captures, device acceptance and release remain
+unqualified; see the current handoff in `docs/agent-context.md`.
+
 ## iOS loading / Factory child integration — 10 November 2026 (#1715)
 
 Integrated #1704 head `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9` into the
@@ -21,6 +44,44 @@ Next: exact-final-head CI/native qualification and screenshot inspection, using
 the #1715 handoff in `docs/agent-context.md`. The four Today line-limit failures
 reproduce on native-equivalent main; Factory timeouts are not established
 baseline. No tests were waived, and native acceptance/release remains pending.
+
+## iOS chat integration — 10 November 2026 (#1718)
+
+Merged #1713 head `6d035394` into the child of #1714 head `08b0e9ab`,
+retaining both histories and features. Removed the unsupported write to the
+read-only Reduce Motion environment value. Combined native fixtures now retain
+photo history and hold tool-only streaming open; a regression covers photos,
+mixed files, removal, keyboard/composer growth, failures and the final reply.
+Local checks pass: 579 Core, 80 backend attachment/conversation, 138 web chat and
+26 iOS source-contract tests; changed native Swift parses successfully.
+Next: exact-final-head macOS build/tests and capture inspection using
+`docs/agent-context.md`, then orchestrator integration with #1715/#1716.
+Native/device acceptance, Swift security analysis and release are not claimed.
+
+## iOS chat photo previews — 10 November 2026 (#1712)
+
+Implemented composer and sent/history photo previews using the approved reference
+and owner-authorized attachment read URLs. Text-required send eligibility, files,
+upload bytes, dictation/voice, refresh and scrolling policies remain unchanged.
+Local qualification: 573 JarvisCore tests and 80 backend attachment/conversation
+tests pass; changed native Swift sources pass syntax parsing. Native loader and
+composer regression cases, including retained screenshot attachments, are added
+to the existing Simulator selection. Next: execute and inspect those captures on
+macOS, exercise library/camera hardware, Dynamic Type and VoiceOver, and integrate
+with #1713/#1707 and #1704. Linux has no Xcode/simulator; native build, captures,
+device acceptance, integration and release remain outstanding and primary-owned.
+## Chat follow-latest — 10 November 2026 (#1707)
+
+Implemented shared geometry-driven following for normal and isolated native
+chat, with user-scroll/selection protection and deterministic tool-only fixtures.
+Local checks: 574 JarvisCore tests, 138 web chat tests, web TypeScript/scoped
+ESLint, Swift syntax parsing and diff checks pass. The web tool-only failure was
+not reproduced in its component fixture; retain its existing observers.
+Next/blocker: macOS simulator compilation, before/after reproduction, dock
+geometry and interaction captures, Now visibility transitions, reduced motion,
+Dynamic Type, link/selection checks and physical-iPhone validation. Do not mark
+native acceptance complete. Orchestrator owns integration and release; preserve
+#1712/#1714 photo changes and #1704's chat-model refresh fixes.
 
 ## Explicit reminder quiet-hours repair — 10 November 2026 (#1706)
 

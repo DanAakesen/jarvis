@@ -1,3 +1,20 @@
+## 10 November 2026 — Deliver existing chat integration directly to main (#1726)
+
+Use main `ddc626ff60a78580059a8376fa0e658703cf3545` plus complete #1719 head
+`1f154ca3973b2ac5d0c1d80f08ee60872ae6fec9`, retaining both histories and both
+implementations rather than restarting either feature. Delivery #1727 targets
+main; older child/stacked target instructions below are historical. Source PRs,
+Factory task 24 and release remain unchanged.
+
+Preserve the automatically combined chat model: main's independent Now/jobs
+refresh and stale-response guards coexist with photo metadata and owner-scoped
+read URLs. Keep shared design, selection-aware layout following and the approved
+#1712 reference. Retain every main loading/Factory native selection and the chat/
+photo suites, including `ChatPhotoLoaderTests`; enforce their coexistence in the
+existing workflow regression. Preserve both sides of documentation conflicts.
+Native acceptance requires a run of the combined final tree, not inherited
+green source checks or skipped draft runs.
+
 ## 10 November 2026 — Integrate loading and Factory details in a child (#1715)
 
 Retain #1704's app-wide static structure, retained refresh and context/account
@@ -45,6 +62,73 @@ coverage warning until HTTP pagination reaches the end, preserving older pages.
 Batch replay in groups of at most 100, yield between groups, and refresh task
 status once at `ready`, not once for every replayed state change. Keep live
 delivery immediate and retain validated short batches on connection failure.
+
+## 10 November 2026 — Integrate chat features on the photo child (#1718)
+
+Keep #1714 as the delivery PR and merge #1713 into its existing child #1719,
+preserving both source histories. Source heads were unchanged at `08b0e9ab` and
+`6d035394`; latest main `741e0378` is already an ancestor. No source PR is merged,
+closed or retargeted.
+
+Remove the unsupported `.environment` write: Apple's
+[Reduce Motion value](https://developer.apple.com/documentation/swiftui/environmentvalues/accessibilityreducemotion)
+is get-only. Keep the system preference and additive fixture override for screen
+motion, and nonanimated layout following. This matches
+[HIG Motion](https://developer.apple.com/design/human-interface-guidelines/motion):
+motion is purposeful and optional, never the only way to expose activity.
+Official indexed excerpts were read; direct Apple retrieval failed DNS.
+
+#1715/#1716 owns the independent loading/Factory delivery. A non-mutating trial
+merge with its `0c6f242c` head combined `JarvisChatModel` automatically; preserve
+its `activityRefreshID`, independent feed/jobs refresh and retained error/data
+state alongside this branch's attachment metadata and photo loader. Only the
+decision log conflicted in that trial. Repeat against both latest heads before
+release; a trial merge is not native execution or final integration acceptance.
+
+## 10 November 2026 — Native chat photo previews (#1712)
+
+Implement approved design 1 with existing shared composer controls, a removable
+compact thumbnail, and right-aligned sent photos below user text. Fit sent images;
+crop only the compact visual thumbnail, never the uploaded source. Keep
+non-image file labels and existing text-required sending.
+
+Reuse owner-scoped attachment authorization and short-lived private Blob URLs,
+not public links, an additional backend endpoint or a persistent image cache.
+Download without forwarding API credentials and reject redirects. Decode bounded,
+orientation-correct thumbnails off the main actor. Preserve per-item filename
+accessibility, shared loading, and explicit unavailable/retry presentation.
+
+The supplied generated reference was inspected. Apple documentation access was
+blocked; indexed official excerpts were reviewed for SwiftUI `scaledToFit`,
+ImageIO thumbnail creation/orientation, URLSession `AsyncBytes.task`, and HIG
+Accessibility (links and actual checks in `docs/agent-context.md`). This is not a
+full-page Apple review or native visual acceptance.
+
+Inspected #1704 at `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9`: its
+`activityRefreshID` and independent Now/jobs refresh fixes are outside these
+edits. #1707/#1713 owns live-follow/layout handling; this change adds attachment
+subviews without modifying transcript follow triggers or composer controls.
+Primary retains integration and release; simulator/device acceptance is pending.
+## 10 November 2026 — Follow chat layout, not only reply events (#1707)
+
+Use the existing safe-area dock plus native scroll geometry/phase observation;
+do not estimate dock height or move progress into Now. Scope the default bottom
+anchor to initial positioning so content-size changes do not override a history
+reader. Coalesce follow requests, cancel superseded work and recheck interaction,
+selection and foreground state before scrolling. Leave `JarvisChatModel` untouched
+to avoid overlap with #1704 and #1712; screen edits cover follow wiring, a dock
+accessibility identifier and shared selection-aware text rendering. Preserve
+literal user text, Markdown replies and short-bubble sizing.
+
+Apple guidance consulted through indexed documentation (direct page retrieval
+was blocked): [onScrollGeometryChange](https://developer.apple.com/documentation/swiftui/view/onscrollgeometrychange(for:of:action:))
+observes transformed geometry, [ScrollPhase](https://developer.apple.com/documentation/swiftui/scrollphase)
+distinguishes tracking/interaction/deceleration from programmatic animation, and
+[defaultScrollAnchor](https://developer.apple.com/documentation/swiftui/view/defaultscrollanchor(_:))
+can otherwise affect content-size repositioning as well as startup.
+[HIG Layout](https://developer.apple.com/design/human-interface-guidelines/layout)
+requires unobscured safe-area content and adaptation to text-size changes.
+Native reproduction/captures are not claimed on the Linux runner.
 
 ## 10 November 2026 — Explicit timed reminders bypass quiet hours (#1706)
 

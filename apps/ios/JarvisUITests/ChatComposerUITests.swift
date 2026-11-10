@@ -1,8 +1,268 @@
 import XCTest
+import CoreFoundation
 
 final class ChatComposerUITests: XCTestCase {
+    func testPhotoThumbnailsRemoveOnlyTheChosenItemAndPreserveDraft() {
+        let app = launch(language: "en", extraArguments: ["--ui-test-chat-photos"])
+        defer { app.terminate() }
+        let input = app.textViews["chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        let removePortrait = app.buttons["Remove Synthetic portrait.jpg"]
+        let removeLandscape = app.buttons["Remove Synthetic landscape.jpg"]
+        XCTAssertTrue(removeLandscape.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.images["Synthetic landscape.jpg"].waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(removeLandscape.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(removeLandscape.frame.height, 44)
+        removeLandscape.tap()
+        XCTAssertFalse(removeLandscape.exists)
+        XCTAssertTrue(removePortrait.exists)
+        XCTAssertTrue(app.buttons["Remove Synthetic notes.txt"].exists)
+        XCTAssertEqual(input.value as? String, "Synthetic photo draft")
+        removePortrait.tap()
+        app.buttons["Remove Synthetic notes.txt"].tap()
+        XCTAssertEqual(input.value as? String, "Synthetic photo draft")
+        XCTAssertTrue(app.buttons["chat.send"].isEnabled)
+        capturePhotos(app, name: "photo-removal-preserves-editable-draft")
+    }
+
+    func testPhotosRenderBelowSentTextAndReloadWithUnavailableHistoryFallback() {
+        let app = launch(language: "en", extraArguments: ["--ui-test-chat-photos"])
+        defer { app.terminate() }
+        XCTAssertTrue(app.textViews["chat.input"].waitForExistence(timeout: 10))
+        let retry = app.buttons["Retry"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 5), "Expired photo-only history must offer a fallback.")
+        retry.tap()
+        XCTAssertTrue(app.staticTexts["Photo unavailable"].waitForExistence(timeout: 5))
+        capturePhotos(app, name: "photo-only-history-unavailable-and-pending-thumbnails")
+        app.buttons["chat.send"].tap()
+        XCTAssertTrue(app.textViews["chat.reply.45"].waitForExistence(timeout: 10))
+        let image = app.images["Synthetic landscape.jpg"]
+        XCTAssertTrue(image.waitForExistence(timeout: 5))
+        let bubble = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label == %@", "You: Synthetic photo draft")
+        ).firstMatch
+        let transcript = app.scrollViews["chat.transcript"]
+        transcript.swipeDown()
+        XCTAssertTrue(bubble.exists)
+        XCTAssertGreaterThan(image.frame.minY, bubble.frame.maxY)
+        XCTAssertLessThanOrEqual(image.frame.maxX, transcript.frame.maxX)
+        XCTAssertTrue(app.staticTexts["Synthetic notes.txt"].exists)
+        XCTAssertFalse(app.buttons["Remove Synthetic landscape.jpg"].exists)
+        capturePhotos(app, name: "sent-text-multiple-photos-and-file")
+        // A new launch loads saved fixture history, including an available portrait and an expired image.
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["Retry"].waitForExistence(timeout: 10))
+        app.scrollViews["chat.transcript"].swipeDown()
+        XCTAssertTrue(app.images["Synthetic saved portrait.jpg"].waitForExistence(timeout: 5))
+        capturePhotos(app, name: "reloaded-photo-only-history")
+    }
+
+    private func capturePhotos(_ app: XCUIApplication, name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    func testPhotosAndToolOnlyUpdatesShareTheChangingDock() {
+        let app = followApp(showsNow: true)
+        app.launchArguments += ["--ui-test-chat-photos", "--ui-test-chat-follow-reduced-motion"]
+        app.launch()
+        defer { app.terminate() }
+        let input = app.textViews["chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.images["Synthetic saved portrait.jpg"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Retry"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.images["Synthetic landscape.jpg"].waitForExistence(timeout: 5))
+        captureFollow(app, "integrated-photo-history-and-pending-thumbnails")
+        app.buttons["Remove Synthetic landscape.jpg"].tap()
+        XCTAssertTrue(app.buttons["Remove Synthetic portrait.jpg"].exists)
+        XCTAssertTrue(app.buttons["Remove Synthetic notes.txt"].exists)
+        XCTAssertEqual(input.value as? String, "Synthetic photo draft")
+        app.buttons["chat.send"].tap()
+        XCTAssertTrue(app.buttons["chat.turn.status"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.images["Synthetic portrait.jpg"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Synthetic notes.txt"].exists)
+        XCTAssertFalse(app.buttons["Remove Synthetic portrait.jpg"].exists)
+        XCTAssertFalse(app.textViews["chat.reply.45"].exists, "The combined fixture must hold the turn open")
+
+        signalFollowFixture("tools")
+        let group = app.buttons["chat.live.toolGroup.\(followToolID(7))"]
+        assertAboveDock(group, app: app)
+        XCTAssertFalse(app.textViews["chat.reply.streaming"].exists)
+        input.tap()
+        input.typeText("A retained draft that wraps while photo previews and tool-only updates share the composer dock.")
+        assertAboveDock(group, app: app)
+        captureFollow(app, "integrated-photos-tool-only-keyboard-multiline-reduced-motion")
+        group.tap()
+        let lastCall = app.descendants(matching: .any)["chat.live.toolCall.\(followToolID(9))"]
+        signalFollowFixture("fail-tool")
+        let failed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS 'Failed'"), object: lastCall)
+        XCTAssertEqual(XCTWaiter.wait(for: [failed], timeout: 5), .completed)
+        assertAboveDock(lastCall, app: app)
+        signalFollowFixture("finish")
+        XCTAssertTrue(app.textViews["chat.reply.45"].waitForExistence(timeout: 8))
+        assertAboveDock(app.buttons["chat.tools.45"], app: app)
+        XCTAssertTrue(app.images["Synthetic portrait.jpg"].exists)
+        XCTAssertTrue(app.staticTexts["Synthetic notes.txt"].exists)
+        captureFollow(app, "integrated-photos-final-reply")
+    }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
+    }
+
+    func testToolOnlyUpdatesFollowAboveDockWithAndWithoutNow() {
+        for showsNow in [false, true] {
+            let app = followApp(showsNow: showsNow)
+            app.launch()
+            let input = app.textViews["chat.input"]
+            XCTAssertTrue(input.waitForExistence(timeout: 10))
+            input.tap()
+            input.typeText("?")
+            app.buttons["chat.send"].tap()
+            XCTAssertTrue(app.buttons["chat.turn.status"].waitForExistence(timeout: 5))
+            let shortBubble = app.descendants(matching: .any).matching(NSPredicate(
+                format: "identifier == %@ AND label == %@", "chat.message.user", "You: ?"
+            )).firstMatch
+            XCTAssertTrue(shortBubble.exists)
+            XCTAssertLessThan(shortBubble.frame.width, 120, "Native selection must retain content-fit user bubbles")
+            XCTAssertEqual(app.buttons["chat.now"].exists, showsNow)
+
+            signalFollowFixture("tools")
+            let group = app.buttons["chat.live.toolGroup.\(followToolID(7))"]
+            assertAboveDock(group, app: app)
+            XCTAssertTrue(group.label.contains("repo list ×3"))
+            XCTAssertFalse(app.textViews["chat.reply.streaming"].exists, "Tools must follow without reply deltas")
+            captureFollow(app, "tool-only-follow-now-\(showsNow)-keyboard")
+            group.tap()
+            let lastCall = app.descendants(matching: .any)["chat.live.toolCall.\(followToolID(9))"]
+            assertAboveDock(lastCall, app: app)
+            signalFollowFixture("fail-tool")
+            let failed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS 'Failed'"), object: lastCall)
+            XCTAssertEqual(XCTWaiter.wait(for: [failed], timeout: 5), .completed)
+            assertAboveDock(lastCall, app: app)
+            captureFollow(app, "expanded-tool-failure-now-\(showsNow)")
+            group.tap()
+            assertAboveDock(group, app: app)
+
+            input.tap()
+            input.typeText("Keep this draft as the composer grows over several wrapped lines without sending it. Keep typing a little more.")
+            assertAboveDock(group, app: app)
+            input.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 40))
+            assertAboveDock(group, app: app)
+            signalFollowFixture("tools")
+            let nextGroup = app.buttons["chat.live.toolGroup.\(followToolID(16))"]
+            assertAboveDock(nextGroup, app: app)
+            captureFollow(app, "tool-only-follow-multiline-now-\(showsNow)")
+            signalFollowFixture("finish")
+            let reply = app.textViews["chat.reply.45"]
+            XCTAssertTrue(reply.waitForExistence(timeout: 8))
+            assertAboveDock(app.buttons["chat.tools.45"], app: app)
+            XCTAssertTrue(reply.isHittable)
+            captureFollow(app, "final-reply-follow-now-\(showsNow)")
+            app.terminate()
+        }
+    }
+
+    func testToolUpdatesDoNotPullHistoryReaderAndResumeAtBottom() {
+        let app = followApp(showsNow: true)
+        app.launchArguments += ["--ui-test-chat-follow-reduced-motion",
+                                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"]
+        app.launch()
+        defer { app.terminate() }
+        let input = app.textViews["chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("Run the synthetic tool checks")
+        app.buttons["chat.send"].tap()
+        XCTAssertTrue(app.buttons["chat.turn.status"].waitForExistence(timeout: 5))
+        signalFollowFixture("tools")
+        assertAboveDock(app.buttons["chat.live.toolGroup.\(followToolID(7))"], app: app)
+        let transcript = app.scrollViews["chat.transcript"]
+        transcript.swipeDown()
+        transcript.swipeDown()
+        let older = transcript.textViews.matching(NSPredicate(format: "identifier BEGINSWITH 'chat.reply.'")).allElementsBoundByIndex
+            .first { $0.isHittable && $0.frame.minY > transcript.frame.minY }
+        XCTAssertNotNil(older)
+        guard let older else { return }
+        let previousY = older.frame.minY
+        signalFollowFixture("tools")
+        let nextGroup = app.buttons["chat.live.toolGroup.\(followToolID(16))"]
+        XCTAssertTrue(nextGroup.waitForExistence(timeout: 5))
+        XCTAssertEqual(older.frame.minY, previousY, accuracy: 3, "Tool-only layout must not move an older-history reader")
+        captureFollow(app, "reading-history-during-tool-only-updates-accessibility-reduced-motion")
+
+        for _ in 0..<12 {
+            if nextGroup.isHittable { break }
+            transcript.swipeUp()
+        }
+        assertAboveDock(nextGroup, app: app)
+        signalFollowFixture("tools")
+        assertAboveDock(app.buttons["chat.live.toolGroup.\(followToolID(25))"], app: app)
+        captureFollow(app, "follow-resumed-accessibility-reduced-motion")
+    }
+
+    func testReplySelectionSurvivesToolOnlyGrowthAtLatest() {
+        let app = followApp(showsNow: true)
+        app.launch()
+        defer { app.terminate() }
+        let input = app.textViews["chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("Run the synthetic tool checks")
+        app.buttons["chat.send"].tap()
+        XCTAssertTrue(app.buttons["chat.turn.status"].waitForExistence(timeout: 5))
+        signalFollowFixture("stream")
+        let reply = app.textViews["chat.reply.streaming"]
+        assertAboveDock(reply, app: app)
+        reply.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0))
+            .withOffset(CGVector(dx: 0, dy: 12)).press(forDuration: 1.2)
+        XCTAssertTrue(app.menuItems["Copy"].waitForExistence(timeout: 5))
+        let previousY = reply.frame.minY
+        signalFollowFixture("stream")
+        signalFollowFixture("tools")
+        XCTAssertTrue(app.buttons["chat.live.toolGroup.\(followToolID(7))"].waitForExistence(timeout: 5))
+        XCTAssertEqual(reply.frame.minY, previousY, accuracy: 3, "Live work must not move selected text")
+        XCTAssertTrue(app.menuItems["Copy"].exists)
+        captureFollow(app, "selection-held-during-tool-only-growth")
+    }
+
+    private func followApp(showsNow: Bool) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--screenshot-chat-fixture", "--ui-test-chat-feedback", "--ui-test-chat-follow",
+                               "-jarvis.appLanguage", "en", "-jarvis.appTheme", "dark"]
+        if showsNow { app.launchArguments.append("--ui-test-chat-follow-now") }
+        return app
+    }
+
+    private func followToolID(_ index: Int) -> String {
+        String(format: "00000000-0000-4000-8000-%012d", index)
+    }
+
+    private func signalFollowFixture(_ action: String) {
+        CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(rawValue: "com.jarvis.uitests.\(action)-chat-feedback" as CFString), nil, nil, true)
+    }
+
+    private func assertAboveDock(_ element: XCUIElement, app: XCUIApplication,
+                                 file: StaticString = #filePath, line: UInt = #line) {
+        let dock = app.descendants(matching: .any)["chat.dock"]
+        let visible = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            element.exists && dock.exists && element.isHittable &&
+                element.frame.maxY <= dock.frame.minY + 1 &&
+                element.frame.minY >= app.scrollViews["chat.transcript"].frame.minY
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [visible], timeout: 8), .completed,
+                       "Latest activity must be above the actual dock edge", file: file, line: line)
+    }
+
+    private func captureFollow(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "chat-follow-\(name)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testRuntimeTestKeepsNormalDraftAndHistorySeparate() {
@@ -34,7 +294,7 @@ final class ChatComposerUITests: XCTestCase {
         testInput.tap()
         testInput.typeText("Synthetic test message")
         app.buttons["runtimeTest.send"].tap()
-        XCTAssertTrue(app.staticTexts["runtimeTest.acknowledgment"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.textViews["runtimeTest.acknowledgment"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any)["runtimeTest.tool.00000000-0000-4000-8000-000000000001"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["runtimeTest.progress"].exists)
         let progressCapture = XCTAttachment(screenshot: app.screenshot())
