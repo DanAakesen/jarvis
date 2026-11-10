@@ -29,7 +29,7 @@ function registeredProject(overrides: Partial<Project> = {}): Project {
 }
 
 describe('project awareness', () => {
-  it('names the Jarvis repository, lists added projects and requires confirmation before adding', () => {
+  it('names the Jarvis repository, lists added projects and acts on a request to add', () => {
     const text = projectAwarenessInstructions([
       { id: '2', name: 'jarvis', repo: 'DanAakesen/jarvis' },
       { id: '1', name: 'jarvis-test-target', repo: 'DanAakesen/jarvis-test-target' },
@@ -44,7 +44,7 @@ describe('project awareness', () => {
     expect(text).toContain('I found a bug in my code');
     expect(text).toContain('Jeg fandt en fejl i min kode');
     expect(text).toContain('- jarvis-test-target (DanAakesen/jarvis-test-target, project ID 1)');
-    expect(text).toContain('ask him to confirm before adding it');
+    expect(text).toContain('add it without a second approval');
     expect(text).toContain('do not add it again');
     expect(text).toContain('"Mener du projekt X?"');
     expect(text).toContain('Do not use create_task for code changes.');
