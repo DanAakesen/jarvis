@@ -6,6 +6,8 @@ export type SystemPushKind = 'alert' | 'due_soon' | 'overdue' | 'mixed' | 'owner
 
 export interface SystemPushRequest {
   kind: SystemPushKind;
+  /** Set only after server-side verification of an explicit timed reminder. */
+  ownerRequested?: true;
   count: number;
   language: 'da' | 'en';
   itemId: string;
@@ -213,7 +215,9 @@ export function createSystemPushSender(dependencies: {
     };
 
     if (signal.aborted) return outcome('skipped', 'aborted');
-    if (isQuietHour(now())) return outcome('skipped', 'quiet_hours');
+    const explicitReminder = request.ownerRequested === true && request.kind === 'owner_reminder' &&
+      request.origin === 'proactive_reminder' && request.count === 1;
+    if (isQuietHour(now()) && !explicitReminder) return outcome('skipped', 'quiet_hours');
     try {
       const native = await dependencies.nativeSend?.(request, signal);
       if (native) return outcome(native.status, native.reason, native.attempted, native.accepted, native.statusCode);

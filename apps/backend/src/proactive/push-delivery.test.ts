@@ -2,7 +2,7 @@ import { createECDH } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { PushStore, StoredPushSubscription } from '../database/push-store.js';
 import { encryptWebPushPayload, generateVapidKeyPair, sendWebPush, type VapidKeyPair, type WebPushResult } from '../push/webpush.js';
-import { buildPushPayload, createSystemPushSender } from './push-delivery.js';
+import { buildPushPayload, createSystemPushSender, type SystemPushRequest } from './push-delivery.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const itemId = '22222222-2222-4222-8222-222222222222';
@@ -226,6 +226,38 @@ describe('shared proactive push delivery', () => {
     expect(result.status).toBe(throws ? 'failed' : 'sent');
     expect(JSON.stringify({ result, logs: [logger.info.mock.calls, logger.warn.mock.calls],
       writes: [fixture.result.mock.calls, fixture.remove.mock.calls] })).not.toContain(canary);
+  });
+
+  it.each(['2026-10-24T20:00:00Z', '2026-10-24T22:00:00Z',
+    '2026-10-25T00:30:00Z', '2026-10-25T01:30:00Z', '2026-10-25T06:00:00Z'])(
+    'allows only verified individual owner reminders to reach Web Push at %s', async (at) => {
+      const fixture = storeFixture([subscription('one')]);
+      const send = vi.fn(async (_subscription: StoredPushSubscription, _payload: Buffer) => ({ attempted: 1, accepted: true, statusCode: 201, removed: false }));
+      const sender = createSystemPushSender({ store: fixture.store, ownerObjectId: owner,
+        publicOrigin: 'https://jarvis.example', now: () => new Date(at), send });
+      const explicit: SystemPushRequest = { ...request, kind: 'owner_reminder',
+        ownerRequested: true, count: 1, origin: 'proactive_reminder' };
+      await expect(sender(explicit, new AbortController().signal)).resolves.toMatchObject({ status: 'sent', accepted: 1 });
+      expect(send).toHaveBeenCalledOnce();
+      expect(JSON.parse(send.mock.calls[0]![1].toString())).toMatchObject({ kind: 'owner_reminder', title: 'Reminder' });
+    });
+
+  it.each([
+    { kind: 'owner_reminder', count: 1, origin: 'proactive_reminder' },
+    { kind: 'alert', ownerRequested: true, count: 1, origin: 'proactive_alert' },
+    { kind: 'insight', ownerRequested: true, count: 1, origin: 'proactive_alert' },
+    { kind: 'mixed', ownerRequested: true, count: 2, origin: 'proactive_reminder' },
+    { kind: 'owner_reminder', ownerRequested: true, count: 2, origin: 'proactive_reminder' },
+    { kind: 'owner_reminder', ownerRequested: true, count: 1, origin: 'proactive_alert' },
+  ] as const)('rejects unverified or mixed provenance at the sender boundary: %j', async (overrides) => {
+    const fixture = storeFixture([subscription('one')]);
+    const nativeSend = vi.fn();
+    const sender = createSystemPushSender({ store: fixture.store, ownerObjectId: owner,
+      publicOrigin: 'https://jarvis.example', now: () => new Date('2026-10-24T22:00:00Z'), nativeSend });
+    await expect(sender({ ...request, ...overrides }, new AbortController().signal))
+      .resolves.toMatchObject({ status: 'skipped', reason: 'quiet_hours' });
+    expect(nativeSend).not.toHaveBeenCalled();
+    expect(fixture.list).not.toHaveBeenCalled();
   });
 
   it('guards system sends during quiet hours before subscription, key, or network access', async () => {

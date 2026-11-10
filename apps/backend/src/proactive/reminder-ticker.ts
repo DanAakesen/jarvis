@@ -171,7 +171,7 @@ export function createReminderTicker(options: {
 
   async function processDue(now: Date, signal: AbortSignal): Promise<void> {
     await processOwnerDue(now, controller.signal);
-    if (signal.aborted) return;
+    if (signal.aborted || isQuietHour(now)) return;
     const due = await options.reminders.listDue(now, maxDueRows);
     if (due.length === 0) return;
 
@@ -406,6 +406,7 @@ export function createReminderTicker(options: {
       if (latestClaim?.state !== 'sending' || latestClaim.claimToken !== schedule.claimToken) continue;
       const outcome = await options.send({
         kind: 'owner_reminder',
+        ownerRequested: true,
         count: 1,
         language,
         itemId: item.id,
@@ -440,11 +441,6 @@ export function createReminderTicker(options: {
         await schedules.finishClaim(schedule.id, schedule.claimToken!, {
           state: 'suppressed', reason: 'no_subscription', lastDelivery: 'suppressed', itemId: item.id,
         });
-      } else if (outcome.reason === 'quiet_hours') {
-        const nextMorning = localDateTimeInstant(addCalendarDays(dayKey(options.now()), 1), '07:00');
-        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
-          state: 'scheduled', reason: 'quiet_hours', fireAt: nextMorning,
-        });
       } else if (!signal.aborted) {
         await schedules.finishClaim(schedule.id, schedule.claimToken!, {
           state: 'scheduled', fireAt: new Date(options.now().getTime() + retryDelayMs),
@@ -460,7 +456,7 @@ export function createReminderTicker(options: {
     try {
       const now = options.now();
       startedAt = now.getTime();
-      if (isQuietHour(now) || nextWakeAt === null || nextWakeAt.getTime() > now.getTime()) return;
+      if (nextWakeAt === null || nextWakeAt.getTime() > now.getTime()) return;
       await processDue(now, signal);
       if (!stopped && !controller.signal.aborted) {
         const [automatic, explicit] = await Promise.all([

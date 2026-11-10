@@ -88,6 +88,17 @@ async function fixture(options: {
 afterEach(async () => { await Promise.all(stoppers.splice(0).map((stop) => stop())); });
 
 describe('owner reminder ticker', () => {
+  it.each(['2026-10-24T20:00:00Z', '2026-10-24T22:00:00Z',
+    '2026-10-25T00:30:00Z', '2026-10-25T01:30:00Z', '2026-10-25T06:00:00Z'])(
+    'processes a one-off at its requested instant, including quiet hours: %s', async (at) => {
+      const f = await fixture({ fireAt: new Date(at) });
+      await Promise.all([f.ticker.tick(), f.ticker.tick()]);
+      await f.ticker.tick();
+      expect(f.send).toHaveBeenCalledOnce();
+      expect(f.send.mock.calls[0]![0]).toMatchObject({ kind: 'owner_reminder', ownerRequested: true });
+      expect(f.schedules.snapshot()[0]).toMatchObject({ state: 'completed', lastDelivery: 'provider_accepted' });
+    });
+
   it('sends an explicit low-priority date-only task reminder independently of proactive preferences', async () => {
     const f = await fixture();
     await f.ticker.tick();
