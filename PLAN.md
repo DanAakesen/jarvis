@@ -13,22 +13,27 @@ accessibility string into typed steps without changing copy/number formatting,
 and restore the task choice control's top-level declaration. Native diagnostics
 also identified two watchOS-unavailable DisclosureGroups; read-only navigation
 lists now preserve access to those details and the active draft. After synchronizing
-main and these corrections, all 619 Core tests, 1,126 focused backend regressions, backend build/lint,
-Swift parsing and the existing iOS metadata check pass. Auto/Manual draft tests
-cover timeout, malformed success, definite rejection and unchanged explicit retry.
+main and these corrections, all 619 Core tests, 1,126 focused backend regressions,
+backend build/lint, Swift parsing and the existing iOS metadata check pass.
+Auto/Manual draft tests cover timeout, malformed success, definite rejection and
+unchanged explicit retry.
 Process-death restoration is not implemented.
 
 Native run 42836136120 failed at the nutrition expression; its physical build was
 skipped. Combined-source run 42857360808 was superseded by the documentation
 head. Run 42859214862 passed nutrition compilation but failed on DisclosureGroup;
-physical compilation and captures were skipped. The corrected head still needs
-all three builds and native capture/interaction qualification.
+physical compilation and captures were skipped. Corrected runtime `606c299d`
+passes Watch simulator, physical-Watch Release architecture and paired-phone
+builds in run 42860889807. Its artifact contains 21 synthetic native PNG captures;
+the dashboard's top viewport was visually inspected. The image viewer's one-image
+limit prevented inspection of the other captures. Native task interactions,
+remaining visual review and physical-device acceptance are not claimed.
 CI and the separate iPhone UI workflow are draft-skipped, not passing results.
 The earlier filtering checkpoint is not evidence for the combined feature.
 
-Next: qualify the final native source and physical Watch interactions, including
-Ultra 2. Exact nutrition/task-list complication image transfer remains a visual
-sign-off blocker. Dashboard and task-screen approvals in the issue supersede
+Next: inspect the remaining native captures and qualify interactions on a physical
+Watch, including Ultra 2. Exact nutrition/task-list complication image transfer
+remains a visual sign-off blocker. Dashboard and task-screen approvals in the issue supersede
 PR #1700's older unapproved-dashboard note.
 
 ## Explicit reminder quiet-hours repair — 10 November 2026 (#1706)

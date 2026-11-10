@@ -35,9 +35,24 @@ head. Run 42859214862 compiled nutrition but failed Watch/paired-phone compilati
 on two DisclosureGroups, which SwiftUI marks unavailable on watchOS. Both now
 use native links to read-only detail lists; the active editor still owns its
 unchanged draft while inspecting the saved task. All 619 Core tests pass after
-this correction. All three native builds and new captures still need qualification.
+this correction. Corrected runtime
+[`606c299d`](https://github.com/DanAakesen/jarvis/commit/606c299d9f4ca8b3ae077aaa4d8107bb1150b8a2)
+passes Watch simulator, physical-Watch Release architecture and paired-iPhone
+compilation in
+[run 42860889807](https://github.com/DanAakesen/jarvis/actions/runs/42860889807).
+Capture also passed, producing 21 synthetic native PNGs in
+[artifact 13786576239](https://github.com/DanAakesen/jarvis/actions/runs/42860889807/artifacts/13786576239);
+download SHA256 `a54a37fd645e96b97f37717ad47fe8f25c78f8e97530a87328d8379602183fb8`
+matches GitHub's digest. Eighteen images are 422×514 and the three smaller-size
+captures are 374×446; these dimensions do not establish physical Ultra 2 fit.
+The dashboard's `home.png` top viewport was visually inspected: title/menu,
+Up Next time/timeline, event title/timing and horizontal-page indicator render
+without visible overlap. The viewer then enforced a one-image cap, preventing
+visual inspection of the other twenty captures. Their presence does not establish
+task/complication layout acceptance. Fixture launches are not tap/dictation/save,
+scroll/swipe, VoiceOver, Always On/tint or physical-device interaction evidence.
 Aggregate CI and the separate iPhone Simulator UI workflow remain draft-skipped,
-not passed. GitHub CodeQL run 42857360341 passed its configured
+not passed. GitHub CodeQL run 42860889763 passed its configured
 languages (not Swift). Local CodeQL could not create a Swift database and skipped
 JavaScript analysis for size; no Swift security-analysis pass is claimed.
 Save freezes the submission identity, time and payload in the active editor.
