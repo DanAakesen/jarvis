@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+Keep the approved Watch layout and controls. Startup and idle connectivity changes use the existing quiet connection status. History read failures stay inside the chat scroll area. The modal Jarvis alert is reserved for actual user-action/interruption feedback.
+
 ## Owner actions without approval interruptions — 9 November 2026
 
 Requested actions return progress and a truthful completion or failure receipt.

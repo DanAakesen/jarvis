@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+An initial unreachable WCSession callback is connection status, not evidence that a send failed. Reserve interrupted-action alerts for actual active interactions. Keep passive history errors inline and discard obsolete read results. Preserve pending drafts, acknowledgement boundaries and manual recovery; do not add an offline queue or automatic resend.
+
 ## 2026-11-09 — Execute resolved owner requests directly
 
 Dan explicitly rejected approval cards, repeated confirmation turns, prescribed

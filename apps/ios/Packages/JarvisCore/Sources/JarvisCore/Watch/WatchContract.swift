@@ -146,6 +146,14 @@ public struct WatchComposer: Equatable, Sendable {
         sending = true; return text
     }
     public mutating func finishSend(success: Bool) { sending = false; if success { draft = "" } }
+
+    /// Idle reachability changes are connection status, not interrupted user actions.
+    /// An acknowledged send can still have an in-flight response; never recreate its cleared draft.
+    public mutating func handleConnectionLoss(hasInFlightTurn: Bool, hasVoiceSession: Bool) -> Bool {
+        guard sending || hasInFlightTurn || hasVoiceSession else { return false }
+        sending = false
+        return true
+    }
 }
 
 public struct WatchHistoryMessage: Codable, Sendable {

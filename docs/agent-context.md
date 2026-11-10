@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+The owner reported an interrupted-send modal on ordinary Ultra 2 startup. The initial WCSession activation callback was treated as a disconnect even with no active interaction. The fix remains a separate branch from Home PR #1689. No deployment is authorized in this secondary thread. Device checks must include startup/foreground, phone background/lock, notification opening, idle range loss and active send/voice interruption.
+
 ## Owner-action delivery evidence — 9 November 2026
 
 PR #1690 merged as `70c669c9`. CI 42661574458 passed 7,400 backend, 1,317
