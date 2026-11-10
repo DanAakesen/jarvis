@@ -1,3 +1,23 @@
+## Watch dashboard and personal-task implementation — 10 November 2026 (#1701)
+
+Source implementation is complete on the issue branch; no merge or deployment.
+It preserves the existing steps/startup and Factory/lift work. Shared Today/
+Upcoming filtering, dashboard/full views, four rectangular complications and
+task detail/edit/Auto/Manual capture are implemented.
+
+Qualification reports: 23 targeted Today tests; a 616-test Core run before the
+last integration refinements; 1,241 backend regressions and 94 real SQL tests;
+backend build/lint and targeted follow-up checks passed. The updated capture
+workflow passes YAML/shell syntax checks. Native Home UI tests and final combined
+native compilation/rendering remain unverified on this Linux host. The earlier
+filtering checkpoint passed all three unsigned builds, but simulator capture
+failed with “Scene update failed”; it is not evidence for the combined feature.
+
+Next: qualify the final native source and physical Watch interactions, including
+Ultra 2. Exact nutrition/task-list complication image transfer remains a visual
+sign-off blocker. Dashboard and task-screen approvals in the issue supersede
+PR #1700's older unapproved-dashboard note.
+
 ## Direct owner requests — 10 November 2026
 
 The approval-cleanup branch implements direct request handling and removes selected repeat prompts. Qualification and integration are in progress; see `docs/approval-cleanup-2026-11-10.md` for actual status. No production or device acceptance is implied by this entry.

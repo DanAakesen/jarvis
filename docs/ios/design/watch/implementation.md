@@ -1,3 +1,35 @@
+## Dashboard and personal tasks — 10 November 2026 (#1701)
+
+Source implementation is complete on the issue branch. The current base already
+contains the steps/startup and Factory/lift changes described historically below;
+do not duplicate or revert them. The owner's latest issue approves the scrolling
+dashboard and Today/detail/Auto/Manual task concepts, superseding PR #1700's older
+dashboard status. Body Fat selects the permitted preceding-three-calendar-months window.
+
+Local filtering evidence: Swift 6.2.1, `swift test -j 2 --filter JarvisTodayTests`,
+23 passed. Today includes overdue plus today; Upcoming contains only future
+tasks. Completed/undated and midnight/DST cases are covered. Implementation-owner
+reports include 616 Core tests before final integration refinements, 1,241 backend
+regressions, 94 real SQL tests and passing backend build/lint. Focused follow-up
+checks cover pagination, timezone preservation and definite versus unknown save
+outcomes. Native Home count/list tests have not run on this Linux host.
+
+The filtering checkpoint passed all three unsigned builds in run 42828752415;
+its capture step failed on a simulator “Scene update failed” launch. That run does
+not qualify the combined feature. The extended capture workflow passes YAML/shell
+syntax checks; final combined native compilation/rendering remains outstanding.
+Save freezes the submission identity, time and payload in the active editor.
+Server receipts survive restarts; Watch-process draft restoration is not claimed.
+
+Remaining acceptance: both task entry points, detail/edit, typed/dictated capture
+without auto-submit, independent defaults, English/Danish, failed-save draft and
+stable retry; dashboard navigation/swipes and source states; complication expiry,
+deep links, Always On/tint, VoiceOver, long text and supported Watch sizes including
+Ultra 2. Physical device rendering and interaction are not verified here.
+Exact nutrition/task-list complication images could not be retrieved from PR #1700
+or repository/session references and still require an authorized transfer from the
+design conversation before final visual sign-off. No merge/deployment is performed.
+
 ## Startup alert follow-up — 9 November 2026
 
 The owner reproduced the modal "iPhone unavailable. Reconnect and check history before sending again." on ordinary Watch launch, including launches unrelated to notifications. The root cause is the unconditional WatchModel disconnect alert combined with initial WCSession activation reporting not reachable.

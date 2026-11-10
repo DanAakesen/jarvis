@@ -9274,6 +9274,30 @@ backend execution, authorization, provider catalogue or audit semantics.
 
 XcodeGen JarvisWatch embeds JarvisWatchWidgets and is embedded by the phone app. Both use portable JarvisCore; Watch-native shared controls live under apps/ios/Watch. A Codable WatchConnectivity allow-list connects Watch to the paired phone. JarvisWatchBridge owns authenticated chat/health/lift/Factory reads/writes and VoiceSessionClient; credentials remain on phone. Watch VoiceAudioEngine captures/plays PCM16 through ordered acknowledged messages. Phone expires voice after 15 seconds without Watch heartbeat. Existing VoiceLiveActivityController controls the same session. No backend endpoint, infrastructure or production configuration is added. Display-only Health snapshots cross application context and expire in 15 minutes or date rollover. No offline mutation queue. See docs/ios/design/watch/implementation.md for verification limits.
 
+### Watch dashboard and personal-task extension (#1701)
+
+The new dashboard extends the paired-phone allow-list rather than creating a
+standalone Watch API client. Calendar, task, note, nutrition, body-measurement and
+Home-brief reads reuse their existing clients and permissions. Missing sections
+are distinct from successful empty reads. Display snapshots are bounded and
+cached in the existing Watch App Group; WidgetKit refresh is system-budgeted,
+not an instantaneous background channel. The existing steps snapshot/rendering
+and voice/dictation/Factory routes remain.
+
+`JarvisTodayTaskLists` is the shared date-only projection for iPhone Home and Watch:
+open dated tasks through the owner's local today versus later dates. The phone
+supplies local day boundaries without rewriting vault metadata. A task selection
+retains the source identity and version for optimistic editing.
+
+Watch Auto creation adds an owner-only backend boundary for structured model
+parsing and the existing vault task writer. It captures the first Save's UUID,
+submission instant and IANA timezone; durable receipts retain resolved fields
+before the external write, and vault compare-and-swap/idempotency protects
+ambiguous retries. Notes and timezone metadata remain attached to the existing
+vault task, not a second task system. Auto defaults are isolated from ordinary
+task creation/reminder rules. New persistence must precede the compatible backend
+and native client; integration/deployment remains primary-controlled.
+
 ### Notes recent-library projection
 
 JarvisNotesArea keys its cancellable projection by graph nodes, local visit history

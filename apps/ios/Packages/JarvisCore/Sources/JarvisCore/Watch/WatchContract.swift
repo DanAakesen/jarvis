@@ -25,6 +25,8 @@ public enum WatchCodec {
 /// Paired-device protocol. No credentials, arbitrary URLs or backend paths cross this boundary.
 public enum WatchAction: String, Codable, Sendable {
     case snapshot, history, sendTurn, tasks, workouts, lifts, saveLift, deleteLift
+    case dashboard, brief, agenda, bodyFat, notes, note, nutrition
+    case createWatchTask, updateWatchTask, completeWatchTask
     case projects, factoryTasks, createFactoryTask, startVoice, voiceHeartbeat, audio, muteVoice, playbackCompleted, endVoice
 }
 
@@ -42,7 +44,10 @@ public struct WatchRequest: Codable, Equatable, Sendable {
     public var isValid: Bool {
         version == 1 && (text?.utf8.count ?? 0) <= 8_000 && (itemID?.utf8.count ?? 0) <= 200 &&
         (data?.count ?? 0) <= WatchLimits.payloadBytes && (action != .sendTurn || !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) &&
-            (action != .createFactoryTask || factorySubmission != nil)
+            (action != .createFactoryTask || factorySubmission != nil) &&
+            (action != .createWatchTask || createWatchTaskRequest != nil) &&
+            (action != .updateWatchTask || updateWatchTaskRequest != nil) &&
+            (action != .completeWatchTask || completionWatchTask != nil)
     }
 }
 
@@ -65,8 +70,9 @@ public struct WatchReply: Codable, Sendable {
     public var id: UUID
     public var data: Data?
     public var failure: WatchFailure?
-    public init(id: UUID, data: Data? = nil, failure: WatchFailure? = nil) {
-        self.id = id; self.data = data; self.failure = failure
+    public var taskError: WatchTaskMutationFailure?
+    public init(id: UUID, data: Data? = nil, failure: WatchFailure? = nil, taskError: WatchTaskMutationFailure? = nil) {
+        self.id = id; self.data = data; self.failure = failure; self.taskError = taskError
     }
 }
 

@@ -23,6 +23,8 @@ import { WorkspaceCommandBroker } from '../core/workspace-commands.js';
 import type { Settings } from '../core/settings.js';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import { executeRealtimeToolCall } from '../voice/realtime.js';
+import type { WatchTaskReceipt, WatchTaskSubmissionStore } from './watch-task-capture.js';
+import { encodeTaskMetadata } from './task-metadata.js';
 
 const sha = (character: string) => character.repeat(40);
 const signal = () => new AbortController().signal;
@@ -235,6 +237,8 @@ function moduleFor(options: {
   readonly apiMemoryStore?: MemoryStore;
   readonly memorySettings?: Partial<Settings['memory']>;
   readonly log?: NonNullable<Parameters<typeof createVaultModule>[0]['log']>;
+  readonly watchTaskModel?: NonNullable<Parameters<typeof createVaultModule>[0]['watchTaskModel']>;
+  readonly watchTaskSubmissions?: WatchTaskSubmissionStore;
 } = {}) {
   const github = fakeGitHub(options.remote, options.conflicts);
   const indexStore = options.index ?? new FakeIndexStore();
@@ -265,6 +269,8 @@ function moduleFor(options: {
     ...(options.embedder ? { embedder: options.embedder } : {}),
     ...(settingsStore ? { settingsStore } : {}),
     ...(options.log ? { log: options.log } : {}),
+    ...(options.watchTaskModel ? { watchTaskModel: options.watchTaskModel } : {}),
+    ...(options.watchTaskSubmissions ? { watchTaskSubmissions: options.watchTaskSubmissions } : {}),
   });
   return { github, indexStore, module, tokenIssuer, memoryStore };
 }
@@ -335,6 +341,259 @@ function memoryApiApp(
 }
 
 const apiAuthorization = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
+
+describe('owner-only Watch task capture routes', () => {
+  const submission = {
+    submissionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+    submittedAt: '2026-11-10T12:15:27.000Z', timeZone: 'Europe/Copenhagen',
+    mode: 'manual', fields: { text: 'Review launch', scope: 'work', notes: 'First line\nSecond line' },
+  };
+  function watchModule() {
+    const receipts = new Map<string, WatchTaskReceipt>();
+    const store: WatchTaskSubmissionStore = {
+      get: vi.fn(async (owner, id) => receipts.get(`${owner}:${id}`) ?? null),
+      reserve: vi.fn(async (owner, id, receipt) => {
+        const key = `${owner}:${id}`;
+        if (!receipts.has(key)) receipts.set(key, receipt);
+        return receipts.get(key)!;
+      }),
+      complete: vi.fn(async (owner, id, _hash, result) => { receipts.get(`${owner}:${id}`)!.result = result; }),
+    };
+    const model = vi.fn(async () => JSON.stringify({ text: 'Køb mælk', due: null, time: null, priority: 'high' }));
+    return { ...moduleFor({ watchTaskSubmissions: store, watchTaskModel: model }), model, store };
+  }
+
+  it('creates directly, lists full fields, replays a stable submission, and edits with optimistic version', async () => {
+    const state = watchModule();
+    const app = memoryApiApp(state.module);
+    const created = await app.inject({ method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization, payload: submission });
+    expect(created.statusCode).toBe(200);
+    expect(created.headers['cache-control']).toBe('no-store');
+    const task = created.json();
+    expect(task).toMatchObject({
+      text: 'Review launch', path: 'Work/Inbox.md', dueDate: null, dueTime: null,
+      dueAt: null, priority: 'normal', notes: 'First line\nSecond line',
+      timeZone: 'Europe/Copenhagen', remindAtDue: false,
+    });
+    expect(state.model).not.toHaveBeenCalled();
+    const replay = await app.inject({ method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization, payload: submission });
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json()).toEqual(task);
+    const list = await app.inject({ method: 'GET', url: '/vault/tasks', headers: apiAuthorization });
+    expect(list.json().items[0]).toMatchObject({ notes: task.notes, timeZone: task.timeZone, dueAt: task.dueAt });
+    const edit = {
+      path: task.path, line: task.line, text: task.text, version: task.version,
+      fields: { text: 'Revised launch', due: '2026-11-12', time: '10:00', priority: 'high', notes: 'Updated notes' },
+    };
+    const changed = await app.inject({ method: 'PATCH', url: '/vault/watch-tasks', headers: apiAuthorization, payload: edit });
+    expect(changed.statusCode).toBe(200);
+    expect(changed.json()).toMatchObject({
+      text: 'Revised launch', dueAt: '2026-11-12T09:00:00.000Z', notes: 'Updated notes',
+      timeZone: 'Europe/Copenhagen', priority: 'high', done: false,
+    });
+    const conflict = await app.inject({ method: 'PATCH', url: '/vault/watch-tasks', headers: apiAuthorization, payload: edit });
+    expect(conflict.statusCode).toBe(409);
+    expect(state.github.files.get(task.path)?.content).toContain(`🆔 ${submission.submissionId}`);
+  });
+
+  it('uses the bilingual model for Auto and returns its persisted task, never an acknowledgement placeholder', async () => {
+    const state = watchModule();
+    const result = await memoryApiApp(state.module).inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization,
+      payload: { ...submission, mode: 'auto', input: 'Køb mælk, høj prioritet', fields: { scope: 'personal' } },
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.json()).toMatchObject({ text: 'Køb mælk', priority: 'high', dueAt: '2026-11-10T13:15:27.000Z' });
+    expect(state.model).toHaveBeenCalledOnce();
+    expect(state.github.calls.some(call => call.method === 'PUT')).toBe(true);
+  });
+
+  it('rejects unauthenticated/foreign-owner writes before parsing or persistence', async () => {
+    const state = watchModule();
+    const anonymous = await memoryApiApp(state.module).inject({ method: 'POST', url: '/vault/watch-tasks', payload: submission });
+    expect(anonymous.statusCode).toBe(401);
+    const foreign = memoryApiApp(state.module, { auth: async () => ({
+      objectId: 'someone-else', tenantId: apiConfig.auth.tenantId, displayName: 'Someone else',
+    }) });
+    for (const method of ['POST', 'PATCH'] as const) {
+      const result = await foreign.inject({ method, url: '/vault/watch-tasks', headers: apiAuthorization, payload: submission });
+      expect(result.statusCode).toBe(403);
+    }
+    expect(state.model).not.toHaveBeenCalled();
+    expect(state.store.get).not.toHaveBeenCalled();
+    expect(state.github.calls.some(call => call.method === 'PUT')).toBe(false);
+  });
+
+  it('reports real safe parsing/storage failures and rejects bounded invalid payloads', async () => {
+    const state = watchModule();
+    const app = memoryApiApp(state.module);
+    state.model.mockResolvedValueOnce('provider-private-response');
+    const parse = await app.inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization,
+      payload: { ...submission, mode: 'auto', input: 'Køb mælk', fields: {} },
+    });
+    expect(parse.statusCode).toBe(400);
+    expect(parse.json().error).toContain('could not be understood');
+    expect(parse.json()).toMatchObject({ code: 'invalid_task', retryable: false, outcomeUnknown: false, message: parse.json().error });
+    expect(parse.body).not.toContain('provider-private-response');
+    const invalid = await app.inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization, payload: { ...submission, extra: true },
+    });
+    expect(invalid.statusCode).toBe(400);
+    const oversized = await app.inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization, payload: { ...submission, input: 'x'.repeat(17000) },
+    });
+    expect(oversized.statusCode).toBe(413);
+    const malformed = await app.inject({
+      method: 'POST', url: '/vault/watch-tasks',
+      headers: { ...apiAuthorization, 'content-type': 'application/json' }, payload: '{"mode":',
+    });
+    expect(malformed.statusCode).toBe(400);
+    const unavailable = await memoryApiApp(moduleFor().module).inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization, payload: submission,
+    });
+    expect(unavailable.statusCode).toBe(503);
+    expect(unavailable.json().error).toContain('Durable');
+    expect(unavailable.json()).toMatchObject({ code: 'task_unavailable', retryable: true, outcomeUnknown: false });
+    expect(state.github.calls.some(call => call.method === 'PUT')).toBe(false);
+  });
+
+  it('distinguishes an uncertain persisted save from a definite parsing rejection for draft recovery', async () => {
+    const state = watchModule();
+    vi.mocked(state.store.complete).mockRejectedValueOnce(new Error('Lost SQL completion acknowledgement'));
+    const app = memoryApiApp(state.module);
+    const uncertain = await app.inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization, payload: submission,
+    });
+    expect(uncertain.statusCode).toBe(503);
+    expect(uncertain.json()).toMatchObject({
+      code: 'task_save_unknown', retryable: true, outcomeUnknown: true, message: uncertain.json().error,
+    });
+    expect(uncertain.body).not.toContain('Lost SQL');
+    const replay = await app.inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization, payload: submission,
+    });
+    expect(replay.statusCode).toBe(200);
+    expect(state.github.calls.filter(call => call.method === 'PUT')).toHaveLength(1);
+  });
+
+  it.each(['missing', 'failed'] as const)('serializes a definite pre-write 503 when Auto parsing is %s', async (failure) => {
+    const state = watchModule();
+    state.model.mockRejectedValueOnce(new Error('Private provider failure'));
+    const module = moduleFor({
+      watchTaskSubmissions: state.store,
+      ...(failure === 'failed' ? { watchTaskModel: state.model } : {}),
+    });
+    const rejected = await memoryApiApp(module.module).inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization,
+      payload: { ...submission, mode: 'auto', input: 'Køb mælk', fields: {} },
+    });
+    expect(rejected.statusCode).toBe(503);
+    expect(rejected.json()).toMatchObject({
+      code: 'task_unavailable', retryable: true, outcomeUnknown: false, message: rejected.json().error,
+    });
+    expect(rejected.json().error).toMatch(/Manual/u);
+    expect(rejected.body).not.toContain('Private provider');
+    expect(state.store.reserve).not.toHaveBeenCalled();
+    expect(module.github.calls.some(call => call.method === 'PUT')).toBe(false);
+  });
+
+  it('serializes an uncertain external write as locked same-ID recovery, then safely reconciles it', async () => {
+    const state = watchModule();
+    const fetcher = state.github.fetcher.getMockImplementation()!;
+    let responseLost = false;
+    state.github.fetcher.mockImplementation(async (input, init) => {
+      const response = await fetcher(input, init);
+      if (init?.method === 'PUT' && !responseLost) {
+        responseLost = true;
+        throw new Error('Private lost GitHub acknowledgement');
+      }
+      return response;
+    });
+    const app = memoryApiApp(state.module);
+    const uncertain = await app.inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization, payload: submission,
+    });
+    expect(uncertain.statusCode).toBe(503);
+    expect(uncertain.json()).toMatchObject({
+      code: 'task_save_unknown', retryable: true, outcomeUnknown: true, message: uncertain.json().error,
+    });
+    expect(uncertain.body).not.toContain('Private lost');
+    const recovered = await app.inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization, payload: submission,
+    });
+    expect(recovered.statusCode).toBe(200);
+    expect(state.github.calls.filter(call => call.method === 'PUT')).toHaveLength(1);
+  });
+
+  it('hides encoded metadata from task titles, note search and snippets and redacts notes like task text', async () => {
+    const path = 'Personal/Inbox.md';
+    const metadata = encodeTaskMetadata({
+      notes: 'password: synthetic-secret-value', timeZone: 'Europe/Copenhagen', dueAt: '2026-11-10T13:15:27.000Z',
+    });
+    const encoded = metadata.slice('<!-- jarvis-task:'.length, -' -->'.length);
+    const state = moduleFor({ remote: {
+      [path]: { sha: sha('a'), content: `# Inbox\n\n- [ ] Review launch 📅 2026-11-10 14:15 ${metadata}\n` },
+    } });
+    const app = memoryApiApp(state.module);
+    const list = await app.inject({ method: 'GET', url: '/vault/tasks', headers: apiAuthorization });
+    const task = list.json().items[0];
+    expect(task).toMatchObject({ text: 'Review launch', notes: '[redacted]', timeZone: 'Europe/Copenhagen', dueAt: '2026-11-10T13:15:27.000Z' });
+    expect(list.body).not.toContain(encoded);
+    const hiddenSearch = await app.inject({
+      method: 'GET', url: `/vault/tasks?q=${encoded.slice(0, 40)}`, headers: apiAuthorization,
+    });
+    expect(hiddenSearch.json().items).toEqual([]);
+    await state.module.synchronize(signal());
+    const found = await tool(state.module, 'vault_search').execute({ query: 'Review launch' }, request, signal());
+    expect(JSON.stringify(found)).toContain('Review launch');
+    expect(JSON.stringify(found)).not.toContain('jarvis-task:');
+    expect(JSON.stringify(found)).not.toContain(encoded);
+    const hidden = await tool(state.module, 'vault_search').execute({ query: encoded.slice(0, 40) }, request, signal()) as { results: unknown[] };
+    expect(hidden.results).toEqual([]);
+    const edited = await app.inject({
+      method: 'PATCH', url: '/vault/watch-tasks', headers: apiAuthorization,
+      payload: { path, line: task.line, text: task.text, version: task.version, fields: { text: 'Review revised launch' } },
+    });
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json().notes).toBe('[redacted]');
+    expect(state.github.files.get(path)!.content).toContain(metadata);
+  });
+
+  it('round-trips full 400-scalar titles through Manual create, list, optimistic edit and complete', async () => {
+    const state = watchModule();
+    const app = memoryApiApp(state.module);
+    const text = 'ø🙂'.repeat(200);
+    const create = await app.inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization,
+      payload: { ...submission, fields: { text } },
+    });
+    expect(create.statusCode).toBe(200);
+    expect(create.json().text).toBe(text);
+    const list = await app.inject({ method: 'GET', url: '/vault/tasks', headers: apiAuthorization });
+    const task = list.json().items[0];
+    expect(task.text).toBe(text);
+    const nextText = 'æ🙂'.repeat(200);
+    const edit = await app.inject({
+      method: 'PATCH', url: '/vault/watch-tasks', headers: apiAuthorization,
+      payload: { path: task.path, line: task.line, text: task.text, version: task.version, fields: { text: nextText } },
+    });
+    expect(edit.statusCode).toBe(200);
+    expect(edit.json().text).toBe(nextText);
+    const edited = edit.json();
+    const done = await app.inject({
+      method: 'PATCH', url: '/vault/tasks', headers: apiAuthorization,
+      payload: { path: edited.path, line: edited.line, text: edited.text, version: edited.version, done: true },
+    });
+    expect(done.statusCode).toBe(200);
+    expect(done.json()).toMatchObject({ text: nextText, done: true });
+    const tooLong = await app.inject({
+      method: 'POST', url: '/vault/watch-tasks', headers: apiAuthorization,
+      payload: { ...submission, submissionId: 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee', fields: { text: `${text}ø` } },
+    });
+    expect(tooLong.statusCode).toBe(400);
+  });
+});
 
 describe('GitHub vault', () => {
   it('indexes added and changed Markdown, deletes removed notes, and skips excluded paths and binaries', async () => {

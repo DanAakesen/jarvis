@@ -3806,3 +3806,28 @@ Native capture correction: Watch toolbar primary actions were not visible, so Ad
 ## Watch steps-only revision — 10 November 2026
 
 Use one large white rounded step count above a full-width amber curve, with fine vertical gradient stems beneath it and a thin dashed white daily-goal reference on the same scale. No other visible text, axes or footer. Preserve real hourly positions; do not stretch an incomplete day or invent future readings. VoiceOver describes steps and goal. This supersedes the previous rectangular daily/weekly composition only. Approved concept: [amber stem reference](docs/ios/design/watch/steps-approved-2026-11-10.png) from the secondary design conversation. Native installed-size acceptance remains open.
+
+## Watch dashboard and task flow — 10 November 2026 (#1701)
+
+The owner approved the [scrolling dashboard](https://github.com/DanAakesen/jarvis/blob/f344cdf5a30771fdb3b8a39cd61fbbf8357a758d/docs/ios/design/watch/watch-home-approved-revision.png)
+and the Today, task-detail, Auto and Manual screen concepts in design PR #1700 at
+`ada3116a996d13de689d3e1d26dcf701205bb4c6`. These are illustrative concepts, not
+working-build evidence. Keep black/amber styling, readable native text, larger section
+headings and vertical scrolling rather than compressing the whole dashboard into
+one viewport. The original action screen is the second horizontal page.
+
+Up Next places the next event time at the heading's right, then a horizontal time
+chart and event title/timing; the whole section opens the agenda. Workouts, Body Fat,
+Tasks and Recent Notes use right-aligned See more. Today includes overdue tasks with
+an explicit Overdue label, never color alone. The task plus opens Auto by default;
+the multiline draft contains its mic action and Save sits below. Manual and Edit
+use the same scrollable explicit-field form; Edit has no Auto/Manual toggle.
+
+Nutrition uses CARB/FAT/PROT segmented bars; task titles use outlined amber squares
+and white text. Home text derives from the actual configured Home brief, retaining
+data-grounded amber highlights. Body Fat has its title, current percentage and a
+percentage-labelled trend over the preceding three calendar months. The revised Home/Body Fat
+images have not received separate visual approval. Exact nutrition/task-list
+complication images remain absent from PR #1700 and this repository: descriptions
+do not replace those references. Final visual sign-off and physical Ultra 2/smaller
+Watch fit, large text, Always On/tint and interaction checks remain open.

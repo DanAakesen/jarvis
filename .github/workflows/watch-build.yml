@@ -71,6 +71,27 @@ jobs:
           xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=project
           sleep 2
           xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/project-tasks.png"
+          for SCREEN in actions tasks task-detail personal-new-task agenda body-fat notes nutrition complications; do
+            xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture "--watch-screen=$SCREEN"
+            sleep 2
+            xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/$SCREEN.png"
+          done
+          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=personal-new-task --watch-task-mode=manual
+          sleep 2
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/personal-new-task-manual.png"
+          SMALL_WATCH_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | contains("Apple Watch")) | select(.name | test("4[012]mm"))][0].udid // empty')"
+          if [[ -n "$SMALL_WATCH_ID" ]]; then
+            xcrun simctl boot "$SMALL_WATCH_ID" || true
+            xcrun simctl bootstatus "$SMALL_WATCH_ID" -b
+            xcrun simctl install "$SMALL_WATCH_ID" "$RUNNER_TEMP/WatchBuild/Build/Products/Debug-watchsimulator/JarvisWatch.app"
+            for SCREEN in dashboard tasks personal-new-task; do
+              xcrun simctl launch --terminate-running-process "$SMALL_WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture "--watch-screen=$SCREEN"
+              sleep 2
+              xcrun simctl io "$SMALL_WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/small-$SCREEN.png"
+            done
+          else
+            echo "::warning::No 40–42 mm Watch simulator is available; smaller-size screenshots were not captured."
+          fi
       - name: Build paired iPhone bridge without signing
         if: ${{ !cancelled() }}
         working-directory: apps/ios

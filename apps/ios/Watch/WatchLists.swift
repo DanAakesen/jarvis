@@ -2,27 +2,6 @@ import Foundation
 import JarvisCore
 import SwiftUI
 
-struct WatchTasksView: View {
-    @EnvironmentObject private var connection: WatchConnection
-    @State private var tasks: [VaultTask] = []
-    @State private var loading = true
-    @State private var failure: String?
-    var body: some View {
-        List {
-            if loading { ProgressView() }
-            if let failure { Text(failure); Button("Retry") { Task { await load() } } }
-            else if !loading && tasks.isEmpty { Text("No tasks due today") }
-            ForEach(tasks) { task in Text(task.text) }
-        }.navigationTitle("Today").task { await load() }.refreshable { await load() }
-    }
-    private func load() async {
-        loading = true; failure = nil
-        defer { loading = false }
-        do { tasks = try await connection.load(.tasks) }
-        catch { tasks = []; failure = (error as? WatchFailure)?.message ?? "Tasks unavailable" }
-    }
-}
-
 struct WatchHealthList: View {
     var lifts: Bool
     @EnvironmentObject private var connection: WatchConnection

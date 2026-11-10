@@ -23,6 +23,7 @@ export interface FoundryApprovalModelOptions {
   readonly selectModel: (signal: AbortSignal) => Promise<ApprovalModelSelection | undefined>;
   readonly recordUsage: (usage: FoundryModelUsage) => Promise<void>;
   readonly fetcher?: typeof fetch;
+  readonly maxContentBytes?: number;
 }
 
 /**
@@ -80,6 +81,8 @@ async function boundedJson(response: Response): Promise<unknown> {
  */
 export function createFoundryJsonCompletion(options: FoundryApprovalModelOptions): ApprovalModelPort {
   const fetcher = options.fetcher ?? fetch;
+  const maxContentBytes = options.maxContentBytes ?? MAX_CONTENT_BYTES;
+  if (!Number.isInteger(maxContentBytes) || maxContentBytes < 1 || maxContentBytes > 16 * 1024) throw new RangeError('Invalid JSON completion content limit');
   return async (prompt, signal) => {
     signal.throwIfAborted();
     const selected = await options.selectModel(signal);
@@ -128,7 +131,7 @@ export function createFoundryJsonCompletion(options: FoundryApprovalModelOptions
     const choice = record(result.choices[0]);
     const message = record(choice.message);
     if (choice.finish_reason !== 'stop' || message.refusal || message.tool_calls || message.function_call ||
-        typeof message.content !== 'string' || Buffer.byteLength(message.content, 'utf8') > MAX_CONTENT_BYTES) {
+        typeof message.content !== 'string' || Buffer.byteLength(message.content, 'utf8') > maxContentBytes) {
       return undefined;
     }
     return message.content;

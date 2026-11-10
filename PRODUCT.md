@@ -1,3 +1,30 @@
+## Watch dashboard and personal tasks — 10 November 2026 (#1701)
+
+The Watch opens on a vertically scrolling dashboard: Up Next calendar, weekly Gym/Run
+counts, Body Fat, Today tasks and Recent Notes. The existing Voice/Dictate/Factory
+screen remains one horizontal swipe to the right. The entire calendar block opens
+the agenda; the other headings have See more actions. Four additional rectangular
+complications show nutrition macros, a grounded Home brief, actual Today task titles
+and Body Fat. The approved steps complication and existing actions remain.
+
+Today means incomplete tasks due today **or overdue**; Upcoming means incomplete tasks
+due after today. Counts and lists use the same local-day boundary on iPhone Home and
+Watch; undated tasks keep their existing separate handling. Both Watch task entry
+points open Today. Tasks open full details and a prefilled explicit-field editor.
+The top-right plus opens New task in Auto mode; Manual uses native field controls.
+Typing and dictation only change the draft; Save creates the task without another
+confirmation. Auto parses English/Danish through the existing backend model, defaulting
+only omitted date/time to submission time plus one hour and omitted priority to Low.
+Retries retain the submission identity, owner timezone and resolved due timestamp.
+These defaults do not change other task/reminder policies.
+
+Use real sources and explicit loading/empty/unavailable/stale states. Body Fat uses
+the preceding three calendar months, one of the owner's permitted periods.
+The dashboard and four task-screen concepts are owner-approved; the refined Home
+phrase/Body Fat visuals and device fit are not separately accepted. The exact
+nutrition/task-list complication reference images still require transfer from the
+design conversation before final visual sign-off. No merge or deployment is authorized.
+
 ## Direct owner requests — 10 November 2026
 
 A clear, authenticated owner instruction authorizes the requested operation without a second yes. Ask only for details needed to identify the intended action or target. Keep device and all-device sign-out confirmations. Treat credentials as non-storable and distinguish requested sensitive saves from automatic capture.

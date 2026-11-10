@@ -1,3 +1,22 @@
+## 2026-11-10 — Watch dashboard, personal tasks and Body Fat period (#1701)
+
+Implement the owner's approved dashboard and four task-screen concepts from #1701,
+preserving the existing action page and steps design. Use one Today/Upcoming
+projection: incomplete dated tasks through the owner's local today versus later
+dates; do not rewrite due metadata or pull undated tasks into either list.
+The Body Fat trend uses the preceding three calendar months, selecting one of the
+owner's explicitly permitted options. This fits the existing bounded metric API
+without calling a year-limited result the latest 20 measurements.
+Keep source timestamps/availability visible and do not claim instantaneous
+WatchConnectivity or WidgetKit refresh.
+
+Watch Auto capture has its own independent missing-date and missing-priority
+defaults (submission time +1h and Low), not a new general reminder policy. Save is
+the creation boundary; dictation and mode changes cannot submit. Retain the same
+submission identity/timezone and resolved due instant across manual retries.
+Native/device validation and exact nutrition/task-list image transfer remain
+separate from concept approval. No merge or release is part of this issue.
+
 ## Direct owner requests — 10 November 2026
 
 Dan directs Jarvis to execute owner-requested actions without another approval or prescribed wording, and to preserve the two sign-out dialogs. Interpret a request using the conversation; retain owner authentication, resource checks, stale-write handling, secret protection and safe treatment of untrusted content. Telephony is a separate unused integration, not browser/app voice.

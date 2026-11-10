@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { MAX_VAULT_FILE_BYTES } from '../vault/github-client.js';
 import { localDateTimeInstant } from './time.js';
+import { readTaskMetadata, taskLocalInstant, taskLocalParts, taskMetadataComment } from '../vault/task-metadata.js';
 
 type VaultReader = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read'>;
 
@@ -24,6 +25,8 @@ export interface ParsedVaultTodo extends ParsedTodo {
   taskIdentity: string;
   /** Opaque SHA-256 of the exact raw line, so a write can prove the line is unchanged since it was read. */
   version: string;
+  notes?: string;
+  timeZone?: string;
 }
 
 const dueMarkerPattern = /(?:📅\s*|\[due::\s*|\bdue:\s*)(\d{4}-\d{2}-\d{2})(?:(?:\s+|T)(\d{2}:\d{2}))?\]?/iu;
@@ -34,12 +37,12 @@ const priorityMarkersPattern = /\s*\[\s*priority\s*::?\s*[^\]]*\]|\s*\(\s*priori
 const timeMarkerPattern = /🕒\s*(\d{2}:\d{2})/u;
 export const taskMetadata = /[📅⏳🛫➕✅❌🔁🏁⏫🔼🔽⏬🔺🆔⛔🕒]/gu;
 
-export function sanitizeFactText(value: string): string {
+export function sanitizeFactText(value: string, maximum = 300): string {
   const withoutControls = value.replace(/\p{Cc}/gu, '');
   const withoutHtml = withoutControls.replace(/<[^>]*(?:>|$)/gu, '');
   const withoutLinks = withoutHtml.replace(/!?\[([^\]]*)\]\((?:<[^>]*>|[^)]*)\)/gu, '$1');
   const withoutAngles = withoutLinks.replace(/</gu, '');
-  return Array.from(withoutAngles.replace(/\s+/gu, ' ').trim()).slice(0, 300).join('');
+  return Array.from(withoutAngles.replace(/\s+/gu, ' ').trim()).slice(0, maximum).join('');
 }
 
 export async function resolveTodoFile(
@@ -98,10 +101,19 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
     const rawText = task[2] ?? '';
     const dueMarker = dueMarkerPattern.exec(rawText);
     const time = timeMarkerPattern.exec(rawText)?.[1] ?? dueMarker?.[2];
-    const dueAt = dueMarker
-      ? dueDate(dueMarker[1]!, time)
-      : null;
+    const metadata = readTaskMetadata(rawText);
+    let dueAt = dueMarker ? dueDate(dueMarker[1]!, time) : null;
+    if (dueMarker && metadata.timeZone) {
+      try {
+        dueAt = taskLocalInstant(dueMarker[1]!, time ?? '23:59', metadata.timeZone);
+        if (time && metadata.dueAt) {
+          const represented = taskLocalParts(new Date(metadata.dueAt), metadata.timeZone);
+          if (represented.due === dueMarker[1] && represented.time === time) dueAt = new Date(metadata.dueAt).toISOString();
+        }
+      } catch { dueAt = null; }
+    }
     const text = sanitizeFactText(rawText
+      .replace(taskMetadataComment, ' ')
       .replace(dueMarkersPattern, ' ')
       .replace(/\[reminder::\s*at_due_time\]/giu, ' ')
       .replace(/🕒\s*\d{2}:\d{2}/gu, ' ')
@@ -110,7 +122,7 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
       .replace(/[🆔⛔]\s*[a-z\d-]+(?:\s*,\s*[a-z\d-]+)*/giu, ' ')
       .replace(/🏁\s*(?:delete|keep)\b/giu, ' ')
       .replace(priorityMarkersPattern, ' ')
-      .replace(taskMetadata, ' '));
+      .replace(taskMetadata, ' '), 400);
     const highPriority = highPriorityPattern.test(rawText);
     todos.push({
       text,
@@ -127,6 +139,8 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
       heading,
       taskIdentity: taskIdentity(rawText, text),
       version: taskLineVersion(line),
+      ...(metadata.notes === undefined ? {} : { notes: metadata.notes }),
+      ...(metadata.timeZone === undefined ? {} : { timeZone: metadata.timeZone }),
     });
   }
   return todos;
@@ -134,7 +148,7 @@ export function parseTodosWithContext(content: string, path: string): ParsedVaul
 
 export function parseTodos(content: string): ParsedTodo[] {
   return parseTodosWithContext(content, '').map(({ text, dueAt, dueHasTime, done, highPriority, remindAtDue }) =>
-    ({ text, dueAt, dueHasTime, done, highPriority, ...(remindAtDue ? { remindAtDue } : {}) }));
+    ({ text: sanitizeFactText(text), dueAt, dueHasTime, done, highPriority, ...(remindAtDue ? { remindAtDue } : {}) }));
 }
 
 export { MAX_VAULT_FILE_BYTES };

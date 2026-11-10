@@ -7935,6 +7935,16 @@ results separate and retain actual native captures before claiming UI acceptance
 
 Source: apps/ios/Watch, apps/ios/WatchWidgets and iPhone JarvisWatchBridge.swift. Build: apps/ios/project.yml. Tests: `swift test --package-path apps/ios/Packages/JarvisCore --filter WatchContractTests` or full swift test. Native check after xcodegen generate in apps/ios: `xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build`. PR-only watch-build.yml builds Watch and phone unsigned and captures isolated DEBUG --watch-fixture views on an available Ultra simulator. Fixtures are not real health or successful connectivity. Primary owns signing, installation, integration and deployment. References, decisions and unverified checks: docs/ios/design/watch/.
 
+For #1701, preserve the integrated steps/startup and Factory/lift paths while
+adding dashboard and personal-task flows. The owner approved the dashboard and
+four personal-task screen concepts; PR #1700's older status is not authoritative.
+Its exact nutrition/task-list complication reference images are still missing,
+so do not claim final visual sign-off. Body Fat uses the last 20 measurements.
+Watch task Save must reuse its submission identity/time/zone on retry; dictation
+only edits the draft. Backend persistence changes require normal primary
+integration before native rollout. Use isolated fixtures/stubbed models for
+testing, never live task creation as a secondary-thread check.
+
 
 ### 8 November: subscription access corrected
 

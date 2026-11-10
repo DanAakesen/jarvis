@@ -8,14 +8,20 @@ struct WatchProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<WatchEntry>) -> Void) {
         let value = entry()
         // Expire display data on its actual deadline even if no companion refresh arrives.
-        let expiry = value.health?.expiresAt() ?? Date().addingTimeInterval(900)
-        completion(Timeline(entries: [value, .init(date: max(expiry, Date().addingTimeInterval(1)), health: nil, current: false)], policy: .after(Date().addingTimeInterval(900))))
+        let expiries = [value.health?.expiresAt(), value.dashboard?.expiresAt(),
+                        value.dashboard?.brief?.generatedAt.addingTimeInterval(900)]
+            .compactMap { $0 }.filter { $0 > value.date }.sorted()
+        let entries = [value] + Array(Set(expiries)).sorted().map { entry(at: $0) }
+        completion(Timeline(entries: entries, policy: .after(value.date.addingTimeInterval(900))))
     }
-    private func entry() -> WatchEntry {
+    private func entry(at date: Date = Date()) -> WatchEntry {
         let defaults = UserDefaults(suiteName: "group.com.danaakesen.jarvis")
         let snapshot = defaults?.data(forKey: "watch.health").flatMap { try? JSONDecoder().decode(WatchHealthSnapshot.self, from: $0) }
-        let current = snapshot?.isCurrent(at: Date()) == true
-        return .init(date: Date(), health: current ? snapshot : nil, current: current)
+        let dashboard = defaults?.data(forKey: "watch.dashboard").flatMap { try? JSONDecoder().decode(WatchDashboardSnapshot.self, from: $0) }
+        let current = snapshot?.isCurrent(at: date) == true
+        return .init(date: date, health: current ? snapshot : nil, current: current,
+                     dashboard: dashboard?.isCurrent(at: date) == true ? dashboard : nil,
+                     dashboardStale: dashboard != nil && dashboard?.isCurrent(at: date) != true)
     }
 }
 
@@ -57,7 +63,56 @@ struct JarvisWatchVoiceWidget: Widget {
         }.configurationDisplayName("Voice Session").description("Start or resume a spoken conversation.").supportedFamilies([.accessoryCircular])
     }
 }
+struct JarvisWatchNutritionWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "jarvis.watch.nutrition", provider: WatchProvider()) { entry in
+            WatchNutritionComplicationView(entry: entry)
+                .privacySensitive().containerBackground(.black, for: .widget)
+                .widgetURL(URL(string: "jarvis-watch://nutrition"))
+        }.configurationDisplayName("Nutrition").description("Today's carbohydrates, fat and protein against your saved goals.")
+            .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
+    }
+}
+struct JarvisWatchHomeWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "jarvis.watch.home", provider: WatchProvider()) { entry in
+            WatchHomeComplicationView(entry: entry)
+                .privacySensitive().containerBackground(.black, for: .widget)
+                .widgetURL(URL(string: "jarvis-watch://home"))
+        }.configurationDisplayName("Home").description("A short highlight from your iPhone Home brief.")
+            .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
+    }
+}
+struct JarvisWatchTaskListWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "jarvis.watch.task-list", provider: WatchProvider()) { entry in
+            WatchTasksComplicationView(entry: entry)
+                .privacySensitive().containerBackground(.black, for: .widget)
+                .widgetURL(URL(string: "jarvis-watch://tasks"))
+        }.configurationDisplayName("Tasks").description("Actual task titles due today, including overdue tasks.")
+            .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
+    }
+}
+struct JarvisWatchBodyFatWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "jarvis.watch.body-fat", provider: WatchProvider()) { entry in
+            WatchBodyFatComplicationView(entry: entry)
+                .privacySensitive().containerBackground(.black, for: .widget)
+                .widgetURL(URL(string: "jarvis-watch://body-fat"))
+        }.configurationDisplayName("Body Fat").description("Your latest body fat percentage and up to 20 measurements.")
+            .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
+    }
+}
 @main
 struct JarvisWatchWidgetBundle: WidgetBundle {
-    var body: some Widget { JarvisWatchHealthWidget(); JarvisWatchTasksWidget(); JarvisWatchDictateWidget(); JarvisWatchVoiceWidget() }
+    var body: some Widget {
+        JarvisWatchHealthWidget()
+        JarvisWatchTasksWidget()
+        JarvisWatchDictateWidget()
+        JarvisWatchVoiceWidget()
+        JarvisWatchNutritionWidget()
+        JarvisWatchHomeWidget()
+        JarvisWatchTaskListWidget()
+        JarvisWatchBodyFatWidget()
+    }
 }

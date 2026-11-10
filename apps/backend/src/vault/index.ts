@@ -43,6 +43,9 @@ import {
 import { dayKey } from '../proactive/time.js';
 import { isTodoFileWritable } from '../proactive/todo-lines.js';
 import { parseTodosWithContext, sanitizeFactText, taskLineVersion, taskMetadata } from '../proactive/todo-file.js';
+import { encodeTaskMetadata, taskLocalInstant, taskMetadataComment } from './task-metadata.js';
+import type { ApprovalModelPort } from '../core/approval-interpreter.js';
+import { createWatchTaskCapture, watchTaskEditInput, type WatchTaskSubmissionStore } from './watch-task-capture.js';
 
 const folderNames = new Set(['People', 'Work', 'Personal', 'General']);
 const skippedFolders = new Set(['.git', '.obsidian', '.github', '.codex', '.vscode']);
@@ -260,7 +263,7 @@ function indexedDirectoryTree(allPaths: readonly string[], markdownPaths: readon
 }
 
 function chunkMarkdown(text: string): Array<{ heading: string; content: string }> {
-  const lines = text.replace(/\r\n?/gu, '\n').split('\n');
+  const lines = text.replace(taskMetadataComment, '').replace(/\r\n?/gu, '\n').split('\n');
   const sections: Array<{ heading: string; lines: string[] }> = [];
   const headings: Array<{ level: number; text: string }> = [];
   let current: { heading: string; lines: string[] } | undefined;
@@ -378,7 +381,7 @@ function vaultApiItem(path: string, content: string, updatedAt: Date): MemoryApi
 }
 
 function vaultNoteTitle(path: string, heading: string): string {
-  const title = heading.trim();
+  const title = heading.replace(taskMetadataComment, '').trim();
   return (title && title !== 'Introduction'
     ? title.split(' > ', 1)[0]!
     : posix.basename(path).replace(/\.md$/iu, '').replace(/[-_]/gu, ' ')).slice(0, 200);
@@ -431,7 +434,7 @@ function vaultTaskId(path: string, line: number): string {
 }
 
 function vaultTaskItem(todo: Awaited<ReturnType<typeof readVaultTasks>>[number]) {
-  const text = sanitizeFactText(todo.text);
+  const text = sanitizeFactText(todo.text, 400);
   return {
     id: vaultTaskId(todo.path, todo.line),
     text: shouldRedact(text) ? '[redacted]' : text,
@@ -444,6 +447,9 @@ function vaultTaskItem(todo: Awaited<ReturnType<typeof readVaultTasks>>[number])
     line: todo.line,
     heading: todo.heading,
     version: todo.version,
+    ...(todo.notes === undefined ? {} : { notes: shouldRedact(todo.notes) ? '[redacted]' : todo.notes }),
+    ...(todo.timeZone === undefined ? {} : { timeZone: todo.timeZone }),
+    remindAtDue: todo.remindAtDue === true,
   };
 }
 
@@ -465,6 +471,7 @@ function setTaskDone(content: string, path: string, line: number, text: string, 
 
 /** Every Tasks-plugin or Dataview marker the parser strips from a task's visible text, so an edit can keep them verbatim. */
 const taskMarkerPattern = new RegExp([
+  String.raw`<!-- jarvis-task:[A-Za-z0-9_-]{1,16000} -->`,
   String.raw`\[reminder::\s*at_due_time\]`,
   String.raw`(?:📅\s*|\[due::\s*|\bdue:\s*)\d{4}-\d{2}-\d{2}(?:(?:\s+|T)\d{2}:\d{2})?\]?`,
   String.raw`🕒\s*\d{2}:\d{2}`,
@@ -485,6 +492,8 @@ interface TaskEdit {
   /** Omitted keeps the priority. */
   priority?: 'high' | 'medium' | 'normal' | undefined;
   remindAtDue?: boolean | undefined;
+  notes?: string | undefined;
+  timeZone?: string | undefined;
 }
 
 function taskMarkerKind(marker: string): 'due' | 'time' | 'priority' | 'other' {
@@ -509,13 +518,16 @@ function setTaskText(content: string, path: string, line: number, text: string, 
   if (edit.time && wantDue === null) return { status: 'refused' };
   const wantTime = wantDue === null ? null : edit.time === undefined ? todo.dueTime : edit.time;
   const wantPriority = edit.priority ?? todo.priorityLevel;
+  const wantNotes = edit.notes ?? todo.notes;
+  const wantTimeZone = edit.timeZone ?? todo.timeZone;
   const wantReminder = edit.remindAtDue ?? (todo.remindAtDue === true);
   if (wantReminder && (!wantDue || !wantTime || wantPriority !== 'high')) return { status: 'refused' };
   const reminderChanged = wantReminder !== (todo.remindAtDue === true);
-  const textChanged = todo.text !== sanitizeFactText(newText);
+  const textChanged = todo.text !== sanitizeFactText(newText, 400);
   const dueChanged = wantDue !== todo.dueDate || wantTime !== todo.dueTime;
   const priorityChanged = wantPriority !== todo.priorityLevel;
-  if (!textChanged && !dueChanged && !priorityChanged && !reminderChanged) return { status: 'unchanged', version: todo.version, done: todo.done };
+  const metadataChanged = wantNotes !== todo.notes || wantTimeZone !== todo.timeZone;
+  if (!textChanged && !dueChanged && !priorityChanged && !reminderChanged && !metadataChanged) return { status: 'unchanged', version: todo.version, done: todo.done };
   const parts = content.split(/(\r?\n)/u);
   const current = parts[(line - 1) * 2];
   const match = current === undefined ? null : /^(\uFEFF?\s*[-*]\s+\[[ xX]\]\s*)(.*)$/u.exec(current);
@@ -548,6 +560,10 @@ function setTaskText(content: string, path: string, line: number, text: string, 
       position = marker.index + marker[0].length;
       continue;
     }
+    if (marker[0].startsWith('<!-- jarvis-task:')) {
+      position = marker.index + marker[0].length;
+      continue;
+    }
     const kind = taskMarkerKind(marker[0].trim());
     if (dueChanged && (kind === 'due' || kind === 'time')) placeDue();
     else if (priorityChanged && kind === 'priority') placePriority();
@@ -559,10 +575,18 @@ function setTaskText(content: string, path: string, line: number, text: string, 
   placeDue();
   placePriority();
   if (wantReminder) pieces.push('[reminder:: at_due_time]');
+  let dueAt = todo.timeZone ? todo.dueAt ?? undefined : undefined;
+  if (dueChanged || wantTimeZone !== todo.timeZone) {
+    try { dueAt = wantDue && wantTime && wantTimeZone ? taskLocalInstant(wantDue, wantTime, wantTimeZone) : undefined; }
+    catch { return { status: 'refused' }; }
+  }
+  const metadata = encodeTaskMetadata({ notes: wantNotes, timeZone: wantTimeZone, dueAt });
+  if (metadata) pieces.push(metadata);
   const next = `${match[1] ?? ''}${pieces.join(' ')}`;
   const reread = parseTodosWithContext(next.replace(/^\uFEFF/u, ''), path)[0];
-  if (!reread || reread.text !== (textChanged ? sanitizeFactText(newText) : todo.text) || reread.done !== todo.done ||
-      reread.dueDate !== wantDue || reread.dueTime !== wantTime || reread.priorityLevel !== wantPriority || (reread.remindAtDue === true) !== wantReminder) {
+  if (!reread || reread.text !== (textChanged ? sanitizeFactText(newText, 400) : todo.text) || reread.done !== todo.done ||
+      reread.dueDate !== wantDue || reread.dueTime !== wantTime || reread.priorityLevel !== wantPriority || (reread.remindAtDue === true) !== wantReminder ||
+      reread.notes !== wantNotes || reread.timeZone !== wantTimeZone) {
     return { status: 'refused' };
   }
   parts[(line - 1) * 2] = next;
@@ -585,7 +609,7 @@ function newTaskText(value: string): string {
     .replace(/\[reminder::[^\]]*\]/giu, ' ')
     .replace(taskMetadata, ' ')
     .replace(/\s+/gu, ' ')
-    .trim()).slice(0, 200).join('');
+    .trim()).slice(0, 400).join('');
 }
 
 function queryTerms(value: string): string[] {
@@ -769,7 +793,7 @@ function cosineSimilarity(left: readonly number[], right: readonly number[]): nu
 }
 
 function snippet(value: string): string {
-  return value.replace(/\s+/gu, ' ').trim().slice(0, maxSnippetLength);
+  return value.replace(taskMetadataComment, '').replace(/\s+/gu, ' ').trim().slice(0, maxSnippetLength);
 }
 
 function assertCaptureIsSafe(source: string, text: string): void {
@@ -801,6 +825,8 @@ export function createVaultModule(options: {
   readonly onUsageRecordFailure?: () => void;
   readonly log?: (event: 'vault.index' | 'vault.write', fields: VaultLogFields) => void;
   readonly logEmbedding?: (fields: MemoryEmbeddingLogFields) => void;
+  readonly watchTaskModel?: ApprovalModelPort;
+  readonly watchTaskSubmissions?: WatchTaskSubmissionStore;
 }): VaultModule {
   const log = options.log ?? (() => {});
   let synchronization: Promise<{ readonly added: number; readonly changed: number; readonly removed: number }> | undefined;
@@ -829,7 +855,7 @@ export function createVaultModule(options: {
     const readAt = new Date();
     const today = dayKey(readAt);
     const tasks = todos.map((todo) => {
-      const text = sanitizeFactText(todo.text);
+      const text = sanitizeFactText(todo.text, 400);
       return { ...todo, text: shouldRedact(text) ? '[redacted]' : text };
     });
     const matches = filterVaultTasks(tasks, { ...filters, today });
@@ -1389,6 +1415,9 @@ export function createVaultModule(options: {
     onWrite: indexAfterNoteWrite,
     log,
   });
+  const captureWatchTask = createWatchTaskCapture({
+    writer: taskWriter, store: options.watchTaskSubmissions, model: options.watchTaskModel, shouldRedact,
+  });
   const taskTools = [
     {
       name: 'vault_task_create',
@@ -1862,7 +1891,7 @@ export function createVaultModule(options: {
               type: 'object',
               properties: {
                 id: { type: 'string', pattern: '^[0-9a-f]{64}$' },
-                text: { type: 'string', maxLength: 300 },
+                text: { type: 'string', maxLength: 400 },
                 done: { type: 'boolean' },
                 dueDate: { type: ['string', 'null'], format: 'date' },
                 dueTime: { type: ['string', 'null'], pattern: '^\\d{2}:\\d{2}$' },
@@ -1872,6 +1901,9 @@ export function createVaultModule(options: {
                 line: { type: 'integer', minimum: 1 },
                 heading: { type: ['string', 'null'], maxLength: 300 },
                 version: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+                notes: { type: 'string', maxLength: 2000 },
+                timeZone: { type: 'string', maxLength: 100 },
+                remindAtDue: { type: 'boolean' },
               },
               required: ['id', 'text', 'done', 'dueDate', 'dueTime', 'dueAt', 'priority', 'path', 'line', 'heading', 'version'],
               additionalProperties: false,
@@ -2131,6 +2163,9 @@ export function createVaultModule(options: {
           done: { type: 'boolean' },
           commit: { type: ['string', 'null'], pattern: '^[\\da-f]{40}$' },
           version: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+          notes: { type: 'string', maxLength: 2000 },
+          timeZone: { type: 'string', maxLength: 100 },
+          remindAtDue: { type: 'boolean' },
         },
         required: ['id', 'path', 'line', 'done', 'commit', 'version'],
         additionalProperties: false,
@@ -2139,6 +2174,42 @@ export function createVaultModule(options: {
         if (error instanceof TaskWriteError) return reply.code(error.statusCode).send({ error: error.message });
         return reply.code(503).send({ error: 'The task save outcome is unknown. Reread the task list before trying again.' });
       };
+
+      const watchTaskErrorSchema = {
+        type: 'object',
+        properties: {
+          error: { type: 'string' }, message: { type: 'string' },
+          code: { type: 'string', enum: ['invalid_task', 'task_conflict', 'task_unavailable', 'task_save_unknown'] },
+          retryable: { type: 'boolean' }, outcomeUnknown: { type: 'boolean' },
+        },
+        required: ['error'],
+        additionalProperties: false,
+      };
+      const watchTaskFailure = (error: unknown, reply: import('fastify').FastifyReply, edit = false) => {
+        const status = error instanceof TaskWriteError ? error.statusCode : 503;
+        const message = error instanceof TaskWriteError ? error.message : 'The task save outcome could not be confirmed. Refresh the task list before retrying.';
+        const outcomeUnknown = status === 503 && (!(error instanceof TaskWriteError) || edit || error.outcomeUnknown);
+        const code = status === 400 ? 'invalid_task' : status === 409 ? 'task_conflict' : outcomeUnknown ? 'task_save_unknown' : 'task_unavailable';
+        return reply.code(status).send({ error: message, message, code, retryable: status === 503, outcomeUnknown });
+      };
+      const watchTaskRouteOptions = {
+        bodyLimit: 16 * 1024,
+        schema: {
+          response: { 200: taskWriteResponseSchema, 400: watchTaskErrorSchema, 403: apiError, 409: watchTaskErrorSchema, 503: watchTaskErrorSchema },
+        },
+      };
+      app.post<{ Body: unknown }>('/vault/watch-tasks', watchTaskRouteOptions, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        try {
+          return await captureWatchTask(app.ownerObjectId, request.body, AbortSignal.timeout(30_000));
+        } catch (error) { return watchTaskFailure(error, reply); }
+      });
+      app.patch<{ Body: unknown }>('/vault/watch-tasks', watchTaskRouteOptions, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        try {
+          return await taskWriter.edit(watchTaskEditInput(request.body), AbortSignal.timeout(30_000));
+        } catch (error) { return watchTaskFailure(error, reply, true); }
+      });
 
       app.patch<{ Body: { path: string; line: number; text: string; version: string; done: boolean } }>('/vault/tasks', {
         schema: {

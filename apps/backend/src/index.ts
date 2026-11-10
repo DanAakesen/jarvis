@@ -70,6 +70,7 @@ import { createChatAcceptanceProbes } from './core/chat-canary.js';
 import { FOUNDRY_SCOPE, FoundryClient } from './foundry/client.js';
 import { createApprovalInterpreter } from './core/approval-interpreter.js';
 import { chooseApprovalModel, createFoundryApprovalModel, createFoundryJsonCompletion } from './core/approval-interpreter-foundry.js';
+import { createWatchTaskSubmissionStore } from './database/watch-task-submission-store.js';
 import { createJevPcActPlanner } from './pc-bridge/pc-act.js';
 import { createJevRecipePlanner } from './core/task-recipes.js';
 import { createRecipeModule } from './core/recipe-management.js';
@@ -529,6 +530,14 @@ try {
           ? metadata.target : null;
       } }
     : undefined;
+  const approvalEndpoint = (() => {
+    if (!config.foundryProjectEndpoint) return undefined;
+    try {
+      const url = new URL('/models/chat/completions', new URL(normalizeFoundryProjectEndpoint(config.foundryProjectEndpoint)).origin);
+      url.searchParams.set('api-version', '2024-05-01-preview');
+      return url;
+    } catch { return undefined; }
+  })();
   const vaultClient = githubAppTokenIssuer
     ? createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer })
     : undefined;
@@ -538,6 +547,23 @@ try {
       indexStore: vaultIndexStore,
       memoryStore,
       apiMemoryStore: memoryStore,
+      ...(database ? { watchTaskSubmissions: createWatchTaskSubmissionStore(database.pool) } : {}),
+      ...(approvalEndpoint && credential && settingsStore && usageStore?.recordFoundryUsage ? {
+        watchTaskModel: createFoundryJsonCompletion({
+          endpoint: approvalEndpoint, scope: FOUNDRY_SCOPE, maxContentBytes: 16 * 1024,
+          getToken: async (scope, signal) => {
+            const token = await credential.getToken(scope, { abortSignal: signal });
+            if (!token) throw new Error('Task parsing identity unavailable');
+            return token.token;
+          },
+          selectModel: async () => {
+            const catalogue = await modelCatalogue.read();
+            const selected = chooseApprovalModel(catalogue, (await readSettings(settingsStore, catalogue)).roles.chat.model);
+            return selected ? { ...selected, maxCompletionTokens: 2048 } : undefined;
+          },
+          recordUsage: usage => usageStore.recordFoundryUsage!(usage),
+        }),
+      } : {}),
       ...(workspaceItemsStore ? { recordWorkspaceGraph: (query: string, highlight: readonly string[], createdAt: string) => {
         const id = randomUUID();
         return workspaceItemsStore.record(config.auth.ownerObjectId, {
@@ -801,16 +827,6 @@ try {
     : undefined;
   // Decides what Dan's verified reply means for a staged change (never whether he may approve). Without a configured
   // chat model, or on any failure, only plain one-word replies approve and everything else gets one natural question.
-  const approvalEndpoint = (() => {
-    if (!config.foundryProjectEndpoint) return undefined;
-    try {
-      const url = new URL('/models/chat/completions', new URL(normalizeFoundryProjectEndpoint(config.foundryProjectEndpoint)).origin);
-      url.searchParams.set('api-version', '2024-05-01-preview');
-      return url;
-    } catch {
-      return undefined;
-    }
-  })();
   const approvalInterpreter = approvalEndpoint && credential && settingsStore && usageStore?.recordFoundryUsage
     ? createApprovalInterpreter({
       model: createFoundryApprovalModel({
