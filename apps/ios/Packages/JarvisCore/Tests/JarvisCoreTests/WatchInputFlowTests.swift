@@ -63,6 +63,29 @@ final class WatchInputFlowTests: XCTestCase {
         }
         XCTAssertThrowsError(try WatchHealthHistory.items(from: result(status: "empty", items: [["id": .string("unexpected")]])))
     }
+    func testEditingHighRepLiftPreservesCountDuringUnrelatedWeightChange() throws {
+        let row: [String: JSONValue] = ["exerciseName": .string("Calf raises"),
+            "weightKg": .number(20), "reps": .number(150), "sets": .number(3)]
+        var value = try XCTUnwrap(WatchLiftInput(record: row))
+        value.kilograms = 25
+        XCTAssertTrue(value.isValid)
+        XCTAssertEqual(value.reps, 150)
+        let encoded = try JSONDecoder().decode(WatchLiftInput.self, from: WatchCodec.encode(value))
+        XCTAssertEqual(encoded.reps, 150)
+        XCTAssertEqual(encoded.kilograms, 25)
+        XCTAssertTrue(WatchLiftInput(exercise: "Calf raises", kilograms: 0, reps: 1000, sets: 100).isValid)
+    }
+    func testUnsupportedStoredCountsAreRejectedWithoutCoercionOrIntegerTrap() {
+        var row: [String: JSONValue] = ["exerciseName": .string("Bench"),
+            "weightKg": .number(20), "reps": .number(8), "sets": .number(3)]
+        for invalid in [1001.0, 1.5, -1, Double.greatestFiniteMagnitude, Double.nan] {
+            row["reps"] = .number(invalid)
+            XCTAssertNil(WatchLiftInput(record: row))
+        }
+        row["reps"] = .number(8); row["sets"] = .number(101)
+        XCTAssertNil(WatchLiftInput(record: row))
+        XCTAssertFalse(WatchLiftInput(exercise: "Bench", kilograms: 20, reps: 1001, sets: 3).isValid)
+    }
     private func result(status: String, items: [[String: JSONValue]]) throws -> JarvisHealthQueryResult {
         struct Envelope: Encodable {
             let source = "daily.health.lifts"

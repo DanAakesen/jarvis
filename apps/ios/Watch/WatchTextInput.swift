@@ -39,11 +39,12 @@ struct WatchTextInput: View {
 struct WatchCountPicker: View {
     var title: String
     @Binding var value: Int
+    var range: ClosedRange<Int> = 1...100
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         VStack(spacing: 8) {
             Picker(title, selection: $value) {
-                ForEach(1...100, id: \.self) { number in
+                ForEach(range, id: \.self) { number in
                     Text(number.formatted()).font(.title2).tag(number)
                 }
             }.pickerStyle(.wheel).labelsHidden().frame(height: 110)

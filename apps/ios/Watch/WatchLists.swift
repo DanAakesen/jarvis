@@ -121,30 +121,40 @@ struct WatchLiftEditor: View {
     @State private var failure: String?
     @State private var confirmDelete = false
     @State private var initialized = false
+    @State private var unsupportedRecord = false
     @State private var previewReps = false
     private var id: String? { row["id"]?.stringValue }
     private var value: WatchLiftInput { .init(submissionID: submissionID, exercise: exercise, kilograms: kilograms, reps: reps, sets: sets) }
     var body: some View {
         Form {
-            WatchTextInput(title: "Exercise", text: $exercise).disabled(busy)
-            TextField("Weight (kg)", value: $kilograms, format: .number)
-                .font(.body).accessibilityLabel("Weight in kilograms").disabled(busy)
+            WatchTextInput(title: "Exercise", text: $exercise).disabled(busy || unsupportedRecord)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Weight (kg)").font(.caption).foregroundStyle(.secondary)
+                TextField("Weight (kg)", value: $kilograms, format: .number)
+                    .font(.body).accessibilityLabel("Weight in kilograms")
+            }.disabled(busy || unsupportedRecord)
             NavigationLink {
-                WatchCountPicker(title: "Reps", value: $reps)
-            } label: { LabeledContent("Reps", value: reps.formatted()) }.disabled(busy)
+                WatchCountPicker(title: "Reps", value: $reps, range: 1...1000)
+            } label: { LabeledContent("Reps", value: reps.formatted()) }.disabled(busy || unsupportedRecord)
             NavigationLink {
                 WatchCountPicker(title: "Sets", value: $sets)
-            } label: { LabeledContent("Sets", value: sets.formatted()) }.disabled(busy)
+            } label: { LabeledContent("Sets", value: sets.formatted()) }.disabled(busy || unsupportedRecord)
             if let failure { Text(failure).font(.caption) }
             Button(busy ? "Saving…" : "Save") { Task { await save() } }
-                .disabled(busy || !value.isValid || !connection.reachable || (!row.isEmpty && id == nil))
+                .disabled(busy || unsupportedRecord || !value.isValid || !connection.reachable || (!row.isEmpty && id == nil))
             if id != nil { Button("Delete lift", role: .destructive) { confirmDelete = true }.disabled(busy || !connection.reachable) }
         }.navigationTitle(id == nil ? "New lift" : "Edit lift")
         .onAppear {
             guard !initialized else { return }; initialized = true
-            exercise = row["exerciseName"]?.stringValue ?? ""
-            kilograms = row["weightKg"]?.numberValue ?? 0
-            reps = min(100, max(1, Int(row["reps"]?.numberValue ?? 8))); sets = min(100, max(1, Int(row["sets"]?.numberValue ?? 3)))
+            if !row.isEmpty {
+                guard let record = WatchLiftInput(record: row) else {
+                    unsupportedRecord = true
+                    failure = "This lift cannot be edited on Watch. Open it on iPhone."
+                    return
+                }
+                exercise = record.exercise; kilograms = record.kilograms
+                reps = record.reps; sets = record.sets
+            }
             #if DEBUG
             previewReps = ProcessInfo.processInfo.arguments.contains("--watch-picker=reps")
             #endif
@@ -155,7 +165,7 @@ struct WatchLiftEditor: View {
         }
     }
     private func save() async {
-        guard !busy, value.isValid, connection.reachable else { return }
+        guard !busy, !unsupportedRecord, value.isValid, connection.reachable else { return }
         busy = true; defer { busy = false }
         do {
             _ = try await connection.request(.init(action: .saveLift, itemID: id, data: WatchCodec.encode(value), id: submissionID))

@@ -128,11 +128,21 @@ public struct WatchLiftInput: Codable, Equatable, Sendable {
     public init(submissionID: UUID = UUID(), exercise: String, kilograms: Double, reps: Int, sets: Int) {
         self.submissionID = submissionID; self.exercise = exercise; self.kilograms = kilograms; self.reps = reps; self.sets = sets
     }
+    /// Reject unsupported/corrupt reads instead of clamping and overwriting saved values.
+    public init?(record: [String: JSONValue]) {
+        guard case .string(let name)? = record["exerciseName"],
+              case .number(let weight)? = record["weightKg"],
+              case .number(let repCount)? = record["reps"],
+              case .number(let setCount)? = record["sets"],
+              repCount.isFinite, setCount.isFinite,
+              (1...1000).contains(repCount), (1...100).contains(setCount),
+              repCount.rounded() == repCount, setCount.rounded() == setCount else { return nil }
+        self.init(exercise: name, kilograms: weight, reps: Int(repCount), sets: Int(setCount))
+        guard isValid else { return nil }
+    }
     public var isValid: Bool {
-        let name = exercise.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !name.isEmpty && name.utf16.count <= 80 && !name.unicodeScalars.contains(where: { $0.value < 32 }) &&
-            kilograms.isFinite && (0...1000).contains(kilograms) && abs(kilograms * 100 - (kilograms * 100).rounded()) < 1e-7 &&
-            (1...100).contains(reps) && (1...100).contains(sets)
+        JarvisLiftDraft(idempotencyKey: submissionID, exerciseName: exercise,
+                        weightKg: kilograms, reps: reps, sets: sets).isValid
     }
 }
 
