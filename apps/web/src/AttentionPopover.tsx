@@ -1,91 +1,16 @@
-import { ReviewSummary } from './ReviewSummary';
 import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { Link } from 'react-router-dom';
-import type { BrowserConfirmation, FeedAttention, ActivityItem } from './activity';
+import type { FeedAttention, ActivityItem } from './activity';
 import { activityHref } from './activity';
 import { formatDateTime } from './format/date-time';
 import { ShellIcon } from './ShellIcon';
 import { returnFocusAfterOutsidePress } from './overlay-focus';
 import { useOverlayMotion } from './overlay-motion';
 
-function confirmationLabel(kind: BrowserConfirmation['actionKind']): string {
-  const words = kind.replaceAll('_', ' ');
-  return `${words[0]!.toUpperCase()}${words.slice(1)}`;
-}
-
 function without<T>(values: ReadonlySet<T>, value: T): ReadonlySet<T> {
   const next = new Set(values);
   next.delete(value);
   return next;
-}
-
-function ConfirmationList({
-  confirmations,
-  onResolve,
-}: {
-  confirmations: readonly BrowserConfirmation[];
-  onResolve?: FeedAttention['onResolveConfirmation'];
-}) {
-  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
-  const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
-  const [message, setMessage] = useState('');
-
-  async function resolve(confirmation: BrowserConfirmation, decision: 'approve' | 'reject') {
-    if (!onResolve || pending.has(confirmation.id)) return;
-    setPending((current) => new Set(current).add(confirmation.id));
-    setFailed((current) => without(current, confirmation.id));
-    setMessage('');
-    try {
-      await onResolve(confirmation.id, decision);
-      setMessage(decision === 'approve' ? 'Approval recorded.' : 'Request rejected.');
-    } catch {
-      setFailed((current) => new Set(current).add(confirmation.id));
-    } finally {
-      setPending((current) => without(current, confirmation.id));
-    }
-  }
-
-  if (confirmations.length === 0) return message ? <p role="status">{message}</p> : null;
-  return (
-    <section aria-labelledby="attention-confirmations-heading">
-      <h3 id="attention-confirmations-heading">Pending confirmations</h3>
-      <p>Review each request before it expires.</p>
-      {message && <p role="status">{message}</p>}
-      {!onResolve && <p id="attention-confirmation-unavailable">Browser approvals are unavailable.</p>}
-      <ul className="activity-list">
-        {confirmations.map((confirmation) => {
-          const busy = pending.has(confirmation.id);
-          const label = confirmationLabel(confirmation.actionKind);
-          return (
-            <li key={confirmation.id} className="activity-item">
-              <div>
-                <h4>{label}</h4>
-                <ReviewSummary text={confirmation.summary} />
-                <p className="activity-time">
-                  Expires <time dateTime={confirmation.expiresAt}>{formatDateTime(confirmation.expiresAt)}</time>
-                </p>
-                {failed.has(confirmation.id) && (
-                  <p className="error-text" role="alert">Jarvis could not record your response. Try again.</p>
-                )}
-              </div>
-              <div className="action-row">
-                <button className="secondary-button" type="button" aria-label={`Reject ${label}`}
-                  aria-describedby={onResolve ? undefined : 'attention-confirmation-unavailable'}
-                  disabled={!onResolve || busy} onClick={() => { void resolve(confirmation, 'reject'); }}>
-                  Reject
-                </button>
-                <button className="primary-button" type="button" aria-label={`Approve ${label}`}
-                  aria-describedby={onResolve ? undefined : 'attention-confirmation-unavailable'}
-                  disabled={!onResolve || busy} onClick={() => { void resolve(confirmation, 'approve'); }}>
-                  {busy ? 'Sending…' : 'Approve'}
-                </button>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
-  );
 }
 
 function AttentionItems({
@@ -166,7 +91,7 @@ function focusHeaderFallback() {
 }
 
 export function AttentionPopover({ attention }: { attention: FeedAttention | null }) {
-  const count = (attention?.items.length ?? 0) + (attention?.confirmations.length ?? 0);
+  const count = attention?.items.length ?? 0;
   return count > 0 && attention ? <AttentionPopoverContent attention={attention} count={count} /> : null;
 }
 
@@ -231,7 +156,6 @@ function AttentionPopoverContent({ attention, count }: { attention: FeedAttentio
               onClick={close}><ShellIcon name="close" /></button>
           </div>
           <AttentionItems items={attention.items} onDismiss={attention.onDismiss} panel={popover} />
-          <ConfirmationList confirmations={attention.confirmations} onResolve={attention.onResolveConfirmation} />
         </div>
       )}
     </div>
