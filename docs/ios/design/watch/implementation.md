@@ -16,8 +16,28 @@ outcomes. Native Home count/list tests have not run on this Linux host.
 
 The filtering checkpoint passed all three unsigned builds in run 42828752415;
 its capture step failed on a simulator “Scene update failed” launch. That run does
-not qualify the combined feature. The extended capture workflow passes YAML/shell
-syntax checks; final combined native compilation/rendering remains outstanding.
+not qualify the combined feature. Run 42836136120 failed Watch simulator and
+paired-phone compilation at the nutrition accessibility expression; physical
+architecture compilation was skipped. The review fix extracts a String property
+with typed amount/goal/prefix/caveat steps, preserving the original `.formatted()`
+calls, missing-value copy and partial-intake qualifiers. It also restores
+`WatchChoiceBar` to top-level scope without changing the controls.
+
+After merging main with both documentation entries preserved, runtime commit
+`c9e05f6a` passes all 618 Core tests, 1,126 focused backend tests, backend build/lint,
+Swift parsing and the existing iOS CI metadata check. The new Auto/Manual regression
+exercises timeout, malformed success, definite rejection and successful manual
+retry with unchanged content, submission identity, timestamp and timezone.
+These are state/client tests, not
+native interaction evidence. Native run
+[42857360808](https://github.com/DanAakesen/jarvis/actions/runs/42857360808)
+is queued without an assigned Mac runner after approximately ten minutes of
+observation. None of its three builds or captures has run; no new native
+screenshots or interactions were inspected. Later documentation-only edits leave
+this native source unchanged. Aggregate CI and the separate iPhone Simulator UI workflow remain
+draft-skipped, not passed. GitHub CodeQL run 42857360341 passed its configured
+languages (not Swift). Local CodeQL could not create a Swift database and skipped
+JavaScript analysis for size; no Swift security-analysis pass is claimed.
 Save freezes the submission identity, time and payload in the active editor.
 Server receipts survive restarts; Watch-process draft restoration is not claimed.
 

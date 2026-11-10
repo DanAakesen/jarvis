@@ -1,6 +1,6 @@
 ## Watch dashboard and personal-task implementation — 10 November 2026 (#1701)
 
-Source implementation is complete on the issue branch; no merge or deployment.
+Source implementation is complete on the issue branch; no PR merge or deployment.
 It preserves the existing steps/startup and Factory/lift work. Shared Today/
 Upcoming filtering, dashboard/full views, four rectangular complications and
 task detail/edit/Auto/Manual capture are implemented.
@@ -8,10 +8,20 @@ task detail/edit/Auto/Manual capture are implemented.
 Qualification reports: 23 targeted Today tests; a 616-test Core run before the
 last integration refinements; 1,241 backend regressions and 94 real SQL tests;
 backend build/lint and targeted follow-up checks passed. The updated capture
-workflow passes YAML/shell syntax checks. Native Home UI tests and final combined
-native compilation/rendering remain unverified on this Linux host. The earlier
-filtering checkpoint passed all three unsigned builds, but simulator capture
-failed with “Scene update failed”; it is not evidence for the combined feature.
+workflow passes YAML/shell syntax checks. Review fixes split the nutrition
+accessibility string into typed steps without changing copy/number formatting,
+and restore the task choice control's top-level declaration. After synchronizing
+main, all 618 Core tests, 1,126 focused backend regressions, backend build/lint,
+Swift parsing and the existing iOS metadata check pass. Auto/Manual draft tests
+cover timeout, malformed success, definite rejection and unchanged explicit retry.
+Process-death restoration is not implemented.
+
+Native run 42836136120 failed at the nutrition expression; its physical build was
+skipped. Combined-source run 42857360808 is queued at runtime commit `c9e05f6a`.
+No Mac runner was assigned during this review; the three builds and new captures
+remain unverified. Subsequent documentation edits do not change native source.
+CI and the separate iPhone UI workflow are draft-skipped, not passing results.
+The earlier filtering checkpoint is not evidence for the combined feature.
 
 Next: qualify the final native source and physical Watch interactions, including
 Ultra 2. Exact nutrition/task-list complication image transfer remains a visual
