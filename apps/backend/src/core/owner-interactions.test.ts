@@ -77,8 +77,8 @@ function fixture(withConversationStore = true) {
   const directService = service;
   const phoneService: OwnerInteractionService = {
     ...service,
-    runConfirmed: (kind, summary, action, signal, delivery) => withPhoneConfirmationSession('42', () =>
-      directService.runConfirmed(kind, summary, action, signal, delivery)),
+    runRequested: (kind, summary, action, signal, delivery) => withPhoneConfirmationSession('42', () =>
+      directService.runRequested(kind, summary, action, signal, delivery)),
   };
   return { service: phoneService, directService, store, rows, onWebNotification, onConfirmationsChanged, onConfirmationPending, conversationStore };
 }
@@ -97,7 +97,7 @@ describe('phone-bound food confirmation compatibility', () => {
   it('publishes the exact persisted proposal and source binding while waiting for a new reply', async () => {
     const { service, store, onConfirmationPending } = fixture();
     const action = vi.fn(async () => 'committed');
-    const operation = service.runConfirmed('other', 'Log synthetic portion: 200 kcal.', action, undefined, delivery);
+    const operation = service.runRequested('other', 'Log synthetic portion: 200 kcal.', action, undefined, delivery);
     await vi.waitFor(() => expect(onConfirmationPending).toHaveBeenCalledOnce());
     expect(store.createConfirmation).toHaveBeenCalledOnce();
     expect(onConfirmationPending).toHaveBeenCalledWith(
@@ -114,7 +114,7 @@ describe('phone-bound food confirmation compatibility', () => {
     const { service, store, onConfirmationPending } = fixture();
     onConfirmationPending.mockImplementation(() => { throw new Error('Synthetic delivery failure'); });
     const action = vi.fn();
-    await expect(service.runConfirmed('other', 'Log synthetic portion.', action, undefined, delivery))
+    await expect(service.runRequested('other', 'Log synthetic portion.', action, undefined, delivery))
       .rejects.toThrow('Browser confirmation could not be completed.');
     expect(service.pendingBrowserConfirmations()).toEqual([]);
     expect(store.cancelConfirmation).toHaveBeenCalled();
@@ -125,7 +125,7 @@ describe('phone-bound food confirmation compatibility', () => {
     const { service, store, conversationStore } = fixture();
     conversationStore.getDanMessagesAfter.mockResolvedValue([{ id: '43', text, language: 'en' }]);
     const action = vi.fn(async () => 'committed');
-    const operation = service.runConfirmed('other', 'Log synthetic portion: 200 kcal.', action, undefined, delivery);
+    const operation = service.runRequested('other', 'Log synthetic portion: 200 kcal.', action, undefined, delivery);
     const rejected = ['no', 'cancel'].includes(text);
     const checked = rejected ? expect(operation).rejects.toThrow('rejected') : expect(operation).resolves.toBe('committed');
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
@@ -142,7 +142,7 @@ describe('phone-bound food confirmation compatibility', () => {
       conversationStore.getDanMessagesAfter.mockResolvedValue([{ id: '43', text, language: 'en' }]);
       const action = vi.fn();
       const controller = new AbortController();
-      const operation = service.runConfirmed('other', 'Log synthetic portion.', action, controller.signal, delivery);
+      const operation = service.runRequested('other', 'Log synthetic portion.', action, controller.signal, delivery);
       const checked = expect(operation).rejects.toThrow();
       await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
       expect(await service.resolveFoodEstimateReply!(reply(text), decide, controller.signal)).toBe(false);
@@ -192,7 +192,7 @@ describe('phone-bound food confirmation compatibility', () => {
       const { service } = fixture();
       const controller = new AbortController();
       const action = vi.fn();
-      const operation = service.runConfirmed('other', 'Synthetic portion.', action, controller.signal, delivery);
+      const operation = service.runRequested('other', 'Synthetic portion.', action, controller.signal, delivery);
       const checked = expect(operation).rejects.toThrow();
       await vi.advanceTimersByTimeAsync(0);
       if (end === 'cancel') controller.abort();
@@ -273,7 +273,7 @@ describe('phone-bound owner interactions', () => {
   it.each(['approve', 'decline'] as const)('resolves a bound food %s through the browser SQL boundary once', async verdict => {
     const { service, store, conversationStore } = fixture();
     const action = vi.fn(async () => 'committed');
-    const operation = service.runConfirmed('other', 'Log synthetic portion: 200 kcal.', action, undefined, delivery);
+    const operation = service.runRequested('other', 'Log synthetic portion: 200 kcal.', action, undefined, delivery);
     const checked = verdict === 'approve'
       ? expect(operation).resolves.toBe('committed') : expect(operation).rejects.toThrow('rejected');
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
@@ -297,7 +297,7 @@ describe('phone-bound owner interactions', () => {
   it.each(['neither', 'throws', 'invalid'] as const)('revokes natural authority after an unclear/failed %s decision but keeps the browser card', async outcome => {
     const { service } = fixture();
     const action = vi.fn(async () => 'committed');
-    const operation = service.runConfirmed('other', 'Log synthetic portion.', action, undefined, delivery);
+    const operation = service.runRequested('other', 'Log synthetic portion.', action, undefined, delivery);
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
     const decide = vi.fn(async () => {
       if (outcome === 'throws') throw new Error('Interpreter unavailable');
@@ -401,7 +401,7 @@ describe('phone-bound owner interactions', () => {
       const controller = new AbortController();
       const replyController = new AbortController();
       const action = vi.fn();
-      const operation = service.runConfirmed('other', 'Log synthetic portion.', action, controller.signal, delivery);
+      const operation = service.runRequested('other', 'Log synthetic portion.', action, controller.signal, delivery);
       const checked = expect(operation).rejects.toThrow();
       await vi.advanceTimersByTimeAsync(0);
       const decision = Promise.withResolvers<ApprovalVerdict>();
@@ -425,7 +425,7 @@ describe('phone-bound owner interactions', () => {
   it('keeps Away confirmations in the browser until the owner approves them', async () => {
     const { service, store, onConfirmationsChanged } = fixture();
     const action = vi.fn(async () => 'done');
-    const operation = service.runConfirmed('delete', 'Remove the staged item.', action);
+    const operation = service.runRequested('delete', 'Remove the staged item.', action);
 
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
     const confirmation = service.pendingBrowserConfirmations()[0]!;
@@ -445,7 +445,7 @@ describe('phone-bound owner interactions', () => {
   it('rejects browser confirmations without running the action', async () => {
     const { service, store } = fixture();
     const action = vi.fn();
-    const operation = service.runConfirmed('other', 'Review this change.', action);
+    const operation = service.runRequested('other', 'Review this change.', action);
     const rejected = expect(operation).rejects.toThrow('rejected');
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
     const confirmation = service.pendingBrowserConfirmations()[0]!;
@@ -461,7 +461,7 @@ describe('phone-bound owner interactions', () => {
     try {
       const { service, store } = fixture();
       const action = vi.fn(async () => 'done');
-      const operation = service.runConfirmed('other', 'Review this food correction.', action, undefined,
+      const operation = service.runRequested('other', 'Review this food correction.', action, undefined,
         { channel: 'browser', lifetimeSeconds: 1 });
       const expired = expect(operation).rejects.toThrow('expired');
       await vi.advanceTimersByTimeAsync(0);
@@ -495,7 +495,7 @@ describe('phone-bound owner interactions', () => {
     const { service, store } = fixture();
     const action = vi.fn();
     const controller = new AbortController();
-    const operation = service.runConfirmed('other', 'Review this exact change.', action, controller.signal);
+    const operation = service.runRequested('other', 'Review this exact change.', action, controller.signal);
     const cancelled = expect(operation).rejects.toThrow();
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
     const { id } = service.pendingBrowserConfirmations()[0]!;
@@ -513,7 +513,7 @@ describe('phone-bound owner interactions', () => {
   it('expires active waiters as well as durable pending confirmations', async () => {
     const { service } = fixture();
     const action = vi.fn();
-    const operation = service.runConfirmed('other', 'Review this exact change.', action);
+    const operation = service.runRequested('other', 'Review this exact change.', action);
     const expired = expect(operation).rejects.toThrow('expired');
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
     const { id } = service.pendingBrowserConfirmations()[0]!;
@@ -526,7 +526,7 @@ describe('phone-bound owner interactions', () => {
   it('executes only once when the same browser approval is submitted twice', async () => {
     const { service } = fixture();
     const action = vi.fn(async () => 'done');
-    const operation = service.runConfirmed('other', 'Review this exact change.', action);
+    const operation = service.runRequested('other', 'Review this exact change.', action);
     await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
     const { id } = service.pendingBrowserConfirmations()[0]!;
     expect(await Promise.all([
@@ -548,7 +548,7 @@ describe('signed-in owner actions', () => {
   it('executes immediately without creating an approval or waiting for a second message', async () => {
     const { directService, store, onConfirmationPending } = fixture();
     const action = vi.fn(async () => ({ saved: true }));
-    await expect(directService.runConfirmed('delete', 'Delete the requested item', action))
+    await expect(directService.runRequested('delete', 'Delete the requested item', action))
       .resolves.toEqual({ saved: true });
     expect(action).toHaveBeenCalledOnce();
     expect(store.createConfirmation).not.toHaveBeenCalled();
@@ -561,9 +561,9 @@ describe('signed-in owner actions', () => {
     const controller = new AbortController();
     controller.abort();
     const action = vi.fn(async () => 'saved');
-    await expect(directService.runConfirmed('other', 'Save', action, controller.signal)).rejects.toThrow();
+    await expect(directService.runRequested('other', 'Save', action, controller.signal)).rejects.toThrow();
     expect(action).not.toHaveBeenCalled();
-    await expect(directService.runConfirmed('other', 'Save', async () => { throw new Error('storage failed'); }))
+    await expect(directService.runRequested('other', 'Save', async () => { throw new Error('storage failed'); }))
       .rejects.toThrow('storage failed');
   });
 });

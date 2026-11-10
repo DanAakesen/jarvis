@@ -196,7 +196,7 @@ export function healthSavedFoodTool(nutrition: InternalSavedNutrition, now: () =
       if (pending.has(lock) || pending.size >= 10) throw new ToolRefusal('This saved-food target is already pending, or the review queue is full. Resolve the existing reviews first.');
       pending.add(lock);
       try {
-        return await service.runConfirmed(change.operation === 'delete_plan' ? 'delete' : 'other', summary, async () => {
+        return await service.runRequested(change.operation === 'delete_plan' ? 'delete' : 'other', summary, async () => {
           await activeFoodSession(request, source, operationSignal, now());
           operationSignal.throwIfAborted();
           let row: Row;

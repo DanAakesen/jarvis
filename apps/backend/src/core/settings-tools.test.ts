@@ -189,9 +189,9 @@ describe('Jarvis settings tools', () => {
     });
 
     it('validates reasoning against the proposed model rather than the current model', async () => {
-      const runConfirmed = vi.fn(async (_kind: string, _summary: string, action: () => Promise<unknown>) => action());
+      const runRequested = vi.fn(async (_kind: string, _summary: string, action: () => Promise<unknown>) => action());
       const { app, values } = fixture({
-        ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
+        ownerInteractions: { runRequested } as unknown as OwnerInteractionService,
       });
       const response = await app.inject({
         method: 'POST', url: '/tools/update_settings', headers,
@@ -203,12 +203,12 @@ describe('Jarvis settings tools', () => {
 
   it('confirms model-role and budget changes in Now before writing', async () => {
     let approve!: () => void;
-    const runConfirmed = vi.fn(async (_kind: string, _summary: string, action: () => Promise<unknown>) => {
+    const runRequested = vi.fn(async (_kind: string, _summary: string, action: () => Promise<unknown>) => {
       await new Promise<void>((resolve) => { approve = resolve; });
       return action();
     });
     const { app, settingsStore, values } = fixture({
-      ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
+      ownerInteractions: { runRequested } as unknown as OwnerInteractionService,
     });
     const pending = app.inject({
       method: 'POST',
@@ -221,9 +221,9 @@ describe('Jarvis settings tools', () => {
         },
       },
     });
-    await vi.waitFor(() => expect(runConfirmed).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(runRequested).toHaveBeenCalledOnce());
 
-    expect(runConfirmed).toHaveBeenCalledWith(
+    expect(runRequested).toHaveBeenCalledWith(
       'other',
       'Change chat reasoning: high and vision budget: USD 2 per day in Jarvis settings.',
       expect.any(Function),
@@ -239,13 +239,13 @@ describe('Jarvis settings tools', () => {
   });
 
   it('shows the proposed model and reasoning values in the approval card', async () => {
-    const runConfirmed = vi.fn(async (_kind, _summary, action) => action());
-    const { app } = fixture({ ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService });
+    const runRequested = vi.fn(async (_kind, _summary, action) => action());
+    const { app } = fixture({ ownerInteractions: { runRequested } as unknown as OwnerInteractionService });
     const response = await app.inject({ method: 'POST', url: '/tools/update_settings', headers,
       payload: { settings: { roles: { chat: { model: 'gpt-5.6-luna', reasoningEffort: 'high' } } } } });
     expect(response.json().outcome).toBe('ok');
-    expect(runConfirmed.mock.calls[0]?.[1]).toContain('chat model: gpt-5.6-luna');
-    expect(runConfirmed.mock.calls[0]?.[1]).toContain('chat reasoning: high');
+    expect(runRequested.mock.calls[0]?.[1]).toContain('chat model: gpt-5.6-luna');
+    expect(runRequested.mock.calls[0]?.[1]).toContain('chat reasoning: high');
   });
 
   it('refuses unsupported or credential-like keys without writing', async () => {
@@ -275,9 +275,9 @@ describe('Jarvis settings tools', () => {
   });
 
   it('does not write a model change when Dan rejects Now confirmation', async () => {
-    const runConfirmed = vi.fn(async () => { throw new ToolRefusal('Dan rejected the request.'); });
+    const runRequested = vi.fn(async () => { throw new ToolRefusal('Dan rejected the request.'); });
     const { app, settingsStore } = fixture({
-      ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
+      ownerInteractions: { runRequested } as unknown as OwnerInteractionService,
     });
     const response = await app.inject({
       method: 'POST',

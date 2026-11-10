@@ -1684,7 +1684,7 @@ export function createVaultModule(options: {
             throw new ToolFailure('Vault deletion is temporarily unavailable.');
           }
           if (!note) throw new ToolRefusal('That vault note does not exist.');
-          const commit = await service.runConfirmed(
+          const commit = await service.runRequested(
             'delete',
             `Permanently delete vault note ${path}.`,
             () => deleteNote(path, note!.sha, operationSignal),

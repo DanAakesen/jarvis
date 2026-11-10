@@ -208,7 +208,7 @@ function workspaceItemTools(
           const operationSignal = AbortSignal.any([signal, AbortSignal.timeout(6 * 60_000)]);
           try {
             const { item } = await store.get(ownerId, id, operationSignal);
-            await service.runConfirmed(
+            await service.runRequested(
               'delete',
               `Remove Workspaces item ${JSON.stringify(item.title)} (${item.id}). Its source artifact and history will be retained.`,
               async () => {

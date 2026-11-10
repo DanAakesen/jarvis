@@ -210,7 +210,7 @@ describe('Foundry model deployment manager', () => {
     const baseWorkflow = workflowFixture();
     const notification = {
       notify: vi.fn(async () => {}),
-      runConfirmed: vi.fn(async <T>(
+      runRequested: vi.fn(async <T>(
         _kind: string,
         _summary: string,
         action: () => Promise<T>,

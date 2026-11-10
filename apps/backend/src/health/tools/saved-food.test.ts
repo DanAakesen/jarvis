@@ -75,7 +75,7 @@ function fixture() {
     }),
   };
   const decisions: ReturnType<typeof Promise.withResolvers<'approve' | 'reject'>>[] = [];
-  const runConfirmed = vi.fn(async <T>(_kind: ConfirmationActionKind, _summary: string, action: () => Promise<T>,
+  const runRequested = vi.fn(async <T>(_kind: ConfirmationActionKind, _summary: string, action: () => Promise<T>,
     operationSignal?: AbortSignal, delivery?: BrowserConfirmationDelivery): Promise<T> => {
     expect(delivery).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
     const decision = Promise.withResolvers<'approve' | 'reject'>(); decisions.push(decision);
@@ -88,7 +88,7 @@ function fixture() {
   const source = { id: '42', sessionId: 'session', role: 'dan' as const, text: 'Review this synthetic saved food.', model: null, at };
   const request = { principal: { objectId: owner }, headers: {}, jarvisConversationMessage: source,
     server: { ownerObjectId: owner, conversationStore: { getSession: async () => session },
-      awayModeStore: { read: async () => mode }, ownerInteractions: { runConfirmed } } } as unknown as FastifyRequest;
+      awayModeStore: { read: async () => mode }, ownerInteractions: { runRequested } } } as unknown as FastifyRequest;
   const tool = healthSavedFoodTool(() => store, () => at.getTime());
   const begin = async (input: unknown, operationSignal = signal()) => {
     const active = tool.execute(input, request, operationSignal);
@@ -99,7 +99,7 @@ function fixture() {
       decision.resolve(answer); const result = await settled; if (result.error) throw result.error; return result.value;
     } };
   };
-  return { tool, request, store, favorites, plans, preferences, runConfirmed, mode, session, sourceRow, begin };
+  return { tool, request, store, favorites, plans, preferences, runRequested, mode, session, sourceRow, begin };
 }
 
 describe('inactive internal saved-food workflow', () => {
@@ -111,7 +111,7 @@ describe('inactive internal saved-food workflow', () => {
     expect(f.store.lookupSaved).toHaveBeenCalledWith('Alias', expect.any(AbortSignal));
     f.store.lookupSaved.mockResolvedValueOnce(null);
     expect(await f.tool.execute({ operation: 'lookup_saved', name: 'Missing' }, f.request, signal())).toMatchObject({ status: 'empty' });
-    expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.runRequested).not.toHaveBeenCalled();
     expect(f.tool.sensitive).toBe(true); expect(f.tool.denyOnPhone).toBe(true); expect(f.tool.reflexSafe).not.toBe(true);
     expect(JSON.stringify(await f.tool.execute({ operation: 'lookup_saved', name: 'Existing' }, f.request, signal()))).not.toContain('must-not-escape');
   });
@@ -126,19 +126,19 @@ describe('inactive internal saved-food workflow', () => {
       { favoriteId: 'disliked', status: 'available', revision: '3', preference: 'dislike' },
     ] });
     expect(f.store.preferences).toHaveBeenCalledWith(['missing', 'cleared', 'disliked'], expect.any(AbortSignal));
-    expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.runRequested).not.toHaveBeenCalled();
   });
   it('freezes a definition until actual browser approval and recovers the real replay without another approval', async () => {
     const f = fixture(); const input = save(); const pending = await f.begin(input);
     expect(f.store.favorite).not.toHaveBeenCalled();
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('"energy_kcal": 200');
+    expect(f.runRequested.mock.calls[0]![1]).toContain('"energy_kcal": 200');
     input.definition.energyKcal = 999;
     const committed = await pending.resolve();
     expect(committed).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null, fat_grams: 0, confidence: 'estimate' } });
     expect(JSON.stringify(committed)).not.toContain('must-not-escape');
     expect(f.store.favorite.mock.calls[0]![0].definition?.provenance).toMatchObject({ independentlyVerified: false });
     expect(await f.tool.execute(save(), f.request, signal())).toMatchObject({ status: 'already-applied', record: { revision: '1', energy_kcal: 200 } });
-    expect(f.store.favorite).toHaveBeenCalledOnce(); expect(f.runConfirmed).toHaveBeenCalledOnce();
+    expect(f.store.favorite).toHaveBeenCalledOnce(); expect(f.runRequested).toHaveBeenCalledOnce();
   });
   it('binds the actual source revision, saved quantities and unchanged provenance for an intake-derived favourite', async () => {
     const f = fixture();
@@ -151,7 +151,7 @@ describe('inactive internal saved-food workflow', () => {
     expect(f.store.savePlan).not.toHaveBeenCalled();
     input.entries[0]!.favoriteId = 'not-reviewed';
     expect(await pending.resolve()).toMatchObject({ record: { energy_kcal: 900, protein_grams: null, fat_grams: 0, revision: '1' } });
-    expect(f.runConfirmed.mock.calls[0]![1].length).toBeLessThanOrEqual(4000);
+    expect(f.runRequested.mock.calls[0]![1].length).toBeLessThanOrEqual(4000);
     expect(await f.tool.execute(plan(), f.request, signal())).toMatchObject({ status: 'already-applied' });
     expect(f.store.savePlan).toHaveBeenCalledOnce();
   });
@@ -213,6 +213,6 @@ describe('inactive internal saved-food workflow', () => {
       { operation: 'lookup_saved', name: 'Existing', favoriteIds: ['favorite'] },
       { ...save(), operationId: 'untrusted' }, { ...save(), confirmed: true },
     ]) await expect(f.tool.execute(input, f.request, signal())).rejects.toThrow();
-    expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.runRequested).not.toHaveBeenCalled();
   });
 });

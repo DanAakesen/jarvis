@@ -234,7 +234,7 @@ describe('PC task recipes', () => {
     expect(runtime.store.save).not.toHaveBeenCalled();
   });
 
-  it('keeps replayed irreversible clicks behind runConfirmed', async () => {
+  it('keeps replayed irreversible clicks behind runRequested', async () => {
     const runtime = recipes({
       kind: 'pc', key: 'vscode', goal: 'delete item',
       steps: [{ operation: 'click', target: { role: 'button', name: 'Delete' } }, { operation: 'done' }],
@@ -242,11 +242,11 @@ describe('PC task recipes', () => {
     const pc = bridge({
       observe: vi.fn(async () => ({ ...snapshot, elements: [{ index: 0, role: 'button', name: 'Delete' }] })),
     });
-    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
     await runPcAct({ goal: 'Delete item' }, request(), new AbortController().signal, pc, {
-      planner: { decide: vi.fn(async () => decision('blocked')) }, recipes: runtime, runConfirmed,
+      planner: { decide: vi.fn(async () => decision('blocked')) }, recipes: runtime, runRequested,
     });
-    expect(runConfirmed).toHaveBeenCalledOnce();
+    expect(runRequested).toHaveBeenCalledOnce();
     expect(pc.act).toHaveBeenCalledWith(expect.objectContaining({ confirmed: true }), expect.any(AbortSignal));
   });
 });
@@ -624,17 +624,17 @@ describe('pc_act bounded Windows control loop', () => {
     const visionModel = { locateElements: vi.fn(async () => [{
       index: 0, role: 'button', name: 'Send', bounds: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 },
     }]) };
-    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
 
     await runPcAct(
       { goal: 'Send the message' },
       request(),
       new AbortController().signal,
       pcBridge,
-      { planner, visionModel, runConfirmed },
+      { planner, visionModel, runRequested },
     );
 
-    expect(runConfirmed).toHaveBeenCalledWith(
+    expect(runRequested).toHaveBeenCalledWith(
       'Click the button "Send" in VS Code.',
       expect.any(Function),
       expect.any(AbortSignal),
@@ -705,18 +705,18 @@ describe('pc_act bounded Windows control loop', () => {
     const planner = { decide: vi.fn()
       .mockResolvedValueOnce(decision('click', 0))
       .mockResolvedValueOnce(decision('done')) };
-    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
 
     const result = await runPcAct(
       { goal: 'Open Settings' },
       request(),
       new AbortController().signal,
       pcBridge,
-      { planner, runConfirmed },
+      { planner, runRequested },
     );
 
     expect(result.status).toBe('completed');
-    expect(runConfirmed).not.toHaveBeenCalled();
+    expect(runRequested).not.toHaveBeenCalled();
     expect(pcBridge.act).toHaveBeenCalledWith(expect.objectContaining({
       action: 'click',
       confirmed: false,
@@ -773,14 +773,14 @@ describe('pc_act bounded Windows control loop', () => {
       .mockResolvedValueOnce(decision('click', 0))
       .mockResolvedValueOnce(decision('click', 0))
       .mockResolvedValueOnce(decision('done')) };
-    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
 
     const result = await runPcAct(
       { goal: 'Search Spotify for "Daft Punk" and play the result' },
       request(),
       new AbortController().signal,
       pcBridge,
-      { planner, runConfirmed },
+      { planner, runRequested },
     );
 
     expect(result.status).toBe('completed');
@@ -795,7 +795,7 @@ describe('pc_act bounded Windows control loop', () => {
       action: 'click',
       confirmed: false,
     }), expect.any(AbortSignal));
-    expect(runConfirmed).not.toHaveBeenCalled();
+    expect(runRequested).not.toHaveBeenCalled();
   });
 
   it('confirms irreversible keyboard chords and keeps chord/text content out of step logs', async () => {
@@ -803,7 +803,7 @@ describe('pc_act bounded Windows control loop', () => {
     const planner = { decide: vi.fn()
       .mockResolvedValueOnce(decision('keys', undefined, undefined, ['Ctrl+Enter']))
       .mockResolvedValueOnce(decision('done')) };
-    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
     const onStep = vi.fn();
 
     const result = await runPcAct(
@@ -811,11 +811,11 @@ describe('pc_act bounded Windows control loop', () => {
       request(),
       new AbortController().signal,
       pcBridge,
-      { planner, runConfirmed, onStep },
+      { planner, runRequested, onStep },
     );
 
     expect(result.status).toBe('completed');
-    expect(runConfirmed).toHaveBeenCalledWith(
+    expect(runRequested).toHaveBeenCalledWith(
       'Send an irreversible keyboard action in vscode.',
       expect.any(Function),
       expect.any(AbortSignal),
@@ -864,17 +864,17 @@ describe('pc_act bounded Windows control loop', () => {
       const planner = { decide: vi.fn()
         .mockResolvedValueOnce(decision('click', 0))
         .mockResolvedValueOnce(decision('done')) };
-      const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+      const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
 
       await runPcAct(
         { goal: `Click ${name}` },
         request(),
         new AbortController().signal,
         pcBridge,
-        { planner, runConfirmed },
+        { planner, runRequested },
       );
 
-      expect(runConfirmed).not.toHaveBeenCalled();
+      expect(runRequested).not.toHaveBeenCalled();
       expect(pcBridge.act).toHaveBeenCalledWith(expect.objectContaining({ confirmed: false }), expect.any(AbortSignal));
     }
   });
@@ -889,7 +889,7 @@ describe('pc_act bounded Windows control loop', () => {
         })
         .mockResolvedValueOnce({ acted: true, action: 'click' }),
     });
-    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
     const planner = { decide: vi.fn()
       .mockResolvedValueOnce(decision('click', 0))
       .mockResolvedValueOnce(decision('done')) };
@@ -899,11 +899,11 @@ describe('pc_act bounded Windows control loop', () => {
       request(),
       new AbortController().signal,
       pcBridge,
-      { planner, runConfirmed },
+      { planner, runRequested },
     );
 
     expect(result.status).toBe('completed');
-    expect(runConfirmed).toHaveBeenCalledWith(
+    expect(runRequested).toHaveBeenCalledWith(
       'Click the button "Open project" in VS Code.',
       expect.any(Function),
       expect.any(AbortSignal),
@@ -921,18 +921,18 @@ describe('pc_act bounded Windows control loop', () => {
     const planner = { decide: vi.fn()
       .mockResolvedValueOnce(decision('click', 0))
       .mockResolvedValueOnce(decision('done')) };
-    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
 
     const result = await runPcAct(
       { goal: 'Save the file' },
       request(),
       new AbortController().signal,
       pcBridge,
-      { planner, runConfirmed },
+      { planner, runRequested },
     );
 
     expect(result.status).toBe('completed');
-    expect(runConfirmed).toHaveBeenCalledWith(
+    expect(runRequested).toHaveBeenCalledWith(
       'Click the button "Overwrite file" in VS Code.',
       expect.any(Function),
       expect.any(AbortSignal),
@@ -949,18 +949,18 @@ describe('pc_act bounded Windows control loop', () => {
     const planner = { decide: vi.fn()
       .mockResolvedValueOnce(decision('type', 0, 'new title'))
       .mockResolvedValueOnce(decision('done')) };
-    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
 
     const result = await runPcAct(
       { goal: 'Overwrite the current title with "new title"' },
       request(),
       new AbortController().signal,
       pcBridge,
-      { planner, runConfirmed },
+      { planner, runRequested },
     );
 
     expect(result.status).toBe('completed');
-    expect(runConfirmed).toHaveBeenCalledWith(
+    expect(runRequested).toHaveBeenCalledWith(
       'Replace text in the edit "Search" in VS Code.',
       expect.any(Function),
       expect.any(AbortSignal),

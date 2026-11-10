@@ -2037,14 +2037,14 @@ describe('GitHub vault', () => {
     });
     await module.synchronize(signal());
     let approve: (() => Promise<unknown>) | undefined;
-    const runConfirmed = vi.fn((_kind: unknown, _summary: unknown, action: () => Promise<unknown>) =>
+    const runRequested = vi.fn((_kind: unknown, _summary: unknown, action: () => Promise<unknown>) =>
       new Promise<unknown>((resolve, reject) => {
         approve = async () => {
           try { resolve(await action()); } catch (error) { reject(error); }
         };
       }));
     const app = memoryApiApp(module, {
-      ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
+      ownerInteractions: { runRequested } as unknown as OwnerInteractionService,
     });
     const graphBefore = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
     expect(graphBefore.json().nodes).toHaveLength(1);
@@ -2054,8 +2054,8 @@ describe('GitHub vault', () => {
       { ...request, server: app } as FastifyRequest,
       signal(),
     );
-    await vi.waitFor(() => expect(runConfirmed).toHaveBeenCalledOnce());
-    expect(runConfirmed).toHaveBeenCalledWith(
+    await vi.waitFor(() => expect(runRequested).toHaveBeenCalledOnce());
+    expect(runRequested).toHaveBeenCalledWith(
       'delete',
       `Permanently delete vault note ${path}.`,
       expect.any(Function),
@@ -2087,14 +2087,14 @@ describe('GitHub vault', () => {
       remote: { [path]: { sha: sha('a'), content: '# Decision\n\nCurrent.' } },
     });
     await module.synchronize(signal());
-    const runConfirmed = vi.fn(async (_kind: unknown, _summary: unknown, action: () => Promise<unknown>) => {
+    const runRequested = vi.fn(async (_kind: unknown, _summary: unknown, action: () => Promise<unknown>) => {
       github.set(path, { sha: sha('b'), content: '# Decision\n\nChanged.' });
       return action();
     });
     const toolRequest = {
       ...request,
       server: {
-        ownerInteractions: { runConfirmed },
+        ownerInteractions: { runRequested },
         awayModeStore: null,
       },
     } as unknown as FastifyRequest;

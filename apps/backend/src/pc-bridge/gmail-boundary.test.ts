@@ -146,17 +146,17 @@ describe('actual raw PC registry Gmail boundary', () => {
   });
 
   it('rechecks structured identity inside actual native confirmation', async () => {
-    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => {
+    const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => {
       f.setNative('chrome', 'Inbox - Gmail');
       return action();
     });
-    const f = fixture({ runConfirmed });
+    const f = fixture({ runRequested });
     f.setNative('vscode', 'gmail-access-policy.ts - jarvis - Visual Studio Code');
     f.setControlName('Delete');
     f.planner.decide.mockResolvedValue({ operation: 'click', confidence: 0.99, targetIndex: 0 });
     await expect(f.registry.get('pc_act')!.execute({ goal: 'Delete the entry' }, request(), signal()))
       .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
-    expect(runConfirmed).toHaveBeenCalledOnce();
+    expect(runRequested).toHaveBeenCalledOnce();
     expect(f.execute.mock.calls.filter(([command]) => command.name === 'uia_act')).toHaveLength(0);
   });
 
@@ -313,11 +313,11 @@ describe('actual raw PC registry Gmail boundary', () => {
   });
 
   it('rechecks the actual site before confirmed dispatch without replacing the original snapshot', async () => {
-    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => {
+    const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => {
       f.setGmail(true);
       return action();
     });
-    const f = fixture({ runConfirmed });
+    const f = fixture({ runRequested });
     f.setGmail(false);
     const execute = f.execute.getMockImplementation()!;
     f.execute.mockImplementation(async (command, commandSignal, logger) => command.name === 'browser_act'
@@ -327,7 +327,7 @@ describe('actual raw PC registry Gmail boundary', () => {
     await expect(f.registry.get('pc_browser_act')!.execute({
       tabId: 'tab_1', snapshotId, action: 'click', elementIndex: 0,
     }, request(), signal())).rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
-    expect(runConfirmed).toHaveBeenCalledOnce();
+    expect(runRequested).toHaveBeenCalledOnce();
     expect(f.execute.mock.calls.filter(([command]) => command.name === 'browser_act')).toHaveLength(1);
     expect(f.execute.mock.calls.filter(([command]) => command.name === 'browser_snapshot')).toHaveLength(1);
   });

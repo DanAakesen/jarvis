@@ -68,7 +68,7 @@ export interface OwnerInteractionService {
     signal?: AbortSignal,
     delivery?: BrowserConfirmationDelivery,
   ): Promise<void>;
-  runConfirmed<T>(
+  runRequested<T>(
     actionKind: ConfirmationActionKind,
     summary: string,
     action: () => Promise<T>,
@@ -313,7 +313,7 @@ export function createOwnerInteractionService({
     async requestConfirmation(actionKind, summary, signal, delivery) {
       await requestConfirmation(actionKind, summary, signal, delivery);
     },
-    async runConfirmed(actionKind, summary, action, signal, delivery) {
+    async runRequested(actionKind, summary, action, signal, delivery) {
       if (typeof action !== 'function') throw new ToolRefusal('A confirmed action is required.');
       signal?.throwIfAborted();
       // The signed-in owner's request already authorizes this action. Callers

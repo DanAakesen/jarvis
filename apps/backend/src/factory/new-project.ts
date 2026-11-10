@@ -73,7 +73,7 @@ export const createProjectTool: JarvisTool = {
     }
     let repositoryUrl: string;
     try {
-      repositoryUrl = await notifications.runConfirmed(
+      repositoryUrl = await notifications.runRequested(
         'create_repository',
         `Create the ${defaults.visibility} repository ${repo}: ${cleanDescription}`,
         () => projectRepositoryCreator.create({

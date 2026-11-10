@@ -216,7 +216,7 @@ export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
   readonly pcActVisionModel?: PcActVisionModel;
   readonly recipes?: PcActOptions['recipes'];
   readonly onPcActStep?: PcActOptions['onStep'];
-  readonly runConfirmed?: <T>(
+  readonly runRequested?: <T>(
     summary: string,
     action: () => Promise<T>,
     signal: AbortSignal,
@@ -721,7 +721,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
         },
         sensitive: true,
         execute: (input, request, signal) =>
-          runBrowserAction(bridge, options.runConfirmed, input, signal, request.log),
+          runBrowserAction(bridge, options.runRequested, input, signal, request.log),
       },
       ...(options.pcActPlanner ? [{
         name: 'pc_act',
@@ -786,7 +786,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
             ...(options.pcActVisionModel ? { visionModel: options.pcActVisionModel } : {}),
             visionDeployment: settings.roles.vision.model,
             ...(options.recipes ? { recipes: options.recipes } : {}),
-            ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
+            ...(options.runRequested ? { runRequested: options.runRequested } : {}),
             ...(options.onPcActStep ? { onStep: options.onPcActStep } : {}),
           });
         },
@@ -836,7 +836,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
 
 async function runBrowserAction(
   bridge: PcBridgeConnection,
-  runConfirmed: PcBridgeModuleOptions['runConfirmed'],
+  runRequested: PcBridgeModuleOptions['runRequested'],
   input: unknown,
   signal: AbortSignal,
   logger: PcBridgeTimingLogger,
@@ -848,10 +848,10 @@ async function runBrowserAction(
   const { requiresConfirmation = false, ...bridgeAction } = action;
   if (bridgeAction.action === 'keys' &&
       (requiresConfirmation || isIrreversibleKeySequence(bridgeAction.keys))) {
-    if (!runConfirmed) {
+    if (!runRequested) {
       throw new ToolRefusal('Dan’s confirmation service is unavailable; the browser action was not performed.');
     }
-    return runConfirmed('Send an irreversible keyboard action in Chrome.', async () => {
+    return runRequested('Send an irreversible keyboard action in Chrome.', async () => {
       const approved = await executeBrowserAction(bridge, {
         name: 'browser_act',
         arguments: { ...bridgeAction, confirmed: true },
@@ -870,10 +870,10 @@ async function runBrowserAction(
     return result;
   }
   if (bridgeAction.action !== 'click' && bridgeAction.action !== 'keys') throw new Error('Invalid browser confirmation response');
-  if (!runConfirmed) {
+  if (!runRequested) {
     throw new ToolRefusal('Dan’s confirmation service is unavailable; the browser action was not performed.');
   }
-  return runConfirmed(result.summary, async () => {
+  return runRequested(result.summary, async () => {
     const approved = await executeBrowserAction(bridge, {
       name: 'browser_act',
       arguments: { ...bridgeAction, confirmed: true },
@@ -1189,7 +1189,7 @@ async function runCodexPrompt(
   const result = await runPcAct({ goal }, request, signal, guardedPcActBridge(bridge, request.log), {
     planner: options.pcActPlanner!,
     confirmOverwrites: false,
-    ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
+    ...(options.runRequested ? { runRequested: options.runRequested } : {}),
     onStep: (activity) => {
       if (activity.outcome === 'completed') completedActions.add(activity.action);
       options.onPcActStep?.(activity);

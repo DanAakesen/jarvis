@@ -13,7 +13,7 @@ function fixture() {
   const confirmation: string[] = [];
   const request = (id = owner) => ({
     server: { ownerObjectId: owner, ownerInteractions: {
-      runConfirmed: async (_kind: string, text: string, apply: () => Promise<unknown>) => {
+      runRequested: async (_kind: string, text: string, apply: () => Promise<unknown>) => {
         confirmation.push(text);
         return apply();
       },

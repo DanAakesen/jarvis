@@ -823,7 +823,7 @@ describe('conversation routes', () => {
     const store = storeFixture();
     const action = vi.fn(async () => 'Logged.');
     const chatAgent = { stream: vi.fn(async function* (_input, _auth, signal: AbortSignal) {
-      const pending = service.runConfirmed('other', 'Log synthetic portion: 200 kcal.', action, signal,
+      const pending = service.runRequested('other', 'Log synthetic portion: 200 kcal.', action, signal,
         { channel: 'browser', lifetimeSeconds: 120, foodEstimate: { sessionId: '41', sourceMessageId: '42' } });
       expect(signal.aborted).toBe(false);
       yield await pending;
@@ -856,7 +856,7 @@ describe('conversation routes', () => {
       agentSignal = signal;
       yield 'Working.';
       if (decision !== 'disconnect_after_commit') await proceed.promise;
-      const result = await service.runConfirmed('other', 'Log synthetic portion.', action, signal);
+      const result = await service.runRequested('other', 'Log synthetic portion.', action, signal);
       if (decision === 'disconnect_after_commit') await proceed.promise;
       yield result;
     }) };

@@ -82,7 +82,7 @@ export function healthNutritionTargetsTool(targets: NutritionTargetsAccess): Jar
       if (pending.has(lock)) throw new ToolRefusal('A nutrition-target change is already running. Wait for its result.');
       pending.add(lock);
       try {
-        return await service.runConfirmed('other', summary(current.targets, input.patch, changed), async () => {
+        return await service.runRequested('other', summary(current.targets, input.patch, changed), async () => {
           operationSignal.throwIfAborted();
           return { ...present(await store.write(input.patch, operationSignal)), status: 'committed', changed };
         }, operationSignal, { channel: 'browser', lifetimeSeconds: 120 });

@@ -160,7 +160,7 @@ export function healthFoodReviewTool(nutrition: InternalNutrition, now: () => nu
           sourceMessageId: source.id, summary: `Estimated nutrition (not measured):\n${nutritionSummary(after)}` });
       }
       try {
-        return await service.runConfirmed(change.operation === 'delete' ? 'delete' : 'other', summary, async () => {
+        return await service.runRequested(change.operation === 'delete' ? 'delete' : 'other', summary, async () => {
           operationSignal.throwIfAborted();
           const current = await store.intake(key, operationSignal);
           const replay = replayedChange(current);

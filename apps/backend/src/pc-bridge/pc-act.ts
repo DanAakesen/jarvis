@@ -144,7 +144,7 @@ export interface PcActOptions {
   readonly visionDeployment?: string;
   readonly confirmOverwrites?: boolean;
   readonly recipes?: RecipeRuntime;
-  readonly runConfirmed?: <T>(
+  readonly runRequested?: <T>(
     summary: string,
     action: () => Promise<T>,
     signal: AbortSignal,
@@ -852,20 +852,20 @@ export async function runPcAct(
       try {
         if ((operation === 'click' || operation === 'type') &&
             needsApproval(operation, goal, target!, options.confirmOverwrites !== false)) {
-          if (!options.runConfirmed) {
+          if (!options.runRequested) {
             throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
           }
-          await options.runConfirmed(
+          await options.runRequested(
             approvalSummary(operation, snapshot.application, target!),
             () => action(true),
             deadline,
           );
         } else if (operation === 'keys' &&
             (isIrreversibleKeySequence(decision.keys!) || irreversibleActionPattern.test(goal))) {
-          if (!options.runConfirmed) {
+          if (!options.runRequested) {
             throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
           }
-          await options.runConfirmed(
+          await options.runRequested(
             `Send an irreversible keyboard action in ${snapshot.application}.`,
             () => action(true),
             deadline,
@@ -875,10 +875,10 @@ export async function runPcAct(
         }
       } catch (error) {
         if (!(error instanceof ConfirmationNeeded)) throw error;
-        if (!options.runConfirmed) {
+        if (!options.runRequested) {
           throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
         }
-        await options.runConfirmed(error.summary, () => action(true), deadline);
+        await options.runRequested(error.summary, () => action(true), deadline);
       }
 
       if (!recipeDrifted) {

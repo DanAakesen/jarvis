@@ -95,7 +95,7 @@ function fixture() {
   };
   const decision = Promise.withResolvers<'approve' | 'reject'>();
   const staged = Promise.withResolvers<void>();
-  const runConfirmed = vi.fn(async <T>(_kind: ConfirmationActionKind, _summary: string, action: () => Promise<T>,
+  const runRequested = vi.fn(async <T>(_kind: ConfirmationActionKind, _summary: string, action: () => Promise<T>,
     operationSignal?: AbortSignal, delivery?: BrowserConfirmationDelivery): Promise<T> => {
     expect(delivery).toMatchObject({ channel: 'browser', lifetimeSeconds: 120 });
     staged.resolve();
@@ -114,7 +114,7 @@ function fixture() {
   };
   const request = {
     server: { ownerObjectId: owner, conversationStore,
-      awayModeStore: { read: vi.fn(async () => mode) }, ownerInteractions: { runConfirmed } },
+      awayModeStore: { read: vi.fn(async () => mode) }, ownerInteractions: { runRequested } },
     principal: { objectId: owner }, headers: {}, jarvisConversationMessage: source,
     validateInput: vi.fn(() => true), getValidationFunction: vi.fn(() => undefined), log: { info: vi.fn() },
   } as unknown as FastifyRequest;
@@ -128,7 +128,7 @@ function fixture() {
       confidence: 'accurate', captureMethod: 'mixed', provenance: { energyKcal: { source: 'user-exact' } }, ...overrides });
     rows.set('retained-key', saved); return saved;
   };
-  return { tool, request, store, conversationStore, nutrition, rows, runConfirmed, staged: staged.promise,
+  return { tool, request, store, conversationStore, nutrition, rows, runRequested, staged: staged.promise,
     approve: () => decision.resolve('approve'), reject: () => decision.resolve('reject'), mode, session, seed, lookup,
     setAttachments: (value: typeof photo[]) => { attachments = value; } };
 }
@@ -292,7 +292,7 @@ describe('inactive internal food proposal review', () => {
     await expect(f.tool.execute({ change: { operation: 'log_estimate', food: { mealName: 'Synthetic portion',
       referenceComponents: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } } }, f.request, signal()))
       .rejects.toThrow('superseded');
-    expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.runRequested).not.toHaveBeenCalled();
     expect(f.store.log).not.toHaveBeenCalled();
   });
 
@@ -341,7 +341,7 @@ describe('inactive internal food proposal review', () => {
     };
     const service = createOwnerInteractionService({ ownerObjectId: owner, store: confirmations,
       conversationStore: { getDanMessagesAfter: vi.fn(async () => [{ id: '43', text: 'yes, log that', language: 'en' }]) } });
-    f.runConfirmed.mockImplementation((...args) => service.runConfirmed(...args));
+    f.runRequested.mockImplementation((...args) => service.runRequested(...args));
     const result = channel === 'voice' ? executeThroughVoiceCapability(f.tool, f.request, estimate())
       : f.tool.execute(estimate(), f.request, signal());
     const receipt = await result;
@@ -359,7 +359,7 @@ describe('inactive internal food proposal review', () => {
     const estimateResult = executeThroughVoiceCapability(estimateFixture.tool, estimateFixture.request, estimate());
     await estimateFixture.staged;
     expect(estimateFixture.store.log).not.toHaveBeenCalled();
-    expect(estimateFixture.runConfirmed.mock.calls[0]![4]).toMatchObject({ channel: 'browser', lifetimeSeconds: 120,
+    expect(estimateFixture.runRequested.mock.calls[0]![4]).toMatchObject({ channel: 'browser', lifetimeSeconds: 120,
       foodEstimate: { sessionId: 'session', sourceMessageId: '42' } });
     estimateFixture.approve();
     expect(JSON.parse(await estimateResult)).toMatchObject({
@@ -405,16 +405,16 @@ describe('inactive internal food proposal review', () => {
     const result = f.tool.execute(input, f.request, signal());
     await f.staged;
     expect(f.store.log).not.toHaveBeenCalled();
-    expect(f.runConfirmed.mock.calls[0]![4]).toMatchObject({ channel: 'browser', lifetimeSeconds: 120,
+    expect(f.runRequested.mock.calls[0]![4]).toMatchObject({ channel: 'browser', lifetimeSeconds: 120,
       foodEstimate: { sessionId: 'session', sourceMessageId: '42' } });
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('- Calories: 200 kcal');
+    expect(f.runRequested.mock.calls[0]![1]).toContain('- Calories: 200 kcal');
     input.change.food.energyKcal = 999;
     f.approve();
     expect(await result).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null, confidence: 'estimate', capture_method: 'voice' } });
     expect(f.store.log).toHaveBeenCalledWith(expect.objectContaining({ confidence: 'estimate' }),
       { intent: 'log-intake', explicit: true, proposalRequired: true, estimateAccepted: true }, expect.any(AbortSignal));
     expect(JSON.stringify(await f.tool.execute(estimate(), f.request, signal()))).not.toContain('must-not-escape');
-    expect(f.store.log).toHaveBeenCalledOnce(); expect(f.runConfirmed).toHaveBeenCalledOnce();
+    expect(f.store.log).toHaveBeenCalledOnce(); expect(f.runRequested).toHaveBeenCalledOnce();
     expect(f.tool.sensitive).toBe(true); expect(f.tool.publicAllowedOnPhone).not.toBe(true); expect(f.tool.reflexSafe).not.toBe(true);
     expect(f.tool.denyOnPhone).toBe(true);
   });
@@ -425,7 +425,7 @@ describe('inactive internal food proposal review', () => {
     expect(lookedUp).toMatchObject({ intakeLogged: false, status: 'complete', totals: { energyKcal: 200 },
       presentation: expect.stringContaining('- Protein: 10 g\n- Calories: 200 kcal\n- Fat: 20 g') });
     expect(confirmToolCall('health_food_review', 'ok', lookedUp)).toContain('- Protein: 10 g\n- Calories: 200 kcal\n- Fat: 20 g');
-    expect(f.store.log).not.toHaveBeenCalled(); expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.store.log).not.toHaveBeenCalled(); expect(f.runRequested).not.toHaveBeenCalled();
 
     const changed = [{ name: 'Synthetic lentils', grams: 75, preparationMethod: 'boiled' }];
     const input = { change: { operation: 'log_estimate', food: { mealName: 'Synthetic meal', referenceComponents: changed } } };
@@ -433,10 +433,10 @@ describe('inactive internal food proposal review', () => {
     const pending = f.tool.execute(input, f.request, signal());
     await f.staged;
     expect(f.lookup).toHaveBeenLastCalledWith(changed, f.request, expect.any(AbortSignal));
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('- Calories: 150 kcal');
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('"referenceFood":"Frida Synthetic lentils"');
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('DTU National Food Institute');
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('Capture: "photo"');
+    expect(f.runRequested.mock.calls[0]![1]).toContain('- Calories: 150 kcal');
+    expect(f.runRequested.mock.calls[0]![1]).toContain('"referenceFood":"Frida Synthetic lentils"');
+    expect(f.runRequested.mock.calls[0]![1]).toContain('DTU National Food Institute');
+    expect(f.runRequested.mock.calls[0]![1]).toContain('Capture: "photo"');
     expect(f.store.log).not.toHaveBeenCalled();
     input.change.food.referenceComponents[0]!.grams = 999;
     f.approve();
@@ -466,7 +466,7 @@ describe('inactive internal food proposal review', () => {
     expect(unresolved).toMatchObject({ status: 'needs_details', intakeLogged: false,
       lookup: { totals: { energyKcal: null }, unknowns: ['0:no_match'] },
       presentation: expect.stringContaining('- Calories: unknown (not zero) kcal') });
-    expect(f.runConfirmed).not.toHaveBeenCalled(); expect(f.store.log).not.toHaveBeenCalled();
+    expect(f.runRequested).not.toHaveBeenCalled(); expect(f.store.log).not.toHaveBeenCalled();
   });
   it('keeps unknown nutrients null and recovers failed lookups without claiming an estimate', async () => {
     const f = fixture(); f.session.channel = 'chat'; f.setAttachments([photo]);
@@ -474,19 +474,19 @@ describe('inactive internal food proposal review', () => {
     await expect(f.tool.execute({ change: { operation: 'lookup_components',
       components: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } }, f.request, signal()))
       .rejects.toThrow('Synthetic provider failure');
-    expect(f.store.log).not.toHaveBeenCalled(); expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.store.log).not.toHaveBeenCalled(); expect(f.runRequested).not.toHaveBeenCalled();
 
     f.lookup.mockRejectedValueOnce(new ToolFailure('Synthetic final lookup failure'));
     await expect(f.tool.execute({ change: { operation: 'log_estimate', food: { mealName: 'Synthetic meal',
       referenceComponents: [{ name: 'Synthetic food', grams: 100, preparationMethod: null }] } } }, f.request, signal()))
       .rejects.toThrow('Synthetic final lookup failure');
-    expect(f.store.log).not.toHaveBeenCalled(); expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.store.log).not.toHaveBeenCalled(); expect(f.runRequested).not.toHaveBeenCalled();
 
     const pending = f.tool.execute({ change: { operation: 'log_estimate', food: { mealName: 'Synthetic meal',
       referenceComponents: [{ name: 'Synthetic unknown macro', grams: 100, preparationMethod: null }] } } }, f.request, signal());
     await f.staged;
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('- Protein: unknown (not zero) g');
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('nutrient_missing:proteinGrams');
+    expect(f.runRequested.mock.calls[0]![1]).toContain('- Protein: unknown (not zero) g');
+    expect(f.runRequested.mock.calls[0]![1]).toContain('nutrient_missing:proteinGrams');
     f.approve();
     expect(await pending).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null } });
     expect(f.store.log.mock.calls[0]![0].provenance).toMatchObject({ unknowns: ['0:nutrient_missing:proteinGrams'] });
@@ -496,7 +496,7 @@ describe('inactive internal food proposal review', () => {
     f.request.jarvisConversationMessage = { ...f.request.jarvisConversationMessage!, attachments: [photo] } as never;
     const pending = f.tool.execute(estimate(), f.request, signal());
     await f.staged;
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('Capture: "voice"');
+    expect(f.runRequested.mock.calls[0]![1]).toContain('Capture: "voice"');
     f.approve(); await pending;
 
     const other = fixture(); other.request.principal = { objectId: '22222222-2222-4222-8222-222222222222' };
@@ -523,14 +523,14 @@ describe('inactive internal food proposal review', () => {
     await f.staged; f.reject(); await refused;
     expect(f.store.log).not.toHaveBeenCalled();
     await expect(f.tool.execute(estimate(), f.request, signal())).rejects.toThrow('rejected');
-    expect(f.runConfirmed).toHaveBeenCalledTimes(2);
+    expect(f.runRequested).toHaveBeenCalledTimes(2);
   });
   it('refuses overlapping review instead of showing duplicate or changed approval cards', async () => {
     const f = fixture(); const first = f.tool.execute(estimate(), f.request, signal());
     await f.staged;
     await expect(f.tool.execute(estimate(), f.request, signal())).rejects.toThrow('already awaiting');
     f.approve(); await first;
-    expect(f.runConfirmed).toHaveBeenCalledOnce(); expect(f.store.log).toHaveBeenCalledOnce();
+    expect(f.runRequested).toHaveBeenCalledOnce(); expect(f.store.log).toHaveBeenCalledOnce();
   });
   it('allows an authenticated action while away and still honors cancellation', async () => {
     const f = fixture(); const result = f.tool.execute(estimate(), f.request, signal());
@@ -551,17 +551,17 @@ describe('inactive internal food proposal review', () => {
     ]) {
       const f = fixture(); modify(f);
       await expect(f.tool.execute(estimate(), f.request, signal())).rejects.toThrow();
-      expect(f.runConfirmed).not.toHaveBeenCalled(); expect(f.store.log).not.toHaveBeenCalled();
+      expect(f.runRequested).not.toHaveBeenCalled(); expect(f.store.log).not.toHaveBeenCalled();
     }
   });
   it('routes direct exact labels and actual saved favourites back to the one-step tool without another confirmation', async () => {
     const exact = fixture(); exact.request.jarvisConversationMessage!.text = 'Log yoghurt: 200 kcal';
     await expect(exact.tool.execute(estimate(), exact.request, signal())).rejects.toThrow('log_exact');
-    expect(exact.runConfirmed).not.toHaveBeenCalled();
+    expect(exact.runRequested).not.toHaveBeenCalled();
     const favorite = fixture(); favorite.request.jarvisConversationMessage!.text = 'Log my favourite Dinner';
     favorite.store.lookupSaved.mockResolvedValue({ source: 'favorite', row: {} });
     await expect(favorite.tool.execute(estimate(), favorite.request, signal())).rejects.toThrow('log_favorite');
-    expect(favorite.runConfirmed).not.toHaveBeenCalled();
+    expect(favorite.runRequested).not.toHaveBeenCalled();
   });
   it('rejects forged input authority and a different owner before touching nutrition', async () => {
     const f = fixture();
@@ -592,12 +592,12 @@ describe('inactive internal food proposal review', () => {
       changes: { energyKcal: 222, occurredAt: '2026-01-02T23:30:00Z' } } };
     const pending = f.tool.execute(input, f.request, signal());
     await f.staged;
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('energy 100 → 222 kcal');
+    expect(f.runRequested.mock.calls[0]![1]).toContain('energy 100 → 222 kcal');
     expect(f.store.correct).not.toHaveBeenCalled();
     f.approve();
     expect(await pending).toMatchObject({ status: 'committed', record: { energy_kcal: 222, meal_date: '2026-01-03', revision: '2', confidence: 'estimate', capture_method: 'mixed' } });
     expect(await f.tool.execute(input, f.request, signal())).toMatchObject({ status: 'committed', record: { revision: '2' } });
-    expect(f.runConfirmed).toHaveBeenCalledOnce(); expect(f.store.correct).toHaveBeenCalledOnce();
+    expect(f.runRequested).toHaveBeenCalledOnce(); expect(f.store.correct).toHaveBeenCalledOnce();
   });
   it('keeps a four-component photo meal name correction reviewable through the actual tool path', async () => {
     const f = fixture();
@@ -625,7 +625,7 @@ describe('inactive internal food proposal review', () => {
       changes: { mealName: 'Renamed synthetic photo meal' } } };
     const pending = f.tool.execute(input, f.request, signal());
     await f.staged;
-    const summary = f.runConfirmed.mock.calls[0]![1];
+    const summary = f.runRequested.mock.calls[0]![1];
     expect(summary.length).toBeLessThanOrEqual(4000);
     expect(summary).toContain('"Four component synthetic photo meal" → "Renamed synthetic photo meal"');
     expect(summary).toContain('Record revision: 1');
@@ -660,7 +660,7 @@ describe('inactive internal food proposal review', () => {
     const second = healthFoodReviewTool(() => f.store, () => at.getTime());
     expect(await second.execute(input, f.request, signal())).toEqual(committed);
     expect(f.store.correct).toHaveBeenCalledOnce();
-    expect(f.runConfirmed).toHaveBeenCalledTimes(2);
+    expect(f.runRequested).toHaveBeenCalledTimes(2);
   });
   it('recovers an actual source-bound corrected row after an uncertain correction result', async () => {
     const f = fixture(); f.seed(); const persist = f.store.correct.getMockImplementation()!;
@@ -685,6 +685,6 @@ describe('inactive internal food proposal review', () => {
     await f.staged; expect(f.store.remove).not.toHaveBeenCalled(); f.approve();
     expect(await pending).toMatchObject({ status: 'committed', record: { revision: '2', deleted_at: at.toISOString(), energy_kcal: 100 } });
     expect(await f.tool.execute(input, f.request, signal())).toMatchObject({ status: 'already-deleted', record: { revision: '2' } });
-    expect(f.rows.size).toBe(1); expect(f.store.remove).toHaveBeenCalledOnce(); expect(f.runConfirmed).toHaveBeenCalledOnce();
+    expect(f.rows.size).toBe(1); expect(f.store.remove).toHaveBeenCalledOnce(); expect(f.runRequested).toHaveBeenCalledOnce();
   });
 });

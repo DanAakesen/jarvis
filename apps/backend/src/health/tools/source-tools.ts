@@ -358,7 +358,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
       if (summary.length > 8_000) throw new ToolRefusal('The profile change is too large to review safely.');
       const interactions = request.server.ownerInteractions;
       if (!interactions) throw new ToolRefusal('Action execution is unavailable. No profile field was changed.');
-      return interactions.runConfirmed('other', summary, async () => {
+      return interactions.runRequested('other', summary, async () => {
         const latest = await store.profile(signal);
         if (latest.status !== 'available' || BigInt(String(latest.profile.revision)) !== revision) throw new ToolRefusal('The coach profile changed. Read it and review the update again.');
         return { status: 'committed', profile: await store.updateProfile(patch, revision, signal) };
@@ -382,7 +382,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
       const interactions = request.server.ownerInteractions;
       if (!interactions) throw new ToolRefusal('Action execution is unavailable. No meal preference was changed.');
       const revision = current ? BigInt(String(current.revision)) : 0n;
-      return interactions.runConfirmed('other', `Review this exact meal preference in Now. No food or Health row changes.\n${JSON.stringify({
+      return interactions.runRequested('other', `Review this exact meal preference in Now. No food or Health row changes.\n${JSON.stringify({
         mealKey: input.mealKey, before: current?.preference ?? null, after: input.preference,
       })}`, async () => {
         const latest = (await store.preferences([input.mealKey as string], signal))[0] ?? null;
@@ -412,7 +412,7 @@ export function healthSourceTools(data: HealthData, nutrition: NutritionAccess, 
       const before = await store.recovery(period.startDate, period.endDate, signal);
       const interactions = request.server.ownerInteractions;
       if (!interactions) throw new ToolRefusal('Action execution is unavailable. No recovery marker was changed.');
-      return interactions.runConfirmed('other', `Review this exact recovery-period change in Now. Measured records remain untouched.\n${JSON.stringify({
+      return interactions.runRequested('other', `Review this exact recovery-period change in Now. Measured records remain untouched.\n${JSON.stringify({
         ...period, state, context: input.context ?? null, before: before.map(row => ({
           date: row.recovery_date instanceof Date ? row.recovery_date.toISOString().slice(0, 10) : String(row.recovery_date).slice(0, 10),
           context: row.context_text ?? null,

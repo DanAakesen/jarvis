@@ -50,7 +50,7 @@ function fixture(options: {
   settingsStore?: SettingsStore;
   modelCatalogue?: ModelCatalogueReader;
   onPcActStep?: PcActOptions['onStep'];
-  runConfirmed?: <T>(summary: string, action: () => Promise<T>, signal: AbortSignal) => Promise<T>;
+  runRequested?: <T>(summary: string, action: () => Promise<T>, signal: AbortSignal) => Promise<T>;
 } = {}) {
   const records: string[] = [];
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
@@ -424,8 +424,8 @@ describe('authenticated PC bridge protocol', () => {
   it.each(['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const)(
     'routes pc_media %s through the authenticated bridge without confirmation',
     async (action) => {
-      const runConfirmed = vi.fn(async (_summary: string, operation: () => Promise<unknown>) => operation());
-      const { app, record } = fixture({ runConfirmed });
+      const runRequested = vi.fn(async (_summary: string, operation: () => Promise<unknown>) => operation());
+      const { app, record } = fixture({ runRequested });
       const url = await listen(app);
       const bridge = await connectBridge(url);
       const commands: Array<Record<string, unknown>> = [];
@@ -443,14 +443,14 @@ describe('authenticated PC bridge protocol', () => {
 
       expect(response.json()).toMatchObject({ outcome: 'ok', result: { controlled: true, action } });
       expect(commands).toMatchObject([{ command: 'media', arguments: { action } }]);
-      expect(runConfirmed).not.toHaveBeenCalled();
+      expect(runRequested).not.toHaveBeenCalled();
       expect(record.mock.calls[0]?.[0]).toMatchObject({ tool: 'pc_media', outcome: 'ok' });
     },
   );
 
   it('closes an app by name through the bridge and refuses when no window matches', async () => {
-    const runConfirmed = vi.fn(async (_summary: string, operation: () => Promise<unknown>) => operation());
-    const { app, record } = fixture({ runConfirmed });
+    const runRequested = vi.fn(async (_summary: string, operation: () => Promise<unknown>) => operation());
+    const { app, record } = fixture({ runRequested });
     const url = await listen(app);
     const bridge = await connectBridge(url);
     const commands: Array<Record<string, unknown>> = [];
@@ -474,7 +474,7 @@ describe('authenticated PC bridge protocol', () => {
       { command: 'close_app', arguments: { app: 'Visual Studio Code - Insiders' } },
       { command: 'close_app', arguments: { app: 'Notepad' } },
     ]);
-    expect(runConfirmed).not.toHaveBeenCalled();
+    expect(runRequested).not.toHaveBeenCalled();
     expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['ok', 'refused']);
   });
   it('runs pc_act through the authenticated bridge and redacts its audit and step activity', async () => {
@@ -535,8 +535,8 @@ describe('authenticated PC bridge protocol', () => {
         .mockResolvedValueOnce({ operation: 'click', confidence: 0.99, targetIndex: 1 })
         .mockResolvedValueOnce({ operation: 'done', confidence: 0.99 }),
     };
-    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
-    const { app, record } = fixture({ pcActPlanner: planner, runConfirmed });
+    const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+    const { app, record } = fixture({ pcActPlanner: planner, runRequested });
     const url = await listen(app);
     const bridge = await connectBridge(url);
     const commands: Array<Record<string, unknown>> = [];
@@ -578,8 +578,8 @@ describe('authenticated PC bridge protocol', () => {
     ]);
     expect(commands[3]!.arguments).toMatchObject({ action: 'type', text: prompt, confirmed: false });
     expect(commands[6]!.arguments).toMatchObject({ action: 'click', confirmed: true });
-    expect(runConfirmed).toHaveBeenCalledTimes(1);
-    expect(runConfirmed).toHaveBeenCalledWith(
+    expect(runRequested).toHaveBeenCalledTimes(1);
+    expect(runRequested).toHaveBeenCalledWith(
       'Click the button "Submit" in codex.',
       expect.any(Function),
       expect.any(AbortSignal),
@@ -677,8 +677,8 @@ describe('authenticated PC bridge protocol', () => {
   });
 
     it('routes browser tabs, atomic snapshots and actions through the bridge and confirms irreversible clicks', async () => {
-      const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
-      const { app, record } = fixture({ runConfirmed });
+      const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+      const { app, record } = fixture({ runRequested });
       const url = await listen(app);
       const bridge = await connectBridge(url);
       const commands: Array<Record<string, unknown>> = [];
@@ -729,7 +729,7 @@ describe('authenticated PC bridge protocol', () => {
         action: 'click',
       });
       expect(action.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'click' } });
-      expect(runConfirmed).toHaveBeenCalledWith(
+      expect(runRequested).toHaveBeenCalledWith(
         'Click "Send message" in Chrome.',
         expect.any(Function),
         expect.any(AbortSignal),
@@ -752,8 +752,8 @@ describe('authenticated PC bridge protocol', () => {
     });
 
     it('routes keyboard and focused-text actions through the bridge with confirmation only when irreversible', async () => {
-      const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
-      const { app, record } = fixture({ runConfirmed });
+      const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+      const { app, record } = fixture({ runRequested });
       const url = await listen(app);
       const bridge = await connectBridge(url);
       const commands: Array<Record<string, unknown>> = [];
@@ -785,7 +785,7 @@ describe('authenticated PC bridge protocol', () => {
 
       expect(keys.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'keys' } });
       expect(typed.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'type_focused' } });
-      expect(runConfirmed).toHaveBeenCalledWith(
+      expect(runRequested).toHaveBeenCalledWith(
         'Send an irreversible keyboard action in Chrome.',
         expect.any(Function),
         expect.any(AbortSignal),
@@ -818,8 +818,8 @@ describe('authenticated PC bridge protocol', () => {
     it.each(['Submit order', 'Purchase now', 'Send message'])(
       'uses P7-03 confirmation before clicking %s',
       async (label) => {
-        const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
-        const { app } = fixture({ runConfirmed });
+        const runRequested = vi.fn(async (_summary: string, action: () => Promise<unknown>) => action());
+        const { app } = fixture({ runRequested });
         const url = await listen(app);
         const bridge = await connectBridge(url);
         const commands: Array<Record<string, unknown>> = [];
@@ -850,7 +850,7 @@ describe('authenticated PC bridge protocol', () => {
         });
 
         expect(response.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'click' } });
-        expect(runConfirmed).toHaveBeenCalledWith(`Click "${label}" in Chrome.`, expect.any(Function), expect.any(AbortSignal));
+        expect(runRequested).toHaveBeenCalledWith(`Click "${label}" in Chrome.`, expect.any(Function), expect.any(AbortSignal));
         expect(commands.map(({ command }) => command)).toEqual([
           'browser_tabs', 'browser_snapshot', 'browser_tabs', 'browser_act', 'browser_tabs', 'browser_act',
         ]);

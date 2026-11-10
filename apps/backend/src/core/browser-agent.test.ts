@@ -913,14 +913,14 @@ describe('Jev browser agent', () => {
     let markRequested!: (summary: string) => void;
     const approval = new Promise<void>((resolve) => { approve = resolve; });
     const requested = new Promise<string>((resolve) => { markRequested = resolve; });
-    const runConfirmed = vi.fn(async (summary: string, action: () => Promise<unknown>) => {
+    const runRequested = vi.fn(async (summary: string, action: () => Promise<unknown>) => {
       markRequested(summary);
       await approval;
       return action();
     });
     env.act.mockImplementation(async (value: unknown) => {
       const input = value as BrowserActionInput;
-      const result = await runConfirmed(
+      const result = await runRequested(
         'Click "Send message" in Chrome.',
         async () => ({ acted: true, action: input.action }),
       );
@@ -941,7 +941,7 @@ describe('Jev browser agent', () => {
       elementIndex: 1,
       action: 'click',
     }]);
-    expect(runConfirmed).toHaveBeenCalledOnce();
+    expect(runRequested).toHaveBeenCalledOnce();
   });
 
   it('stops a shared-tab run when its caller aborts', async () => {

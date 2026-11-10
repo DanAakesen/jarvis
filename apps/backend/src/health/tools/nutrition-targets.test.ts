@@ -34,7 +34,7 @@ function fixture(initial: NutritionTargets = emptyNutritionTargets, options: { a
   };
   const access = vi.fn(() => store);
   const decisions: ReturnType<typeof Promise.withResolvers<'approve' | 'reject'>>[] = [];
-  const runConfirmed = vi.fn(async <T>(_kind: ConfirmationActionKind, _summary: string, action: () => Promise<T>,
+  const runRequested = vi.fn(async <T>(_kind: ConfirmationActionKind, _summary: string, action: () => Promise<T>,
     _signal?: AbortSignal, delivery?: BrowserConfirmationDelivery): Promise<T> => {
     expect(delivery).toEqual({ channel: 'browser', lifetimeSeconds: 120 });
     const decision = Promise.withResolvers<'approve' | 'reject'>();
@@ -45,7 +45,7 @@ function fixture(initial: NutritionTargets = emptyNutritionTargets, options: { a
   });
   const request = {
     principal: { objectId: owner }, headers: {},
-    server: { ownerObjectId: owner, ...(options.approval === false ? {} : { ownerInteractions: { runConfirmed } }) },
+    server: { ownerObjectId: owner, ...(options.approval === false ? {} : { ownerInteractions: { runRequested } }) },
   } as unknown as FastifyRequest;
   const tool = healthNutritionTargetsTool(access);
   const begin = async (input: unknown, operationSignal = signal()) => {
@@ -62,7 +62,7 @@ function fixture(initial: NutritionTargets = emptyNutritionTargets, options: { a
       },
     };
   };
-  return { tool, request, store, access, runConfirmed, begin };
+  return { tool, request, store, access, runRequested, begin };
 }
 
 describe('health_nutrition_targets descriptor', () => {
@@ -105,7 +105,7 @@ describe('health_nutrition_targets read', () => {
       bounds: nutritionTargetBounds,
       provenance: { store: 'health-settings', enteredBy: 'owner' },
     });
-    expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.runRequested).not.toHaveBeenCalled();
     expect(f.store.write).not.toHaveBeenCalled();
   });
 
@@ -149,7 +149,7 @@ describe('health_nutrition_targets input', () => {
   ])('refuses %s without asking for approval or writing', async (_label, input) => {
     const f = fixture();
     await expect(f.tool.execute(input, f.request, signal())).rejects.toBeInstanceOf(ToolRefusal);
-    expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.runRequested).not.toHaveBeenCalled();
     expect(f.store.write).not.toHaveBeenCalled();
   });
 
@@ -201,7 +201,7 @@ describe('health_nutrition_targets set_targets', () => {
     const f = fixture({ restingKcal: 1750, deficitKcal: null, proteinGrams: null });
     const review = await f.begin({ operation: 'set_targets', targets: { restingKcal: 1800, proteinGrams: 110 } });
     expect(f.store.write).not.toHaveBeenCalled();
-    const [kind, summary] = f.runConfirmed.mock.calls[0]!;
+    const [kind, summary] = f.runRequested.mock.calls[0]!;
     expect(kind).toBe('other');
     expect(summary).toContain('Resting energy burn: 1750 kcal → 1800 kcal');
     expect(summary).toContain('Protein target: not set → 110 g');
@@ -219,7 +219,7 @@ describe('health_nutrition_targets set_targets', () => {
   it('shows a clear as a move to not set and deletes only that target on approval', async () => {
     const f = fixture(synthetic);
     const review = await f.begin({ operation: 'set_targets', targets: { deficitKcal: null } });
-    expect(f.runConfirmed.mock.calls[0]![1]).toContain('Per-day deficit: 350 kcal → not set');
+    expect(f.runRequested.mock.calls[0]![1]).toContain('Per-day deficit: 350 kcal → not set');
     expect(await review.resolve()).toMatchObject({
       status: 'committed', changed: ['deficitKcal'], missing: ['deficitKcal'], targets: { restingKcal: 1750, deficitKcal: null, proteinGrams: 110 },
     });
@@ -247,7 +247,7 @@ describe('health_nutrition_targets set_targets', () => {
     const f = fixture(synthetic);
     expect(await f.tool.execute({ operation: 'set_targets', targets: { restingKcal: synthetic.restingKcal } }, f.request, signal()))
       .toMatchObject({ status: 'unchanged', targets: synthetic });
-    expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.runRequested).not.toHaveBeenCalled();
     expect(f.store.write).not.toHaveBeenCalled();
   });
 
@@ -255,7 +255,7 @@ describe('health_nutrition_targets set_targets', () => {
     const f = fixture();
     expect(await f.tool.execute({ operation: 'set_targets', targets: { proteinGrams: null } }, f.request, signal()))
       .toMatchObject({ status: 'unchanged' });
-    expect(f.runConfirmed).not.toHaveBeenCalled();
+    expect(f.runRequested).not.toHaveBeenCalled();
   });
 
   it('refuses to change anything when Now approval is unavailable', async () => {
@@ -270,7 +270,7 @@ describe('health_nutrition_targets set_targets', () => {
     const first = await f.begin({ operation: 'set_targets', targets: { restingKcal: 1800 } });
     await expect(f.tool.execute({ operation: 'set_targets', targets: { deficitKcal: 400 } }, f.request, signal()))
       .rejects.toThrow(/already running/u);
-    expect(f.runConfirmed).toHaveBeenCalledOnce();
+    expect(f.runRequested).toHaveBeenCalledOnce();
     await first.resolve('reject').catch(() => undefined);
     const second = await f.begin({ operation: 'set_targets', targets: { deficitKcal: 400 } });
     expect(await second.resolve()).toMatchObject({ status: 'committed', changed: ['deficitKcal'] });
