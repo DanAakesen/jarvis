@@ -352,7 +352,7 @@ export function healthMcpRoutes(query: Pick<HealthQueryService, 'query'>, option
               return receipt(await options.nutrition.log(payloadWithoutExpiry(payload), context(requestTime, 'log-intake', ctx.mcpReq.signal)), 'log');
             }));
             server.registerTool('correct_food', {
-              title: 'Correct food', description: 'Correct one owned intake using its exact idempotency key and current revision, after native review. No Health export.',
+              title: 'Correct food', description: 'Correct one owned intake using its exact idempotency key and current revision. No Health export.',
               _meta: security(true),
               inputSchema: correctionSchema, annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false, idempotentHint: true },
             }, async (input, ctx) => safe(request, 'correct_food', challenge(true), async () => {
@@ -382,7 +382,7 @@ export function healthMcpRoutes(query: Pick<HealthQueryService, 'query'>, option
               }, context(parsed.requestTime, 'correct-intake', ctx.mcpReq.signal)), 'correct');
             }));
             server.registerTool('delete_food', {
-              title: 'Delete food', description: 'Soft-delete one owned intake using its exact idempotency key and current revision, after native review. No Health deletion/export.',
+              title: 'Delete food', description: 'Soft-delete one owned intake using its exact idempotency key and current revision. No Health deletion/export.',
               _meta: security(true),
               inputSchema: removeSchema, annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true, idempotentHint: true },
             }, async (input, ctx) => safe(request, 'delete_food', challenge(true), async () => {
