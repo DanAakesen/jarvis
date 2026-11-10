@@ -2119,13 +2119,20 @@ describe('GitHub vault', () => {
     expect(github.calls).toHaveLength(0);
   });
 
-  it('refuses sensitive captures without explicit remember and always refuses actual credentials', async () => {
+  it('allows direct sensitive saves without magic words, blocks automatic capture and credentials', async () => {
     const health = moduleFor({ source: 'I was diagnosed with a condition.' });
     await expect(tool(health.module, 'vault_write').execute({
       path: 'Personal/health.md', content: 'Diagnosis: sensitive detail.', reason: 'capture',
       automaticCapture: true,
     }, request, signal())).rejects.toThrow('unless Dan explicitly says “remember”');
     expect(health.github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+
+    const requested = moduleFor({ source: 'Please save my health information.' });
+    await expect(tool(requested.module, 'vault_write').execute({
+      path: 'Personal/health.md', content: 'Diagnosis: sensitive detail.', reason: 'owner requested save',
+      automaticCapture: false,
+    }, request, signal())).resolves.toMatchObject({ path: 'Personal/health.md' });
+    expect(requested.github.calls.some(({ method }) => method === 'PUT')).toBe(true);
 
     const password = moduleFor({ source: 'Remember my password is apple.' });
     await expect(tool(password.module, 'vault_write').execute({
