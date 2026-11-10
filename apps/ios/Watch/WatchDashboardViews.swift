@@ -6,6 +6,7 @@ struct WatchDashboardView: View {
     @State private var loading = false
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     HStack {
@@ -37,7 +38,7 @@ struct WatchDashboardView: View {
                         WatchDashboardSection(title: "Workouts", route: .workouts) {
                             workouts(now: context.date)
                             WatchLogLiftShortcut()
-                        }
+                        }.id("workouts")
                         Divider()
                         WatchDashboardSection(title: "Body Fat", route: .bodyFat) {
                             bodyFat(snapshot?.bodyFat)
@@ -84,6 +85,17 @@ struct WatchDashboardView: View {
                         Button("Refresh") { Task { await refresh() } }
                     }
                 }.padding(.horizontal, 4).padding(.bottom, 22)
+            }
+            .task {
+                #if DEBUG
+                if ProcessInfo.processInfo.arguments.contains("--watch-fixture"),
+                   ProcessInfo.processInfo.arguments.contains("--watch-dashboard-section=workouts") {
+                    await Task.yield()
+                    proxy.scrollTo("workouts", anchor: .top)
+                }
+                WatchPreview.captureReady("dashboard")
+                #endif
+            }
             }
         }
         .task(id: connection.reachable) { await refresh() }

@@ -1,7 +1,8 @@
-#if DEBUG
 import Foundation
 import JarvisCore
+import SwiftUI
 
+#if DEBUG
 /// Isolated synthetic previews. No fixture request reaches WatchConnectivity or a live Factory.
 @MainActor enum WatchPreview {
     private static var lifts: [[String: JSONValue]] = [
@@ -12,6 +13,37 @@ import JarvisCore
     private static var created: [UUID: WatchReply] = [:]
     private static var personalTasks = taskFixtures()
     private static var personalSubmissions: [UUID: Data] = [:]
+    static func captureReady(_ screen: String) {
+        let arguments = ProcessInfo.processInfo.arguments
+        let expected = arguments.first { $0.hasPrefix("--watch-screen=") }?
+            .replacingOccurrences(of: "--watch-screen=", with: "") ?? "dashboard"
+        let expectedURL = arguments.first { $0.hasPrefix("--watch-expect-url=") }?
+            .replacingOccurrences(of: "--watch-expect-url=", with: "")
+        guard screen == expected || expectedURL.flatMap(URL.init(string:))?.host == screen else { return }
+        writeCaptureReceipt(["screen": screen], name: "watch-capture.json")
+    }
+
+    static func openedURL(_ url: URL) {
+        writeCaptureReceipt(["url": url.absoluteString], name: "watch-open-url.json")
+    }
+
+    private static func writeCaptureReceipt(_ fields: [String: String], name: String) {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--watch-fixture"),
+              let argument = arguments.first(where: { $0.hasPrefix("--watch-capture-id=") }),
+              let id = UUID(uuidString: String(argument.dropFirst("--watch-capture-id=".count))) else { return }
+        do {
+            let directory = try FileManager.default.url(for: .documentDirectory, in: .userDomainMask,
+                                                       appropriateFor: nil, create: true)
+            let receipt = fields.merging([
+                "captureID": id.uuidString,
+                "pid": String(ProcessInfo.processInfo.processIdentifier)
+            ]) { first, _ in first }
+            try JSONEncoder().encode(receipt).write(to: directory.appendingPathComponent(name), options: .atomic)
+        } catch {
+            print("Watch fixture capture receipt could not be written.")
+        }
+    }
     static func project() throws -> FactoryProject {
         try JSONDecoder().decode(FactoryProject.self, from: Data(#"{"id":"7","name":"Fixture project","repo":"example/fixture","default_branch":"main","default_agent":"codex","policy":"deliver_pr"}"#.utf8))
     }
@@ -170,3 +202,13 @@ import JarvisCore
     }
 }
 #endif
+
+extension View {
+    @ViewBuilder func watchCaptureReady(_ screen: String) -> some View {
+        #if DEBUG
+        self.task { @MainActor in WatchPreview.captureReady(screen) }
+        #else
+        self
+        #endif
+    }
+}

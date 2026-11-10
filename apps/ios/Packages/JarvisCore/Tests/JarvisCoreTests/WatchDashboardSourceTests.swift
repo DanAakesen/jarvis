@@ -21,9 +21,10 @@ final class WatchDashboardSourceTests: XCTestCase {
         for flag in ["tasks", "personal-new-task", "task-detail", "complications", "new-task"] {
             XCTAssertTrue(app.contains("--watch-screen=\(flag)"))
         }
-        for route in ["agenda", "body-fat", "notes", "home", "nutrition", "tasks"] {
-            XCTAssertTrue(app.contains("\"\(route)\""))
+        for route in ["agenda", "bodyFat", "notes", "home", "nutrition", "tasks", "logLift"] {
+            XCTAssertTrue(app.contains("case .\(route): path = [.\(route)]"))
         }
+        XCTAssertTrue(app.contains("WatchAppLink(url: url)"))
     }
 
     func testDashboardOrderAndWholeUpNextAgendaLink() throws {
@@ -48,14 +49,14 @@ final class WatchDashboardSourceTests: XCTestCase {
             ("Nutrition", "nutrition", "nutrition"),
             ("Home", "home", "home"),
             ("TaskList", "task-list", "tasks"),
-            ("BodyFat", "body-fat", "body-fat")
+            ("BodyFat", "body-fat", "bodyFat")
         ]
         for (type, kind, route) in registrations {
             let start = try XCTUnwrap(widgets.range(of: "struct JarvisWatch\(type)Widget: Widget"))
             let next = widgets.range(of: "\nstruct ", range: start.upperBound..<widgets.endIndex)?.lowerBound ?? widgets.endIndex
             let widget = String(widgets[start.lowerBound..<next])
             XCTAssertTrue(widget.contains("\"jarvis.watch.\(kind)\""))
-            XCTAssertTrue(widget.contains("\"jarvis-watch://\(route)\""))
+            XCTAssertTrue(widget.contains(".widgetURL(WatchAppLink.\(route).url)"))
             XCTAssertTrue(widget.contains(".supportedFamilies([.accessoryRectangular])"))
             XCTAssertTrue(widget.contains(".privacySensitive()"))
         }

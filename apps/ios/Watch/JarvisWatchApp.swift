@@ -1,4 +1,5 @@
 import AVFoundation
+import JarvisCore
 import SwiftUI
 import WatchKit
 
@@ -37,7 +38,7 @@ struct WatchRoot: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: WatchRoute.self) { route in
                 switch route {
-                case .chat: WatchChatView(dictate: dictate, pendingDictation: $pendingDictation)
+                case .chat: WatchChatView(dictate: dictate, pendingDictation: $pendingDictation).watchCaptureReady("chat")
                 case .menu:
                     List {
                         NavigationLink("Tasks Today", value: WatchRoute.tasks)
@@ -53,25 +54,27 @@ struct WatchRoot: View {
                     WatchHealthView(entry: .init(date: Date(), health: connection.snapshot, current: connection.snapshot?.isCurrent(at: Date()) == true))
                         .frame(height: 100).navigationTitle("Health")
                         .task { await connection.refresh() }
+                        .watchCaptureReady("health")
                 case .tasks: WatchTasksView()
                 case .workouts: WatchHealthList(lifts: false)
                 case .lifts: WatchHealthList(lifts: true)
                 case .factory: WatchFactoryView()
-                case .agenda: WatchAgendaView()
-                case .bodyFat: WatchBodyFatView()
-                case .notes: WatchNotesView()
-                case .home: WatchHomeBriefView()
-                case .nutrition: WatchNutritionView()
+                case .agenda: WatchAgendaView().watchCaptureReady("agenda")
+                case .bodyFat: WatchBodyFatView().watchCaptureReady("body-fat")
+                case .notes: WatchNotesView().watchCaptureReady("notes")
+                case .home: WatchHomeBriefView().watchCaptureReady("home")
+                case .nutrition: WatchNutritionView().watchCaptureReady("nutrition")
                 case .logLift:
                     WatchLiftCaptureView {
                         path.append(.chat); Task { await model.startVoice() }
-                    }
+                    }.watchCaptureReady("log-lift")
                 #if DEBUG
-                case .complications: WatchComplicationPreviewView()
+                case .complications: WatchComplicationPreviewView().watchCaptureReady("complications")
                 case .logLiftComplication:
                     WatchLogLiftComplicationView().frame(width: 52, height: 52)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .navigationTitle("Log lift")
+                        .watchCaptureReady("log-lift-complication")
                 #endif
                 }
             }
@@ -105,23 +108,27 @@ struct WatchRoot: View {
             #endif
         }
         .onOpenURL { url in
-            guard url.scheme == "jarvis-watch" else { return }
-            switch url.host {
-            case "dictate": path = [.chat]; pendingDictation = true
-            case "voice": path = [.chat]; Task { await model.startVoice() }
-            case "tasks": path = [.tasks]
-            case "health": path = [.health]
-            case "agenda": path = [.agenda]
-            case "bodyFat", "bodyfat", "body-fat": path = [.bodyFat]
-            case "notes": path = [.notes]
-            case "home": path = [.home]
-            case "nutrition": path = [.nutrition]
-            case "dashboard": page = 0; path = []
-            case "log-lift": path = [.logLift]
-            case "chat": path = [.chat]
-            case "end-voice": Task { await model.endVoice() }
-            default: path = [.menu]
+            guard url.scheme?.lowercased() == "jarvis-watch" else { return }
+            guard let link = WatchAppLink(url: url) else { path = [.menu]; return }
+            switch link {
+            case .dictate: path = [.chat]; pendingDictation = true
+            case .voice: path = [.chat]; Task { await model.startVoice() }
+            case .tasks: path = [.tasks]
+            case .health: path = [.health]
+            case .agenda: path = [.agenda]
+            case .bodyFat: path = [.bodyFat]
+            case .notes: path = [.notes]
+            case .home: path = [.home]
+            case .nutrition: path = [.nutrition]
+            case .dashboard: page = 0; path = []
+            case .logLift: path = [.logLift]
+            case .chat: path = [.chat]
+            case .menu: path = [.menu]
+            case .endVoice: Task { await model.endVoice() }
             }
+            #if DEBUG
+            WatchPreview.openedURL(url)
+            #endif
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in
             if model.voiceID != nil { Task { await model.endVoice() } }
@@ -148,7 +155,7 @@ struct WatchRoot: View {
                 JarvisWatchAction(title: "Factory", kind: .factory) { path.append(.factory) }
                 if !connection.reachable { Text("Open Jarvis on your iPhone to connect.").font(.caption).foregroundStyle(.secondary) }
             }
-        }
+        }.watchCaptureReady("actions")
     }
     private func dictate() {
         guard connection.reachable else { model.error = "Connect to your iPhone and open Jarvis."; return }

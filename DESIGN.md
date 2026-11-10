@@ -3838,3 +3838,14 @@ images have not received separate visual approval. Exact nutrition/task-list
 complication images remain absent from PR #1700 and this repository: descriptions
 do not replace those references. Final visual sign-off and physical Ultra 2/smaller
 Watch fit, large text, Always On/tint and interaction checks remain open.
+## Integrated Watch shortcuts — 10 November 2026 (#1721)
+
+Retain #1701's approved scrolling Home and second horizontal actions page.
+Place the approved #1705 Log lift shortcut directly below the existing Gym/Run
+summary in Workouts, without a second Workouts block or replacing See more.
+Use the existing shared capture screen and circular plus/dumbbell artwork.
+The three #1705 source images were retrieved and compared with the older failed
+native artifact: its Home shows the old launcher, its capture is a launch spinner,
+and its complication is only an in-app artwork preview. None establishes
+integrated visual acceptance. See the implementation handoff for exact evidence,
+missing #1701 nutrition/task-list references and physical-device limits.

@@ -73,6 +73,196 @@ final class WatchTaskFlowTests: XCTestCase {
         XCTAssertNotEqual(revised.submissionId, original.submissionId)
     }
 
+    @MainActor func testPersistentCreateKeepsBothModesAndDateControlsAcrossDismissal() throws {
+        let directory = testArtifactDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("create.json")
+        let selected = now.addingTimeInterval(172_800)
+        let store = try WatchTaskDraftStore(fileURL: url, createSelectedDue: now)
+        var draft = autoDraft()
+        draft.fields = .init(
+            text: "Ring til tandlægen", scope: .work, due: "2026-11-12",
+            time: "09:30", priority: .high, notes: "Spørg om næste kontrol."
+        )
+        draft.mode = .manual
+        try store.update(
+            draft: draft, selectedDue: selected, customDue: true,
+            includeTime: false, remindAtDue: false
+        )
+
+        let recovered = try WatchTaskDraftStore(fileURL: url)
+        XCTAssertEqual(recovered.record.draft, draft)
+        XCTAssertEqual(recovered.record.draft.input, "Call dentist tomorrow at 9")
+        XCTAssertEqual(recovered.record.draft.fields.scope, .work)
+        XCTAssertEqual(recovered.record.selectedDue, selected)
+        XCTAssertTrue(recovered.record.customDue)
+        XCTAssertFalse(recovered.record.includeTime)
+    }
+
+    @MainActor func testPersistentCreateRetryIsByteIdenticalAcrossClockAndTimeZoneChanges() throws {
+        let directory = testArtifactDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("create.json")
+        let store = try WatchTaskDraftStore(fileURL: url, createSelectedDue: now)
+        try store.update(
+            draft: autoDraft(), selectedDue: now, customDue: false,
+            includeTime: true, remindAtDue: false
+        )
+        let first = try store.beginCreate(now: now, timeZone: zone, makeID: { id })
+
+        let recovered = try WatchTaskDraftStore(fileURL: url)
+        XCTAssertEqual(recovered.record.phase, .uncertain)
+        let retry = try recovered.beginCreate(
+            now: now.addingTimeInterval(86_400),
+            timeZone: TimeZone(identifier: "America/New_York")!
+        ) {
+            XCTFail("An uncertain retry must not allocate a new identity")
+            return UUID()
+        }
+        XCTAssertEqual(try WatchCodec.encode(retry), try WatchCodec.encode(first))
+        XCTAssertEqual(retry.submittedAt, first.submittedAt)
+        XCTAssertEqual(retry.timeZone, first.timeZone)
+    }
+
+    @MainActor func testUnsentEditAndDateControlsSurviveDismissal() throws {
+        let directory = testArtifactDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("edit.json")
+        let original = fixtureTask()
+        let store = try WatchTaskDraftStore(fileURL: url, editing: original)
+        var draft = store.record.draft
+        draft.fields.text = "Call dentist and hygienist"
+        draft.fields.notes = "Keep this entered note."
+        let selected = now.addingTimeInterval(86_400)
+        try store.update(
+            draft: draft, selectedDue: selected, customDue: false,
+            includeTime: false, remindAtDue: false
+        )
+
+        let recovered = try WatchTaskDraftStore(fileURL: url, editing: original)
+        XCTAssertEqual(recovered.record.phase, .editing)
+        XCTAssertEqual(recovered.record.draft, draft)
+        XCTAssertEqual(recovered.record.source, original)
+        XCTAssertEqual(recovered.record.selectedDue, selected)
+        XCTAssertFalse(recovered.record.customDue)
+        XCTAssertFalse(recovered.record.includeTime)
+    }
+
+    @MainActor func testSavedCreateReceiptSurvivesCrashBeforeAcknowledgement() throws {
+        let directory = testArtifactDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("create.json")
+        let store = try WatchTaskDraftStore(fileURL: url, createSelectedDue: now)
+        try store.update(
+            draft: autoDraft(), selectedDue: now, customDue: false,
+            includeTime: true, remindAtDue: false
+        )
+        _ = try store.beginCreate(now: now, timeZone: zone, makeID: { id })
+        try store.saveResult(fixtureTask())
+
+        let recovered = try WatchTaskDraftStore(fileURL: url)
+        XCTAssertEqual(recovered.record.phase, .saved)
+        XCTAssertEqual(recovered.record.savedTask, fixtureTask())
+        XCTAssertThrowsError(try recovered.beginCreate())
+        try recovered.startAnotherCreate(selectedDue: now)
+        let acknowledged = try WatchTaskDraftStore(fileURL: url)
+        XCTAssertEqual(acknowledged.record.phase, .editing)
+        XCTAssertEqual(acknowledged.record.draft, WatchTaskDraft())
+    }
+
+    @MainActor func testPersistentDefiniteRejectionRequiresExplicitRevision() throws {
+        let directory = testArtifactDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("create.json")
+        let store = try WatchTaskDraftStore(fileURL: url)
+        try store.update(
+            draft: autoDraft(), selectedDue: now, customDue: false,
+            includeTime: true, remindAtDue: false
+        )
+        let original = try store.beginCreate(now: now, timeZone: zone, makeID: { id })
+        try store.finishFailure(rejectedWithoutSaving: true)
+
+        let recovered = try WatchTaskDraftStore(fileURL: url)
+        XCTAssertEqual(recovered.record.phase, .rejected)
+        XCTAssertTrue(recovered.record.submissions.canRevise)
+        XCTAssertEqual(try recovered.beginCreate(), original)
+        try recovered.finishFailure(rejectedWithoutSaving: true)
+        try recovered.reviseRejectedCreate()
+        XCTAssertEqual(recovered.record.phase, .editing)
+        XCTAssertEqual(recovered.record.draft.input, autoDraft().input)
+        let revised = try recovered.beginCreate(now: now, timeZone: zone)
+        XCTAssertNotEqual(revised.submissionId, original.submissionId)
+    }
+
+    @MainActor func testUncertainEditRestoresAsRefreshProtectedAndNeverSilentlyReapplies() throws {
+        let directory = testArtifactDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("edit.json")
+        let original = fixtureTask()
+        let store = try WatchTaskDraftStore(fileURL: url, editing: original)
+        var draft = store.record.draft
+        draft.fields.text = "Call dentist and hygienist"
+        try store.update(
+            draft: draft, selectedDue: now, customDue: true,
+            includeTime: true, remindAtDue: false
+        )
+        let update = WatchTaskUpdateRequest(task: original, fields: draft.fields, timeZone: zone)
+        try store.beginEdit(update)
+
+        let recovered = try WatchTaskDraftStore(fileURL: url, editing: original)
+        XCTAssertEqual(recovered.record.phase, .requiresRefresh)
+        XCTAssertEqual(recovered.record.update, update)
+        let concurrent = taskCopy(original, text: "Changed on iPhone", version: String(repeating: "c", count: 64))
+        XCTAssertFalse(try recovered.refreshEdit(with: concurrent))
+        XCTAssertEqual(recovered.record.phase, .editing)
+        XCTAssertTrue(recovered.record.reapplying)
+        XCTAssertEqual(recovered.record.source, concurrent)
+        XCTAssertEqual(recovered.record.draft.fields.text, "Call dentist and hygienist")
+        XCTAssertNil(recovered.record.update)
+    }
+
+    @MainActor func testUncertainEditRecognizesAlreadySavedPayloadAfterRefresh() throws {
+        let directory = testArtifactDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("edit.json")
+        let original = fixtureTask()
+        let store = try WatchTaskDraftStore(fileURL: url, editing: original)
+        var draft = store.record.draft
+        draft.fields.text = "Call dentist and hygienist"
+        try store.update(
+            draft: draft, selectedDue: now, customDue: true,
+            includeTime: true, remindAtDue: false
+        )
+        try store.beginEdit(WatchTaskUpdateRequest(task: original, fields: draft.fields, timeZone: zone))
+        let recovered = try WatchTaskDraftStore(fileURL: url, editing: original)
+        XCTAssertThrowsError(try recovered.saveResult(taskCopy(
+            original, text: "Wrong response", version: String(repeating: "d", count: 64)
+        )))
+        let saved = taskCopy(
+            original, text: draft.fields.text, version: String(repeating: "c", count: 64)
+        )
+        XCTAssertTrue(try recovered.refreshEdit(with: saved))
+        XCTAssertEqual(try WatchTaskDraftStore(fileURL: url, editing: original).record.phase, .saved)
+    }
+
+    @MainActor func testTaskDraftStorageCorruptionAndWriteFailureFailClosed() throws {
+        let directory = testArtifactDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let corrupt = directory.appendingPathComponent("corrupt.json")
+        try Data("not a task draft".utf8).write(to: corrupt)
+        XCTAssertThrowsError(try WatchTaskDraftStore(fileURL: corrupt))
+
+        let blockedParent = directory.appendingPathComponent("not-a-directory")
+        try Data("file".utf8).write(to: blockedParent)
+        let store = try WatchTaskDraftStore(fileURL: blockedParent.appendingPathComponent("draft.json"))
+        XCTAssertThrowsError(try store.update(
+            draft: autoDraft(), selectedDue: now, customDue: false,
+            includeTime: true, remindAtDue: false
+        ))
+        XCTAssertEqual(store.record.draft, WatchTaskDraft())
+    }
+
     func testAutoAndManualDraftsSurviveSaveErrorsAndRetryTheOriginalPayload() async throws {
         for mode in [WatchTaskMode.auto, .manual] {
             var draft = autoDraft()
@@ -468,6 +658,18 @@ final class WatchTaskFlowTests: XCTestCase {
               priority: .normal, path: "Personal/Inbox.md", line: 4, heading: "Tasks",
               version: String(repeating: "b", count: 64), notes: "Ask about the next check-up.",
               timeZone: "Europe/Copenhagen")
+    }
+    private func taskCopy(_ task: VaultTask, text: String, version: String) -> VaultTask {
+        .init(
+            id: task.id, text: text, done: task.done, dueDate: task.dueDate,
+            dueTime: task.dueTime, dueAt: task.dueAt, priority: task.priority,
+            path: task.path, line: task.line, heading: task.heading, version: version,
+            notes: task.notes, timeZone: task.timeZone, remindAtDue: task.remindAtDue
+        )
+    }
+    private func testArtifactDirectory() -> URL {
+        URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(".build/jarvis-task-draft-tests-\(UUID().uuidString)")
     }
     private func http(_ transport: TaskTransport) throws -> JarvisClient {
         try .init(configuration: .init(baseURL: URL(string: "https://fixture.invalid/api")!,

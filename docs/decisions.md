@@ -12492,3 +12492,26 @@ read timeout despite the backend's 270-second generation budget. Two regression
 tests reproduced the default/configured mismatch. Image calls now use the existing
 long-tool setting (320 seconds by default), like web research. This requires
 releasing the Jarvis agent as well as the backend. No total chat deadline is added.
+## 2026-11-10 — Integrate Watch features in Home child only (#1721)
+
+The owner authorizes combining current #1703 and #1711 on a child targeting the
+existing Home branch; #1703 remains the eventual delivery PR. Preserve both sides
+of navigation, bridge, widgets and backend composition. Reuse the Home Workouts
+block and insert only the lift shortcut. Use one navigation allow-list without
+URL-provided write fields. Keep startup/speech permissions, actual values,
+missing-data handling and existing persistence/idempotency contracts.
+
+The failed native artifacts demonstrate why filenames and fixed sleeps are not
+acceptance: actual lift capture is a launch spinner and some differently named
+screens are byte-identical. Separate simulator startup, fresh destination
+appearance, external URL delivery and visual comparison. Missing source
+registration is not established as the cause of error 115; keep that failure
+visible until a supported native run proves delivery. Device acceptance and
+missing exact #1701 nutrition/task-list reference transfer remain open.
+
+Resolve the task process-death gap with local atomic Watch persistence, matching
+the lift draft pattern rather than adding a backend draft table or expiry.
+Uncertain create requests retain UUID/time/zone/payload; uncertain edits retain
+source/version and require refresh before deliberate reapplication. Do not clear
+an acknowledged task until its terminal receipt is durable. Storage recovery
+fails closed, fixtures never use real drafts, and reconnect/restoration never send.

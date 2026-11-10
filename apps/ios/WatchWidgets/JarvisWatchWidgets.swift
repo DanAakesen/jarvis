@@ -28,7 +28,7 @@ struct WatchProvider: TimelineProvider {
 struct JarvisWatchHealthWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.health", provider: WatchProvider()) { entry in
-            WatchHealthView(entry: entry).privacySensitive().containerBackground(.black, for: .widget).widgetURL(URL(string: "jarvis-watch://health"))
+            WatchHealthView(entry: entry).privacySensitive().containerBackground(.black, for: .widget).widgetURL(WatchAppLink.health.url)
         }.configurationDisplayName("Daily steps").description("Daily steps and progress toward your goal from iPhone.")
             .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
     }
@@ -40,7 +40,7 @@ struct JarvisWatchTasksWidget: Widget {
                 WatchGlyph(kind: .tasks).frame(width: 16, height: 20)
                 Text(entry.health?.tasksToday.map(String.init) ?? "—").font(.system(size: 25, weight: .semibold, design: .rounded)).minimumScaleFactor(0.5)
             }.frame(maxWidth: .infinity, maxHeight: .infinity).modifier(WatchSurface(radius: 50)).clipShape(Circle()).containerBackground(.black, for: .widget)
-                .privacySensitive().widgetURL(URL(string: "jarvis-watch://tasks"))
+                .privacySensitive().widgetURL(WatchAppLink.tasks.url)
                 .accessibilityLabel(entry.health?.tasksToday.map { "\($0) tasks due today" } ?? "Today's tasks unavailable")
         }.configurationDisplayName("Tasks Today").description("Remaining tasks due today.").supportedFamilies([.accessoryCircular])
     }
@@ -49,7 +49,7 @@ struct JarvisWatchDictateWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.dictate", provider: WatchProvider()) { _ in
             WatchGlyph(kind: .dictate).padding(5).frame(maxWidth: .infinity, maxHeight: .infinity).modifier(WatchSurface(radius: 50)).clipShape(Circle())
-                .containerBackground(.black, for: .widget).widgetURL(URL(string: "jarvis-watch://dictate"))
+                .containerBackground(.black, for: .widget).widgetURL(WatchAppLink.dictate.url)
                 .accessibilityLabel("Dictate a message")
         }.configurationDisplayName("Dictate").description("Dictate into a draft, then send manually.").supportedFamilies([.accessoryCircular])
     }
@@ -58,7 +58,7 @@ struct JarvisWatchVoiceWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.voice", provider: WatchProvider()) { _ in
             WatchGlyph(kind: .voice).padding(5).frame(maxWidth: .infinity, maxHeight: .infinity).modifier(WatchSurface(radius: 50)).clipShape(Circle())
-                .containerBackground(.black, for: .widget).widgetURL(URL(string: "jarvis-watch://voice"))
+                .containerBackground(.black, for: .widget).widgetURL(WatchAppLink.voice.url)
                 .accessibilityLabel("Start or resume voice")
         }.configurationDisplayName("Voice Session").description("Start or resume a spoken conversation.").supportedFamilies([.accessoryCircular])
     }
@@ -68,7 +68,7 @@ struct JarvisWatchNutritionWidget: Widget {
         StaticConfiguration(kind: "jarvis.watch.nutrition", provider: WatchProvider()) { entry in
             WatchNutritionComplicationView(entry: entry)
                 .privacySensitive().containerBackground(.black, for: .widget)
-                .widgetURL(URL(string: "jarvis-watch://nutrition"))
+                .widgetURL(WatchAppLink.nutrition.url)
         }.configurationDisplayName("Nutrition").description("Today's carbohydrates, fat and protein against your saved goals.")
             .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
     }
@@ -78,7 +78,7 @@ struct JarvisWatchHomeWidget: Widget {
         StaticConfiguration(kind: "jarvis.watch.home", provider: WatchProvider()) { entry in
             WatchHomeComplicationView(entry: entry)
                 .privacySensitive().containerBackground(.black, for: .widget)
-                .widgetURL(URL(string: "jarvis-watch://home"))
+                .widgetURL(WatchAppLink.home.url)
         }.configurationDisplayName("Home").description("A short highlight from your iPhone Home brief.")
             .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
     }
@@ -88,7 +88,7 @@ struct JarvisWatchTaskListWidget: Widget {
         StaticConfiguration(kind: "jarvis.watch.task-list", provider: WatchProvider()) { entry in
             WatchTasksComplicationView(entry: entry)
                 .privacySensitive().containerBackground(.black, for: .widget)
-                .widgetURL(URL(string: "jarvis-watch://tasks"))
+                .widgetURL(WatchAppLink.tasks.url)
         }.configurationDisplayName("Tasks").description("Actual task titles due today, including overdue tasks.")
             .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
     }
@@ -98,8 +98,8 @@ struct JarvisWatchBodyFatWidget: Widget {
         StaticConfiguration(kind: "jarvis.watch.body-fat", provider: WatchProvider()) { entry in
             WatchBodyFatComplicationView(entry: entry)
                 .privacySensitive().containerBackground(.black, for: .widget)
-                .widgetURL(URL(string: "jarvis-watch://body-fat"))
-        }.configurationDisplayName("Body Fat").description("Your latest body fat percentage and up to 20 measurements.")
+                .widgetURL(WatchAppLink.bodyFat.url)
+        }.configurationDisplayName("Body Fat").description("Your latest body fat percentage and three-month trend.")
             .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
     }
 }
@@ -107,7 +107,7 @@ struct JarvisWatchLogLiftWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.logLift", provider: WatchProvider()) { _ in
             WatchLogLiftComplicationView()
-                .containerBackground(.black, for: .widget).widgetURL(URL(string: "jarvis-watch://log-lift"))
+                .containerBackground(.black, for: .widget).widgetURL(WatchAppLink.logLift.url)
         }.configurationDisplayName("Log lift").description("Type or dictate a lift, then save explicitly.")
             .supportedFamilies([.accessoryCircular])
     }

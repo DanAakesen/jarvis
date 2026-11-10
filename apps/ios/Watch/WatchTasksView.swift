@@ -106,6 +106,7 @@ struct WatchTasksView: View {
             if arguments.contains("--watch-screen=task-detail") || arguments.contains("--watch-screen=task-edit") {
                 previewDetail = tasks.first
             }
+            WatchPreview.captureReady("tasks")
             #endif
         } catch {
             guard read == readID, !Task.isCancelled else { return }
@@ -199,8 +200,14 @@ struct WatchTaskDetailView: View {
         }
         .task {
             #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--watch-fixture"),
-               ProcessInfo.processInfo.arguments.contains("--watch-screen=task-edit") { showEdit = true }
+            if ProcessInfo.processInfo.arguments.contains("--watch-fixture") {
+                if ProcessInfo.processInfo.arguments.contains("--watch-screen=task-edit") {
+                    showEdit = true
+                }
+                if ProcessInfo.processInfo.arguments.contains("--watch-screen=task-detail") {
+                    WatchPreview.captureReady("task-detail")
+                }
+            }
             #endif
         }
     }
@@ -263,7 +270,14 @@ struct WatchPersonalTaskEditor: View {
     @State private var customDue = false
     @State private var includeTime = true
     @State private var remindAtDue = false
-    private var locked: Bool { busy || submissions.request != nil || update != nil }
+    @State private var store: WatchTaskDraftStore?
+    @State private var storagePrepared = false
+    @State private var storageAvailable = false
+    @State private var storageFailure: String?
+    @State private var savedResult: VaultTask?
+    private var locked: Bool {
+        busy || !storageAvailable || submissions.request != nil || update != nil
+    }
     private var editingTimeZone: TimeZone {
         source?.timeZone.flatMap(TimeZone.init(identifier:)) ?? .current
     }
@@ -292,107 +306,106 @@ struct WatchPersonalTaskEditor: View {
 
     var body: some View {
         Form {
-            if task == nil {
-                WatchChoiceBar(choices: [(.auto, "Auto"), (.manual, "Manual")], selection: $draft.mode)
-                    .disabled(locked).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
-            }
-            if task == nil && draft.mode == .auto {
-                WatchTextInput(title: "Describe your task…", text: $draft.input, multiline: true)
-                    .disabled(locked)
-                Text("English or Danish. Missing due date/time defaults to one hour after Save; priority defaults to Low.")
-                    .font(.caption).foregroundStyle(.secondary).listRowBackground(Color.clear)
+            if let savedResult {
+                Label(task == nil ? "Task saved" : "Changes saved", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(WatchStyle.amber)
+                Text(savedResult.text).fixedSize(horizontal: false, vertical: true)
+                Button(task == nil ? "Create another task" : "Done") {
+                    if task == nil { startAnother() }
+                    else { saved(savedResult); dismiss() }
+                }.disabled(!storageAvailable)
             } else {
-                manualFields
-            }
-            if !connection.reachable {
-                Text(WatchFailure.unavailable.message).font(.footnote).listRowBackground(Color.clear)
-            }
-            if let failure {
-                Text(failure).font(.footnote).listRowBackground(Color.clear)
-                if submissions.canRevise {
-                    Button("Edit draft") { submissions.reviseRejectedDraft(); self.failure = nil }
+                if task == nil {
+                    WatchChoiceBar(
+                        choices: [(.auto, "Auto"), (.manual, "Manual")], selection: modeBinding
+                    )
+                    .disabled(locked).listRowBackground(Color.clear).listRowInsets(EdgeInsets())
                 }
+                if task == nil && draft.mode == .auto {
+                    WatchTextInput(title: "Describe your task…", text: inputBinding, multiline: true)
+                        .disabled(locked)
+                    Text("English or Danish. Missing due date/time defaults to one hour after Save; priority defaults to Low.")
+                        .font(.caption).foregroundStyle(.secondary).listRowBackground(Color.clear)
+                } else {
+                    manualFields
+                }
+                if !connection.reachable {
+                    Text(WatchFailure.unavailable.message).font(.footnote).listRowBackground(Color.clear)
+                }
+                if let failure {
+                    Text(failure).font(.footnote).listRowBackground(Color.clear)
+                    if submissions.canRevise {
+                        Button("Edit draft") { reviseRejectedCreate() }
+                    }
+                    if requiresRefresh {
+                        Button("Refresh task") { Task { await refreshSource() } }
+                            .disabled(busy || !storageAvailable || !connection.reachable)
+                    }
+                }
+                if let refreshedSource {
+                    NavigationLink("Current saved task") {
+                        List {
+                            Text(refreshedSource.text).fixedSize(horizontal: false, vertical: true)
+                            LabeledContent("Due", value: WatchTaskPresentation.due(refreshedSource))
+                            LabeledContent("Priority", value: refreshedSource.priority.watchLabel)
+                            if let notes = refreshedSource.notes, !notes.isEmpty {
+                                Text(notes).fixedSize(horizontal: false, vertical: true)
+                            }
+                            LabeledContent("Reminder", value: refreshedSource.watchReminderLabel ?? "Not recorded")
+                        }.navigationTitle("Current saved task")
+                    }
+                }
+                if let validation = validationMessage, hasEnteredContent, !locked {
+                    Text(validation).font(.caption).listRowBackground(Color.clear)
+                }
+                if submissions.request != nil && !submissions.canRevise {
+                    Text("Retry keeps the original task, submission time and time zone. Check Tasks before starting another task.")
+                        .font(.caption).foregroundStyle(.secondary).listRowBackground(Color.clear)
+                }
+                Button(busy ? "Saving…" : reapplying ? "Save my edits" :
+                        submissions.request != nil || update != nil ? "Retry save" : "Save") {
+                    Task { await save() }
+                }
+                .tint(WatchStyle.amber)
+                .disabled(busy || !storageAvailable || requiresRefresh ||
+                          !connection.reachable || validationMessage != nil)
                 if requiresRefresh {
-                    Button("Refresh task") { Task { await refreshSource() } }
-                        .disabled(busy || !connection.reachable)
+                    Text("Refresh the saved task before trying again. Your entered details are kept.")
+                        .font(.caption).listRowBackground(Color.clear)
                 }
             }
-            if let refreshedSource {
-                NavigationLink("Current saved task") {
-                    List {
-                        Text(refreshedSource.text).fixedSize(horizontal: false, vertical: true)
-                        LabeledContent("Due", value: WatchTaskPresentation.due(refreshedSource))
-                        LabeledContent("Priority", value: refreshedSource.priority.watchLabel)
-                        if let notes = refreshedSource.notes, !notes.isEmpty {
-                            Text(notes).fixedSize(horizontal: false, vertical: true)
-                        }
-                        LabeledContent("Reminder", value: refreshedSource.watchReminderLabel ?? "Not recorded")
-                    }.navigationTitle("Current saved task")
-                }
-            }
-            if let validation = validationMessage, hasEnteredContent, !locked {
-                Text(validation).font(.caption).listRowBackground(Color.clear)
-            }
-            if submissions.request != nil && !submissions.canRevise {
-                Text("Retry keeps the original task, submission time and time zone. Check Tasks before starting another task.")
-                    .font(.caption).foregroundStyle(.secondary).listRowBackground(Color.clear)
-            }
-            Button(busy ? "Saving…" : reapplying ? "Save my edits" :
-                    submissions.request != nil || update != nil ? "Retry save" : "Save") {
-                Task { await save() }
-            }
-            .tint(WatchStyle.amber)
-            .disabled(busy || requiresRefresh || !connection.reachable || validationMessage != nil)
-            if requiresRefresh {
-                Text("Refresh the saved task before trying again. Your entered details are kept.")
-                    .font(.caption).listRowBackground(Color.clear)
+            if let storageFailure {
+                Text(storageFailure).font(.footnote).listRowBackground(Color.clear)
             }
         }.navigationTitle(task == nil ? "New task" : "Edit task")
             .interactiveDismissDisabled(busy)
             .task {
-                #if DEBUG
-                guard task == nil, ProcessInfo.processInfo.arguments.contains("--watch-fixture") else { return }
-                let arguments = ProcessInfo.processInfo.arguments
-                let manual = arguments.contains("--watch-screen=task-manual") ||
-                    (arguments.contains("--watch-screen=personal-new-task") && arguments.contains("--watch-task-mode=manual"))
-                if manual {
-                    draft.mode = .manual
-                    draft.fields.text = "Call dentist"; draft.fields.notes = "Ask about the next check-up."
-                }
-                if arguments.contains("--watch-screen=task-auto") ||
-                    (arguments.contains("--watch-screen=personal-new-task") && !manual) {
-                    draft.input = "Call the dentist tomorrow at 9. Ask about the next check-up."
-                }
-                #endif
+                prepareStorage()
             }
     }
 
     @ViewBuilder private var manualFields: some View {
-        WatchTextInput(title: "Title", text: $draft.fields.text).disabled(locked)
-        Toggle(task == nil ? "Choose due date" : "Due date", isOn: $customDue)
+        WatchTextInput(title: "Title", text: fieldTextBinding).disabled(locked)
+        Toggle(task == nil ? "Choose due date" : "Due date", isOn: customDueBinding)
             .disabled(locked)
-            .onChange(of: customDue) { _, selected in
-                if selected { setDue(selectedDue) }
-                else { draft.fields.due = nil; draft.fields.time = nil }
-            }
         if customDue {
-            DatePicker("Due", selection: $selectedDue, displayedComponents: includeTime ? [.date, .hourAndMinute] : [.date])
+            DatePicker("Due", selection: selectedDueBinding,
+                       displayedComponents: includeTime ? [.date, .hourAndMinute] : [.date])
                 .environment(\.timeZone, editingTimeZone)
-                .disabled(locked).onChange(of: selectedDue) { _, date in setDue(date) }
+                .disabled(locked)
             if task != nil {
-                Toggle("Include time", isOn: $includeTime).disabled(locked)
-                    .onChange(of: includeTime) { _, _ in setDue(selectedDue) }
+                Toggle("Include time", isOn: includeTimeBinding).disabled(locked)
             }
         } else if task == nil {
             Text("No due date").font(.caption).foregroundStyle(.secondary)
         }
-        Picker("Priority", selection: $draft.fields.priority) {
+        Picker("Priority", selection: priorityBinding) {
             Text("Low").tag(VaultTask.Priority.normal)
             Text("Medium").tag(VaultTask.Priority.medium)
             Text("High").tag(VaultTask.Priority.high)
         }.disabled(locked)
         if task == nil {
-            Picker("List", selection: $draft.fields.scope) {
+            Picker("List", selection: scopeBinding) {
                 Text("Personal").tag(VaultTaskScope.personal)
                 Text("Work").tag(VaultTaskScope.work)
             }.disabled(locked)
@@ -401,9 +414,52 @@ struct WatchPersonalTaskEditor: View {
             Text("Edits stay in the existing vault source.").font(.caption).foregroundStyle(.secondary)
         }
         if task != nil {
-            Toggle("Remind at due time", isOn: $remindAtDue).disabled(locked)
+            Toggle("Remind at due time", isOn: remindAtDueBinding).disabled(locked)
         }
-        WatchTextInput(title: "Notes", text: $draft.fields.notes, multiline: true).disabled(locked)
+        WatchTextInput(title: "Notes", text: notesBinding, multiline: true).disabled(locked)
+    }
+    private var modeBinding: Binding<WatchTaskMode> {
+        Binding(get: { draft.mode }, set: { draft.mode = $0; persistEditing() })
+    }
+    private var inputBinding: Binding<String> {
+        Binding(get: { draft.input }, set: { draft.input = $0; persistEditing() })
+    }
+    private var fieldTextBinding: Binding<String> {
+        Binding(get: { draft.fields.text }, set: { draft.fields.text = $0; persistEditing() })
+    }
+    private var notesBinding: Binding<String> {
+        Binding(get: { draft.fields.notes }, set: { draft.fields.notes = $0; persistEditing() })
+    }
+    private var priorityBinding: Binding<VaultTask.Priority> {
+        Binding(get: { draft.fields.priority }, set: { draft.fields.priority = $0; persistEditing() })
+    }
+    private var scopeBinding: Binding<VaultTaskScope> {
+        Binding(get: { draft.fields.scope }, set: { draft.fields.scope = $0; persistEditing() })
+    }
+    private var selectedDueBinding: Binding<Date> {
+        Binding(get: { selectedDue }, set: {
+            selectedDue = $0
+            setDue($0)
+            persistEditing()
+        })
+    }
+    private var customDueBinding: Binding<Bool> {
+        Binding(get: { customDue }, set: {
+            customDue = $0
+            if $0 { setDue(selectedDue) }
+            else { draft.fields.due = nil; draft.fields.time = nil }
+            persistEditing()
+        })
+    }
+    private var includeTimeBinding: Binding<Bool> {
+        Binding(get: { includeTime }, set: {
+            includeTime = $0
+            setDue(selectedDue)
+            persistEditing()
+        })
+    }
+    private var remindAtDueBinding: Binding<Bool> {
+        Binding(get: { remindAtDue }, set: { remindAtDue = $0; persistEditing() })
     }
     private var hasEnteredContent: Bool {
         draft.mode == .auto ? !draft.input.isEmpty : !draft.fields.text.isEmpty || !draft.fields.notes.isEmpty
@@ -414,9 +470,142 @@ struct WatchPersonalTaskEditor: View {
         let parts = calendar.dateComponents([.hour, .minute], from: date)
         draft.fields.time = includeTime ? String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0) : nil
     }
+    private var isFixture: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--watch-fixture")
+        #else
+        false
+        #endif
+    }
+    private func prepareStorage() {
+        guard !storagePrepared else { return }
+        storagePrepared = true
+        if isFixture {
+            storageAvailable = true
+            #if DEBUG
+            guard task == nil else {
+                WatchPreview.captureReady("task-edit")
+                return
+            }
+            let arguments = ProcessInfo.processInfo.arguments
+            let manual = arguments.contains("--watch-screen=task-manual") ||
+                (arguments.contains("--watch-screen=personal-new-task") &&
+                 arguments.contains("--watch-task-mode=manual"))
+            if manual {
+                draft.mode = .manual
+                draft.fields.text = "Call dentist"
+                draft.fields.notes = "Ask about the next check-up."
+            }
+            if arguments.contains("--watch-screen=task-auto") ||
+                (arguments.contains("--watch-screen=personal-new-task") && !manual) {
+                draft.input = "Call the dentist tomorrow at 9. Ask about the next check-up."
+            }
+            for screen in ["personal-new-task", "task-auto", "task-manual"]
+            where arguments.contains("--watch-screen=\(screen)") {
+                WatchPreview.captureReady(screen)
+                break
+            }
+            #endif
+            return
+        }
+        do {
+            let directory = try FileManager.default.url(
+                for: .applicationSupportDirectory, in: .userDomainMask,
+                appropriateFor: nil, create: true
+            )
+            let value: WatchTaskDraftStore
+            if let task {
+                value = try WatchTaskDraftStore(
+                    fileURL: directory.appendingPathComponent("watch-task-edit-\(task.id).json"),
+                    editing: task
+                )
+            } else {
+                value = try WatchTaskDraftStore(
+                    fileURL: directory.appendingPathComponent("watch-task-create.json"),
+                    createSelectedDue: selectedDue
+                )
+            }
+            store = value
+            storageAvailable = true
+            apply(value.record)
+        } catch {
+            storageUnavailable()
+        }
+    }
+    private func apply(_ record: WatchTaskEditorRecord) {
+        draft = record.draft
+        submissions = record.submissions
+        update = record.update
+        source = record.source
+        selectedDue = record.selectedDue
+        customDue = record.customDue
+        includeTime = record.includeTime
+        remindAtDue = record.remindAtDue
+        reapplying = record.reapplying
+        refreshedSource = record.reapplying ? record.source : nil
+        requiresRefresh = record.phase == .requiresRefresh
+        savedResult = record.savedTask
+        switch record.phase {
+        case .uncertain:
+            failure = "Could not confirm the save. Retry keeps the exact original task."
+        case .rejected:
+            failure = "The task was not saved. Choose Edit draft to revise it, or retry the exact request."
+        case .requiresRefresh:
+            failure = "The previous edit may have been saved. Refresh the task before reviewing or retrying your edits."
+        default:
+            break
+        }
+    }
+    private func persistEditing() {
+        guard storageAvailable, !isFixture else { return }
+        do {
+            try store?.update(
+                draft: draft, selectedDue: selectedDue, customDue: customDue,
+                includeTime: includeTime, remindAtDue: remindAtDue
+            )
+        } catch {
+            storageUnavailable()
+        }
+    }
+    private func storageUnavailable() {
+        storageAvailable = false
+        storageFailure = "Could not preserve this task draft safely. Restart Jarvis on your Watch before saving. The stored draft has not been replaced."
+    }
+    private func reviseRejectedCreate() {
+        if isFixture {
+            submissions.reviseRejectedDraft()
+            failure = nil
+            return
+        }
+        do {
+            try store?.reviseRejectedCreate()
+            if let store { apply(store.record) }
+            failure = nil
+        } catch {
+            storageUnavailable()
+        }
+    }
+    private func startAnother() {
+        guard task == nil else { return }
+        if isFixture {
+            draft = .init()
+            submissions = .init()
+            savedResult = nil
+            return
+        }
+        do {
+            try store?.startAnotherCreate()
+            if let store { apply(store.record) }
+            failure = nil
+        } catch {
+            storageUnavailable()
+        }
+    }
     private func save() async {
-        guard !busy, !requiresRefresh, connection.reachable, validationMessage == nil else { return }
+        guard !busy, storageAvailable, !requiresRefresh,
+              connection.reachable, validationMessage == nil else { return }
         busy = true; failure = nil; defer { busy = false }
+        var requestDispatched = false
         do {
             let request: WatchRequest
             if let task = source {
@@ -424,53 +613,118 @@ struct WatchPersonalTaskEditor: View {
                 let zone = scheduleChanged ? editingTimeZone : task.timeZone.flatMap(TimeZone.init(identifier:))
                 let reminderOverride = remindAtDue != (task.remindAtDue == true) ? remindAtDue : nil
                 let value = update ?? WatchTaskUpdateRequest(task: task, fields: draft.fields,
-                                                            timeZone: zone, remindAtDue: reminderOverride)
-                update = value
+                                                           timeZone: zone, remindAtDue: reminderOverride)
+                if isFixture {
+                   update = value
+                } else {
+                   do {
+                       guard let store else { throw WatchFailure.failed }
+                       try store.beginEdit(value)
+                       apply(store.record)
+                   } catch {
+                       storageUnavailable()
+                       return
+                   }
+                }
                 request = .init(action: .updateWatchTask, itemID: task.id, data: try WatchCodec.encode(value))
             } else {
-                let value = try submissions.begin(draft)
+                let value: WatchTaskCreateRequest
+                if isFixture {
+                   value = try submissions.begin(draft)
+                } else {
+                   do {
+                       guard let store else { throw WatchFailure.failed }
+                       value = try store.beginCreate()
+                       apply(store.record)
+                   } catch {
+                       storageUnavailable()
+                       return
+                   }
+                }
                 guard let id = UUID(uuidString: value.submissionId) else { throw WatchFailure.invalidRequest }
                 request = .init(action: .createWatchTask, data: try WatchCodec.encode(value),
-                                id: id)
+                               id: id)
             }
+            requestDispatched = true
             let reply = try await connection.request(request)
             if let detail = reply.taskError { throw detail }
             guard let data = reply.data, let value = try? JSONDecoder().decode(VaultTask.self, from: data),
                   WatchTaskValidation.task(value) else { throw WatchTaskMutationFailure.unknown }
-            submissions.finish()
             let result = VaultTask(id: value.id, text: value.text, done: value.done,
                 dueDate: value.dueDate, dueTime: value.dueTime, dueAt: value.dueAt,
                 priority: value.priority, path: value.path, line: value.line,
                 heading: value.heading ?? source?.heading, version: value.version,
                 notes: value.notes, timeZone: value.timeZone, remindAtDue: value.remindAtDue)
+            if isFixture {
+                submissions.finish()
+            } else {
+                do {
+                   try store?.saveResult(result)
+                   if let store { apply(store.record) }
+                } catch {
+                   storageUnavailable()
+                   return
+                }
+            }
             saved(result); dismiss()
         } catch {
             let detail = error as? WatchTaskMutationFailure
-            if task == nil { submissions.finish(rejectedWithoutSaving: detail?.outcomeUnknown == false) }
-            if task != nil {
-                // PATCH has source-version protection, not create's durable submission receipt.
-                requiresRefresh = detail?.outcomeUnknown != false || detail?.code == "task_conflict" || detail?.code == "http_409"
-                if !requiresRefresh { update = nil }
+            let definitelyRejected = !requestDispatched || detail?.outcomeUnknown == false
+            if isFixture {
+                if task == nil { submissions.finish(rejectedWithoutSaving: definitelyRejected) }
+                if task != nil {
+                   requiresRefresh = !definitelyRejected || detail?.code == "task_conflict" ||
+                       detail?.code == "http_409"
+                   if !requiresRefresh { update = nil }
+                }
+            } else if store?.record.phase == .submitting {
+                do {
+                   try store?.finishFailure(rejectedWithoutSaving: definitelyRejected)
+                   if let store { apply(store.record) }
+                } catch {
+                   storageUnavailable()
+                   return
+                }
             }
             failure = WatchTaskPresentation.failure(error)
         }
     }
     private func refreshSource() async {
-        guard !busy, let source, connection.reachable else { return }
+        guard !busy, storageAvailable, let source, connection.reachable else { return }
         busy = true; defer { busy = false }
         do {
             guard let fresh = try await WatchPersonalTaskRead.task(source.id, connection: connection) else {
                 failure = "This task is no longer in the open list. Your edits are kept; return to Tasks to check its status."
                 return
             }
-            if fresh.text == draft.fields.text, fresh.dueDate == draft.fields.due,
-               fresh.dueTime == draft.fields.time, fresh.priority == draft.fields.priority,
-               (fresh.notes ?? "") == draft.fields.notes, (fresh.remindAtDue == true) == remindAtDue {
-                saved(fresh); dismiss()
-                return
+            if isFixture {
+                if fresh.text == draft.fields.text, fresh.dueDate == draft.fields.due,
+                   fresh.dueTime == draft.fields.time, fresh.priority == draft.fields.priority,
+                   (fresh.notes ?? "") == draft.fields.notes, (fresh.remindAtDue == true) == remindAtDue {
+                    saved(fresh); dismiss()
+                    return
+                }
+                self.source = fresh
+                refreshedSource = fresh
+                update = nil
+                requiresRefresh = false
+                reapplying = true
+            } else {
+                do {
+                    guard let store else { throw WatchFailure.failed }
+                    let alreadySaved = try store.refreshEdit(with: fresh)
+                    apply(store.record)
+                    if alreadySaved {
+                        saved(fresh)
+                        dismiss()
+                        return
+                    }
+                } catch {
+                    storageUnavailable()
+                    return
+                }
             }
-            self.source = fresh; refreshedSource = fresh
-            update = nil; requiresRefresh = false; reapplying = true
+            refreshedSource = fresh
             failure = "Latest task loaded. Your edits are kept. Review the current saved task before saving your edits."
         } catch { failure = "The saved task could not refresh. " + WatchTaskPresentation.failure(error) }
     }

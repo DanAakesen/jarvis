@@ -8109,3 +8109,16 @@ Primary owns #1697 steps/startup integration and must preserve its WatchContract
 ## Watch steps follow-up — 10 November 2026
 
 Use existing PR-only Apple Watch build workflow for unsigned Watch simulator, physical Watch Release architecture and paired iPhone compilation. JarvisCore includes WatchStepsPlotTests for goal crossing, missing/zero and partial-day coverage; 550 tests, CI and CodeQL passed at 6490aa2. Native run 42765852671 passed all three unsigned builds. The isolated Health preview was inspected; it is not an installed watch-face screenshot. Final picker-copy/reference/docs follow-up checks are pending; no installed-device success is claimed. Startup alert PR #1692 is implemented and separately qualified at 5de65c01; it is not merged or released. Do not duplicate its recovery patch. Primary owns integration/deployment. Weekly workout concepts are deferred.
+## Watch child integration qualification — 10 November 2026 (#1721)
+
+Use child PR #1722 targeting `copilot/implement-watch-home-complications`; do not
+push to or retarget #1703/#1711. Primary owns integration/release. Check current
+heads again before handoff. This runner's Swift 6.4.2 is available by adding
+`/usr/share/swift/usr/bin` to PATH; Xcode, `xcrun` and physical devices are absent.
+Use existing Core tests, backend checks and the PR-only Watch workflow.
+The workflow records exact head and installed plist metadata and requires
+nonce/destination/PID receipts before captures; inspect the actual PNGs as well.
+External URL failure remains a failed check, not a fixture-navigation pass.
+Source artifacts showed launch spinners and stale scenes under valid filenames.
+See `docs/ios/design/watch/implementation.md` for the retrieved approved images,
+Apple sources, exact commands and unverified acceptance. No live writes/deployment.

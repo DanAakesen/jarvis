@@ -2794,3 +2794,14 @@ Every Watch free-text field, including exercise name and chat draft, supports ty
 ## Watch steps complication — 10 November 2026
 
 The owner approved the amber vertical-stem steps design (second concept in the final steps exploration). The rectangular complication shows only a large daily step count and a full-width cumulative steps chart with a dashed goal reference. Remove the target text, time labels, calorie footer and weekly workout column. Small complications stay unchanged. Weekly workout concepts are deferred, not approved for implementation.
+## Integrated Watch delivery — 10 November 2026 (#1721)
+
+Combine #1701 Home/complications/tasks and #1705 quick lift logging without
+replacing either scope. The Workouts section keeps its summary and See more,
+with Log lift underneath; its shortcut and circular complication open the same
+capture screen. Keep task and lift drafts across dismissal/restart, including
+frozen request identity, payload, timestamp and timezone after an uncertain save.
+Restoration never sends automatically. A local storage failure must prevent a
+fresh unsafe write and explain recovery. Preserve edit source-version checking.
+Concept approval, actual intended simulator rendering, installed-complication
+routing and physical Watch dictation/voice acceptance remain separate criteria.

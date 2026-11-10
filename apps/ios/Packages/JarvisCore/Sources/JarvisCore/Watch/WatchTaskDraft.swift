@@ -35,7 +35,7 @@ public struct WatchTaskFields: Codable, Equatable, Sendable {
 }
 
 /// Both modes keep their own entered content. No identity or default date is allocated by editing.
-public struct WatchTaskDraft: Equatable, Sendable {
+public struct WatchTaskDraft: Codable, Equatable, Sendable {
     public var mode: WatchTaskMode = .auto
     public var input = ""
     public var fields = WatchTaskFields()
@@ -158,10 +158,11 @@ public struct WatchTaskPageCollection: Sendable {
 }
 
 /// A lost acknowledgement must not turn a changed form into a second create.
-public struct WatchTaskSubmissionState: Sendable {
+public struct WatchTaskSubmissionState: Codable, Equatable, Sendable {
     public private(set) var request: WatchTaskCreateRequest?
     public private(set) var sending = false
     public private(set) var canRevise = false
+    public private(set) var uncertain = false
     private var submittedDraft: WatchTaskDraft?
     public init() {}
 
@@ -173,23 +174,58 @@ public struct WatchTaskSubmissionState: Sendable {
         guard draft.validationMessage == nil else { throw WatchTaskSubmissionError.invalidDraft }
         if let request {
             guard submittedDraft == draft else { throw WatchTaskSubmissionError.changedPayload }
-            sending = true
+            sending = true; canRevise = false; uncertain = false
             return request
         }
         let value = WatchTaskCreateRequest(draft: draft, id: makeID(), submittedAt: now, timeZone: timeZone)
         guard value.isValid else { throw WatchTaskSubmissionError.invalidDraft }
-        request = value; submittedDraft = draft; sending = true; canRevise = false
+        request = value; submittedDraft = draft; sending = true; canRevise = false; uncertain = false
         return value
     }
 
     public mutating func finish(rejectedWithoutSaving: Bool = false) {
         sending = false
         canRevise = rejectedWithoutSaving
+        uncertain = !rejectedWithoutSaving
     }
 
     public mutating func reviseRejectedDraft() {
         guard !sending, canRevise else { return }
-        request = nil; submittedDraft = nil; canRevise = false
+        request = nil; submittedDraft = nil; canRevise = false; uncertain = false
+    }
+
+    mutating func confirmSaved() {
+        sending = false
+        canRevise = false
+        uncertain = false
+    }
+
+    static func restore(from data: Data) throws -> Self {
+        var value = try JSONDecoder().decode(Self.self, from: data)
+        try value.restoreAfterProcessDeath()
+        return value
+    }
+
+    mutating func restoreAfterProcessDeath() throws {
+        if sending {
+            sending = false
+            uncertain = true
+        }
+        guard let request else {
+            guard submittedDraft == nil, !sending, !canRevise, !uncertain else {
+                throw WatchFailure.invalidRequest
+            }
+            return
+        }
+        guard let submittedDraft,
+              request.isValid,
+              request.mode == submittedDraft.mode,
+              request.input == (submittedDraft.mode == .auto ? submittedDraft.input : nil),
+              request.fields == (submittedDraft.mode == .manual ? submittedDraft.fields : nil),
+              !sending,
+              !(canRevise && uncertain) else {
+            throw WatchFailure.invalidRequest
+        }
     }
 }
 

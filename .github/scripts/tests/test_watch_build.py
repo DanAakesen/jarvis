@@ -1,0 +1,78 @@
+import json
+from pathlib import Path
+import plistlib
+import subprocess
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+class WatchBuildTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        result = subprocess.run(
+            ["ruby", "-ryaml", "-rjson", "-e",
+             "puts JSON.generate(YAML.safe_load_file(ARGV[0]))",
+             str(ROOT / ".github/workflows/watch-build.yml")],
+            check=True, capture_output=True, text=True,
+        )
+        cls.workflow = json.loads(result.stdout)
+        cls.steps = cls.workflow["jobs"]["watch"]["steps"]
+
+    def test_existing_builds_remain_and_checkout_is_exact_head(self):
+        checkout = next(step for step in self.steps if step.get("uses", "").startswith("actions/checkout@"))
+        self.assertEqual(checkout["with"]["ref"], "${{ github.event.pull_request.head.sha }}")
+        shell = "\n".join(step.get("run", "") for step in self.steps)
+        for destination in ["watchOS Simulator", "generic/platform=watchOS", "iOS Simulator"]:
+            self.assertIn(destination, shell)
+        self.assertIn("watch-head.txt", shell)
+        for step in self.steps:
+            if "run" in step:
+                subprocess.run(["bash", "-n"], input=step["run"], text=True, check=True)
+
+    def test_captures_reject_stale_processes_and_require_destination_receipts(self):
+        capture = next(step["run"] for step in self.steps if step.get("name", "").startswith("Capture intended"))
+        self.assertNotIn("--terminate-running-process", capture)
+        self.assertIn('simctl terminate "$device" "$BUNDLE"', capture)
+        self.assertIn('test "$pid" != "$PREVIOUS_PID"', capture)
+        self.assertIn('kill -0 "$PREVIOUS_PID"', capture)
+        self.assertIn(".captureID == $id and .screen == $screen and .pid == $pid", capture)
+        self.assertLess(capture.index("watch-capture.json"), capture.index('simctl io "$device" screenshot'))
+        self.assertIn("return 1", capture)
+        for screen in ["task-detail", "task-edit", "personal-new-task-manual", "dashboard-workouts",
+                       "log-lift-complication", "saved missing uncertain deleted", "small-$SCREEN"]:
+            self.assertIn(screen, capture)
+
+    def test_url_delivery_failure_is_not_replaced_by_fixture_navigation(self):
+        delivery = next(step["run"] for step in self.steps if step.get("name", "").startswith("Verify external URL"))
+        self.assertIn("set -euo pipefail", delivery)
+        self.assertIn('simctl openurl "$WATCH_ID" "jarvis-watch://$ROUTE"', delivery)
+        self.assertNotIn("--watch-screen=", delivery)
+        self.assertNotIn("|| true", delivery)
+        self.assertIn("watch-open-url.json", delivery)
+        self.assertIn("watch-capture.json", delivery)
+        self.assertIn("tasks log-lift", delivery)
+        self.assertLess(delivery.index('test "$READY" = true'), delivery.index('simctl openurl'))
+
+    def test_actual_watch_target_registers_the_same_url_scheme(self):
+        with (ROOT / "apps/ios/Watch/Info.plist").open("rb") as file:
+            info = plistlib.load(file)
+        self.assertTrue(info["WKApplication"])
+        self.assertIn("jarvis-watch", [
+            scheme for entry in info["CFBundleURLTypes"] for scheme in entry["CFBundleURLSchemes"]
+        ])
+        self.assertEqual(info["CFBundleURLTypes"][0]["CFBundleTypeRole"], "Editor")
+        boot = next(step["run"] for step in self.steps if step.get("name", "").startswith("Boot and inspect"))
+        self.assertIn("built-info.json", boot)
+        self.assertIn("installed-info.json", boot)
+
+    def test_widget_kinds_and_dashboard_shortcut_both_survive_integration(self):
+        widgets = (ROOT / "apps/ios/WatchWidgets/JarvisWatchWidgets.swift").read_text()
+        for kind in ["health", "tasks", "dictate", "voice", "nutrition", "home", "task-list", "body-fat", "logLift"]:
+            self.assertIn(f'kind: "jarvis.watch.{kind}"', widgets)
+        self.assertIn(".widgetURL(WatchAppLink.logLift.url)", widgets)
+        dashboard = (ROOT / "apps/ios/Watch/WatchDashboardViews.swift").read_text()
+        self.assertIn('WatchDashboardSection(title: "Workouts", route: .workouts)', dashboard)
+        self.assertIn("WatchLogLiftShortcut()", dashboard)
+        self.assertNotIn("WatchLiftHomeSummary", (ROOT / "apps/ios/Watch/JarvisWatchApp.swift").read_text())

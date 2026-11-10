@@ -4841,3 +4841,27 @@ Notes/push-chat iPhone UI failures are documented in the Watch handoff, not
 claimed fixed. Home #1689 and workout design work remain separate. Installed
 Ultra 2 complication, startup, reconnect and active-send/voice checks follow
 TestFlight delivery. See docs/ios/design/watch/steps-reconnect-handoff-2026-11-10.md.
+## Watch child integration — 10 November 2026 (#1721)
+
+PR #1722 is the child delivery into #1703's Home branch, not main. Both current
+source heads are included with a true merge; the original PRs remain intact.
+Dashboard, all complications, shared Today/Upcoming, task capture and both lift
+entry/voice/dictation flows are retained. The temporary duplicate Workouts summary
+is removed. The actual old artifacts contain stale scenes and a launch spinner;
+they are not visual acceptance. Capture now requires fresh destination receipts
+and keeps external URL-delivery failure separate and visible.
+
+Merged-backend qualification: 1,585 targeted tests plus 178 vault/store tests,
+build and lint pass. Real SQL testing is blocked by its isolated-loopback guard.
+Five workflow regressions and parent Watch DEBUG/release parsing pass.
+Task draft/restart qualification is implemented: atomic local create/edit drafts,
+pre-send frozen requests, uncertain/refresh-required restoration and terminal
+saved receipts; restoration never automatically sends. The focused combined Core
+run passes 37 tests. The full run exposed six parent URL-refactor source-literal
+assertions; their guards now follow the shared enum rather than obsolete literals.
+The corrected parent-owned routing/source suite passes all 12 tests.
+Next: run final exact-head native/security checks and inspect intended captures
+against the approved images. Exact #1701
+nutrition/task-list image transfer and physical Watch speech/accessibility/tap
+checks remain open. See `docs/ios/design/watch/implementation.md` for evidence.
+Earlier sections are historical results, not integrated-head qualification.

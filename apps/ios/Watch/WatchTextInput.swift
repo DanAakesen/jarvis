@@ -91,6 +91,7 @@ struct WatchCountPicker: View {
                 .accessibilityLabel(title)
             Button("Done") { dismiss() }
         }.navigationTitle(title)
+            .watchCaptureReady("new-lift")
     }
 }
 

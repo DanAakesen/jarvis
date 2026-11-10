@@ -9449,3 +9449,22 @@ WatchTextInput uses native SwiftUI text editing and WatchKit system text input f
 ## Watch steps rendering — 10 November 2026
 
 `WatchStepsPlot` in JarvisCore projects the existing bounded 24-hour cumulative snapshot and positive daily goal onto a shared scale with headroom. `WatchStepsChart` draws the chart and gradient stems in SwiftUI Canvas. No new transport, persistence, HealthKit query, credential, entitlement or backend boundary. Existing snapshot freshness and midnight expiry remain authoritative. The separate startup-alert recovery patch is PR #1692, not a dependency of chart rendering.
+## Watch child integration — 10 November 2026 (#1721)
+
+The Home/dashboard/task and quick-lift branches are combined on a child of Home,
+with their existing paired-phone handlers, owner-authenticated backend services
+and all WidgetKit kinds preserved. `WatchAppLink` supplies the shared navigation
+allow-list used by widgets and `onOpenURL`; links do not carry write payloads.
+No new Watch credentials, independent API client, offline queue or infrastructure
+is introduced. DEBUG capture receipts are confined to synthetic fixture launches
+and identify process/destination appearance; they are not production state or
+visual/device acceptance. Build metadata and external URL delivery are checked
+separately from rendering in the existing Watch workflow.
+
+`WatchTaskDraftStore` atomically persists one create draft and task-ID-keyed edit
+drafts under Watch ApplicationSupport, isolated from synthetic fixtures. Records
+retain both mode drafts, field controls, source/version and the frozen request
+before transport. Restarted creates become uncertain; interrupted edits require
+source refresh. Confirmed saved receipts persist before UI acknowledgement, and
+new creates require an explicit action. Corrupt/unwritable storage blocks saving
+instead of allocating a fresh operation. Backend receipts/migration are unchanged.
