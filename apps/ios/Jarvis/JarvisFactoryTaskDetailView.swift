@@ -21,7 +21,6 @@ struct JarvisFactoryTaskDetailView: View {
     @State private var hasMoreEvents = false
     @State private var busyAction: FactoryTaskControl?
     @State private var steeringPresented = false
-    @State private var cancelPresented = false
     @State private var confirmationPresented = false
     @State private var pendingConfirmation: FactoryTaskControlRequest?
     @State private var pendingConfirmationReason = ""
@@ -62,21 +61,6 @@ struct JarvisFactoryTaskDetailView: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
-        }
-        .confirmationDialog(
-            copy.text(.cancelConfirmationTitle),
-            isPresented: $cancelPresented,
-            titleVisibility: .visible
-        ) {
-            Button(copy.text(.cancelTask), role: .destructive) {
-                guard let request = task.map({
-                    FactoryTaskControlRequest(taskId: $0.id, action: .cancel)
-                }) else { return }
-                Task { await perform(request) }
-            }
-            Button(copy.text(.keepTask), role: .cancel) {}
-        } message: {
-            Text(copy.text(.cancelConfirmationMessage))
         }
         .confirmationDialog(
             copy.text(.confirmationTitle),
@@ -251,7 +235,7 @@ struct JarvisFactoryTaskDetailView: View {
                 isFullWidth: true,
                 isLeading: true,
                 isDestructive: true
-            ) { cancelPresented = true }
+            ) { Task { await perform(FactoryTaskControlRequest(taskId: task.id, action: .cancel)) } }
         } else if action == .steer {
             JarvisLabelledButton(
                 title: copy.text(.steer),
