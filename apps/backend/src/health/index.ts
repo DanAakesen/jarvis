@@ -50,7 +50,7 @@ export function createHealthModules(enabled = false, data?: HealthData, connecto
         await app.register(healthQueryRoutes(data.query));
         if (nutritionTargets) await app.register(nutritionTargetsRoutes(nutritionTargets));
         if (trainingTargets) await app.register(trainingTargetsRoutes(trainingTargets));
-        if (data.lifts) await app.register(liftRoutes(data.lifts));
+        if (data.lifts) await app.register(liftRoutes(data.lifts, data.liftCaptureModel));
         if (data.workouts) await app.register(workoutRoutes(data.workouts));
         if (data.deviceSync) await app.register(deviceSyncRoutes(data.deviceSync));
         if (data.retryGymVault) {

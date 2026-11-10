@@ -114,3 +114,11 @@ it does not remove tasks, issues, conversations or notification receipts.
 `0076_proactive_context.sql` expands the existing proactive source-status and alert-class constraints for Health, nutrition, notes, memory and normal model insights. Apply it before the corresponding backend. It creates no table and rewrites no historical record. The down batch refuses rollback while new-source statuses or insight receipts exist, preserving history rather than deleting it to force a downgrade. Coordinate the backend with a native client that recognizes the four new source IDs.
 
 `0077_proactive_conversation_context.sql` adds one owner-keyed notification selection (finding UUID and timestamp). Apply before the compatible backend, then the updated native client. It changes no findings or messages. Its down batch drops selection metadata only; revert the dependent backend first. Live rollback remains primary/owner-controlled.
+
+`0078_watch_task_submissions.sql` stores owner/submission-keyed Watch task receipts.
+Resolved fields, including the due instant and timezone, are saved before the
+vault write; the result receipt and vault marker reconcile retries after an
+ambiguous response. Apply before the Watch-task backend, then the compatible
+native client. The down batch refuses to remove nonempty receipts because doing
+so could allow duplicate creation. No existing task dates or reminder policies
+are migrated.

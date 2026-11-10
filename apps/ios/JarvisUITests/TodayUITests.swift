@@ -254,10 +254,33 @@ final class TodayUITests: XCTestCase {
         app.buttons["sheet.cancel"].tap()
     }
 
+    func testTodayAndUpcomingUseMatchingTaskCountsAndLists() {
+        launch()
+        let today = app.buttons["today.tab.today"]
+        reveal(today)
+        XCTAssertEqual(today.label, "Today 3", "Two today tasks plus one overdue; calendar is not a task")
+        let expand = app.buttons["today.list.expand"]
+        reveal(expand)
+        expand.tap()
+        let overdue = app.descendants(matching: .any)["today.task.t4"]
+        reveal(overdue)
+        XCTAssertTrue((overdue.value as? String)?.contains("Overdue") == true, "Overdue must be readable without color")
+        XCTAssertFalse(app.descendants(matching: .any)["today.task.t5"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["today.task.t6"].exists)
+        let upcoming = app.buttons["today.tab.due"]
+        reveal(upcoming)
+        XCTAssertEqual(upcoming.label, "Upcoming 1")
+        upcoming.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["today.task.t3"].waitForExistence(timeout: 5))
+        for id in ["t1", "t2", "t4", "t5", "t6"] {
+            XCTAssertFalse(app.descendants(matching: .any)["today.task.\(id)"].exists)
+        }
+    }
+
     func testCompletingATaskConfirmsSuccessAndKeepsOtherTasksUsable() {
         launch(appearance: "dark")
         XCTAssertTrue(screen("today").waitForExistence(timeout: 10))
-        // t1/t2 are due today. Tasks due deliberately contains overdue/upcoming tasks.
+        // Today includes t1/t2 and all overdue tasks; Upcoming contains only future tasks.
         XCTAssertTrue(app.buttons["today.tab.today"].isSelected)
         let expand = app.buttons["today.list.expand"]
         for _ in 0..<4 where !expand.isHittable { app.swipeUp() }

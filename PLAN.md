@@ -82,6 +82,47 @@ geometry and interaction captures, Now visibility transitions, reduced motion,
 Dynamic Type, link/selection checks and physical-iPhone validation. Do not mark
 native acceptance complete. Orchestrator owns integration and release; preserve
 #1712/#1714 photo changes and #1704's chat-model refresh fixes.
+## Watch dashboard and personal-task implementation — 10 November 2026 (#1701)
+
+Source implementation is complete on the issue branch; no PR merge or deployment.
+It preserves the existing steps/startup and Factory/lift work. Shared Today/
+Upcoming filtering, dashboard/full views, four rectangular complications and
+task detail/edit/Auto/Manual capture are implemented.
+
+Qualification reports: 23 targeted Today tests; a 616-test Core run before the
+last integration refinements; 1,241 backend regressions and 94 real SQL tests;
+backend build/lint and targeted follow-up checks passed. The updated capture
+workflow passes YAML/shell syntax checks. Review fixes split the nutrition
+accessibility string into typed steps without changing copy/number formatting,
+and restore the task choice control's top-level declaration. Native diagnostics
+also identified two watchOS-unavailable DisclosureGroups; read-only navigation
+lists now preserve access to those details and the active draft. After synchronizing
+main and these corrections, all 619 Core tests, 1,126 focused backend regressions,
+backend build/lint, Swift parsing and the existing iOS metadata check pass.
+Auto/Manual draft tests cover timeout, malformed success, definite rejection and
+unchanged explicit retry.
+Process-death restoration is not implemented.
+
+Native run 42836136120 failed at the nutrition expression; its physical build was
+skipped. Combined-source run 42857360808 was superseded by the documentation
+head. Run 42859214862 passed nutrition compilation but failed on DisclosureGroup;
+physical compilation and captures were skipped. Corrected runtime `606c299d`
+passes Watch simulator, physical-Watch Release architecture and paired-phone
+builds in run 42860889807. Its artifact contains 21 synthetic native PNG captures;
+the dashboard's top viewport was visually inspected. The image viewer's one-image
+limit prevented inspection of the other captures. Native task interactions,
+remaining visual review and physical-device acceptance are not claimed.
+CI and the separate iPhone UI workflow are draft-skipped, not passing results.
+The earlier filtering checkpoint is not evidence for the combined feature.
+
+Next: inspect the remaining native captures and qualify interactions on a physical
+Watch, including Ultra 2. Exact nutrition/task-list complication image transfer
+remains a visual sign-off blocker. Dashboard and task-screen approvals in the issue supersede
+PR #1700's older unapproved-dashboard note.
+
+## Watch quick lift logging — 10 November 2026 (#1705)
+
+Implemented on this branch: additive shared capture/complication, owner-authenticated natural-language extraction into existing lift history, durable duplicate-safe retry, recorded-value voice receipts and explicit recovery for a confirmed deleted operation. Focused backend/Core checks pass; acceptance remains open. PR #1703 remains separate: integrate into its Workouts section and preserve its dashboard, task flows, Today/Upcoming semantics and existing complications. Primary owns integration/release; do not touch active Factory acceptance task #24. Native builds, simulator interactions/captures, installed Ultra 2 dictation/voice/complication and real history readback remain acceptance work until evidence is recorded in `docs/ios/design/watch/implementation.md`.
 
 ## Explicit reminder quiet-hours repair — 10 November 2026 (#1706)
 
@@ -4916,3 +4957,27 @@ Notes/push-chat iPhone UI failures are documented in the Watch handoff, not
 claimed fixed. Home #1689 and workout design work remain separate. Installed
 Ultra 2 complication, startup, reconnect and active-send/voice checks follow
 TestFlight delivery. See docs/ios/design/watch/steps-reconnect-handoff-2026-11-10.md.
+## Watch child integration — 10 November 2026 (#1721)
+
+PR #1722 is the child delivery into #1703's Home branch, not main. Both current
+source heads are included with a true merge; the original PRs remain intact.
+Dashboard, all complications, shared Today/Upcoming, task capture and both lift
+entry/voice/dictation flows are retained. The temporary duplicate Workouts summary
+is removed. The actual old artifacts contain stale scenes and a launch spinner;
+they are not visual acceptance. Capture now requires fresh destination receipts
+and keeps external URL-delivery failure separate and visible.
+
+Merged-backend qualification: 1,585 targeted tests plus 178 vault/store tests,
+build and lint pass. Real SQL testing is blocked by its isolated-loopback guard.
+Five workflow regressions and parent Watch DEBUG/release parsing pass.
+Task draft/restart qualification is implemented: atomic local create/edit drafts,
+pre-send frozen requests, uncertain/refresh-required restoration and terminal
+saved receipts; restoration never automatically sends. The focused combined Core
+run passes 37 tests. The full run exposed six parent URL-refactor source-literal
+assertions; their guards now follow the shared enum rather than obsolete literals.
+The corrected parent-owned routing/source suite passes all 12 tests.
+Next: run final exact-head native/security checks and inspect intended captures
+against the approved images. Exact #1701
+nutrition/task-list image transfer and physical Watch speech/accessibility/tap
+checks remain open. See `docs/ios/design/watch/implementation.md` for evidence.
+Earlier sections are historical results, not integrated-head qualification.

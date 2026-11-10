@@ -6,6 +6,36 @@ composer/Now dock, including viewport and text-size changes. Pause during user
 scrolling and text selection; returning to the latest content resumes following.
 Keep tool activity in the transcript and retain transparent, floating controls.
 Native simulator and physical-iPhone acceptance remain pending.
+## Watch dashboard and personal tasks — 10 November 2026 (#1701)
+
+The Watch opens on a vertically scrolling dashboard: Up Next calendar, weekly Gym/Run
+counts, Body Fat, Today tasks and Recent Notes. The existing Voice/Dictate/Factory
+screen remains one horizontal swipe to the right. The entire calendar block opens
+the agenda; the other headings have See more actions. Four additional rectangular
+complications show nutrition macros, a grounded Home brief, actual Today task titles
+and Body Fat. The approved steps complication and existing actions remain.
+
+Today means incomplete tasks due today **or overdue**; Upcoming means incomplete tasks
+due after today. Counts and lists use the same local-day boundary on iPhone Home and
+Watch; undated tasks keep their existing separate handling. Both Watch task entry
+points open Today. Tasks open full details and a prefilled explicit-field editor.
+The top-right plus opens New task in Auto mode; Manual uses native field controls.
+Typing and dictation only change the draft; Save creates the task without another
+confirmation. Auto parses English/Danish through the existing backend model, defaulting
+only omitted date/time to submission time plus one hour and omitted priority to Low.
+Retries retain the submission identity, owner timezone and resolved due timestamp.
+These defaults do not change other task/reminder policies.
+
+Use real sources and explicit loading/empty/unavailable/stale states. Body Fat uses
+the preceding three calendar months, one of the owner's permitted periods.
+The dashboard and four task-screen concepts are owner-approved; the refined Home
+phrase/Body Fat visuals and device fit are not separately accepted. The exact
+nutrition/task-list complication reference images still require transfer from the
+design conversation before final visual sign-off. No merge or deployment is authorized.
+
+## Watch quick lift logging — 10 November 2026 (#1705)
+
+Watch Home's Workouts section and a circular Log lift complication open the same capture screen. Native dictation fills editable text; only Save submits it. Voice opens the existing paired-phone voice experience and a complete spoken request needs no second approval. Record the actual exercise, kilograms and reps in existing lift history, defaulting to one set unless explicitly specified. Never estimate a one-rep maximum, double dumbbell weight or invent missing values. Ask for missing details while retaining the input; report recorded values, actual failures and uncertain outcomes. Manual retry must preserve the operation identity across reconnect/relaunch. No standalone Watch credentials, offline send queue, workout tracker or rest timer. Preserve PR #1703's dashboard, Today/Upcoming semantics, task flows, complications and Workouts See more. Approved generated references at `009750f0932e6d49af370af73618160ed8ef6fae` are not native/device acceptance.
 
 ## Direct owner requests — 10 November 2026
 
@@ -2804,3 +2834,14 @@ Every Watch free-text field, including exercise name and chat draft, supports ty
 ## Watch steps complication — 10 November 2026
 
 The owner approved the amber vertical-stem steps design (second concept in the final steps exploration). The rectangular complication shows only a large daily step count and a full-width cumulative steps chart with a dashed goal reference. Remove the target text, time labels, calorie footer and weekly workout column. Small complications stay unchanged. Weekly workout concepts are deferred, not approved for implementation.
+## Integrated Watch delivery — 10 November 2026 (#1721)
+
+Combine #1701 Home/complications/tasks and #1705 quick lift logging without
+replacing either scope. The Workouts section keeps its summary and See more,
+with Log lift underneath; its shortcut and circular complication open the same
+capture screen. Keep task and lift drafts across dismissal/restart, including
+frozen request identity, payload, timestamp and timezone after an uncertain save.
+Restoration never sends automatically. A local storage failure must prevent a
+fresh unsafe write and explain recovery. Preserve edit source-version checking.
+Concept approval, actual intended simulator rendering, installed-complication
+routing and physical Watch dictation/voice acceptance remain separate criteria.

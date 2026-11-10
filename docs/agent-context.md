@@ -455,6 +455,11 @@ Integration: #1704 head `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9` was inspected
 its model refresh changes are not duplicated or overwritten. Keep concurrent
 #1712/#1714 photo/composer changes; integration and release stay with the
 orchestrator. No work was started on #1706.
+## Watch quick lift capture — 10 November 2026 (#1705)
+
+Quick capture uses the paired-phone `captureLift` action and owner-only `/health/lifts/capture`; no Watch credentials or offline sends. Input is bounded to 2,000 UTF-16 units with unsupported controls rejected before submission. Never rotate the persisted operation key after an uncertain result. Missing details permit editing the retained text under that key; only a confirmed terminal result permits explicitly starting another lift. Preserve both sides of PR #1703's shared Watch root/contract/bridge/widget changes and use its existing Workouts section rather than duplicate the dashboard. The implementation handoff in `docs/ios/design/watch/implementation.md` lists exact integration anchors, Apple sources, tests and remaining native/device checks. Primary owns integration/release; do not interact with active Factory acceptance task #24.
+
+The existing Watch CI capture step includes synthetic quick-lift states and a deep-link launch. Local Linux Swift tests/parsing do not compile SwiftUI against watchOS, install a complication or exercise speech. Treat native build/capture results and installed Ultra 2 acceptance separately.
 
 ## Explicit timed reminders — 10 November 2026 (#1706)
 
@@ -8487,6 +8492,16 @@ results separate and retain actual native captures before claiming UI acceptance
 
 Source: apps/ios/Watch, apps/ios/WatchWidgets and iPhone JarvisWatchBridge.swift. Build: apps/ios/project.yml. Tests: `swift test --package-path apps/ios/Packages/JarvisCore --filter WatchContractTests` or full swift test. Native check after xcodegen generate in apps/ios: `xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build`. PR-only watch-build.yml builds Watch and phone unsigned and captures isolated DEBUG --watch-fixture views on an available Ultra simulator. Fixtures are not real health or successful connectivity. Primary owns signing, installation, integration and deployment. References, decisions and unverified checks: docs/ios/design/watch/.
 
+For #1701, preserve the integrated steps/startup and Factory/lift paths while
+adding dashboard and personal-task flows. The owner approved the dashboard and
+four personal-task screen concepts; PR #1700's older status is not authoritative.
+Its exact nutrition/task-list complication reference images are still missing,
+so do not claim final visual sign-off. Body Fat uses the last 20 measurements.
+Watch task Save must reuse its submission identity/time/zone on retry; dictation
+only edits the draft. Backend persistence changes require normal primary
+integration before native rollout. Use isolated fixtures/stubbed models for
+testing, never live task creation as a secondary-thread check.
+
 
 ### 8 November: subscription access corrected
 
@@ -8694,3 +8709,16 @@ its shared detail-view/workflow changes still need primary-owned integration,
 without replacing either branch wholesale. Final-head Actions and native
 captures remain separate qualification requirements; this Linux environment has
 no Xcode/Simulator or authenticated workflow-dispatch CLI.
+## Watch child integration qualification — 10 November 2026 (#1721)
+
+Use child PR #1722 targeting `copilot/implement-watch-home-complications`; do not
+push to or retarget #1703/#1711. Primary owns integration/release. Check current
+heads again before handoff. This runner's Swift 6.4.2 is available by adding
+`/usr/share/swift/usr/bin` to PATH; Xcode, `xcrun` and physical devices are absent.
+Use existing Core tests, backend checks and the PR-only Watch workflow.
+The workflow records exact head and installed plist metadata and requires
+nonce/destination/PID receipts before captures; inspect the actual PNGs as well.
+External URL failure remains a failed check, not a fixture-navigation pass.
+Source artifacts showed launch spinners and stale scenes under valid filenames.
+See `docs/ios/design/watch/implementation.md` for the retrieved approved images,
+Apple sources, exact commands and unverified acceptance. No live writes/deployment.

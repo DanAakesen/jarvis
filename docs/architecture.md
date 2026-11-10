@@ -25,6 +25,11 @@ to write its read-only environment key. The screen's explicit fixture override
 only adds reduced motion; continuous layout following uses a nonanimated
 transaction in either mode. Photo and follow fixtures can run together without
 replacing photo history or prematurely completing the held stream.
+## Watch quick lift capture — 10 November 2026 (#1705)
+
+Quick logging follows Watch → allow-listed WatchConnectivity request → authenticated iPhone JarvisClient → owner-only `POST /health/lifts/capture`. Text extraction reuses the configured Foundry JSON model port without giving it mutation tools. The server validates extracted exercise/weight/reps, defaults unspecified sets to one, and writes through the existing owner-scoped LiftEntriesStore/Gym log path. Durable idempotency lookup precedes extraction, so uncertain retries return the original persisted result rather than reinterpreting or overwriting it. Clarifications do not write. The Watch preserves its draft and operation identity; Voice remains the existing WatchModel/paired-phone voice session with the existing gym tool. No new credentials, storage table, workout-session service or offline queue.
+
+PR #1703 independently extends the same Watch root, bridge, contract and widget bundle. Integration must preserve its additions and insert the quick-lift shortcut inside its existing Workouts section rather than retain two Home summaries. See `docs/ios/design/watch/implementation.md` for integration and verification evidence.
 
 ## Direct owner requests — 10 November 2026
 
@@ -9372,6 +9377,30 @@ backend execution, authorization, provider catalogue or audit semantics.
 
 XcodeGen JarvisWatch embeds JarvisWatchWidgets and is embedded by the phone app. Both use portable JarvisCore; Watch-native shared controls live under apps/ios/Watch. A Codable WatchConnectivity allow-list connects Watch to the paired phone. JarvisWatchBridge owns authenticated chat/health/lift/Factory reads/writes and VoiceSessionClient; credentials remain on phone. Watch VoiceAudioEngine captures/plays PCM16 through ordered acknowledged messages. Phone expires voice after 15 seconds without Watch heartbeat. Existing VoiceLiveActivityController controls the same session. No backend endpoint, infrastructure or production configuration is added. Display-only Health snapshots cross application context and expire in 15 minutes or date rollover. No offline mutation queue. See docs/ios/design/watch/implementation.md for verification limits.
 
+### Watch dashboard and personal-task extension (#1701)
+
+The new dashboard extends the paired-phone allow-list rather than creating a
+standalone Watch API client. Calendar, task, note, nutrition, body-measurement and
+Home-brief reads reuse their existing clients and permissions. Missing sections
+are distinct from successful empty reads. Display snapshots are bounded and
+cached in the existing Watch App Group; WidgetKit refresh is system-budgeted,
+not an instantaneous background channel. The existing steps snapshot/rendering
+and voice/dictation/Factory routes remain.
+
+`JarvisTodayTaskLists` is the shared date-only projection for iPhone Home and Watch:
+open dated tasks through the owner's local today versus later dates. The phone
+supplies local day boundaries without rewriting vault metadata. A task selection
+retains the source identity and version for optimistic editing.
+
+Watch Auto creation adds an owner-only backend boundary for structured model
+parsing and the existing vault task writer. It captures the first Save's UUID,
+submission instant and IANA timezone; durable receipts retain resolved fields
+before the external write, and vault compare-and-swap/idempotency protects
+ambiguous retries. Notes and timezone metadata remain attached to the existing
+vault task, not a second task system. Auto defaults are isolated from ordinary
+task creation/reminder rules. New persistence must precede the compatible backend
+and native client; integration/deployment remains primary-controlled.
+
 ### Notes recent-library projection
 
 JarvisNotesArea keys its cancellable projection by graph nodes, local visit history
@@ -9494,3 +9523,22 @@ WatchTextInput uses native SwiftUI text editing and WatchKit system text input f
 ## Watch steps rendering — 10 November 2026
 
 `WatchStepsPlot` in JarvisCore projects the existing bounded 24-hour cumulative snapshot and positive daily goal onto a shared scale with headroom. `WatchStepsChart` draws the chart and gradient stems in SwiftUI Canvas. No new transport, persistence, HealthKit query, credential, entitlement or backend boundary. Existing snapshot freshness and midnight expiry remain authoritative. The separate startup-alert recovery patch is PR #1692, not a dependency of chart rendering.
+## Watch child integration — 10 November 2026 (#1721)
+
+The Home/dashboard/task and quick-lift branches are combined on a child of Home,
+with their existing paired-phone handlers, owner-authenticated backend services
+and all WidgetKit kinds preserved. `WatchAppLink` supplies the shared navigation
+allow-list used by widgets and `onOpenURL`; links do not carry write payloads.
+No new Watch credentials, independent API client, offline queue or infrastructure
+is introduced. DEBUG capture receipts are confined to synthetic fixture launches
+and identify process/destination appearance; they are not production state or
+visual/device acceptance. Build metadata and external URL delivery are checked
+separately from rendering in the existing Watch workflow.
+
+`WatchTaskDraftStore` atomically persists one create draft and task-ID-keyed edit
+drafts under Watch ApplicationSupport, isolated from synthetic fixtures. Records
+retain both mode drafts, field controls, source/version and the frozen request
+before transport. Restarted creates become uncertain; interrupted edits require
+source refresh. Confirmed saved receipts persist before UI acknowledgement, and
+new creates require an explicit action. Corrupt/unwritable storage blocks saving
+instead of allocating a fresh operation. Backend receipts/migration are unchanged.

@@ -2,27 +2,6 @@ import Foundation
 import JarvisCore
 import SwiftUI
 
-struct WatchTasksView: View {
-    @EnvironmentObject private var connection: WatchConnection
-    @State private var tasks: [VaultTask] = []
-    @State private var loading = true
-    @State private var failure: String?
-    var body: some View {
-        List {
-            if loading { ProgressView() }
-            if let failure { Text(failure); Button("Retry") { Task { await load() } } }
-            else if !loading && tasks.isEmpty { Text("No tasks due today") }
-            ForEach(tasks) { task in Text(task.text) }
-        }.navigationTitle("Today").task { await load() }.refreshable { await load() }
-    }
-    private func load() async {
-        loading = true; failure = nil
-        defer { loading = false }
-        do { tasks = try await connection.load(.tasks) }
-        catch { tasks = []; failure = (error as? WatchFailure)?.message ?? "Tasks unavailable" }
-    }
-}
-
 struct WatchHealthList: View {
     var lifts: Bool
     @EnvironmentObject private var connection: WatchConnection
@@ -97,6 +76,9 @@ struct WatchHealthList: View {
             let result: [[String: JSONValue]] = try await connection.load(lifts ? .lifts : .workouts)
             guard readID == read, !Task.isCancelled else { return }
             rows = result
+            #if DEBUG
+            WatchPreview.captureReady(lifts ? "lifts" : "workouts")
+            #endif
         } catch {
             guard readID == read, !Task.isCancelled else { return }
             failure = (error as? WatchFailure)?.message ?? "History unavailable"
@@ -164,6 +146,7 @@ struct WatchLiftEditor: View {
             }
             #if DEBUG
             previewReps = ProcessInfo.processInfo.arguments.contains("--watch-picker=reps")
+            if !previewReps { WatchPreview.captureReady("new-lift") }
             #endif
         }
         .sheet(isPresented: $previewReps) { NavigationStack { WatchCountPicker(title: "Reps", value: $reps) } }
@@ -244,6 +227,7 @@ struct WatchFactoryTasks: View {
             }
             if tasks.count == 10 { Text("Latest 10 tasks. Full board on iPhone.").font(.caption2) }
         }.navigationTitle(project.name)
+        .watchCaptureReady("project")
         .task(id: connection.reachable) { await load() }.refreshable { await load() }
         .sheet(isPresented: $showCreate) {
             NavigationStack { WatchFactoryTaskEditor(project: project) { Task { await load() } } }

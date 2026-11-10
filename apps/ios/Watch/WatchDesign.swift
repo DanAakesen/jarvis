@@ -33,7 +33,7 @@ struct WatchWave: View {
     }
 }
 struct WatchGlyph: View {
-    enum Kind { case voice, dictate, tasks, factory }
+    enum Kind { case voice, dictate, tasks, factory, logLift }
     var kind: Kind
     var body: some View {
         Group {
@@ -47,6 +47,11 @@ struct WatchGlyph: View {
                 }
             case .tasks: Image(systemName: "checklist").resizable().scaledToFit()
             case .factory: Image(systemName: "chevron.left.forwardslash.chevron.right").resizable().scaledToFit()
+            case .logLift:
+                VStack(spacing: 2) {
+                    Image(systemName: "plus").font(.system(size: 12, weight: .semibold))
+                    Image(systemName: "dumbbell.fill").font(.system(size: 18, weight: .semibold))
+                }.frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }.foregroundStyle(WatchStyle.amber).accessibilityHidden(true)
     }
@@ -63,6 +68,26 @@ struct JarvisWatchAction: View {
                 Spacer(minLength: 0)
             }.padding(.horizontal, 14).frame(minHeight: 46).modifier(WatchSurface())
         }.buttonStyle(.plain).accessibilityLabel(title)
+    }
+}
+
+/// Shared production artwork; the DEBUG screen shows it at circular accessory size.
+struct WatchLogLiftComplicationView: View {
+    var body: some View {
+        WatchGlyph(kind: .logLift).padding(5).frame(maxWidth: .infinity, maxHeight: .infinity)
+            .modifier(WatchSurface(radius: 50)).clipShape(Circle())
+            .accessibilityElement(children: .ignore).accessibilityLabel("Log lift")
+    }
+}
+
+struct WatchPrimaryAction: View {
+    var title: String
+    var action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Text(title).font(.system(.body, design: .rounded, weight: .semibold))
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }.buttonStyle(.borderedProminent).tint(WatchStyle.amber).foregroundStyle(.black)
     }
 }
 

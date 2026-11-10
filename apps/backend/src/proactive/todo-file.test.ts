@@ -149,7 +149,15 @@ describe('todo parser', () => {
       done: false,
       highPriority: false,
     });
+
     expect(Object.keys(instruction ?? {}).sort()).toEqual(['done', 'dueAt', 'dueHasTime', 'highPriority', 'text']);
+  });
+
+  it('retains 400 Unicode scalars for task reads while keeping the legacy fact-text cap at 300', () => {
+    const text = 'ø🙂'.repeat(200);
+    const content = `- [ ] ${text}`;
+    expect(parseTodosWithContext(content, 'Personal/Inbox.md')[0]?.text).toBe(text);
+    expect(Array.from(parseTodos(content)[0]!.text)).toHaveLength(300);
   });
 
   it('recognizes only explicit high-priority markers and removes them from task text', () => {

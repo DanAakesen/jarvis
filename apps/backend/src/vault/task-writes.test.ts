@@ -59,7 +59,7 @@ describe('task write input validation', () => {
       null, [], { ...current, line: '1' }, { ...current, done: 'true' },
       { ...current, version: 'a'.repeat(63) }, { ...current, version: 'A'.repeat(64) },
       { ...current, path: '' }, { ...current, line: 1_000_001 }, { ...current, extra: true },
-      { ...current, text: 'x'.repeat(301) },
+      { ...current, text: 'x'.repeat(401) },
     ]) expect(validateTaskCompleteInput(invalid)).toBe(false);
     expect(validateTaskEditInput({ ...current, done: undefined, newText: 'New words' })).toBe(false);
     expect(validateTaskCreateInput({ text: 'Review this', scope: 'Personal' })).toBe(false);
@@ -92,6 +92,19 @@ describe('shared task writer', () => {
       .resolves.toMatchObject({ path: 'Personal/Inbox.md' });
     await state.writer.create({ text: 'Check notifications', scope: 'personal' }, undefined, '901');
     expect(state.client.write).toHaveBeenCalledOnce();
+  });
+
+  it('retains the legacy source-message ID digest and includes new task metadata only when supplied', async () => {
+    const state = fixture(null);
+    const legacy = { text: 'Check notifications', scope: 'personal' as const };
+    const first = await state.writer.create(legacy, undefined, '901');
+    const oldId = createHash('sha256').update(JSON.stringify(['901', 'personal', legacy.text, undefined, undefined, undefined, false])).digest('hex').slice(0, 24);
+    expect(state.file()!.content).toContain(`🆔 ${oldId}`);
+    expect(await state.writer.create(legacy, undefined, '901')).toMatchObject({ version: first.version, commit: null });
+    const withNotes = await state.writer.create({ ...legacy, notes: 'Different notes' }, undefined, '901');
+    expect(withNotes.line).not.toBe(first.line);
+    expect(withNotes.notes).toBe('Different notes');
+    expect(state.client.write).toHaveBeenCalledTimes(2);
   });
 
   it.each(['high', 'medium', 'normal'] as const)('persists the selected %s priority when creating a task', async (priority) => {
@@ -331,10 +344,10 @@ describe('shared task writer', () => {
     expect(complete.client.write).not.toHaveBeenCalled();
   });
 
-  it('sanitizes and caps newly created task text using the existing helper', async () => {
+  it('sanitizes newly created task text without truncating an accepted title', async () => {
     const state = fixture(null);
     const result = await state.writer.create({ text: `Review\n<!-- -->${'a'.repeat(300)}📅`, scope: 'personal' });
-    expect(Array.from(result.text).length).toBe(200);
+    expect(result.text).toBe(`Review ${'a'.repeat(300)}`);
     expect(state.file()!.content.split('\n')).toHaveLength(4);
     await expect(state.writer.create({ text: '📅', scope: 'personal' })).rejects.toMatchObject({ statusCode: 400 });
   });

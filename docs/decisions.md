@@ -129,6 +129,30 @@ can otherwise affect content-size repositioning as well as startup.
 [HIG Layout](https://developer.apple.com/design/human-interface-guidelines/layout)
 requires unobscured safe-area content and adaptation to text-size changes.
 Native reproduction/captures are not claimed on the Linux runner.
+## 2026-11-10 — Watch dashboard, personal tasks and Body Fat period (#1701)
+
+Implement the owner's approved dashboard and four task-screen concepts from #1701,
+preserving the existing action page and steps design. Use one Today/Upcoming
+projection: incomplete dated tasks through the owner's local today versus later
+dates; do not rewrite due metadata or pull undated tasks into either list.
+The Body Fat trend uses the preceding three calendar months, selecting one of the
+owner's explicitly permitted options. This fits the existing bounded metric API
+without calling a year-limited result the latest 20 measurements.
+Keep source timestamps/availability visible and do not claim instantaneous
+WatchConnectivity or WidgetKit refresh.
+
+Watch Auto capture has its own independent missing-date and missing-priority
+defaults (submission time +1h and Low), not a new general reminder policy. Save is
+the creation boundary; dictation and mode changes cannot submit. Retain the same
+submission identity/timezone and resolved due instant across manual retries.
+Use native read-only navigation lists for vault metadata and conflict comparison:
+SwiftUI DisclosureGroup is unavailable on watchOS; returning keeps the active draft.
+Native/device validation and exact nutrition/task-list image transfer remain
+separate from concept approval. No merge or release is part of this issue.
+
+## 2026-11-10 — Watch quick logging is one actual lift, not a workout session (#1705)
+
+The owner approved all three quick-lift references and the direct logging flow. Reuse existing SQL lift history and paired-iPhone authentication; the Watch carries no credentials. Dictation edits a draft and explicit Save authorizes capture; Voice uses the existing conversation/tool path without a second approval for complete requests. Missing essential data requires clarification, not guessed values. One set is the default, with actual reps/weight and no dumbbell doubling or estimated maximum. Retry identity must survive uncertain completion and relaunch. Integrate the shortcut into PR #1703's Workouts section, preserving its dashboard, existing complications and task/backend changes. Primary owns integration and release; Factory acceptance task #24 is outside this work.
 
 ## 10 November 2026 — Explicit timed reminders bypass quiet hours (#1706)
 
@@ -12616,3 +12640,26 @@ and preserves existing integer stat consumers while adding explicit unknown
 values to the shared stat component. Primary owns final integration, native
 qualification and deployment. Linux syntax/Core checks do not establish native
 layout, VoiceOver, Dynamic Type, reduced-motion or scroll acceptance.
+## 2026-11-10 — Integrate Watch features in Home child only (#1721)
+
+The owner authorizes combining current #1703 and #1711 on a child targeting the
+existing Home branch; #1703 remains the eventual delivery PR. Preserve both sides
+of navigation, bridge, widgets and backend composition. Reuse the Home Workouts
+block and insert only the lift shortcut. Use one navigation allow-list without
+URL-provided write fields. Keep startup/speech permissions, actual values,
+missing-data handling and existing persistence/idempotency contracts.
+
+The failed native artifacts demonstrate why filenames and fixed sleeps are not
+acceptance: actual lift capture is a launch spinner and some differently named
+screens are byte-identical. Separate simulator startup, fresh destination
+appearance, external URL delivery and visual comparison. Missing source
+registration is not established as the cause of error 115; keep that failure
+visible until a supported native run proves delivery. Device acceptance and
+missing exact #1701 nutrition/task-list reference transfer remain open.
+
+Resolve the task process-death gap with local atomic Watch persistence, matching
+the lift draft pattern rather than adding a backend draft table or expiry.
+Uncertain create requests retain UUID/time/zone/payload; uncertain edits retain
+source/version and require refresh before deliberate reapplication. Do not clear
+an acknowledged task until its terminal receipt is durable. Storage recovery
+fails closed, fixtures never use real drafts, and reconnect/restoration never send.

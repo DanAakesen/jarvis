@@ -4,6 +4,7 @@ import {
   type HealthCursor, type HealthJson, type HealthQuery, type HealthQueryResult,
 } from '@jarvis/contracts';
 import type { FastifyRequest } from 'fastify';
+import type { ApprovalModelPort } from '../core/approval-interpreter.js';
 import type sql from 'mssql';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import { AuthenticationDenied } from '../auth/verify.js';
@@ -298,6 +299,7 @@ export function createHealthData(pool: sql.ConnectionPool, owner: string, now: (
   };
 }
 export interface HealthData {
+  liftCaptureModel?: ApprovalModelPort;
   query: Pick<HealthQueryService, 'query'>;
   changes: HealthChanges;
   trainingTargets?: TrainingTargetsAccess;
