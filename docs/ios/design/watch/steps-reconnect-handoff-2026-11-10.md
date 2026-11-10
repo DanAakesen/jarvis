@@ -50,3 +50,24 @@ Reconnect runtime `5de65c0`:
 - Real active send/voice interruption still reports uncertainty, retains appropriate drafts, stops local audio and never automatically resubmits.
 - Confirm fresh history after reconnect and installed iPhone/Watch build identity.
 - Real device/transport testing and owner acceptance are unverified. No new runtime dependency between these two patches.
+
+## Primary integration — 10 November 2026
+
+Primary combined exact secondary heads `afa8f8dc` and `5de65c01` on current
+main `cb360ca7`, preserving both design and recovery changes. Only the decision
+log required conflict resolution; both entries are retained. The saved native
+Health preview was inspected and matches the approved steps-only direction;
+it remains a fixture, not an installed watch-face capture.
+
+Combined Core, unsigned native builds and CodeQL qualification are pending.
+The broader iPhone suite remains separate: the six previously observed failures
+are in unchanged Notes and notification navigation. Notes tests still assume
+folder controls on the landing page; two notification tests require `chat.send`
+when the empty composer deliberately renders `chat.mode`. The transient
+notification-context recovery failure remains unresolved. No full iPhone UI
+pass or installed-device acceptance is claimed. These known baseline failures
+do not establish a regression in this Watch-only bundle.
+
+Release scope is steps plus startup/reconnect recovery. Home brief/daily activity
+PR #1689 and deferred workout designs are not included. Primary will upload the
+combined signed iPhone/Watch build after changed-source qualification passes.

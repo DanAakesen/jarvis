@@ -4760,3 +4760,13 @@ No native build is required. Live image generation remains unverified until the 
 ## Watch follow-up — 10 November 2026
 
 Implement the approved steps-only rectangular complication on `feature/watch-steps-complication`, based on main cb360ca7. Weekly workout designs are deferred. All 550 Core tests, CI, CodeQL and unsigned Watch simulator/physical Watch Release/paired iPhone builds passed at runtime commit 6490aa2. Final evidence changes add references/docs and correct the picker name/description; fresh checks on that metadata-only follow-up are pending. The startup reconnect alert is already implemented separately in PR #1692 (not merged): exact source 5de65c01 passed 551 Core tests, CI, CodeQL and unsigned Watch simulator/physical architecture/paired iPhone builds. Its broad iPhone suite has six Notes/push-navigation failures; physical Watch acceptance remains open. Primary owns integration and release of both changes.
+
+## Watch combined release — 10 November 2026
+
+Primary integration combines PR #1696 (`afa8f8dc`, approved daily steps) and
+#1692 (`5de65c01`, quiet startup/idle connection recovery) on main `cb360ca7`.
+Combined-source Core/native checks and signing/upload are pending. Existing
+Notes/push-chat iPhone UI failures are documented in the Watch handoff, not
+claimed fixed. Home #1689 and workout design work remain separate. Installed
+Ultra 2 complication, startup, reconnect and active-send/voice checks follow
+TestFlight delivery. See docs/ios/design/watch/steps-reconnect-handoff-2026-11-10.md.
