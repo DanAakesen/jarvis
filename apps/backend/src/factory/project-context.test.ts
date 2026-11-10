@@ -29,7 +29,7 @@ function registeredProject(overrides: Partial<Project> = {}): Project {
 }
 
 describe('project awareness', () => {
-  it('names the Jarvis repository, lists added projects and requires confirmation before adding', () => {
+  it('names the Jarvis repository, lists added projects and acts on a request to add', () => {
     const text = projectAwarenessInstructions([
       { id: '2', name: 'jarvis', repo: 'DanAakesen/jarvis' },
       { id: '1', name: 'jarvis-test-target', repo: 'DanAakesen/jarvis-test-target' },
@@ -44,7 +44,7 @@ describe('project awareness', () => {
     expect(text).toContain('I found a bug in my code');
     expect(text).toContain('Jeg fandt en fejl i min kode');
     expect(text).toContain('- jarvis-test-target (DanAakesen/jarvis-test-target, project ID 1)');
-    expect(text).toContain('ask him to confirm before adding it');
+    expect(text).toContain('add it without a second approval');
     expect(text).toContain('do not add it again');
     expect(text).toContain('"Mener du projekt X?"');
     expect(text).toContain('Do not use create_task for code changes.');
@@ -85,6 +85,28 @@ describe('active project resolution', () => {
     expect(resolved).toMatchObject({ id: project.id, repo: project.repo });
   });
 
+  it('uses recent owner context for a follow-up without accepting a later different project', async () => {
+    const jarvis = registeredProject({ id: '31', name: 'Jarvis', repo: 'DanAakesen/jarvis' });
+    const other = registeredProject({ id: '32', name: 'Other', repo: 'synthetic/other' });
+    const store = { list: vi.fn(async () => [jarvis, other]) } as unknown as ProjectStore;
+    await expect(resolveProjectForMessage(
+      'Jarvis', 'Save the requirements in the repo.', store, ['Let us work on Jarvis.'],
+    )).resolves.toMatchObject({ id: '31' });
+    await expect(resolveProjectForMessage(
+      'Jarvis', 'Save the requirements in the repo.', store, ['Now work on Other.', 'Let us work on Jarvis.'],
+    )).rejects.toThrow('Do you mean project');
+  });
+
+  it('does not use prior context when the current request names a different project', async () => {
+    const jarvis = registeredProject({ id: '31', name: 'Jarvis', repo: 'DanAakesen/jarvis' });
+    const other = registeredProject({ id: '32', name: 'Other', repo: 'synthetic/other' });
+    const store = { list: vi.fn(async () => [jarvis, other]) } as unknown as ProjectStore;
+    for (const message of ['Save this in Other.', 'Save this in another project.']) {
+      await expect(resolveProjectForMessage('31', message, store, ['Work on Jarvis.']))
+        .rejects.toThrow('Do you mean project');
+    }
+  });
+
   it('accepts an exact ID when the request names that project by its registered display name', async () => {
     const project = registeredProject();
     const store = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
@@ -94,12 +116,12 @@ describe('active project resolution', () => {
     )).resolves.toMatchObject({ id: project.id, repo: project.repo });
   });
 
-  it('asks before using a weak description-only reference in English or Danish', async () => {
+  it('uses a unique description reference in English or Danish', async () => {
     const project = registeredProject();
     const store = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
 
-    await expect(resolveProject('the test project', store)).rejects.toThrow('Do you mean project Greeting Runner');
-    await expect(resolveProject('testprojektet', store)).rejects.toThrow('Do you mean project Greeting Runner');
+    await expect(resolveProject('the test project', store)).resolves.toMatchObject({ id: project.id });
+    await expect(resolveProject('testprojektet', store)).resolves.toMatchObject({ id: project.id });
     const negated = { list: vi.fn(async () => [
       registeredProject({ description: 'not a test project' }),
     ]) } as unknown as ProjectStore;

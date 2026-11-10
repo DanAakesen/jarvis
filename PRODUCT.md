@@ -1,3 +1,7 @@
+## Direct owner requests — 10 November 2026
+
+A clear, authenticated owner instruction authorizes the requested operation without a second yes. Ask only for details needed to identify the intended action or target. Keep device and all-device sign-out confirmations. Treat credentials as non-storable and distinguish requested sensitive saves from automatic capture.
+
 ## Watch startup connection feedback — 9 November 2026
 
 Ordinary Watch startup, foreground connection warm-up and passive history refresh must not display an interrupted-send alert. Show connection/history status inline. Actual user-action failures and interrupted active chat/voice still report errors; preserve unsent drafts and never automatically resend an accepted request.

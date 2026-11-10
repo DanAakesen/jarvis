@@ -117,11 +117,11 @@ it('uses configured defaults and keeps the repository secret out of task and rec
   };
   const toolCalls: ToolCallRecord[] = [];
   const toolCallStore: ToolCallStore = { record: async (call) => { toolCalls.push(call); } };
-  const runConfirmed = vi.fn(async (_kind: unknown, _summary: unknown, action: () => Promise<string>) => action());
+  const runRequested = vi.fn(async (_kind: unknown, _summary: unknown, action: () => Promise<string>) => action());
   const ownerInteractions = {
     notify: vi.fn(async () => {}),
     requestConfirmation: vi.fn(async () => {}),
-    runConfirmed,
+    runRequested,
     rememberMessage: vi.fn(async () => {}),
     receiveConfirmation: vi.fn(async () => false),
     expirePendingConfirmations: vi.fn(async () => {}),
@@ -177,7 +177,7 @@ it('uses configured defaults and keeps the repository secret out of task and rec
   expect(taskInput.mock.calls[0]?.[0].request).toContain('DanAakesen/templates');
   expect(taskInput.mock.calls[0]?.[0].request).toContain('PowerShell 7 (pwsh)');
   expect(taskInput.mock.calls[0]?.[0].request).toContain('JARVIS_NEEDS_ATTENTION:');
-  expect(runConfirmed).toHaveBeenCalledWith(
+  expect(runRequested).toHaveBeenCalledWith(
     'create_repository',
     expect.stringContaining('Create the public repository DanAakesen/bright-app'),
     expect.any(Function),

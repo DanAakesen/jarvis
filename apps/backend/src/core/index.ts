@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { generatedViewSchema, isGeneratedView } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
-import { ToolFailure, ToolRefusal } from './tool-registry.js';
+import { isCurrentAssistantTool, ToolFailure, ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
 import { setThemeTool } from './theme.js';
 import { registerNowRoutes } from './now.js';
@@ -160,7 +160,7 @@ export const coreModule: BackendModule = {
       const smoke = request.headers['x-jarvis-smoke'] === 'true';
       if (smoke && !request.agentPrincipal) return reply.code(403).send({ error: 'Smoke tools are unavailable' });
       return app.jarvisTools.list()
-        .filter(({ name }) => !smoke || smokeTools.has(name))
+        .filter(({ name }) => isCurrentAssistantTool(name) && (!smoke || smokeTools.has(name)))
         .map(({ name, description, inputSchema, execution }) => ({
           name, description, inputSchema, ...(execution ? { execution } : {}),
         }));

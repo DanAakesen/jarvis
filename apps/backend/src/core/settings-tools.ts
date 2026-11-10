@@ -67,7 +67,7 @@ export async function applySettingsPatch(
   if (!summary) return save();
   const notifications = request.server.ownerInteractions;
   if (!notifications) throw new ToolRefusal('Action execution is unavailable; no settings were changed.');
-  return notifications.runConfirmed('other', summary, save, signal);
+  return notifications.runRequested('other', summary, save, signal);
 }
 
 export const getSettingsTool: JarvisTool = {

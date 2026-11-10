@@ -1,7 +1,7 @@
 import { ToolRefusal } from '../../core/tool-registry.js';
 import { normalizeSearchText, resolveNutrients, text, writeDefinition, type FoodDefinition, type Nutrients } from './model.js';
 
-const command = /^(?:please\s+)?(?:log|record|registrer|registr\u00e9r)\s+(.+?)[.!]?\s*$/iu;
+const command = /^(?:(?:can|could|would)\s+you\s+|kan\s+du\s+)?(?:(?:please|venligst)\s+)?(?:logge|log|record|registrere|registrer|registr\u00e9r)\s+(.+?)[.!?]?\s*$/iu;
 const uncertain = /\b(?:approx(?:imate(?:ly)?)?|about|roughly|estimate[ds]?|maybe|photo|picture|image|guess|omkring|cirka)\b/iu;
 const qualified = /\b(?:if|unless|when|provided|not|never|don['\u2019]t|instead|but|ikke|aldrig|hvis|men|yesterday|tomorrow|earlier|later|last|next|today|tonight|morgen|tidligere|senere)\b|\bi\s+g\u00e5r\b|\b\d{1,4}[-/]\d{1,2}\b|\b(?:at|kl)\s+\d/iu;
 const quantity = '(\\d{1,5}(?:\\.\\d{1,2})?)';
@@ -16,8 +16,11 @@ const measuredMacro = new RegExp(`^${quantity}\\s*(?:g|grams?)\\s+(?:of\\s+)?(${
 
 function requestedFood(message: string): string {
   text(message, 4000);
-  if (/[\r\n;?]/u.test(message)) throw new ToolRefusal('Use one explicit food-log request. No intake was logged.');
-  const food = command.exec(message.trim())?.[1]?.trim();
+  const normalized = message.trim().replace(/\s+(?:today|i dag)(?=[.!?]?\s*$)/iu, '');
+  if (/[\r\n;]/u.test(normalized) || /\?/.test(normalized.slice(0, -1))) {
+    throw new ToolRefusal('Use one food-log request. No intake was logged.');
+  }
+  const food = command.exec(normalized)?.[1]?.trim();
   if (!food) throw new ToolRefusal('An explicit food-log request from Dan is required. No intake was logged.');
   if (qualified.test(food)) throw new ToolRefusal('Conditional, negated or time-qualified requests are not supported by this direct path. No intake was logged.');
   return food;

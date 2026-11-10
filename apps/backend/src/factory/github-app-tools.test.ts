@@ -16,7 +16,7 @@ const apps: ReturnType<typeof buildApp>[] = [];
 
 function fixture(fetchImpl: typeof fetch, permissions: Record<string, 'read' | 'write' | 'admin'> = {
   issues: 'read', pull_requests: 'write', contents: 'read', actions: 'read', checks: 'read',
-}, agent = false, message = 'Please do it', projectStore?: ProjectStore) {
+}, agent = false, message = 'Please do it', projectStore?: ProjectStore, previousOwnerMessages: string[] = []) {
   vi.stubGlobal('fetch', fetchImpl);
   const githubAppTokenIssuer = {
     readInstallationPermissions: vi.fn(async () => permissions),
@@ -30,8 +30,11 @@ function fixture(fetchImpl: typeof fetch, permissions: Record<string, 'read' | '
     githubAppTokenIssuer: githubAppTokenIssuer as never,
     projectStore,
     conversationStore: {
-      getHistory: vi.fn(async () => ({
-        messages: [{ id: '42', sessionId: 'session', role: 'dan', text: message, at: new Date() }], nextCursor: null,
+      getHistory: vi.fn(async (input: { before?: string }) => ({
+        messages: input.before
+          ? previousOwnerMessages.map((text, index) => ({ id: String(40 + index), sessionId: 'session', role: 'dan', text, at: new Date() }))
+          : [{ id: '42', sessionId: 'session', role: 'dan', text: message, at: new Date() }],
+        nextCursor: null,
       })),
     } as never,
     toolCallStore: { record: vi.fn(async () => {}) },
@@ -364,6 +367,46 @@ describe('GitHub App capability tools', () => {
     expect((await callTool(app, 'pr_merge', input)).json()).toMatchObject({ outcome: 'ok', result: { status: 'merged' } });
     expect((await callTool(app, 'pr_merge', input)).json()).toMatchObject({ outcome: 'ok', result: { status: 'merged' } });
     expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
+  });
+
+  it('writes to the established project on a follow-up without asking again', async () => {
+    const projectStore = { list: vi.fn(async () => [registeredProject]) } as unknown as ProjectStore;
+    const fetchImpl = vi.fn<typeof fetch>(async (_request, init) => Response.json(init?.method === 'PUT'
+      ? { commit: { sha: 'b'.repeat(40) }, content: { path: 'requirements.md' } }
+      : { default_branch: 'main', private: false }));
+    const { app } = fixture(fetchImpl, { contents: 'write' }, true,
+      'Save the requirements in the repo.', projectStore, ['We are working on Greeting project.']);
+    const response = await callTool(app, 'file_write', {
+      project: '7', path: 'requirements.md', branch: 'main', content: 'Requirements', message: 'Save requirements',
+    });
+    expect(response.json().outcome).toBe('ok');
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
+  });
+
+  it('resolves a generic repo follow-up from owner history without a project argument', async () => {
+    const projectStore = { list: vi.fn(async () => [registeredProject]) } as unknown as ProjectStore;
+    const fetchImpl = vi.fn<typeof fetch>(async (_request, init) => Response.json(init?.method === 'PUT'
+      ? { commit: { sha: 'b'.repeat(40) }, content: { path: 'requirements.md' } }
+      : { default_branch: 'main', private: false }));
+    const { app } = fixture(fetchImpl, { contents: 'write' }, true,
+      'Save the requirements in the repo.', projectStore, ['We are working on Greeting project.']);
+    const response = await callTool(app, 'file_write', {
+      path: 'requirements.md', branch: 'main', content: 'Requirements', message: 'Save requirements',
+    });
+    expect(response.json().outcome).toBe('ok');
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1);
+  });
+
+  it('does not map a different unnamed project to older context', async () => {
+    const projectStore = { list: vi.fn(async () => [registeredProject]) } as unknown as ProjectStore;
+    const fetchImpl = vi.fn<typeof fetch>();
+    const { app } = fixture(fetchImpl, { contents: 'write' }, true,
+      'Save this in another project.', projectStore, ['We are working on Greeting project.']);
+    const response = await callTool(app, 'file_write', {
+      path: 'requirements.md', branch: 'main', content: 'Requirements', message: 'Save requirements',
+    });
+    expect(response.json().outcome).toBe('refused');
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it('writes the requested default-branch file directly without an approval round trip', async () => {

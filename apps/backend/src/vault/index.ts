@@ -776,9 +776,6 @@ function assertCaptureIsSafe(source: string, text: string): void {
   if (credentialPattern.test(`${source}\n${text}`) || secretPattern.test(`${source}\n${text}`)) {
     throw new ToolRefusal('Secrets and credentials can never be saved to the vault. Nothing was written.');
   }
-  if (sensitivePattern.test(`${source}\n${text}`) && !/\bremember\b/iu.test(source)) {
-    throw new ToolRefusal('I will not save banking or health details unless Dan explicitly says “remember”. Nothing was written.');
-  }
 }
 
 export function isVaultLineSafe(text: string): boolean {
@@ -1279,7 +1276,7 @@ export function createVaultModule(options: {
     return hits;
   }
 
-  async function checkSource(request: FastifyRequest, content: string, reason: string, signal: AbortSignal) {
+  async function checkSource(request: FastifyRequest, content: string, reason: string, signal: AbortSignal, automaticCapture = false) {
     if (!request.principal && !request.agentPrincipal) throw new ToolRefusal('Vault access is not authorized.');
     const header = request.headers['x-jarvis-message-id'] ??
       request.jarvisConversationMessage?.id ?? request.jarvisMemorySourceMessageId;
@@ -1289,6 +1286,9 @@ export function createVaultModule(options: {
     const source = await options.memoryStore.getSourceMessage(header, signal);
     if (!source) throw new ToolRefusal('The source message is missing or is not from Dan. Nothing was written.');
     assertCaptureIsSafe(source.text, `${content}\n${reason}`);
+    if (automaticCapture && sensitivePattern.test(`${source.text}\n${content}`)) {
+      throw new ToolRefusal('Sensitive details are not saved by automatic capture. Save them when Dan requests it.');
+    }
     return { ...source, id: header };
   }
 
@@ -1611,7 +1611,7 @@ export function createVaultModule(options: {
         }
         let source: Awaited<ReturnType<typeof checkSource>>;
         try {
-          source = await checkSource(request, content, reason, signal);
+          source = await checkSource(request, content, reason, signal, value.automaticCapture);
         } catch (error) {
           logWrite(error instanceof ToolRefusal ? 'refused' : 'error');
           throw error;
@@ -1684,7 +1684,7 @@ export function createVaultModule(options: {
             throw new ToolFailure('Vault deletion is temporarily unavailable.');
           }
           if (!note) throw new ToolRefusal('That vault note does not exist.');
-          const commit = await service.runConfirmed(
+          const commit = await service.runRequested(
             'delete',
             `Permanently delete vault note ${path}.`,
             () => deleteNote(path, note!.sha, operationSignal),

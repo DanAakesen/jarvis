@@ -1,6 +1,16 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { gmailAccessGuard } from './gmail-access-policy.js';
 
+// Kept as HTTP compatibility endpoints for older clients, but no longer
+// advertised to the assistant as part of normal owner-request execution.
+const legacyConfirmationTools = new Set([
+  'get_pending_issue', 'confirm_create_issue', 'confirm_project_archive',
+  'calendar_get_pending_change', 'calendar_confirm_change', 'mail_confirm_action',
+]);
+export function isCurrentAssistantTool(name: string): boolean {
+  return !legacyConfirmationTools.has(name);
+}
+
 export interface JarvisTool {
   readonly name: string;
   readonly description: string;

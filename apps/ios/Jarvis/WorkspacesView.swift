@@ -21,7 +21,6 @@ struct WorkspacesView: View {
     @State private var openedFeedbackTask: Task<Void, Never>?
     @State private var renameTarget: SavedWorkspaceItem?
     @State private var renameTitle = ""
-    @State private var removeTarget: SavedWorkspaceItem?
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -66,19 +65,6 @@ struct WorkspacesView: View {
             Button(text(.save)) { Task { await rename() } }
                 .disabled(renameTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Button(text(.cancel), role: .cancel) { renameTarget = nil }
-        }
-        .confirmationDialog(
-            removeTarget.map { formatted(.removeQuestion, $0.title) } ?? text(.removeFallbackQuestion),
-            isPresented: Binding(
-                get: { removeTarget != nil },
-                set: { if !$0 { removeTarget = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button(text(.remove), role: .destructive) { Task { await remove() } }
-            Button(text(.cancel), role: .cancel) { removeTarget = nil }
-        } message: {
-            Text(text(.removeMessage))
         }
         .environment(\.locale, language.locale)
     }
@@ -325,7 +311,7 @@ struct WorkspacesView: View {
                     renameTitle = item.title
                 }
                 Button(text(.remove), systemImage: "trash", role: .destructive) {
-                    removeTarget = item
+                    Task { await remove(item) }
                 }
             }
         }
@@ -345,7 +331,7 @@ struct WorkspacesView: View {
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(text(.remove), systemImage: "trash", role: .destructive) {
-                removeTarget = item
+                Task { await remove(item) }
             }
             .disabled(busyItems.contains(item.id))
         }
@@ -470,12 +456,11 @@ struct WorkspacesView: View {
         }
     }
 
-    private func remove() async {
-        guard let item = removeTarget, let client = runtime.workspacesClient else { return }
+    private func remove(_ item: SavedWorkspaceItem) async {
+        guard let client = runtime.workspacesClient, !busyItems.contains(item.id) else { return }
         setBusy(item.id, true)
         defer {
             setBusy(item.id, false)
-            removeTarget = nil
         }
         do {
             try await client.remove(item)

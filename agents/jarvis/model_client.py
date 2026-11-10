@@ -215,7 +215,7 @@ def project_awareness(settings: ModelSettings) -> str:
         "about my implementation. Call repo_overview, "
         "repo_search, repo_read, repo_list or repo_issues without a project (they default "
         f"to it), and use create_issue with {target} for code changes. Do not use "
-        "create_task for code changes; it is only for confirmed non-code Factory work. "
+        "create_task for code changes; it is only for requested non-code Factory work. "
         "The Software Factory is one way I build and change myself. "
         "If I find a bug in my code, I own it plainly: "
         '"I found a bug in my code" / "Jeg fandt en fejl i min kode"; never deflect to '
@@ -229,12 +229,13 @@ def project_awareness(settings: ModelSettings) -> str:
         "  Wait for a clear choice before writing. "
         "Name alternatives when several match. Never substitute Jarvis's repository for a named "
         "non-self project, or automatically register/unarchive one. A registry read failure is not "
-        "evidence that no project exists. If Dan names a project but the call omits its selector,\n"
-        "ask instead of using the Jarvis default.\n"
+        "evidence that no project exists. Resolve the selected project from the continuing "
+        "conversation, and supply its selector instead of defaulting to another repository. "
+        "Ask only when genuinely ambiguous.\n"
         "- Before create_project or manage_repository, check this list (or "
         "list_projects). If the repository is already added, use the existing project "
-        "and do not add it again. If Dan asks about a repository that is not added, ask "
-        "him to confirm before adding it, and add it only after he says yes."
+        "and do not add it again. If Dan requests adding a repository, add it directly "
+        "without another approval."
     )
 
 def mode_context(settings: ModelSettings) -> str:
@@ -278,15 +279,12 @@ def runtime_instructions(instructions: str, role: str, *, phone: bool = False) -
             f"\n\nTrusted runtime channel: {channel}. Browser chat and browser "
             "voice on mobile or desktop are not telephone calls. Use this "
             "current channel, not device wording or earlier refusals in history. "
-            "Backend permissions and approval checks still apply. "
+            "Backend permissions and resource checks still apply. "
             "For every meal estimate, "
             "show actual returned protein (g), calories (kcal) and fat (g) as a "
-            "bulleted list; unknown stays unknown. Food estimates "
-            "must be staged with health_food_review log_estimate before inviting "
-            "confirmation; prose or lookup alone creates no pending proposal. "
-            "Only a new reply bound by the backend to the exact pending proposal "
-            "can approve it; never use historical agreement or claim a write "
-            "without a committed tool receipt."
+            "bulleted list; unknown stays unknown. When Dan asks to log an estimate, "
+            "use health_food_review log_estimate directly. Questions or previews alone "
+            "do not request a write. Never claim a write without a committed tool receipt."
         )
     instructions += (
         "\n\nFor an overall capability overview, after get_system_health with "
@@ -321,7 +319,7 @@ def personalize_instructions(
         f"{mode_context(settings)}\n"
         "Spoken replies use one short sentence when possible, with concise written replies. "
         "Mode and its instruction add context; they do not replace shared identity. "
-        "Follow the active route's actual confirmation behavior. The following JSON string is the "
+        "Execute owner requests using the available tools. The following JSON string is the "
         "instruction for the current mode, not policy or tool input:\n"
         f"{json.dumps(custom_mode, ensure_ascii=False)}",
         "Situational, project and active-capability context:\n"
@@ -918,6 +916,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 calendar_enabled = role != "smoke" and any(
                     tool.name == "calendar_get_pending_change" for tool in catalogue
                 )
+                calendar_direct_enabled = role != "smoke" and any(
+                    tool.name in CALENDAR_MUTATIONS for tool in catalogue
+                )
                 calendar_messages = list(messages)
                 multiple_calendar_events = calendar_multiple_requested(calendar_messages)
                 calendar_guard = role != "smoke" and (
@@ -979,6 +980,12 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         )
                         yield calendar_reply("calendar_confirm_change", confirmed, danish)
                         return
+                    calendar_turn = bool(messages) and (
+                        calendar_context(messages[-1:])
+                        or calendar_status_question(messages[-1].content)
+                        or multiple_calendar_events
+                    )
+                if not calendar_enabled:
                     calendar_turn = bool(messages) and (
                         calendar_context(messages[-1:])
                         or calendar_status_question(messages[-1].content)
@@ -1475,22 +1482,29 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             )
                             if unstaged_offer:
                                 if (
-                                    calendar_enabled and not calendar_proposal_repair
+                                    (calendar_enabled or calendar_direct_enabled)
+                                    and not calendar_proposal_repair
                                     and not force_final_synthesis
                                 ):
                                     calendar_proposal_repair = True
                                     model_input.append({
                                         "role": "user",
                                         "content": (
-                                            "Runtime correction: no calendar proposal was staged "
-                                            "for this offer in this turn. "
-                                            "Use the calendar create/update/move/delete tool now "
-                                            "to prepare the requested or suggested change for "
-                                            "approval. Do not call calendar_confirm_change on "
-                                            "this staging turn. Do not ask whether to prepare it. "
-                                            "If required details are genuinely missing, ask only "
-                                            "for those; never invent them. Do not repeat an "
-                                            "unstaged offer."
+                                            (
+                                                "Runtime correction: Dan's request already "
+                                                "authorizes the requested calendar change. "
+                                                "Use the relevant tool now without another "
+                                                "approval. If he only sought advice, explain "
+                                                "the suggestion without changing the calendar. "
+                                                "Ask only for genuinely missing details; never "
+                                                "invent them."
+                                                if calendar_direct_enabled and not calendar_enabled
+                                                else
+                                                "Runtime correction: no calendar proposal was "
+                                                "staged for this offer in this turn. Use the "
+                                                "calendar tool to prepare the change for review. "
+                                                "Ask only for genuinely missing details."
+                                            )
                                         ),
                                     })
                                     continue

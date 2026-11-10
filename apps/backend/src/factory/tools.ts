@@ -35,6 +35,7 @@ import {
   projectSelectorSchema,
   requiresProjectSelector,
   resolveProjectForMessage,
+  resolveProjectFromOwnerContext,
   resolveProject,
   resolveRepository,
   revalidateProject,
@@ -345,6 +346,14 @@ function issueProposal(action: PendingIssueCreation) {
   };
 }
 
+async function ownerProjectHistory(request: FastifyRequest, source: ConversationMessage): Promise<string[]> {
+  const store = request.server.conversationStore;
+  if (!store) return [];
+  const page = await store.getHistory({ sessionId: source.sessionId, before: source.id, limit: 20 });
+  return page.messages.filter((message) => message.role === 'dan' && message.sessionId === source.sessionId)
+    .reverse().map((message) => message.text);
+}
+
 async function resolveCreateIssueProject(
   request: FastifyRequest,
   input: Record<string, unknown> & { project?: string },
@@ -468,10 +477,24 @@ async function resolveCreateIssueProject(
     return resolved;
   }
 
-  if (!input.project) return undefined;
+  if (!input.project) {
+    if (!requiresProjectSelector(source.text)) return undefined;
+    const history = await ownerProjectHistory(request, source);
+    const resolved = await resolveProjectFromOwnerContext(source.text, history, request.server.projectStore ?? null);
+    if (resolved) return resolved;
+    throw new ToolRefusal('Which active project do you mean? I will not use an unselected repository. No changes were made.');
+  }
   try {
     return await resolveProjectForMessage(input.project, source.text, request.server.projectStore ?? null);
   } catch (error) {
+    if (error instanceof ProjectClarification && request.server.conversationStore) {
+      const history = await ownerProjectHistory(request, source);
+      try {
+        return await resolveProjectForMessage(input.project, source.text, request.server.projectStore ?? null, history);
+      } catch (contextError) {
+        if (!(contextError instanceof ProjectClarification)) throw contextError;
+      }
+    }
     if (error instanceof ProjectClarification) {
       if (!requiresProjectSelector(source.text)) {
         throw new ToolRefusal('Please identify the active project in your request. No changes were made.');
@@ -525,7 +548,7 @@ async function stageIssueCreation(
   if (!/^[1-9]\d{0,18}$/u.test(source.id) || BigInt(source.id) > maxSqlBigInt) {
     throw new ToolRefusal('A verified Dan message is required to confirm this issue creation.');
   }
-  if (input.project === undefined && input.repository === undefined && requiresProjectSelector(source.text)) {
+  if (!resolvedProject && input.project === undefined && input.repository === undefined && requiresProjectSelector(source.text)) {
     throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
   }
   const selectedProject = resolvedProject ?? (!input.repository && input.project
@@ -809,7 +832,8 @@ async function controlTask(
   const controller = requireStore(request.server.taskController, 'Task controls');
   if (action === 'resume' || (action === 'steer' && await steeringRestartsTask(request.server, taskId))) {
     const reason = await taskRestartReason(request.server, taskId);
-    if (reason) throw new ToolRefusal(`Task restart refused: ${reason}. Dan must review it in task controls; model tools cannot confirm.`);
+    if (reason === 'task_not_found') throw new ToolRefusal('Task not found.');
+    if (reason === 'work_status_unverified') throw new ToolFailure('Task restart status could not be verified.');
   }
   const result = await controller.control(taskId, action === 'steer'
     ? { action, message: message! }
@@ -875,9 +899,6 @@ export const factoryTools: readonly JarvisTool[] = [
       const draft = input as { project?: string; title: string; body: string; executor?: IssueExecutor } & IssueAttachmentInput;
       try {
         const source = await currentDanMessage(request, 'issue creation');
-        if (draft.project === undefined && requiresProjectSelector(source.text)) {
-          throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
-        }
         const selectedProject = await resolveCreateIssueProject(request, draft, source);
         validateIssueDraft(draft.title, draft.body);
         const targetRepository = selectedProject?.repo ?? JARVIS_REPOSITORY;
@@ -1215,7 +1236,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'create_task',
-    description: 'Create a linked GitHub issue and Ready Factory task for confirmed non-code work. For my own repository and all project-code changes, use create_issue so owner-instruction verification, P11 allocation and executor handoff run.',
+    description: 'Create a linked GitHub issue and Ready Factory task for requested non-code work. For my own repository and all project-code changes, use create_issue so owner-instruction verification, P11 allocation and executor handoff run.',
     execution: { defaultEffect: 'action' },
     inputSchema: {
       type: 'object',

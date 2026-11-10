@@ -3,7 +3,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { coreModule } from './core/index.js';
 import { factoryModule } from './factory/index.js';
-import { ToolFailure, ToolRefusal, type JarvisTool } from './core/tool-registry.js';
+import { isCurrentAssistantTool, ToolFailure, ToolRefusal, type JarvisTool } from './core/tool-registry.js';
 import type { BackendModule } from './modules.js';
 import { createSystemStatusReader } from './system-status.js';
 
@@ -73,7 +73,7 @@ describe('backend module composition', () => {
       ...coreModule.tools.map(({ name, description, inputSchema, execution }) => ({
         name, description, inputSchema, ...(execution ? { execution } : {}),
       })),
-      ...factoryModule.tools.map(({ name, description, inputSchema, execution }) => ({
+      ...factoryModule.tools.filter(({ name }) => isCurrentAssistantTool(name)).map(({ name, description, inputSchema, execution }) => ({
         name, description, inputSchema, ...(execution ? { execution } : {}),
       })),
       {

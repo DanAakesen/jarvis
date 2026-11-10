@@ -10,7 +10,6 @@ struct JarvisDeploymentsSettingsView: View {
     @State private var catalogue: JarvisModelCatalogue?
     @State private var loading = true
     @State private var removing: String?
-    @State private var pendingRemoval: JarvisModelDeployment?
     @State private var error: String?
     @State private var notice: String?
 
@@ -45,7 +44,7 @@ struct JarvisDeploymentsSettingsView: View {
                                     identifier: "settings.deployment.remove",
                                     isDisabled: readOnly || removing != nil,
                                     tint: .red
-                                ) { pendingRemoval = deployment }
+                                ) { Task { await remove(deployment) } }
                             }
                         }
                         Text("\(deployment.model) · \(deployment.version) · \(deployment.sku)")
@@ -80,20 +79,7 @@ struct JarvisDeploymentsSettingsView: View {
         .task {
             if catalogue == nil { await load() }
         }
-        .confirmationDialog(
-            copy(.removeDeploymentConfirm),
-            isPresented: Binding(
-                get: { pendingRemoval != nil },
-                set: { if !$0 { pendingRemoval = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button(copy(.removeDeployment), role: .destructive) {
-                guard let pendingRemoval else { return }
-                Task { await remove(pendingRemoval) }
-            }
-            Button(copy(.cancel), role: .cancel) { pendingRemoval = nil }
-        }
+
     }
 
     private func load() async {
@@ -129,7 +115,6 @@ struct JarvisDeploymentsSettingsView: View {
             self.error = copy(.requestFailed)
             onFailure(error)
         }
-        pendingRemoval = nil
         removing = nil
     }
 }

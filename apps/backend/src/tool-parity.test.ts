@@ -1,3 +1,4 @@
+import { isCurrentAssistantTool } from './core/tool-registry.js';
 import { EventEmitter } from 'node:events';
 import type { FastifyRequest } from 'fastify';
 import WebSocket from 'ws';
@@ -203,9 +204,13 @@ describe('voice and chat tool parity', () => {
 
     expect(catalogue.map(({ name }) => name)).toEqual(expect.arrayContaining([
       'mail_search', 'calendar_create_event', 'calendar_create_events',
-      'calendar_get_pending_change', 'calendar_confirm_change', 'vault_search', 'get_system_health',
+      'vault_search', 'get_system_health',
       'health_query', 'health_food', 'health_food_review', 'gym_lifts', 'gym_sessions',
     ]));
+    for (const name of [
+      'calendar_get_pending_change', 'calendar_confirm_change', 'mail_confirm_action',
+      'get_pending_issue', 'confirm_create_issue', 'confirm_project_archive',
+    ]) expect(catalogue.map((tool) => tool.name)).not.toContain(name);
     expect(missingInstructionTools(capabilityInstructions(defaultSettings.memory), catalogue)).toEqual([]);
   });
 
@@ -258,7 +263,7 @@ describe('voice and chat tool parity', () => {
       discoveredIssueParameters ??= output.result.capabilities.find(({ name }) => name === 'create_issue')?.parameters;
       offset = output.result.nextOffset;
     } while (offset !== null);
-    expect(discovered.sort()).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
+    expect(discovered.sort()).toEqual(f.app.jarvisTools.list().filter(({ name }) => isCurrentAssistantTool(name)).map(({ name }) => name).sort());
     expect(projectSelectorDescription(discoveredIssueParameters)).toContain('Natural references');
 
     await call(VOICE_CAPABILITY_EXECUTION_TOOL, 'advertised',

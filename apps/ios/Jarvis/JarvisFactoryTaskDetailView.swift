@@ -21,10 +21,6 @@ struct JarvisFactoryTaskDetailView: View {
     @State private var hasMoreEvents = false
     @State private var busyAction: FactoryTaskControl?
     @State private var steeringPresented = false
-    @State private var cancelPresented = false
-    @State private var confirmationPresented = false
-    @State private var pendingConfirmation: FactoryTaskControlRequest?
-    @State private var pendingConfirmationReason = ""
     @State private var actionCompleted = false
 
     private var copy: JarvisFactoryCopy { JarvisFactoryCopy(language: language) }
@@ -62,37 +58,6 @@ struct JarvisFactoryTaskDetailView: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
-        }
-        .confirmationDialog(
-            copy.text(.cancelConfirmationTitle),
-            isPresented: $cancelPresented,
-            titleVisibility: .visible
-        ) {
-            Button(copy.text(.cancelTask), role: .destructive) {
-                guard let request = task.map({
-                    FactoryTaskControlRequest(taskId: $0.id, action: .cancel)
-                }) else { return }
-                Task { await perform(request) }
-            }
-            Button(copy.text(.keepTask), role: .cancel) {}
-        } message: {
-            Text(copy.text(.cancelConfirmationMessage))
-        }
-        .confirmationDialog(
-            copy.text(.confirmationTitle),
-            isPresented: $confirmationPresented,
-            titleVisibility: .visible
-        ) {
-            Button(copy.text(.confirm), role: .destructive) {
-                guard let request = pendingConfirmation else { return }
-                pendingConfirmation = nil
-                Task { await perform(request, confirm: true) }
-            }
-            Button(copy.text(.keepTask), role: .cancel) {
-                pendingConfirmation = nil
-            }
-        } message: {
-            Text(confirmationMessage)
         }
         .accessibilityIdentifier("factory.taskDetail")
     }
@@ -251,7 +216,7 @@ struct JarvisFactoryTaskDetailView: View {
                 isFullWidth: true,
                 isLeading: true,
                 isDestructive: true
-            ) { cancelPresented = true }
+            ) { Task { await perform(FactoryTaskControlRequest(taskId: task.id, action: .cancel)) } }
         } else if action == .steer {
             JarvisLabelledButton(
                 title: copy.text(.steer),
@@ -371,26 +336,15 @@ struct JarvisFactoryTaskDetailView: View {
         }
     }
 
-    private func perform(_ request: FactoryTaskControlRequest, confirm: Bool = false) async {
+    private func perform(_ request: FactoryTaskControlRequest) async {
         guard busyAction == nil else { return }
         busyAction = request.action
         actionFailed = false
         actionCompleted = false
         defer { busyAction = nil }
         do {
-            task = try await client.controlTask(request, confirm: confirm)
+            task = try await client.controlTask(request, confirm: false)
             actionCompleted = true
-        } catch let error as JarvisFactoryClientError {
-            switch error {
-            case .confirmationRequired(let reason, _):
-                pendingConfirmation = request
-                pendingConfirmationReason = reason
-                confirmationPresented = true
-            case .taskConflict:
-                actionFailed = true
-            default:
-                actionFailed = true
-            }
         } catch {
             actionFailed = true
         }
@@ -400,15 +354,6 @@ struct JarvisFactoryTaskDetailView: View {
         guard let task else { return false }
         await perform(FactoryTaskControlRequest(taskId: task.id, action: .steer, message: message))
         return !actionFailed
-    }
-
-    private var confirmationMessage: String {
-        switch pendingConfirmationReason {
-        case "issue_closed": copy.text(.confirmationIssueClosed)
-        case "pull_request_merged": copy.text(.confirmationPullRequestMerged)
-        case "superseded_legacy_task": copy.text(.confirmationSuperseded)
-        default: copy.text(.confirmationGeneric)
-        }
     }
 
     private var diskEvents: [FactoryTaskEvent] {

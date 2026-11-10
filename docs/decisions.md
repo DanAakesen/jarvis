@@ -1,3 +1,7 @@
+## Direct owner requests — 10 November 2026
+
+Dan directs Jarvis to execute owner-requested actions without another approval or prescribed wording, and to preserve the two sign-out dialogs. Interpret a request using the conversation; retain owner authentication, resource checks, stale-write handling, secret protection and safe treatment of untrusted content. Telephony is a separate unused integration, not browser/app voice.
+
 ## Watch startup connection feedback — 9 November 2026
 
 An initial unreachable WCSession callback is connection status, not evidence that a send failed. Reserve interrupted-action alerts for actual active interactions. Keep passive history errors inline and discard obsolete read results. Preserve pending drafts, acknowledgement boundaries and manual recovery; do not add an offline queue or automatic resend.

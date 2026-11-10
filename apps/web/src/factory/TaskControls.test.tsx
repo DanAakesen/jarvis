@@ -124,7 +124,7 @@ describe('task controls', () => {
     expect(screen.queryByRole('button', { name: 'Recover' })).toBeNull();
   });
 
-  it('offers only state-valid actions and requires confirmation before cancelling', async () => {
+  it('offers state-valid actions and cancels directly', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(response({ id: '42', state: 'Cancelled' }));
     vi.stubGlobal('fetch', fetchMock);
@@ -136,12 +136,7 @@ describe('task controls', () => {
     const cancelButton = screen.getByRole('button', { name: 'Cancel task' });
     expect(cancelButton.className).toBe('danger-button');
     await user.click(cancelButton);
-    expect(screen.getByText('This ends the task and cannot be undone.')).not.toBeNull();
-    const confirmButton = screen.getByRole('button', { name: 'Confirm cancel task' });
-    expect(confirmButton.className).toBe('danger-button danger-button--filled');
-    expect([...confirmButton.parentElement!.querySelectorAll('button')].map((button) => button.textContent))
-      .toEqual(['Confirm cancel task', 'Keep task']);
-    await user.click(confirmButton);
+    expect(screen.queryByText('This ends the task and cannot be undone.')).toBeNull();
 
     expect(fetchMock).toHaveBeenCalledWith(
       expect.any(String),
@@ -150,7 +145,7 @@ describe('task controls', () => {
   });
 
   it.each([null, 'crashed', 'idle_expired', 'done'] as const)(
-    'offers confirmed Cancel for attention without adding steer or resume (%s)', async (endReason) => {
+    'offers direct Cancel for attention without adding steer or resume (%s)', async (endReason) => {
       const user = userEvent.setup();
       fetchMock.mockResolvedValue(response({ id: '42', state: 'Cancelled' }));
       vi.stubGlobal('fetch', fetchMock);
@@ -161,12 +156,6 @@ describe('task controls', () => {
       if (endReason === 'crashed') expect(screen.getByRole('button', { name: 'Recover' })).not.toBeNull();
       if (endReason === 'idle_expired') expect(screen.getByRole('button', { name: 'Continue' })).not.toBeNull();
       await user.click(screen.getByRole('button', { name: 'Cancel task' }));
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(getAccessToken).not.toHaveBeenCalled();
-      await user.click(screen.getByRole('button', { name: 'Keep task' }));
-      expect(fetchMock).not.toHaveBeenCalled();
-      await user.click(screen.getByRole('button', { name: 'Cancel task' }));
-      await user.click(screen.getByRole('button', { name: 'Confirm cancel task' }));
       expect(fetchMock).toHaveBeenCalledOnce();
       expect(fetchMock).toHaveBeenCalledWith(expect.any(String),
         expect.objectContaining({ body: JSON.stringify({ action: 'cancel' }) }));
@@ -182,17 +171,15 @@ describe('task controls', () => {
     vi.stubGlobal('fetch', fetchMock);
     const onComplete = renderControls('NeedsAttention', 'crashed');
     await user.click(screen.getByRole('button', { name: 'Cancel task' }));
-    await user.click(screen.getByRole('button', { name: 'Confirm cancel task' }));
     expect(screen.getByRole('button', { name: 'Cancelling…' })).toHaveProperty('disabled', true);
     expect(screen.getByRole('button', { name: 'Recover' })).toHaveProperty('disabled', true);
-    expect(screen.getByRole('button', { name: 'Keep task' })).toHaveProperty('disabled', true);
     await user.click(screen.getByRole('button', { name: 'Cancelling…' }));
     expect(fetchMock).toHaveBeenCalledOnce();
     finish(response({ error: 'Task is Cancelled, but sandbox cleanup could not be completed' }, 502));
     expect((await screen.findByRole('alert')).textContent).toContain('could not complete this action');
     expect(onComplete).not.toHaveBeenCalled();
     expect(screen.queryByRole('status')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Confirm cancel task' })).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'Cancel task' })).toHaveProperty('disabled', false);
   });
 
   it.each(['Done', 'Cancelled'] as const)('offers no cancellation for terminal state %s', (state) => {

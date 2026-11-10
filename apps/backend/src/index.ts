@@ -840,8 +840,8 @@ try {
       onStatusChange: (online, controlPaused) => pcBridgeStatusStore.setStatus(online, controlPaused),
     } : {}),
     ...(ownerInteractions ? {
-      runConfirmed: (summary, action, signal) =>
-        ownerInteractions.runConfirmed('computer_use', summary, action, signal),
+      runRequested: (summary, action, signal) =>
+        ownerInteractions.runRequested('computer_use', summary, action, signal),
     } : {}),
     onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
   });
@@ -1079,7 +1079,7 @@ try {
         },
       }),
       confirm: (actionKind, summary, action, signal) =>
-        ownerInteractions.runConfirmed(actionKind, summary, action, signal),
+        ownerInteractions.runRequested(actionKind, summary, action, signal),
       onChanged: () => nowEventHub.publish({ type: 'refresh' }),
     })
     : undefined;

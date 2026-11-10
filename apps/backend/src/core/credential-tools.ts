@@ -28,7 +28,7 @@ export const renewCredentialTool: JarvisTool = {
     const notifications = request.server.ownerInteractions;
     if (!notifications) throw new ToolRefusal('Action execution is unavailable; no renewal was started.');
 
-    return notifications.runConfirmed('other', 'Renew the Jarvis Codex login.', async () => {
+    return notifications.runRequested('other', 'Renew the Jarvis Codex login.', async () => {
       signal.throwIfAborted();
 
       let outcome: Awaited<ReturnType<typeof renew>>;

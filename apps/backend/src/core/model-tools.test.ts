@@ -22,7 +22,7 @@ function fixture() {
     }),
   };
   const record = vi.fn<(call: ToolCallRecord) => Promise<void>>(async () => {});
-  const runConfirmed = vi.fn(async (_kind: string, _summary: string, action: () => Promise<unknown>) => action());
+  const runRequested = vi.fn(async (_kind: string, _summary: string, action: () => Promise<unknown>) => action());
   const app = buildApp(config, undefined, {
     modules: [coreModule],
     auth: async () => ({
@@ -32,10 +32,10 @@ function fixture() {
     }),
     settingsStore,
     toolCallStore: { record },
-    ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
+    ownerInteractions: { runRequested } as unknown as OwnerInteractionService,
   });
   apps.push(app);
-  return { app, settingsStore, values, record, runConfirmed };
+  return { app, settingsStore, values, record, runRequested };
 }
 
 afterEach(async () => {
@@ -44,7 +44,7 @@ afterEach(async () => {
 
 describe('Jarvis model tool', () => {
   it('registers a schema-backed tool and applies supported settings to the next session', async () => {
-    const { app, settingsStore, values, runConfirmed } = fixture();
+    const { app, settingsStore, values, runRequested } = fixture();
     const discovery = await app.inject({ url: '/tools', headers });
     expect(discovery.json()).toContainEqual(expect.objectContaining({
       name: 'set_jarvis_model',
@@ -66,7 +66,7 @@ describe('Jarvis model tool', () => {
     expect(settingsStore.write).toHaveBeenCalledWith({
       roles: { chat: { model: 'gpt-5.6-luna', reasoningEffort: 'high' } },
     });
-    expect(runConfirmed).toHaveBeenCalledWith(
+    expect(runRequested).toHaveBeenCalledWith(
       'other',
       'Change chat model: gpt-5.6-luna and chat reasoning: high in Jarvis settings.',
       expect.any(Function),

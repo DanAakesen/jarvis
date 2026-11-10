@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { projectAwarenessInstructions, type ProjectContextEntry } from '../factory/project-context.js';
 import { confirmToolCall, type ToolCallOutcome } from '../core/tool-calls.js';
-import { ToolFailure, ToolRefusal, type ToolRegistry } from '../core/tool-registry.js';
+import { isCurrentAssistantTool, ToolFailure, ToolRefusal, type ToolRegistry } from '../core/tool-registry.js';
 import { capabilityInstructions } from '../core/capability-instructions.js';
 import { defaultSettings, type Settings } from '../core/settings.js';
 import { defaultAwayModeState, type AwayModeState } from '../core/away-mode.js';
@@ -69,7 +69,7 @@ function voiceCapabilityToolDefinitions() {
 }
 
 function directToolDefinitions(tools: ToolRegistry) {
-  return tools.list().map((tool) => ({
+  return tools.list().filter((tool) => isCurrentAssistantTool(tool.name)).map((tool) => ({
     type: 'function' as const,
     name: tool.name,
     description: tool.description,
@@ -553,7 +553,7 @@ export async function executeRealtimeCapabilityCall(
         )) {
       return toolOutput(call.name, 'refused', { refused: 'Invalid capability discovery request.' });
     }
-    const catalogue = tools.list();
+    const catalogue = tools.list().filter((tool) => isCurrentAssistantTool(tool.name));
     const offset = typeof input.offset === 'number' ? input.offset : 0;
     if (offset > catalogue.length) {
       return toolOutput(call.name, 'refused', { refused: 'Capability page is outside the catalogue.' });

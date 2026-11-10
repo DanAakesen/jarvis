@@ -8,7 +8,7 @@ import { loadConfig } from '../config.js';
 import type { ConversationStore } from '../core/conversation-store.js';
 import { defaultAwayModeState } from '../core/away-mode.js';
 import { createLogger } from '../logging.js';
-import type { JarvisTool } from '../core/tool-registry.js';
+import { isCurrentAssistantTool, type JarvisTool } from '../core/tool-registry.js';
 import {
   VOICE_CAPABILITY_DISCOVERY_TOOL,
   VOICE_CAPABILITY_EXECUTION_TOOL,
@@ -458,7 +458,7 @@ describe('Voice Live capability-preserving fallback', () => {
     const active = f.upstream;
     const toolOutput = (callId: string) => active.sent.map((data) => JSON.parse(data))
       .find((message) => message.item?.call_id === callId)?.item.output;
-    expect(names(active)).toEqual(f.app.jarvisTools.list().map(({ name }) => name).sort());
+    expect(names(active)).toEqual(f.app.jarvisTools.list().filter(({ name }) => isCurrentAssistantTool(name)).map(({ name }) => name).sort());
 
     active.event('response.created', { response: { id: 'full_catalogue_response' } });
     active.event('response.function_call_arguments.done', {

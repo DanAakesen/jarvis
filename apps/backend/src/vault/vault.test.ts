@@ -2037,14 +2037,14 @@ describe('GitHub vault', () => {
     });
     await module.synchronize(signal());
     let approve: (() => Promise<unknown>) | undefined;
-    const runConfirmed = vi.fn((_kind: unknown, _summary: unknown, action: () => Promise<unknown>) =>
+    const runRequested = vi.fn((_kind: unknown, _summary: unknown, action: () => Promise<unknown>) =>
       new Promise<unknown>((resolve, reject) => {
         approve = async () => {
           try { resolve(await action()); } catch (error) { reject(error); }
         };
       }));
     const app = memoryApiApp(module, {
-      ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
+      ownerInteractions: { runRequested } as unknown as OwnerInteractionService,
     });
     const graphBefore = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
     expect(graphBefore.json().nodes).toHaveLength(1);
@@ -2054,8 +2054,8 @@ describe('GitHub vault', () => {
       { ...request, server: app } as FastifyRequest,
       signal(),
     );
-    await vi.waitFor(() => expect(runConfirmed).toHaveBeenCalledOnce());
-    expect(runConfirmed).toHaveBeenCalledWith(
+    await vi.waitFor(() => expect(runRequested).toHaveBeenCalledOnce());
+    expect(runRequested).toHaveBeenCalledWith(
       'delete',
       `Permanently delete vault note ${path}.`,
       expect.any(Function),
@@ -2087,14 +2087,14 @@ describe('GitHub vault', () => {
       remote: { [path]: { sha: sha('a'), content: '# Decision\n\nCurrent.' } },
     });
     await module.synchronize(signal());
-    const runConfirmed = vi.fn(async (_kind: unknown, _summary: unknown, action: () => Promise<unknown>) => {
+    const runRequested = vi.fn(async (_kind: unknown, _summary: unknown, action: () => Promise<unknown>) => {
       github.set(path, { sha: sha('b'), content: '# Decision\n\nChanged.' });
       return action();
     });
     const toolRequest = {
       ...request,
       server: {
-        ownerInteractions: { runConfirmed },
+        ownerInteractions: { runRequested },
         awayModeStore: null,
       },
     } as unknown as FastifyRequest;
@@ -2119,13 +2119,20 @@ describe('GitHub vault', () => {
     expect(github.calls).toHaveLength(0);
   });
 
-  it('refuses sensitive captures without explicit remember and always refuses actual credentials', async () => {
+  it('allows direct sensitive saves without magic words, blocks automatic capture and credentials', async () => {
     const health = moduleFor({ source: 'I was diagnosed with a condition.' });
     await expect(tool(health.module, 'vault_write').execute({
       path: 'Personal/health.md', content: 'Diagnosis: sensitive detail.', reason: 'capture',
       automaticCapture: true,
-    }, request, signal())).rejects.toThrow('unless Dan explicitly says “remember”');
+    }, request, signal())).rejects.toThrow('Sensitive details are not saved by automatic capture');
     expect(health.github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+
+    const requested = moduleFor({ source: 'Please save my health information.' });
+    await expect(tool(requested.module, 'vault_write').execute({
+      path: 'Personal/health.md', content: 'Diagnosis: sensitive detail.', reason: 'owner requested save',
+      automaticCapture: false,
+    }, request, signal())).resolves.toMatchObject({ path: 'Personal/health.md' });
+    expect(requested.github.calls.some(({ method }) => method === 'PUT')).toBe(true);
 
     const password = moduleFor({ source: 'Remember my password is apple.' });
     await expect(tool(password.module, 'vault_write').execute({

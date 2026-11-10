@@ -288,7 +288,7 @@ jobs:
                 -jarvis.appLanguage "$language" -jarvis.appTheme "$appearance"
               sleep 2
               xcrun simctl io "$DEVICE_ID" screenshot \
-                "$SCREENSHOT_DIR/calendar-change-confirmation-${language}-${appearance}.png"
+                "$SCREENSHOT_DIR/legacy-calendar-notifications-${language}-${appearance}.png"
             done
             for state in listening thinking speaking; do
               xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
@@ -482,10 +482,9 @@ jobs:
 
           [Download light/dark screenshots, Chat plus menu, open-sidebar, notifications, empty/active Background activity, Factory, Health, Voice states, voice Lock Screen screenshots, Lock Screen task/approval previews, and board comparisons]($ARTIFACT_URL)
 
-          Calendar review: \`calendar-change-confirmation-{da,en}-{light,dark}.png\` shows
-          the production Needs you sheet with Danish/English Approve and Decline controls.
-          This Simulator-only calendar_change fixture is synthetic: decisions are disabled,
-          no live calendar access or writes occur, and these images do not prove backend execution.
+          Legacy calendar fixture: `legacy-calendar-notifications-{da,en}-{light,dark}.png`
+          shows that old pending records do not surface approval controls. This synthetic fixture
+          does not perform calendar writes or prove backend execution.
           [Native UI test evidence]($UI_EVIDENCE_URL) retains XCUI screenshots, failure recordings
           and the export manifest separately so each review archive stays downloadable.
 

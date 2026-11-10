@@ -229,7 +229,7 @@ def test_builtin_presence_behavior_is_salient_with_empty_or_custom_preferences(m
             assert "one very short sentence" in statement
             assert "never ask him to paste, type, copy, open or read anything" in statement
             assert "or look at a screen" in statement
-            assert "single-word confirmations" in statement
+            assert "without asking for another approval" in statement
             assert "say 'read it'" in statement
 
 
@@ -311,7 +311,7 @@ def test_personalized_instructions_know_the_jarvis_repository_and_added_projects
     assert "I found a bug in my code" in text
     assert "Jeg fandt en fejl i min kode" in text
     assert "- target (DanAakesen/jarvis-test-target, project ID 1)" in text
-    assert "ask him to confirm before adding it" in text
+    assert "add it directly without another approval" in text
     assert "which is not listed as an active project in this context" in personalize_instructions(
         "base", ModelSettings("gpt-5.6-luna", "none")
     )
@@ -1882,7 +1882,8 @@ async def test_trusted_channel_does_not_infer_telephone_from_mobile_history(
         expected = {"chat": "browser chat", "voice": "browser voice", "phone": "telephone call"}
         assert f"Trusted runtime channel: {expected[channel]}." in request["instructions"]
         assert "not device wording or earlier refusals" in request["instructions"]
-        assert "prose or lookup alone creates no pending proposal" in request["instructions"]
+        assert "use health_food_review log_estimate directly" in request["instructions"]
+        assert "Questions or previews alone do not request a write" in request["instructions"]
         assert "committed tool receipt" in request["instructions"]
         assert "protein (g), calories (kcal) and fat (g)" in request["instructions"]
         assert "bulleted list; unknown stays unknown" in request["instructions"]

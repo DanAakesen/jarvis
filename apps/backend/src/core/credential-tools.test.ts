@@ -38,7 +38,7 @@ function fixture(options: {
     if (options.error) throw new Error(options.error);
     return options.outcome ?? 'renewed';
   });
-  const runConfirmed = vi.fn(async (
+  const runRequested = vi.fn(async (
     _kind: string,
     _summary: string,
     action: () => Promise<unknown>,
@@ -59,19 +59,19 @@ function fixture(options: {
       renewCodexCredential: renew,
     }),
     ...(!options.unavailable ? {
-      ownerInteractions: { runConfirmed } as unknown as OwnerInteractionService,
+      ownerInteractions: { runRequested } as unknown as OwnerInteractionService,
     } : {}),
     toolCallStore: { record },
   });
   apps.push(app);
-  return { app, credential, store, renew, runConfirmed, record };
+  return { app, credential, store, renew, runRequested, record };
 }
 
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
 describe('renew_credential tool', () => {
   it('confirms renewal, relays the outcome and status, and redacts the audit record', async () => {
-    const { app, credential, renew, runConfirmed, record } = fixture();
+    const { app, credential, renew, runRequested, record } = fixture();
     const response = await app.inject({
       method: 'POST', url: '/tools/renew_credential', headers, payload: { name: 'codex-login' },
     });
@@ -82,7 +82,7 @@ describe('renew_credential tool', () => {
       result: { outcome: 'renewed', credential, nextStep: null },
       confirmation: 'Jarvis Codex login renewed.',
     });
-    expect(runConfirmed).toHaveBeenCalledWith(
+    expect(runRequested).toHaveBeenCalledWith(
       'other', 'Renew the Jarvis Codex login.', expect.any(Function), expect.any(AbortSignal),
     );
     expect(renew).toHaveBeenCalledOnce();
@@ -112,18 +112,18 @@ describe('renew_credential tool', () => {
   });
 
   it('refuses unknown credential names without starting renewal', async () => {
-    const { app, renew, runConfirmed } = fixture();
+    const { app, renew, runRequested } = fixture();
     const response = await app.inject({
       method: 'POST', url: '/tools/renew_credential', headers, payload: { name: 'copilot-token' },
     });
 
     expect(response.json()).toMatchObject({ tool: 'renew_credential', outcome: 'refused' });
     expect(renew).not.toHaveBeenCalled();
-    expect(runConfirmed).not.toHaveBeenCalled();
+    expect(runRequested).not.toHaveBeenCalled();
   });
 
   it('refuses when renewal dependencies are unavailable', async () => {
-    const { app, renew, runConfirmed } = fixture({ unavailable: true });
+    const { app, renew, runRequested } = fixture({ unavailable: true });
     const response = await app.inject({
       method: 'POST', url: '/tools/renew_credential', headers, payload: { name: 'codex-login' },
     });
@@ -131,7 +131,7 @@ describe('renew_credential tool', () => {
     expect(response.json()).toMatchObject({ outcome: 'refused' });
     expect(response.json().result.refused).toContain('unavailable');
     expect(renew).not.toHaveBeenCalled();
-    expect(runConfirmed).not.toHaveBeenCalled();
+    expect(runRequested).not.toHaveBeenCalled();
   });
 
   it('makes no renewal or status change when Dan declines Now confirmation', async () => {

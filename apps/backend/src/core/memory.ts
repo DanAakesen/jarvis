@@ -17,6 +17,7 @@ const MAX_HISTORY_RESULTS = 10;
 const MAX_SQL_BIGINT = 9_223_372_036_854_775_807n;
 const idPattern = /^[1-9]\d{0,18}$/u;
 const categories = new Set<MemoryCategory>(['preference', 'project_fact', 'decision', 'unfinished_task']);
+const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
 const sensitivePattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase|bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b/iu;
 
 declare module 'fastify' {
@@ -120,13 +121,17 @@ async function sourceForWrite(
   request: FastifyRequest,
   signal: AbortSignal,
   content: string,
+  directRequest = false,
 ) {
   checkPrincipal(request);
   const id = sourceMessageId(request);
   const source = await store.getSourceMessage(id, signal);
   if (!source) throw new ToolRefusal('The source message is missing or is not from Dan. Nothing changed.');
-  if (sensitivePattern.test(`${source.text}\n${content}`) && !/\bremember\b/iu.test(source.text)) {
-    throw new ToolRefusal('I will not store secrets, credentials, banking or health details unless you explicitly say “remember”. Nothing changed.');
+  if (credentialPattern.test(`${source.text}\n${content}`)) {
+    throw new ToolRefusal('Secrets and credentials cannot be saved in memory. Nothing changed.');
+  }
+  if (!directRequest && sensitivePattern.test(`${source.text}\n${content}`)) {
+    throw new ToolRefusal('Sensitive details are not saved by automatic capture. Save them when Dan requests it.');
   }
   return source;
 }
@@ -230,13 +235,14 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
   const tools = [
     {
       name: 'memory_remember',
-      description: 'Save a confirmed preference, project fact, decision or unfinished task that Dan clearly stated. Do not infer facts. Never save a secret, credential, banking or health detail unless this stored Dan message explicitly says “remember”. Use a stable key; first search existing memories and preserve corrections under the same key.',
+      description: 'Save a preference, project fact, decision or unfinished task that Dan clearly stated. Do not infer facts. Never save a secret or credential. Set sourceIntent to requested when Dan asks to save this information, including a contextual follow-up; otherwise use automatic. Do not automatically capture sensitive health or financial details. Use a stable key; first search existing memories and preserve corrections under the same key.',
       inputSchema: {
         type: 'object',
         properties: {
           category: { type: 'string', enum: ['preference', 'project_fact', 'decision', 'unfinished_task'] },
           key: { type: 'string', minLength: 1, maxLength: 100 },
           content: { type: 'string', minLength: 1, maxLength: 2000 },
+          sourceIntent: { type: 'string', enum: ['requested', 'automatic'] },
         },
         required: ['category', 'key', 'content'],
         additionalProperties: false,
@@ -246,7 +252,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         const kind = category(input.category);
         const key = memoryKey(input.key);
         const content = requiredString(input.content, 'content', 2000);
-        const source = await sourceForWrite(store, request, signal, content);
+        const source = await sourceForWrite(store, request, signal, content, input.sourceIntent === 'requested');
         const embedding = await embed(content, signal, request);
         const saved = await store.save({
           category: kind, key, content, sourceMessageId: source.messageId, embedding: embedding.value,
@@ -360,7 +366,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         const input = asObject(value);
         const id = memoryId(input.memoryId);
         const content = requiredString(input.content, 'content', 2000);
-        const source = await sourceForWrite(store, request, signal, content);
+        const source = await sourceForWrite(store, request, signal, content, true);
         const current = await store.history(id, 1, signal);
         const memory = current[0];
         if (!memory) throw new ToolRefusal('No saved memory with that ID exists. Nothing changed.');

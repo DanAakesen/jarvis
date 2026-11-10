@@ -1,3 +1,7 @@
+## Direct owner requests — 10 November 2026
+
+The approval-cleanup branch implements direct request handling and removes selected repeat prompts. Qualification and integration are in progress; see `docs/approval-cleanup-2026-11-10.md` for actual status. No production or device acceptance is implied by this entry.
+
 ## Watch startup connection feedback — 9 November 2026
 
 Implemented on fix/watch-startup-connectivity-alert: suppress bootstrap/idle disconnect alerts, guard passive history reads, retain inline history errors and preserve explicit action recovery. Four composer recovery regression scenarios are added. CI/native builds and physical startup/reconnection checks remain unverified until their results are recorded in the PR. Primary owns integration and deployment.

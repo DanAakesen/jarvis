@@ -1,3 +1,7 @@
+## Direct owner requests — 10 November 2026
+
+Task cancellation and recovery, routine/memory deletion, workspace removal, deployment removal and Watch lift deletion act from the selected control. Surface failures and retain busy-state protection. Legacy approval cards and composer buttons do not displace current chat or activity; real task alerts remain visible. Sign-out dialogs stay.
+
 ## Watch startup connection feedback — 9 November 2026
 
 Keep the approved Watch layout and controls. Startup and idle connectivity changes use the existing quiet connection status. History read failures stay inside the chat scroll area. The modal Jarvis alert is reserved for actual user-action/interruption feedback.

@@ -255,7 +255,7 @@ describe('English realtime session', () => {
     expect(instructions).toContain('one very short sentence');
     expect(instructions).toContain('never ask him to paste, type, copy, open or read anything');
     expect(instructions).toContain('or look at a screen');
-    expect(instructions).toContain('single-word confirmations');
+    expect(instructions).toContain('without asking for another approval');
     expect(instructions).toContain("say 'read it'");
     expect(instructions).toContain(JSON.stringify('Use a warmer tone.'));
   });

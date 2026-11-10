@@ -1,3 +1,7 @@
+## Direct owner requests — 10 November 2026
+
+For the approval cleanup, run backend, web, agent Python, iOS and Watch checks against the final combined head. Verify direct repository follow-ups, intent-based sensitive saves, food writes, task recovery and legacy pending activity, including real-device acceptance after release. See `docs/approval-cleanup-2026-11-10.md`; current branch results are not deployment evidence.
+
 ## Watch startup connection feedback — 9 November 2026
 
 The owner reported an interrupted-send modal on ordinary Ultra 2 startup. The initial WCSession activation callback was treated as a disconnect even with no active interaction. The fix remains a separate branch from Home PR #1689. No deployment is authorized in this secondary thread. Device checks must include startup/foreground, phone background/lock, notification opening, idle range loss and active send/voice interruption.

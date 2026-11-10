@@ -38,7 +38,6 @@ export function TaskControls({
   const [busy, setBusy] = useState<Action | null>(null);
   const [steering, setSteering] = useState(false);
   const [message, setMessage] = useState('');
-  const [confirmCancel, setConfirmCancel] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [error, setError] = useState('');
   const continueExpiredSession = (state === 'Running' || state === 'NeedsAttention') &&
@@ -97,7 +96,6 @@ export function TaskControls({
         ? 'Continuation started from the task branch.'
         : messages[action]);
       setSteering(false);
-      setConfirmCancel(false);
       setMessage('');
       onComplete(result.state as TaskState);
     } catch (reason) {
@@ -158,24 +156,10 @@ export function TaskControls({
             {busy === 'resume' ? 'Resuming…' : 'Resume'}
           </button>
         )}
-        {!confirmCancel ? (
-          <button className="danger-button" type="button" disabled={busy !== null}
-            onClick={() => { setConfirmCancel(true); setSteering(false); setError(''); setFeedback(''); }}>
-            Cancel task
-          </button>
-        ) : (
-          <>
-            <span className="task-control-confirmation">This ends the task and cannot be undone.</span>
-            <button className="danger-button danger-button--filled" type="button" disabled={busy !== null}
-              onClick={() => void run('cancel')}>
-              {busy === 'cancel' ? 'Cancelling…' : 'Confirm cancel task'}
-            </button>
-            <button className="secondary-button" type="button" disabled={busy !== null}
-              onClick={() => setConfirmCancel(false)}>
-              Keep task
-            </button>
-          </>
-        )}
+        <button className="danger-button" type="button" disabled={busy !== null}
+          onClick={() => void run('cancel')}>
+          {busy === 'cancel' ? 'Cancelling…' : 'Cancel task'}
+        </button>
       </div>
       {steering && state === 'Running' && (
         <form className="task-control-form" onSubmit={submitSteering}>

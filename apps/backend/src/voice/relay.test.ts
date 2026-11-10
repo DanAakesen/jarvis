@@ -21,7 +21,7 @@ import type { ConversationStore } from '../core/conversation-store.js';
 import { flattenSettings, type SettingsStore } from '../core/settings.js';
 import { type AwayModeStore, type AwayModeState } from '../core/away-mode.js';
 import type { ToolCallStore } from '../core/tool-calls.js';
-import { ToolRefusal } from '../core/tool-registry.js';
+import { isCurrentAssistantTool, ToolRefusal } from '../core/tool-registry.js';
 import type { ReflexClassifier } from '../core/reflex.js';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import {
@@ -3913,7 +3913,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
 
       expect(session.tools).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: 'function', name }),
-        ...factoryModule.tools.map(({ name }) => expect.objectContaining({ type: 'function', name })),
+        ...factoryModule.tools.filter(({ name }) => isCurrentAssistantTool(name)).map(({ name }) => expect.objectContaining({ type: 'function', name })),
       ]));
       expect(session.instructions).toContain('British English');
       const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');

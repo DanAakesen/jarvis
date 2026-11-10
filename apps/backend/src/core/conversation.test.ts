@@ -823,7 +823,7 @@ describe('conversation routes', () => {
     const store = storeFixture();
     const action = vi.fn(async () => 'Logged.');
     const chatAgent = { stream: vi.fn(async function* (_input, _auth, signal: AbortSignal) {
-      const pending = service.runConfirmed('other', 'Log synthetic portion: 200 kcal.', action, signal,
+      const pending = service.runRequested('other', 'Log synthetic portion: 200 kcal.', action, signal,
         { channel: 'browser', lifetimeSeconds: 120, foodEstimate: { sessionId: '41', sourceMessageId: '42' } });
       expect(signal.aborted).toBe(false);
       yield await pending;
@@ -856,7 +856,7 @@ describe('conversation routes', () => {
       agentSignal = signal;
       yield 'Working.';
       if (decision !== 'disconnect_after_commit') await proceed.promise;
-      const result = await service.runConfirmed('other', 'Log synthetic portion.', action, signal);
+      const result = await service.runRequested('other', 'Log synthetic portion.', action, signal);
       if (decision === 'disconnect_after_commit') await proceed.promise;
       yield result;
     }) };
@@ -1052,6 +1052,26 @@ describe('conversation routes', () => {
       expect(reflexClassifier.classify).toHaveBeenCalledOnce();
       await reflexAborted;
       expect(classifierSignal?.aborted).toBe(true);
+    });
+
+    it('continues through the normal agent when reflex marks an action for confirmation', async () => {
+      const store = storeFixture();
+      const chatAgent = { stream: vi.fn(async function* () { yield 'I will handle it.'; }) };
+      const reflexClassifier: ReflexClassifier = {
+        classify: vi.fn(async () => ({
+          addressed: true, intent: 'action' as const, confidence: 0.99,
+          needsConfirmation: true, completeCommand: true, target: null,
+        })),
+      };
+      const app = createApp(store, { conversationAgent: chatAgent, reflexClassifier });
+      const response = await app.inject({
+        method: 'POST', url: '/conversation/sessions/41/turns', headers,
+        payload: { text: 'Please handle this.' },
+      });
+      expect(response.body).toContain('I will handle it.');
+      expect(response.body).not.toContain('confirmation_required');
+      expect(reflexClassifier.classify).toHaveBeenCalledOnce();
+      expect(chatAgent.stream).toHaveBeenCalledOnce();
     });
 
     it('keeps the agent reply when reflex classification fails', async () => {
