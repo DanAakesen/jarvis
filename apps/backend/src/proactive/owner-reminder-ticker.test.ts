@@ -152,7 +152,7 @@ describe('owner reminder ticker', () => {
     expect(f.updateAutomatic).toHaveBeenCalledWith(automatic.id, {
       state: 'suppressed',
       reason: 'already_alerted',
-    });
+    }, automatic.fireAt);
   });
 
   it('repeats on Copenhagen calendar days and stops once the stable task identity is completed', async () => {
