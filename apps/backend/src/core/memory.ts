@@ -17,7 +17,7 @@ const MAX_HISTORY_RESULTS = 10;
 const MAX_SQL_BIGINT = 9_223_372_036_854_775_807n;
 const idPattern = /^[1-9]\d{0,18}$/u;
 const categories = new Set<MemoryCategory>(['preference', 'project_fact', 'decision', 'unfinished_task']);
-const sensitivePattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase|bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b/iu;
+const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -125,8 +125,8 @@ async function sourceForWrite(
   const id = sourceMessageId(request);
   const source = await store.getSourceMessage(id, signal);
   if (!source) throw new ToolRefusal('The source message is missing or is not from Dan. Nothing changed.');
-  if (sensitivePattern.test(`${source.text}\n${content}`) && !/\bremember\b/iu.test(source.text)) {
-    throw new ToolRefusal('I will not store secrets, credentials, banking or health details unless you explicitly say “remember”. Nothing changed.');
+  if (credentialPattern.test(`${source.text}\n${content}`)) {
+    throw new ToolRefusal('Secrets and credentials cannot be saved in memory. Nothing changed.');
   }
   return source;
 }
@@ -230,7 +230,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
   const tools = [
     {
       name: 'memory_remember',
-      description: 'Save a confirmed preference, project fact, decision or unfinished task that Dan clearly stated. Do not infer facts. Never save a secret, credential, banking or health detail unless this stored Dan message explicitly says “remember”. Use a stable key; first search existing memories and preserve corrections under the same key.',
+      description: 'Save a confirmed preference, project fact, decision or unfinished task that Dan clearly stated. Do not infer facts. Never save a secret or credential. Understand requests to save health or financial details from the owner’s intent and context, without requiring a particular word. Use a stable key; first search existing memories and preserve corrections under the same key.',
       inputSchema: {
         type: 'object',
         properties: {
