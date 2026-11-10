@@ -2,6 +2,31 @@
 
 The owner approved all three quick-lift references and the direct logging flow. Reuse existing SQL lift history and paired-iPhone authentication; the Watch carries no credentials. Dictation edits a draft and explicit Save authorizes capture; Voice uses the existing conversation/tool path without a second approval for complete requests. Missing essential data requires clarification, not guessed values. One set is the default, with actual reps/weight and no dumbbell doubling or estimated maximum. Retry identity must survive uncertain completion and relaunch. Integrate the shortcut into PR #1703's Workouts section, preserving its dashboard, existing complications and task/backend changes. Primary owns integration and release; Factory acceptance task #24 is outside this work.
 
+## 10 November 2026 — Explicit timed reminders bypass quiet hours (#1706)
+
+Supersedes the quiet-window refusal in #1239 and the all-reminder night gate in
+P13-13/P14-24. A verified direct owner request can create, update or snooze a
+future reminder during 22:00–07:00 Copenhagen. Existing owner/session, task,
+time-range and idempotency checks remain. The runtime catalogue states this rule.
+
+Owner schedules and vault tasks carrying the current `remindAtDue` marker are
+processed at night. The marker-specific key and current vault task are checked
+before a vault send; a timestamp, null alert key or source run never establishes
+owner intent. Explicit sends are individual `owner_reminder` requests with a
+server-only owner-request marker; automatic batches cannot inherit the exception.
+The shared sender applies it before both APNs and Web Push. Unsolicited insights,
+suggestions and automatic deadlines retain quiet hours and their existing gates.
+
+Vault sends acquire a compare-and-set claim using the pending fire time, with a
+two-minute lease and fenced completion. Existing terminal rows remain terminal;
+no old schedules are rewritten. Recurrence keeps the existing Copenhagen
+calendar semantics: nonexistent spring times skip an occurrence. Offset-qualified
+owner schedules preserve either autumn instant; vault HH:mm tasks keep the
+existing second-occurrence resolver. Provider acceptance remains separate from
+device display, and a crash after acceptance but before persistence remains an
+uncertain delivery outcome. Local qualification and SQL/device limits are recorded
+in docs/agent-context.md. No deployment or live notification was performed.
+
 ## Direct owner requests — 10 November 2026
 
 Dan directs Jarvis to execute owner-requested actions without another approval or prescribed wording, and to preserve the two sign-out dialogs. Interpret a request using the conversation; retain owner authentication, resource checks, stale-write handling, secret protection and safe treatment of untrusted content. Telephony is a separate unused integration, not browser/app voice.

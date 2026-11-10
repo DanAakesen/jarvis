@@ -100,7 +100,9 @@ describe('reminder ticker push details', () => {
     expect(fixture.send).toHaveBeenCalledOnce();
     expect(fixture.logger.warn).toHaveBeenCalledWith(expect.objectContaining({ reason: 'internal_error' }), 'proactive.reminder_tick');
     expect(JSON.stringify([fixture.logger.info.mock.calls, fixture.logger.warn.mock.calls])).not.toContain('Synthetic private task');
-    expect(fixture.update).not.toHaveBeenCalled();
+    expect(fixture.update).toHaveBeenCalledTimes(fixture.rows.length);
+    expect(fixture.update.mock.calls.every(([, change]) =>
+      change.fireAt?.getTime() === now.getTime() + 120_000 && change.state === undefined)).toBe(true);
     expect(fixture.pushStore.updateItemDelivery).not.toHaveBeenCalled();
     expect(fixture.reminders.snapshot().every(({ state }) => state === 'pending')).toBe(true);
   });

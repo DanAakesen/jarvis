@@ -85,6 +85,23 @@ describe('vault-push todo reminder planning', () => {
     expect(test.reminders.snapshot()[0]?.plannedRunId).toBeNull();
   });
 
+  it.each(['2026-10-24T20:00:00Z', '2026-10-24T22:00:00Z', '2026-10-25T01:30:00Z'])(
+    'plans explicit reminders created within quiet hours at %s without planning automatic ones', async (at) => {
+      const now = new Date(at);
+      const dueAt = new Date(now.getTime() + 60_000);
+      const test = fixture(now, [
+        `${todoLine('Explicit request', dueAt)} [reminder:: at_due_time]`,
+        todoLine('Automatic deadline', dueAt),
+      ].join('\n'));
+      test.pass.trigger();
+      await vi.waitFor(() => expect(test.reminders.snapshot()).toHaveLength(1));
+      expect(test.reminders.snapshot()[0]).toMatchObject({ title: 'Explicit request', fireAt: dueAt });
+      expect(test.wake).toHaveBeenCalledWith(dueAt);
+      test.pass.trigger();
+      await test.pass.stop();
+      expect(test.reminders.snapshot()).toHaveLength(1);
+    });
+
   it('does not plan a task whose due time has passed', async () => {
     const dueAt = new Date('2026-10-20T08:00:00.000Z');
     const test = fixture(new Date('2026-10-20T08:30:00.000Z'), todoLine('Synthetic overdue task', dueAt));
@@ -97,7 +114,6 @@ describe('vault-push todo reminder planning', () => {
   it.each([
     { reason: 'vault_push_paused', paused: true, enabled: true, at: '2026-10-20T08:30:00.000Z' },
     { reason: 'vault_push_todos_disabled', paused: false, enabled: false, at: '2026-10-20T08:30:00.000Z' },
-    { reason: 'vault_push_quiet_hours', paused: false, enabled: true, at: '2026-10-20T21:30:00.000Z' },
   ])('does not read the vault when gated by $reason', async ({ reason, paused, enabled, at }) => {
     const test = fixture(new Date(at), todoLine('Synthetic gated task', new Date('2026-10-20T10:00:00.000Z')));
     await test.store.settings.patch({ paused, sources: { todos: enabled } });

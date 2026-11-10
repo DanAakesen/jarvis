@@ -5,6 +5,7 @@ import { proactiveAlertKey } from './alerts.js';
 import type { PlannedReminder, ProactiveReminderStore } from './reminder-store.js';
 import type { ProactiveStore } from './store.js';
 import { classifySuggestionScope } from './policy.js';
+import { isQuietHour } from './time.js';
 
 export interface ReminderPlannerLogger {
   info?: (data: { runId: string; count?: number; durationMs?: number; reason: string }, message: string) => void;
@@ -40,7 +41,7 @@ export async function planTodoReminders(options: {
   onPlanned?: (fireAt: Date) => void;
 }): Promise<Awaited<ReturnType<ProactiveReminderStore['plan']>>> {
   const candidates: PlannedReminder[] = todosDueWithin(options.facts, options.now, 48 * 60)
-    .filter((fact) => fact.dueHasTime === true && typeof fact.dueAt === 'string' &&
+    .filter((fact) => (!isQuietHour(options.now) || fact.remindAtDue === true) && fact.dueHasTime === true && typeof fact.dueAt === 'string' &&
       Number.isFinite(Date.parse(fact.dueAt)))
     .flatMap((fact) => {
       const dueAt = new Date(fact.dueAt!);
