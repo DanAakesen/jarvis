@@ -16,6 +16,15 @@ Preserve PR #1704's task-detail structure/retention/request guards from head
 main integration and release. Simulator captures and device acceptance are not
 claimed from the Linux development environment.
 
+Review follow-up (#1710, comment 5845353676): use the explicitly permitted
+incomplete-history presentation rather than adding a backend latest-page API.
+Oldest-first HTTP history may omit recent updates while SSE is delayed/offline;
+even successful `ready` covers active SQL events only. Keep the localized
+coverage warning until HTTP pagination reaches the end, preserving older pages.
+Batch replay in groups of at most 100, yield between groups, and refresh task
+status once at `ready`, not once for every replayed state change. Keep live
+delivery immediate and retain validated short batches on connection failure.
+
 ## Direct owner requests — 10 November 2026
 
 Dan directs Jarvis to execute owner-requested actions without another approval or prescribed wording, and to preserve the two sign-out dialogs. Interpret a request using the conversation; retain owner authentication, resource checks, stale-write handling, secret protection and safe treatment of untrusted content. Telephony is a separate unused integration, not browser/app voice.

@@ -1760,6 +1760,15 @@ Native task detail uses `FactoryTaskHistory` to merge unique event IDs while
 tracking the oldest-first HTTP page offset separately from the SSE cursor.
 Refresh retains fetched history; replay starts at the beginning until SSE has
 established a cursor, so a partially fetched page cannot skip unseen events.
+Task-detail replay publishes at most 100 records per batch and yields between
+batches, merging each batch into view state once. Live records remain immediate;
+the existing per-event client method retains immediate delivery. A short batch
+is flushed before `ready`, EOF or a non-cancellation failure without advancing
+the cursor beyond delivered records. Replayed state changes do not each trigger
+HTTP/Live Activity updates; task detail refreshes once at `ready` and on new live
+state changes. The server replays active SQL rows only, not archived records.
+Consequently, a persistent partial-history notice follows HTTP `hasMore` even
+after `ready`; reconnect/offline status is independent of that coverage warning.
 `FactoryTaskTimeline` derives adjacent public ACP message chunks, protocol
 tool titles/status and plan entries, grouped low-level notifications and a
 bounded preview. Diagnostic disclosure exposes identifiers, types, sources,

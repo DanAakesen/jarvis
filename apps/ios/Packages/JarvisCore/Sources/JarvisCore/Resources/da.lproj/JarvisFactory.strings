@@ -82,6 +82,8 @@
 "factory.eventCount" = "%ld hændelser";
 "factory.eventDiagnostics" = "Hændelsesdetaljer";
 "factory.historyLoadFailed" = "Kunne ikke indlæse mere historik. Prøv igen.";
+"factory.historyIncomplete" = "Kun en del af historikken er indlæst. Nyere aktivitet kan mangle; indlæs mere historik for at kontrollere.";
+"factory.eventCatchingUp" = "Henter manglende livehændelser";
 "factory.metadata" = "Oplysninger";
 "factory.timeline" = "Tidslinje";
 "factory.usage" = "Forbrug";

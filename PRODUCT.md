@@ -1490,6 +1490,11 @@ demand. Public ACP message chunks are joined without trimming; low-level ACP
 notifications are condensed without publishing private reasoning or raw tool
 payloads. The standalone Disk section is removed only from this native page;
 recorded disk monitoring, low-disk protection and failure/attention events remain.
+An oldest-first page is not presented as the current tail: while further HTTP
+history remains, the native page and history sheet explicitly warn that recent
+activity may be missing. Loading all HTTP pages removes that coverage warning.
+Live catch-up, reconnecting and offline status remain separate; receiving a
+replay `ready` signal does not establish complete archived history.
 
 The runner sends each task-scoped event to authenticated `POST /factory/sandbox-events`
 using its managed identity. The backend accepts only the separately assigned runner

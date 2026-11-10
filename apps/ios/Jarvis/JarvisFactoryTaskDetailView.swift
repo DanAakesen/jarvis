@@ -13,7 +13,7 @@ struct JarvisFactoryTaskDetailView: View {
     @State private var usage: [FactoryTaskUsage] = []
     @State private var loadFailed = false
     @State private var actionFailed = false
-    @State private var taskConnection: FactoryTaskConnection = .connected
+    @State private var taskConnection: FactoryTaskConnection = .catchingUp
     @State private var eventRetryCount = 0
     @State private var loadingMoreEvents = false
     @State private var historyFailed = false
@@ -108,7 +108,8 @@ struct JarvisFactoryTaskDetailView: View {
                 }
                 if liveUpdatesEnabled && taskConnection != .connected {
                     Label(
-                        copy.text(taskConnection == .offline ? .offline : .eventReconnecting),
+                        copy.text(taskConnection == .offline ? .offline :
+                            taskConnection == .catchingUp ? .eventCatchingUp : .eventReconnecting),
                         systemImage: taskConnection == .offline ? "wifi.slash" : "arrow.triangle.2.circlepath"
                     )
                     .foregroundStyle(.secondary)
@@ -169,6 +170,9 @@ struct JarvisFactoryTaskDetailView: View {
             }
 
             Section(copy.text(.timeline)) {
+                if task != nil, history?.hasMore == true {
+                    incompleteHistoryNotice
+                }
                 if task == nil {
                     detailPlaceholder
                 } else if events.isEmpty {
@@ -240,6 +244,13 @@ struct JarvisFactoryTaskDetailView: View {
         }
     }
 
+    private var incompleteHistoryNotice: some View {
+        Label(copy.text(.historyIncomplete), systemImage: "clock.badge.exclamationmark")
+            .font(.callout)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("factory.timeline.incomplete")
+    }
+
     private var timelineHistory: some View {
         let timeline = self.timeline
         return JarvisPageScaffold(
@@ -252,6 +263,9 @@ struct JarvisFactoryTaskDetailView: View {
             hero: { EmptyView() }
         ) {
             LazyVStack(alignment: .leading, spacing: JarvisDesignTokens.factoryRowSpacing) {
+                if history?.hasMore == true {
+                    incompleteHistoryNotice
+                }
                 ForEach(timeline) { entry in
                     FactoryTimelineRow(entry: entry, copy: copy)
                     Divider()
@@ -322,6 +336,8 @@ struct JarvisFactoryTaskDetailView: View {
             steeringPresented = false
             actionFailed = false
             actionCompleted = false
+            taskConnection = .catchingUp
+            eventRetryCount = 0
         }
         loadFailed = false
         do {
@@ -332,7 +348,6 @@ struct JarvisFactoryTaskDetailView: View {
             loadedTaskID = requestedTaskID
             history?.mergePage(detail.events, offset: 0)
             usage = detail.usage
-            taskConnection = .connected
             await JarvisFactoryLiveActivityController.update(task: detail.task, language: language)
             if firstLoad && showSteeringAtLaunch {
                 steeringPresented = true
@@ -366,47 +381,42 @@ struct JarvisFactoryTaskDetailView: View {
         var retrySeconds = 1
         while !Task.isCancelled {
             do {
-                try await client.listenForTaskEvents(taskId: requestedTaskID, after: history?.streamCursor) { event in
+                try await client.listenForTaskEventBatches(
+                    taskId: requestedTaskID,
+                    after: history?.streamCursor,
+                    onReplayComplete: {
+                        let current = await MainActor.run {
+                            guard !Task.isCancelled, taskID == requestedTaskID,
+                                  loadedTaskID == requestedTaskID else { return false }
+                            taskConnection = .connected
+                            eventRetryCount = 0
+                            return true
+                        }
+                        if current { await refreshTaskAfterEvents(taskID: requestedTaskID) }
+                    }
+                ) { batch, replaying in
                     let (stateChanged, currentTask) = await MainActor.run {
-                        guard !Task.isCancelled, taskID == requestedTaskID, loadedTaskID == requestedTaskID else {
+                        guard !Task.isCancelled, taskID == requestedTaskID, loadedTaskID == requestedTaskID,
+                              var updatedHistory = history else {
                             return (false, Optional<FactoryTaskRecord>.none)
                         }
-                        taskConnection = .connected
-                        eventRetryCount = 0
-                        let inserted = history?.receive(event) ?? false
-                        return (inserted && event.type == "state_changed", task)
+                        var stateChanged = false
+                        for event in batch {
+                            let inserted = updatedHistory.receive(event)
+                            stateChanged = stateChanged || (inserted && event.type == "state_changed")
+                        }
+                        history = updatedHistory
+                        return (!replaying && stateChanged, replaying ? nil : task)
                     }
                     if let currentTask {
                         await JarvisFactoryLiveActivityController.update(
                             task: currentTask,
-                            activityText: event.summary,
+                            activityText: batch.last?.summary,
                             language: language
                         )
                     }
                     if stateChanged {
-                        do {
-                            let refreshRequest = loadRequest
-                            let detail = try await client.task(id: requestedTaskID)
-                            let applied = await MainActor.run {
-                                guard !Task.isCancelled, taskID == requestedTaskID,
-                                      loadedTaskID == requestedTaskID, loadRequest == refreshRequest else { return false }
-                                task = detail.task
-                                usage = detail.usage
-                                history?.mergePage(detail.events, offset: 0)
-                                return true
-                            }
-                            if applied {
-                                await JarvisFactoryLiveActivityController.update(
-                                    task: detail.task,
-                                    language: language
-                                )
-                            }
-                        } catch {
-                            await MainActor.run {
-                                guard !Task.isCancelled, taskID == requestedTaskID, loadedTaskID == requestedTaskID else { return }
-                                actionFailed = true
-                            }
-                        }
+                        await refreshTaskAfterEvents(taskID: requestedTaskID)
                     }
                 }
                 guard !Task.isCancelled, taskID == requestedTaskID, loadedTaskID == requestedTaskID else { return }
@@ -423,6 +433,30 @@ struct JarvisFactoryTaskDetailView: View {
                 return
             }
             retrySeconds = min(retrySeconds * 2, 15)
+        }
+    }
+
+    private func refreshTaskAfterEvents(taskID requestedTaskID: String) async {
+        let refreshRequest = loadRequest
+        do {
+            let detail = try await client.task(id: requestedTaskID)
+            let applied = await MainActor.run {
+                guard !Task.isCancelled, taskID == requestedTaskID,
+                      loadedTaskID == requestedTaskID, loadRequest == refreshRequest else { return false }
+                task = detail.task
+                usage = detail.usage
+                history?.mergePage(detail.events, offset: 0)
+                return true
+            }
+            if applied {
+                await JarvisFactoryLiveActivityController.update(task: detail.task, language: language)
+            }
+        } catch {
+            await MainActor.run {
+                guard !Task.isCancelled, taskID == requestedTaskID,
+                      loadedTaskID == requestedTaskID, loadRequest == refreshRequest else { return }
+                actionFailed = true
+            }
         }
     }
 
@@ -497,6 +531,7 @@ struct JarvisFactoryTaskDetailView: View {
 }
 
 private enum FactoryTaskConnection: Equatable {
+    case catchingUp
     case connected
     case reconnecting
     case offline

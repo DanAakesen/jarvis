@@ -6778,6 +6778,14 @@ Its opt-in `--ui-test-factory-long-detail` scenario (with the existing
 `--ui-test-navigation --ui-test-notification-tasks` flags) provides a synthetic
 long request and 1,200 mixed events on task 21, without changing ordinary fixture
 data. HTTP pages remain repeatable and oldest-first.
+Review follow-up #1710 adds `--ui-test-factory-live-replay` or
+`--ui-test-factory-offline-replay` to those flags for task-detail-only fixture
+streaming. Live replay deliberately waits before sending 1,200 events, including
+the distinct final “Synthetic latest progress 1200”, then `ready` and keepalives.
+Offline replay fails without changing HTTP pagination. Native tests retain
+request expansion, navigation, overlapping pagination, refresh and screenshot
+attachments before/during/after replay. They remain unexecuted in this Linux
+environment; the prior Simulator run 42849420856 was skipped and has no captures.
 Preserve the task-detail loading/refresh/context guards reviewed against
 PR #1704 head `0bffc61d30ae5d66a6203684aa8f53d975e8d1c7` during integration.
 Do not mutate live acceptance task 24 (#1706).
@@ -6794,6 +6802,11 @@ full-page documentation review. The Request uses native `lineLimit`,
 `textSelection` and hidden width-matched geometry preferences for overflow,
 with shared labelled buttons. Native Dynamic Type and VoiceOver behavior
 still require simulator/device inspection.
+For the follow-up, indexed Apple
+[Task.yield](https://developer.apple.com/documentation/swift/task/yield())
+documentation was consulted: yielding permits other work but does not guarantee
+fair scheduling. Replay batch-count/cancellation tests are not evidence of
+native frame responsiveness; that still requires the retained simulator tests.
 
 Local #1708 qualification on Linux:
 `swift build` and `swift test --skip JarvisDesignSystemGuardTests` from
@@ -6808,6 +6821,18 @@ build. No simulator screenshots, width/VoiceOver inspection, live-task read or
 physical-device verification were performed here.
 Secret scanning found no secrets. CodeQL reported no Actions alerts, but Swift
 database creation failed, so Swift CodeQL analysis is unverified.
+
+Review follow-up #1710 local qualification: `swift build` and
+`swift test --skip JarvisDesignSystemGuardTests` passed (570 selected tests),
+including five controlled replay regressions with 1,200-event histories and
+delayed/failing streams. They cover actual-tail arrival, exact message chunks,
+bounded batch counts, archived-only `ready`, reconnect overlap, retained HTTP
+offsets and batch-boundary cancellation. The native source guard remains
+excluded from agent-authored UI scope. Backend
+`npm test --workspace @jarvis/backend -- src/factory/tasks.test.ts` passed all
+49 task-route tests. Updated task-detail source parsed with
+`swiftc -frontend -parse`; native typechecking, simulator captures and
+VoiceOver/physical-device interaction remain unverified.
 
 `JarvisFactoryFixtureScenario` in `apps/ios/Jarvis/` supplies the Factory
 previews and simulator screenshots through `FixtureTransport`; its project,

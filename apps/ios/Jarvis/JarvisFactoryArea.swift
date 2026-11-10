@@ -239,7 +239,7 @@ struct JarvisFactoryArea: View {
                     client: client,
                     taskID: selectedTaskID ?? "21",
                     language: language,
-                    liveUpdatesEnabled: liveUpdatesEnabled,
+                    liveUpdatesEnabled: liveUpdatesEnabled || JarvisFactoryFixtureScenario.taskDetailLiveUpdatesEnabled,
                     showSteeringAtLaunch: previewState == .steer
                 )
             }

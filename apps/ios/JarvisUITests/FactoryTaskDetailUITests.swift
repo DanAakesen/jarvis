@@ -35,6 +35,116 @@ final class FactoryTaskDetailUITests: XCTestCase {
         capture("short-request")
     }
 
+    func testEnglishOfflineReplayShowsPartialOldestHistoryWithoutClaimingLatest() {
+        launch(language: "en", long: true, replay: "--ui-test-factory-offline-replay")
+        defer { app.terminate() }
+        openBoardTask()
+        reveal(section("Details"))
+        XCTAssertTrue(app.staticTexts["Offline"].firstMatch.waitForExistence(timeout: 15))
+        reveal(loadedEventCount(100, language: "en"))
+        assertIncompleteHistoryWarning()
+        XCTAssertFalse(timelineEntry("1200").exists)
+        XCTAssertFalse(app.staticTexts["Synthetic latest progress 1200"].exists)
+        capture("offline-oldest-100-incomplete")
+        captureHierarchy("offline-oldest-100-hierarchy")
+
+        reveal(app.buttons["factory.timeline.history"]).tap()
+        XCTAssertTrue(app.descendants(matching: .any)["factory.timeline.detail"].waitForExistence(timeout: 5))
+        XCTAssertTrue(reveal(timelineEntry("2")).label.contains("Synthetic earlier disk_low"))
+        XCTAssertFalse(timelineEntry("101").exists)
+        XCTAssertFalse(timelineEntry("1200").exists)
+        assertPrivateContentHidden()
+        capture("offline-history-before-pagination")
+        reveal(app.buttons["factory.timeline.loadMore"]).tap()
+        reveal(timelineEntry("181"))
+        XCTAssertFalse(timelineEntry("201").exists)
+        capture("offline-history-after-pagination")
+        app.buttons["sheet.cancel"].tap()
+        reveal(loadedEventCount(200, language: "en"), searchBackward: true)
+        assertIncompleteHistoryWarning()
+    }
+
+    func testEnglishLiveReplayReachesActualLastEventWithoutDuplicatesAndKeepsNavigationResponsive() {
+        launch(language: "en", long: true, replay: "--ui-test-factory-live-replay")
+        defer { app.terminate() }
+        openBoardTask()
+        reveal(loadedEventCount(100, language: "en"))
+        assertIncompleteHistoryWarning()
+        XCTAssertFalse(timelineEntry("1200").exists)
+        capture("live-before-catchup-oldest-100")
+        captureHierarchy("live-before-catchup-hierarchy")
+
+        let replayStarted = XCTNSPredicateExpectation(
+            predicate: NSPredicate { [self] _, _ in
+                app.staticTexts.matching(NSPredicate(
+                    format: "label MATCHES %@", "([2-9]00|1[01]00) loaded events.*"
+                )).firstMatch.exists
+            },
+            object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [replayStarted], timeout: 60), .completed)
+        reveal(app.buttons["factory.timeline.history"], maximumSwipes: 6).tap()
+        XCTAssertTrue(app.descendants(matching: .any)["factory.timeline.detail"].waitForExistence(timeout: 5))
+        capture("live-history-during-catchup")
+        let close = app.buttons["sheet.cancel"]
+        XCTAssertTrue(close.waitForExistence(timeout: 5))
+        close.tap()
+        let dismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate { [self] _, _ in
+                !app.descendants(matching: .any)["factory.timeline.detail"].exists
+            },
+            object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [dismissed], timeout: 5), .completed)
+
+        XCTAssertTrue(loadedEventCount(1_200, language: "en").waitForExistence(timeout: 60))
+        reveal(section("Details"), searchBackward: true)
+        let replayReady = XCTNSPredicateExpectation(
+            predicate: NSPredicate { [self] _, _ in
+                !app.staticTexts["Catching up on live events"].firstMatch.exists
+            },
+            object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [replayReady], timeout: 10), .completed)
+        XCTAssertFalse(app.staticTexts["Offline"].firstMatch.exists)
+        reveal(loadedEventCount(1_200, language: "en"), searchBackward: true)
+        assertIncompleteHistoryWarning()
+        capture("live-after-ready-history-still-incomplete")
+        XCTAssertTrue(reveal(timelineEntry("1200")).label.contains("Synthetic latest progress 1200"))
+        assertPrivateContentHidden()
+        capture("live-after-catchup-actual-event-1200")
+        captureHierarchy("live-after-catchup-hierarchy")
+
+        reveal(app.buttons["factory.timeline.history"]).tap()
+        XCTAssertTrue(app.descendants(matching: .any)["factory.timeline.detail"].waitForExistence(timeout: 5))
+        reveal(timelineEntry("1200"), maximumSwipes: 100, forwardOnly: true)
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "factory.timeline.entry.1200").count, 1)
+        capture("live-history-actual-final-event")
+        // HTTP still owns pagination. Its overlapping second page must not duplicate replayed events.
+        reveal(app.buttons["factory.timeline.loadMore"]).tap()
+        XCTAssertTrue(reveal(timelineEntry("1200"), maximumSwipes: 6, searchBackward: true)
+            .label.contains("Synthetic latest progress 1200"))
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "factory.timeline.entry.1200").count, 1)
+        app.buttons["sheet.cancel"].tap()
+        reveal(loadedEventCount(1_200, language: "en"), searchBackward: true)
+        refreshDetail(language: "en")
+        reveal(loadedEventCount(1_200, language: "en"))
+        assertIncompleteHistoryWarning()
+        XCTAssertTrue(reveal(timelineEntry("1200")).label.contains("Synthetic latest progress 1200"))
+        assertPrivateContentHidden()
+        capture("live-after-overlapping-http-and-refresh")
+    }
+
+    private func assertIncompleteHistoryWarning() {
+        let warning = reveal(
+            app.descendants(matching: .any)["factory.timeline.incomplete"].firstMatch,
+            searchBackward: true
+        )
+        XCTAssertTrue(warning.label.localizedCaseInsensitiveContains("history"))
+        XCTAssertTrue(warning.label.localizedCaseInsensitiveContains("recent activity may be missing"),
+                      "Partial oldest-first history must explicitly warn that the latest update may be missing")
+    }
+
     private func exerciseLongDetail(language: String, notification: Bool, contentSize: String? = nil) {
         launch(language: language, long: true, contentSize: contentSize)
         defer { app.terminate() }
@@ -165,13 +275,14 @@ final class FactoryTaskDetailUITests: XCTestCase {
         }
     }
 
-    private func launch(language: String, long: Bool, contentSize: String? = nil) {
+    private func launch(language: String, long: Bool, contentSize: String? = nil, replay: String? = nil) {
         app.launchArguments = [
             "--ui-test-navigation", "--ui-test-notification-tasks",
             "-jarvis.appLanguage", language, "-jarvis.appTheme", "dark",
             "-AppleLanguages", "(\(language))", "-AppleLocale", language == "da" ? "da_DK" : "en_US"
         ]
         if long { app.launchArguments.append("--ui-test-factory-long-detail") }
+        if let replay { app.launchArguments.append(replay) }
         if let contentSize {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSize]
         }

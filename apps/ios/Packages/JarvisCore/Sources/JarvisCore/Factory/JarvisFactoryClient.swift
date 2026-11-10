@@ -317,6 +317,35 @@ public final class JarvisFactoryClient: Sendable {
         after eventId: String? = nil,
         receive: (FactoryTaskEvent) async -> Void
     ) async throws {
+        try await listenForTaskEventBatches(
+            taskId: taskId, after: eventId, replayBatchSize: 1, onReplayComplete: {}
+        ) { events, _ in
+            for event in events { await receive(event) }
+        }
+    }
+
+    /// Replay is delivered in bounded batches; live events are delivered immediately.
+    /// `ready` covers active SQL events only, not archived HTTP history.
+    public func listenForTaskEventBatches(
+        taskId: String,
+        after eventId: String? = nil,
+        onReplayComplete: () async -> Void = {},
+        receive: (_ events: [FactoryTaskEvent], _ replaying: Bool) async -> Void
+    ) async throws {
+        try await listenForTaskEventBatches(
+            taskId: taskId, after: eventId,
+            replayBatchSize: Self.maximumReplayBatchSize,
+            onReplayComplete: onReplayComplete, receive: receive
+        )
+    }
+
+    private func listenForTaskEventBatches(
+        taskId: String,
+        after eventId: String?,
+        replayBatchSize: Int,
+        onReplayComplete: () async -> Void,
+        receive: (_ events: [FactoryTaskEvent], _ replaying: Bool) async -> Void
+    ) async throws {
         guard isValidFactoryID(taskId),
               eventId.map({ $0.range(of: #"^(?:0|[1-9][0-9]{0,18})$"#, options: .regularExpression) != nil && Int64($0) != nil }) ?? true else {
             throw JarvisFactoryClientError.invalidRequest
@@ -328,10 +357,24 @@ public final class JarvisFactoryClient: Sendable {
             headers: eventId.map { ["Last-Event-ID": $0] } ?? [:]
         )
         var parser = SSEParser()
-        for try await chunk in response.body {
-            for event in parser.append(chunk) {
+        var pending: [FactoryTaskEvent] = []
+        var replaying = true
+        func deliver(_ frames: [ServerSentEvent]) async throws {
+            for event in frames {
+                try Task.checkCancellation()
                 guard event.data.utf8.count <= Self.maximumEventBytes else {
                     throw JarvisFactoryClientError.invalidResponse
+                }
+                if event.name == "ready" {
+                    if !pending.isEmpty {
+                        await receive(pending, replaying)
+                        pending.removeAll(keepingCapacity: true)
+                    }
+                    if replaying {
+                        replaying = false
+                        await onReplayComplete()
+                    }
+                    continue
                 }
                 guard event.name == "task" else { continue }
                 guard let id = event.id, isValidFactoryID(id) else {
@@ -341,23 +384,31 @@ public final class JarvisFactoryClient: Sendable {
                 guard taskEvent.taskId == taskId, taskEvent.id == id else {
                     throw JarvisFactoryClientError.invalidResponse
                 }
-                await receive(taskEvent)
+                pending.append(taskEvent)
+                if !replaying || pending.count == replayBatchSize {
+                    await receive(pending, replaying)
+                    pending.removeAll(keepingCapacity: true)
+                    await Task.yield()
+                }
             }
         }
-        for event in parser.finish() where event.name == "task" {
-            guard event.data.utf8.count <= Self.maximumEventBytes,
-                  let id = event.id,
-                  isValidFactoryID(id) else {
-                throw JarvisFactoryClientError.invalidResponse
+        do {
+            for try await chunk in response.body {
+                try await deliver(parser.append(chunk))
             }
-            let taskEvent = try Self.decode(FactoryTaskEvent.self, from: event.data)
-            guard taskEvent.taskId == taskId, taskEvent.id == id else {
-                throw JarvisFactoryClientError.invalidResponse
+            try await deliver(parser.finish())
+        } catch {
+            // A short replay can fail before reaching a batch boundary. Retain all
+            // validated events, but never treat a dropped stream as a ready signal.
+            if !Task.isCancelled, !pending.isEmpty {
+                await receive(pending, replaying)
             }
-            await receive(taskEvent)
+            throw error
         }
+        if !pending.isEmpty { await receive(pending, replaying) }
     }
 
+    private static let maximumReplayBatchSize = 100
     private static let maximumResponseBytes = 1024 * 1024
     private static let maximumEventBytes = 64 * 1024
 

@@ -85,6 +85,8 @@ public enum JarvisFactoryLocalizationKey: String, CaseIterable, Sendable {
     case eventCount = "factory.eventCount"
     case eventDiagnostics = "factory.eventDiagnostics"
     case historyLoadFailed = "factory.historyLoadFailed"
+    case historyIncomplete = "factory.historyIncomplete"
+    case eventCatchingUp = "factory.eventCatchingUp"
     case metadata = "factory.metadata"
     case timeline = "factory.timeline"
     case usage = "factory.usage"

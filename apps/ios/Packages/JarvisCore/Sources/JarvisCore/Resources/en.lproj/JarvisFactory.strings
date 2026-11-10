@@ -82,6 +82,8 @@
 "factory.eventCount" = "%ld events";
 "factory.eventDiagnostics" = "Event details";
 "factory.historyLoadFailed" = "Could not load more history. Try again.";
+"factory.historyIncomplete" = "Only part of the history is loaded. Recent activity may be missing; load more history to check.";
+"factory.eventCatchingUp" = "Catching up on live events";
 "factory.metadata" = "Details";
 "factory.timeline" = "Timeline";
 "factory.usage" = "Usage";

@@ -20,6 +20,18 @@ struct JarvisFactoryScreenshotConfiguration {
 }
 
 enum JarvisFactoryFixtureScenario {
+    static var taskDetailLiveUpdatesEnabled: Bool {
+#if DEBUG && targetEnvironment(simulator)
+        let arguments = ProcessInfo.processInfo.arguments
+        return ["--ui-test-navigation", "--ui-test-notification-tasks", "--ui-test-factory-long-detail"]
+            .allSatisfy(arguments.contains) &&
+            ["--ui-test-factory-live-replay", "--ui-test-factory-offline-replay"]
+            .contains(where: arguments.contains)
+#else
+        return false
+#endif
+    }
+
     static func makeClient(state: JarvisFactoryPreviewState) throws -> JarvisFactoryClient {
         let scenario = Data(scenario(for: state).utf8)
         var history = Data(#"{"version":1,"interactions":[\#(taskDetailResponse)]}"#.utf8)
@@ -314,6 +326,11 @@ enum JarvisFactoryFixtureScenario {
                     ]
                 }
             }
+            if offset == 1_199, taskDetailLiveUpdatesEnabled {
+                type = "task_result"
+                summary = "Synthetic latest progress 1200"
+                payload = ["result": summary]
+            }
             return [
                 "id": String(offset + 1), "taskId": "21", "type": type, "summary": summary,
                 "payload": payload, "payloadTruncated": false, "source": "runner",
@@ -398,9 +415,76 @@ private struct TaskHistoryFixtureTransport: HTTPTransport {
     }
 
     func stream(_ request: HTTPRequest) async throws -> HTTPStreamResponse {
-        try await base.stream(request)
+#if DEBUG && targetEnvironment(simulator)
+        if JarvisFactoryFixtureScenario.taskDetailLiveUpdatesEnabled,
+           request.url.path == "/api/factory/tasks/21/events" {
+            guard request.method == .get else { throw FixtureTransportError.requestMismatch }
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-factory-offline-replay") {
+                throw HTTPTransportFailure.network
+            }
+            let cursorValue = request.headers.first {
+                $0.key.caseInsensitiveCompare("Last-Event-ID") == .orderedSame
+            }?.value ?? "0"
+            guard let cursor = Int(cursorValue), (0...1_200).contains(cursor),
+                  let scenario = try JSONSerialization.jsonObject(with: history) as? [String: Any],
+                  let interactions = scenario["interactions"] as? [[String: Any]] else {
+                throw FixtureTransportError.invalidScenario
+            }
+            let events = try interactions.flatMap { interaction -> [[String: Any]] in
+                guard let response = interaction["response"] as? [String: Any],
+                      let body = response["body"] as? [String: Any],
+                      let events = body["events"] as? [[String: Any]] else {
+                    throw FixtureTransportError.invalidScenario
+                }
+                return events
+            }
+            let frames: [Data] = try events.compactMap { event in
+                guard let id = event["id"] as? String, let number = Int(id) else {
+                    throw FixtureTransportError.invalidScenario
+                }
+                guard number > cursor else { return nil }
+                let json = try JSONSerialization.data(withJSONObject: event, options: [.sortedKeys])
+                return Data("event: task\nid: \(id)\ndata: \(String(decoding: json, as: UTF8.self))\n\n".utf8)
+            }
+            let batches = stride(from: 0, to: frames.count, by: 100).map { offset in
+                frames.dropFirst(offset).prefix(100).reduce(into: Data()) { $0.append($1) }
+            }
+            let playback = FactoryTaskReplayPlayback(
+                chunks: batches + [Data("event: ready\ndata: {}\n\n".utf8)]
+            )
+            return HTTPStreamResponse(
+                statusCode: 200,
+                headers: ["Content-Type": "text/event-stream"],
+                body: AsyncThrowingStream(unfolding: { try await playback.next() })
+            )
+        }
+#endif
+        return try await base.stream(request)
     }
 }
+
+#if DEBUG && targetEnvironment(simulator)
+private actor FactoryTaskReplayPlayback {
+    let chunks: [Data]
+    private var index = 0
+
+    init(chunks: [Data]) { self.chunks = chunks }
+
+    func next() async throws -> Data? {
+        try Task.checkCancellation()
+        // Leave time to inspect the oldest HTTP page and use navigation before replay.
+        try await Task.sleep(for: index == 0 ? .seconds(30) : .milliseconds(500))
+        if index < chunks.count {
+            let chunk = chunks[index]
+            index += 1
+            return chunk
+        }
+        // A ready signal is not EOF. Keep the stream alive until its consumer cancels.
+        try await Task.sleep(for: .seconds(30))
+        return Data(": synthetic task 21 keepalive\n\n".utf8)
+    }
+}
+#endif
 
 private actor FactoryScreenshotTokenStore: TokenStore {
     func read() async throws -> String? { "fixture.owner.token" }
