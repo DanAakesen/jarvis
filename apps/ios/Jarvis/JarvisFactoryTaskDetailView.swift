@@ -33,9 +33,6 @@ struct JarvisFactoryTaskDetailView: View {
 
     var body: some View {
         detailContent(loadedTaskID == taskID ? task : nil)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            JarvisTaskActivityNotice(language: language)
-        }
         .jarvisAmbientBackground()
         .navigationTitle(loadedTaskID == taskID ? task?.title ?? copy.text(.taskDetail) : copy.text(.taskDetail))
         .navigationBarTitleDisplayMode(.inline)
@@ -62,6 +59,7 @@ struct JarvisFactoryTaskDetailView: View {
         let events = self.events
         let timeline = FactoryTaskTimeline.entries(events: events, taskID: taskID, language: language)
         JarvisList {
+            JarvisTaskActivityNotice(language: language)
             if loadFailed {
                 FactoryStateMessage(
                     title: copy.text(.actionFailed),

@@ -180,8 +180,17 @@ jobs:
           mkdir -p "$SCREENSHOT_DIR"
           echo "IOS_SIMULATOR_UDID=$DEVICE_ID" >> "$GITHUB_ENV"
           echo "IOS_SIMULATOR_NAME=$DEVICE_NAME" >> "$GITHUB_ENV"
-          xcrun simctl boot "$DEVICE_ID"
-          xcrun simctl bootstatus "$DEVICE_ID" -b
+          ensure_simulator_booted() {
+            local state
+            state="$(xcrun simctl list devices available --json | jq -r --arg id "$DEVICE_ID" '.devices[][] | select(.udid == $id) | .state')"
+            case "$state" in
+              Shutdown) xcrun simctl boot "$DEVICE_ID" ;;
+              Booted|Booting) ;;
+              *) echo "::error::Cannot capture simulator in state: $state"; return 1 ;;
+            esac
+            xcrun simctl bootstatus "$DEVICE_ID" -b
+          }
+          ensure_simulator_booted
           xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
           if xcodebuild test \
@@ -230,6 +239,9 @@ jobs:
           else
             mkdir -p "$SCREENSHOT_DIR/ui-test-attachments"
           fi
+          # XCTest can leave the destination shut down, even after exporting evidence.
+          ensure_simulator_booted
+          xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           # Retain a short motion sample before the broad still-capture sweep.
           xcrun simctl ui "$DEVICE_ID" appearance dark
           xcrun simctl launch --terminate-running-process "$DEVICE_ID" com.danaakesen.jarvis \
@@ -608,6 +620,8 @@ jobs:
       - name: Shut down iPhone Simulator
         if: always()
         run: |
-          if [[ -n "${IOS_SIMULATOR_UDID:-}" ]]; then
+          if [[ -n "${IOS_SIMULATOR_UDID:-}" ]] && \
+            xcrun simctl list devices available --json | \
+              jq -e --arg id "$IOS_SIMULATOR_UDID" '.devices[][] | select(.udid == $id and .state == "Booted")' > /dev/null; then
             xcrun simctl shutdown "$IOS_SIMULATOR_UDID"
           fi

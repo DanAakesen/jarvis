@@ -1,3 +1,27 @@
+## iOS loading / Factory child integration — 10 November 2026 (#1715)
+
+Integrated #1704 head `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9` into the
+#1710-based child; #1710 head `465ef3980a358f961414a722432758a11483c4cc`
+already contains main `741e03782c8d887c5da6f67263b10d43f0c65af1`.
+Keep #1710 as the delivery PR; requested child title starts `fix-main:` and
+targets `copilot/simplify-factory-task-page`, not main. Neither source PR nor
+live Factory task 24 was changed.
+
+The three conflicts retain both PLAN entries, both native test selections and
+the newer task-history/replay implementation with loading/context guards.
+Recovered native evidence exposed an XXXL Live Activity notice overlap; the
+notice now scrolls inside task content. Simulator capture conditionally recovers
+a shut-down destination without masking UI-test failures. Added regressions
+cover combined test selection, recovery states, static section order and
+expanded-request refresh retention.
+Local checks passed: 600 Core, 340 script, 242 backend Factory and four runner
+tests; Core/backend builds, backend lint and edited Swift syntax parsing passed.
+
+Next: exact-final-head CI/native qualification and screenshot inspection, using
+the #1715 handoff in `docs/agent-context.md`. The four Today line-limit failures
+reproduce on native-equivalent main; Factory timeouts are not established
+baseline. No tests were waived, and native acceptance/release remains pending.
+
 ## Explicit reminder quiet-hours repair — 10 November 2026 (#1706)
 
 Implemented on the existing task branch: owner create/update/snooze accepts night

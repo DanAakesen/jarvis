@@ -71,6 +71,27 @@ final class JarvisInsightsLoadingStructureTests: XCTestCase {
         XCTAssertTrue(text.contains(".accessibilityValue(pendingText)"))
     }
 
+    func testFactoryTaskStructureAndActivityNoticeStayInsideRetainedList() throws {
+        let text = try source("JarvisFactoryTaskDetailView")
+        let content = try section(text, from: "private func detailContent(", to: "private var detailPlaceholder:")
+        let list = try XCTUnwrap(content.range(of: "JarvisList {"))
+        let notice = try XCTUnwrap(content.range(of: "JarvisTaskActivityNotice(language: language)"))
+        let failure = try XCTUnwrap(content.range(of: "if loadFailed"))
+        XCTAssertLessThan(list.lowerBound, notice.lowerBound)
+        XCTAssertLessThan(notice.lowerBound, failure.lowerBound)
+        XCTAssertFalse(text.contains(".safeAreaInset"))
+        var previous = list.lowerBound
+        for key in ["actions", "metadata", "request", "timeline", "usage", "artifacts"] {
+            let heading = try XCTUnwrap(content.range(of: "Section(copy.text(.\(key)))"))
+            XCTAssertLessThan(previous, heading.lowerBound)
+            previous = heading.lowerBound
+        }
+        XCTAssertFalse(content.contains("Section(copy.text(.disk))"))
+        XCTAssertTrue(content.contains("JarvisFactoryRequestView(request: task.request, copy: copy)"))
+        XCTAssertTrue(content.contains(".id(task.id)"))
+        XCTAssertTrue(content.contains(".refreshable { await loadTask() }"))
+    }
+
     func testRetainedFailuresOfferSharedRetryControls() throws {
         let identifiers = [
             "JarvisUsageArea": "usage.refreshFailed.retry",

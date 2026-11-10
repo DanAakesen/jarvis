@@ -1,3 +1,24 @@
+## 10 November 2026 — Integrate loading and Factory details in a child (#1715)
+
+Retain #1704's app-wide static structure, retained refresh and context/account
+safeguards alongside #1710's task order, expandable request, compact public
+timeline, independent HTTP pagination and batched SSE replay. The child targets
+`copilot/simplify-factory-task-page`; #1710 remains the single delivery PR.
+Main's reminder fix and independent Watch/chat work are preserved.
+
+Recovered #1710 simulator evidence shows the full Live Activity notice overlapping
+task content at accessibility XXXL. Put that existing notice in the scrolling
+task list, preserving text and recovery rather than hiding or truncating it.
+After UI-test attachment export, check destination state, boot only if shut down
+and wait before captures; cleanup skips devices already shut down. Capture
+recovery must not change the recorded test failure or waive any test.
+
+The four Today line-limit failures reproduce with identical measurements in
+main run 42802233122, whose iOS/workflow sources equal integration main
+`741e03782c8d887c5da6f67263b10d43f0c65af1`. Leave those independent tests
+unchanged. Factory timeout/interaction failures remain unqualified until an
+exact-final-head native run; source checks are not rendered acceptance.
+
 ## 10 November 2026 — Native Factory task detail (#1708)
 
 Use the owner-requested Actions / Details / Request / Timeline / Usage / Artifacts

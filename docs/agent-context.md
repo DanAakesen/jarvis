@@ -1,3 +1,160 @@
+## iOS loading / Factory integration handoff — 10 November 2026 (#1715)
+
+Requested child PR: **fix-main: Integrate iOS loading and Factory task details**,
+target **copilot/simplify-factory-task-page**. Do not retarget, close or merge
+#1704/#1710; the primary orchestrator owns final delivery/release. Do not mutate
+live Factory task 24. This integration performs no live Factory calls.
+
+Source heads checked unchanged before integration and again after the merge:
+
+| Source | SHA |
+| --- | --- |
+| #1710 base | `465ef3980a358f961414a722432758a11483c4cc` |
+| #1704 loading | `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9` |
+| main, already in #1710 | `741e03782c8d887c5da6f67263b10d43f0c65af1` |
+
+Conflict resolution:
+- `PLAN.md`: retain both loading and explicit-reminder entries.
+- `.github/workflows/ios-ci.yml`: retain `FactoryTaskDetailUITests` and all
+  #1704 loading selections; the pipeline regression now requires both.
+- `JarvisFactoryTaskDetailView.swift`: retain #1710's sections, request component,
+  history model, HTTP offsets, SSE cursor/replay batching and request/context
+  guards. Those already incorporate #1704's loading/retention safeguards.
+  Do not restore the older event-array model, duplicate Request or Disk section.
+- Auto-merged Factory board/loading changes remain alongside #1710's fixtures.
+  Reminder, Today, Watch and independent chat source implementations were not
+  rewritten during conflict resolution.
+
+### Failed native run and baseline
+
+[Run 42857978948/job 129976108061](https://github.com/DanAakesen/jarvis/actions/runs/42857978948/job/129976108061)
+tested #1710 head, not this integration. Its aggregate failing-name list has
+**20 tests**: Today (4), Factory task detail (5), Chat composer (1), Component
+gallery (10). A restarted runner's final four-failure summary is not the aggregate.
+
+All four `testBriefVisibleLineLimit{Normal,Accessibility}{English,Danish}` cases
+fail the six-line height-ratio assertion: normal **199.333 > 189**, accessibility
+**325.667 > 321.3**. The identical four failures/measurements occur in
+[main run 42802233122/job 129809558284](https://github.com/DanAakesen/jarvis/actions/runs/42802233122/job/129809558284)
+at `f005486069afb0ef2a741a08bbb0d0c587b00ded`. Both main revisions have iOS tree
+`c22edd9b4cc9ee51a40532ce1ce2781e5700a7d1`; the following comparison exits zero:
+
+```bash
+git diff --exit-code \
+  f005486069afb0ef2a741a08bbb0d0c587b00ded \
+  741e03782c8d887c5da6f67263b10d43f0c65af1 \
+  -- apps/ios .github/workflows/ios-ci.yml .github/workflows/ios-simulator.yml
+```
+
+No exact-`741e037` simulator result was found; this is a native-source-equivalent
+baseline, not a claim that the exact main SHA ran. Existing `.lineSpacing(4)`
+makes height ratios an imperfect line-count oracle. The baseline reproduces the
+failure; this child neither changes Today behavior nor relaxes its assertions.
+
+Factory failures are **not established baseline**:
+- Danish notification/XXXL, English board long detail, live replay and offline
+  replay exceeded the 120-second default execution allowance; several restarted
+  the runner. Danish collapse-height waiting also timed out near 150 seconds.
+- English accessibility-medium request failed waiting ten seconds for
+  `factory.taskDetail` after opening task 9. Short-request coverage passed.
+- The archived Danish XXXL hierarchy records a 301-point availability notice
+  ending at y=433 while expanded request starts at y=348: an 85-point overlap.
+  The expanded request is 6945.3 points tall, collapse control at y=7301.3.
+  One recovered native task screenshot was inspected and corroborates overlap.
+  The notice now scrolls in the list; its full localized text/Settings recovery
+  remain. Native rendering of this fix is still unverified.
+
+Capture investigation: attachment export succeeded at **17:50:38**, then the
+next simulator operation failed at **17:50:39** with CoreSimulator error 405,
+`Unable to lookup in current state: Shutdown`, exit 149. Logs do not establish
+who shut down the device. Cleanup repeated the already-shutdown error.
+[UI evidence artifact 13787364478](https://github.com/DanAakesen/jarvis/actions/runs/42857978948/artifacts/13787364478)
+did survive: **450 files**, including native captures, hierarchy text and export
+manifest. Thus loss of the broad screenshot sweep was not loss of all evidence.
+Conditional boot/wait after export and state-checked cleanup now address this
+failure path. Mocked shell tests cover Shutdown, Booting, Booted and invalid
+states; they do not prove CoreSimulator recovery on macOS.
+
+### Exact-final-head qualification
+
+Integrated local checks (Linux):
+- From the Core package, `swift build` and `swift test -j 2`: **600 tests passed**,
+  including the design-system guard and new task-list structure regression.
+- From the repository root,
+  `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`:
+  **340 tests passed**, including both native selections and mocked recovery.
+- `npm test --workspace @jarvis/backend -- src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts src/factory/dispatcher.test.ts`:
+  **242 tests passed**; backend build and lint also passed.
+- From `runner`,
+  `.venv/bin/python -m pytest tests/test_app.py -k 'assistant_text_chunks or disk_low_threshold or low_disk_emits or runner_event_publisher'`:
+  **four tests passed**, retaining public message chunks and low-disk protection.
+- Edited task-detail/native-test Swift passed `swiftc -frontend -parse`, not
+  Apple-framework typechecking. Read-only integration/follow-up review found no
+  significant issues; changed-file secret scans found no secrets.
+
+This runner has no Xcode, iPhone Simulator or VoiceOver. Recovered old artifacts
+are evidence for diagnosis only, not before/after or final-head acceptance.
+
+1. Keep the child targeted at #1710's branch and make it ready for review when
+   the orchestrator wants native CI. Require both the aggregate CI and separate
+   iOS Simulator workflow for the **published final child head**. Record run URL,
+   `head_sha`, tested checkout SHA/tree and artifact IDs. PR checks may test a
+   synthetic merge: verify its tree equals the intended integrated tree, or report
+   and validate the actual difference. Re-run after any source/base change.
+2. Do not use a manual `ios-ci.yml` dispatch as native evidence without checking
+   job execution: its existing macOS event condition excludes workflow_dispatch.
+3. For an explicit macOS/Xcode 26.6 diagnostic run, use an existing checkout of
+   the final child head and the pinned XcodeGen 2.46.0. Keep outputs outside it:
+
+```bash
+REPO="$(git rev-parse --show-toplevel)"
+EXPECTED_SHA="<published final child head SHA>"
+test "$(git -C "$REPO" rev-parse HEAD)" = "$EXPECTED_SHA" || exit 1
+(cd "$REPO/apps/ios" && xcodegen generate)
+EVIDENCE="$(mktemp -d "${TMPDIR:-/tmp}/jarvis-1715.XXXXXX")"
+DEVICE_ID="$(xcrun simctl list devices available --json |
+  jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid // empty')"
+test -n "$DEVICE_ID" || exit 1
+xcodebuild test \
+  -project "$REPO/apps/ios/Jarvis.xcodeproj" -scheme Jarvis \
+  -destination "id=$DEVICE_ID" -derivedDataPath "$EVIDENCE/DerivedData" \
+  -resultBundlePath "$EVIDENCE/final-head-ui.xcresult" \
+  -only-testing:JarvisUITests/TodayUITests \
+  -only-testing:JarvisUITests/FactoryTaskDetailUITests \
+  -only-testing:JarvisUITests/FactoryLoadingUITests \
+  -only-testing:JarvisUITests/WorkspacesLoadingUITests \
+  -parallel-testing-enabled NO -test-timeouts-enabled YES \
+  -default-test-execution-time-allowance 120 \
+  -maximum-test-execution-time-allowance 150 CODE_SIGNING_ALLOWED=NO
+# Export retained evidence even if the preceding test command failed.
+xcrun xcresulttool export attachments \
+  --path "$EVIDENCE/final-head-ui.xcresult" --output-path "$EVIDENCE/attachments"
+```
+
+4. The diagnostic selection above is not the complete native selection. Run the
+   full integrated workflow, including all 21 loading cases, without removing
+   assertions or increasing timeouts to hide failures. If Factory multi-scenario
+   tests still time out, investigate interaction cost and split scenarios while
+   retaining every assertion; do not call their prior failures pre-existing.
+5. Inspect SHA-labelled native captures in English/Danish, light/dark, normal
+   widths and accessibility sizes. Exercise five rendered request lines,
+   expansion/collapse and retained expansion on refresh; notice/error recovery;
+   compact timeline counts, earlier attention, Usage/Artifacts reachability;
+   1,200-event live replay, reconnect/overlapping HTTP pagination; loading/empty/
+   failure, navigation away/back and rapid context/account changes. Check scroll
+   and selection retention, VoiceOver, reduced motion and unavailable controls.
+   Include first-load/refresh before/after evidence for representative screens
+   from the loading inventory below. No physical-device acceptance is claimed.
+
+Apple references for native review:
+[lineLimit](https://developer.apple.com/documentation/swiftui/view/linelimit(_:)-513mb)
+limits rendered lines, not a height ratio;
+[XCTest attachments](https://developer.apple.com/documentation/xctest/adding-attachments-to-tests-activities-and-issues)
+supports retained screenshot evidence;
+[HIG Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
+guides Dynamic Type and accessible interactions. Documentation/existing native
+artifacts do not replace testing this final implementation.
+
 ## Explicit timed reminders — 10 November 2026 (#1706)
 
 Owner reminder schedules and current vault `remindAtDue` tasks bypass Copenhagen

@@ -3140,6 +3140,10 @@ Task-detail simplification (#1708, 10 November 2026) retains the native list and
 shared controls. Actions precede Details, the five-rendered-line expandable
 Request, compact Timeline, Usage and Artifacts. Request overflow is measured
 at the current width and Dynamic Type size, not estimated by character count.
+Integration #1715 places Live Activity availability feedback inside the scrolling
+task list, retaining its full text and Settings link instead of pinning a tall
+accessibility-size notice over task content. Final-head native inspection remains
+required; the recovered pre-integration XXXL capture showed an overlap.
 Timeline rows disclose full readable activity and permitted event metadata.
 Six recent loaded activities and any earlier latest attention event keep Usage
 reachable; a separate history sheet exposes grouped records and pagination.
