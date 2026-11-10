@@ -155,7 +155,7 @@ export function createProactiveReminderStore(
       return fireAt === null || fireAt === undefined ? null : date(fireAt);
     },
     async listDue(now, limit) {
-      if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new RangeError('Invalid reminder limit');
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new RangeError('Invalid reminder limit');
       const { recordset } = await databaseReadRequest(pool)
         .input('owner', sql.UniqueIdentifier, owner)
         .input('now', sql.DateTime2, now)
@@ -173,12 +173,13 @@ export function createProactiveReminderStore(
           WHERE owner_object_id = @owner AND sent_day_key = @dayKey AND state = N'sent';`);
       return recordset[0]?.count ?? 0;
     },
-    async updatePending(id, update) {
+    async updatePending(id, update, expectedFireAt) {
       const entries = Object.entries(update) as [keyof ReminderUpdate, ReminderUpdate[keyof ReminderUpdate]][];
       if (entries.length === 0) return false;
       const request = new sql.Request(pool)
         .input('owner', sql.UniqueIdentifier, owner)
-        .input('id', sql.UniqueIdentifier, id);
+        .input('id', sql.UniqueIdentifier, id)
+        .input('expectedFireAt', sql.DateTime2, expectedFireAt ?? null);
       const assignments = entries.map(([key, value], index) => {
         const parameter = `value${index}`;
         const type = key === 'fireAt' ? sql.DateTime2
@@ -191,7 +192,8 @@ export function createProactiveReminderStore(
       });
       const { rowsAffected } = await request.query(`UPDATE dbo.proactive_reminders
         SET ${assignments.join(', ')}, updated_at = SYSUTCDATETIME()
-        WHERE owner_object_id = @owner AND id = @id AND state = N'pending';`);
+        WHERE owner_object_id = @owner AND id = @id AND state = N'pending'
+          AND (@expectedFireAt IS NULL OR fire_at = @expectedFireAt);`);
       return (rowsAffected[0] ?? 0) > 0;
     },
   };

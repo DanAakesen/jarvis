@@ -1,3 +1,30 @@
+## Explicit timed reminders — 10 November 2026 (#1706)
+
+Owner reminder schedules and current vault `remindAtDue` tasks bypass Copenhagen
+quiet hours. Automatic deadlines and suggestions keep the quiet window. No
+migration, production configuration, live reminder replay or device send is part
+of this change. Existing pending rows are re-verified; terminal rows stay terminal.
+The vault store uses an expected-fire-time compare-and-set delivery lease before
+provider calls, using existing columns. Owner schedules retain their own leases.
+
+Qualification on this branch: `npm test --workspace @jarvis/backend --
+--maxWorkers=4` passed all 7,512 tests across 335 files with loopback socket
+access. Backend build and lint passed. The initial sandbox suite hit `listen
+EPERM: 127.0.0.1`; overlapping retries were stopped before the successful bounded
+run. The earlier focused proactive/push/vault-write suite passed 1,036 tests;
+the final full suite includes all subsequent regressions.
+
+The end-to-end `timed-reminder-delivery.test.ts` uses synthetic owner requests
+and vaults, real scheduling/ticker/shared delivery and mocked APNs/Web Push
+transports. Coverage includes 22:00/07:00, midnight, Copenhagen DST, daily/weekly
+recurrence, creation at night, provenance separation, cancellation/expiry and
+concurrent processing. This establishes provider-acceptance handling, not device
+display. No live notification or deployment was performed.
+
+SQL regression: `npm run test:database --workspace @jarvis/backend --
+src/database/proactive-reminder-store.integration.test.ts`. Local invocation stops
+at the isolation guard because no loopback SQL Server is configured; run in CI.
+
 ## Direct owner requests — 10 November 2026
 
 For the approval cleanup, run backend, web, agent Python, iOS and Watch checks against the final combined head. Verify direct repository follow-ups, intent-based sensitive saves, food writes, task recovery and legacy pending activity, including real-device acceptance after release. See `docs/approval-cleanup-2026-11-10.md`; current branch results are not deployment evidence.
@@ -1339,7 +1366,7 @@ What now happens, exactly:
   instead. P13-21 pushes show a due-time headline and todo title, or a bundled
   count headline with up to three time/title lines and an overflow count; tapping
   opens a private Proactive item. At most 8 reminders per
-  Copenhagen day. A reminder that falls in the quiet window is held until 07:00
+  Copenhagen day. An automatic reminder that falls in the quiet window is held until 07:00
   and shown as due soon or overdue. A todo added after the last check is covered
   from the next check on; "Check now" covers it immediately.
 
@@ -1735,7 +1762,8 @@ the top of this file) sets the alert flag in production. The
 planner runs for every trigger after the successful todo read. The ticker is
 constructed only when its vault, reminder store, alert ledger, push store and
 shared sender dependencies are available. It has no database, vault or push
-work while idle or during Copenhagen quiet hours. P13-21 reminder details come
+work while idle. During Copenhagen quiet hours it processes verified explicit
+reminders only (#1706); automatic reminders wait for daytime. P13-21 reminder details come
 from rows already in memory; alert details use read-only item lookups without
 marking items loaded or seen, and failed/missing detail reads still send the
 count headline. Details go only into the encrypted push payload, never logs or

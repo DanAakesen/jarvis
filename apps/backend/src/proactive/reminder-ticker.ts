@@ -19,6 +19,8 @@ const tickIntervalMs = 30_000;
 const retryDelayMs = 5 * 60_000;
 const verifyTimeoutMs = 20_000;
 const maxDueRows = 20;
+// Planning bounds the queue at 100. Scan it so automatic rows cannot hide explicit ones at night.
+const maxPendingRows = 100;
 const maxHealthReminders = 8;
 const ownerClaimLeaseMs = 2 * 60_000;
 type VaultReader = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read'>;
@@ -100,13 +102,14 @@ function itemBody(row: ReminderRow, now: Date, language: 'da' | 'en'): string {
   return language === 'da' ? `Forfaldt kl. ${time}` : `Was due at ${time}`;
 }
 
-function findingFor(row: ReminderRow, now: Date, language: 'da' | 'en', suggestionScope: SuggestionScope): FindingInput {
+function findingFor(row: ReminderRow, now: Date, language: 'da' | 'en', suggestionScope: SuggestionScope, ownerRequested: boolean): FindingInput {
   return {
     dedupeKey: reminderDedupeKey(row.reminderKey),
     title: row.title,
     body: itemBody(row, now, language),
     category: 'todo',
     suggestionScope,
+    ...(ownerRequested ? { ownerRequested: true } : {}),
     urgency: 'time_critical',
     dueAt: row.dueAt.toISOString(),
     evidence: [{ source: 'todos', label: 'Todo list', observedAt: now.toISOString() }],
@@ -166,13 +169,14 @@ export function createReminderTicker(options: {
   }
 
   async function update(row: ReminderRow, values: Parameters<ProactiveReminderStore['updatePending']>[1]) {
-    await options.reminders.updatePending(row.id, values);
+    return options.reminders.updatePending(row.id, values, row.fireAt);
   }
 
   async function processDue(now: Date, signal: AbortSignal): Promise<void> {
     await processOwnerDue(now, controller.signal);
     if (signal.aborted) return;
-    const due = await options.reminders.listDue(now, maxDueRows);
+    const quiet = isQuietHour(now);
+    const due = await options.reminders.listDue(now, quiet ? maxPendingRows : maxDueRows);
     if (due.length === 0) return;
 
     const remaining: ReminderRow[] = [];
@@ -185,20 +189,21 @@ export function createReminderTicker(options: {
 
     const settings = await options.store.settings.read();
     if (settings.paused) {
-      await Promise.all(remaining.map((row) => update(row, { state: 'suppressed', reason: 'paused' })));
+      if (!quiet) await Promise.all(remaining.map((row) => update(row, { state: 'suppressed', reason: 'paused' })));
       return;
     }
     if (!proactiveSourceAllowed(settings, 'todos') || !settings.categories.todo) return;
 
     const subscriptions = await options.pushStore.listSubscriptions(options.ownerObjectId);
-    if (subscriptions.length === 0 && !await options.hasNativeRecipients?.()) {
+    const hasRecipients = subscriptions.length > 0 || await options.hasNativeRecipients?.() === true;
+    if (!hasRecipients && !quiet) {
       await Promise.all(remaining.map((row) =>
         update(row, { state: 'suppressed', reason: 'no_subscription' })));
       return;
     }
     if (signal.aborted) return;
 
-    let verifiedKeys: Map<string, { scope: SuggestionScope; taskIdentity: string }> | undefined;
+    let verifiedKeys: Map<string, { scope: SuggestionScope; taskIdentity: string; ownerRequested: boolean }> | undefined;
     try {
       const todos = await readTodos(options.vault, signal);
       verifiedKeys = new Map(todos.filter((todo) => !todo.done && todo.highPriority && todo.dueHasTime &&
@@ -206,9 +211,11 @@ export function createReminderTicker(options: {
         .map((todo) => [reminderKey(todo.text, new Date(todo.dueAt!).toISOString(), todo.remindAtDue), {
           scope: todo.path.startsWith('Personal/') ? 'personal' : todo.path.startsWith('Work/') ? 'work' : 'unknown',
           taskIdentity: todo.taskIdentity,
+          ownerRequested: todo.remindAtDue === true,
         }]));
     } catch {
-      if (signal.aborted) return;
+      // Automatic rows remain untouched at night when current provenance cannot be read.
+      if (signal.aborted || quiet) return;
       const verifiedAt = options.now();
       for (const row of remaining) {
         const verifyAttempts = Math.min(255, row.verifyAttempts + 1);
@@ -230,17 +237,21 @@ export function createReminderTicker(options: {
         const verified = verifiedKeys.get(row.reminderKey);
         if (verified === undefined) {
           await update(row, { state: 'cancelled', reason: 'todo_changed' });
-        } else if (settings.suggestionScope === 'all' || verified.scope === settings.suggestionScope) {
+        } else if ((!quiet || verified.ownerRequested) && (settings.suggestionScope === 'all' || verified.scope === settings.suggestionScope)) {
           sendable.push(row);
           verifiedScopes.set(row.reminderKey, verified.scope);
         }
       }
     }
     if (sendable.length === 0 || signal.aborted) return;
+    if (!hasRecipients) {
+      await Promise.all(sendable.map((row) => update(row, { state: 'suppressed', reason: 'no_subscription' })));
+      return;
+    }
 
     const eligible: ReminderRow[] = [];
     if (!options.ledger) return;
-    for (const row of sendable) {
+    for (const row of sendable.slice(0, maxDueRows)) {
       const taskIdentity = verifiedKeys?.get(row.reminderKey)?.taskIdentity;
       if (taskIdentity && options.ownerReminders &&
           await options.ownerReminders.hasTaskReminderNear(taskIdentity, row.fireAt, 5 * 60_000)) {
@@ -280,6 +291,7 @@ export function createReminderTicker(options: {
         row: candidate,
         item: await options.store.items.upsertFinding(findingFor(
           candidate, now, language, verifiedScopes.get(candidate.reminderKey) ?? 'unknown',
+          verifiedKeys?.get(candidate.reminderKey)?.ownerRequested === true,
         )),
       });
     }
@@ -289,46 +301,67 @@ export function createReminderTicker(options: {
     if (signal.aborted || !proactiveSourceAllowed(latestSettings, 'todos') ||
         !items.every(({ item }) => findingAllowed(latestSettings, 'todo', item.suggestionScope))) return;
 
-    const dueTimes = items.map(({ row }) => row.dueAt.getTime());
-    const kind: SystemPushRequest['kind'] = dueTimes.every((value) => value > now.getTime())
-      ? 'due_soon'
-      : dueTimes.every((value) => value <= now.getTime()) ? 'overdue' : 'mixed';
-    const outcome = await options.send({
-      kind,
-      count: items.length,
-      language,
-      itemId: items[0]!.item.id,
-      origin: 'proactive_reminder',
-      details: [...items].sort((left, right) => left.row.dueAt.getTime() - right.row.dueAt.getTime())
-        .slice(0, 3).map(({ row }) => ({ title: row.title, dueAt: row.dueAt.toISOString() })),
-    }, signal);
+    // Explicit reminders are individual sends; automatic rows can never inherit their exception.
+    const explicit = items.filter(({ row }) => verifiedKeys?.get(row.reminderKey)?.ownerRequested === true);
+    const automatic = items.filter(({ row }) => verifiedKeys?.get(row.reminderKey)?.ownerRequested !== true);
+    const batches = [...explicit.map((item) => [item]), ...(automatic.length ? [automatic] : [])];
+    for (const batch of batches) {
+      if (signal.aborted) return;
+      const items: typeof batch = [];
+      for (const candidate of batch) {
+        // Compare-and-set the pending fire time before any provider call. This lease also
+        // fences stale workers from completing rows claimed by another ticker.
+        const leaseUntil = new Date(options.now().getTime() + ownerClaimLeaseMs);
+        if (await update(candidate.row, { fireAt: leaseUntil })) {
+          items.push({ ...candidate, row: { ...candidate.row, fireAt: leaseUntil } });
+        }
+      }
+      if (items.length === 0 || signal.aborted) continue;
+      const ownerRequested = verifiedKeys?.get(items[0]!.row.reminderKey)?.ownerRequested === true;
+      const dueTimes = items.map(({ row }) => row.dueAt.getTime());
+      const kind: SystemPushRequest['kind'] = ownerRequested ? 'owner_reminder'
+        : dueTimes.every((value) => value > now.getTime()) ? 'due_soon'
+          : dueTimes.every((value) => value <= now.getTime()) ? 'overdue' : 'mixed';
+      const outcome = await options.send({
+        kind,
+        ...(ownerRequested ? { ownerRequested: true } : {}),
+        count: items.length,
+        language,
+        itemId: items[0]!.item.id,
+        origin: 'proactive_reminder',
+        details: [...items].sort((left, right) => left.row.dueAt.getTime() - right.row.dueAt.getTime())
+          .slice(0, 3).map(({ row }) => ({ title: row.title, dueAt: ownerRequested ? null : row.dueAt.toISOString() })),
+      }, signal);
 
-    if (outcome.status === 'sent') {
-      const sentDayKey = dayKey(options.now());
-      await Promise.all(items.flatMap(({ row, item }) => [
-        update(row, {
-          state: 'sent',
-          itemId: item.id,
-          sentDayKey,
-        }),
-        options.pushStore.updateItemDelivery(item.id, 'accepted', outcome.statusCode),
-      ]));
-    } else if (outcome.status === 'failed') {
-      await Promise.all(items.flatMap(({ row, item }) => {
-        const sendAttempts = Math.min(255, row.sendAttempts + 1);
-        return [
-          update(row, sendAttempts < 2
-            ? { sendAttempts, fireAt: new Date(options.now().getTime() + retryDelayMs) }
-            : { state: 'failed', reason: outcome.reason, sendAttempts }),
-          options.pushStore.updateItemDelivery(item.id, 'failed', outcome.statusCode),
-        ];
-      }));
-    } else if (outcome.reason === 'no_subscription') {
-      await Promise.all(items.map(({ row }) =>
-        update(row, { state: 'suppressed', reason: 'no_subscription' })));
+      if (outcome.status === 'sent') {
+        const sentDayKey = dayKey(options.now());
+        await Promise.all(items.flatMap(({ row, item }) => [
+          update(row, {
+            state: 'sent',
+            itemId: item.id,
+            sentDayKey,
+          }),
+          options.pushStore.updateItemDelivery(item.id, 'accepted', outcome.statusCode),
+        ]));
+      } else if (outcome.status === 'failed') {
+        await Promise.all(items.flatMap(({ row, item }) => {
+          const sendAttempts = Math.min(255, row.sendAttempts + 1);
+          return [
+            update(row, sendAttempts < 2
+              ? { sendAttempts, fireAt: new Date(options.now().getTime() + retryDelayMs) }
+              : { state: 'failed', reason: outcome.reason, sendAttempts }),
+            options.pushStore.updateItemDelivery(item.id, 'failed', outcome.statusCode),
+          ];
+        }));
+      } else if (outcome.reason === 'no_subscription') {
+        await Promise.all(items.map(({ row }) =>
+          update(row, { state: 'suppressed', reason: 'no_subscription' })));
+      } else {
+        await Promise.all(items.map(({ row }) => update(row, { fireAt: now })));
+      }
+      log(outcome.status === 'failed' ? 'warn' : 'info', outcome.reason ?? outcome.status,
+        now.getTime(), items.length);
     }
-    log(outcome.status === 'failed' ? 'warn' : 'info', outcome.reason ?? outcome.status,
-      now.getTime(), items.length);
   }
 
   async function processOwnerDue(now: Date, signal: AbortSignal): Promise<void> {
@@ -406,6 +439,7 @@ export function createReminderTicker(options: {
       if (latestClaim?.state !== 'sending' || latestClaim.claimToken !== schedule.claimToken) continue;
       const outcome = await options.send({
         kind: 'owner_reminder',
+        ownerRequested: true,
         count: 1,
         language,
         itemId: item.id,
@@ -440,11 +474,6 @@ export function createReminderTicker(options: {
         await schedules.finishClaim(schedule.id, schedule.claimToken!, {
           state: 'suppressed', reason: 'no_subscription', lastDelivery: 'suppressed', itemId: item.id,
         });
-      } else if (outcome.reason === 'quiet_hours') {
-        const nextMorning = localDateTimeInstant(addCalendarDays(dayKey(options.now()), 1), '07:00');
-        await schedules.finishClaim(schedule.id, schedule.claimToken!, {
-          state: 'scheduled', reason: 'quiet_hours', fireAt: nextMorning,
-        });
       } else if (!signal.aborted) {
         await schedules.finishClaim(schedule.id, schedule.claimToken!, {
           state: 'scheduled', fireAt: new Date(options.now().getTime() + retryDelayMs),
@@ -460,7 +489,7 @@ export function createReminderTicker(options: {
     try {
       const now = options.now();
       startedAt = now.getTime();
-      if (isQuietHour(now) || nextWakeAt === null || nextWakeAt.getTime() > now.getTime()) return;
+      if (nextWakeAt === null || nextWakeAt.getTime() > now.getTime()) return;
       await processDue(now, signal);
       if (!stopped && !controller.signal.aborted) {
         const [automatic, explicit] = await Promise.all([
