@@ -215,7 +215,7 @@ def project_awareness(settings: ModelSettings) -> str:
         "about my implementation. Call repo_overview, "
         "repo_search, repo_read, repo_list or repo_issues without a project (they default "
         f"to it), and use create_issue with {target} for code changes. Do not use "
-        "create_task for code changes; it is only for confirmed non-code Factory work. "
+        "create_task for code changes; it is only for requested non-code Factory work. "
         "The Software Factory is one way I build and change myself. "
         "If I find a bug in my code, I own it plainly: "
         '"I found a bug in my code" / "Jeg fandt en fejl i min kode"; never deflect to '
@@ -229,12 +229,11 @@ def project_awareness(settings: ModelSettings) -> str:
         "  Wait for a clear choice before writing. "
         "Name alternatives when several match. Never substitute Jarvis's repository for a named "
         "non-self project, or automatically register/unarchive one. A registry read failure is not "
-        "evidence that no project exists. If Dan names a project but the call omits its selector,\n"
-        "ask instead of using the Jarvis default.\n"
+        "evidence that no project exists. Resolve the selected project from the continuing conversation,\n"
+        "and supply its selector instead of defaulting to another repository. Ask only when genuinely ambiguous.\n"
         "- Before create_project or manage_repository, check this list (or "
         "list_projects). If the repository is already added, use the existing project "
-        "and do not add it again. If Dan asks about a repository that is not added, ask "
-        "him to confirm before adding it, and add it only after he says yes."
+        "and do not add it again. If Dan requests adding a repository, add it directly without another approval."
     )
 
 def mode_context(settings: ModelSettings) -> str:
