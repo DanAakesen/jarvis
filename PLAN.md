@@ -6,9 +6,11 @@ native/web sender admits only verified individual reminders. Automatic alerts
 stay quiet. Vault sends use atomic pending-row claims against concurrent workers.
 Regression coverage includes 22:00/07:00, midnight, DST, recurrence, creation at
 night, mixed provenance, cancellation, expiry and duplicate/concurrent processing.
-Local qualification is in progress; SQL integration requires isolated loopback SQL
-Server, unavailable here. Next: finish backend checks and push the documentation
-checkpoint. Deployment and physical device receipt remain unverified.
+Local backend qualification passed: 7,512 tests across 335 files, build and lint.
+SQL integration stopped at its isolation guard because no loopback SQL Server is
+available here. Next: run the added SQL concurrency regression in CI, then
+integrate/release through the normal process. Deployment and physical device
+receipt remain unverified.
 
 ## Direct owner requests — 10 November 2026
 

@@ -3699,8 +3699,9 @@ language for older workers. The payload is not stored. Retries are limited to tr
 bounded by per-request/overall timeouts.
 
 P13-01 sends only a direct user-requested test. It adds no scheduler or quiet-hour
-guard; every future system-started send must enforce 22:00–07:00
-Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
+guard; unsolicited system sends enforce 22:00–07:00 Europe/Copenhagen
+with no emergency exception. Verified timed owner reminders bypass this window
+as specified in #1706. There is no Teams delivery path.
 Actual iPhone delivery is not yet proven.
 
 ## Proactive foundation and engine (P13-05, P13-06; default off)
@@ -4150,7 +4151,7 @@ new, time-critical deadline or clash finding: at most one per check and three pe
 Copenhagen day, and never in the 22:00 to 07:00 quiet window, which is enforced in
 the hook and again at the sender. Reminders send one detailed push about an hour
 before a todo with an explicit time is due (at most eight per Copenhagen day), and
-a reminder due in the quiet window is held until 07:00. The pause switch and the
+an automatic reminder due in the quiet window is held until 07:00. The pause switch and the
 Todo list source switch are read before any vault call. Pause also suppresses
 reminders already planned, while the source switch only stops new ones being
 planned. A device turns its own pushes off in Settings. As with P13-03 and

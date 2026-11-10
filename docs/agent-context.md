@@ -7,11 +7,20 @@ of this change. Existing pending rows are re-verified; terminal rows stay termin
 The vault store uses an expected-fire-time compare-and-set delivery lease before
 provider calls, using existing columns. Owner schedules retain their own leases.
 
-Focused checks: `npm test --workspace @jarvis/backend -- src/proactive src/push
-src/vault/task-writes.test.ts`, backend build and lint. Backend build and lint passed. The full suite is being rerun with loopback
-socket access after a sandbox `listen EPERM: 127.0.0.1` failure. The end-to-end `timed-reminder-delivery.test.ts` uses synthetic
-owner requests/vaults, real scheduling/ticker/shared delivery and mocked APNs/Web
-Push transports. This establishes provider-acceptance handling, not device display.
+Qualification on this branch: `npm test --workspace @jarvis/backend --
+--maxWorkers=4` passed all 7,512 tests across 335 files with loopback socket
+access. Backend build and lint passed. The initial sandbox suite hit `listen
+EPERM: 127.0.0.1`; overlapping retries were stopped before the successful bounded
+run. The earlier focused proactive/push/vault-write suite passed 1,036 tests;
+the final full suite includes all subsequent regressions.
+
+The end-to-end `timed-reminder-delivery.test.ts` uses synthetic owner requests
+and vaults, real scheduling/ticker/shared delivery and mocked APNs/Web Push
+transports. Coverage includes 22:00/07:00, midnight, Copenhagen DST, daily/weekly
+recurrence, creation at night, provenance separation, cancellation/expiry and
+concurrent processing. This establishes provider-acceptance handling, not device
+display. No live notification or deployment was performed.
+
 SQL regression: `npm run test:database --workspace @jarvis/backend --
 src/database/proactive-reminder-store.integration.test.ts`. Local invocation stops
 at the isolation guard because no loopback SQL Server is configured; run in CI.
@@ -1357,7 +1366,7 @@ What now happens, exactly:
   instead. P13-21 pushes show a due-time headline and todo title, or a bundled
   count headline with up to three time/title lines and an overflow count; tapping
   opens a private Proactive item. At most 8 reminders per
-  Copenhagen day. A reminder that falls in the quiet window is held until 07:00
+  Copenhagen day. An automatic reminder that falls in the quiet window is held until 07:00
   and shown as due soon or overdue. A todo added after the last check is covered
   from the next check on; "Check now" covers it immediately.
 

@@ -1801,7 +1801,7 @@ Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to c
   destinations, are not written. Existing tasks and suggestion sections are
   never edited, completed, reordered or deleted.
 - Push only for deadlines within 24 hours, calendar clashes, travel disruptions
-  and reminders about an hour before a todo is due. Hold a quiet-hour reminder
+  and reminders about an hour before a todo is due. Hold an automatic quiet-hour reminder
   until 07:00 and show it as due soon or overdue. Bundle at most one push per
   run and enforce daily caps. Pushes carry bounded todo or finding titles and
   due times for durable, owner-protected items in an encrypted payload. They
@@ -1858,7 +1858,7 @@ lower-priority tasks do not generate task notifications. Open high-priority task
 without a due date create one normal-urgency digest finding for an unchanged task
 set per Copenhagen day, listing the count and up to five titles; it sends no push.
 About an hour before an eligible todo with a time is due, Jarvis sends one reminder
-push; a reminder due in the quiet window is held until 07:00 and shown as due soon
+push; an automatic reminder due in the quiet window is held until 07:00 and shown as due soon
 or overdue. Pause, the Todo list source switch and Notifications → Turn off stop
 them. Whether todo lines appear and pushes arrive is established by Dan's test on
 the deployed app, not by CI.
