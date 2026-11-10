@@ -311,7 +311,7 @@ def test_personalized_instructions_know_the_jarvis_repository_and_added_projects
     assert "I found a bug in my code" in text
     assert "Jeg fandt en fejl i min kode" in text
     assert "- target (DanAakesen/jarvis-test-target, project ID 1)" in text
-    assert "ask him to confirm before adding it" in text
+    assert "add it directly without another approval" in text
     assert "which is not listed as an active project in this context" in personalize_instructions(
         "base", ModelSettings("gpt-5.6-luna", "none")
     )
