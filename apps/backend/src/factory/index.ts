@@ -79,7 +79,7 @@ export const factoryModule: BackendModule = {
   tools: [...factoryTools, ...repositoryTools, ...pullRequestTools, ...githubAppTools, createProjectTool, {
     name: 'manage_repository',
     description: 'Register an existing repository from the GitHub App installation using the New projects defaults. ' +
-      'Only after Dan has confirmed adding it; check list_projects first. Returns alreadyAdded when it is already a project.',
+      'When Dan requests it, add directly without a second approval; check list_projects first. Returns alreadyAdded when it is already a project.',
     inputSchema: {
       type: 'object',
       properties: {
