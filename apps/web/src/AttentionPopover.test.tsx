@@ -19,15 +19,15 @@ function view(attention: FeedAttention | null) {
 }
 
 describe('attention popover', () => {
-  it('hides at zero and names the counted items and confirmations', () => {
+  it('counts actionable items without obsolete confirmations', () => {
     const page = view(null);
     expect(screen.queryByRole('button', { name: /need attention/ })).toBeNull();
 
     page.rerender(<MemoryRouter><AttentionPopover attention={{ items: [items[0]!], confirmations: [confirmation] }} /></MemoryRouter>);
-    const trigger = screen.getByRole('button', { name: '2 items need attention' });
-    expect(trigger.title).toBe('2 items need attention');
+    const trigger = screen.getByRole('button', { name: '1 item needs attention' });
+    expect(trigger.title).toBe('1 item needs attention');
     expect(trigger.querySelector('svg')).not.toBeNull();
-    expect(within(trigger).getByRole('img', { name: '2 items need attention' })).not.toBeNull();
+    expect(within(trigger).getByRole('img', { name: '1 item needs attention' })).not.toBeNull();
   });
 
   it('lists linked and unlinked items with times and dismisses through the existing handler', async () => {
@@ -64,13 +64,10 @@ describe('attention popover', () => {
     expect(screen.queryByRole('button', { name: '1 item needs attention' })).toBeNull();
   });
 
-  it.each(['approve', 'reject'] as const)('resolves a pending confirmation with %s', async (decision) => {
-    const user = userEvent.setup();
-    const onResolveConfirmation = vi.fn().mockResolvedValue(undefined);
-    view({ items: [], confirmations: [confirmation], onResolveConfirmation });
-    await user.click(screen.getByRole('button', { name: '1 item needs attention' }));
-    await user.click(screen.getByRole('button', { name: `${decision === 'approve' ? 'Approve' : 'Reject'} Delete` }));
-    await waitFor(() => expect(onResolveConfirmation).toHaveBeenCalledWith('confirmation-1', decision));
+  it('does not show obsolete approval cards as actionable work', () => {
+    view({ items: [], confirmations: [confirmation] });
+    expect(screen.queryByRole('button', { name: /need attention/ })).toBeNull();
+    expect(screen.queryByText('Pending confirmations')).toBeNull();
   });
 
   it('closes on Escape and returns focus, and closes on an outside click', async () => {
