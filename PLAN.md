@@ -13,7 +13,9 @@ main directly. Source PRs and live Factory task 24 remain untouched.
 Local combined-tree checks pass: 611 Core, 341 script, 322 backend attachment/
 Factory and 138 web chat tests; Core build, web typecheck/scoped lint and changed
 Swift syntax parsing pass. Independent integration review found no significant
-issues. Next: security review and exact-head CI/Simulator evidence. #1727's draft
+issues. Secret scans pass; CodeQL found no Actions/Python alerts, but Swift
+database creation failed and JavaScript analysis was skipped for database size.
+Next: exact-head CI/Simulator evidence. #1727's draft
 gate skipped both workflows and its generated title failed the title check;
 use `fix-main: Integrate approved chat with current iOS loading` and run both
 workflows after readiness. Native captures, device acceptance and release remain

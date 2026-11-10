@@ -64,7 +64,10 @@ and documentation follow-up; no subsequent production-code change):
   six source selections survive in the combined workflow's 24 selections.
   Factory detail/history sources and `ios-simulator.yml` are unchanged from main.
 - Independent read-only integration review found no significant issues.
-  The merge's changed-file secret scan passed; final security analysis is pending.
+  Changed-file secret scans passed before both commits. CodeQL on implementation
+  revision `ae5c2e000d029bdae517cc1edfc78659f56744a2` found no Actions/Python
+  alerts; Swift database creation failed and JavaScript analysis was skipped for
+  database size. These last two languages remain unverified, not clean analyses.
 
 On merge `e6329ee`, [CI 42879297219](https://github.com/DanAakesen/jarvis/actions/runs/42879297219)
 and [Simulator 42879297425](https://github.com/DanAakesen/jarvis/actions/runs/42879297425)
@@ -81,6 +84,21 @@ The approved generated #1712 image was inspected from the design branch (blob
 `f474aa4e52c73f7e691fc827731a39c4e6088f10`); the pinned reference in `DESIGN.md`
 is preserved. This is reference inspection, not a combined-tree screenshot or
 before/after visual acceptance.
+
+Final implementation revision is `ae5c2e000d029bdae517cc1edfc78659f56744a2`;
+subsequent edits only record this handoff. Its tree
+`8e750ea07038919bd7887370de1e30ab15d1edbc` exactly matches GitHub's synthetic
+merge `0617a81ad2515da1af5ab6c1179c3b229c0a0c65` (`git diff --exit-code`).
+The iOS subtree is `a431a1a2727a7d05924ab4549ca87c29ddc1a5e2` and
+`ios-ci.yml` blob is `d450a10456fed7ce2839f449bc894614dd952931`.
+At **18:56 UTC**, implementation-head [CI 42879973149](https://github.com/DanAakesen/jarvis/actions/runs/42879973149)
+and [Simulator 42879973413](https://github.com/DanAakesen/jarvis/actions/runs/42879973413)
+again skipped the draft; [title run 42879973173](https://github.com/DanAakesen/jarvis/actions/runs/42879973173)
+failed. Watch build `42879972961` was pending. Source/main Simulator runs above
+were still in progress when rechecked. No combined-tree native result bundle,
+screenshot artifact, physical-device acceptance or successful native security
+analysis is available. The final-head CI/Simulator execution requirement remains
+open; tree equality alone is not execution evidence.
 
 Require both aggregate CI and the separate `ios-simulator.yml` on the published
 final #1727 head. Draft-gated/skipped jobs are not qualification: make the delivery
