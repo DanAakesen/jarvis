@@ -845,13 +845,12 @@ async function runBrowserAction(
   if (!action) {
     throw new ToolRefusal('Use a valid element index from the latest browser snapshot and one supported action.');
   }
+  const executeRequested: NonNullable<PcBridgeModuleOptions['runRequested']> = runRequested ??
+    (async (_summary, operation, actionSignal) => { actionSignal.throwIfAborted(); return operation(); });
   const { requiresConfirmation = false, ...bridgeAction } = action;
   if (bridgeAction.action === 'keys' &&
       (requiresConfirmation || isIrreversibleKeySequence(bridgeAction.keys))) {
-    if (!runRequested) {
-      throw new ToolRefusal('Dan’s confirmation service is unavailable; the browser action was not performed.');
-    }
-    return runRequested('Send an irreversible keyboard action in Chrome.', async () => {
+    return executeRequested('Send an irreversible keyboard action in Chrome.', async () => {
       const approved = await executeBrowserAction(bridge, {
         name: 'browser_act',
         arguments: { ...bridgeAction, confirmed: true },
@@ -870,10 +869,7 @@ async function runBrowserAction(
     return result;
   }
   if (bridgeAction.action !== 'click' && bridgeAction.action !== 'keys') throw new Error('Invalid browser confirmation response');
-  if (!runRequested) {
-    throw new ToolRefusal('Dan’s confirmation service is unavailable; the browser action was not performed.');
-  }
-  return runRequested(result.summary, async () => {
+  return executeRequested(result.summary, async () => {
     const approved = await executeBrowserAction(bridge, {
       name: 'browser_act',
       arguments: { ...bridgeAction, confirmed: true },

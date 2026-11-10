@@ -859,7 +859,7 @@ describe('authenticated PC bridge protocol', () => {
       },
     );
 
-    it('does not forward model selectors and refuses high-impact actions without confirmation', async () => {
+    it('does not forward model selectors and executes a requested action without the old service', async () => {
       const { app } = fixture();
       const url = await listen(app);
       const bridge = await connectBridge(url);
@@ -867,45 +867,28 @@ describe('authenticated PC bridge protocol', () => {
       bridge.on('message', (data) => {
         const command = JSON.parse(data.toString()) as Record<string, unknown>;
         commands.push(command);
+        const arguments_ = command.arguments as Record<string, unknown>;
         bridge.send(JSON.stringify({
           id: command.id,
           type: 'result',
           result: command.command === 'browser_tabs' ? browserTabs
-            : { confirmationRequired: true, actionKind: 'computer_use', summary: 'Delete this item in Chrome.' },
+            : arguments_.confirmed === true ? { acted: true, action: 'click' }
+              : { confirmationRequired: true, actionKind: 'computer_use', summary: 'Delete this item in Chrome.' },
         }));
       });
-
-      const malformed = await callTool(app, 'pc_browser_act', {
-        tabId: 'tab_1',
-        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
-        elementIndex: 0,
-        action: 'click',
-        selector: '#delete',
-      });
+      const input = {
+        tabId: 'tab_1', snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4', elementIndex: 0, action: 'click',
+      };
+      const malformed = await callTool(app, 'pc_browser_act', { ...input, selector: '#delete' });
       expect(malformed.json()).toMatchObject({
         outcome: 'refused', result: { refused: expect.stringContaining("unexpected property 'selector'") },
       });
       expect(commands).toHaveLength(0);
-
-      const refused = await callTool(app, 'pc_browser_act', {
-        tabId: 'tab_1',
-        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
-        elementIndex: 0,
-        action: 'click',
-      });
-      expect(refused.json()).toMatchObject({
-        outcome: 'refused',
-        result: { refused: 'Dan’s confirmation service is unavailable; the browser action was not performed.' },
-      });
-      expect(commands).toHaveLength(2);
-      expect(commands[0]!.command).toBe('browser_tabs');
-      expect(commands[1]!.arguments).toEqual({
-        tabId: 'tab_1',
-        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
-        elementIndex: 0,
-        action: 'click',
-        confirmed: false,
-      });
+      const result = await callTool(app, 'pc_browser_act', input);
+      expect(result.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'click' } });
+      expect(commands.map(({ command }) => command)).toEqual(['browser_tabs', 'browser_act', 'browser_tabs', 'browser_act']);
+      expect(commands.filter(({ command }) => command === 'browser_act')
+        .map(({ arguments: args }) => (args as Record<string, unknown>).confirmed)).toEqual([false, true]);
       expect(JSON.stringify(commands)).not.toContain('#delete');
     });
 

@@ -974,43 +974,24 @@ describe('pc_act bounded Windows control loop', () => {
     }, expect.any(AbortSignal));
   });
 
-  it('never executes an irreversible action if the approval service is unavailable', async () => {
+  it.each([
+    { goal: 'Delete this project', operation: 'click' as const, target: 'button', label: 'Delete project' },
+    { goal: 'Overwrite the current title with "new title"', operation: 'type' as const, target: 'edit', label: 'Title' },
+    { goal: 'Send the message with Ctrl+Enter', operation: 'keys' as const, target: 'button', label: 'Send' },
+  ])('executes an authenticated requested $operation when the old approval service is absent', async (item) => {
     const pcBridge = bridge({
-      observe: vi.fn(async () => ({
-        ...snapshot,
-        elements: [{ index: 0, role: 'button', name: 'Delete project' }],
-      })),
+      observe: vi.fn(async () => ({ ...snapshot, elements: [{ index: 0, role: item.target, name: item.label }] })),
     });
-    const planner = { decide: vi.fn().mockResolvedValue(decision('click', 0)) };
-
-    await expect(runPcAct(
-      { goal: 'Delete this project' },
-      request(),
-      new AbortController().signal,
-      pcBridge,
-      { planner },
-    )).rejects.toThrow(/approval service is unavailable/u);
-    expect(pcBridge.act).not.toHaveBeenCalled();
-
-    const typeBridge = bridge();
-    await expect(runPcAct(
-      { goal: 'Overwrite the current title with "new title"' },
-      request(),
-      new AbortController().signal,
-      typeBridge,
-      { planner: { decide: vi.fn().mockResolvedValue(decision('type', 0, 'new title')) } },
-    )).rejects.toThrow(/approval service is unavailable/u);
-    expect(typeBridge.act).not.toHaveBeenCalled();
-
-    const keysBridge = bridge();
-    await expect(runPcAct(
-      { goal: 'Send the message with Ctrl+Enter' },
-      request(),
-      new AbortController().signal,
-      keysBridge,
-      { planner: { decide: vi.fn().mockResolvedValue(decision('keys', undefined, undefined, ['Ctrl+Enter'])) } },
-    )).rejects.toThrow(/approval service is unavailable/u);
-    expect(keysBridge.act).not.toHaveBeenCalled();
+    const chosen = item.operation === 'type' ? decision('type', 0, 'new title')
+      : item.operation === 'keys' ? decision('keys', undefined, undefined, ['Ctrl+Enter'])
+        : decision('click', 0);
+    const planner = { decide: vi.fn().mockResolvedValueOnce(chosen).mockResolvedValueOnce(decision('done')) };
+    const result = await runPcAct({ goal: item.goal }, request(), new AbortController().signal, pcBridge, { planner });
+    expect(result.status).toBe('completed');
+    expect(pcBridge.act).toHaveBeenCalledOnce();
+    expect(pcBridge.act).toHaveBeenCalledWith(
+      expect.objectContaining({ action: item.operation, confirmed: true }), expect.any(AbortSignal),
+    );
   });
 
   it('refuses injected text that was not explicitly quoted and refuses unverified callers', async () => {

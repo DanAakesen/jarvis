@@ -641,6 +641,8 @@ export async function runPcAct(
     throw new ToolRefusal(`Provide a PC goal between 1 and ${maxGoalLength} characters.`);
   }
   if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for PC actions.');
+  const runRequested: NonNullable<PcActOptions['runRequested']> = options.runRequested ??
+    (async (_summary, action, actionSignal) => { actionSignal.throwIfAborted(); return action(); });
   if (sensitiveGoal(input.goal)) {
     throw new ToolRefusal("I won't handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.");
   }
@@ -852,20 +854,14 @@ export async function runPcAct(
       try {
         if ((operation === 'click' || operation === 'type') &&
             needsApproval(operation, goal, target!, options.confirmOverwrites !== false)) {
-          if (!options.runRequested) {
-            throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
-          }
-          await options.runRequested(
+          await runRequested(
             approvalSummary(operation, snapshot.application, target!),
             () => action(true),
             deadline,
           );
         } else if (operation === 'keys' &&
             (isIrreversibleKeySequence(decision.keys!) || irreversibleActionPattern.test(goal))) {
-          if (!options.runRequested) {
-            throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
-          }
-          await options.runRequested(
+          await runRequested(
             `Send an irreversible keyboard action in ${snapshot.application}.`,
             () => action(true),
             deadline,
@@ -875,10 +871,7 @@ export async function runPcAct(
         }
       } catch (error) {
         if (!(error instanceof ConfirmationNeeded)) throw error;
-        if (!options.runRequested) {
-          throw new ToolRefusal('Dan’s approval service is unavailable; the Windows action was not performed.');
-        }
-        await options.runRequested(error.summary, () => action(true), deadline);
+        await runRequested(error.summary, () => action(true), deadline);
       }
 
       if (!recipeDrifted) {
