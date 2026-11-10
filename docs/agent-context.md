@@ -8128,3 +8128,17 @@ documentation review or Apple recommendation is claimed. Existing platform
 `task(id:)`, structured concurrency, native scrolling and shared controls remain.
 The existing Simulator time budget is unchanged; measure the added focused cases
 on its next native run rather than claiming that runtime or visual acceptance here.
+
+Review follow-up (#1704): replaced the obsolete literal `copy.text(.noLifts)`
+source assertion with guards for both independently loaded lift sections,
+retained rows, loading precedence, failed reads, genuine empty data and unmatched
+searches. The already-selected native Health loading case also checks that
+loading does not announce empty/error copy and that an unmatched search shows
+“No results” rather than “No lifts logged.” All 339 existing Python script tests
+passed locally; the edited XCTest source passed Swift syntax parsing, not native
+execution. This follow-up does not edit Factory, Today/Watch or model settings.
+PR #1710 explicitly carries forward #1704's task-detail loading/context guards;
+its shared detail-view/workflow changes still need primary-owned integration,
+without replacing either branch wholesale. Final-head Actions and native
+captures remain separate qualification requirements; this Linux environment has
+no Xcode/Simulator or authenticated workflow-dispatch CLI.

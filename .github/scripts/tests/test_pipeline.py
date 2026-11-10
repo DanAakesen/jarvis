@@ -1206,7 +1206,28 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn("copy.text(.save)", lists)
         self.assertIn("copy.text(.exercises)", lists)
         self.assertIn("copy.text(.history)", lists)
-        self.assertIn("copy.text(.noLifts)", lists)
+        for rows, loading, loaded, failed in (
+            ("visibleExercises", "exercisesLoading", "exercisesLoaded", "exercisesFailed"),
+            ("visibleLifts", "loading", "historyLoaded", "failed"),
+        ):
+            with self.subTest(section=rows):
+                self.assertRegex(
+                    lists,
+                    rf"if {rows}\.isEmpty\s*\{{\s*"
+                    rf"emptyRows\(loading: {loading} && !{loaded}, failed: {failed}\)"
+                    rf"\s*\}} else \{{\s*ForEach\({rows}\.indices",
+                )
+        empty_rows = lists.split("private func emptyRows(", 1)[1].split(
+            "@ViewBuilder private func liftRow", 1
+        )[0]
+        self.assertRegex(
+            empty_rows,
+            r"if loading\s*\{\s*"
+            r"JarvisHealthStateLine\(state: \.loading, language: language\)"
+            r"\s*\} else \{\s*Text\(copy\.text\("
+            r"failed\s*\?\s*\.loadFailed\s*:\s*"
+            r"searchText\.isEmpty\s*\?\s*\.noLifts\s*:\s*\.noResults\)\)",
+        )
 
     def test_ios_voice_live_activity_metadata_and_evidence_are_in_existing_job(self):
         project = load_workflow(ROOT / "apps/ios/project.yml")

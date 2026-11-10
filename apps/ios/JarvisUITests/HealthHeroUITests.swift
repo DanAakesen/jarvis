@@ -139,6 +139,22 @@ final class HealthHeroUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Exercises"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts["History"].exists)
         XCTAssertTrue(element("health.search").exists)
+        XCTAssertFalse(app.staticTexts["No lifts logged"].exists)
+        XCTAssertFalse(app.staticTexts["No results"].exists)
+        XCTAssertFalse(app.staticTexts["Health data could not be loaded"].exists)
         attach("health-track-loading-static-structure")
+
+        let row = app.buttons["health.lift.exercise.00000000-0000-4000-8000-000000000000"]
+        XCTAssertTrue(row.waitForExistence(timeout: 8))
+        let search = app.textFields["health.search"]
+        search.tap()
+        search.typeText("No matching exercise")
+        XCTAssertTrue(app.staticTexts["No results"].firstMatch.waitForExistence(timeout: 3))
+        XCTAssertFalse(row.exists)
+        XCTAssertFalse(app.staticTexts["No lifts logged"].exists)
+        XCTAssertFalse(app.staticTexts["Health data could not be loaded"].exists)
+        XCTAssertTrue(app.staticTexts["Exercises"].exists)
+        XCTAssertTrue(app.staticTexts["History"].exists)
+        attach("health-track-no-search-results")
     }
 }
