@@ -605,7 +605,6 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
   const [error, setError] = useState(!backendUrl ? 'Project settings unavailable.' : '');
   const [message, setMessage] = useState(pageNotice(location.state));
   const [saving, setSaving] = useState(false);
-  const [showArchiveConfirmation, setShowArchiveConfirmation] = useState(false);
   const [archivePending, setArchivePending] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
   const [validationError, setValidationError] = useState('');
@@ -691,7 +690,6 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
       navigate('/settings#projects', { replace: true, state: { notice: 'Project archived.' } });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Project could not be archived. Try again.');
-      setShowArchiveConfirmation(false);
     } finally {
       setArchivePending(false);
     }
@@ -807,24 +805,11 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
           <section className="project-archive" aria-labelledby="archive-project-heading">
             <h2 id="archive-project-heading">Archive project</h2>
             <p>Hides the project from active lists. History is kept.</p>
-            {!showArchiveConfirmation ? (
-              <div className="button-group button-group--space-4">
-                <button className="secondary-button" type="button" disabled={disabled}
-                  onClick={() => setShowArchiveConfirmation(true)}>Archive project</button>
-              </div>
-            ) : (
-              <div className="project-archive-confirm" role="group" aria-label="Confirm project archive">
-                <p>Archive {values.name || 'this project'}?</p>
-                <div className="settings-actions">
-                  <button className="secondary-button" type="button" disabled={disabled}
-                    onClick={() => setShowArchiveConfirmation(false)}>Cancel archive</button>
-                  <button className="primary-button danger-button danger-button--filled" type="button" disabled={disabled} aria-busy={archivePending || undefined} aria-label={archivePending ? 'Archiving…' : undefined} onClick={() => { void archive(); }}>
-                    <span className="button-label">Confirm archive</span>
-                    {archivePending && <span className="button-loading-indicator" aria-hidden="true"><Loader variant="inline" announce={false} label="Archiving…" /></span>}
-                  </button>
-                </div>
-              </div>
-            )}
+            <button className="primary-button danger-button danger-button--filled" type="button"
+              disabled={disabled} aria-busy={archivePending || undefined}
+              onClick={() => { void archive(); }}>
+              {archivePending ? 'Archiving…' : 'Archive project'}
+            </button>
           </section>
         </form>
       )}
