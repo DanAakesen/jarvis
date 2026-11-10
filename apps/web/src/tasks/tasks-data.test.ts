@@ -36,6 +36,16 @@ describe('vault task API client', () => {
     }).items).toEqual([response.items[0], longTask]);
   });
 
+  it('counts Unicode code points like the server when bounding Watch task titles', () => {
+    const text = `Task ${String.fromCodePoint(0x1f4dd).repeat(395)}`;
+    expect(readVaultTaskResponse({
+      ...response, items: [{ ...response.items[0], text }],
+    }).items[0]?.text).toBe(text);
+    expect(() => readVaultTaskResponse({
+      ...response, items: [{ ...response.items[0], text: `${text}x` }],
+    })).toThrow('invalid vault task');
+  });
+
   it('rejects task titles beyond the server limit without expanding heading limits', () => {
     expect(() => readVaultTaskResponse({
       ...response, items: [{ ...response.items[0], text: 'x'.repeat(401) }],

@@ -15,7 +15,9 @@ live Factory task 24 action, merge or TestFlight was performed.
   301/400-character regressions failed before the one-line decoder correction.
   The 401-character title and 301-character heading remain rejected.
 - `npm test --workspace @jarvis/web -- src/tasks/tasks-data.test.ts src/tasks/TasksPanel.test.tsx`:
-  **34 passed**. Scoped ESLint and `tsc --noEmit` passed in the web workspace.
+  **35 passed** after adding a Unicode 400/401-code-point boundary regression.
+  Scoped ESLint, TypeScript checking and production web build passed. Vite reports
+  the existing large-chunk warning; no chunking or warning threshold was changed.
 - The native workflow keeps all 24 main/source selections and the complete
   capture sweep, using exactly two XCTest workers on simulator clones. Per-test
   120/150-second limits, 75-minute job limit, result export and failure gate remain.
@@ -31,8 +33,27 @@ live Factory task 24 action, merge or TestFlight was performed.
   New native coverage requires distinct tool/disclosure identifiers and checks
   both the saved photo and expired-image Retry above the actual dock.
 - The chat agent ran focused follow/history/tool/grouping/client/design-system
-  Core tests: **56 passed**. Edited Swift files parse with and without DEBUG.
+  Core tests: **56 passed**, then the full existing Core suite: **701 passed**.
+  Edited Swift files parse with and without DEBUG.
   These checks do not run XCUITest or establish repaired native geometry.
+- Concrete attachment evidence in **13797435729**: hierarchy
+  `88ABCA54-4286-46F3-8016-73330421F87A.txt:128` exposes the `repo list ×3`
+  button as `chat.tools.live`, with no `chat.live.toolGroup.*` identifiers.
+  `57F46C70-0D1A-4D48-8EE9-00CD5A560369.txt` requests the missing group ending
+  `000007`. The two dock predicates therefore fail their existence condition;
+  recordings without hierarchies do not rule out additional geometry problems.
+  Photo hierarchy `CB712B6C-4E20-4FEE-839B-B3A3F73ADE60.txt` ends at history 39,
+  before the incorrectly dated saved photo row.
+- Read-only focused review found no significant issues. Secret scans passed.
+  Local CodeQL on implementation **26d57e4** reported no Actions/Python alerts;
+  Swift database creation failed and JavaScript analysis was skipped for database
+  size. Those languages remain unqualified, not clean analyses.
+- `npm test --workspace @jarvis/backend -- src/vault/watch-task-capture.test.ts src/vault/task-writes.test.ts src/database/watch-task-submission-store.test.ts src/health/lifts/capture.test.ts src/core/conversation.test.ts src/core/attachment-files.test.ts`:
+  **201 passed**. Backend build and lint passed without warnings.
+- The exact-source Watch capture transcript reproduced a readiness false negative:
+  Task/Edit/Call dentist/Due are visible but Priority is below the first viewport.
+  The matcher now requires those four visible anchors; startup and wrong-scene
+  rejection remain. **Eight existing Watch-build/capture tests passed**.
 
 ### Native evidence and execution constraints
 
@@ -54,13 +75,85 @@ live Factory task 24 action, merge or TestFlight was performed.
   PID 13783 at 18:55:48.998; the simulator explicitly disabled termination, so
   this log alone does not establish a process crash. Existing #1729 repairs and
   fail-closed rendered-content gates are retained.
-- At inspection, exact source-head Watch **42886195288/job 130075316603** passed
-  simulator/device builds and boot but was still capturing; exact-head iPhone
-  **42886195890** was pending. Neither establishes final repair-head acceptance.
+- Exact source-head Watch **42886195288/job 130075316603** passed simulator/device
+  and paired-phone builds. Artifact **13798051865** was downloaded; SHA-256
+  `39b0716e4541a4a66b76ca12103a6d3c36be49dd21f42e0ed95f16c7c85c5bdd`
+  matches GitHub's digest. Nine destinations passed OCR, including project and
+  Tasks with unwrapped Upcoming. Task-detail was correctly rendered but rejected
+  by its below-the-fold Priority requirement; subsequent captures did not run.
+  The independent URL step failed at `jarvis-watch://tasks` with
+  `LSApplicationWorkspaceErrorDomain` **115** at 19:47:15, before route evidence.
+  Log lift URL was consequently not exercised. Built/installed registrations
+  match; no demonstrated URL repair exists. Exact-head iPhone **42886195890**
+  remained pending. Neither run establishes final repair-head acceptance.
 - Repair branch simulator **42888029362**, merge `02d226f`, skipped because #1731
   is draft. This Linux runner has Swift but no Xcode/simulators; available workflow
   API access returned HTTP 403. Native reruns require the orchestrator's existing
   ready/run path, not removal of draft guards.
+- Implementation **26d57e4** also has skipped CI **42889074791** and iPhone
+  **42889074475** while draft. PR-title gate **42889078328** failed because the
+  generated WIP title lacks the required prefix. The orchestrator's ready/run
+  handoff should use **`fix-main: Repair native chat and qualify combined iPhone and Watch release`**;
+  do not change validation rules to accept the generated title.
+
+### Other native failures: verified baseline versus open diagnosis
+
+Source chat run checked out synthetic merge **526b605** (`1f154ca` into
+`89a8699`), not just its PR head. Its 92 tests took 2430.350 seconds; all 18
+failures remain failures regardless of later screenshot success. The following
+`ComponentGalleryUITests` failures match current-main run **42877998951**:
+
+| Test | Matching failure |
+| --- | --- |
+| `testHealthPeriodsDarkEnglish` | line 256: trailing edge 413.667 vs 367 ±2 |
+| `testHealthPeriodsLightDanish` | line 256: trailing edge 414.333 vs 367 ±2 |
+| `testHistoricalProactiveNotificationOpensChatWithoutSending` | line 441: missing empty-composer `chat.send` |
+| `testProactiveNotificationOpensExistingChatWithoutSending` | line 441: missing empty-composer `chat.send` |
+| `testNewFolderPersistsAnEmptyChildOfTheSelectedParent` | line 679: missing folder-title field |
+| `testNewNoteCreatesFolderInsideTheOpenFolder` | line 862: `notes.folder.Work` unreachable |
+| `testNotesRootFoldersCountsBackAndRecentlyOpened` | line 626: missing folder-count snapshot |
+| `testNotificationsHasHeroAndKeepsApprovalActionsInBothLanguages` | line 418: missing synthetic approval action |
+| `testSharedPagesAtAccessibilityTextSize` | line 377: Body Mass chart/detail unreachable above dock |
+| `testTransientProactiveNotificationFailureShowsChatRecovery` | line 452: recovery text absent |
+
+Two notification hierarchies actually reach `chat.input` and Voice `chat.mode`;
+the tests expect a disabled Send that the empty composer intentionally replaces
+with Voice. The missing Send is not proof of failed navigation. Notes tests
+expect folder rows on the Recent library instead of entering Browse folders;
+period alignment may involve horizontal overflow. Those are scoped diagnosis
+findings, not authorization to rewrite baseline tests here. The Body Mass failure
+image `CF8B4F0B-A7D1-44AB-B9D7-31455C7AD3F8.png` was inspected: large-text chart
+content overlaps the floating dock. That baseline UI defect remains unresolved.
+
+All four `TodayUITests.testBriefVisibleLineLimit{Accessibility,Normal}{Danish,English}`
+fail at line 76: 325.667 > 321.3 at accessibility size, 199.333 > 189 normally.
+Historical main **42802233122/job 129809558284**, actual head
+`f005486069afb0ef2a741a08bbb0d0c587b00ded`, reproduces those four exact assertions
+and measurements. Git comparisons verify identical Today screen/model/fixture/
+tests, activity card, tokens, controls and app/root entrypoints through current
+main `ddc626ff`; the intervening shared-header changes do not affect greeting
+geometry. Later Watch changes affect task lists, not the fixed brief fixture or
+greeting typography. This is a verified code-equivalent historical baseline,
+not a final-head pass. The six-line height calculation may omit the five explicit
+four-point interline gaps; that hypothesis does not justify widening assertions.
+
+Loading source **42874104073** tested synthetic merge **3c688f9** (`f43a97a` into
+`e9e3f6d`). Logs show four Factory detail cases reaching 120-second timeouts:
+`testDanishNotificationLongRequestAndHistoryAtAccessibilityXXXL`,
+`testEnglishBoardLongRequestAndHistory`,
+`testEnglishLiveReplayReachesActualLastEventWithoutDuplicatesAndKeepsNavigationResponsive`,
+and `testEnglishOfflineReplayShowsPartialOldestHistoryWithoutClaimingLatest`.
+Each restart cost roughly 35–54 seconds. Other observed assertions:
+FactoryLoading 13/29/44; FactoryTaskDetail 327; HealthHero 115; Insights 92/129;
+NotesRedesign 39; SettingsField 78/114/130/132/133. Those results are not all
+baseline-classified. The legacy initial-loading test also expects hidden controls,
+contradicting the newer static-controls-loading requirement; retain it pending
+separate diagnosis rather than silently dropping coverage.
+Result artifact **13797261356** contains unfinished xcresult Data/Staging records,
+not a finalized summary: 93 started, 64 passed, 23 failed, five explicit timeouts
+and one unfinished Today case were recovered. These are partial records, not
+final XCTest totals. Child `xcodebuild` continued during artifact upload after
+the job deadline; cancellation cannot be interpreted as successful completion.
 
 Remaining release gates: focused native chat reruns and captures; complete final
 native test outcomes and baseline classification; fresh Watch destinations and

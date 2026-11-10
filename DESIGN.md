@@ -8,6 +8,9 @@ their visibility above the real dock. Native assertions now also check those
 photo/fallback positions and individual tool disclosure identity. No opaque
 dock, fixed spacer, animation or replacement Photos behavior was introduced.
 Fresh integrated native execution and Watch reference review remain required.
+The Watch task-detail readiness gate now checks the visible title/Edit/Due
+content rather than requiring below-the-fold Priority. This corrects capture
+classification only; it changes no layout and does not establish visual acceptance.
 
 ## Combined release evidence (#1728; 10 November 2026)
 

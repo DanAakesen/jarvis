@@ -6,7 +6,7 @@ regressions without relaxing geometry, selection, history-reading or photo
 assertions. A successful screenshot step does not waive failed native tests.
 Compare other failures with verified main evidence before classifying them.
 Keep valid Watch task titles readable by every client through the server's
-400-character contract. Final native captures, interactions and external URL
+400-Unicode-code-point contract. Final native captures, interactions and external URL
 delivery must qualify the integrated revision before orchestrator-owned release.
 
 ## One qualified iPhone/Watch release (#1728; 10 November 2026)

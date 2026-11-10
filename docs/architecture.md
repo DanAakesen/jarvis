@@ -1,6 +1,6 @@
 ## Combined-release compatibility and qualification (#1730; 10 November 2026)
 
-The web vault-task decoder accepts the same 400-character task-title bound as
+The web vault-task decoder accepts the same 400-Unicode-code-point title bound as
 the integrated Watch/backend contract; a valid long task must not invalidate
 unrelated list entries. Heading, identity, date and response-size checks remain.
 Native CI runs the same selected suites on two XCTest-managed simulator clones,
@@ -13,6 +13,11 @@ does not replace individual tool/disclosure identifiers. Follow intent,
 scroll geometry, selection lifetime and the real photo loading path are unchanged.
 The combined photo fixture's saved row sorts after the synthetic history, not
 one day before it; history ordering remains the production timestamp ordering.
+
+Watch task-detail readiness checks require visible Task/Edit/title/Due content;
+Priority remains available by scrolling, not a mandatory initial-viewport OCR
+anchor. Fresh PID/nonce receipts, OCR, image hashes and external URL delivery
+remain independent gates. URL error 115 is not treated as fixture success.
 
 ## Combined iPhone/Watch delivery boundary (#1728; 10 November 2026)
 

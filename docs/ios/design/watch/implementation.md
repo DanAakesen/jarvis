@@ -1,6 +1,30 @@
-Current delivery is **#1729 → main (#1728)**. The combined qualification section
+Current delivery is **#1731 → main (#1730)**; #1729 is preserved source evidence.
+The historical combined qualification section
 at the end supersedes historical child/stacked directions and separates source
 evidence from final-head acceptance.
+
+## Native repair qualification — 10 November 2026 (#1730)
+
+Exact #1729 `a39f152` is preserved as an ancestor. Its Watch run **42886195288**
+passes simulator, physical-architecture Release and paired-phone builds.
+Downloaded artifact **13798051865** has SHA-256
+`39b0716e4541a4a66b76ca12103a6d3c36be49dd21f42e0ed95f16c7c85c5bdd`,
+matching GitHub's digest. Nine destinations passed visible-text verification;
+project now contains Fixture project/No tasks, and Tasks contains unwrapped
+Upcoming. This OCR evidence is not native visual/reference acceptance.
+
+Task-detail failed the gate despite recognized Task/Edit/Call dentist/Due content:
+Priority is below the initial viewport. The matcher now uses those four visible
+anchors, retaining fresh receipt and startup/wrong-scene rejection. The exact
+transcript failed before repair; eight capture/workflow tests now pass locally.
+Later destinations, lower dashboard sections and smaller-size captures did not
+run after that failure and still require an exact-final-head capture.
+
+Separate actual `simctl openurl` delivery of `jarvis-watch://tasks` failed with
+**LSApplicationWorkspaceErrorDomain 115**; Log lift URL was not reached. Both built
+and installed URL registration match. No URL repair or installed-complication
+acceptance is claimed. Preserve the failing gate; physical-device routing,
+dictation, accessibility, approved-reference review and release remain outstanding.
 
 ## Dashboard and personal tasks — 10 November 2026 (#1701)
 

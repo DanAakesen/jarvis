@@ -26,7 +26,7 @@ func requiredText(for name: String) -> [[String]]? {
     case "new-task": return [["new task"], ["title"], ["request"]]
     case "project": return [["fixture project"], ["no tasks"]]
     case "tasks": return [["today"], ["upcoming"], ["dentist", "phone bill"]]
-    case "task-detail": return [["call dentist"], ["edit"], ["priority"]]
+    case "task-detail": return [["task"], ["call dentist"], ["edit"], ["due"]]
     case "task-edit": return [["edit task"], ["title"], ["call dentist"]]
     case "personal-new-task": return [["new task"], ["auto"], ["manual"], ["describe your task", "call the dentist"]]
     case "personal-new-task-manual": return [["new task"], ["auto"], ["manual"], ["title"]]

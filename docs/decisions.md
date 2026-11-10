@@ -6,7 +6,8 @@ the orchestrator retains final merge/TestFlight ownership.
 
 The combined backend expands task titles to 400 characters. Regression checks
 reproduced web decoder rejection at 301 and 400 characters, invalidating unrelated
-tasks too. Match that title bound without widening heading or identity checks.
+tasks too. Match that title bound and the server's Unicode-code-point counting
+without widening heading or identity checks; 401 code points remain rejected.
 
 Use exactly two XCTest workers on isolated simulator clones to reduce serial
 native wall time while retaining every source/main selection, capture, timeout,
@@ -20,6 +21,13 @@ contain accessibility children rather than weaken dock/selection assertions or
 rewrite working follow state. The saved photo fixture was dated a day before
 the long transcript; correct its synthetic chronology, retaining real history
 ordering and Photos behavior. Add explicit child/disclosure and photo dock checks.
+
+Exact-source Watch artifact 13798051865 contains rendered task detail with
+Task/Edit/Call dentist/Due; Priority is below the initial viewport. Match those
+four visible anchors instead of rejecting a valid scene as a startup spinner.
+The exact OCR transcript reproduces the failure before repair; spinner/wrong-scene
+negatives remain. External `simctl openurl` separately returns error 115 despite
+matching built/installed registration; this is unresolved, not a waived gate.
 
 ## 10 November 2026 — One integration and qualification target (#1728)
 
