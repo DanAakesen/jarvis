@@ -74,6 +74,8 @@ final class ChatComposerUITests: XCTestCase {
         XCTAssertTrue(input.waitForExistence(timeout: 10))
         XCTAssertTrue(app.images["Synthetic saved portrait.jpg"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Retry"].waitForExistence(timeout: 5))
+        assertAboveDock(app.images["Synthetic saved portrait.jpg"], app: app)
+        assertAboveDock(app.buttons["Retry"], app: app)
         XCTAssertTrue(app.images["Synthetic landscape.jpg"].waitForExistence(timeout: 5))
         captureFollow(app, "integrated-photo-history-and-pending-thumbnails")
         app.buttons["Remove Synthetic landscape.jpg"].tap()
@@ -111,6 +113,32 @@ final class ChatComposerUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+    }
+
+    func testLiveToolContainerPreservesIndividualAccessibilityIdentifiers() {
+        let app = followApp(showsNow: false)
+        app.launch()
+        defer { app.terminate() }
+        let input = app.textViews["chat.input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.tap()
+        input.typeText("Check tool accessibility")
+        app.buttons["chat.send"].tap()
+        XCTAssertTrue(app.buttons["chat.turn.status"].waitForExistence(timeout: 5))
+
+        signalFollowFixture("tools")
+        let container = app.descendants(matching: .any)["chat.tools.live"]
+        XCTAssertTrue(container.waitForExistence(timeout: 5))
+        let group = container.buttons["chat.live.toolGroup.\(followToolID(7))"]
+        XCTAssertTrue(group.waitForExistence(timeout: 5))
+        XCTAssertTrue(container.descendants(matching: .any)["chat.live.tool.\(followToolID(1))"].exists)
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "chat.tools.live").count, 1)
+        assertAboveDock(group, app: app)
+        group.tap()
+        let lastCall = container.descendants(matching: .any)["chat.live.toolCall.\(followToolID(9))"]
+        XCTAssertTrue(lastCall.waitForExistence(timeout: 5))
+        assertAboveDock(lastCall, app: app)
+        XCTAssertEqual(group.value as? String, "Expanded")
     }
 
     func testToolOnlyUpdatesFollowAboveDockWithAndWithoutNow() {

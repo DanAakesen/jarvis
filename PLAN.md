@@ -1,3 +1,37 @@
+## Native regression repair and release qualification — 10 November 2026 (#1730)
+
+Current delivery is **#1731 → main**; #1729 remains source evidence, not a
+separate merge target. Merge `02d226f06c258898dd3aa476c7dc4c97a699dec4`
+preserves exact #1729 `a39f1529470eeffc6786319a156e5207777dfa45` on current
+main `ddc626ff60a78580059a8376fa0e658703cf3545`. Its tree initially matched
+that source exactly. All source tests, approved references and Watch changes
+remain; no source PR or live Factory task 24 was changed.
+
+Completed: reproduced and repaired the Watch-to-web 301–400-character task-title
+decoder incompatibility (34 adjacent web tests, scoped lint and typecheck pass).
+Native workflow now keeps all 24 selections and captures with two isolated
+simulator workers, retaining per-test limits, exports and the UI failure gate.
+All 81 pipeline tests and 12 embedded shell syntax checks pass; actual macOS
+parallel execution and timing are not yet qualified.
+
+The chat repair contains the live-tool accessibility wrapper (preserving child
+identifiers) and corrects combined photo fixture chronology. Existing assertions
+remain; added checks cover tool identity/disclosure and photo/fallback dock
+visibility. Focused Core tests pass (56), and edited Swift syntax parses with and
+without DEBUG; native compilation and rendering are not qualified by these checks.
+
+**Active step:** complete exact-head native qualification and review.
+Source chat run 42874121366 has 18 failures,
+not a passing capture result. Ten ComponentGallery failures reproduce on current
+main; Today and loading diagnostics require separate evidence, not a blanket
+baseline waiver. See `docs/agent-context.md` for the evidence and remaining gates.
+
+This runner has no Xcode. Repair-branch simulator run 42888029362 at `02d226f`
+skipped because this PR is draft; the available workflow API returned HTTP 403.
+Native reruns, fresh capture review and actual URL delivery remain release
+blockers. Preserve draft/failure guards. Merge and TestFlight remain orchestrator
+owned; the existing owner authorization is unchanged.
+
 ## Combined direct-main delivery — 10 November 2026 (#1728 / #1729)
 
 Current delivery is **#1729 → main**, superseding the separate/child delivery

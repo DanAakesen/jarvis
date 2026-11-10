@@ -382,6 +382,8 @@ struct JarvisChatScreen: View {
                                     JarvisChatToolActivityList(groups: ChatToolActivityGroup.grouping(model.liveTools),
                                                               language: appLanguage, identifierPrefix: "chat.live")
                                     .frame(maxWidth: .infinity, alignment: .leading)
+                                    // Keep the container identifier from replacing individual tool identifiers.
+                                    .accessibilityElement(children: .contain)
                                     .accessibilityIdentifier("chat.tools.live")
                                 }
                             }

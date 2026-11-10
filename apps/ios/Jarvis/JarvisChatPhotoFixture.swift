@@ -35,7 +35,7 @@ enum JarvisChatPhotoFixture {
     static var history: [[String: Any]] {
         [[
             "id": "40", "sessionId": "12", "channel": "chat", "language": "en", "role": "dan",
-            "text": "", "at": "2026-11-06T12:00:00Z", "interrupted": false, "toolCalls": [],
+            "text": "", "at": "2026-11-07T12:00:40Z", "interrupted": false, "toolCalls": [],
             "attachments": [
                 metadata(id: portraitID, name: "Synthetic saved portrait.jpg", type: "image/jpeg", size: 100),
                 metadata(id: expiredID, name: "Synthetic expired.jpg", type: "image/jpeg", size: 100),

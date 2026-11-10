@@ -1,3 +1,14 @@
+## Combined-release repair scope (#1730; 10 November 2026)
+
+Carry exact #1729 `a39f152` forward in #1731 directly to main, preserving its
+complete chat, Watch, loading and Factory behavior and tests. Repair native chat
+regressions without relaxing geometry, selection, history-reading or photo
+assertions. A successful screenshot step does not waive failed native tests.
+Compare other failures with verified main evidence before classifying them.
+Keep valid Watch task titles readable by every client through the server's
+400-character contract. Final native captures, interactions and external URL
+delivery must qualify the integrated revision before orchestrator-owned release.
+
 ## One qualified iPhone/Watch release (#1728; 10 November 2026)
 
 Deliver the complete approved chat live-follow/photo and Watch dashboard/tasks/

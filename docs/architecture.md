@@ -1,3 +1,19 @@
+## Combined-release compatibility and qualification (#1730; 10 November 2026)
+
+The web vault-task decoder accepts the same 400-character task-title bound as
+the integrated Watch/backend contract; a valid long task must not invalidate
+unrelated list entries. Heading, identity, date and response-size checks remain.
+Native CI runs the same selected suites on two XCTest-managed simulator clones,
+then exports the same result bundle and captures on the original destination.
+Fixture state remains simulator/process-local. Native timing and contention
+still need macOS verification; no server or persistence boundary changes.
+
+The live-tool wrapper is a containing accessibility element so its identifier
+does not replace individual tool/disclosure identifiers. Follow intent,
+scroll geometry, selection lifetime and the real photo loading path are unchanged.
+The combined photo fixture's saved row sorts after the synthetic history, not
+one day before it; history ordering remains the production timestamp ordering.
+
 ## Combined iPhone/Watch delivery boundary (#1728; 10 November 2026)
 
 #1729 combines the existing chat/loading and Watch boundaries below without a new

@@ -1,3 +1,73 @@
+## Native repair handoff — 10 November 2026 (#1730 / #1731)
+
+Current delivery is **#1731 → main**, superseding the delivery targets in the
+historical handoffs below. Exact #1729 `a39f1529470eeffc6786319a156e5207777dfa45`
+is the second parent of merge `02d226f06c258898dd3aa476c7dc4c97a699dec4`;
+the initial merged tree equals that source tree. Main was verified at
+`ddc626ff60a78580059a8376fa0e658703cf3545`. Preserve every source/native selection,
+Watch implementation/reference and loading/Factory guard. No source PR mutation,
+live Factory task 24 action, merge or TestFlight was performed.
+
+### Confirmed compatibility repair and available checks
+
+- The integrated Watch/backend allows 400-character task titles; web previously
+  rejected any title longer than 300 and failed the entire task list. New
+  301/400-character regressions failed before the one-line decoder correction.
+  The 401-character title and 301-character heading remain rejected.
+- `npm test --workspace @jarvis/web -- src/tasks/tasks-data.test.ts src/tasks/TasksPanel.test.tsx`:
+  **34 passed**. Scoped ESLint and `tsc --noEmit` passed in the web workspace.
+- The native workflow keeps all 24 main/source selections and the complete
+  capture sweep, using exactly two XCTest workers on simulator clones. Per-test
+  120/150-second limits, 75-minute job limit, result export and failure gate remain.
+  The workflow agent ran **81 pipeline tests**, all **12 embedded shell syntax
+  checks** and `git diff --check` successfully. Actual speedup/contention remains
+  unverified without macOS.
+- Chat attachment investigation found `chat.tools.live` replacing individual
+  live-tool identifiers, accounting for the missing tool group in the two
+  above-dock checks and selection-growth check. Explicit accessibility containment
+  preserves those children; no follow/selection logic or geometry assertion changed.
+  The combined photo row was timestamped November 6, before November 7 history;
+  it now sorts at the latest synthetic position instead of remaining offscreen.
+  New native coverage requires distinct tool/disclosure identifiers and checks
+  both the saved photo and expired-image Retry above the actual dock.
+- The chat agent ran focused follow/history/tool/grouping/client/design-system
+  Core tests: **56 passed**. Edited Swift files parse with and without DEBUG.
+  These checks do not run XCUITest or establish repaired native geometry.
+
+### Native evidence and execution constraints
+
+- Source chat **42874121366/job 130032793210**, head `1f154ca`, executed 92 UI
+  tests with **18 failures**. Capture/upload success does not override its failed
+  UI gate. Artifacts: result **13795673724**, captures **13796402122**, native
+  attachments **13797435729**.
+- Main **42877998951/job 130046372428**, head `ddc626ff`, reproduces all ten
+  ComponentGallery failures at the same assertions. This is a baseline finding,
+  not a resolution or waiver of those failures.
+- Loading/Factory **42874104073/job 130032733014**, head `f43a97a`, was cancelled
+  at the job limit during native testing. It uploaded result **13797261356**;
+  screenshot and separate attachment uploads failed because captures had not
+  completed. Its diagnostics must not be reported as a native pass.
+- Source Watch **42875315079 attempt 2**, artifact **13793598118**, was downloaded.
+  Task-detail was independently viewed and is a startup spinner despite its
+  receipt; Tasks was independently viewed and wraps Upcoming. Simulator logs
+  record a ten-second `scene-create` watchdog provision violation for task-edit
+  PID 13783 at 18:55:48.998; the simulator explicitly disabled termination, so
+  this log alone does not establish a process crash. Existing #1729 repairs and
+  fail-closed rendered-content gates are retained.
+- At inspection, exact source-head Watch **42886195288/job 130075316603** passed
+  simulator/device builds and boot but was still capturing; exact-head iPhone
+  **42886195890** was pending. Neither establishes final repair-head acceptance.
+- Repair branch simulator **42888029362**, merge `02d226f`, skipped because #1731
+  is draft. This Linux runner has Swift but no Xcode/simulators; available workflow
+  API access returned HTTP 403. Native reruns require the orchestrator's existing
+  ready/run path, not removal of draft guards.
+
+Remaining release gates: focused native chat reruns and captures; complete final
+native test outcomes and baseline classification; fresh Watch destinations and
+reference comparison (including lower dashboard sections); actual external URL
+delivery, installed complications and physical-device acceptance. Do not equate
+receipts, OCR matcher tests, unsigned builds or source-head checks with these gates.
+
 ## Combined direct-main handoff — 10 November 2026 (#1728 / #1729)
 
 Delivery is **#1729 → main**. This supersedes older child/separate delivery

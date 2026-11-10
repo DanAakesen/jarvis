@@ -1,3 +1,14 @@
+## Native repair evidence (#1730; 10 November 2026)
+
+The follow-up preserves the approved layout and existing follow/selection state.
+The live-tool accessibility container must expose each individual tool and
+disclosure, not overwrite their identifiers. The combined photo fixture must
+place its saved images at the latest chronological position before checking
+their visibility above the real dock. Native assertions now also check those
+photo/fallback positions and individual tool disclosure identity. No opaque
+dock, fixed spacer, animation or replacement Photos behavior was introduced.
+Fresh integrated native execution and Watch reference review remain required.
+
 ## Combined release evidence (#1728; 10 November 2026)
 
 This integration introduces no new visual direction. The exact approved chat

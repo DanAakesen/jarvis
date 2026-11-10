@@ -1,3 +1,26 @@
+## 10 November 2026 — Preserve the combined source while repairing regressions (#1730)
+
+Use exact #1729 `a39f152` as preserved source history on current main, delivering
+the follow-up through #1731. Source PRs and live Factory task 24 remain untouched;
+the orchestrator retains final merge/TestFlight ownership.
+
+The combined backend expands task titles to 400 characters. Regression checks
+reproduced web decoder rejection at 301 and 400 characters, invalidating unrelated
+tasks too. Match that title bound without widening heading or identity checks.
+
+Use exactly two XCTest workers on isolated simulator clones to reduce serial
+native wall time while retaining every source/main selection, capture, timeout,
+result export and failure gate. Loading run 42874104073 reached the job deadline;
+no test is waived. Local workflow checks establish configuration consistency,
+not native parallel execution or a measured speedup. Draft skips, pending runs
+and screenshot-step success cannot establish release qualification.
+
+Native attachments show the live-tool wrapper shadowing its children's IDs;
+contain accessibility children rather than weaken dock/selection assertions or
+rewrite working follow state. The saved photo fixture was dated a day before
+the long transcript; correct its synthetic chronology, retaining real history
+ordering and Photos behavior. Add explicit child/disclosure and photo dock checks.
+
 ## 10 November 2026 — One integration and qualification target (#1728)
 
 Use #1729 directly against verified main `ddc626ff`, retaining the complete
