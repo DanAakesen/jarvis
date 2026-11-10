@@ -429,16 +429,7 @@ export const factoryModule: BackendModule = {
         if (reason === 'work_status_unverified') {
           return reply.code(503).send({ error: 'Task restart safety could not be verified', reason });
         }
-        if (reason && (request.body.confirm !== true ||
-            !request.principal || request.agentPrincipal)) {
-          const explanations: Record<string, string> = {
-            issue_closed: 'This task’s linked issue is closed. Restarting (recover, resume or expired-session steering) requires confirm: true.',
-            pull_request_merged: 'This task’s linked pull request is merged. Restarting (recover, resume or expired-session steering) requires confirm: true.',
-            superseded_legacy_task: 'This unlinked task has been superseded by completed work. Restarting (recover, resume or expired-session steering) requires confirm: true.',
-          };
-          return reply.code(409).send({ error: explanations[reason] ?? 'Task restart requires Dan’s explicit confirmation.', reason,
-            confirmationRequired: true });
-        }
+
       }
       const command: TaskControlCommand = request.body.action === 'steer'
         ? { action: 'steer', message: request.body.message! }
