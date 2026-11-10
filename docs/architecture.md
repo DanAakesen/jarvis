@@ -2115,6 +2115,20 @@ success does not establish live service, device, or owner acceptance.
 
 ### iOS Usage, Status and Proactive pages (P15-58)
 
+Loading refinement (#1702, 10 November 2026): static page/section structure is
+owned by each screen rather than the full-page placeholder. Independent source
+reads publish separately, while same-context refreshes retain their current
+values. `JarvisCardState` preserves even a successfully loaded empty collection
+on refresh failure. Repository reads capture a cache-session generation and
+validate it and the resource's invalidation revision before publication/write/touch,
+so mutations, sign-out and rebinding the same or another account reject delayed
+results without blocking unrelated sources. The gate's existing content epoch
+still resets view-owned state; cache keys retain their feature/filter/period scope.
+Workspaces now uses the same repository with a 60-second freshness window and
+query/kind scope, invalidated after saved-item mutations, not a second cache.
+Notification feed and background-job reads publish independently and retain their
+own last result on failure. No endpoint or permanent offline store is added.
+
 The Usage, Status and Proactive destinations replace the placeholders in the
 `NavigationStack` shell. `JarvisUsageClient`, `JarvisStatusClient` and
 `JarvisProactiveClient` plus their logic (period/grouping/share maths, status

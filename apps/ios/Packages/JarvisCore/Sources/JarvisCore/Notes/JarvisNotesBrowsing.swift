@@ -56,20 +56,21 @@ public struct JarvisNoteVisit: Codable, Equatable, Sendable {
 extension JarvisCache {
     /// Shares the account-bound cache, but note refresh invalidation must not erase reading history.
     public func recentNoteVisits() async -> [JarvisNoteVisit] {
-        guard let entry = await read("recentlyOpenedNotes"),
+        guard let originalSession = session(),
+              let entry = await read("recentlyOpenedNotes"), isCurrent(originalSession),
               let visits = try? JSONDecoder().decode([JarvisNoteVisit].self, from: entry.data) else { return [] }
         return Array(visits.filter { JarvisNotesLogic.validNotePath($0.path) }.prefix(50))
     }
 
     public func recordNoteOpen(path: String, at date: Date = Date()) async {
         guard JarvisNotesLogic.validNotePath(path), date.timeIntervalSince1970.isFinite,
-              let originalAccount = currentAccount else { return }
+              let originalSession = session() else { return }
         var visits = await recentNoteVisits().filter { $0.path != path }
-        guard currentAccount == originalAccount else { return }
+        guard isCurrent(originalSession) else { return }
         visits.append(JarvisNoteVisit(path: path, openedAt: date))
         visits.sort { $0.openedAt > $1.openedAt }
         guard let data = try? JSONEncoder().encode(Array(visits.prefix(50))) else { return }
-        await write(data: data, validator: nil, key: "recentlyOpenedNotes")
+        await write(data: data, validator: nil, key: "recentlyOpenedNotes", session: originalSession)
     }
 }
 
@@ -77,19 +78,20 @@ extension JarvisCache {
 extension JarvisCache {
     /// Pins are local preferences scoped to the signed-in account, independent of note refreshes.
     public func pinnedNotePaths() async -> [String] {
-        guard let entry = await read("pinnedNotePaths"),
+        guard let originalSession = session(),
+              let entry = await read("pinnedNotePaths"), isCurrent(originalSession),
               let paths = try? JSONDecoder().decode([String].self, from: entry.data) else { return [] }
         var seen = Set<String>()
         return paths.filter { JarvisNotesLogic.validNotePath($0) && seen.insert($0).inserted }
     }
 
     public func setNotePinned(path: String, pinned: Bool) async {
-        guard JarvisNotesLogic.validNotePath(path), let account = currentAccount else { return }
+        guard JarvisNotesLogic.validNotePath(path), let originalSession = session() else { return }
         var paths = await pinnedNotePaths().filter { $0 != path }
-        guard currentAccount == account else { return }
+        guard isCurrent(originalSession) else { return }
         if pinned { paths.insert(path, at: 0) }
         guard let data = try? JSONEncoder().encode(paths) else { return }
-        await write(data: data, validator: nil, key: "pinnedNotePaths")
+        await write(data: data, validator: nil, key: "pinnedNotePaths", session: originalSession)
     }
 }
 

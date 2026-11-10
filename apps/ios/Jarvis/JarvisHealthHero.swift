@@ -130,12 +130,7 @@ struct JarvisHealthSleepHero<Accessory: View>: View {
 
     var body: some View {
         JarvisPageHeroCard(title: copy.text(.sleep), accessory: { accessory }) {
-            if data.sleep.state == .loading || data.sleep.state == .notServed ||
-                data.sleep.state == .failed || data.sleep.state == .offline {
-                JarvisHealthStateLine(state: data.sleep.state, language: language)
-            } else {
-                content
-            }
+            content
         }
         .fillingHeight()
     }
@@ -153,6 +148,9 @@ struct JarvisHealthSleepHero<Accessory: View>: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(copy.text(.sleep))
                 .accessibilityIdentifier("health.sleep.details")
+                .disabled(data.sleep.state != .available)
+                .accessibilityHint(copy.text(data.sleep.state == .loading ? .loading :
+                    data.sleep.state == .available ? .sleepNight : .unavailable))
                 VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
                     stageRow(.deepSleep, summary.deep, JarvisDesignTokens.healthAccent)
                     stageRow(.remSleep, summary.rem, JarvisDesignTokens.healthAccentSecondary)
@@ -165,7 +163,8 @@ struct JarvisHealthSleepHero<Accessory: View>: View {
                 JarvisHealthHeroStat(value: summary.total.map { "\(formatHours($0, language: language)) \(copy.text(.hourShort))" } ?? "—",
                     title: copy.text(.average))
                 Divider()
-                JarvisHealthHeroStat(value: formatNumber(Double(summary.nightCount), language: language),
+                JarvisHealthHeroStat(value: data.sleep.state == .available || data.sleep.state == .empty
+                    ? formatNumber(Double(summary.nightCount), language: language) : "—",
                     title: copy.text(.nightsRecorded))
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -176,6 +175,7 @@ struct JarvisHealthSleepHero<Accessory: View>: View {
                 title: copy.text(.sleepChart),
                 identifier: "health.chart.sleep",
                 language: language,
+                state: data.sleep.state,
                 format: { formatHours($0, language: language) }
             )
         }
@@ -257,12 +257,7 @@ struct JarvisHealthNutritionHero<Accessory: View>: View {
 
     var body: some View {
         JarvisPageHeroCard(title: copy.text(.nutrition), accessory: { accessory }) {
-            if data.nutritionDays.state == .loading || data.nutritionDays.state == .notServed ||
-                data.nutritionDays.state == .failed || data.nutritionDays.state == .offline {
-                JarvisHealthStateLine(state: data.nutritionDays.state, language: language)
-            } else {
-                content
-            }
+            content
         }
         .fillingHeight()
     }
@@ -285,6 +280,9 @@ struct JarvisHealthNutritionHero<Accessory: View>: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(copy.text(.nutrition))
                 .accessibilityIdentifier("health.nutrition.details")
+                .disabled(data.capabilities?.availableSources.contains(JarvisHealthSource.meals.rawValue) != true)
+                .accessibilityHint(copy.text(data.capabilities == nil ? .loading :
+                    data.capabilities?.availableSources.contains(JarvisHealthSource.meals.rawValue) == true ? .meals : .unavailable))
                 VStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
                     macroRow(.protein, summary.average(.protein), proteinTarget, JarvisDesignTokens.healthAccent)
                     macroRow(.carbs, summary.average(.carbs), goals.carbsGrams, JarvisDesignTokens.healthAccentSecondary)
@@ -296,7 +294,8 @@ struct JarvisHealthNutritionHero<Accessory: View>: View {
                 JarvisHealthHeroStat(value: kcal.map { "\(formatNumber(period.dayCount == 1 ? max(0, goals.kcal - $0) : $0, language: language)) kcal" } ?? "—",
                     title: copy.text(period.dayCount == 1 ? .caloriesLeft : .dailyAverage))
                 Divider()
-                JarvisHealthHeroStat(value: formatNumber(Double(summary.mealCount), language: language),
+                JarvisHealthHeroStat(value: data.nutritionDays.state == .available || data.nutritionDays.state == .empty
+                    ? formatNumber(Double(summary.mealCount), language: language) : "—",
                     title: copy.text(.mealsLogged))
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -309,6 +308,7 @@ struct JarvisHealthNutritionHero<Accessory: View>: View {
                 title: copy.text(.proteinChart),
                 identifier: "health.chart.protein",
                 language: language,
+                state: data.nutritionDays.state,
                 format: { formatNumber($0, language: language) }
             )
         }
@@ -389,6 +389,7 @@ struct JarvisHealthBarChart: View {
     let title: String
     let identifier: String
     let language: JarvisAppLanguage
+    var state: JarvisHealthReadState = .available
     let format: (Double) -> String
 
     @State private var selected: String?
@@ -430,6 +431,9 @@ struct JarvisHealthBarChart: View {
             .accessibilityIdentifier("\(identifier).headline")
             if values.hasData {
                 chart
+            } else if state != .available && state != .empty {
+                JarvisHealthStateLine(state: state, language: language)
+                    .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.healthChartHeight)
             } else {
                 Text(copy.text(.empty))
                     .font(.subheadline)
@@ -440,6 +444,7 @@ struct JarvisHealthBarChart: View {
         }
         .accessibilityIdentifier(identifier)
         .onAppear { grown = true }
+        .onChange(of: values.days.map(\.date)) { selected = nil }
     }
 
     private var caption: String {

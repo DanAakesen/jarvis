@@ -2527,11 +2527,18 @@ files and accepted findings, and background work reports meaningful milestones.
 Existing managed project creation, saved research reports and source-aware Health
 queries remain the workflow foundations, with no new parallel job system.
 
-Pending page data uses a shared animated skeleton, including Software Factory;
-inline loading uses the shared dots. Both stop when inactive/offscreen and respect
-Reduce Motion. Navigation stays available and real content replaces loading as
-soon as it arrives. Release follows successful checks and native visual review,
-with backend/agent readiness before the dependent TestFlight upload.
+Pending data uses shared loading indicators only inside data-dependent content.
+Static page titles, section headings, labels and controls render immediately,
+including on first-load failure. Unknown counts and names are not zero or empty
+results. Independent sources publish independently. Revisits and refreshes retain
+usable data only for the same account and context; failed refreshes keep it with
+error/staleness feedback and retry. Context changes exclude previous results and
+obsolete requests cannot publish into the current session. Preserve scroll,
+selection, transparent chrome and usable controls; actions needing unavailable
+data remain visibly disabled with accessible feedback. Loading motion stops when
+inactive/offscreen and respects Reduce Motion. This 10 November refinement
+(#1702) changes neither backend semantics nor offline-storage policy. Release
+still requires successful checks and native visual review; primary owns integration.
 
 ### Body trend graphs and medium widget consistency (6 November 2026)
 

@@ -6,6 +6,7 @@ actor JarvisSettingsFixtureTransport: HTTPTransport {
     private var settings: Data
     private var training = ["gymSessionsPerWeek": 4, "runSessionsPerWeek": 1, "dailySteps": 6000]
     private var nutrition = ["restingKcal": 2200, "deficitKcal": 300, "proteinGrams": 160]
+    private var reads: [String: Int] = [:]
 
     init(scenario: Data) throws {
         let root = try JSONSerialization.jsonObject(with: scenario) as! [String: Any]
@@ -15,6 +16,29 @@ actor JarvisSettingsFixtureTransport: HTTPTransport {
     }
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        let arguments = ProcessInfo.processInfo.arguments
+        if request.method == .get {
+            let path = request.url.path
+            reads[path, default: 0] += 1
+            let attempt = reads[path, default: 0]
+            if arguments.contains("--settings-fixture-slow") {
+                try await Task.sleep(for: .seconds(5))
+            }
+            if (arguments.contains("--settings-fixture-first-read-fails") && attempt == 1) ||
+                (arguments.contains("--settings-fixture-refresh-fails") && attempt > 1) {
+                return HTTPResponse(statusCode: 500)
+            }
+        }
+        if request.url.path == "/api/memory", arguments.contains("--settings-fixture-memory") {
+            let query = URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems?
+                .first(where: { $0.name == "query" })?.value ?? ""
+            let items: [[String: Any]] = query.isEmpty ? [
+                ["id": "1", "type": "memory", "title": "Fixture memory", "content": "Fixture content", "folder": "General"],
+            ] : []
+            return HTTPResponse(statusCode: 200, body: try JSONSerialization.data(withJSONObject: [
+                "items": items, "count": items.count, "limit": 50, "offset": 0, "hasMore": false,
+            ]))
+        }
         if request.url.path == "/api/settings" {
             if request.method == .patch, let data = request.body,
                let patch = try JSONSerialization.jsonObject(with: data) as? [String: Any] {

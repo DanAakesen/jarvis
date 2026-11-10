@@ -49,7 +49,7 @@ struct JarvisHealthRingsSection<Accessory: View>: View {
                     values: JarvisHealthChartValues(values: stepDays, endingOn: period.endDate,
                         count: max(period.dayCount, 7), target: data.trainingTargets?.targets.dailySteps),
                     unit: copy.text(.steps), title: copy.text(.steps), identifier: "health.chart.steps",
-                    language: language, format: { formatNumber($0, language: language) }
+                    language: language, state: data.steps.state, format: { formatNumber($0, language: language) }
                 )
             }
         }
@@ -90,7 +90,7 @@ struct JarvisHealthRingsSection<Accessory: View>: View {
             VStack(spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                 Text(workoutTotal.map { formatNumber($0, language: language) } ?? "—").font(.title.weight(.semibold))
                 Text(totalTarget.map { String(format: copy.text(.totalTarget), formatNumber($0, language: language)) }
-                    ?? copy.text(.noTarget)).font(.caption2).foregroundStyle(.secondary)
+                    ?? (data.trainingTargets == nil ? "—" : copy.text(.noTarget))).font(.caption2).foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -143,6 +143,7 @@ struct JarvisHealthRingsSection<Accessory: View>: View {
     }
 
     var activityIssue: JarvisHealthLocalizationKey? {
+        guard data.activeEnergy.state != .loading, data.exerciseTime.state != .loading else { return nil }
         let states = [energyTotal.availability, exerciseTotal.availability]
         if states.contains(.stale) { return .activityStale }
         if states.contains(.unavailable) { return .activityUnavailable }

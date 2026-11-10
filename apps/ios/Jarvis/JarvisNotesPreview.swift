@@ -59,6 +59,7 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
     ]
     private var inventory = ["Work", "Work/Projects", "Personal", "Attachments/Scans"]
     private let timestamp = "2026-11-05T09:00:00Z"
+    private var readCounts: [String: Int] = [:]
     private var tasks: [[String: Any]] = [[
         "id": String(repeating: "1", count: 64), "text": "Review release — synthetic", "done": false,
         "dueDate": "2026-11-05", "dueTime": NSNull(), "dueAt": NSNull(), "priority": "medium",
@@ -104,6 +105,21 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
     }
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+#if targetEnvironment(simulator)
+        if request.method == .get {
+            let path = request.url.path
+            readCounts[path, default: 0] += 1
+            let count = readCounts[path, default: 0]
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-notes-slow-graph"),
+               path == "/api/knowledge/graph", count == 1 {
+                try await Task.sleep(for: .seconds(5))
+            }
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-notes-refresh-failure"),
+               count == 2, ["/api/knowledge/graph", "/api/notes/tree", "/api/notes", "/api/vault/tasks"].contains(path) {
+                return try json(["error": "Synthetic refresh failure"], status: 503)
+            }
+        }
+#endif
         let query = Dictionary((URLComponents(url: request.url, resolvingAgainstBaseURL: false)?.queryItems ?? []).map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { _, last in last })
         let body = request.body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] } ?? [:]
         switch (request.method, request.url.path) {

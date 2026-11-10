@@ -72,7 +72,12 @@ struct JarvisHealthBodyChart: View {
                 .font(.caption).foregroundStyle(.secondary)
             }
         }
-        .onChange(of: metric.read.items) { selectedID = nil }
+        .onChange(of: period) { selectedID = nil }
+        .onChange(of: metric.read.items) { previous, current in
+            selectedID = JarvisBodyTrend(rows: current, period: period).selectionID(
+                retaining: selectedID, from: JarvisBodyTrend(rows: previous, period: period)
+            )
+        }
     }
 
     private func value(_ reading: JarvisBodyTrend.Reading) -> some View {

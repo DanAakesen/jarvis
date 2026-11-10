@@ -18,6 +18,9 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
     static let now = ISO8601DateFormatter().date(from: "2026-10-31T12:00:00Z")!
 
     private let mode: Mode
+    private let failStatusOnly: Bool
+    private let failUsageRefreshOnce: Bool
+    private var usageReads = 0
     private var failNextSave: Bool
     private var revision = 1
     private var paused = false
@@ -41,6 +44,8 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
         let raw = arguments.first { $0.hasPrefix("--ui-test-insights=") }?
             .dropFirst("--ui-test-insights=".count)
         mode = raw.flatMap { Mode(rawValue: String($0)) } ?? .normal
+        failStatusOnly = arguments.contains("--ui-test-insights-status-only-fails")
+        failUsageRefreshOnce = arguments.contains("--ui-test-insights-usage-refresh-fails-once")
         failNextSave = arguments.contains("--ui-test-insights-save-fails-once")
     }
 
@@ -50,6 +55,15 @@ actor JarvisInsightsFixtureTransport: HTTPTransport {
         if mode == .error { return Self.response(500, ["error": "internal_error"]) }
         let components = URLComponents(url: request.url, resolvingAgainstBaseURL: false)
         let path = (components?.path ?? "").replacingOccurrences(of: "/api", with: "", options: .anchored)
+        if failStatusOnly, path == "/proactive/status" {
+            return Self.response(500, ["error": "internal_error"])
+        }
+        if request.method == .get, path == "/usage" {
+            usageReads += 1
+            if failUsageRefreshOnce, usageReads == 2 {
+                return Self.response(500, ["error": "internal_error"])
+            }
+        }
         let query = Dictionary(
             (components?.queryItems ?? []).map { ($0.name, $0.value ?? "") },
             uniquingKeysWith: { first, _ in first }
