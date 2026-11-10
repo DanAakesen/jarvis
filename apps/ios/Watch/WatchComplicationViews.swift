@@ -18,6 +18,19 @@ struct WatchMacroBar: View {
     var partial = false
     private var validConsumed: Double? { consumed.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil } }
     private var validGoal: Double? { goal.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } }
+    private var nutritionAccessibilityValue: String {
+        guard let consumed = validConsumed else { return "Unavailable" }
+        let amount: String = "\(consumed.formatted()) grams"
+        let goalDescription: String
+        if let goal = validGoal {
+            goalDescription = " of \(goal.formatted()) grams"
+        } else {
+            goalDescription = ", goal unavailable"
+        }
+        let prefix: String = partial ? "At least " : ""
+        let caveat: String = partial ? ", lower-bound intake: some logged meals are missing this nutrient" : ""
+        return prefix + amount + goalDescription + caveat
+    }
     var body: some View {
         HStack(spacing: compact ? 4 : 7) {
             Text(label + (partial ? "*" : "")).font(.system(size: compact ? 10 : 12, weight: .semibold, design: .rounded))
@@ -56,11 +69,7 @@ struct WatchMacroBar: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label == "CARB" ? "Carbohydrates" : label == "PROT" ? "Protein" : "Fat")
-        .accessibilityValue(validConsumed.map {
-            (partial ? "At least " : "") + "\($0.formatted()) grams" +
-                (validGoal.map { " of \($0.formatted()) grams" } ?? ", goal unavailable") +
-                (partial ? ", lower-bound intake: some logged meals are missing this nutrient" : "")
-        } ?? "Unavailable")
+        .accessibilityValue(nutritionAccessibilityValue)
     }
 }
 

@@ -73,6 +73,52 @@ final class WatchTaskFlowTests: XCTestCase {
         XCTAssertNotEqual(revised.submissionId, original.submissionId)
     }
 
+    func testAutoAndManualDraftsSurviveSaveErrorsAndRetryTheOriginalPayload() async throws {
+        for mode in [WatchTaskMode.auto, .manual] {
+            var draft = autoDraft()
+            draft.mode = mode
+            draft.fields = .init(text: "Ring til tandlægen", scope: .work, due: "2026-11-12",
+                                 time: "09:30", priority: .high, notes: "Spørg om næste kontrol.")
+            let originalDraft = draft
+            let transport = TaskTransport([
+                .failure(.timedOut),
+                .response(.init(statusCode: 200, body: Data(#"{"ok":true}"#.utf8))),
+                .response(.init(statusCode: 503, body: Data(#"{"error":"Parsing unavailable.","outcomeUnknown":false}"#.utf8))),
+                .response(.init(statusCode: 200, body: try JSONEncoder().encode(fixtureTask())))
+            ])
+            let client = JarvisWatchTasksClient(client: try http(transport))
+            var state = WatchTaskSubmissionState()
+            let original = try state.begin(draft, now: now, timeZone: zone, makeID: { id })
+            for unknown in [true, true, false] {
+                do {
+                    _ = try await client.create(try XCTUnwrap(state.request))
+                    XCTFail("Expected save error")
+                } catch let JarvisWatchTasksClientError.failure(detail) {
+                    XCTAssertEqual(detail.outcomeUnknown, unknown)
+                    state.finish(rejectedWithoutSaving: !detail.outcomeUnknown)
+                }
+                XCTAssertEqual(draft, originalDraft)
+                XCTAssertFalse(state.sending)
+                XCTAssertEqual(state.canRevise, !unknown)
+                let retry = try state.begin(draft, now: now.addingTimeInterval(86_400),
+                                            timeZone: TimeZone(identifier: "America/New_York")!) {
+                    XCTFail("An error must not allocate a new submission identity")
+                    return UUID()
+                }
+                XCTAssertEqual(retry, original)
+            }
+            let saved = try await client.create(try XCTUnwrap(state.request))
+            state.finish()
+            XCTAssertEqual(saved, fixtureTask())
+            let requests = await transport.recordedRequests()
+            XCTAssertEqual(requests.count, 4, "Only explicit attempts may send")
+            for request in requests {
+                XCTAssertEqual(try JSONDecoder().decode(WatchTaskCreateRequest.self,
+                                                       from: XCTUnwrap(request.body)), original)
+            }
+        }
+    }
+
     func testManualDefaultRequestOmitsDateAndTimeButUsesNormalForLow() throws {
         var draft = WatchTaskDraft(); draft.mode = .manual
         draft.fields.text = "Call dentist"
