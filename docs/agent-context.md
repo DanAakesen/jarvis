@@ -91,6 +91,17 @@ Integrated local checks (Linux):
 - Edited task-detail/native-test Swift passed `swiftc -frontend -parse`, not
   Apple-framework typechecking. Read-only integration/follow-up review found no
   significant issues; changed-file secret scans found no secrets.
+- CodeQL found no Actions or Python alerts. Swift database creation failed,
+  so Swift CodeQL analysis remains unverified.
+
+Child [#1716](https://github.com/DanAakesen/jarvis/pull/1716) is confirmed to
+target `copilot/simplify-factory-task-page`. It is still draft, with the generated
+`[WIP]` title; the orchestrator must apply the requested `fix-main:` title and
+make it ready before relying on CI. At code head
+`a257e0140cc1a78a297a6aef66bd3f70163ee495`, aggregate
+[CI 42872779934](https://github.com/DanAakesen/jarvis/actions/runs/42872779934)
+and [Simulator 42872779668](https://github.com/DanAakesen/jarvis/actions/runs/42872779668)
+were **skipped**, not passed. These runs do not qualify the final head.
 
 This runner has no Xcode, iPhone Simulator or VoiceOver. Recovered old artifacts
 are evidence for diagnosis only, not before/after or final-head acceptance.
