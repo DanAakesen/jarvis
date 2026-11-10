@@ -62,7 +62,7 @@ function isDateTime(value: unknown): value is string {
 function task(value: unknown): VaultTask | null {
   const item = object(value);
   if (!item || typeof item.id !== 'string' || !/^[0-9a-f]{64}$/u.test(item.id) ||
-      typeof item.text !== 'string' || item.text.length > 300 || typeof item.done !== 'boolean' ||
+      typeof item.text !== 'string' || item.text.length > 400 || typeof item.done !== 'boolean' ||
       (item.dueDate !== null && !isDate(item.dueDate)) ||
       (item.dueTime !== null && (typeof item.dueTime !== 'string' || !/^\d{2}:\d{2}$/u.test(item.dueTime))) ||
       (item.dueAt !== null && !isDateTime(item.dueAt)) ||

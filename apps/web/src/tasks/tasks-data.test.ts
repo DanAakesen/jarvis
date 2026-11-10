@@ -29,6 +29,22 @@ describe('vault task API client', () => {
     expect(() => readVaultTaskResponse({ ...response, items: Array(501).fill(response.items[0]) })).toThrow();
   });
 
+  it.each([301, 400])('retains a %i-character Watch task alongside unrelated tasks', (length) => {
+    const longTask = { ...response.items[0], id: 'b'.repeat(64), text: 'x'.repeat(length) };
+    expect(readVaultTaskResponse({
+      ...response, total: 2, items: [response.items[0], longTask],
+    }).items).toEqual([response.items[0], longTask]);
+  });
+
+  it('rejects task titles beyond the server limit without expanding heading limits', () => {
+    expect(() => readVaultTaskResponse({
+      ...response, items: [{ ...response.items[0], text: 'x'.repeat(401) }],
+    })).toThrow('invalid vault task');
+    expect(() => readVaultTaskResponse({
+      ...response, items: [{ ...response.items[0], heading: 'x'.repeat(301) }],
+    })).toThrow('invalid vault task');
+  });
+
   it('uses authenticated no-store reads and passes the query and state filters', async () => {
     const fetchMock = vi.fn(async () => json(response));
     vi.stubGlobal('fetch', fetchMock);
