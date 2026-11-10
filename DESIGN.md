@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+Keep the approved Watch layout and controls. Startup and idle connectivity changes use the existing quiet connection status. History read failures stay inside the chat scroll area. The modal Jarvis alert is reserved for actual user-action/interruption feedback.
+
 ## Owner actions without approval interruptions — 9 November 2026
 
 Requested actions return progress and a truthful completion or failure receipt.
@@ -3789,3 +3793,8 @@ The owner's installed-device photos show clipped, oversized reps/sets steppers a
 After Factory project selection, show a plus action opening New task with Title, Request and native Agent picker. Reuse WatchTextInput for exercise, title, request and chat draft: native text editing plus an explicit mic action opening the system text-input interface. Dictation appends to the draft and never submits. No new colour theme, large custom control or complication redesign. Native fixtures/captures are synthetic; installed-device acceptance remains open.
 
 Native capture correction: Watch toolbar primary actions were not visible, so Add lift/New task use compact clear-background plus rows within each list. Free-text fields are clean tap-to-edit rows with mic controls; the native typing field lives in a separate editor, avoiding nested field backgrounds. Weight opens its native numeric editor. Reps/Sets share one compact row.
+
+
+## Watch steps-only revision — 10 November 2026
+
+Use one large white rounded step count above a full-width amber curve, with fine vertical gradient stems beneath it and a thin dashed white daily-goal reference on the same scale. No other visible text, axes or footer. Preserve real hourly positions; do not stretch an incomplete day or invent future readings. VoiceOver describes steps and goal. This supersedes the previous rectangular daily/weekly composition only. Approved concept: [amber stem reference](docs/ios/design/watch/steps-approved-2026-11-10.png) from the secondary design conversation. Native installed-size acceptance remains open.

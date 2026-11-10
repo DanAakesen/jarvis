@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+Ordinary Watch startup, foreground connection warm-up and passive history refresh must not display an interrupted-send alert. Show connection/history status inline. Actual user-action failures and interrupted active chat/voice still report errors; preserve unsent drafts and never automatically resend an accepted request.
+
 ## Owner action policy — current, 9 November 2026
 
 The signed-in owner's clear request authorizes the resolved action in chat and
@@ -2739,3 +2743,8 @@ The owner approves connecting cross-app context, computing facts from saved data
 The owner now authorizes creating a Factory task from the selected Watch project through a plus action. This supersedes the read-only Factory scope for creation only; task controls, recovery, policy changes, merge and deployment controls remain absent. Title and request support native typing/dictation; project selection is retained and agent defaults to that project. Explicit Start task submits through the authenticated paired phone and existing Factory API. No automatic sends, offline queue or live Factory test execution.
 
 Every Watch free-text field, including exercise name and chat draft, supports typing and an explicit system mic entry point. Numeric/type selectors remain native. Reps and sets use bounded 1–1,000 reps / 1–100 sets swipe/Crown pickers rather than oversized steppers. Valid empty lift/workout histories show empty states, not a false phone-connection error.
+
+
+## Watch steps complication — 10 November 2026
+
+The owner approved the amber vertical-stem steps design (second concept in the final steps exploration). The rectangular complication shows only a large daily step count and a full-width cumulative steps chart with a dashed goal reference. Remove the target text, time labels, calorie footer and weekly workout column. Small complications stay unchanged. Weekly workout concepts are deferred, not approved for implementation.
