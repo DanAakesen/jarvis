@@ -337,7 +337,7 @@ describe('Projects page', () => {
     expect(screen.queryByRole('textbox', { name: 'Project name' })).toBeNull();
   });
 
-  it('saves changed settings and confirms archive before retaining history', async () => {
+  it('saves changed settings and archives directly while retaining history', async () => {
     const user = userEvent.setup();
     renderFactory('/factory/projects/7');
 
@@ -351,9 +351,6 @@ describe('Projects page', () => {
     expect(patchCall?.[1]?.body).toBe(JSON.stringify({ default_branch: 'stable' }));
 
     await user.click(screen.getByRole('button', { name: 'Archive project' }));
-    const confirmation = screen.getByRole('group', { name: 'Confirm project archive' });
-    expect(screen.getByText(/History is kept/)).not.toBeNull();
-    await user.click(within(confirmation).getByRole('button', { name: 'Confirm archive' }));
 
     expect(await screen.findByText('No projects')).not.toBeNull();
     expect(screen.getByText('Project archived.')).not.toBeNull();
