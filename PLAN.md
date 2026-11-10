@@ -10,16 +10,19 @@ last integration refinements; 1,241 backend regressions and 94 real SQL tests;
 backend build/lint and targeted follow-up checks passed. The updated capture
 workflow passes YAML/shell syntax checks. Review fixes split the nutrition
 accessibility string into typed steps without changing copy/number formatting,
-and restore the task choice control's top-level declaration. After synchronizing
-main, all 618 Core tests, 1,126 focused backend regressions, backend build/lint,
+and restore the task choice control's top-level declaration. Native diagnostics
+also identified two watchOS-unavailable DisclosureGroups; read-only navigation
+lists now preserve access to those details and the active draft. After synchronizing
+main and these corrections, all 619 Core tests, 1,126 focused backend regressions, backend build/lint,
 Swift parsing and the existing iOS metadata check pass. Auto/Manual draft tests
 cover timeout, malformed success, definite rejection and unchanged explicit retry.
 Process-death restoration is not implemented.
 
 Native run 42836136120 failed at the nutrition expression; its physical build was
-skipped. Combined-source run 42857360808 is queued at runtime commit `c9e05f6a`.
-No Mac runner was assigned during this review; the three builds and new captures
-remain unverified. Subsequent documentation edits do not change native source.
+skipped. Combined-source run 42857360808 was superseded by the documentation
+head. Run 42859214862 passed nutrition compilation but failed on DisclosureGroup;
+physical compilation and captures were skipped. The corrected head still needs
+all three builds and native capture/interaction qualification.
 CI and the separate iPhone UI workflow are draft-skipped, not passing results.
 The earlier filtering checkpoint is not evidence for the combined feature.
 

@@ -167,12 +167,14 @@ struct WatchTaskDetailView: View {
             if let timeZone = task.timeZone {
                 LabeledContent("Time zone", value: timeZone).listRowBackground(Color.clear)
             }
-            DisclosureGroup("Vault source") {
-                sourceField("Path", task.path)
-                sourceField("Line", String(task.line))
-                if let dueAt = task.dueAt { sourceField("Due instant", dueAt) }
-                sourceField("Task ID", task.id)
-                sourceField("Version", task.version)
+            NavigationLink("Vault source") {
+                List {
+                    sourceField("Path", task.path)
+                    sourceField("Line", String(task.line))
+                    if let dueAt = task.dueAt { sourceField("Due instant", dueAt) }
+                    sourceField("Task ID", task.id)
+                    sourceField("Version", task.version)
+                }.navigationTitle("Vault source")
             }.listRowBackground(Color.clear)
             if let failure {
                 Text(failure).font(.footnote).listRowBackground(Color.clear)
@@ -316,14 +318,16 @@ struct WatchPersonalTaskEditor: View {
                 }
             }
             if let refreshedSource {
-                DisclosureGroup("Current saved task") {
-                    Text(refreshedSource.text).fixedSize(horizontal: false, vertical: true)
-                    LabeledContent("Due", value: WatchTaskPresentation.due(refreshedSource))
-                    LabeledContent("Priority", value: refreshedSource.priority.watchLabel)
-                    if let notes = refreshedSource.notes, !notes.isEmpty {
-                        Text(notes).fixedSize(horizontal: false, vertical: true)
-                    }
-                    LabeledContent("Reminder", value: refreshedSource.watchReminderLabel ?? "Not recorded")
+                NavigationLink("Current saved task") {
+                    List {
+                        Text(refreshedSource.text).fixedSize(horizontal: false, vertical: true)
+                        LabeledContent("Due", value: WatchTaskPresentation.due(refreshedSource))
+                        LabeledContent("Priority", value: refreshedSource.priority.watchLabel)
+                        if let notes = refreshedSource.notes, !notes.isEmpty {
+                            Text(notes).fixedSize(horizontal: false, vertical: true)
+                        }
+                        LabeledContent("Reminder", value: refreshedSource.watchReminderLabel ?? "Not recorded")
+                    }.navigationTitle("Current saved task")
                 }
             }
             if let validation = validationMessage, hasEnteredContent, !locked {

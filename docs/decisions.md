@@ -14,6 +14,8 @@ Watch Auto capture has its own independent missing-date and missing-priority
 defaults (submission time +1h and Low), not a new general reminder policy. Save is
 the creation boundary; dictation and mode changes cannot submit. Retain the same
 submission identity/timezone and resolved due instant across manual retries.
+Use native read-only navigation lists for vault metadata and conflict comparison:
+SwiftUI DisclosureGroup is unavailable on watchOS; returning keeps the active draft.
 Native/device validation and exact nutrition/task-list image transfer remain
 separate from concept approval. No merge or release is part of this issue.
 

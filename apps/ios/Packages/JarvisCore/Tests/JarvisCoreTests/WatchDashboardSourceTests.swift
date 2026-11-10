@@ -110,6 +110,15 @@ final class WatchDashboardSourceTests: XCTestCase {
         XCTAssertTrue(input.contains(".accessibilityAddTraits(selection == value ? .isSelected : [])"))
     }
 
+    func testTaskSourceAndConflictDetailsUseWatchSupportedNavigation() throws {
+        let tasks = try source("apps/ios/Watch/WatchTasksView.swift")
+        XCTAssertFalse(tasks.contains("DisclosureGroup("), "DisclosureGroup is unavailable on watchOS")
+        for title in ["Vault source", "Current saved task"] {
+            XCTAssertTrue(tasks.contains("NavigationLink(\"\(title)\") {"))
+            XCTAssertTrue(tasks.contains(".navigationTitle(\"\(title)\")"))
+        }
+    }
+
     func testSourceAgePartialFieldsAndTaskCountFallbackAreExplicit() throws {
         let shared = try source("apps/ios/Watch/WatchComplicationViews.swift")
         let full = try source("apps/ios/Watch/WatchDashboardFullViews.swift")

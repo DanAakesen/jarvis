@@ -28,14 +28,16 @@ After merging main with both documentation entries preserved, runtime commit
 Swift parsing and the existing iOS CI metadata check. The new Auto/Manual regression
 exercises timeout, malformed success, definite rejection and successful manual
 retry with unchanged content, submission identity, timestamp and timezone.
-These are state/client tests, not
-native interaction evidence. Native run
+These are state/client tests, not native interaction evidence. Native run
 [42857360808](https://github.com/DanAakesen/jarvis/actions/runs/42857360808)
-is queued without an assigned Mac runner after approximately ten minutes of
-observation. None of its three builds or captures has run; no new native
-screenshots or interactions were inspected. Later documentation-only edits leave
-this native source unchanged. Aggregate CI and the separate iPhone Simulator UI workflow remain
-draft-skipped, not passed. GitHub CodeQL run 42857360341 passed its configured
+waited ten minutes for a Mac runner, then was superseded by the documentation
+head. Run 42859214862 compiled nutrition but failed Watch/paired-phone compilation
+on two DisclosureGroups, which SwiftUI marks unavailable on watchOS. Both now
+use native links to read-only detail lists; the active editor still owns its
+unchanged draft while inspecting the saved task. All 619 Core tests pass after
+this correction. All three native builds and new captures still need qualification.
+Aggregate CI and the separate iPhone Simulator UI workflow remain draft-skipped,
+not passed. GitHub CodeQL run 42857360341 passed its configured
 languages (not Swift). Local CodeQL could not create a Swift database and skipped
 JavaScript analysis for size; no Swift security-analysis pass is claimed.
 Save freezes the submission identity, time and payload in the active editor.

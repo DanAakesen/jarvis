@@ -3822,6 +3822,9 @@ Tasks and Recent Notes use right-aligned See more. Today includes overdue tasks 
 an explicit Overdue label, never color alone. The task plus opens Auto by default;
 the multiline draft contains its mic action and Save sits below. Manual and Edit
 use the same scrollable explicit-field form; Edit has no Auto/Manual toggle.
+Vault source metadata and the current saved task comparison open read-only native
+detail lists; inspecting them preserves the editor draft. watchOS does not support
+SwiftUI DisclosureGroup.
 
 Nutrition uses CARB/FAT/PROT segmented bars; task titles use outlined amber squares
 and white text. Home text derives from the actual configured Home brief, retaining
