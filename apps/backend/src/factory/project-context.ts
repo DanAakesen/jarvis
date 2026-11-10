@@ -269,8 +269,7 @@ ${list}
 named projects to Jarvis or auto-register. Recheck and report registry failures before writes.
 - Before create_project or manage_repository, check this list (or list_projects). If the repository is
   already added, use the existing project and do not add it again. If Dan asks about a repository that
-  is not added, ask him to confirm before adding it, and add it only after he says yes.
+  is not added and Dan asks to add it, add it without a second approval.
 - Use update_project to change the requested name, description or project defaults without changing
-  other settings. Archive only with archive_project followed by confirm_project_archive after Dan clearly
-  agrees in a later message.`;
+  other settings. When Dan requests an archive, use archive_project directly without another approval.`;
 }
