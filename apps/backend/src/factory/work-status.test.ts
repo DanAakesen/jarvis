@@ -176,20 +176,20 @@ describe('get_work_status evidence and restart safety', () => {
     expect(f.taskStore.linkIssueNumberIfUnlinked).not.toHaveBeenCalled();
     expect(await taskRestartReason(f.app, '42')).toBeNull();
   });
-  it('blocks an unlinked task when same-project exact task-code peer was delivered', async () => {
+  it('records supersession but permits owner-requested recovery', async () => {
     const f = fixture(); f.tasks[0]!.issueNumber = null;
     f.tasks.push({ ...task, id: '43', title: 'P9-50: New description', state: 'Done' });
     expect(await taskRestartReason(f.app, '42')).toBe('superseded_legacy_task');
     const response = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers,
       payload: { action: 'recover' } });
-    expect(response.statusCode).toBe(409); expect(f.control).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200); expect(f.control).toHaveBeenCalledWith('42', { action: 'recover' });
   });
   it('blocks legacy peers with closed linked issues even without Done task state', async () => {
     const f = fixture(); f.tasks[0]!.issueNumber = null;
     f.tasks.push({ ...task, id: '43' });
     expect(await taskRestartReason(f.app, '42')).toBe('superseded_legacy_task');
   });
-  it('blocks explicitly superseded legacy task despite different replacement title', async () => {
+  it('records explicit supersession but permits owner-requested recovery', async () => {
     const f = fixture(); f.tasks[0]!.issueNumber = null;
     f.issue.title = 'P11-01: Simpler approval for Google Calendar actions';
     f.issue.body = 'Supersedes Factory task 42, which failed before the runner fix in #584.';
@@ -200,7 +200,7 @@ describe('get_work_status evidence and restart safety', () => {
     expect(await taskRestartReason(f.app, '42')).toBe('superseded_legacy_task');
     const response = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers,
       payload: { action: 'recover' } });
-    expect(response.statusCode).toBe(409); expect(f.control).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200); expect(f.control).toHaveBeenCalledWith('42', { action: 'recover' });
     expect(f.taskStore.linkIssueNumberIfUnlinked).not.toHaveBeenCalled();
   });
   it('blocks explicit replacement when only linked PR has merged', async () => {
@@ -226,34 +226,18 @@ describe('get_work_status evidence and restart safety', () => {
       payload: { action: 'recover', confirm } });
     expect(response.statusCode).toBe(400); expect(f.control).not.toHaveBeenCalled();
   });
-  it.each(['recover', 'resume'])('refuses %s before controller; only explicit Dan true confirms', async (action) => {
+  it.each(['recover', 'resume'])('executes requested %s without another approval', async (action) => {
     const f = fixture();
-    const refused = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers, payload: { action } });
-    expect(refused.statusCode).toBe(409); expect(refused.json().reason).toBe('issue_closed');
-    expect(refused.json().error).toContain('linked issue is closed');
-    expect(refused.json().error).toContain('confirm: true');
-    expect(f.control).not.toHaveBeenCalled();
-    const confirmed = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers,
-      payload: { action, confirm: true } });
-    expect(confirmed.statusCode).toBe(200); expect(f.control).toHaveBeenCalledWith('42', { action });
+    const response = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers, payload: { action } });
+    expect(response.statusCode).toBe(200);
+    expect(f.control).toHaveBeenCalledWith('42', { action });
   });
-  it('refuses merged-PR recovery for an open issue', async () => {
+  it('executes requested recovery even if the previous PR is merged', async () => {
     const f = fixture(); f.issue.state = 'open';
     const response = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers,
-      payload: { action: 'recover', confirm: false } });
-    expect(response.statusCode).toBe(409); expect(response.json().reason).toBe('pull_request_merged');
-    expect(f.control).not.toHaveBeenCalled();
-  });
-  it.each(['closed', 'open'] as const)('retains restart blockers for %s issues when deployment lookup fails', async (state) => {
-    const f = fixture(); f.issue.state = state;
-    f.releases.read.mockRejectedValue(new Error('private release error'));
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('private actions error'); }));
-    const response = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers,
       payload: { action: 'recover' } });
-    expect(response.statusCode).toBe(409);
-    expect(response.json().reason).toBe(state === 'closed' ? 'issue_closed' : 'pull_request_merged');
-    expect(f.control).not.toHaveBeenCalled();
-    expect(response.body).not.toContain('private');
+    expect(response.statusCode).toBe(200);
+    expect(f.control).toHaveBeenCalledWith('42', { action: 'recover' });
   });
   it('returns 503 when historical PR safety cannot be verified', async () => {
     const f = fixture(); f.issue.state = 'open';
@@ -264,14 +248,12 @@ describe('get_work_status evidence and restart safety', () => {
     expect(response.json().reason).toBe('work_status_unverified');
     expect(f.control).not.toHaveBeenCalled();
   });
-  it('resume tool cannot bypass confirmation with model input', async () => {
+  it('resumes the requested task from chat without an approval argument', async () => {
     const f = fixture();
     const response = await f.app.inject({ method: 'POST', url: '/tools/resume_task', headers,
       payload: { taskId: '42' } });
-    expect(response.json().outcome).toBe('refused'); expect(f.control).not.toHaveBeenCalled();
-    const invalid = await f.app.inject({ method: 'POST', url: '/tools/resume_task', headers,
-      payload: { taskId: '42', confirm: true } });
-    expect(invalid.json().outcome).toBe('refused'); expect(f.control).not.toHaveBeenCalled();
+    expect(response.json().outcome).toBe('ok');
+    expect(f.control).toHaveBeenCalledWith('42', { action: 'resume' });
   });
   it('does not give the agent access to Dan confirmation through the controls route', async () => {
     const f = fixture(true);
@@ -318,7 +300,7 @@ describe('get_work_status evidence and restart safety', () => {
     expect(calls.length).toBeGreaterThan(1);
     for (const call of calls) expect(call).toEqual(['42', 1, 0]);
   });
-  it.each(['closed', 'merged', 'superseded'] as const)('blocks expired-session steering recovery for %s work', async (kind) => {
+  it.each(['closed', 'merged', 'superseded'] as const)('executes requested steering after %s work', async (kind) => {
     const f = fixture(); f.tasks[0]!.latestSessionEndReason = 'idle_expired';
     if (kind === 'merged') f.issue.state = 'open';
     if (kind === 'superseded') {
@@ -327,17 +309,15 @@ describe('get_work_status evidence and restart safety', () => {
     }
     const response = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers,
       payload: { action: 'steer', message: 'Continue' } });
-    expect(response.statusCode).toBe(409); expect(f.control).not.toHaveBeenCalled();
-    const confirmed = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers,
-      payload: { action: 'steer', message: 'Continue', confirm: true } });
-    expect(confirmed.statusCode).toBe(200);
+    expect(response.statusCode).toBe(200);
     expect(f.control).toHaveBeenCalledWith('42', { action: 'steer', message: 'Continue' });
   });
-  it('model steering cannot bypass expired-session recovery safety', async () => {
+  it('executes requested steering through chat after an expired session', async () => {
     const f = fixture(); f.tasks[0]!.latestSessionEndReason = 'idle_expired';
     const response = await f.app.inject({ method: 'POST', url: '/tools/steer_task', headers,
       payload: { taskId: '42', message: 'Continue' } });
-    expect(response.json().outcome).toBe('refused'); expect(f.control).not.toHaveBeenCalled();
+    expect(response.json().outcome).toBe('ok');
+    expect(f.control).toHaveBeenCalledWith('42', { action: 'steer', message: 'Continue' });
   });
   it('ordinary live steering stays unchanged even for closed linked work', async () => {
     const f = fixture(); f.tasks[0]!.latestSessionEndReason = 'idle';
