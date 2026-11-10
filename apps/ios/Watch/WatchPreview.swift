@@ -13,6 +13,7 @@ import SwiftUI
     private static var created: [UUID: WatchReply] = [:]
     private static var personalTasks = taskFixtures()
     private static var personalSubmissions: [UUID: Data] = [:]
+    static func captureTask() -> VaultTask { taskFixtures()[0] }
     static func captureReady(_ screen: String) {
         let arguments = ProcessInfo.processInfo.arguments
         let expected = arguments.first { $0.hasPrefix("--watch-screen=") }?

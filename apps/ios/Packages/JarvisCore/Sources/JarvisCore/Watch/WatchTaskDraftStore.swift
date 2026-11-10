@@ -325,7 +325,7 @@ public struct WatchTaskEditorRecord: Codable, Equatable, Sendable {
         update: WatchTaskUpdateRequest, source: VaultTask, saved: VaultTask
     ) -> Bool {
         saved.path == source.path && saved.line == source.line &&
-            saved.text == update.fields.text &&
+            saved.text == update.fields.text.split(whereSeparator: \.isWhitespace).joined(separator: " ") &&
             saved.dueDate == update.fields.due &&
             saved.dueTime == update.fields.time &&
             saved.priority == update.fields.priority &&

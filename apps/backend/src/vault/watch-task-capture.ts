@@ -106,24 +106,23 @@ export async function resolveWatchTask(
   let extracted: Partial<CaptureFields> = {};
   if (submission.mode === 'auto') {
     if (!model) throw new TaskWriteError(503, 'Automatic task parsing is unavailable. Use Manual or retry later.');
-    const boundedSignal = AbortSignal.any([signal, AbortSignal.timeout(10_000)]);
     let abort: () => void = () => {};
     let raw: string | undefined;
     try {
-      boundedSignal.throwIfAborted();
+      signal.throwIfAborted();
       raw = await Promise.race([
         model({
           system: watchTaskSystemPrompt,
           user: JSON.stringify({ submittedAt: submission.submittedAt, timeZone: submission.timeZone, input: submission.input }),
-        }, boundedSignal),
+        }, signal),
         new Promise<never>((_resolve, reject) => {
           abort = () => reject(new Error('Task parsing deadline exceeded'));
-          boundedSignal.addEventListener('abort', abort, { once: true });
-          if (boundedSignal.aborted) abort();
+          signal.addEventListener('abort', abort, { once: true });
+          if (signal.aborted) abort();
         }),
       ]);
     } catch { throw new TaskWriteError(503, 'Automatic task parsing failed. Retry or use Manual.'); }
-    finally { boundedSignal.removeEventListener('abort', abort); }
+    finally { signal.removeEventListener('abort', abort); }
     try {
       if (!raw || Buffer.byteLength(raw, 'utf8') > 16 * 1024) throw new Error('Missing task');
       const parsed: unknown = JSON.parse(raw);

@@ -158,6 +158,22 @@ describe('Watch task parsing and independent defaults', () => {
     await expect(resolveWatchTask(submission, async () => new Promise(() => {}), controller.signal)).rejects.toMatchObject({ statusCode: 503 });
   });
 
+  it('uses the caller lifetime without a separate parsing deadline and releases its listener', async () => {
+    const controller = new AbortController();
+    const remove = vi.spyOn(controller.signal, 'removeEventListener');
+    const model = vi.fn(async (_prompt, receivedSignal) => {
+      expect(receivedSignal).toBe(controller.signal);
+      return modelResult();
+    });
+    await expect(resolveWatchTask(submission, model, controller.signal)).resolves.toMatchObject({ text: 'Køb mælk' });
+    expect(remove).toHaveBeenCalledWith('abort', expect.any(Function));
+
+    const pending = resolveWatchTask(submission, async () => new Promise(() => {}), controller.signal);
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ statusCode: 503 });
+    expect(remove).toHaveBeenCalledTimes(2);
+  });
+
   it('bounds schema inputs without coercion or untrusted extra fields', () => {
     expect(validateWatchTaskSubmission(submission)).toBe(true);
     for (const invalid of [

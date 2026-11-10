@@ -45,7 +45,9 @@ class WatchBuildTests(unittest.TestCase):
             self.assertIn(screen, capture)
 
     def test_url_delivery_failure_is_not_replaced_by_fixture_navigation(self):
-        delivery = next(step["run"] for step in self.steps if step.get("name", "").startswith("Verify external URL"))
+        step = next(step for step in self.steps if step.get("name", "").startswith("Verify external URL"))
+        self.assertEqual(step["if"], "${{ !cancelled() && env.WATCH_ID != '' }}")
+        delivery = step["run"]
         self.assertIn("set -euo pipefail", delivery)
         self.assertIn('simctl openurl "$WATCH_ID" "jarvis-watch://$ROUTE"', delivery)
         self.assertNotIn("--watch-screen=", delivery)
@@ -54,6 +56,18 @@ class WatchBuildTests(unittest.TestCase):
         self.assertIn("watch-capture.json", delivery)
         self.assertIn("tasks log-lift", delivery)
         self.assertLess(delivery.index('test "$READY" = true'), delivery.index('simctl openurl'))
+
+    def test_fixture_destinations_are_initial_state_not_launch_time_push_and_sheet_chains(self):
+        app = (ROOT / "apps/ios/Watch/JarvisWatchApp.swift").read_text()
+        start = app.index("struct WatchRoot")
+        initializer = app[app.index("init()", start):app.index("var body:", start)]
+        self.assertIn('guard arguments.contains("--watch-fixture")', initializer)
+        self.assertIn("_path = State(initialValue: path)", initializer)
+        self.assertIn('arguments.contains("--watch-screen=task-edit") { path = [.taskEdit] }', initializer)
+        self.assertIn('case .taskEdit: WatchPersonalTaskEditor(task: WatchPreview.captureTask())', app)
+        self.assertIn('case .personalNewTask: WatchPersonalTaskEditor', app)
+        capture = next(step["run"] for step in self.steps if step.get("name", "").startswith("Capture intended"))
+        self.assertIn('$name-failed.png', capture)
 
     def test_actual_watch_target_registers_the_same_url_scheme(self):
         with (ROOT / "apps/ios/Watch/Info.plist").open("rb") as file:

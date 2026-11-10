@@ -18,7 +18,7 @@ struct JarvisWatchApp: App {
 enum WatchRoute: String, Hashable {
     case chat, menu, tasks, health, workouts, lifts, factory, agenda, bodyFat, notes, home, nutrition, logLift
     #if DEBUG
-    case complications, logLiftComplication
+    case complications, logLiftComplication, taskDetail, taskEdit, personalNewTask
     #endif
 }
 struct WatchRoot: View {
@@ -28,6 +28,36 @@ struct WatchRoot: View {
     @State private var path: [WatchRoute] = []
     @State private var pendingDictation = false
     @State private var page = 0
+    init() {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--watch-fixture") else { return }
+        var path: [WatchRoute] = []
+        var page = 0
+        if arguments.contains("--watch-screen=chat") { path = [.chat] }
+        if arguments.contains("--watch-screen=actions") { page = 1 }
+        if arguments.contains("--watch-screen=health") { path = [.health] }
+        if arguments.contains("--watch-screen=tasks") { path = [.tasks] }
+        if arguments.contains("--watch-screen=personal-new-task") ||
+            arguments.contains("--watch-screen=task-auto") ||
+            arguments.contains("--watch-screen=task-manual") { path = [.personalNewTask] }
+        if arguments.contains("--watch-screen=task-detail") { path = [.taskDetail] }
+        if arguments.contains("--watch-screen=task-edit") { path = [.taskEdit] }
+        if arguments.contains("--watch-screen=agenda") { path = [.agenda] }
+        if arguments.contains("--watch-screen=body-fat") { path = [.bodyFat] }
+        if arguments.contains("--watch-screen=notes") { path = [.notes] }
+        if arguments.contains("--watch-screen=home") { path = [.home] }
+        if arguments.contains("--watch-screen=nutrition") { path = [.nutrition] }
+        if arguments.contains("--watch-screen=complications") { path = [.complications] }
+        if arguments.contains("--watch-screen=lifts") || arguments.contains("--watch-screen=new-lift") { path = [.lifts] }
+        if arguments.contains("--watch-screen=new-task") || arguments.contains("--watch-screen=project") { path = [.factory] }
+        if arguments.contains("--watch-screen=log-lift") { path = [.logLift] }
+        if arguments.contains("--watch-screen=log-lift-complication") { path = [.logLiftComplication] }
+        _path = State(initialValue: path)
+        _page = State(initialValue: page)
+        #endif
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             TabView(selection: $page) {
@@ -75,6 +105,9 @@ struct WatchRoot: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .navigationTitle("Log lift")
                         .watchCaptureReady("log-lift-complication")
+                case .taskDetail: WatchTaskDetailView(task: WatchPreview.captureTask()) { _ in }
+                case .taskEdit: WatchPersonalTaskEditor(task: WatchPreview.captureTask()) { _ in }
+                case .personalNewTask: WatchPersonalTaskEditor { _ in }
                 #endif
                 }
             }
@@ -82,31 +115,6 @@ struct WatchRoot: View {
         .alert("Jarvis", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
         } message: { Text(model.error ?? "") }
-        .task {
-            #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=chat") { path = [.chat] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=actions") { page = 1 }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=health") { path = [.health] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=tasks") { path = [.tasks] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=personal-new-task") ||
-                ProcessInfo.processInfo.arguments.contains("--watch-screen=task-auto") ||
-                ProcessInfo.processInfo.arguments.contains("--watch-screen=task-manual") ||
-                ProcessInfo.processInfo.arguments.contains("--watch-screen=task-edit") ||
-                ProcessInfo.processInfo.arguments.contains("--watch-screen=task-detail") { path = [.tasks] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=agenda") { path = [.agenda] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=body-fat") { path = [.bodyFat] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=notes") { path = [.notes] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=home") { path = [.home] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=nutrition") { path = [.nutrition] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=complications"),
-               ProcessInfo.processInfo.arguments.contains("--watch-fixture") { path = [.complications] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=lifts") || ProcessInfo.processInfo.arguments.contains("--watch-screen=new-lift") { path = [.lifts] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=new-task") || ProcessInfo.processInfo.arguments.contains("--watch-screen=project") { path = [.factory] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=log-lift") { path = [.logLift] }
-            if ProcessInfo.processInfo.arguments.contains("--watch-screen=log-lift-complication"),
-               ProcessInfo.processInfo.arguments.contains("--watch-fixture") { path = [.logLiftComplication] }
-            #endif
-        }
         .onOpenURL { url in
             guard url.scheme?.lowercased() == "jarvis-watch" else { return }
             guard let link = WatchAppLink(url: url) else { path = [.menu]; return }

@@ -99,6 +99,7 @@ jobs:
               sleep 1
             done
             echo "::error::No fresh destination receipt for $name; refusing a launch-spinner capture"
+            xcrun simctl io "$device" screenshot "$RUNNER_TEMP/watch-screenshots/$name-failed.png"
             return 1
           }
           for SCREEN in dashboard actions chat health lifts new-lift new-task project tasks task-detail task-edit personal-new-task agenda body-fat notes home nutrition complications log-lift log-lift-complication; do
@@ -128,6 +129,7 @@ jobs:
             exit 1
           fi
       - name: Verify external URL delivery separately from fixture navigation
+        if: ${{ !cancelled() && env.WATCH_ID != '' }}
         timeout-minutes: 4
         run: |
           set -euo pipefail
@@ -136,7 +138,7 @@ jobs:
           for ROUTE in tasks log-lift; do
             NONCE="$(uuidgen)"
             rm -f "$CONTAINER/Documents/watch-open-url.json" "$CONTAINER/Documents/watch-capture.json"
-            OUTPUT="$(xcrun simctl launch "$WATCH_ID" "$BUNDLE" --watch-fixture "--watch-capture-id=$NONCE" "--watch-expect-url=jarvis-watch://$ROUTE")"
+            OUTPUT="$(xcrun simctl launch --terminate-running-process "$WATCH_ID" "$BUNDLE" --watch-fixture "--watch-capture-id=$NONCE" "--watch-expect-url=jarvis-watch://$ROUTE")"
             echo "$OUTPUT"
             PID="${OUTPUT##*: }"
             [[ "$PID" =~ ^[0-9]+$ ]] || { echo "::error::Missing launch PID"; exit 1; }

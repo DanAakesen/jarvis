@@ -325,6 +325,38 @@ final class WatchTaskFlowTests: XCTestCase {
         XCTAssertEqual(try WatchTaskDraftStore(fileURL: url, editing: original).record.phase, .saved)
     }
 
+    @MainActor func testCanonicalEditTitlePreservesReceiptWithoutAnotherWrite() throws {
+        let directory = testArtifactDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let original = fixtureTask()
+        for recover in [false, true] {
+            let url = directory.appendingPathComponent("canonical-\(recover).json")
+            let store = try WatchTaskDraftStore(fileURL: url, editing: original)
+            var draft = store.record.draft
+            draft.fields.text = "  Call  dentist and hygienist "
+            try store.update(
+                draft: draft, selectedDue: now, customDue: true,
+                includeTime: true, remindAtDue: false
+            )
+            let request = WatchTaskUpdateRequest(task: original, fields: draft.fields, timeZone: zone)
+            try store.beginEdit(request)
+            let saved = taskCopy(
+                original, text: "Call dentist and hygienist", version: String(repeating: "c", count: 64)
+            )
+            let receiving = try recover ? WatchTaskDraftStore(fileURL: url, editing: original) : store
+            if recover {
+                XCTAssertTrue(try receiving.refreshEdit(with: saved))
+            } else {
+                try receiving.saveResult(saved)
+            }
+            let reopened = try WatchTaskDraftStore(fileURL: url, editing: original)
+            XCTAssertEqual(reopened.record.phase, .saved)
+            XCTAssertEqual(reopened.record.savedTask, saved)
+            XCTAssertEqual(reopened.record.source, original)
+            XCTAssertThrowsError(try reopened.beginEdit(request), "A saved edit must not be sent again")
+        }
+    }
+
     @MainActor func testTaskDraftStorageCorruptionAndWriteFailureFailClosed() throws {
         let directory = testArtifactDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
