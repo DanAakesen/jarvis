@@ -438,6 +438,20 @@ describe('Software Factory Jarvis tools', () => {
     expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
   });
 
+  it('refuses a direct request if the project repository changes before writing', async () => {
+    const registered = { ...project, id: '31', name: 'Greeting Runner', description: 'test project', repo: 'synthetic/hello-world' };
+    const test = fixture([registered]);
+    test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan',
+      text: 'Add a file to the test project.', model: null, at: new Date() });
+    vi.mocked(test.projectStore.list)
+      .mockResolvedValueOnce([registered])
+      .mockResolvedValue([{ ...registered, repo: 'synthetic/renamed' }]);
+    const response = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
+      payload: { project: 'the test project', title: 'Add a file', body: 'Create the file.' } });
+    expect(response.json().outcome).toBe('refused');
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+  });
+
   it('deduplicates concurrent direct requests for a uniquely resolved project', async () => {
     const registered = { ...project, id: '31', name: 'Greeting Runner', description: 'test project', repo: 'synthetic/hello-world' };
     const test = fixture([registered]);
