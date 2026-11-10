@@ -11,6 +11,7 @@ import {
   projectSelectorSchema,
   requiresProjectSelector,
   resolveProjectForMessage,
+  resolveProjectFromOwnerContext,
   resolveRepository,
   revalidateProject,
 } from './project-context.js';
@@ -543,14 +544,22 @@ async function runOperation(
   const selector = typeof input.project === 'string'
     ? input.project
     : undefined;
-  const source = writes && (selector !== undefined || typeof input.repository === 'string') &&
-      (request.jarvisConversationMessage || request.agentPrincipal)
+  const source = writes && (request.jarvisConversationMessage || request.agentPrincipal)
     ? await danMessage(request)
     : undefined;
-  if (writes && input.repository === undefined && input.project === undefined &&
-      (request.jarvisConversationMessage || request.agentPrincipal)) {
-    if (requiresProjectSelector(source?.text ?? (await danMessage(request)).text)) {
-      throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
+  let contextualProject: Awaited<ReturnType<typeof resolveProjectFromOwnerContext>> = null;
+  if (writes && input.repository === undefined && input.project === undefined && source &&
+      requiresProjectSelector(source.text)) {
+    if (request.server.conversationStore && request.server.projectStore) {
+      const page = await request.server.conversationStore.getHistory({
+        sessionId: source.sessionId, before: source.id, limit: 20,
+      });
+      const previous = page.messages.filter((message) =>
+        message.role === 'dan' && message.sessionId === source.sessionId).reverse().map((message) => message.text);
+      contextualProject = await resolveProjectFromOwnerContext(source.text, previous, request.server.projectStore);
+    }
+    if (!contextualProject) {
+      throw new ToolRefusal('Which active project do you mean? I will not use an unselected repository. No changes were made.');
     }
   }
   const resolveWithOwnerContext = async (project: string) => {
@@ -570,7 +579,7 @@ async function runOperation(
       );
     }
   };
-  let selectedProject: Awaited<ReturnType<typeof resolveProjectForMessage>> | undefined;
+  let selectedProject: Awaited<ReturnType<typeof resolveProjectForMessage>> | undefined = contextualProject ?? undefined;
   if (writes && selector !== undefined) {
     selectedProject = await resolveWithOwnerContext(selector);
   } else if (writes && typeof input.repository === 'string' && request.server.projectStore) {
