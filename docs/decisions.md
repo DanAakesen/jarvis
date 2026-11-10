@@ -1,3 +1,11 @@
+## Watch startup connection feedback — 9 November 2026
+
+An initial unreachable WCSession callback is connection status, not evidence that a send failed. Reserve interrupted-action alerts for actual active interactions. Keep passive history errors inline and discard obsolete read results. Preserve pending drafts, acknowledgement boundaries and manual recovery; do not add an offline queue or automatic resend.
+
+## 2026-11-10 — Simplify the Watch rectangular complication
+
+The owner approved the amber vertical-stem steps concept after rejecting small text on the Ultra 2. Show only the large daily step count, full-width cumulative chart and dashed daily-goal reference; remove all other visible labels and metrics. Preserve missing data and actual hourly coverage. Weekly workout designs are deferred. Startup reconnect recovery remains separate in PR #1692; neither change is merged or deployed by this secondary thread. The actual shared view was inspected in an isolated Ultra-family Health preview; installed watch-face rendering and physical acceptance remain unverified.
+
 ## 2026-11-09 — Execute resolved owner requests directly
 
 Dan explicitly rejected approval cards, repeated confirmation turns, prescribed

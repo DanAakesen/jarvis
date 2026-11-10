@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+The owner reported an interrupted-send modal on ordinary Ultra 2 startup. The initial WCSession activation callback was treated as a disconnect even with no active interaction. The fix remains a separate branch from Home PR #1689. No deployment is authorized in this secondary thread. Device checks must include startup/foreground, phone background/lock, notification opening, idle range loss and active send/voice interruption.
+
 ## Owner-action delivery evidence — 9 November 2026
 
 PR #1690 merged as `70c669c9`. CI 42661574458 passed 7,400 backend, 1,317
@@ -8041,3 +8045,8 @@ read timeout despite the backend's 270-second generation budget. Two regression
 tests reproduced the default/configured mismatch. Image calls now use the existing
 long-tool setting (320 seconds by default), like web research. This requires
 releasing the Jarvis agent as well as the backend. No total chat deadline is added.
+
+
+## Watch steps follow-up — 10 November 2026
+
+Use existing PR-only Apple Watch build workflow for unsigned Watch simulator, physical Watch Release architecture and paired iPhone compilation. JarvisCore includes WatchStepsPlotTests for goal crossing, missing/zero and partial-day coverage; 550 tests, CI and CodeQL passed at 6490aa2. Native run 42765852671 passed all three unsigned builds. The isolated Health preview was inspected; it is not an installed watch-face screenshot. Final picker-copy/reference/docs follow-up checks are pending; no installed-device success is claimed. Startup alert PR #1692 is implemented and separately qualified at 5de65c01; it is not merged or released. Do not duplicate its recovery patch. Primary owns integration/deployment. Weekly workout concepts are deferred.

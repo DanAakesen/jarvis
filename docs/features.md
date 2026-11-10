@@ -1,3 +1,7 @@
+## Watch startup connection feedback — 9 November 2026
+
+The Watch startup fix keeps transient activation/idle reachability changes quiet and history refresh failures inline. Real interrupted chat/voice actions retain feedback and draft recovery. Implementation is separate from deployment/device acceptance; primary owns delivery.
+
 ## Notification conversation continuity — 9 November 2026
 
 Implemented on the secondary branch, with CI tracked in PR #1686: proactive pushes open
