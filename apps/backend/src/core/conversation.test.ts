@@ -1070,6 +1070,7 @@ describe('conversation routes', () => {
       });
       expect(response.body).toContain('I will handle it.');
       expect(response.body).not.toContain('confirmation_required');
+      expect(reflexClassifier.classify).toHaveBeenCalledOnce();
       expect(chatAgent.stream).toHaveBeenCalledOnce();
     });
 
