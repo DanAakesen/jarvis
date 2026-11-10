@@ -776,7 +776,9 @@ function assertCaptureIsSafe(source: string, text: string): void {
   if (credentialPattern.test(`${source}\n${text}`) || secretPattern.test(`${source}\n${text}`)) {
     throw new ToolRefusal('Secrets and credentials can never be saved to the vault. Nothing was written.');
   }
-
+  if (sensitivePattern.test(`${source}\n${text}`) && !/\bremember\b/iu.test(source)) {
+    throw new ToolRefusal('I will not save banking or health details unless Dan explicitly says “remember”. Nothing was written.');
+  }
 }
 
 export function isVaultLineSafe(text: string): boolean {
