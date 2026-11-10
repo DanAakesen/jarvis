@@ -809,7 +809,8 @@ async function controlTask(
   const controller = requireStore(request.server.taskController, 'Task controls');
   if (action === 'resume' || (action === 'steer' && await steeringRestartsTask(request.server, taskId))) {
     const reason = await taskRestartReason(request.server, taskId);
-    if (reason) throw new ToolRefusal(`Task restart refused: ${reason}. Dan must review it in task controls; model tools cannot confirm.`);
+    if (reason === 'task_not_found') throw new ToolRefusal('Task not found.');
+    if (reason === 'work_status_unverified') throw new ToolFailure('Task restart status could not be verified.');
   }
   const result = await controller.control(taskId, action === 'steer'
     ? { action, message: message! }
