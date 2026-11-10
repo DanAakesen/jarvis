@@ -106,12 +106,12 @@ describe('active project resolution', () => {
     )).resolves.toMatchObject({ id: project.id, repo: project.repo });
   });
 
-  it('asks before using a weak description-only reference in English or Danish', async () => {
+  it('uses a unique description reference in English or Danish', async () => {
     const project = registeredProject();
     const store = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
 
-    await expect(resolveProject('the test project', store)).rejects.toThrow('Do you mean project Greeting Runner');
-    await expect(resolveProject('testprojektet', store)).rejects.toThrow('Do you mean project Greeting Runner');
+    await expect(resolveProject('the test project', store)).resolves.toMatchObject({ id: project.id });
+    await expect(resolveProject('testprojektet', store)).resolves.toMatchObject({ id: project.id });
     const negated = { list: vi.fn(async () => [
       registeredProject({ description: 'not a test project' }),
     ]) } as unknown as ProjectStore;
