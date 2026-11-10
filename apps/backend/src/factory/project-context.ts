@@ -203,6 +203,33 @@ export async function resolveProjectForMessage(
   return project;
 }
 
+/**
+ * Resolve a generic follow-up only from the owner's own recent messages.
+ * A new or differently named project is never silently mapped to older context.
+ */
+export async function resolveProjectFromOwnerContext(
+  message: string, recentOwnerMessages: readonly string[], projectStore: ProjectStore | null,
+): Promise<Project | null> {
+  if (!projectStore) return null;
+  const active = (await projectStore.list()).filter((candidate) => candidate.active);
+  const matching = (text: string) => {
+    const normalized = ` ${normalizedName(text)} `;
+    return active.filter((candidate) => [candidate.name, candidate.repo]
+      .map(normalizedName).filter(Boolean)
+      .some((name) => normalized.includes(` ${name} `)));
+  };
+  const currentMatches = matching(message);
+  if (currentMatches.length === 1) return currentMatches[0]!;
+  if (currentMatches.length > 1) return null;
+  if (!/\b(?:(?:the|this|that|our|my)\s+(?:repo(?:sitory)?|project)|repoet|projektet)\b/iu.test(message) ||
+      /\b(?:another|different|other|new|andet|anden|nyt|ny)\s+(?:repo(?:sitory)?|project|projekt)\b/iu.test(message)) return null;
+  for (const previous of recentOwnerMessages) {
+    const matches = matching(previous);
+    if (matches.length > 0) return matches.length === 1 ? matches[0]! : null;
+  }
+  return null;
+}
+
 export async function revalidateProject(
   projectId: string,
   repository: string,
