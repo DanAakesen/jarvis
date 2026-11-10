@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { Client, isInputRequiredResult, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
+import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { HealthQueryResult } from '@jarvis/contracts';
 import { installAuthentication } from '../../auth/hook.js';
