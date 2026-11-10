@@ -14,7 +14,6 @@ struct JarvisUsageArea: View {
     @State private var period = JarvisUsagePeriod.default
     @State private var groupBy = JarvisUsageGroupBy.project
     @State private var load: JarvisInsightsLoad<JarvisUsageSummary> = .loading
-    @State private var hasResolvedLoad = false
     @State private var selectedBucketID: String?
     @State private var chartSelection: String?
     @State private var selectedSliceID: String?
@@ -22,6 +21,8 @@ struct JarvisUsageArea: View {
     @State private var refreshFailedWithCache = false
     @State private var forceReload = false
     @State private var showAllTasks = false
+    @State private var loadedPeriod: JarvisUsagePeriod?
+    @State private var requestID = UUID()
 
     private struct LoadKey: Hashable {
         let period: JarvisUsagePeriod
@@ -32,22 +33,28 @@ struct JarvisUsageArea: View {
         jarvisInsightsText(key, language)
     }
 
-    private var isLoading: Bool {
-        if case .loading = load { return true }
-        return false
+    private var summary: JarvisUsageSummary? {
+        if case .loaded(let value) = load, value.period == period { return value }
+        return nil
     }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-                if case .loaded(let summary) = load {
+                if let summary {
                     JarvisPageHeadline(phrase: JarvisUsagePagePhrase.make(summary, language: language))
                 }
-                if refreshFailedWithCache {
-                    Text(text(.refreshFailedShowingSaved))
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("usage.refreshFailed")
+                if refreshFailedWithCache, summary != nil {
+                    HStack {
+                        Text(text(.refreshFailedShowingSaved))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        JarvisIconButton(title: text(.retry), systemImage: "arrow.clockwise", identifier: "usage.refreshFailed.retry") {
+                            forceReload = true
+                            reloadToken += 1
+                        }
+                    }
+                    .accessibilityIdentifier("usage.refreshFailed")
                 }
                 content
             }
@@ -71,84 +78,11 @@ struct JarvisUsageArea: View {
     }
 
     @ViewBuilder private var content: some View {
-        // After the first result, keep period recovery mounted while a retry is
-        // pending. Initial loading still has one skeleton and no premature filters.
-        if client != nil, hasResolvedLoad {
-            if case .loaded = load {} else { periodSelector }
-        }
-        switch load {
-        case .loading:
-            JarvisPageLoadingView(title: text(.loading), identifier: "usage.loading")
-        case .failed(let failure):
-            JarvisInsightsStateView(kind: .failure(failure), language: language, identifier: "usage.error") {
-                if client == nil { onRetryConfiguration() }
-                forceReload = true
-                reloadToken += 1
-            }
-        case .loaded(let summary):
-            loaded(summary)
-        }
-    }
-
-    /// Reads through the repository: cached data first, then a quiet refresh only when it is stale (or forced).
-    private func reload() async {
-        guard let client else {
-            load = .failed(.notConfigured)
-            return
-        }
-        let force = forceReload
-        forceReload = false
-        selectedBucketID = nil
-        chartSelection = nil
-        selectedSliceID = nil
-        refreshFailedWithCache = false
-        let selected = period
-        // Reset before the cache bind can suspend, so old totals never acquire the new range label.
-        if case .loaded(let summary) = load, summary.period == selected {} else { load = .loading }
-        await JarvisAppCache.bindIfNeeded()
-        guard !Task.isCancelled else { return }
-        let repository = JarvisRepository<JarvisUsageReport>(
-            cache: JarvisAppCache.shared,
-            kind: .usage,
-            scope: selected.rawValue
-        ) { try await client.fetchReport(period: selected, validator: $0) }
-        for await update in repository.updates(force: force) {
-            if Task.isCancelled { return }
-            switch update {
-            case .cached(let report, _), .fresh(let report):
-                hasResolvedLoad = true
-                load = .loaded(JarvisUsageSummary(report: report, period: selected))
-            case .refreshing:
-                break
-            case .failed(let error, let cached):
-                hasResolvedLoad = true
-                if let cached {
-                    load = .loaded(JarvisUsageSummary(report: cached, period: selected))
-                    refreshFailedWithCache = true
-                } else {
-                    load = .failed(JarvisInsightsFailure(error))
-                }
-            }
-        }
-        if !Task.isCancelled, case .loading = load {
-            hasResolvedLoad = true
-            load = .failed(.failed)
-        }
-    }
-
-    // MARK: Loaded
-
-    @ViewBuilder private func loaded(_ summary: JarvisUsageSummary) -> some View {
         VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
             overview(summary)
-            if summary.isEmpty {
+            if let summary, summary.isEmpty {
                 JarvisInsightsCard {
-                    JarvisInsightsStateView(
-                        kind: .empty,
-                        emptyTitle: text(.usageNoUsage),
-                        language: language,
-                        identifier: "usage.empty"
-                    )
+                    JarvisInsightsStateView(kind: .empty, emptyTitle: text(.usageNoUsage), language: language, identifier: "usage.empty")
                 }
             } else {
                 breakdown(summary)
@@ -157,6 +91,72 @@ struct JarvisUsageArea: View {
             toolCalls(summary)
         }
     }
+
+    @ViewBuilder private var pendingData: some View {
+        if case .failed(let failure) = load {
+            JarvisInsightsStateView(kind: .failure(failure), language: language, identifier: "usage.error") {
+                if client == nil { onRetryConfiguration() }
+                forceReload = true
+                reloadToken += 1
+            }
+        } else {
+            JarvisInsightsStateView(kind: .loading, language: language, identifier: "usage.loading")
+        }
+    }
+
+    /// Reads through the repository: cached data first, then a quiet refresh only when it is stale (or forced).
+    private func reload() async {
+        let currentRequest = UUID()
+        requestID = currentRequest
+        let selected = period
+        if loadedPeriod != selected {
+            selectedBucketID = nil
+            chartSelection = nil
+            selectedSliceID = nil
+            showAllTasks = false
+        }
+        guard let client else {
+            load = .failed(.notConfigured)
+            return
+        }
+        let force = forceReload
+        forceReload = false
+        refreshFailedWithCache = false
+        // Reset before the cache bind can suspend, so old totals never acquire the new range label.
+        if case .loaded(let summary) = load, summary.period == selected {} else { load = .loading }
+        await JarvisAppCache.bindIfNeeded()
+        guard !Task.isCancelled, requestID == currentRequest, period == selected else { return }
+        let repository = JarvisRepository<JarvisUsageReport>(
+            cache: JarvisAppCache.shared,
+            kind: .usage,
+            scope: selected.rawValue
+        ) { try await client.fetchReport(period: selected, validator: $0) }
+        for await update in repository.updates(force: force) {
+            guard !Task.isCancelled, requestID == currentRequest, period == selected else { return }
+            switch update {
+            case .cached(let report, _), .fresh(let report):
+                loadedPeriod = selected
+                load = .loaded(JarvisUsageSummary(report: report, period: selected))
+            case .refreshing:
+                break
+            case .failed(let error, let cached):
+                if let cached {
+                    loadedPeriod = selected
+                    load = .loaded(JarvisUsageSummary(report: cached, period: selected))
+                    refreshFailedWithCache = true
+                } else if summary != nil {
+                    refreshFailedWithCache = true
+                } else {
+                    load = .failed(JarvisInsightsFailure(error))
+                }
+            }
+        }
+        if !Task.isCancelled, requestID == currentRequest, period == selected, case .loading = load {
+            load = .failed(.failed)
+        }
+    }
+
+    // MARK: Loaded
 
     private func selectedBucket(_ summary: JarvisUsageSummary) -> JarvisUsageBucket? {
         summary.buckets.first { $0.id == selectedBucketID }
@@ -171,25 +171,31 @@ struct JarvisUsageArea: View {
             )
     }
 
-    private func overview(_ summary: JarvisUsageSummary) -> some View {
-        let bucket = selectedBucket(summary)
-        let totals = summary.totals(in: bucket)
-        return JarvisPageHeroCard(title: text(.overview)) {
+    private func overview(_ summary: JarvisUsageSummary?) -> some View {
+        JarvisPageHeroCard(title: text(.overview)) {
             periodSelector
         } content: {
-            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-                if dynamicTypeSize.isAccessibilitySize {
-                    overviewAmount(summary, bucket: bucket)
-                    chart(summary)
-                } else {
-                    HStack(alignment: .center, spacing: JarvisPageHeaderMetrics.spacing) {
+            if let summary {
+                let bucket = selectedBucket(summary)
+                let totals = summary.totals(in: bucket)
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+                    if dynamicTypeSize.isAccessibilitySize {
                         overviewAmount(summary, bucket: bucket)
-                            .frame(minWidth: JarvisPageHeaderMetrics.heroValueMinimumWidth, alignment: .leading)
-                        chart(summary).frame(maxWidth: .infinity)
+                        chart(summary)
+                    } else {
+                        HStack(alignment: .center, spacing: JarvisPageHeaderMetrics.spacing) {
+                            overviewAmount(summary, bucket: bucket)
+                                .frame(minWidth: JarvisPageHeaderMetrics.heroValueMinimumWidth, alignment: .leading)
+                            chart(summary).frame(maxWidth: .infinity)
+                        }
                     }
+                    Divider()
+                    totalsGrid(totals)
                 }
+            } else {
+                pendingData
                 Divider()
-                totalsGrid(totals)
+                totalsGrid(nil)
             }
         }
         .accessibilityIdentifier("usage.hero")
@@ -312,17 +318,17 @@ struct JarvisUsageArea: View {
 
     // MARK: Totals
 
-    private func totalsGrid(_ totals: JarvisUsageTotals) -> some View {
+    private func totalsGrid(_ totals: JarvisUsageTotals?) -> some View {
         LazyVGrid(
             columns: [GridItem(dynamicTypeSize.isAccessibilitySize ? .flexible() : .adaptive(minimum: 72),
                                spacing: 8, alignment: .topLeading)],
             alignment: .leading,
             spacing: 8
         ) {
-            tile(text(.usageSandbox), number(totals.sandboxMinutes) + " " + text(.usageMinutesUnit), "usage.tile.sandbox")
-            tile(text(.usageTokens), compact(totals.tokens), "usage.tile.tokens")
-            tile(text(.usageTurns), number(totals.turns), "usage.tile.turns")
-            tile(text(.usagePremium), number(totals.premiumRequests), "usage.tile.premium")
+            tile(text(.usageSandbox), totals.map { number($0.sandboxMinutes) + " " + text(.usageMinutesUnit) } ?? "—", "usage.tile.sandbox")
+            tile(text(.usageTokens), totals.map { compact($0.tokens) } ?? "—", "usage.tile.tokens")
+            tile(text(.usageTurns), totals.map { number($0.turns) } ?? "—", "usage.tile.turns")
+            tile(text(.usagePremium), totals.map { number($0.premiumRequests) } ?? "—", "usage.tile.premium")
         }
     }
 
@@ -350,9 +356,8 @@ struct JarvisUsageArea: View {
         return [accent, stone, accent.opacity(0.55), stone.opacity(0.55), accent.opacity(0.3), stone.opacity(0.3)]
     }
 
-    private func breakdown(_ summary: JarvisUsageSummary) -> some View {
-        let slices = summary.slices(by: groupBy)
-        return JarvisPageHeroCard(title: text(.usageBreakdown)) {
+    private func breakdown(_ summary: JarvisUsageSummary?) -> some View {
+        JarvisPageHeroCard(title: text(.usageBreakdown)) {
             JarvisPeriodSelector(
                 title: text(.usageBreakdown),
                 identifierPrefix: "usage.groupBy",
@@ -361,11 +366,16 @@ struct JarvisUsageArea: View {
             )
             .onChange(of: groupBy) { _, _ in selectedSliceID = nil }
         } content: {
-            splitBar(slices, summary: summary)
-            VStack(spacing: 0) {
-                ForEach(Array(slices.prefix(8).enumerated()), id: \.element.id) { index, slice in
-                    sliceRow(slice, index: index, summary: summary)
+            if let summary {
+                let slices = summary.slices(by: groupBy)
+                splitBar(slices, summary: summary)
+                VStack(spacing: 0) {
+                    ForEach(Array(slices.prefix(8).enumerated()), id: \.element.id) { index, slice in
+                        sliceRow(slice, index: index, summary: summary)
+                    }
                 }
+            } else {
+                unavailableData(identifier: "usage.breakdown.loading")
             }
         }
     }
@@ -466,44 +476,48 @@ struct JarvisUsageArea: View {
 
     // MARK: Top tasks and tools
 
-    private func topTasks(_ summary: JarvisUsageSummary) -> some View {
-        let ranks = summary.topTasks()
-        let maximum = ranks.map(\.value).max() ?? 0
-        return VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
+    private func topTasks(_ summary: JarvisUsageSummary?) -> some View {
+        VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
             JarvisSectionHeadline(text(.usageTopTasks))
-            JarvisRowGroup {
-                ForEach(showAllTasks ? ranks : Array(ranks.prefix(3))) { rank in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 8) {
-                            Text(taskTitle(rank))
-                                .font(.subheadline)
-                                .lineLimit(2)
-                                .layoutPriority(1)
-                            Spacer(minLength: 8)
-                            Text(valueText(rank.value, summary: summary))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
+            if let summary {
+                let ranks = summary.topTasks()
+                let maximum = ranks.map(\.value).max() ?? 0
+                JarvisRowGroup {
+                    ForEach(showAllTasks ? ranks : Array(ranks.prefix(3))) { rank in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 8) {
+                                Text(taskTitle(rank))
+                                    .font(.subheadline)
+                                    .lineLimit(2)
+                                    .layoutPriority(1)
+                                Spacer(minLength: 8)
+                                Text(valueText(rank.value, summary: summary))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.7)
+                            }
+                            GeometryReader { proxy in
+                                Capsule()
+                                    .fill(JarvisDesignTokens.secondaryAccent.opacity(0.6))
+                                    .frame(width: maximum > 0 ? proxy.size.width * CGFloat(rank.value / maximum) : 0)
+                            }
+                            .frame(height: 4)
+                            .accessibilityHidden(true)
                         }
-                        GeometryReader { proxy in
-                            Capsule()
-                                .fill(JarvisDesignTokens.secondaryAccent.opacity(0.6))
-                                .frame(width: maximum > 0 ? proxy.size.width * CGFloat(rank.value / maximum) : 0)
-                        }
-                        .frame(height: 4)
-                        .accessibilityHidden(true)
+                        .jarvisListRow()
+                        .accessibilityElement(children: .combine)
                     }
-                    .jarvisListRow()
-                    .accessibilityElement(children: .combine)
+                    if ranks.count > 3 {
+                        JarvisTextButton(title: showAllTasks ? text(.showLess) : JarvisInsightsLocalization.format(.showMore, language: language, ranks.count - 3),
+                            identifier: "usage.showMore") { showAllTasks.toggle() }
+                            .jarvisListRow(separator: false)
+                    }
                 }
-                if ranks.count > 3 {
-                    JarvisTextButton(title: showAllTasks ? text(.showLess) : JarvisInsightsLocalization.format(.showMore, language: language, ranks.count - 3),
-                        identifier: "usage.showMore") { showAllTasks.toggle() }
-                        .jarvisListRow(separator: false)
-                }
+                .accessibilityIdentifier("usage.topTasks")
+            } else {
+                unavailableData(identifier: "usage.topTasks.loading")
             }
-            .accessibilityIdentifier("usage.topTasks")
         }
     }
 
@@ -519,42 +533,58 @@ struct JarvisUsageArea: View {
         }
     }
 
-    private func toolCalls(_ summary: JarvisUsageSummary) -> some View {
-        JarvisInsightsCard(title: text(summary.toolCallsAreDaily ? .usageToolCalls : .usageToolCallsPeriod)) {
-            VStack(alignment: .leading, spacing: 8) {
-                if summary.toolCalls.isEmpty {
-                    Text(text(!summary.toolCallsAvailable ? .usageToolsUnavailable : summary.toolCallsAreDaily ? .usageNoToolCalls : .usageNoToolCallsPeriod))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(summary.toolCalls.prefix(8), id: \.tool) { call in
-                        HStack(spacing: 8) {
-                            Text(call.tool)
-                                .font(.subheadline)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .layoutPriority(1)
-                            Spacer(minLength: 8)
-                            Text(number(Double(call.count) ?? 0))
-                                .font(.subheadline.weight(.semibold))
-                                .monospacedDigit()
+    private func toolCalls(_ summary: JarvisUsageSummary?) -> some View {
+        JarvisInsightsCard(title: text(summary?.toolCallsAreDaily == true ? .usageToolCalls : .usageToolCallsPeriod)) {
+            if let summary {
+                VStack(alignment: .leading, spacing: 8) {
+                    if summary.toolCalls.isEmpty {
+                        Text(text(!summary.toolCallsAvailable ? .usageToolsUnavailable : summary.toolCallsAreDaily ? .usageNoToolCalls : .usageNoToolCallsPeriod))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(summary.toolCalls.prefix(8), id: \.tool) { call in
+                            HStack(spacing: 8) {
+                                Text(call.tool)
+                                    .font(.subheadline)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .layoutPriority(1)
+                                Spacer(minLength: 8)
+                                Text(number(Double(call.count) ?? 0))
+                                    .font(.subheadline.weight(.semibold))
+                                    .monospacedDigit()
+                            }
+                            .accessibilityElement(children: .combine)
                         }
-                        .accessibilityElement(children: .combine)
                     }
+                    Text(
+                        summary.codexResearchCalls.map {
+                            JarvisInsightsLocalization.format(.usageCodexResearch, language: language, $0)
+                        } ?? text(.usageCodexResearchUnavailable)
+                    )
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
                 }
-                Text(
-                    summary.codexResearchCalls.map {
-                        JarvisInsightsLocalization.format(.usageCodexResearch, language: language, $0)
-                    } ?? text(.usageCodexResearchUnavailable)
-                )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("usage.toolCalls")
+            } else {
+                unavailableData(identifier: "usage.toolCalls.loading")
             }
-            .accessibilityIdentifier("usage.toolCalls")
         }
     }
 
     // MARK: Formatting
+
+    private func unavailableData(identifier: String) -> some View {
+        let failure: JarvisInsightsFailure? = {
+            if case .failed(let value) = load { return value }
+            return nil
+        }()
+        return JarvisInsightsStateView(
+            kind: failure.map { .failure($0) } ?? .loading,
+            language: language,
+            identifier: identifier
+        )
+    }
 
     private func number(_ value: Double) -> String {
         JarvisNumberFormat.compact(value, language: language)

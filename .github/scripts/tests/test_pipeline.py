@@ -747,6 +747,37 @@ class SafeFailureTests(unittest.TestCase):
         self.assertEqual(scheme_evidence["with"]["path"], "${{ runner.temp }}/ios-scheme.xcresult")
         self.assertEqual(scheme_evidence["with"]["retention-days"], 14)
 
+    def test_ios_loading_regressions_are_selected_for_native_execution(self):
+        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
+        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
+                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
+        cases = {
+            "FactoryTaskDetailUITests": [],
+            "FactoryLoadingUITests": [],
+            "WorkspacesLoadingUITests": [],
+            "HealthHeroUITests": ["testStaticStructureAndControlsPrecedeSlowHealthSources",
+                                 "testFailedRefreshRetainsHeroAndCanRetry",
+                                 "testTrackWorkoutSectionsExistBeforeCapabilitiesLoad"],
+            "InsightsPagesTests": ["testUsageKeepsStaticOverviewAndPeriodOnFirstLoad",
+                                  "testUsageFailedRefreshKeepsBreakdownSelectionAndOffersRetry",
+                                  "testStatusFilterIsVisibleBeforeChecksArriveInDanish",
+                                  "testProactiveControlsAndItemsAreNotBlockedByStatusLoading",
+                                  "testProactiveStatusFailureDoesNotHideIndependentSuggestions",
+                                  "testSettingsFirstLoadKeepsLabelsAndDisablesUnavailableEdits"],
+            "NotesRedesignUITests": ["testStaticStructureAndTasksDoNotWaitForSlowGraph",
+                                    "testFailedRefreshRetainsLibraryAndOffersRetry"],
+            "SettingsFieldUITests": ["testStaticSettingsStructureAndLocalLanguageBeforeDataArrives",
+                                    "testTargetLabelsRemainVisibleDuringFirstLoadAndFailureThenRetry",
+                                    "testFailedRootRefreshRetainsRowsAndOffersRetry",
+                                    "testMemorySearchHidesPreviousContextBeforeNewResultsArrive"],
+        }
+        for suite, methods in cases.items():
+            source = (ROOT / f"apps/ios/JarvisUITests/{suite}.swift").read_text()
+            for method in methods or [""]:
+                selection = f"JarvisUITests/{suite}" + (f"/{method}" if method else "")
+                self.assertIn(f"-only-testing:{selection} \\", capture["run"])
+                self.assertIn(f"func {method}(" if method else f"class {suite}:", source)
+
     def test_ios_chat_launcher_hit_shape_covers_its_plain_button_label(self):
         source = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
         button = source.split("struct JarvisSidebarMenuButton: View {", 1)[1].split(
@@ -1176,7 +1207,28 @@ class SafeFailureTests(unittest.TestCase):
         self.assertNotIn("copy.text(.save)", lists)
         self.assertIn("copy.text(.exercises)", lists)
         self.assertIn("copy.text(.history)", lists)
-        self.assertIn("copy.text(.noLifts)", lists)
+        for rows, loading, loaded, failed in (
+            ("visibleExercises", "exercisesLoading", "exercisesLoaded", "exercisesFailed"),
+            ("visibleLifts", "loading", "historyLoaded", "failed"),
+        ):
+            with self.subTest(section=rows):
+                self.assertRegex(
+                    lists,
+                    rf"if {rows}\.isEmpty\s*\{{\s*"
+                    rf"emptyRows\(loading: {loading} && !{loaded}, failed: {failed}\)"
+                    rf"\s*\}} else \{{\s*ForEach\({rows}\.indices",
+                )
+        empty_rows = lists.split("private func emptyRows(", 1)[1].split(
+            "@ViewBuilder private func liftRow", 1
+        )[0]
+        self.assertRegex(
+            empty_rows,
+            r"if loading\s*\{\s*"
+            r"JarvisHealthStateLine\(state: \.loading, language: language\)"
+            r"\s*\} else \{\s*Text\(copy\.text\("
+            r"failed\s*\?\s*\.loadFailed\s*:\s*"
+            r"searchText\.isEmpty\s*\?\s*\.noLifts\s*:\s*\.noResults\)\)",
+        )
 
     def test_ios_voice_live_activity_metadata_and_evidence_are_in_existing_job(self):
         project = load_workflow(ROOT / "apps/ios/project.yml")

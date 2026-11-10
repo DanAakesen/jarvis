@@ -12494,3 +12494,20 @@ read timeout despite the backend's 270-second generation budget. Two regression
 tests reproduced the default/configured mismatch. Image calls now use the existing
 long-tool setting (320 seconds by default), like web research. This requires
 releasing the Jarvis agent as well as the backend. No total chat deadline is added.
+
+## 10 November 2026 — Static iOS structure and scoped retained refresh (#1702)
+
+The owner-approved UX keeps static headings, labels and usable controls visible
+before data, scopes loading indicators to data, and retains correct-account,
+correct-context results through refresh failures with retry. Reuse existing
+repositories and indicators; no visual redesign, prefetch-everything policy,
+backend split or permanent offline store. Independent reads publish independently.
+An observed shared-cache race allowed an earlier request to write after account
+rebinding or resource invalidation; session generations and per-key revisions now
+reject those obsolete results without invalidating unrelated sources.
+
+PR #1703 owns Today/Upcoming files and semantics. This change avoids those files
+and preserves existing integer stat consumers while adding explicit unknown
+values to the shared stat component. Primary owns final integration, native
+qualification and deployment. Linux syntax/Core checks do not establish native
+layout, VoiceOver, Dynamic Type, reduced-motion or scroll acceptance.

@@ -23,6 +23,13 @@ struct JarvisActivitySheet: View {
             VStack(spacing: 0) {
                 ScrollView {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatSheetRowSpacing) {
+                    pageHead(model.nowFeed)
+                    let presentation = model.backgroundPresentation
+                    if model.nowFeed == nil {
+                        if !presentation.actionable.isEmpty { failedTaskSection(presentation.actionable) }
+                        if !presentation.running.isEmpty { backgroundTaskSection }
+                        if !presentation.quiet.isEmpty { quietFailureGroup(presentation.quiet) }
+                    }
                     if let error = model.activityError, model.nowFeed == nil {
                         ContentUnavailableView {
                             Label(copy(.activityUnavailable), systemImage: "wifi.slash")
@@ -36,7 +43,6 @@ struct JarvisActivitySheet: View {
                             ) { Task { await model.refreshActivity() } }
                         }
                     } else if let feed = model.nowFeed {
-                        let presentation = model.backgroundPresentation
                         let hasActivity = model.shouldShowNowBar
                         if let error = model.activityError {
                             HStack {
@@ -57,13 +63,10 @@ struct JarvisActivitySheet: View {
                                 .foregroundStyle(.secondary)
                                 .accessibilityAddTraits(.updatesFrequently)
                         }
-                        pageHead(feed)
                         if !feed.running.isEmpty {
                             runningSection(feed.running)
                         }
-                        if !presentation.actionable.isEmpty {
-                            failedTaskSection(presentation.actionable)
-                        }
+                        if !presentation.actionable.isEmpty { failedTaskSection(presentation.actionable) }
                         if !presentation.running.isEmpty { backgroundTaskSection }
                         ForEach(NowFeedActivityCategory.allCases, id: \.self) { category in
                             let items = feed.items.filter { $0.category == category }
@@ -78,7 +81,8 @@ struct JarvisActivitySheet: View {
                             ContentUnavailableView(copy(.activityEmpty), systemImage: "checkmark.circle")
                         }
                     } else {
-                        JarvisPageLoadingView(title: copy(.activityLoading), identifier: "notifications.loading")
+                        JarvisLoadingView(title: copy(.activityLoading))
+                            .accessibilityIdentifier("notifications.loading")
                     }
                 }
                 .padding(JarvisDesignTokens.chatHorizontalInset)
@@ -111,14 +115,16 @@ struct JarvisActivitySheet: View {
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("page.title")
             HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
-                if let items = model.nowFeed?.items, !items.isEmpty {
-                    JarvisIconButton(
-                        title: copy(.clearAll),
-                        systemImage: "trash",
-                        identifier: "activity.clearAll",
-                        isDisabled: !model.dismissingActivityIDs.isEmpty
-                    ) { Task { await model.dismissActivities(items) } }
-                }
+                let items = model.nowFeed?.items ?? []
+                JarvisIconButton(
+                    title: copy(.clearAll),
+                    systemImage: "trash",
+                    identifier: "activity.clearAll",
+                    isDisabled: items.isEmpty || !model.dismissingActivityIDs.isEmpty
+                ) { Task { await model.dismissActivities(items) } }
+                .accessibilityHint(model.nowFeed == nil
+                    ? copy(model.activityError == nil ? .activityLoading : .activityUnavailable)
+                    : (items.isEmpty ? copy(.activityEmpty) : ""))
                 JarvisIconButton(
                     title: copy(.done),
                     systemImage: "xmark",
@@ -130,21 +136,22 @@ struct JarvisActivitySheet: View {
         .padding(.vertical, JarvisPageHeaderMetrics.actionSpacing)
     }
 
-    /// The data headline and hero under the title; nothing shows until the feed has loaded.
-    private func pageHead(_ feed: JarvisNowFeed) -> some View {
+    private func pageHead(_ feed: JarvisNowFeed?) -> some View {
         VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.spacing) {
-            JarvisPageHeadline(phrase: JarvisNotificationsPagePhrase.make(
-                needsYou: model.backgroundPresentation.actionable.count,
-                running: feed.running.count + model.backgroundPresentation.running.count,
-                updates: feed.items.count,
-                language: appLanguage
-            ))
+            if let feed {
+                JarvisPageHeadline(phrase: JarvisNotificationsPagePhrase.make(
+                    needsYou: model.backgroundPresentation.actionable.count,
+                    running: feed.running.count + model.backgroundPresentation.running.count,
+                    updates: feed.items.count,
+                    language: appLanguage
+                ))
+            }
             JarvisPageHeroCard(title: copy(.activityOverview)) {
                 JarvisPageStatGrid(
                     stats: [
-                        JarvisPageStat(id: "needs", value: model.backgroundPresentation.actionable.count, label: copy(.activityNeedsYou), systemImage: "bell", tint: JarvisDesignTokens.primaryAccent),
-                        JarvisPageStat(id: "running", value: feed.running.count + model.backgroundPresentation.running.count, label: copy(.activityRunning), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent),
-                        JarvisPageStat(id: "updates", value: feed.items.count, label: copy(.activityUpdates), systemImage: "tray"),
+                        JarvisPageStat(id: "needs", value: feed.map { _ in model.backgroundPresentation.actionable.count }, label: copy(.activityNeedsYou), systemImage: "bell", tint: JarvisDesignTokens.primaryAccent, isLoading: model.activityError == nil),
+                        JarvisPageStat(id: "running", value: feed.map { $0.running.count + model.backgroundPresentation.running.count }, label: copy(.activityRunning), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent, isLoading: model.activityError == nil),
+                        JarvisPageStat(id: "updates", value: feed.map { $0.items.count }, label: copy(.activityUpdates), systemImage: "tray", isLoading: model.activityError == nil),
                     ],
                     language: appLanguage
                 )

@@ -1,5 +1,10 @@
+import CryptoKit
 import JarvisCore
 import SwiftUI
+
+private func settingsCacheDigest(_ value: String) -> String {
+    SHA256.hash(data: Data(value.utf8)).map { String(format: "%02x", $0) }.joined()
+}
 
 struct JarvisProactiveSettingsView: View {
     let client: JarvisSettingsClient?
@@ -9,6 +14,8 @@ struct JarvisProactiveSettingsView: View {
 
     @State private var settings: JarvisProactiveSettings?
     @State private var draftPaused = false
+    @State private var loadGeneration = 0
+    @State private var loadFailed = false
     @State private var loading = true
     @State private var saving = false
     @State private var error: String?
@@ -27,62 +34,87 @@ struct JarvisProactiveSettingsView: View {
                 Text(error)
                     .foregroundStyle(.red)
             }
-            if loading && settings == nil {
-                JarvisLoadingView(title: copy(.loading))
-            } else if let settings {
-                Toggle(copy(.proactiveSuggestions), isOn: Binding(
+            Toggle(copy(.proactiveSuggestions), isOn: Binding(
                     get: { !draftPaused },
                     set: { draftPaused = !$0; error = nil }
-                ))
+            ))
+            .disabled(settings == nil || readOnly || saving)
+            .accessibilityHint(settings == nil ? copy(loading ? .loading : .unavailable) : (readOnly ? copy(.readOnly) : ""))
+            .accessibilityValue(settings == nil ? copy(loading ? .loading : .statusUnknown) : copy(draftPaused ? .paused : .running))
+            if settings != nil {
                 Text(copy(draftPaused ? .paused : .running))
                     .foregroundStyle(.secondary)
-            } else {
-                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
+            } else if loading {
+                JarvisLoadingView(title: copy(.loading))
+            }
+            if loadFailed {
+                JarvisLabelledButton(title: copy(.retry), isDisabled: loading || saving) { Task { await load(force: true) } }
             }
         }
         .navigationTitle(copy(.proactiveRow))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || loading || saving || !isDirty) { Task { await save() } }
+                JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || settings == nil || saving || !isDirty) { Task { await save() } }
+                    .accessibilityHint(settings == nil ? copy(loading ? .loading : .unavailable) : (readOnly ? copy(.readOnly) : ""))
             }
             .sharedBackgroundVisibility(.hidden)
         }
         .task {
             if settings == nil { await load() }
         }
+        .onDisappear { loadGeneration += 1; loading = false }
         .onChange(of: readOnly) { _, value in
             if value { error = copy(.readOnly) }
         }
     }
 
-    private func load() async {
+    private func load(force: Bool = true) async {
+        loadGeneration += 1
+        let generation = loadGeneration
+        defer { if loadGeneration == generation { loading = false } }
         guard let client else {
+            loadFailed = true
             error = copy(.unavailable)
             loading = false
             return
         }
         loading = true
-        do {
-            let fresh = try await client.loadProactiveSettings()
-            settings = fresh
-            draftPaused = fresh.paused
-            error = nil
-        } catch {
-            self.error = copy(.loadFailed)
-            onFailure(error)
+        let repository: JarvisRepository<JarvisProactiveSettings> = await JarvisAppCache.repository(.settings, scope: "proactive") { _ in
+            .modified(try await client.loadProactiveSettings(), validator: nil)
+        }
+        guard !Task.isCancelled, loadGeneration == generation else { return }
+        for await update in repository.updates(force: force) {
+            guard !Task.isCancelled, loadGeneration == generation else { return }
+            switch update {
+            case .cached(let fresh, _), .fresh(let fresh):
+                if !isDirty {
+                    settings = fresh
+                    draftPaused = fresh.paused
+                }
+                error = nil
+                loadFailed = false
+            case .refreshing: break
+            case .failed(let failure, _):
+                error = copy(.loadFailed)
+                loadFailed = true
+                onFailure(failure)
+            }
         }
         loading = false
     }
 
     private func save() async {
-        guard let client, let settings, isDirty, !readOnly else { return }
+        guard let client, let settings, isDirty, !readOnly, !saving else { return }
+        loadGeneration += 1
+        loading = false
         saving = true
         error = nil
         do {
             let saved = try await client.saveProactivePaused(draftPaused, expectedRevision: settings.revision)
             self.settings = saved
             draftPaused = saved.paused
+            await JarvisAppCache.invalidate(.settings, scope: "proactive")
             error = copy(.saved)
         } catch {
             self.error = copy(.savePending)
@@ -99,6 +131,8 @@ struct JarvisRoutinesSettingsView: View {
     let onFailure: (Error) -> Void
 
     @State private var routines: [JarvisRoutine] = []
+    @State private var hasLoaded = false
+    @State private var loadGeneration = 0
     @State private var loading = true
     @State private var error: String?
     @State private var deleting = false
@@ -112,9 +146,9 @@ struct JarvisRoutinesSettingsView: View {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
-            if loading && routines.isEmpty {
+            if loading && !hasLoaded {
                 JarvisLoadingView(title: copy(.loading))
-            } else if routines.isEmpty {
+            } else if hasLoaded && routines.isEmpty {
                 Text(copy(.noRoutines)).foregroundStyle(.secondary)
             }
             ForEach(routines) { routine in
@@ -134,48 +168,67 @@ struct JarvisRoutinesSettingsView: View {
                         isDisabled: readOnly || deleting,
                         tint: .red
                     ) { Task { await delete(routine) } }
+                    .accessibilityHint(readOnly ? copy(.readOnly) : "")
                 }
                 .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
             }
-            if let error, !routines.isEmpty {
-                JarvisLabelledButton(title: copy(.retry), isDisabled: loading) { Task { await load() } }
+            if error != nil {
+                JarvisLabelledButton(title: copy(.retry), isDisabled: loading) { Task { await load(force: true) } }
             }
         }
         .listStyle(.insetGrouped)
         .jarvisAmbientBackground()
         .navigationTitle(copy(.routinesRow))
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await load() }
+        .refreshable { await load(force: true) }
         .task {
-            if routines.isEmpty { await load() }
+            if !hasLoaded { await load() }
         }
+        .onDisappear { loadGeneration += 1; loading = false }
 
     }
 
-    private func load() async {
+    private func load(force: Bool = true) async {
+        guard !deleting else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
+        defer { if loadGeneration == generation { loading = false } }
         guard let client else {
             error = copy(.unavailable)
             loading = false
             return
         }
         loading = true
-        do {
-            routines = try await client.loadRoutines()
-            error = nil
-        } catch {
-            self.error = copy(.loadFailed)
-            onFailure(error)
+        let repository: JarvisRepository<[JarvisRoutine]> = await JarvisAppCache.repository(.settings, scope: "routines") { _ in
+            .modified(try await client.loadRoutines(), validator: nil)
+        }
+        guard !Task.isCancelled, loadGeneration == generation else { return }
+        for await update in repository.updates(force: force) {
+            guard !Task.isCancelled, loadGeneration == generation else { return }
+            switch update {
+            case .cached(let fresh, _), .fresh(let fresh):
+                routines = fresh
+                hasLoaded = true
+                error = nil
+            case .refreshing: break
+            case .failed(let failure, _):
+                error = copy(.loadFailed)
+                onFailure(failure)
+            }
         }
         loading = false
     }
 
     private func delete(_ routine: JarvisRoutine) async {
         guard let client, !readOnly, !deleting else { return }
+        loadGeneration += 1
+        loading = false
         deleting = true
         error = nil
         do {
             try await client.deleteRoutine(id: routine.id)
             routines.removeAll { $0.id == routine.id }
+            await JarvisAppCache.invalidate(.settings, scope: "routines")
         } catch {
             self.error = copy(.deleteFailed)
             onFailure(error)
@@ -200,6 +253,10 @@ struct JarvisMemorySettingsView: View {
     @State private var error: String?
     @State private var selectedMemory: JarvisMemoryItem?
     @State private var loadGeneration = 0
+    @State private var loadedQuery: String?
+
+    private var currentQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var showsCurrentResults: Bool { loadedQuery == currentQuery }
 
     private func copy(_ key: JarvisSettingsLocalizationKey) -> String {
         JarvisSettingsLocalization.string(key, language: language)
@@ -210,12 +267,12 @@ struct JarvisMemorySettingsView: View {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
-            if loading && memories.isEmpty {
+            if loading && !showsCurrentResults {
                 JarvisLoadingView(title: copy(.loading))
-            } else if memories.isEmpty {
+            } else if showsCurrentResults && memories.isEmpty {
                 Text(copy(.noMemories)).foregroundStyle(.secondary)
             }
-            ForEach(memories) { memory in
+            ForEach(showsCurrentResults ? memories : []) { memory in
                 Button {
                     selectedMemory = memory
                 } label: {
@@ -234,11 +291,16 @@ struct JarvisMemorySettingsView: View {
                 .buttonStyle(.plain)
                 .frame(minHeight: JarvisDesignTokens.settingsRowMinimumHeight)
             }
-            if hasMore {
+            if showsCurrentResults && hasMore {
                 JarvisLabelledButton(
                     title: loadingMore ? copy(.loading) : copy(.loadMore),
-                    isDisabled: loadingMore
+                    isDisabled: loadingMore || loading
                 ) { Task { await loadMore() } }
+            }
+            if error != nil {
+                JarvisLabelledButton(title: copy(.retry), isDisabled: loading || loadingMore) {
+                    Task { await load(reset: true, force: true) }
+                }
             }
         }
         .listStyle(.insetGrouped)
@@ -246,8 +308,14 @@ struct JarvisMemorySettingsView: View {
         .navigationTitle(copy(.memoryRow))
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: copy(.memorySearch))
-        .onSubmit(of: .search) { Task { await load(reset: true) } }
-        .refreshable { await load(reset: true) }
+        .onSubmit(of: .search) { Task { await load(reset: true, force: true) } }
+        .onChange(of: query) { _, _ in
+            loading = true
+            loadingMore = false
+            error = nil
+            selectedMemory = nil
+        }
+        .refreshable { await load(reset: true, force: true) }
         .task(id: query) {
             if hasLoaded {
                 do {
@@ -259,6 +327,7 @@ struct JarvisMemorySettingsView: View {
             }
             await load(reset: true)
         }
+        .onDisappear { loadGeneration += 1; loading = false; loadingMore = false }
         .sheet(item: $selectedMemory) { memory in
             NavigationStack {
                 JarvisMemoryEditorView(
@@ -267,13 +336,20 @@ struct JarvisMemorySettingsView: View {
                     language: language,
                     readOnly: readOnly,
                     onFailure: onFailure,
-                    onDeleted: { id in memories.removeAll { $0.id == id } },
+                    onDeleted: { id in
+                        loadGeneration += 1
+                        loading = false
+                        memories.removeAll { $0.id == id }
+                    },
                     onSaved: { fresh in
+                        loadGeneration += 1
+                        loading = false
                         if let index = memories.firstIndex(where: { $0.id == fresh.id }) {
                             memories[index] = fresh
                         }
                     }
                 )
+                .id(memory.id)
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -281,15 +357,23 @@ struct JarvisMemorySettingsView: View {
     }
 
     private func loadMore() async {
-        guard hasMore else { return }
+        guard showsCurrentResults, hasMore, !loadingMore, !loading else { return }
         loadingMore = true
         await load(reset: false)
-        loadingMore = false
     }
 
-    private func load(reset: Bool) async {
+    private func load(reset: Bool, force: Bool = true) async {
         loadGeneration += 1
         let generation = loadGeneration
+        let requestedQuery = currentQuery
+        let requestedOffset = reset ? 0 : offset + JarvisSettingsLogic.memoryPageSize
+        let previousItems = reset ? [] : memories
+        defer {
+            if loadGeneration == generation {
+                loading = false
+                loadingMore = false
+            }
+        }
         guard let client else {
             error = copy(.unavailable)
             loading = false
@@ -297,34 +381,31 @@ struct JarvisMemorySettingsView: View {
         }
         if reset {
             loading = true
-            offset = 0
         }
-        do {
-            let page = try await client.loadMemory(
-                query: query.trimmingCharacters(in: .whitespacesAndNewlines),
-                offset: reset ? 0 : offset + JarvisSettingsLogic.memoryPageSize
-            )
-            try Task.checkCancellation()
-            guard loadGeneration == generation else { return }
-            if reset {
-                memories = page.items
-            } else {
-                memories.append(contentsOf: page.items)
+        let repository: JarvisRepository<JarvisMemoryPage> = await JarvisAppCache.repository(
+            .settings, scope: "memory:\(settingsCacheDigest(requestedQuery)):\(requestedOffset)"
+        ) { _ in
+            .modified(try await client.loadMemory(query: requestedQuery, offset: requestedOffset), validator: nil)
+        }
+        guard !Task.isCancelled, loadGeneration == generation, currentQuery == requestedQuery else { return }
+        for await update in repository.updates(force: force) {
+            guard !Task.isCancelled, loadGeneration == generation, currentQuery == requestedQuery else { return }
+            if case .cached = update, reset, showsCurrentResults && hasLoaded { continue }
+            switch update {
+            case .cached(let page, _), .fresh(let page):
+                memories = previousItems + page.items
+                offset = page.offset
+                loadedQuery = requestedQuery
+                hasMore = page.hasMore
+                hasLoaded = true
+                error = nil
+            case .refreshing: break
+            case .failed(let failure, _):
+                error = copy(.loadFailed)
+                onFailure(failure)
             }
-            offset = page.offset
-            hasMore = page.hasMore
-            hasLoaded = true
-            error = nil
-        } catch is CancellationError {
-            if loadGeneration == generation { loading = false }
-            return
-        } catch {
-            guard loadGeneration == generation else { return }
-            self.error = copy(.loadFailed)
-            onFailure(error)
         }
         if loadGeneration == generation {
-            hasLoaded = true
             loading = false
         }
     }
@@ -340,6 +421,7 @@ private struct JarvisMemoryEditorView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var memory: JarvisMemoryItem
+    @State private var loadGeneration = 0
     @State private var draft: String
     @State private var loading = true
     @State private var loaded = false
@@ -383,34 +465,38 @@ private struct JarvisMemoryEditorView: View {
             if let notice {
                 Text(notice).foregroundStyle(.secondary)
             }
-            if loading {
+            VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                Text(copy(.memoryText)).foregroundStyle(.primary)
+                TextEditor(text: $draft)
+                    .frame(minHeight: 180)
+                    .accessibilityLabel(copy(.memoryText))
+                    .disabled(!loaded || readOnly || saving || deleting)
+                    .accessibilityHint(!loaded ? copy(loading ? .loading : .unavailable) : (readOnly ? copy(.readOnly) : ""))
+            }
+            if loading && !loaded {
                 JarvisLoadingView(title: copy(.loading))
-            } else if !loaded {
-                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
-            } else {
-                VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    Text(copy(.memoryText)).foregroundStyle(.primary)
-                    TextEditor(text: $draft)
-                        .frame(minHeight: 180)
-                        .accessibilityLabel(copy(.memoryText))
-                        .disabled(readOnly || saving || deleting)
-                }
+            }
+            if error != nil {
+                JarvisLabelledButton(title: copy(.retry), isDisabled: loading || saving || deleting) { Task { await load(force: true) } }
             }
             JarvisLabelledButton(
                 title: copy(.delete),
-                isDisabled: readOnly || loading || !loaded || saving || deleting,
+                isDisabled: readOnly || !loaded || saving || deleting,
                 isDestructive: true
             ) { Task { await delete() } }
+            .accessibilityHint(!loaded ? copy(loading ? .loading : .unavailable) : (readOnly ? copy(.readOnly) : ""))
         }
         .navigationTitle(memory.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || loading || !loaded || saving || deleting || !hasChanges || !validText) { Task { await save() } }
+                JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || !loaded || saving || deleting || !hasChanges || !validText) { Task { await save() } }
+                    .accessibilityHint(!loaded ? copy(loading ? .loading : .unavailable) : (readOnly ? copy(.readOnly) : ""))
             }
             .sharedBackgroundVisibility(.hidden)
         }
-        .task { await load() }
+        .task { if !loaded { await load() } }
+        .onDisappear { loadGeneration += 1; loading = false }
 
     }
 
@@ -418,7 +504,11 @@ private struct JarvisMemoryEditorView: View {
         JarvisSettingsLogic.validMemoryText(draft)
     }
 
-    private func load() async {
+    private func load(force: Bool = true) async {
+        loadGeneration += 1
+        let generation = loadGeneration
+        let memoryID = memory.id
+        defer { if loadGeneration == generation { loading = false } }
         loading = true
         error = nil
         guard let client else {
@@ -426,24 +516,37 @@ private struct JarvisMemoryEditorView: View {
             error = copy(.unavailable)
             return
         }
-        do {
-            memory = try await client.readMemory(id: memory.id)
-            draft = memory.text
-            loaded = true
-        } catch {
-            self.error = copy(.loadFailed)
-            onFailure(error)
+        let repository: JarvisRepository<JarvisMemoryItem> = await JarvisAppCache.repository(.settings, scope: "memoryItem:\(settingsCacheDigest(memoryID))") { _ in
+            .modified(try await client.readMemory(id: memoryID), validator: nil)
+        }
+        guard !Task.isCancelled, loadGeneration == generation else { return }
+        for await update in repository.updates(force: force) {
+            guard !Task.isCancelled, loadGeneration == generation, memory.id == memoryID else { return }
+            switch update {
+            case .cached(let fresh, _), .fresh(let fresh):
+                if !hasChanges { draft = fresh.text }
+                memory = fresh
+                loaded = true
+                error = nil
+            case .refreshing: break
+            case .failed(let failure, _):
+                error = copy(.loadFailed)
+                onFailure(failure)
+            }
         }
         loading = false
     }
 
     private func save() async {
-        guard let client, loaded, hasChanges, validText, !readOnly else { return }
+        guard let client, loaded, hasChanges, validText, !readOnly, !saving, !deleting else { return }
+        loadGeneration += 1
+        loading = false
         saving = true
         error = nil
         notice = nil
         do {
             try await client.updateMemory(id: memory.id, text: draft.trimmingCharacters(in: .whitespacesAndNewlines))
+            await JarvisAppCache.invalidateAll(.settings)
             let updated = JarvisMemoryItem(
                 id: memory.id,
                 kind: memory.kind,
@@ -464,7 +567,9 @@ private struct JarvisMemoryEditorView: View {
     }
 
     private func delete() async {
-        guard let client, !readOnly, !deleting else { return }
+        guard let client, loaded, !readOnly, !deleting, !saving else { return }
+        loadGeneration += 1
+        loading = false
         deleting = true
         error = nil
         notice = nil
@@ -473,6 +578,7 @@ private struct JarvisMemoryEditorView: View {
             if approvalPending {
                 notice = copy(.deletePending)
             } else {
+                await JarvisAppCache.invalidateAll(.settings)
                 onDeleted(memory.id)
                 dismiss()
             }
@@ -484,7 +590,7 @@ private struct JarvisMemoryEditorView: View {
     }
 }
 
-enum JarvisTargetSettingsKind: Equatable {
+enum JarvisTargetSettingsKind: Equatable, Sendable {
     case training
     case nutrition
 
@@ -520,6 +626,8 @@ struct JarvisTargetsSettingsView: View {
     let onFailure: (Error) -> Void
 
     @State private var targets: JarvisTargetValues?
+    @State private var loadGeneration = 0
+    @State private var loadFailed = false
     @State private var drafts: [String: String] = [:]
     @State private var loading = true
     @State private var saving = false
@@ -551,38 +659,40 @@ struct JarvisTargetsSettingsView: View {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
-            if loading && targets == nil {
-                JarvisLoadingView(title: copy(.loading))
-            } else if let targets {
-                ForEach(kind.keys, id: \.self) { key in
-                    if let bound = targets.bounds[key] {
-                        VStack(alignment: .leading, spacing: JarvisDesignTokens.settingsSectionSpacing / 2) {
-                            JarvisSettingsTextField(title: copy(kind.title(for: key)), text: Binding(
-                                get: { drafts[key] ?? "" },
-                                set: { drafts[key] = $0; error = nil }
-                            ), identifier: "settings.target.\(key)", keyboard: .numberPad)
+            ForEach(kind.keys, id: \.self) { key in
+                VStack(alignment: .leading, spacing: JarvisDesignTokens.settingsSectionSpacing / 2) {
+                    JarvisSettingsTextField(title: copy(kind.title(for: key)), text: Binding(
+                        get: { drafts[key] ?? "" },
+                        set: { drafts[key] = $0; error = nil }
+                    ), identifier: "settings.target.\(key)", keyboard: .numberPad)
+                        .disabled(targets?.bounds[key] == nil || readOnly || saving)
+                        .accessibilityHint(targets?.bounds[key] == nil ? copy(loading ? .loading : .unavailable) : (readOnly ? copy(.readOnly) : ""))
+                    if let bound = targets?.bounds[key] {
                             Text("\(bound.min)–\(bound.max) \(localizedUnit(bound.unit))")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
-                        }
-                        .disabled(readOnly || saving)
+                    } else if loading {
+                        JarvisLoadingView(title: copy(.loading))
                     }
                 }
-            } else {
-                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
+            }
+            if loadFailed {
+                JarvisLabelledButton(title: copy(.retry), isDisabled: loading || saving) { Task { await load(force: true) } }
             }
         }
         .navigationTitle(copy(kind.screenTitle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || loading || saving || !dirty || !valid) { Task { await save() } }
+                JarvisSheetConfirmButton(title: copy(.save), isWorking: saving, isDisabled: readOnly || targets == nil || saving || !dirty || !valid) { Task { await save() } }
+                    .accessibilityHint(targets == nil ? copy(loading ? .loading : .unavailable) : (readOnly ? copy(.readOnly) : ""))
             }
             .sharedBackgroundVisibility(.hidden)
         }
         .task {
             if targets == nil { await load() }
         }
+        .onDisappear { loadGeneration += 1; loading = false }
         .onChange(of: readOnly) { _, value in
             if value { error = copy(.readOnly) }
         }
@@ -593,31 +703,51 @@ struct JarvisTargetsSettingsView: View {
         return value.integerValue.map(String.init) ?? ""
     }
 
-    private func load() async {
+    private func load(force: Bool = true) async {
+        loadGeneration += 1
+        let generation = loadGeneration
+        defer { if loadGeneration == generation { loading = false } }
         guard let client else {
+            loadFailed = true
             error = copy(.unavailable)
             loading = false
             return
         }
         loading = true
-        do {
-            let fresh: JarvisTargetValues
+        let kind = kind
+        let repository: JarvisRepository<JarvisTargetValues> = await JarvisAppCache.repository(
+            .settings, scope: kind == .training ? "trainingTargets" : "nutritionTargets"
+        ) { _ in
             switch kind {
-            case .training: fresh = try await client.loadTrainingTargets()
-            case .nutrition: fresh = try await client.loadNutritionTargets()
+            case .training: .modified(try await client.loadTrainingTargets(), validator: nil)
+            case .nutrition: .modified(try await client.loadNutritionTargets(), validator: nil)
             }
-            targets = fresh
-            drafts = Dictionary(uniqueKeysWithValues: kind.keys.map { ($0, draftText($0, targets: fresh)) })
-            error = nil
-        } catch {
-            self.error = copy(.loadFailed)
-            onFailure(error)
+        }
+        guard !Task.isCancelled, loadGeneration == generation else { return }
+        for await update in repository.updates(force: force) {
+            guard !Task.isCancelled, loadGeneration == generation else { return }
+            switch update {
+            case .cached(let fresh, _), .fresh(let fresh):
+                if !dirty {
+                    targets = fresh
+                    drafts = Dictionary(uniqueKeysWithValues: kind.keys.map { ($0, draftText($0, targets: fresh)) })
+                }
+                error = nil
+                loadFailed = false
+            case .refreshing: break
+            case .failed(let failure, _):
+                error = copy(.loadFailed)
+                loadFailed = true
+                onFailure(failure)
+            }
         }
         loading = false
     }
 
     private func save() async {
-        guard let client, let targets, !readOnly, dirty, valid else { return }
+        guard let client, let targets, !readOnly, !saving, dirty, valid else { return }
+        loadGeneration += 1
+        loading = false
         var changes: [String: Int?] = [:]
         for key in kind.keys where draftText(key, targets: targets) != (drafts[key] ?? "") {
             let raw = (drafts[key] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -634,6 +764,7 @@ struct JarvisTargetsSettingsView: View {
             }
             self.targets = fresh
             drafts = Dictionary(uniqueKeysWithValues: kind.keys.map { ($0, draftText($0, targets: fresh)) })
+            await JarvisAppCache.invalidate(.settings, scope: kind == .training ? "trainingTargets" : "nutritionTargets")
             error = copy(.saved)
         } catch {
             self.error = copy(.saveFailed)
@@ -659,6 +790,7 @@ struct JarvisHealthCredentialView: View {
     let onFailure: (Error) -> Void
 
     @State private var credential: JarvisHealthUploadCredential?
+    @State private var loadGeneration = 0
     @State private var loading = true
     @State private var error: String?
 
@@ -671,38 +803,64 @@ struct JarvisHealthCredentialView: View {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
-            if loading && credential == nil {
-                JarvisLoadingView(title: copy(.loading))
-            } else if let credential {
-                LabeledContent(copy(.credentialState), value: statusTitle(credential.state))
-                if let expiresAt = credential.expiresAt {
-                    LabeledContent(copy(.credentialExpiry), value: formattedDate(expiresAt))
+            LabeledContent(copy(.credentialState)) {
+                if let credential {
+                    Text(statusTitle(credential.state))
+                } else if loading {
+                    JarvisLoadingView(title: copy(.loading))
+                } else {
+                    Text(copy(.statusUnknown)).foregroundStyle(.secondary)
                 }
-            } else {
-                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
+            }
+            LabeledContent(copy(.credentialExpiry)) {
+                if let expiresAt = credential?.expiresAt {
+                    Text(formattedDate(expiresAt))
+                } else if credential != nil {
+                    Text(copy(.none)).foregroundStyle(.secondary)
+                } else if loading {
+                    JarvisLoadingView(title: copy(.loading))
+                } else {
+                    Text(copy(.statusUnknown)).foregroundStyle(.secondary)
+                }
+            }
+            if error != nil {
+                JarvisLabelledButton(title: copy(.retry), isDisabled: loading) { Task { await load(force: true) } }
             }
         }
         .navigationTitle(copy(.uploadCredentialRow))
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await load() }
+        .refreshable { await load(force: true) }
         .task {
             if credential == nil { await load() }
         }
+        .onDisappear { loadGeneration += 1; loading = false }
     }
 
-    private func load() async {
+    private func load(force: Bool = true) async {
+        loadGeneration += 1
+        let generation = loadGeneration
+        defer { if loadGeneration == generation { loading = false } }
         guard let client else {
             error = copy(.unavailable)
             loading = false
             return
         }
         loading = true
-        do {
-            credential = try await client.loadHealthUploadCredential()
-            error = nil
-        } catch {
-            self.error = copy(.loadFailed)
-            onFailure(error)
+        let repository: JarvisRepository<JarvisHealthUploadCredential> = await JarvisAppCache.repository(.settings, scope: "healthCredential") { _ in
+            .modified(try await client.loadHealthUploadCredential(), validator: nil)
+        }
+        guard !Task.isCancelled, loadGeneration == generation else { return }
+        for await update in repository.updates(force: force) {
+            guard !Task.isCancelled, loadGeneration == generation else { return }
+            switch update {
+            case .cached(let fresh, _), .fresh(let fresh):
+                credential = fresh
+                error = nil
+            case .refreshing: break
+            case .failed(let failure, _):
+                error = copy(.loadFailed)
+                onFailure(failure)
+            }
         }
         loading = false
     }
@@ -732,6 +890,7 @@ struct JarvisOwnerSettingsView: View {
     let onFailure: (Error) -> Void
 
     @State private var name: String?
+    @State private var loadGeneration = 0
     @State private var loading = true
     @State private var error: String?
 
@@ -744,12 +903,17 @@ struct JarvisOwnerSettingsView: View {
             if let error {
                 Text(error).foregroundStyle(.red)
             }
-            if loading && name == nil {
-                JarvisLoadingView(title: copy(.loading))
-            } else if let name {
-                LabeledContent(copy(.ownerRow), value: name)
-            } else {
-                JarvisLabelledButton(title: copy(.retry)) { Task { await load() } }
+            LabeledContent(copy(.ownerRow)) {
+                if let name {
+                    Text(name)
+                } else if loading {
+                    JarvisLoadingView(title: copy(.loading))
+                } else {
+                    Text(copy(.statusUnknown)).foregroundStyle(.secondary)
+                }
+            }
+            if error != nil {
+                JarvisLabelledButton(title: copy(.retry), isDisabled: loading) { Task { await load(force: true) } }
             }
         }
         .navigationTitle(copy(.ownerRow))
@@ -757,21 +921,34 @@ struct JarvisOwnerSettingsView: View {
         .task {
             if name == nil { await load() }
         }
+        .onDisappear { loadGeneration += 1; loading = false }
     }
 
-    private func load() async {
+    private func load(force: Bool = true) async {
+        loadGeneration += 1
+        let generation = loadGeneration
+        defer { if loadGeneration == generation { loading = false } }
         guard let client else {
             error = copy(.ownerUnavailable)
             loading = false
             return
         }
         loading = true
-        do {
-            name = try await client.loadOwnerProfile().name
-            error = nil
-        } catch {
-            self.error = copy(.ownerUnavailable)
-            onFailure(error)
+        let repository: JarvisRepository<JarvisOwnerProfile> = await JarvisAppCache.repository(.settings, scope: "owner") { _ in
+            .modified(try await client.loadOwnerProfile(), validator: nil)
+        }
+        guard !Task.isCancelled, loadGeneration == generation else { return }
+        for await update in repository.updates(force: force) {
+            guard !Task.isCancelled, loadGeneration == generation else { return }
+            switch update {
+            case .cached(let fresh, _), .fresh(let fresh):
+                name = fresh.name
+                error = nil
+            case .refreshing: break
+            case .failed(let failure, _):
+                error = copy(.ownerUnavailable)
+                onFailure(failure)
+            }
         }
         loading = false
     }
@@ -822,6 +999,7 @@ struct JarvisCredentialsSettingsView: View {
                         ) {
                             Task { await renew(credential.name) }
                         }
+                        .accessibilityHint(readOnly ? copy(.readOnly) : "")
                     }
                 }
 

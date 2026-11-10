@@ -32,13 +32,7 @@ struct JarvisProactiveSettingsSheet: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if editor != nil {
-                    form
-                } else {
-                    stateView
-                }
-            }
+            form
             .navigationTitle(text(.editorTitle))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -120,17 +114,24 @@ struct JarvisProactiveSettingsSheet: View {
     private var form: some View {
         ScrollViewReader { proxy in
             JarvisForm {
+                if editor == nil {
+                    Section { stateView }
+                }
                 stateBanner
                 Section {
-                    Toggle(text(.editorPause), isOn: draft(\.paused, fallback: false))
-                        .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                        .accessibilityIdentifier("proactive.edit.pause")
+                    if editor != nil {
+                        Toggle(text(.editorPause), isOn: draft(\.paused, fallback: false))
+                            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                            .accessibilityIdentifier("proactive.edit.pause")
+                    } else { pendingValue(text(.editorPause)) }
                 }
                 Section {
                     ForEach(JarvisProactiveSourceID.allCases) { id in
-                        Toggle(text(id.localizationKey), isOn: sourceBinding(id))
-                            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                            .accessibilityIdentifier("proactive.edit.source.\(id.rawValue)")
+                        if editor != nil {
+                            Toggle(text(id.localizationKey), isOn: sourceBinding(id))
+                                .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                                .accessibilityIdentifier("proactive.edit.source.\(id.rawValue)")
+                        } else { pendingValue(text(id.localizationKey)) }
                     }
                 } header: {
                     Text(text(.editorSources))
@@ -138,9 +139,11 @@ struct JarvisProactiveSettingsSheet: View {
                 .id(Focus.sources.rawValue)
                 Section {
                     ForEach(JarvisProactiveCategory.allCases) { id in
-                        Toggle(text(id.localizationKey), isOn: categoryBinding(id))
-                            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                            .accessibilityIdentifier("proactive.edit.category.\(id.rawValue)")
+                        if editor != nil {
+                            Toggle(text(id.localizationKey), isOn: categoryBinding(id))
+                                .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                                .accessibilityIdentifier("proactive.edit.category.\(id.rawValue)")
+                        } else { pendingValue(text(id.localizationKey)) }
                     }
                 } header: {
                     Text(text(.editorCategories))
@@ -149,33 +152,41 @@ struct JarvisProactiveSettingsSheet: View {
                     JarvisTabStrip(
                         title: text(.editorScope),
                         identifierPrefix: "proactive.edit.scope",
-                        items: JarvisProactiveScope.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
-                        selection: draft(\.scope, fallback: .all)
+                        items: JarvisProactiveScope.allCases.map { JarvisTabItem(tag: Optional($0), title: text($0.localizationKey)) },
+                        selection: Binding(
+                            get: { editor?.draft.scope },
+                            set: { if let value = $0 { editor?.draft.scope = value } }
+                        )
                     )
+                    .disabled(editor == nil)
+                    .accessibilityHint(editor == nil ? pendingText : "")
                 } header: {
                     Text(text(.editorScope))
                 }
                 Section {
-                    HStack {
-                        Text(text(.editorBudget))
-                        Spacer(minLength: 0)
-                        Text("\(budgetValue)")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                    }
-                    Slider(value: budgetSlider, in: Double(JarvisProactiveLimits.budgetRange.lowerBound)...Double(JarvisProactiveLimits.budgetRange.upperBound), step: 10)
-                        .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-                        .accessibilityLabel(text(.editorBudget))
-                        .accessibilityValue("\(budgetValue)")
-                        .accessibilityIdentifier("proactive.edit.budget")
-                    if editor?.draft.budget == nil {
-                        issue(.budgetOutOfRange)
-                    }
+                    if editor != nil {
+                        HStack {
+                            Text(text(.editorBudget))
+                            Spacer(minLength: 0)
+                            Text("\(budgetValue)")
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                        Slider(value: budgetSlider, in: Double(JarvisProactiveLimits.budgetRange.lowerBound)...Double(JarvisProactiveLimits.budgetRange.upperBound), step: 10)
+                            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                            .accessibilityLabel(text(.editorBudget))
+                            .accessibilityValue("\(budgetValue)")
+                            .accessibilityIdentifier("proactive.edit.budget")
+                        if editor?.draft.budget == nil {
+                            issue(.budgetOutOfRange)
+                        }
+                    } else { pendingValue(text(.editorBudget)) }
                 } header: {
                     Text(text(.editorBudget))
                 }
                 .id(Focus.budget.rawValue)
                 Section {
+                    if editor == nil { pendingValue(text(.editorFeeds)) }
                     ForEach(Array(feedRows.enumerated()), id: \.offset) { index, feed in
                         HStack(spacing: 8) {
                             Image(systemName: "dot.radiowaves.up.forward")
@@ -211,29 +222,35 @@ struct JarvisProactiveSettingsSheet: View {
                             title: text(.editorAddFeed),
                             systemImage: "plus",
                             identifier: "proactive.edit.feeds.add",
-                            isDisabled: newFeed.trimmingCharacters(in: .whitespaces).isEmpty,
+                            isDisabled: editor == nil || newFeed.trimmingCharacters(in: .whitespaces).isEmpty,
                             action: addFeed
                         )
                     }
+                    .disabled(editor == nil)
+                    .accessibilityHint(editor == nil ? pendingText : "")
                     ForEach(feedIssues, id: \.self) { issue($0) }
                 } header: {
                     Text(text(.editorFeeds))
                 }
                 Section {
-                    TextEditor(text: draft(\.guidance, fallback: ""))
-                        .frame(minHeight: 120)
-                        .accessibilityLabel(text(.editorGuidance))
-                        .accessibilityIdentifier("proactive.edit.guidance")
-                    guidanceCounter
-                    if (editor?.draft.guidance.count ?? 0) > JarvisProactiveLimits.guidanceLength {
-                        issue(.guidanceTooLong)
-                    }
+                    if editor != nil {
+                        TextEditor(text: draft(\.guidance, fallback: ""))
+                            .frame(minHeight: 120)
+                            .accessibilityLabel(text(.editorGuidance))
+                            .accessibilityIdentifier("proactive.edit.guidance")
+                        guidanceCounter
+                        if (editor?.draft.guidance.count ?? 0) > JarvisProactiveLimits.guidanceLength {
+                            issue(.guidanceTooLong)
+                        }
+                    } else { pendingValue(text(.editorGuidance)) }
                 } header: {
                     Text(text(.editorGuidance))
                 }
                 Section {
                     let preferences = editor?.draft.preferences ?? []
-                    if preferences.isEmpty {
+                    if editor == nil {
+                        pendingValue(text(.editorPreferences))
+                    } else if preferences.isEmpty {
                         Text(text(.editorNoPreferences)).foregroundStyle(.secondary)
                     } else {
                         ForEach(Array(preferences.enumerated()), id: \.offset) { _, preference in
@@ -247,10 +264,30 @@ struct JarvisProactiveSettingsSheet: View {
                 }
             }
             .disabled(isSaving)
+            .onChange(of: editor != nil) { _, isReady in
+                if isReady, focus != .top { proxy.scrollTo(focus.rawValue, anchor: .top) }
+            }
             .onAppear {
                 if focus != .top { proxy.scrollTo(focus.rawValue, anchor: .top) }
             }
         }
+    }
+
+    private var pendingText: String {
+        if case .failed(let failure) = load { return text(failure.localizationKey) }
+        return text(.loading)
+    }
+
+    private func pendingValue(_ label: String) -> some View {
+        HStack {
+            Text(label)
+            Spacer(minLength: 0)
+            if case .loading = load { JarvisLoadingView().accessibilityHidden(true) }
+            else { Text("—").foregroundStyle(.secondary) }
+        }
+        .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(pendingText)
     }
 
     private var budgetValue: Int { editor?.draft.budget ?? 0 }

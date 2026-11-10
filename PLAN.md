@@ -12,6 +12,21 @@ available here. Next: run the added SQL concurrency regression in CI, then
 integrate/release through the normal process. Deployment and physical device
 receipt remain unverified.
 
+## iOS static structure and retained refresh — 10 November 2026 (#1702)
+
+Implementation covers non-overlapping Notes, Factory, Settings, Health, Insights,
+Workspaces, Notifications and generated HTML refresh surfaces. Shared loading
+and cache-session safeguards preserve existing Today consumers. PR #1703 owns
+Today/Upcoming screen, model, fixture, tests and core Today strings/data; those
+files must remain untouched here. Screen coverage and verification limitations
+are recorded in `docs/agent-context.md` under “iOS loading coverage — 10 November 2026”.
+Local Core validation passed 587 tests; focused workflow-selection and existing
+Simulator-gate checks both passed. Secret scanning and Actions/Python CodeQL
+were clean; Swift CodeQL database creation was unavailable. Native Simulator
+build, retained captures and
+device accessibility/scroll/motion checks remain required; primary owns
+integration and deployment. No merge or deployment is part of this issue.
+
 ## Direct owner requests — 10 November 2026
 
 The approval-cleanup branch implements direct request handling and removes selected repeat prompts. Qualification and integration are in progress; see `docs/approval-cleanup-2026-11-10.md` for actual status. No production or device acceptance is implied by this entry.

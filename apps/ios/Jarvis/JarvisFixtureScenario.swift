@@ -197,9 +197,15 @@ enum JarvisFixtureScenario {
     """#
 
     /// Keep the ordered chat playback intact while allowing an independently opened saved-items page.
-    private struct WorkspaceFixtureTransport: HTTPTransport {
+    private actor WorkspaceFixtureTransport: HTTPTransport {
         let base: FixtureTransport
         let completedActivity: Bool
+        private var workspaceReads = 0
+
+        init(base: FixtureTransport, completedActivity: Bool) {
+            self.base = base
+            self.completedActivity = completedActivity
+        }
 
         func send(_ request: HTTPRequest) async throws -> HTTPResponse {
             if request.method == .get, request.url.path == "/api/jobs" {
@@ -214,6 +220,20 @@ enum JarvisFixtureScenario {
             guard request.method == .get, request.url.path == "/api/workspaces" else {
                 return try await base.send(request)
             }
+            #if targetEnvironment(simulator)
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("--ui-test-workspaces-loading") {
+                workspaceReads += 1
+                let read = workspaceReads
+                try await Task.sleep(for: .seconds(3))
+                if read > 1, arguments.contains("--ui-test-workspaces-refresh-fails") {
+                    return HTTPResponse(statusCode: 400, headers: [:], body: Data())
+                }
+            }
+            if arguments.contains("--ui-test-workspaces-empty") {
+                return HTTPResponse(statusCode: 200, headers: ["content-type": "application/json"], body: Data(#"{"items":[]}"#.utf8))
+            }
+            #endif
             return HTTPResponse(statusCode: 200, headers: ["content-type": "application/json"], body: Data(Self.response.utf8))
         }
 

@@ -196,6 +196,23 @@ jobs:
             -only-testing:JarvisUITests/TodayUITests \
             -only-testing:JarvisUITests/ComponentGalleryUITests \
             -only-testing:JarvisUITests/FactoryTaskDetailUITests \
+            -only-testing:JarvisUITests/FactoryLoadingUITests \
+            -only-testing:JarvisUITests/WorkspacesLoadingUITests \
+            -only-testing:JarvisUITests/HealthHeroUITests/testStaticStructureAndControlsPrecedeSlowHealthSources \
+            -only-testing:JarvisUITests/HealthHeroUITests/testFailedRefreshRetainsHeroAndCanRetry \
+            -only-testing:JarvisUITests/HealthHeroUITests/testTrackWorkoutSectionsExistBeforeCapabilitiesLoad \
+            -only-testing:JarvisUITests/InsightsPagesTests/testUsageKeepsStaticOverviewAndPeriodOnFirstLoad \
+            -only-testing:JarvisUITests/InsightsPagesTests/testUsageFailedRefreshKeepsBreakdownSelectionAndOffersRetry \
+            -only-testing:JarvisUITests/InsightsPagesTests/testStatusFilterIsVisibleBeforeChecksArriveInDanish \
+            -only-testing:JarvisUITests/InsightsPagesTests/testProactiveControlsAndItemsAreNotBlockedByStatusLoading \
+            -only-testing:JarvisUITests/InsightsPagesTests/testProactiveStatusFailureDoesNotHideIndependentSuggestions \
+            -only-testing:JarvisUITests/InsightsPagesTests/testSettingsFirstLoadKeepsLabelsAndDisablesUnavailableEdits \
+            -only-testing:JarvisUITests/NotesRedesignUITests/testStaticStructureAndTasksDoNotWaitForSlowGraph \
+            -only-testing:JarvisUITests/NotesRedesignUITests/testFailedRefreshRetainsLibraryAndOffersRetry \
+            -only-testing:JarvisUITests/SettingsFieldUITests/testStaticSettingsStructureAndLocalLanguageBeforeDataArrives \
+            -only-testing:JarvisUITests/SettingsFieldUITests/testTargetLabelsRemainVisibleDuringFirstLoadAndFailureThenRetry \
+            -only-testing:JarvisUITests/SettingsFieldUITests/testFailedRootRefreshRetainsRowsAndOffersRetry \
+            -only-testing:JarvisUITests/SettingsFieldUITests/testMemorySearchHidesPreviousContextBeforeNewResultsArrive \
             -parallel-testing-enabled NO \
             -test-timeouts-enabled YES \
             -default-test-execution-time-allowance 120 \

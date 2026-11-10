@@ -3478,7 +3478,15 @@ surfaces cover microphone startup; device audio acceptance remains pending.
 
 ### 6 November loading refinement
 
-Initial page skeletons now share a restrained travelling highlight rather than
+The 10 November refinement (#1702) keeps the existing page geometry and static
+titles, section headings, labels and controls mounted from first render. Loading
+belongs to data values/rows, never to a replacement page or heading. Mixed headings
+show their known text without inventing a count or name. Same-context refreshes
+retain content, scroll and selection, with existing error/retry feedback on failure.
+Shared stat grids accept an unknown value independently of their real label;
+first-load errors are unavailable, not zero or an endless loading animation.
+
+Data skeletons share a restrained travelling highlight rather than
 static placeholders. Inline pending actions keep three softly pulsing dots. Motion
 runs only while visible and the scene is active; Reduce Motion keeps a static,
 labelled loading state. Skeletons remain noninteractive and expose one localized

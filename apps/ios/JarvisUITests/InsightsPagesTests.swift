@@ -57,6 +57,91 @@ final class InsightsPagesTests: XCTestCase {
         defer { app.terminate() }
         XCTAssertTrue(element("usage.error").waitForExistence(timeout: 8))
         XCTAssertTrue(app.buttons["usage.error.retry"].exists)
+        XCTAssertTrue(tab("usage.range", "7 d").exists)
+        XCTAssertTrue(element("usage.tile.tokens").exists)
+    }
+
+    func testUsageKeepsStaticOverviewAndPeriodOnFirstLoad() {
+        open("usage", extra: ["--ui-test-insights=loading"])
+        defer { app.terminate() }
+        XCTAssertTrue(element("usage.loading").waitForExistence(timeout: 4))
+        XCTAssertTrue(element("usage.hero").exists)
+        XCTAssertTrue(tab("usage.range", "7 d").exists)
+        XCTAssertTrue(element("usage.tile.tokens").exists)
+        XCTAssertFalse(element("usage.total").exists, "An unresolved amount is not a zero")
+        tab("usage.range", "7 d").tap()
+        XCTAssertTrue(element("usage.loading").exists)
+    }
+
+    func testUsageFailedRefreshKeepsBreakdownSelectionAndOffersRetry() {
+        open("usage", extra: ["--ui-test-insights-usage-refresh-fails-once"])
+        defer { app.terminate() }
+        XCTAssertTrue(element("usage.total").waitForExistence(timeout: 8))
+        let slice = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'usage.slice.'")).firstMatch
+        XCTAssertTrue(slice.waitForExistence(timeout: 4))
+        slice.tap()
+        let identifier = slice.identifier
+        XCTAssertTrue(slice.isSelected)
+        let total = element("usage.total").label
+        let scroll = element("usage.scroll")
+        scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2))
+            .press(forDuration: 0.1, thenDragTo: scroll.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
+        XCTAssertTrue(element("usage.refreshFailed").waitForExistence(timeout: 8))
+        XCTAssertEqual(element("usage.total").label, total)
+        XCTAssertTrue(app.buttons[identifier].isSelected)
+        XCTAssertTrue(app.buttons["usage.refreshFailed.retry"].exists)
+        XCTAssertFalse(element("usage.loading").exists)
+        app.buttons["usage.refreshFailed.retry"].tap()
+        let recovered = NSPredicate { _, _ in !self.element("usage.refreshFailed").exists }
+        XCTAssertEqual(
+            XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: recovered, object: nil)], timeout: 8),
+            .completed
+        )
+        XCTAssertTrue(app.buttons[identifier].isSelected)
+    }
+
+    func testStatusFilterIsVisibleBeforeChecksArriveInDanish() {
+        open("status", language: "da", extra: ["--ui-test-insights=loading"])
+        defer { app.terminate() }
+        XCTAssertTrue(element("status.loading").waitForExistence(timeout: 4))
+        XCTAssertTrue(element("status.hero").exists)
+        let issues = tab("status.filter", "Problemer")
+        XCTAssertTrue(issues.exists)
+        issues.tap()
+        XCTAssertTrue(issues.isSelected)
+        XCTAssertFalse(element("status.row.database").exists)
+    }
+
+    func testProactiveControlsAndItemsAreNotBlockedByStatusLoading() {
+        open("proactive", extra: ["--ui-test-insights=loading"])
+        defer { app.terminate() }
+        XCTAssertTrue(element("proactive.loading").waitForExistence(timeout: 4))
+        XCTAssertTrue(tab("proactive.tabs", "Earlier").exists)
+        XCTAssertTrue(app.buttons["proactive.settings"].isEnabled)
+        XCTAssertTrue(app.buttons["proactive.checkNow"].exists)
+        XCTAssertFalse(app.buttons["proactive.checkNow"].isEnabled)
+        XCTAssertTrue(element("proactive.items.loading").exists)
+    }
+
+    func testProactiveStatusFailureDoesNotHideIndependentSuggestions() {
+        open("proactive", extra: ["--ui-test-insights-status-only-fails"])
+        defer { app.terminate() }
+        XCTAssertTrue(element("proactive.item.\(firstItem)").waitForExistence(timeout: 8))
+        XCTAssertTrue(element("proactive.error").waitForExistence(timeout: 8))
+        XCTAssertTrue(tab("proactive.tabs", "Earlier").exists)
+        XCTAssertFalse(app.buttons["proactive.checkNow"].isEnabled)
+    }
+
+    func testSettingsFirstLoadKeepsLabelsAndDisablesUnavailableEdits() {
+        open("proactive", extra: ["--ui-test-insights=loading"])
+        defer { app.terminate() }
+        XCTAssertTrue(app.buttons["proactive.settings"].waitForExistence(timeout: 4))
+        app.buttons["proactive.settings"].tap()
+        XCTAssertTrue(element("proactive.edit.loading").waitForExistence(timeout: 4))
+        XCTAssertTrue(app.staticTexts["Sources"].exists)
+        XCTAssertFalse(app.buttons["sheet.confirm"].isEnabled)
+        XCTAssertTrue(app.buttons["sheet.cancel"].isEnabled)
+        XCTAssertFalse(app.switches["proactive.edit.pause"].exists, "An unresolved setting must not look switched off")
     }
 
     func testStatusFilterAndExpand() {

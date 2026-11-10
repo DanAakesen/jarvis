@@ -52,6 +52,16 @@ public struct JarvisBodyTrend: Equatable, Sendable {
         readings.min { abs($0.date.timeIntervalSince(date)) < abs($1.date.timeIntervalSince(date)) }
     }
 
+    /// Row positions can change during refresh; retain only the same recorded measurement.
+    public func selectionID(retaining selectedID: Int?, from previous: Self) -> Int? {
+        guard let selectedID, let selected = previous.readings.first(where: { $0.id == selectedID }) else {
+            return nil
+        }
+        return readings.first {
+            $0.day == selected.day && $0.value == selected.value && $0.unit == selected.unit
+        }?.id
+    }
+
     /// A labelled, padded scale keeps single/constant readings visible without manufacturing a trend.
     public var domain: ClosedRange<Double> {
         let low = readings.map(\.value).min() ?? 0

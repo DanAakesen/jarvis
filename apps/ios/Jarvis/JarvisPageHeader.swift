@@ -265,11 +265,12 @@ extension JarvisPageHeroCard where Accessory == EmptyView {
 
 struct JarvisPageStat: Identifiable {
     let id: String
-    let value: Int
+    let value: Int?
     let label: String
     let systemImage: String
     var tint: Color = .secondary
     var formattedValue: String?
+    var isLoading = true
 }
 
 /// Counts in a row that wraps at large Dynamic Type sizes. Each stat reads as one element.
@@ -288,15 +289,21 @@ struct JarvisPageStatGrid: View {
             ForEach(stats) { stat in
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: JarvisPageHeaderMetrics.actionSpacing / 2) {
-                        Text(stat.formattedValue ?? JarvisNumberFormat.compact(stat.value, language: language))
-                            .font(.title.weight(.bold))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.7)
-                            .monospacedDigit()
+                        if let value = stat.value {
+                            Text(stat.formattedValue ?? JarvisNumberFormat.compact(value, language: language))
+                                .font(.title.weight(.bold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                                .monospacedDigit()
+                        } else if stat.isLoading {
+                            JarvisLoadingView(title: jarvisInsightsText(.loading, language), size: .inline)
+                        } else {
+                            Text("—").font(.title.weight(.bold))
+                        }
                         Spacer(minLength: JarvisPageHeaderMetrics.actionSpacing)
                         Image(systemName: stat.systemImage)
                             .font(.subheadline)
-                            .foregroundStyle(stat.value > 0 ? stat.tint : Color.secondary)
+                            .foregroundStyle((stat.value ?? 0) > 0 ? stat.tint : Color.secondary)
                             .accessibilityHidden(true)
                     }
                     Text(stat.label)
@@ -306,7 +313,7 @@ struct JarvisPageStatGrid: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(stat.label), \(stat.formattedValue ?? stat.value.formatted(.number.locale(language.locale)))")
+                .accessibilityLabel("\(stat.label), \(stat.formattedValue ?? stat.value.map { $0.formatted(.number.locale(language.locale)) } ?? jarvisInsightsText(stat.isLoading ? .loading : .unavailable, language))")
             }
         }
     }
@@ -361,7 +368,7 @@ struct JarvisPageScaffold<Actions: View, Headline: View, Hero: View, Sections: V
     }
 }
 
-/// Initial page loading has one stable, noninteractive layout. No filters or invented values are exposed.
+/// A legacy full-page placeholder for previews; live screens keep their static structure outside loading content.
 /// One localized announcement replaces decorative shapes for VoiceOver. The shared shimmer stops
 /// offscreen, in the background and with Reduce Motion; loading never delays real content.
 struct JarvisPageLoadingView: View {

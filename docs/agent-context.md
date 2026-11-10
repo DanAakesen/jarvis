@@ -8159,3 +8159,80 @@ Primary owns #1697 steps/startup integration and must preserve its WatchContract
 ## Watch steps follow-up — 10 November 2026
 
 Use existing PR-only Apple Watch build workflow for unsigned Watch simulator, physical Watch Release architecture and paired iPhone compilation. JarvisCore includes WatchStepsPlotTests for goal crossing, missing/zero and partial-day coverage; 550 tests, CI and CodeQL passed at 6490aa2. Native run 42765852671 passed all three unsigned builds. The isolated Health preview was inspected; it is not an installed watch-face screenshot. Final picker-copy/reference/docs follow-up checks are pending; no installed-device success is claimed. Startup alert PR #1692 is implemented and separately qualified at 5de65c01; it is not merged or released. Do not duplicate its recovery patch. Primary owns integration/deployment. Weekly workout concepts are deferred.
+
+## iOS loading coverage — 10 November 2026 (#1702)
+
+Inventory before implementation found page-wide initial gates in Notes, Factory,
+Health, Usage, Status, Proactive and Workspaces; Settings hid its static rows and
+section picker. Existing repository/card state already supported stale values,
+but several callers dropped them or waited for unrelated reads. Workspaces had
+no repository-backed revisit retention. Notification overview labels waited for
+the feed, and background jobs loaded only after that feed succeeded.
+
+| Surface | Loading/retention coverage |
+| --- | --- |
+| Today/Home and gym sheets | Inventoried, not edited: independent source sections and retained model values already exist. PR #1703 owns Today/Upcoming counts, lists, fixtures, core Today and tests. Do not duplicate its changes. |
+| Notes / Tasks / Graph / editor | Static dock, headings, overview labels and filters stay visible; counts remain unknown until their source resolves. Existing repositories and context guards retain same-scope results and expose refresh failure. |
+| Factory board / releases / task detail | Static pipeline/filter/segment structure precedes data; loaded task detail remains during refresh/failure. Bundled detail endpoint stays bundled; no backend semantic change. |
+| Settings root / editors / resources / deployments | Static groups and local settings remain usable; remote values load in place. Remote editors wait for their own data and retained content carries retry feedback. |
+| Health dashboard / workout log / detail | Static sections/period/tab structure remains; independent reads publish as they settle, scoped by period. Previously loaded records survive refresh/failure, including known empty results. |
+| Usage / Status / Proactive / proactive settings | Static headings/selectors remain; independent proactive status/items/runs do not block each other. Correct-range content and active selection persist during refresh; failures offer retry. |
+| Workspaces | Search, kinds and labelled overview render first; the existing repository caches by query/kind, rejects superseded requests and retains data on failed refresh. |
+| Notifications / background activity | Static overview labels and close/clear controls render first; clear is disabled when no items are available. Feed and jobs publish independently and keep their last values on failure. |
+| Generated views / HTML artifacts | Known envelope title/actions already render immediately. HTML retains a matching loaded artifact on reappearance/retry and never reuses a different artifact ID. |
+| Chat / Voice / runtime test / sign-in and lock | Existing static composer, connection/status controls, runtime choices and gate structure already render independently of data. History/stream indicators are content-scoped; no layout redesign or auth-gate bypass. |
+| Shared consumers | `JarvisPageStat` supports unknown vs zero; `JarvisCachedSection` scopes by kind/context and offers retry beside retained data. Full-page placeholder remains gallery-only, enforced by the existing design-system source guard. |
+
+Regression checks include repository delayed success/304/error after different-account
+and same-account re-sign-in, single/all-scope invalidation, cancellation, and
+retained successful-empty data. Parent-owned repository checks passed 22 tests;
+shared design-system checks passed 11 tests. The existing never-returning timeout
+test logs a continuation warning while passing; it was not changed by this issue.
+Native UI tests include slow first loads, failure/retry and retained screenshot
+attachments; `WorkspacesLoadingUITests` uses simulator-only
+`--ui-test-workspaces-loading` / `--ui-test-workspaces-refresh-fails`.
+These synthetic fixtures do not access live services.
+
+Actual local verification:
+- Full Core suite: `swift test --package-path apps/ios/Packages/JarvisCore -j 2`
+  passed **587 tests, zero failures** after the final Notes/Factory freshness and
+  Health chart-identity fixes. Chart selection remaps the recorded date/value/unit
+  after backfills, rather than retaining a changed array index.
+- Scoped Insights, Settings and Health checks passed; all edited native sources
+  passed syntax parsing. This is not a full SwiftUI typecheck.
+- Existing Python workflow tests filtered by `ios_loading` and
+  `ios_navigation_regression` passed one test each. The Simulator's existing single
+  `xcodebuild test` now selects the **21 added loading cases**, including their
+  retained screenshot attachments, without enabling unrelated test suites.
+- Combined fixture typechecking on Linux is limited by existing Darwin
+  CoreFoundation bridging in `JarvisChatFeedbackFixtureTransport.swift`; the
+  Settings fixture itself passed strict Swift 6 typechecking.
+- Changed-file secret scanning found no secrets. CodeQL reported no Actions or
+  Python alerts; Swift database creation failed in this environment, so Swift
+  CodeQL analysis is unverified. Read-only review findings were fixed, including
+  Factory revisit freshness, paginated Workspaces retention and chart identity.
+
+This Linux runner has Swift but no Xcode/Simulator. Native captures, before/after
+comparisons, VoiceOver, English/Danish accessibility sizes, reduced motion,
+scroll-position retention, navigation away/back and rapid context-change checks
+must be completed on Simulator/device before acceptance. No native captures were
+produced or inspected here. Relevant Apple `task(id:priority:_:)` documentation
+was attempted through both fetch and browser but blocked; no full-page Apple
+documentation review or Apple recommendation is claimed. Existing platform
+`task(id:)`, structured concurrency, native scrolling and shared controls remain.
+The existing Simulator time budget is unchanged; measure the added focused cases
+on its next native run rather than claiming that runtime or visual acceptance here.
+
+Review follow-up (#1704): replaced the obsolete literal `copy.text(.noLifts)`
+source assertion with guards for both independently loaded lift sections,
+retained rows, loading precedence, failed reads, genuine empty data and unmatched
+searches. The already-selected native Health loading case also checks that
+loading does not announce empty/error copy and that an unmatched search shows
+“No results” rather than “No lifts logged.” All 339 existing Python script tests
+passed locally; the edited XCTest source passed Swift syntax parsing, not native
+execution. This follow-up does not edit Factory, Today/Watch or model settings.
+PR #1710 explicitly carries forward #1704's task-detail loading/context guards;
+its shared detail-view/workflow changes still need primary-owned integration,
+without replacing either branch wholesale. Final-head Actions and native
+captures remain separate qualification requirements; this Linux environment has
+no Xcode/Simulator or authenticated workflow-dispatch CLI.
