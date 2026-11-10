@@ -263,7 +263,9 @@ final class JarvisTodayModel: ObservableObject {
         await load(
             .tasks, scope: "open", force: force, into: \.taskData,
             fetch: { try await client.fetchOpenTasks(validator: $0) },
-            map: { (list: VaultTaskList) in JarvisTodayTaskData(tasks: list.items, today: list.today) }
+            map: { (list: VaultTaskList) in
+                JarvisTodayTaskData(tasks: list.items, today: JarvisTodayTaskLists.dayKey(self.dependencies.now()))
+            }
         )
     }
 
