@@ -20,6 +20,29 @@ private final class Counter: @unchecked Sendable {
 
 private struct Boom: Error {}
 
+private actor PendingRepositoryFetch {
+    private var result: CheckedContinuation<JarvisFetchResult<[String]>, any Error>?
+    private var started: CheckedContinuation<Void, Never>?
+
+    func fetch() async throws -> JarvisFetchResult<[String]> {
+        try await withCheckedThrowingContinuation { continuation in
+            result = continuation
+            started?.resume()
+            started = nil
+        }
+    }
+
+    func waitUntilStarted() async {
+        if result != nil { return }
+        await withCheckedContinuation { started = $0 }
+    }
+
+    func finish(_ value: Result<JarvisFetchResult<[String]>, any Error>) {
+        result?.resume(with: value)
+        result = nil
+    }
+}
+
 final class JarvisRepositoryTests: XCTestCase {
     private func collect(_ stream: AsyncStream<JarvisRepositoryUpdate<[String]>>) async -> [JarvisRepositoryUpdate<[String]>] {
         var all: [JarvisRepositoryUpdate<[String]>] = []
@@ -219,6 +242,119 @@ final class JarvisRepositoryTests: XCTestCase {
         await cache.bind(account: "other")
         let other = await repo.cachedValue()
         XCTAssertNil(other)
+    }
+
+    func testObsoleteAccountResponsesCannotPublishOrPopulateNewSession() async {
+        for rebindSameAccount in [false, true] {
+            for outcome in [
+                Result<JarvisFetchResult<[String]>, any Error>.success(.modified(["old account"], validator: "old")),
+                .success(.notModified),
+                .failure(Boom()),
+            ] {
+                let cache = JarvisCache(storage: JarvisInMemoryCacheStorage())
+                await cache.bind(account: "first")
+                let seed = JarvisRepository<[String]>(cache: cache, kind: .notes) { _ in
+                    .modified(["saved first account"], validator: "seed")
+                }
+                _ = await collect(seed.updates())
+                let pending = PendingRepositoryFetch()
+                let old = JarvisRepository<[String]>(cache: cache, kind: .notes) { _ in
+                    try await pending.fetch()
+                }
+                let task = Task {
+                    var updates: [JarvisRepositoryUpdate<[String]>] = []
+                    for await update in old.updates(force: true) { updates.append(update) }
+                    return updates
+                }
+                await pending.waitUntilStarted()
+                if rebindSameAccount { await cache.clear() }
+                await cache.bind(account: rebindSameAccount ? "first" : "second")
+                let current = JarvisRepository<[String]>(cache: cache, kind: .notes) { _ in
+                    .modified(["current account"], validator: "current")
+                }
+                _ = await collect(current.updates())
+                await pending.finish(outcome)
+                let updates = await task.value
+                XCTAssertEqual(updates.count, 1, "Only the cached value emitted before account change is allowed")
+                let value = await current.cachedValue()
+                XCTAssertEqual(value, ["current account"])
+            }
+        }
+    }
+
+    func testCancelledResponseDoesNotReplaceRetainedContent() async {
+        let cache = JarvisCache(storage: JarvisInMemoryCacheStorage())
+        await cache.bind(account: "owner")
+        let pending = PendingRepositoryFetch()
+        let old = JarvisRepository<[String]>(cache: cache, kind: .usage, scope: "old-period") { _ in
+            try await pending.fetch()
+        }
+        let task = Task {
+            for await _ in old.updates() {}
+        }
+        await pending.waitUntilStarted()
+        task.cancel()
+        await pending.finish(.success(.modified(["obsolete"], validator: nil)))
+        _ = await task.value
+        let value = await old.cachedValue()
+        XCTAssertNil(value)
+    }
+
+    func testInvalidationRejectsDelayedWritesAndTouchesWithoutBlockingOtherKinds() async {
+        for invalidateAll in [false, true] {
+            for outcome in [
+                Result<JarvisFetchResult<[String]>, any Error>.success(.modified(["before edit"], validator: "old")),
+                .success(.notModified),
+                .failure(Boom()),
+            ] {
+                let cache = JarvisCache(storage: JarvisInMemoryCacheStorage())
+                await cache.bind(account: "owner")
+                let current = JarvisRepository<[String]>(cache: cache, kind: .settings, scope: "item") { _ in
+                    .modified(["after edit"], validator: "new")
+                }
+                let seed = JarvisRepository<[String]>(cache: cache, kind: .settings, scope: "item") { _ in
+                    .modified(["before edit"], validator: "old")
+                }
+                _ = await collect(seed.updates())
+                let unrelated = JarvisRepository<[String]>(cache: cache, kind: .status) { _ in
+                    .modified(["independent"], validator: nil)
+                }
+                _ = await collect(unrelated.updates())
+                let pending = PendingRepositoryFetch()
+                let obsolete = JarvisRepository<[String]>(cache: cache, kind: .settings, scope: "item") { _ in
+                    try await pending.fetch()
+                }
+                let task = Task {
+                    var updates: [JarvisRepositoryUpdate<[String]>] = []
+                    for await update in obsolete.updates(force: true) { updates.append(update) }
+                    return updates
+                }
+                await pending.waitUntilStarted()
+                if invalidateAll {
+                    await cache.invalidateAll(kind: .settings)
+                } else {
+                    await cache.invalidate(kind: .settings, scope: "item")
+                }
+                _ = await collect(current.updates())
+                await pending.finish(outcome)
+                let updates = await task.value
+                XCTAssertEqual(updates.count, 1)
+                let retained = await current.cachedValue()
+                let independent = await unrelated.cachedValue()
+                XCTAssertEqual(retained, ["after edit"])
+                XCTAssertEqual(independent, ["independent"])
+            }
+        }
+    }
+
+    func testCardStateRetainsSuccessfulEmptyResultDuringRefreshFailure() {
+        var state = JarvisCardState<[String]>.loaded([], refreshFailed: false)
+        state.apply(.refreshing)
+        XCTAssertEqual(state.value, [])
+        XCTAssertFalse(state.isLoading)
+        state.apply(.failed(Boom(), cached: nil))
+        XCTAssertEqual(state.value, [])
+        XCTAssertTrue(state.refreshFailed)
     }
 
     func testFileStoragePersistsAndClears() async throws {

@@ -2,7 +2,7 @@ import Foundation
 import JarvisCore
 import SwiftUI
 
-enum JarvisNotesTab: String, CaseIterable, Identifiable {
+enum JarvisNotesTab: String, CaseIterable, Identifiable, Sendable {
     case notes
     case tasks
     case graph
@@ -10,7 +10,7 @@ enum JarvisNotesTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-private enum JarvisNotesSearchScope: String, CaseIterable, Identifiable {
+private enum JarvisNotesSearchScope: String, CaseIterable, Identifiable, Sendable {
     case all
     case notes
     case tasks
@@ -178,7 +178,6 @@ struct JarvisNotesArea: View {
     @State private var graph: KnowledgeGraph?
     @State private var graphSearch: KnowledgeGraphSearch?
     @State private var taskSearch: VaultTaskList?
-    @State private var loading = false
     @State private var searchLoading = false
     @State private var loadError: String?
     @State private var loadRetryUnavailable = false
@@ -201,26 +200,19 @@ struct JarvisNotesArea: View {
     @State private var pendingTaskIDs = Set<String>()
     @State private var noticePresented = false
     @State private var successConfirmation: JarvisSuccessConfirmation?
+    @State private var loadRequest = UUID()
+    @State private var searchRequest = UUID()
+    @State private var searchContext = ""
+    @State private var directoryRequests: [String: UUID] = [:]
+    @State private var openingNoteRequest = UUID()
+    @State private var failedReads = Set<ReadSection>()
+    @State private var graphResetVersion = 0
 
     private var copy: JarvisNotesCopy { JarvisNotesCopy(language: language) }
 
-    private var isInitialLoading: Bool {
-        guard loadError == nil else { return false }
-        switch selectedTab {
-        case .notes: return tree == nil
-        case .tasks: return taskList == nil
-        case .graph: return graph == nil
-        }
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            if isInitialLoading {
-                ScrollView {
-                    JarvisPageLoadingView(title: copy.loading, identifier: "notes.loading")
-                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-                }
-            } else if selectedTab == .graph || searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if selectedTab == .graph || searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 selectedContent
             } else {
                 searchContent
@@ -230,14 +222,12 @@ struct JarvisNotesArea: View {
         .jarvisSuccessFeedback($successConfirmation)
         .environment(\.locale, language.locale)
         .jarvisPageFooter {
-            if !isInitialLoading {
-                VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-                    searchBar
-                }
-                .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-                .padding(.top, JarvisDesignTokens.notesSectionSpacing)
-                .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
+            VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+                searchBar
             }
+            .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+            .padding(.top, JarvisDesignTokens.notesSectionSpacing)
+            .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
         }
         .jarvisAmbientBackground()
         .toolbarBackground(.hidden, for: .bottomBar)
@@ -250,6 +240,13 @@ struct JarvisNotesArea: View {
         }
         .task(id: searchKey) {
             await search()
+        }
+        .onDisappear {
+            loadRequest = UUID()
+            searchRequest = UUID()
+            openingNoteRequest = UUID()
+            directoryRequests = [:]
+            directoryLoading = []
         }
         .sheet(item: $newNoteDestination) { destination in
             if let client {
@@ -325,6 +322,7 @@ struct JarvisNotesArea: View {
                     onPin: { pinned in Task { await setPinned(current.path, pinned: pinned) } },
                     onClose: { editorPresented = false }
                 )
+                .id(current.path)
             }
         }
         .alert(copy.title, isPresented: $noticePresented) {
@@ -365,10 +363,11 @@ struct JarvisNotesArea: View {
             }
             .accessibilityIdentifier("notes.newTask")
         }
+        .accessibilityHint(client == nil ? copy.unavailable : (signInUnavailable ? loadError ?? copy.signIn : copy.createHint))
     }
 
     /// The page head, as the first scrolling row: data phrase, Overview hero, then the Notes / Tasks / Graph
-    /// segmented bar. Pinned and Recent follow on Notes. The shared skeleton is shown until the first data arrives.
+    /// segmented bar. Pinned and Recent follow on Notes; only their values wait for data.
     @ViewBuilder
     private var pageHead: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
@@ -377,10 +376,13 @@ struct JarvisNotesArea: View {
             } else if let taskList {
                 JarvisPageHeadline(phrase: JarvisNotesPagePhrase.tasks(taskList, language: language))
             }
-            if selectedTab != .graph, taskList != nil || tree != nil {
+            if selectedTab != .graph {
                 overviewHero
             }
             tabSwitcher
+            if let loadError {
+                stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
+            }
 
         }
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
@@ -394,10 +396,10 @@ struct JarvisNotesArea: View {
             linkCount: graph?.edges.count,
             linksLabel: copy.links,
             stats: [
-                JarvisPageStat(id: "notes", value: graph?.nodes.count ?? tree?.rootNoteCount ?? 0, label: copy.notes, systemImage: "note.text", tint: JarvisDesignTokens.primaryAccent),
-                JarvisPageStat(id: "open", value: counts?.open ?? 0, label: copy.openTasks, systemImage: "checklist", tint: JarvisDesignTokens.primaryAccent),
-                JarvisPageStat(id: "overdue", value: counts?.overdue ?? 0, label: copy.overdue, systemImage: "flag", tint: JarvisDesignTokens.primaryAccent),
-                JarvisPageStat(id: "today", value: counts?.dueToday ?? 0, label: copy.today, systemImage: "clock", tint: JarvisDesignTokens.primaryAccent),
+                JarvisPageStat(id: "notes", value: graph?.nodes.count, label: copy.notes, systemImage: "note.text", tint: JarvisDesignTokens.primaryAccent, isLoading: !failedReads.contains(.graph) && client != nil),
+                JarvisPageStat(id: "open", value: counts?.open, label: copy.openTasks, systemImage: "checklist", tint: JarvisDesignTokens.primaryAccent, isLoading: !failedReads.contains(.tasks) && client != nil),
+                JarvisPageStat(id: "overdue", value: counts?.overdue, label: copy.overdue, systemImage: "flag", tint: JarvisDesignTokens.primaryAccent, isLoading: !failedReads.contains(.tasks) && client != nil),
+                JarvisPageStat(id: "today", value: counts?.dueToday, label: copy.today, systemImage: "clock", tint: JarvisDesignTokens.primaryAccent, isLoading: !failedReads.contains(.tasks) && client != nil),
             ],
             shares: graph.map { JarvisNotesPresentation.folderShares($0) } ?? [],
             rootTitle: copy.vaultRoot,
@@ -423,6 +425,7 @@ struct JarvisNotesArea: View {
                 ) {
                     graphSearch = nil
                     searchText = ""
+                    graphResetVersion += 1
                     refreshVersion += 1
                 }
             }
@@ -432,9 +435,7 @@ struct JarvisNotesArea: View {
     /// A loading, error or empty state still shows the segmented bar so the tabs stay reachable.
     private func tabState(icon: String, title: String, retry: (() -> Void)?) -> some View {
         VStack(spacing: 0) {
-            tabSwitcher
-                .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-                .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
+            pageHead
             stateView(icon: icon, title: title, retry: retry)
         }
     }
@@ -471,12 +472,8 @@ struct JarvisNotesArea: View {
                 }
                 .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
                 .padding(.bottom, 16)
-                if let loadError {
-                    stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
-                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-                }
                 if libraryGroups.isEmpty {
-                    Text((graph?.nodes.isEmpty ?? true) ? copy.emptyNotes : copy.loading)
+                    Text(graph == nil ? (failedReads.contains(.graph) ? copy.unavailable : copy.loading) : (graph?.nodes.isEmpty == true ? copy.emptyNotes : copy.loading))
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
                 }
@@ -541,7 +538,15 @@ struct JarvisNotesArea: View {
                 .font(.title3.weight(.semibold))
                 .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
             let pinned = pinnedPaths.compactMap { path in graph?.nodes.first { $0.path == path } }
-            if pinned.isEmpty {
+            if graph == nil {
+                if failedReads.contains(.graph) {
+                    Text(copy.unavailable).foregroundStyle(.secondary)
+                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                } else {
+                    JarvisLoadingView(title: copy.loading, size: .inline)
+                        .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+                }
+            } else if pinned.isEmpty {
                 Text(copy.emptyPinned).font(.subheadline).foregroundStyle(.secondary)
                     .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
             } else {
@@ -587,7 +592,8 @@ struct JarvisNotesArea: View {
                     }
                     if let loadError {
                         stateView(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
-                    } else {
+                    }
+                    Group {
                         ForEach(childFolders) { folder in
                             JarvisRowButton(identifier: "notes.folder.\(folder.path)", action: { navigateToFolder(folder.path) }) {
                                 HStack(spacing: JarvisPageHeaderMetrics.spacing) {
@@ -598,12 +604,14 @@ struct JarvisNotesArea: View {
                                 }
                             }
                         }
-                        if directoryNotes[selectedFolder] != nil {
-                            JarvisSectionHeadline(selectedFolder.isEmpty ? copy.vaultRoot : String(selectedFolder.split(separator: "/").last ?? "")) {
+                        JarvisSectionHeadline(selectedFolder.isEmpty ? copy.vaultRoot : String(selectedFolder.split(separator: "/").last ?? "")) {
+                            if directoryNotes[selectedFolder] != nil {
                                 Text("\(currentDirectoryNotes.count)\(directoryHasMore[selectedFolder] == true ? "+" : "")")
                                     .font(.caption).foregroundStyle(.secondary)
                                     .accessibilityIdentifier("notes.folder.count")
                             }
+                        }
+                        if directoryNotes[selectedFolder] != nil {
                             if currentDirectoryNotes.isEmpty {
                                 Text(copy.emptyNotes).font(.subheadline).foregroundStyle(.secondary)
                             } else {
@@ -650,27 +658,13 @@ struct JarvisNotesArea: View {
     }
 
     private var tasksContent: some View {
-        Group {
-            if loading && taskList == nil {
-                tabState(icon: "checklist", title: copy.loading, retry: nil)
-            } else if let loadError {
-                tabState(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
-            } else if let taskList {
-                taskListView(taskList)
-                    .refreshable { await loadSelectedTab(force: true) }
-            } else {
-                tabState(icon: "checklist", title: copy.emptyTasks, retry: nil)
-            }
-        }
+        taskListView(taskList)
+            .refreshable { await loadSelectedTab(force: true) }
     }
 
     private var graphContent: some View {
         Group {
-            if loading && graph == nil {
-                tabState(icon: "point.3.connected.trianglepath.dotted", title: copy.loading, retry: nil)
-            } else if let loadError {
-                tabState(icon: "wifi.exclamationmark", title: loadError, retry: loadRetryUnavailable ? nil : refreshCurrent)
-            } else if let graph {
+            if let graph {
                 if graph.nodes.isEmpty {
                     tabState(icon: "point.3.connected.trianglepath.dotted", title: copy.emptyGraph, retry: nil)
                 } else {
@@ -689,26 +683,31 @@ struct JarvisNotesArea: View {
                             onOpen: { node in await openNote(path: node.path) },
                             searchMatches: Set(graphSearch?.hits.map(\.nodeId) ?? [])
                         )
-                        .id(refreshVersion)
+                        .id(graphResetVersion)
                         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
                     }
                     .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
                 }
+            } else {
+                tabState(icon: "point.3.connected.trianglepath.dotted", title: failedReads.contains(.graph) ? copy.unavailable : copy.loading, retry: nil)
             }
         }
     }
 
     private var searchContent: some View {
         Group {
-            if searchLoading {
-                stateView(icon: "magnifyingglass", title: copy.loading, retry: nil)
-            } else if let searchError {
-                stateView(icon: "wifi.exclamationmark", title: searchError, retry: searchRetryUnavailable ? nil : refreshCurrent)
-            } else if visibleSearchNotes.isEmpty && visibleSearchTasks.isEmpty {
-                stateView(icon: "magnifyingglass", title: copy.noResults, retry: nil)
-            } else {
                 JarvisList(customRowBackgrounds: true) {
-                    if !visibleSearchNotes.isEmpty {
+                    pageHead
+                    if searchLoading {
+                        JarvisLoadingView(title: copy.loading, size: .inline)
+                    }
+                    if let searchError {
+                        stateView(icon: "wifi.exclamationmark", title: searchError, retry: searchRetryUnavailable ? nil : refreshCurrent)
+                    }
+                    if !searchLoading, searchError == nil, visibleSearchNotes.isEmpty && visibleSearchTasks.isEmpty {
+                        Text(copy.noResults).foregroundStyle(.secondary)
+                    }
+                    if selectedScope != .tasks {
                         Section {
                             ForEach(visibleSearchNotes, id: \.nodeId) { hit in
                                 if let node = graphSearch?.graph.nodes.first(where: { $0.id == hit.nodeId }) {
@@ -742,7 +741,6 @@ struct JarvisNotesArea: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-            }
         }
     }
 
@@ -759,6 +757,7 @@ struct JarvisNotesArea: View {
     }
 
     private var visibleSearchNotes: [KnowledgeSearchHit] {
+        guard searchContext == currentSearchContext else { return [] }
         guard let hits = graphSearch?.hits else { return [] }
         guard selectedFolder.isEmpty else {
             return hits.filter { hit in
@@ -769,7 +768,11 @@ struct JarvisNotesArea: View {
     }
 
     private var visibleSearchTasks: [VaultTask] {
-        taskSearch?.items ?? []
+        searchContext == currentSearchContext ? taskSearch?.items ?? [] : []
+    }
+
+    private var currentSearchContext: String {
+        "\(searchText.trimmingCharacters(in: .whitespacesAndNewlines))|\(selectedScope.rawValue)|\(selectedTab.rawValue)"
     }
 
     private var searchKey: String {
@@ -813,34 +816,38 @@ struct JarvisNotesArea: View {
         .accessibilityIdentifier("notes.note.\(note.path)")
     }
 
-    private func taskListView(_ list: VaultTaskList) -> some View {
-        let groups = JarvisNotesLogic.taskGroups(list.items, today: list.today)
-        return Group {
-            if groups.overdue.isEmpty && groups.today.isEmpty && groups.upcoming.isEmpty && groups.noDate.isEmpty {
-                ScrollView {
-                    VStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
-                        pageHead
-                        stateView(icon: "checklist", title: copy.emptyTasks, retry: nil)
-                    }
-                }
-            } else {
-                JarvisList(customRowBackgrounds: true) {
-                    pageHead
-                } content: {
+    private func taskListView(_ list: VaultTaskList?) -> some View {
+        JarvisList(customRowBackgrounds: true) {
+            pageHead
+        } content: {
+            if let list {
+                let groups = JarvisNotesLogic.taskGroups(list.items, today: list.today)
+                if list.items.isEmpty {
+                    stateView(icon: "checklist", title: copy.emptyTasks, retry: nil)
+                } else {
                     taskSection(groups.overdue, title: copy.overdue, today: list.today)
                     taskSection(groups.today, title: copy.today, today: list.today)
                     taskSection(groups.upcoming, title: copy.upcoming, today: list.today)
                     taskSection(groups.noDate, title: copy.noDate, today: list.today)
                 }
-                .listStyle(.plain)
-                .listRowSpacing(0)
-                .listSectionSpacing(JarvisPageHeaderMetrics.spacing)
-                .contentMargins(.top, 0, for: .scrollContent)
-                .contentMargins(.bottom, JarvisDesignTokens.notesHorizontalInset, for: .scrollContent)
-                .scrollContentBackground(.hidden)
-                .accessibilityIdentifier("notes.tasks.list")
+            } else {
+                ForEach([copy.overdue, copy.today, copy.upcoming, copy.noDate], id: \.self) { title in
+                    Section {
+                        JarvisSectionHeadline(title)
+                        if loadError == nil {
+                            JarvisLoadingView(title: copy.loading, size: .inline)
+                        }
+                    }
+                }
             }
         }
+        .listStyle(.plain)
+        .listRowSpacing(0)
+        .listSectionSpacing(JarvisPageHeaderMetrics.spacing)
+        .contentMargins(.top, 0, for: .scrollContent)
+        .contentMargins(.bottom, JarvisDesignTokens.notesHorizontalInset, for: .scrollContent)
+        .scrollContentBackground(.hidden)
+        .accessibilityIdentifier("notes.tasks.list")
     }
 
     @ViewBuilder
@@ -947,7 +954,7 @@ struct JarvisNotesArea: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if let retry {
-                JarvisLabelledButton(title: copy.retry, action: retry)
+                JarvisLabelledButton(title: copy.retry, identifier: "notes.retry", action: retry)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -957,66 +964,90 @@ struct JarvisNotesArea: View {
     }
 
     private func loadSelectedTab(force: Bool = false) async {
+        let request = UUID()
+        loadRequest = request
+        let tab = selectedTab
         guard let client else {
             loadError = copy.unavailable
-            loading = false
+            failedReads = Set(ReadSection.allCases)
             return
         }
         await JarvisAppCache.bindIfNeeded()
+        guard !Task.isCancelled, loadRequest == request, selectedTab == tab else { return }
         recentVisits = await JarvisAppCache.shared.recentNoteVisits()
         pinnedPaths = await JarvisAppCache.shared.pinnedNotePaths()
-        loading = true
+        guard !Task.isCancelled, loadRequest == request, selectedTab == tab else { return }
         loadError = nil
         loadRetryUnavailable = false
         signInUnavailable = false
-        defer { loading = false }
+        await withTaskGroup(of: Void.self) { group in
+            for section in ReadSection.allCases where tab == .notes || section == .graph || (tab == .tasks && section == .tasks) {
+                group.addTask {
+                    await loadSection(section, client: client, force: force, request: request, tab: tab)
+                }
+            }
+        }
+    }
+
+    private enum ReadSection: CaseIterable, Hashable, Sendable {
+        case graph, tasks, tree, directory
+    }
+
+    @MainActor
+    private func loadSection(
+        _ section: ReadSection,
+        client: JarvisNotesClient,
+        force: Bool,
+        request: UUID,
+        tab: JarvisNotesTab
+    ) async {
+        guard !Task.isCancelled, loadRequest == request, selectedTab == tab else { return }
+        failedReads.remove(section)
         do {
-            switch selectedTab {
-            case .notes:
-                if force || graph == nil, let result = try? await client.graph() {
-                    guard !Task.isCancelled else { return }
-                    graph = result
+            switch section {
+            case .tree:
+                let repository = await treeRepository(client)
+                if !force, tree == nil, let cachedTree = await repository.resolve(cacheOnly: true).value {
+                    guard !Task.isCancelled, loadRequest == request, selectedTab == tab else { return }
+                    applyTree(cachedTree)
                 }
-                if force || taskList == nil, let result = try? await openTasks(client, force: force) {
-                    guard !Task.isCancelled else { return }
-                    taskList = result
-                }
-                if force || tree == nil {
-                    let repository = await treeRepository(client)
-                    if !force, tree == nil, let cachedTree = await repository.resolve(cacheOnly: true).value {
-                        await applyTree(cachedTree, force: false)
-                        loading = false
-                    }
-                    let resolved = await repository.resolve(force: force)
-                    guard !Task.isCancelled else { return }
-                    if let nextTree = resolved.value {
-                        if force || nextTree != tree { await applyTree(nextTree, force: force) }
-                    } else if let error = resolved.error {
-                        throw error
-                    }
-                }
+                let resolved = await repository.resolve(force: force)
+                guard !Task.isCancelled, loadRequest == request, selectedTab == tab else { return }
+                if let nextTree = resolved.value { applyTree(nextTree) }
+                if let error = resolved.error { throw error }
+            case .directory:
+                await loadDirectory(selectedFolder, offset: 0, force: force)
             case .tasks:
-                if force || graph == nil, let result = try? await client.graph() {
-                    guard !Task.isCancelled else { return }
-                    graph = result
+                let repository: JarvisRepository<VaultTaskList> = await JarvisAppCache.repository(.tasks, scope: "open") {
+                    try await client.fetchOpenTasks(validator: $0)
                 }
-                if force || taskList == nil {
-                    let result = try await openTasks(client, force: force)
-                    guard !Task.isCancelled else { return }
-                    taskList = result
+                for await update in repository.updates(force: force) {
+                    guard !Task.isCancelled, loadRequest == request, selectedTab == tab else { return }
+                    switch update {
+                    case .cached(let value, _), .fresh(let value): taskList = value
+                    case .failed(let error, _): throw error
+                    case .refreshing: break
+                    }
                 }
             case .graph:
-                if force || graph == nil {
-                    let result = try await client.graph()
-                    guard !Task.isCancelled else { return }
-                    graph = result
+                let repository: JarvisRepository<KnowledgeGraph> = await JarvisAppCache.repository(.notes, scope: "graph") { _ in
+                    .modified(try await client.graph(), validator: nil)
+                }
+                for await update in repository.updates(force: force) {
+                    guard !Task.isCancelled, loadRequest == request, selectedTab == tab else { return }
+                    switch update {
+                    case .cached(let value, _), .fresh(let value): graph = value
+                    case .failed(let error, _): throw error
+                    case .refreshing: break
+                    }
                 }
             }
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, loadRequest == request, selectedTab == tab else { return }
+            failedReads.insert(section)
             loadError = message(for: error)
-            loadRetryUnavailable = authorizationUnavailable(error)
-            signInUnavailable = loadRetryUnavailable
+            loadRetryUnavailable = loadRetryUnavailable || authorizationUnavailable(error)
+            signInUnavailable = signInUnavailable || loadRetryUnavailable
         }
     }
 
@@ -1024,57 +1055,61 @@ struct JarvisNotesArea: View {
         await JarvisAppCache.repository(.notes, scope: "tree") { try await client.fetchFolderTree(validator: $0) }
     }
 
-    /// The open tasks, read through the repository: fresh cache costs no request.
-    private func openTasks(_ client: JarvisNotesClient, force: Bool) async throws -> VaultTaskList {
-        let repository: JarvisRepository<VaultTaskList> = await JarvisAppCache.repository(.tasks, scope: "open") {
-            try await client.fetchOpenTasks(validator: $0)
-        }
-        let resolved = await repository.resolve(force: force)
-        if let value = resolved.value { return value }
-        throw resolved.error ?? JarvisClientError.networkFailure
-    }
-
-    /// The first page of a folder or directory, read through the repository; later pages go straight to the client.
-    private func firstPage(
-        _ client: JarvisNotesClient,
-        folder: String? = nil,
-        directory: String? = nil,
-        force: Bool
-    ) async throws -> VaultNotePage {
-        let scope = folder.map { "folder:\($0)" } ?? "dir:\(directory ?? "")"
-        let repository: JarvisRepository<VaultNotePage> = await JarvisAppCache.repository(.notes, scope: scope) {
-            try await client.fetchNotes(directory: directory, folder: folder, validator: $0)
-        }
-        let resolved = await repository.resolve(force: force)
-        if let value = resolved.value { return value }
-        throw resolved.error ?? JarvisClientError.networkFailure
-    }
-
-    private func applyTree(_ nextTree: VaultNoteTree, force: Bool) async {
+    private func applyTree(_ nextTree: VaultNoteTree) {
         tree = nextTree
         confirmedFolders.subtract(nextTree.directories)
         if !selectedFolder.isEmpty,
            !(nextTree.directories + Array(confirmedFolders)).contains(where: { $0 == selectedFolder || $0.hasPrefix(selectedFolder + "/") }) {
             selectedFolder = ""
         }
-        directoryNotes = [:]
-        directoryHasMore = [:]
-        await loadDirectory(selectedFolder, offset: 0, force: force)
     }
 
     private func loadDirectory(_ directory: String, offset: Int, force: Bool = false) async {
-        guard let client, !directoryLoading.contains(directory) else { return }
+        guard let client, force || !directoryLoading.contains(directory) else { return }
+        let request = UUID()
+        directoryRequests[directory] = request
         directoryLoading.insert(directory)
-        defer { _ = directoryLoading.remove(directory) }
+        defer {
+            if directoryRequests[directory] == request { _ = directoryLoading.remove(directory) }
+        }
         do {
-            let page = try await (offset == 0
-                ? firstPage(client, directory: directory, force: force)
-                : client.notes(directory: directory, offset: offset))
-            let previous = offset == 0 ? [] : directoryNotes[directory] ?? []
-            directoryNotes[directory] = previous + page.notes
-            directoryHasMore[directory] = page.hasMore
+            if offset == 0 {
+                let retainedCount = directoryNotes[directory]?.count ?? 0
+                let repository: JarvisRepository<VaultNotePage> = await JarvisAppCache.repository(.notes, scope: "dir:\(directory)") {
+                    try await client.fetchNotes(directory: directory, validator: $0)
+                }
+                for await update in repository.updates(force: force) {
+                    guard !Task.isCancelled, directoryRequests[directory] == request else { return }
+                    switch update {
+                    case .cached(let page, _):
+                        if directoryNotes[directory] == nil {
+                            directoryNotes[directory] = page.notes
+                            directoryHasMore[directory] = page.hasMore
+                        }
+                    case .fresh(let page):
+                        var notes = page.notes
+                        var hasMore = page.hasMore
+                        while hasMore, notes.count < retainedCount {
+                            let next = try await client.notes(directory: directory, offset: notes.count)
+                            guard !Task.isCancelled, directoryRequests[directory] == request else { return }
+                            guard !next.notes.isEmpty else { break }
+                            notes += next.notes
+                            hasMore = next.hasMore
+                        }
+                        directoryNotes[directory] = notes
+                        directoryHasMore[directory] = hasMore
+                    case .failed(let error, _): throw error
+                    case .refreshing: break
+                    }
+                }
+            } else {
+                let page = try await client.notes(directory: directory, offset: offset)
+                guard !Task.isCancelled, directoryRequests[directory] == request else { return }
+                directoryNotes[directory] = (directoryNotes[directory] ?? []) + page.notes
+                directoryHasMore[directory] = page.hasMore
+            }
         } catch {
-            guard !Task.isCancelled, directory == selectedFolder else { return }
+            guard !Task.isCancelled, directoryRequests[directory] == request, directory == selectedFolder else { return }
             signInUnavailable = authorizationUnavailable(error)
             loadError = message(for: error)
             loadRetryUnavailable = signInUnavailable
@@ -1086,6 +1121,14 @@ struct JarvisNotesArea: View {
     }
 
     private func search() async {
+        let context = currentSearchContext
+        let request = UUID()
+        searchRequest = request
+        if searchContext != context {
+            graphSearch = nil
+            taskSearch = nil
+            searchContext = context
+        }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             graphSearch = nil
@@ -1097,49 +1140,74 @@ struct JarvisNotesArea: View {
         }
         guard let client else {
             searchError = copy.unavailable
+            searchLoading = false
             return
         }
         searchLoading = true
         searchError = nil
         searchRetryUnavailable = false
         signInUnavailable = false
-        graphSearch = nil
-        taskSearch = nil
+        let scope = selectedScope
+        let tab = selectedTab
+        async let notes: Void = searchNotes(client, query: query, scope: scope, tab: tab, request: request)
+        async let tasks: Void = searchTasks(client, query: query, scope: scope, tab: tab, request: request)
+        _ = await (notes, tasks)
+        if searchRequest == request { searchLoading = false }
+    }
+
+    @MainActor
+    private func searchNotes(
+        _ client: JarvisNotesClient, query: String, scope: JarvisNotesSearchScope,
+        tab: JarvisNotesTab, request: UUID
+    ) async {
+        guard scope != .tasks || tab == .graph else { return }
         do {
-            if selectedScope != .tasks || selectedTab == .graph {
-                let result = try await client.searchGraph(query)
-                guard !Task.isCancelled else { return }
-                graphSearch = result
-                graph = result.graph
-            }
-            if selectedScope != .notes && selectedTab != .graph {
-                let result = try await client.tasks(query: query, state: .all)
-                guard !Task.isCancelled else { return }
-                taskSearch = result
-            }
+            let result = try await client.searchGraph(query)
+            guard !Task.isCancelled, searchRequest == request else { return }
+            graphSearch = result
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, searchRequest == request else { return }
             searchError = message(for: error)
-            searchRetryUnavailable = authorizationUnavailable(error)
-            signInUnavailable = searchRetryUnavailable
+            searchRetryUnavailable = searchRetryUnavailable || authorizationUnavailable(error)
+            signInUnavailable = signInUnavailable || searchRetryUnavailable
         }
-        searchLoading = false
+    }
+
+    @MainActor
+    private func searchTasks(
+        _ client: JarvisNotesClient, query: String, scope: JarvisNotesSearchScope,
+        tab: JarvisNotesTab, request: UUID
+    ) async {
+        guard scope != .notes, tab != .graph else { return }
+        do {
+            let result = try await client.tasks(query: query, state: .all)
+            guard !Task.isCancelled, searchRequest == request else { return }
+            taskSearch = result
+        } catch {
+            guard !Task.isCancelled, searchRequest == request else { return }
+            searchError = message(for: error)
+            searchRetryUnavailable = searchRetryUnavailable || authorizationUnavailable(error)
+            signInUnavailable = signInUnavailable || searchRetryUnavailable
+        }
     }
 
     private func openNote(path: String) async {
         guard let client else { return }
         guard !openingNotePaths.contains(path) else { return }
+        let request = UUID()
+        openingNoteRequest = request
         openingNotePaths.insert(path)
         defer { _ = openingNotePaths.remove(path) }
         do {
             let note = try await client.readNote(path: path)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, openingNoteRequest == request else { return }
             editor = note
             editorPresented = true
             await JarvisAppCache.shared.recordNoteOpen(path: path)
+            guard !Task.isCancelled, openingNoteRequest == request else { return }
             recentVisits = await JarvisAppCache.shared.recentNoteVisits()
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, openingNoteRequest == request else { return }
             signInUnavailable = authorizationUnavailable(error)
             notice = message(for: error)
             noticePresented = true

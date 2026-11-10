@@ -87,16 +87,74 @@ struct JarvisStatusArea: View {
     // MARK: Content
 
     @ViewBuilder private var content: some View {
-        if let snapshot = state.snapshot {
-            loaded(snapshot)
-        } else if let failure = state.failure {
-            JarvisInsightsStateView(kind: .failure(failure), language: language, identifier: "status.error") {
-                if client == nil { onRetryConfiguration() }
-                reloadToken += 1
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
+            overview
+            JarvisSegmentedBar(
+                title: text(.statusFilterLabel),
+                identifierPrefix: "status.filter",
+                items: JarvisStatusFilter.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
+                selection: $filter
+            )
+            if let snapshot = state.snapshot {
+                loaded(snapshot)
+            } else if let failure = state.failure {
+                JarvisInsightsStateView(kind: .failure(failure), language: language, identifier: "status.error") {
+                    if client == nil { onRetryConfiguration() }
+                    reloadToken += 1
+                }
+            } else {
+                JarvisInsightsStateView(kind: .loading, language: language, identifier: "status.loading")
             }
-        } else {
-            JarvisPageLoadingView(title: text(.loading), identifier: "status.loading")
+            if state.snapshot == nil {
+                JarvisRowGroup {
+                    ForEach(JarvisStatusCheckID.allCases, id: \.rawValue) { check in
+                        pendingRow(text(check.localizationKey))
+                    }
+                }
+                JarvisRowGroup {
+                    pendingRow(text(.statusMirror))
+                    pendingRow(text(.statusSmoke))
+                }
+            }
         }
+    }
+
+    private func pendingRow(_ title: String) -> some View {
+        HStack(spacing: JarvisDesignTokens.rowSpacing) {
+            Image(systemName: "questionmark.circle")
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+                .accessibilityHidden(true)
+            Text(title).font(.body).lineLimit(2)
+            Spacer(minLength: 0)
+            if state.failure == nil { JarvisLoadingView().accessibilityHidden(true) }
+            else { Text("—").foregroundStyle(.secondary) }
+        }
+        .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+        .jarvisListRow()
+        .accessibilityElement(children: .combine)
+        .accessibilityValue(text(state.failure?.localizationKey ?? .loading))
+    }
+
+    private var overview: some View {
+        JarvisPageHeroCard(title: text(.overview)) {
+            if let snapshot = state.snapshot { checkedLine(snapshot) }
+        } content: {
+            JarvisPageStatGrid(
+                stats: JarvisStatusValue.allCases.map { tone in
+                    JarvisPageStat(
+                        id: tone.rawValue,
+                        value: state.snapshot?.entries.filter { $0.status == tone }.count,
+                        label: text(tone.localizationKey),
+                        systemImage: tone == .ok ? "checkmark.circle" : tone == .unknown ? "questionmark.circle" : "exclamationmark.circle",
+                        tint: tone == .down ? .red : JarvisDesignTokens.primaryAccent,
+                        isLoading: state.failure == nil
+                    )
+                },
+                language: language
+            )
+        }
+        .accessibilityIdentifier("status.hero")
     }
 
     private func loaded(_ snapshot: JarvisStatusSnapshot) -> some View {
@@ -104,36 +162,18 @@ struct JarvisStatusArea: View {
         let mirror = snapshot.vaultMirror
         let showMirror = mirror.map { filter == .all || $0.displayState(now: now).tone != .ok } ?? false
         return VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
-            JarvisPageHeroCard(title: text(.overview)) {
-                checkedLine(snapshot)
-            } content: {
-                JarvisPageStatGrid(
-                    stats: JarvisStatusValue.allCases.map { tone in
-                        JarvisPageStat(
-                            id: tone.rawValue,
-                            value: snapshot.entries.filter { $0.status == tone }.count,
-                            label: text(tone.localizationKey),
-                            systemImage: tone == .ok ? "checkmark.circle" : tone == .unknown ? "questionmark.circle" : "exclamationmark.circle",
-                            tint: tone == .down ? .red : JarvisDesignTokens.primaryAccent
-                        )
-                    },
-                    language: language
-                )
-            }
-            .accessibilityIdentifier("status.hero")
-            JarvisSegmentedBar(
-                title: text(.statusFilterLabel),
-                identifierPrefix: "status.filter",
-                items: JarvisStatusFilter.allCases.map { JarvisTabItem(tag: $0, title: text($0.localizationKey)) },
-                selection: $filter
-            )
             if state.isPartial, let failure = state.failure {
-                JarvisInsightsBadge(
-                    title: text(.statusPartial) + " · " + text(failure.localizationKey),
-                    systemImage: "exclamationmark.arrow.circlepath",
-                    tint: JarvisDesignTokens.primaryAccent
-                )
-                .accessibilityIdentifier("status.partial")
+                HStack {
+                    JarvisInsightsBadge(
+                        title: text(.statusPartial) + " · " + text(failure.localizationKey),
+                        systemImage: "exclamationmark.arrow.circlepath",
+                        tint: JarvisDesignTokens.primaryAccent
+                    )
+                    .accessibilityIdentifier("status.partial")
+                    JarvisIconButton(title: text(.retry), systemImage: "arrow.clockwise", identifier: "status.partial.retry") {
+                        reloadToken += 1
+                    }
+                }
             }
             if entries.isEmpty {
                 JarvisInsightsCard {

@@ -80,13 +80,15 @@ struct JarvisFactoryArea: View {
     @State private var segment: FactorySegment
     @State private var projects: [FactoryProject] = []
     @State private var selectedProjectID = ""
-    @State private var board: FactoryBoard?
-    @State private var releaseView: FactoryReleaseView?
+    @State private var boards: [String: FactoryBoard] = [:]
+    @State private var releaseViews: [String: FactoryReleaseView] = [:]
     @State private var projectLoading = true
     @State private var contentLoading = false
     @State private var refreshing = false
     @State private var projectsError = false
-    @State private var contentError = false
+    @State private var contentErrors = Set<String>()
+    @State private var contentRequest = UUID()
+    @State private var projectsRequest = UUID()
     @State private var connection: FactoryConnectionState = .connected
     @State private var boardEventFailures = 0
     @State private var boardRetrySeconds = 1
@@ -103,6 +105,10 @@ struct JarvisFactoryArea: View {
     @EnvironmentObject private var navigation: JarvisNavigationModel
 
     private var copy: JarvisFactoryCopy { JarvisFactoryCopy(language: language) }
+    private var board: FactoryBoard? { boards[selectedProjectID] }
+    private var releaseView: FactoryReleaseView? { releaseViews[selectedProjectID] }
+    private var contentContext: String { "\(selectedProjectID)|\(segment.rawValue)" }
+    private var contentError: Bool { contentErrors.contains(contentContext) }
     private var project: FactoryProject? { projects.first { $0.id == selectedProjectID } }
     private var filteredCards: [(column: FactoryBoardColumnID, card: FactoryBoardCard)] {
         guard let board else { return [] }
@@ -147,19 +153,11 @@ struct JarvisFactoryArea: View {
             if previewState == .loading {
                 FactoryLoadingView(copy: copy, releases: segment == .releases)
             } else if client == nil {
-                FactoryStateMessage(
-                    title: copy.text(.actionFailed),
-                    actionTitle: copy.text(.retry),
-                    action: onRetryConfiguration
-                )
+                FactoryLoadingView(copy: copy, releases: segment == .releases, retry: onRetryConfiguration)
             } else if projectLoading && projects.isEmpty {
-                FactoryLoadingView(copy: copy, releases: false)
+                FactoryLoadingView(copy: copy, releases: segment == .releases)
             } else if projectsError && projects.isEmpty {
-                FactoryStateMessage(
-                    title: copy.text(.actionFailed),
-                    actionTitle: copy.text(.retry),
-                    action: { Task { await loadProjects(force: true) } }
-                )
+                FactoryLoadingView(copy: copy, releases: segment == .releases, retry: { Task { await loadProjects(force: true) } })
             } else if projects.isEmpty {
                 FactoryStateMessage(title: copy.text(.emptyProjects))
             } else if segment == .releases {
@@ -176,11 +174,9 @@ struct JarvisFactoryArea: View {
         }
         .environment(\.locale, language.locale)
         .jarvisPageFooter {
-            if showsSegmentRow {
-                VStack(spacing: 0) {
-                    segmentRow
-                    bottomDock
-                }
+            VStack(spacing: 0) {
+                segmentRow
+                bottomDock
             }
         }
         .jarvisAmbientBackground()
@@ -203,10 +199,9 @@ struct JarvisFactoryArea: View {
         .task {
             await watchBoardUpdates()
         }
-        .onChange(of: selectedProjectID) { _, _ in
-            board = nil
-            releaseView = nil
-            contentError = false
+        .onDisappear {
+            projectsRequest = UUID()
+            contentRequest = UUID()
         }
         .onChange(of: segment) { _, value in
             if value == .releases {
@@ -312,11 +307,6 @@ struct JarvisFactoryArea: View {
         .accessibilityLabel(copy.text(.stageTasks))
     }
 
-    private var showsSegmentRow: Bool {
-        previewState != .loading && client != nil &&
-            (board != nil || releaseView != nil || (contentError && !projects.isEmpty))
-    }
-
     /// The full-width toggle above the search row, below the page's scrolling content.
     private var segmentRow: some View {
         HStack(spacing: JarvisPageHeaderMetrics.spacing) {
@@ -345,35 +335,43 @@ struct JarvisFactoryArea: View {
         ) {
             createPresented = true
         }
+        .accessibilityHint(projects.isEmpty
+            ? copy.text(projectsError || client == nil ? .actionFailed : .loadingTasks)
+            : copy.text(.newTask))
     }
 
     /// One round glass filter button right of the segmented bar. Its small menu has a checkmark on the
     /// selected project and, on the board, the agent and state filters.
-    @ViewBuilder
     private var filterButton: some View {
-        if project != nil {
-            JarvisMenuButton(
-                title: copy.text(.filters),
-                systemImage: "line.3.horizontal.decrease",
-                identifier: "factory.filters"
-            ) {
-                Picker(copy.text(.project), selection: $selectedProjectID) {
-                    ForEach(projects) { item in
-                        Text(item.name).tag(item.id)
+        JarvisMenuButton(
+            title: copy.text(.filters),
+            systemImage: "line.3.horizontal.decrease",
+            identifier: "factory.filters",
+            isDisabled: client == nil
+        ) {
+            Picker(copy.text(.project), selection: $selectedProjectID) {
+                if projects.isEmpty {
+                    Text(copy.text(.project)).tag("")
+                }
+                ForEach(projects) { item in
+                    Text(item.name).tag(item.id)
+                }
+            }
+            .disabled(projects.isEmpty)
+            .accessibilityHint(projects.isEmpty
+                ? copy.text(projectsError ? .actionFailed : .loadingTasks)
+                : copy.text(.project))
+            if segment != .releases {
+                Picker(copy.text(.agent), selection: $selectedAgent) {
+                    Text(copy.text(.all)).tag("")
+                    ForEach(FactoryAgent.allCases, id: \.rawValue) { agent in
+                        Text(copy.agent(agent)).tag(agent.rawValue)
                     }
                 }
-                if segment != .releases {
-                    Picker(copy.text(.agent), selection: $selectedAgent) {
-                        Text(copy.text(.all)).tag("")
-                        ForEach(FactoryAgent.allCases, id: \.rawValue) { agent in
-                            Text(copy.agent(agent)).tag(agent.rawValue)
-                        }
-                    }
-                    Picker(copy.text(.state), selection: $selectedState) {
-                        Text(copy.text(.all)).tag("")
-                        ForEach(FactoryTaskState.allCases, id: \.rawValue) { state in
-                            Text(copy.state(state)).tag(state.rawValue)
-                        }
+                Picker(copy.text(.state), selection: $selectedState) {
+                    Text(copy.text(.all)).tag("")
+                    ForEach(FactoryTaskState.allCases, id: \.rawValue) { state in
+                        Text(copy.state(state)).tag(state.rawValue)
                     }
                 }
             }
@@ -385,11 +383,7 @@ struct JarvisFactoryArea: View {
         if board == nil && contentLoading {
             FactoryLoadingView(copy: copy, releases: false)
         } else if board == nil && contentError {
-            FactoryStateMessage(
-                title: copy.text(.actionFailed),
-                actionTitle: copy.text(.retry),
-                action: { refreshVersion += 1 }
-            )
+            FactoryLoadingView(copy: copy, releases: false, retry: { refreshVersion += 1 })
         } else if let board {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -412,8 +406,15 @@ struct JarvisFactoryArea: View {
                         if contentError {
                             FactoryStatusLine(symbol: "exclamationmark.triangle", text: copy.text(.actionFailed))
                                 .overlay(alignment: .trailing) {
-                                    JarvisLabelledButton(title: copy.text(.retry)) { refreshVersion += 1 }
+                                    JarvisLabelledButton(title: copy.text(.retry), identifier: "factory.retry") { refreshVersion += 1 }
                                 }
+                        }
+                        if projectsError {
+                            FactoryStateMessage(
+                                title: copy.text(.actionFailed),
+                                actionTitle: copy.text(.retry),
+                                action: { Task { await loadProjects(force: true) } }
+                            )
                         }
                         if filteredCards.isEmpty {
                             Text(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -512,13 +513,16 @@ struct JarvisFactoryArea: View {
         if releaseView == nil && contentLoading {
             FactoryLoadingView(copy: copy, releases: true)
         } else if releaseView == nil && contentError {
-            FactoryStateMessage(
-                title: copy.text(.actionFailed),
-                actionTitle: copy.text(.retry),
-                action: { refreshVersion += 1 }
-            )
+            FactoryLoadingView(copy: copy, releases: true, retry: { refreshVersion += 1 })
         } else if let releaseView {
             VStack(spacing: 0) {
+                if contentError || projectsError {
+                    FactoryStateMessage(
+                        title: copy.text(.actionFailed),
+                        actionTitle: copy.text(.retry),
+                        action: { Task { await refresh() } }
+                    )
+                }
                 JarvisPageHeadline(phrase: JarvisFactoryPagePhrase.releases(
                     releaseView,
                     projectName: project?.name ?? releaseView.project.name,
@@ -577,6 +581,8 @@ struct JarvisFactoryArea: View {
     }
 
     private func loadProjects(force: Bool = false) async {
+        let request = UUID()
+        projectsRequest = request
         guard let client else {
             projectLoading = false
             projectsError = true
@@ -588,63 +594,77 @@ struct JarvisFactoryArea: View {
             let repository = await JarvisAppCache.repository(.factory, scope: "projects") {
                 try await client.fetchProjects(validator: $0)
             }
-            let resolved = await repository.resolve(force: force)
-            guard !Task.isCancelled else { return }
-            guard let result = resolved.value else { throw resolved.error ?? JarvisFactoryClientError.invalidRequest }
-            projects = result
-            if !result.contains(where: { $0.id == selectedProjectID }) {
-                selectedProjectID = result.first?.id ?? ""
+            for await update in repository.updates(force: force) {
+                guard !Task.isCancelled, projectsRequest == request else { return }
+                switch update {
+                case .cached(let result, _), .fresh(let result):
+                    projects = result
+                    if !result.contains(where: { $0.id == selectedProjectID }) {
+                        selectedProjectID = result.first?.id ?? ""
+                    }
+                case .failed(let error, _): throw error
+                case .refreshing: break
+                }
             }
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, projectsRequest == request else { return }
             projectsError = true
         }
         projectLoading = false
     }
 
-    private func loadSelectedContent() async {
+    private func loadSelectedContent(force: Bool = false) async {
+        let request = UUID()
+        contentRequest = request
         guard let client, !selectedProjectID.isEmpty, previewState != .loading else { return }
-        guard segment == .releases ? (releaseView == nil || refreshVersion > 0) : (board == nil || refreshVersion > 0) else {
-            return
-        }
+        let projectID = selectedProjectID
+        let selectedSegment = segment
+        let context = contentContext
         contentLoading = true
-        contentError = false
-        var showingSavedBoard = false
+        contentErrors.remove(context)
+        defer { if contentRequest == request { contentLoading = false } }
         do {
-            if segment == .releases {
-                releaseView = try await client.releases(projectId: selectedProjectID)
+            if selectedSegment == .releases {
+                let repository: JarvisRepository<FactoryReleaseView> = await JarvisAppCache.repository(.factory, scope: "releases:\(projectID)") { _ in
+                    .modified(try await client.releases(projectId: projectID), validator: nil)
+                }
+                for await update in repository.updates(force: force || refreshVersion > 0) {
+                    guard !Task.isCancelled, contentRequest == request, contentContext == context else { return }
+                    switch update {
+                    case .cached(let result, _), .fresh(let result): releaseViews[projectID] = result
+                    case .failed(let error, _): throw error
+                    case .refreshing: break
+                    }
+                }
             } else {
-                let projectId = selectedProjectID
-                let repository = await JarvisAppCache.repository(.factory, scope: projectId) {
-                    try await client.fetchBoard(projectId: projectId, validator: $0)
+                let repository = await JarvisAppCache.repository(.factory, scope: projectID) {
+                    try await client.fetchBoard(projectId: projectID, validator: $0)
                 }
-                let resolved = await repository.resolve(force: refreshVersion > 0)
-                guard let cachedBoard = resolved.value else {
-                    throw resolved.error ?? JarvisFactoryClientError.invalidRequest
-                }
-                board = cachedBoard
-                if let refreshError = resolved.error {
-                    showingSavedBoard = JarvisFactoryConnectionPolicy.isNetworkFailure(refreshError)
+                for await update in repository.updates(force: force || refreshVersion > 0) {
+                    guard !Task.isCancelled, contentRequest == request, contentContext == context else { return }
+                    switch update {
+                    case .cached(let value, _), .fresh(let value): boards[projectID] = value
+                    case .failed(let error, _): throw error
+                    case .refreshing: break
+                    }
                 }
             }
-            guard !Task.isCancelled else { return }
-            contentError = false
-            connection = previewState == .offline || showingSavedBoard
+            guard !Task.isCancelled, contentRequest == request, contentContext == context else { return }
+            connection = previewState == .offline
                 ? .offline : previewState == .reconnecting ? .reconnecting : .connected
         } catch {
-            guard !Task.isCancelled else { return }
-            contentError = true
+            guard !Task.isCancelled, contentRequest == request, contentContext == context else { return }
+            contentErrors.insert(context)
             if JarvisFactoryConnectionPolicy.isNetworkFailure(error) { connection = .offline }
         }
-        contentLoading = false
     }
 
     private func refresh() async {
         guard !refreshing else { return }
         refreshing = true
-        await loadProjects(force: true)
-        refreshVersion += 1
-        await loadSelectedContent()
+        async let projectRefresh: Void = loadProjects(force: true)
+        async let contentRefresh: Void = loadSelectedContent(force: true)
+        _ = await (projectRefresh, contentRefresh)
         refreshing = false
     }
 
@@ -654,6 +674,7 @@ struct JarvisFactoryArea: View {
             do {
                 try await client.listenForBoardUpdates(onConnected: {
                     await MainActor.run {
+                        guard !Task.isCancelled else { return }
                         boardEventFailures = 0
                         boardRetrySeconds = 1
                         connection = .connected
@@ -661,6 +682,7 @@ struct JarvisFactoryArea: View {
                 }) { update in
                     guard update.projectId == selectedProjectID else { return }
                     await MainActor.run {
+                        guard !Task.isCancelled, update.projectId == selectedProjectID else { return }
                         refreshVersion += 1
                     }
                 }
@@ -717,7 +739,7 @@ struct FactoryStateMessage: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             if let actionTitle, let action {
-                JarvisLabelledButton(title: actionTitle, action: action)
+                JarvisLabelledButton(title: actionTitle, identifier: "factory.retry", action: action)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -729,11 +751,44 @@ struct FactoryStateMessage: View {
 struct FactoryLoadingView: View {
     let copy: JarvisFactoryCopy
     let releases: Bool
+    var retry: (() -> Void)? = nil
 
     var body: some View {
         ScrollView {
-            JarvisPageLoadingView(title: copy.text(releases ? .loadingReleases : .loadingTasks), identifier: "factory.loading")
+            VStack(alignment: .leading, spacing: JarvisDesignTokens.factorySectionSpacing) {
+                if let retry {
+                    FactoryStateMessage(
+                        title: copy.text(.actionFailed),
+                        actionTitle: copy.text(.retry),
+                        action: retry
+                    )
+                }
+                if releases {
+                    JarvisSectionHeadline(copy.text(.releases))
+                    if retry == nil {
+                        JarvisLoadingView(title: copy.text(.loadingReleases), size: .inline)
+                    }
+                } else {
+                    JarvisPageHeroCard(title: copy.text(.pipeline)) {
+                        EmptyView()
+                    } content: {
+                        JarvisPageStatGrid(
+                            stats: [
+                                JarvisPageStat(id: "needs", value: nil, label: copy.text(.needsDan), systemImage: "bell", tint: JarvisDesignTokens.factoryAccent, isLoading: retry == nil),
+                                JarvisPageStat(id: "running", value: nil, label: copy.text(.running), systemImage: "play.circle", tint: JarvisDesignTokens.factoryAccent, isLoading: retry == nil),
+                                JarvisPageStat(id: "review", value: nil, label: copy.text(.inReview), systemImage: "checkmark.circle", tint: JarvisDesignTokens.factorySecondaryAccent, isLoading: retry == nil),
+                                JarvisPageStat(id: "failed", value: nil, label: copy.text(.failed), systemImage: "xmark.circle", tint: .red, isLoading: retry == nil),
+                            ],
+                            language: copy.language
+                        )
+                    }
+                    ForEach(JarvisFactoryPresentation.boardColumnOrder, id: \.self) { column in
+                        JarvisSectionHeadline(copy.column(column))
+                    }
+                }
+            }
             .padding(JarvisDesignTokens.factoryHorizontalInset)
+            .accessibilityIdentifier("factory.loading")
         }
     }
 }

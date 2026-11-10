@@ -6,7 +6,7 @@ import os
 /// The kinds of cached data and how long each stays fresh. Within the window no request is made; after it the cached
 /// value is shown and refreshed in the background.
 public enum JarvisRepositoryKind: String, CaseIterable, Sendable {
-    case notes, tasks, calendar, factory, usage, status, proactive, health, settings, notifications
+    case notes, tasks, calendar, factory, usage, status, proactive, health, settings, notifications, workspaces
 
     public var freshness: Duration {
         switch self {
@@ -19,6 +19,7 @@ public enum JarvisRepositoryKind: String, CaseIterable, Sendable {
         case .health: .seconds(300)
         case .settings: .seconds(600)
         case .notifications: .seconds(30)
+        case .workspaces: .seconds(60)
         }
     }
 
@@ -62,6 +63,8 @@ public actor JarvisCache {
     private let storage: any JarvisCacheStorage
     private let now: @Sendable () -> Date
     private var account: String?
+    private var generation = UUID()
+    private var revisions: [String: UUID] = [:]
 
     public init(storage: any JarvisCacheStorage, now: @escaping @Sendable () -> Date = { Date() }) {
         self.storage = storage
@@ -72,14 +75,36 @@ public actor JarvisCache {
 
     /// Binds the cache to the signed-in account. A different account clears all cached data first.
     public func bind(account newAccount: String) async {
-        if let account, account != newAccount { await storage.removeAll() }
-        account = newAccount
+        if account != newAccount {
+            generation = UUID()
+            revisions.removeAll()
+            let hadAccount = account != nil
+            account = newAccount
+            if hadAccount { await storage.removeAll() }
+        }
     }
 
     /// Sign-out: drop every cached entry and the account binding.
     public func clear() async {
+        generation = UUID()
+        revisions.removeAll()
         account = nil
         await storage.removeAll()
+    }
+
+    func session() -> UUID? { account == nil ? nil : generation }
+
+    func isCurrent(_ session: UUID) -> Bool { account != nil && generation == session }
+
+    func revision(for key: String) -> UUID {
+        if let revision = revisions[key] { return revision }
+        let revision = UUID()
+        revisions[key] = revision
+        return revision
+    }
+
+    func isCurrent(_ session: UUID, key: String, revision: UUID) -> Bool {
+        isCurrent(session) && revisions[key] == revision
     }
 
     func read(_ key: String) async -> JarvisCacheEntry? {
@@ -87,13 +112,13 @@ public actor JarvisCache {
         return await storage.read(account: account, key: key)
     }
 
-    func write(data: Data, validator: String?, key: String) async {
-        guard let account else { return }
+    func write(data: Data, validator: String?, key: String, session: UUID, revision: UUID? = nil) async {
+        guard isCurrent(session), revision == nil || revisions[key] == revision, let account else { return }
         await storage.write(JarvisCacheEntry(data: data, fetchedAt: now(), validator: validator), account: account, key: key)
     }
 
-    func touch(_ entry: JarvisCacheEntry, key: String) async {
-        guard let account else { return }
+    func touch(_ entry: JarvisCacheEntry, key: String, session: UUID, revision: UUID) async {
+        guard isCurrent(session, key: key, revision: revision), let account else { return }
         await storage.write(JarvisCacheEntry(data: entry.data, fetchedAt: now(), validator: entry.validator), account: account, key: key)
     }
 
@@ -105,11 +130,15 @@ public actor JarvisCache {
     /// Drops every scope of one kind (for example all note folders after a note was saved).
     public func invalidateAll(kind: JarvisRepositoryKind) async {
         guard let account else { return }
+        for key in Array(revisions.keys) where key.hasPrefix(kind.rawValue) {
+            revisions[key] = UUID()
+        }
         await storage.remove(account: account, keyPrefix: kind.rawValue)
     }
 
     func invalidate(_ key: String) async {
         guard let account else { return }
+        revisions[key] = UUID()
         await storage.remove(account: account, key: key)
     }
 
@@ -156,7 +185,10 @@ public final class JarvisRepository<Value: Codable & Sendable & Equatable>: Send
 
     /// The cached value without any request, for instant first paint.
     public func cachedValue() async -> Value? {
-        guard let entry = await cache.read(key) else { return nil }
+        guard let session = await cache.session() else { return nil }
+        let revision = await cache.revision(for: key)
+        guard let entry = await cache.read(key),
+              await cache.isCurrent(session, key: key, revision: revision), !Task.isCancelled else { return nil }
         return try? JSONDecoder().decode(Value.self, from: entry.data)
     }
 
@@ -192,10 +224,13 @@ public final class JarvisRepository<Value: Codable & Sendable & Equatable>: Send
     private func run(force: Bool, continuation: AsyncStream<JarvisRepositoryUpdate<Value>>.Continuation) async {
         let signpost = JarvisSignpost.begin("open", key)
         defer { JarvisSignpost.end("open", signpost) }
+        guard let session = await cache.session(), !Task.isCancelled else { return }
+        let revision = await cache.revision(for: key)
         let entry = await cache.read(key)
         let value = entry.flatMap { try? JSONDecoder().decode(Value.self, from: $0.data) }
         var isFresh = false
         if let entry, value != nil { isFresh = await cache.age(of: entry) < freshness }
+        guard await cache.isCurrent(session, key: key, revision: revision), !Task.isCancelled else { return }
         if let value {
             continuation.yield(.cached(value, isStale: !isFresh || force))
             if isFresh && !force { return }
@@ -208,23 +243,25 @@ public final class JarvisRepository<Value: Codable & Sendable & Equatable>: Send
             let validator = value == nil ? nil : entry?.validator
             let fetch = self.fetch
             let result = try await withDeadline(refreshTimeout) { try await fetch(validator) }
-            if Task.isCancelled { return }
+            guard await cache.isCurrent(session, key: key, revision: revision), !Task.isCancelled else { return }
             switch result {
             case .modified(let fresh, let validator):
                 if let data = try? JSONEncoder().encode(fresh) {
-                    await cache.write(data: data, validator: validator, key: key)
+                    await cache.write(data: data, validator: validator, key: key, session: session, revision: revision)
                 }
+                guard await cache.isCurrent(session, key: key, revision: revision), !Task.isCancelled else { return }
                 continuation.yield(.fresh(fresh))
             case .notModified:
                 if let entry, let value {
-                    await cache.touch(entry, key: key)
+                    await cache.touch(entry, key: key, session: session, revision: revision)
+                    guard await cache.isCurrent(session, key: key, revision: revision), !Task.isCancelled else { return }
                     continuation.yield(.fresh(value))
                 } else {
                     continuation.yield(.failed(JarvisClientError.networkFailure, cached: nil))
                 }
             }
         } catch {
-            if Task.isCancelled { return }
+            guard await cache.isCurrent(session, key: key, revision: revision), !Task.isCancelled else { return }
             continuation.yield(.failed(error, cached: value))
         }
     }

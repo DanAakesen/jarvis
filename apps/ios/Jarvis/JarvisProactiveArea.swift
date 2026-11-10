@@ -47,6 +47,9 @@ struct JarvisProactiveArea: View {
     @State private var itemsFailure: JarvisInsightsFailure?
     @State private var earlierItems: JarvisInsightsLoad<[JarvisProactiveItem]> = .loading
     @State private var runs: [JarvisProactiveRun] = []
+    @State private var runsLoaded = false
+    @State private var runsFailure: JarvisInsightsFailure?
+    @State private var earlierFailure: JarvisInsightsFailure?
     @State private var tab = Tab.open
     @AppStorage(JarvisApprovalNotificationCoordinator.pendingProactiveItemKey) private var pendingNotificationID = ""
     @State private var notificationItem: JarvisProactiveItem?
@@ -62,6 +65,21 @@ struct JarvisProactiveArea: View {
     @State private var reloadToken = 0
 
     private var now: Date { fixedNow ?? Date() }
+    private var loadedStatus: JarvisProactiveStatus? {
+        if case .loaded(let value) = status { return value }
+        return nil
+    }
+    private var isStatusLoading: Bool {
+        if case .loading = status { return true }
+        return false
+    }
+    private var statusAvailabilityText: String {
+        switch status {
+        case .loading: text(.loading)
+        case .failed(let failure): text(failure.localizationKey)
+        case .loaded: ""
+        }
+    }
 
     private func text(_ key: JarvisInsightsLocalizationKey) -> String {
         jarvisInsightsText(key, language)
@@ -125,7 +143,7 @@ struct JarvisProactiveArea: View {
 
     private func poll() async {
         guard scenePhase == .active else { return }
-        await refresh(initial: true)
+        await refresh(initial: true, force: reloadToken > 0)
         guard liveUpdates else { return }
         while !Task.isCancelled {
             try? await Task.sleep(for: JarvisProactiveLogic.refreshInterval)
@@ -139,6 +157,8 @@ struct JarvisProactiveArea: View {
     private func refresh(initial: Bool, force: Bool = false) async {
         guard let client else {
             status = .failed(.notConfigured)
+            itemsFailure = .notConfigured
+            runsFailure = .notConfigured
             return
         }
         if case .loaded = status {} else { status = .loading }
@@ -148,15 +168,15 @@ struct JarvisProactiveArea: View {
         let itemsRepository: JarvisRepository<[JarvisProactiveItem]> = await JarvisAppCache.repository(
             .proactive, scope: "items"
         ) { try await client.fetchItems(validator: $0) }
-        async let statusDone: Void = consumeStatus(statusRepository, client: client, initial: initial, force: force)
+        async let statusDone: Void = consumeStatus(statusRepository, client: client, force: force)
         async let itemsDone: Void = consumeItems(itemsRepository, force: force)
-        _ = await (statusDone, itemsDone)
+        async let runsDone: Void = loadRuns(client, force: initial && force, onlyIfMissing: !initial)
+        _ = await (statusDone, itemsDone, runsDone)
     }
 
     private func consumeStatus(
         _ repository: JarvisRepository<JarvisProactiveStatus>,
         client: JarvisProactiveClient,
-        initial: Bool,
         force: Bool
     ) async {
         var last: JarvisProactiveStatus?
@@ -168,7 +188,7 @@ struct JarvisProactiveArea: View {
                 let runChanged = last != nil && last?.lastRun != value.lastRun
                 status = .loaded(value)
                 statusRefreshFailed = false
-                if initial || runChanged { await loadRuns(client, force: force || runChanged) }
+                if runChanged { await loadRuns(client, force: true) }
                 if checkMessage == .started, value.lastRun?.status != .running { checkMessage = nil }
                 last = value
             case .refreshing:
@@ -176,7 +196,7 @@ struct JarvisProactiveArea: View {
             case .failed(let error, let cached):
                 statusRefreshFailed = true
                 let failure = JarvisInsightsFailure(error)
-                if (cached == nil && last == nil) || failure == .unavailable || failure == .signInRequired {
+                if cached == nil && last == nil {
                     status = .failed(failure)
                 }
             }
@@ -199,37 +219,45 @@ struct JarvisProactiveArea: View {
         }
     }
 
-    private func loadRuns(_ client: JarvisProactiveClient, force: Bool) async {
+    private func loadRuns(_ client: JarvisProactiveClient, force: Bool, onlyIfMissing: Bool = false) async {
+        if onlyIfMissing && runsLoaded { return }
         let repository: JarvisRepository<[JarvisProactiveRun]> = await JarvisAppCache.repository(
             .proactive, scope: "runs"
         ) { try await client.fetchRuns(validator: $0) }
         for await update in repository.updates(force: force) {
             if Task.isCancelled { return }
             switch update {
-            case .cached(let value, _), .fresh(let value): runs = value
-            case .refreshing, .failed: break
+            case .cached(let value, _), .fresh(let value):
+                runs = value
+                runsLoaded = true
+                runsFailure = nil
+            case .refreshing: break
+            case .failed(let error, _): runsFailure = JarvisInsightsFailure(error)
             }
         }
     }
 
-    private func loadEarlierIfNeeded() async {
+    private func loadEarlierIfNeeded(force: Bool = false) async {
         guard tab == .earlier, let client else { return }
-        if case .loaded = earlierItems { return }
-        earlierItems = .loading
+        if case .loaded = earlierItems {
+            if !force { return }
+        } else { earlierItems = .loading }
+        earlierFailure = nil
         do {
             let all = try await client.items(all: true)
-            if Task.isCancelled { return }
+            if Task.isCancelled || tab != .earlier { return }
             earlierItems = .loaded(JarvisProactiveLogic.earlier(all: all, open: openItems))
         } catch {
-            if Task.isCancelled { return }
-            earlierItems = .failed(JarvisInsightsFailure(error))
+            if Task.isCancelled || tab != .earlier { return }
+            let failure = JarvisInsightsFailure(error)
+            if case .loaded = earlierItems { earlierFailure = failure }
+            else { earlierItems = .failed(failure) }
         }
     }
 
     private func settingsSaved() async {
-        earlierItems = .loading
         await refresh(initial: false, force: true)
-        if tab == .earlier { await loadEarlierIfNeeded() }
+        if tab == .earlier { await loadEarlierIfNeeded(force: true) }
     }
 
     private func checkNow() async {
@@ -248,30 +276,38 @@ struct JarvisProactiveArea: View {
     // MARK: Content
 
     @ViewBuilder private var content: some View {
+        VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
+            nextCheckCard(loadedStatus)
+            if (loadedStatus != nil && statusRefreshFailed) || (itemsLoaded && itemsFailure != nil) {
+                HStack {
+                    Text(text(.refreshFailedShowingSaved)).font(.footnote).foregroundStyle(.secondary)
+                    JarvisIconButton(title: text(.retry), systemImage: "arrow.clockwise", identifier: "proactive.refresh.retry") {
+                        reloadToken += 1
+                    }
+                }
+            }
+            itemsCard
+            sourcesCard(loadedStatus)
+            budgetCard(loadedStatus?.budget)
+            runsCard
+        }
+    }
+
+    @ViewBuilder private func statusDataState(_ identifier: String) -> some View {
         switch status {
         case .loading:
-            JarvisPageLoadingView(title: text(.loading), identifier: "proactive.loading")
+            JarvisInsightsStateView(kind: .loading, language: language, identifier: "\(identifier).loading")
         case .failed(let failure):
             JarvisInsightsStateView(
                 kind: .failure(failure),
                 message: failureMessage(failure),
                 language: language,
-                identifier: "proactive.error"
+                identifier: "\(identifier).error"
             ) {
                 if client == nil { onRetryConfiguration() }
                 reloadToken += 1
             }
-        case .loaded(let loaded):
-            VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
-                nextCheckCard(loaded)
-                if statusRefreshFailed || (itemsLoaded && itemsFailure != nil) {
-                    Text(text(.refreshFailedShowingSaved)).font(.footnote).foregroundStyle(.secondary)
-                }
-                itemsCard
-                sourcesCard(loaded)
-                budgetCard(loaded.budget)
-                runsCard
-            }
+        case .loaded: EmptyView()
         }
     }
 
@@ -325,29 +361,32 @@ struct JarvisProactiveArea: View {
             : JarvisInsightsLocalization.format(.proactiveFindings, language: language, count)
     }
 
-    private func nextCheckCard(_ loaded: JarvisProactiveStatus) -> some View {
+    private func nextCheckCard(_ loaded: JarvisProactiveStatus?) -> some View {
         JarvisPageHeroCard(title: text(.overview)) {
             JarvisPageStatGrid(
                 stats: [
-                    JarvisPageStat(id: "open", value: openItems.count, label: text(.proactiveTabOpen), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent, formattedValue: itemsLoaded ? nil : "—"),
-                    JarvisPageStat(id: "lastRun", value: 0, label: text(.proactiveLastRun), systemImage: "clock",
-                                   formattedValue: loaded.lastRun.flatMap { JarvisInsightsDates.parse($0.occurredAt) }.map(dateTime) ?? "—"),
-                    JarvisPageStat(id: "sources", value: loaded.sources.filter { $0.state != "disabled" }.count, label: text(.proactiveSources), systemImage: "checklist"),
+                    JarvisPageStat(id: "open", value: itemsLoaded ? openItems.count : nil, label: text(.proactiveTabOpen), systemImage: "bolt", tint: JarvisDesignTokens.primaryAccent, isLoading: itemsFailure == nil),
+                    JarvisPageStat(id: "lastRun", value: loaded == nil ? nil : 0, label: text(.proactiveLastRun), systemImage: "clock",
+                                   formattedValue: loaded.map { $0.lastRun.flatMap { JarvisInsightsDates.parse($0.occurredAt) }.map(dateTime) ?? "—" },
+                                   isLoading: isStatusLoading),
+                    JarvisPageStat(id: "sources", value: loaded?.sources.filter { $0.state != "disabled" }.count, label: text(.proactiveSources), systemImage: "checklist", isLoading: isStatusLoading),
                 ],
                 language: language
             )
             Divider()
             HStack(spacing: JarvisPageHeaderMetrics.spacing) {
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                    Text(sentence(loaded))
-                        .font(.subheadline.weight(.medium))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("proactive.sentence")
-                    Text(lastCheckLine(loaded))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("proactive.lastCheck")
+                    if let loaded {
+                        Text(sentence(loaded))
+                            .font(.subheadline.weight(.medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("proactive.sentence")
+                        Text(lastCheckLine(loaded))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("proactive.lastCheck")
+                    } else { statusDataState("proactive") }
                 }
                 Spacer(minLength: 0)
                 JarvisIconButton(
@@ -355,15 +394,16 @@ struct JarvisProactiveArea: View {
                     systemImage: "arrow.clockwise",
                     identifier: "proactive.checkNow",
                     isBusy: checkingNow,
-                    isDisabled: !JarvisProactiveLogic.canCheckNow(loaded)
+                    isDisabled: loaded.map { !JarvisProactiveLogic.canCheckNow($0) } ?? true
                 ) {
                     Task { await checkNow() }
                 }
+                .accessibilityHint(statusAvailabilityText)
             }
-            if loaded.paused {
+            if loaded?.paused == true {
                 JarvisInsightsBadge(title: text(.proactivePausedBanner), systemImage: "pause.circle")
                     .accessibilityIdentifier("proactive.paused")
-            } else if loaded.quietNow {
+            } else if loaded?.quietNow == true {
                 JarvisInsightsBadge(title: text(.proactiveQuietBanner), systemImage: "moon.zzz")
                     .accessibilityIdentifier("proactive.quiet")
             }
@@ -434,6 +474,11 @@ struct JarvisProactiveArea: View {
     }
 
     @ViewBuilder private var earlierList: some View {
+        if let earlierFailure {
+            JarvisInsightsStateView(kind: .failure(earlierFailure), language: language, identifier: "proactive.earlier.refreshFailed") {
+                Task { await loadEarlierIfNeeded(force: true) }
+            }
+        }
         switch earlierItems {
         case .loading:
             JarvisInsightsStateView(kind: .loading, language: language, identifier: "proactive.earlier.loading")
@@ -646,31 +691,55 @@ struct JarvisProactiveArea: View {
 
     // MARK: Sources, budget and runs
 
-    private func sourcesCard(_ loaded: JarvisProactiveStatus) -> some View {
+    private func sourcesCard(_ loaded: JarvisProactiveStatus?) -> some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.healthRowSpacing) {
             JarvisSectionHeadline(text(.proactiveSources)) {
-                JarvisIconButton(title: text(.editorEditSources), systemImage: "pencil", identifier: "proactive.editSources") {
+                JarvisIconButton(title: text(.editorEditSources), systemImage: "pencil", identifier: "proactive.editSources", isDisabled: client == nil) {
                     editorRequest = EditorRequest(focus: .sources)
                 }
             }
-            JarvisRowGroup {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0),
-                    count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 0) {
-                    ForEach(loaded.sources) { source in
-                        HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
-                            Image(systemName: sourceSymbol(source.id))
-                                .foregroundStyle(source.state == "ok" ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent)
-                                .frame(width: JarvisDesignTokens.iconSize).accessibilityHidden(true)
-                            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                                Text(text(source.id.localizationKey)).font(.subheadline)
-                                Text(sourceLine(source)).font(.caption).foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+            if let loaded {
+                JarvisRowGroup {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0),
+                        count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 0) {
+                        ForEach(loaded.sources) { source in
+                            HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
+                                Image(systemName: sourceSymbol(source.id))
+                                    .foregroundStyle(source.state == "ok" ? JarvisDesignTokens.primaryAccent : JarvisDesignTokens.secondaryAccent)
+                                    .frame(width: JarvisDesignTokens.iconSize).accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                                    Text(text(source.id.localizationKey)).font(.subheadline)
+                                    Text(sourceLine(source)).font(.caption).foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 0)
                             }
-                            Spacer(minLength: 0)
+                            .jarvisListRow()
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("proactive.source.\(source.id.rawValue)")
                         }
-                        .jarvisListRow()
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("proactive.source.\(source.id.rawValue)")
+                    }
+                }
+            } else {
+                JarvisRowGroup {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0),
+                        count: dynamicTypeSize.isAccessibilitySize ? 1 : 2), spacing: 0) {
+                        ForEach(JarvisProactiveSourceID.allCases) { source in
+                            HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
+                                Image(systemName: sourceSymbol(source))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: JarvisDesignTokens.iconSize)
+                                    .accessibilityHidden(true)
+                                Text(text(source.localizationKey)).font(.subheadline)
+                                Spacer(minLength: 0)
+                                if isStatusLoading { JarvisLoadingView().accessibilityHidden(true) }
+                                else { Text("—").foregroundStyle(.secondary) }
+                            }
+                            .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
+                            .jarvisListRow()
+                            .accessibilityElement(children: .combine)
+                            .accessibilityValue(statusAvailabilityText)
+                        }
                     }
                 }
             }
@@ -723,45 +792,55 @@ struct JarvisProactiveArea: View {
         value.formatted(.number.precision(.fractionLength(0...2)).locale(language.locale)) + " " + text(.currencyUnit)
     }
 
-    private func budgetCard(_ budget: JarvisProactiveBudget) -> some View {
-        let tint: Color = budget.state == .exhausted ? .red : JarvisDesignTokens.primaryAccent
+    private func budgetCard(_ budget: JarvisProactiveBudget?) -> some View {
+        let tint: Color = budget?.state == .exhausted ? .red : JarvisDesignTokens.primaryAccent
         return JarvisInsightsCard(
             title: text(.proactiveBudget),
             accessory: AnyView(
                 JarvisIconButton(
                     title: text(.editorEditBudget),
                     systemImage: "pencil",
-                    identifier: "proactive.editBudget"
+                    identifier: "proactive.editBudget",
+                    isDisabled: client == nil
                 ) { editorRequest = EditorRequest(focus: .budget) }
             )
         ) {
-            VStack(alignment: .leading, spacing: 8) {
-                ProgressView(value: budget.usedFraction)
-                    .tint(tint)
-                    .accessibilityHidden(true)
-                Text(
-                    JarvisInsightsLocalization.format(
-                        .proactiveBudgetSpend,
-                        language: language,
-                        money(budget.estimatedSpendDkk),
-                        money(budget.monthlyLimitDkk)
+            if let budget {
+                VStack(alignment: .leading, spacing: 8) {
+                    ProgressView(value: budget.usedFraction)
+                        .tint(tint)
+                        .accessibilityHidden(true)
+                    Text(
+                        JarvisInsightsLocalization.format(
+                            .proactiveBudgetSpend,
+                            language: language,
+                            money(budget.estimatedSpendDkk),
+                            money(budget.monthlyLimitDkk)
+                        )
                     )
-                )
-                .font(.subheadline.weight(.medium))
-                .accessibilityIdentifier("proactive.budget.spend")
-                Text(text(budget.state.localizationKey))
-                    .font(.caption)
-                    .foregroundStyle(budget.state == .exhausted ? Color.red : Color.secondary)
-                    .accessibilityIdentifier("proactive.budget.state")
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("proactive.budget")
+                    .font(.subheadline.weight(.medium))
+                    .accessibilityIdentifier("proactive.budget.spend")
+                    Text(text(budget.state.localizationKey))
+                        .font(.caption)
+                        .foregroundStyle(budget.state == .exhausted ? Color.red : Color.secondary)
+                        .accessibilityIdentifier("proactive.budget.state")
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("proactive.budget")
+            } else { statusDataState("proactive.budget") }
         }
     }
 
     private var runsCard: some View {
         JarvisInsightsCard(title: text(.proactiveRecentChecks)) {
-            if runs.isEmpty {
+            if let runsFailure {
+                JarvisInsightsStateView(kind: .failure(runsFailure), language: language, identifier: "proactive.runs.error") {
+                    Task { if let client { await loadRuns(client, force: true) } }
+                }
+            }
+            if !runsLoaded, runsFailure == nil {
+                JarvisInsightsStateView(kind: .loading, language: language, identifier: "proactive.runs.loading")
+            } else if runsLoaded && runs.isEmpty {
                 Text(text(.proactiveNoRuns))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)

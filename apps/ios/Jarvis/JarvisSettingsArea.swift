@@ -80,6 +80,7 @@ struct JarvisSettingsArea: View {
     @State private var signingOut = false
     @State private var confirmCurrentSignOut = false
     @State private var confirmAllSignOut = false
+    @State private var loadGeneration = 0
 
     private var language: JarvisAppLanguage {
         JarvisAppLanguage(rawValue: storedLanguage) ?? .default
@@ -91,15 +92,7 @@ struct JarvisSettingsArea: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Group {
-                if loading && response == nil {
-                    loadingState
-                } else if response == nil {
-                    errorState
-                } else {
-                    settingsList
-                }
-            }
+            settingsList
             .jarvisPageHeader { header }
             .environment(\.locale, language.locale)
             .tint(JarvisDesignTokens.settingsAccent)
@@ -110,8 +103,13 @@ struct JarvisSettingsArea: View {
             .task {
                 if response == nil { await reload() }
             }
+            .onDisappear {
+                loadGeneration += 1
+                loading = false
+            }
             .navigationDestination(for: JarvisSettingsDetail.self) { detail in
                 detailView(for: detail)
+                    .id(detail)
                     .toolbar(.visible, for: .navigationBar)
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -199,10 +197,13 @@ struct JarvisSettingsArea: View {
 
     private var settingsList: some View {
         JarvisList {
-            if let error = loadError, response != nil {
+            if let error = loadError {
                 Text(message(for: error))
                     .foregroundStyle(error == .offline ? Color.secondary : Color.red)
                     .listRowBackground(Color.clear)
+                JarvisLabelledButton(title: copy(.retry), isDisabled: loading) {
+                    Task { await reload(force: true) }
+                }
             }
             ForEach(visibleSections) { section in
                 ForEach(groups(for: section)) { group in
@@ -213,6 +214,9 @@ struct JarvisSettingsArea: View {
                                 Group {
                                     if let detail = row.detail {
                                         NavigationLink(value: detail) { rowContent(row) }
+                                            .disabled(needsSettings(detail) && response == nil)
+                                            .accessibilityHint(needsSettings(detail) && response == nil
+                                                ? copy(loading ? .loading : .unavailable) : "")
                                     } else {
                                         rowContent(row)
                                             .accessibilityHint(row.disabledHint.map(copy) ?? "")
@@ -266,7 +270,8 @@ struct JarvisSettingsArea: View {
             } label: {
                 rowContent(JarvisSettingsRow(id: "signOut", title: .signOut, detail: nil))
             }
-            .disabled(signingOut)
+            .disabled(signingOut || client == nil)
+            .accessibilityHint(client == nil ? copy(.unavailable) : "")
             .foregroundStyle(.red)
             .accessibilityIdentifier("settings.signOut")
         }
@@ -276,7 +281,8 @@ struct JarvisSettingsArea: View {
             } label: {
                 rowContent(JarvisSettingsRow(id: "signOutAll", title: .signOutAll, detail: nil))
             }
-            .disabled(signingOut)
+            .disabled(signingOut || client == nil)
+            .accessibilityHint(client == nil ? copy(.unavailable) : "")
             .foregroundStyle(.red)
             .accessibilityIdentifier("settings.signOutAll")
         }
@@ -284,7 +290,7 @@ struct JarvisSettingsArea: View {
 
     private var bottomBar: some View {
         VStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
-            if response != nil { sectionPicker }
+            sectionPicker
             HStack(spacing: JarvisDesignTokens.settingsSectionSpacing) {
                 JarvisSearchField(
                     placeholder: copy(.search), text: $search,
@@ -292,26 +298,24 @@ struct JarvisSettingsArea: View {
                 )
                 JarvisIconButton(
                     title: copy(.addDeployment), systemImage: "plus",
-                    identifier: "settings.addDeployment"
+                    identifier: "settings.addDeployment",
+                    isDisabled: client == nil || readOnly
                 ) { path.append(.newDeployment) }
+                .accessibilityHint(client == nil ? copy(.unavailable) : (readOnly ? copy(.readOnly) : ""))
             }
             .padding(.horizontal, JarvisPageHeaderMetrics.inset)
         }
         .padding(.vertical, JarvisPageHeaderMetrics.actionSpacing)
     }
 
-    private var errorState: some View {
-        VStack(spacing: JarvisDesignTokens.settingsSectionSpacing) {
-            Text(message(for: loadError ?? .offline))
-                .foregroundStyle(.secondary)
-            JarvisLabelledButton(title: copy(.retry)) { Task { await reload(force: true) } }
+    private func needsSettings(_ detail: JarvisSettingsDetail) -> Bool {
+        switch detail {
+        case .appLanguage, .proactive, .routines, .memory, .deployments, .newDeployment,
+             .trainingTargets, .nutritionTargets, .healthGoals, .healthCredential, .owner:
+            false
+        default:
+            true
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var loadingState: some View {
-        JarvisLoadingView(title: copy(.loading))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var hasVisibleContent: Bool {
@@ -434,6 +438,8 @@ struct JarvisSettingsArea: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(stacksValue ? nil : 1)
                         .truncationMode(.middle)
+                } else if response == nil && loading && ["appearance", "voice", "research", "jarvis", "decisions", "credentials"].contains(row.id) {
+                    JarvisLoadingView(title: copy(.loading))
                 }
             }
         }
@@ -473,25 +479,25 @@ struct JarvisSettingsArea: View {
         case .appLanguage:
             JarvisSettingsLanguageView(language: $storedLanguage, selectedLanguage: language)
         case .proactive:
-            JarvisProactiveSettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteFailure)
+            JarvisProactiveSettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteResourceFailure)
         case .routines:
-            JarvisRoutinesSettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteFailure)
+            JarvisRoutinesSettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteResourceFailure)
         case .memory:
-            JarvisMemorySettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteFailure)
+            JarvisMemorySettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteResourceFailure)
         case .trainingTargets:
             JarvisTargetsSettingsView(
-                client: client, language: language, kind: .training, readOnly: readOnly, onFailure: noteFailure
+                client: client, language: language, kind: .training, readOnly: readOnly, onFailure: noteResourceFailure
             )
         case .nutritionTargets:
             JarvisTargetsSettingsView(
-                client: client, language: language, kind: .nutrition, readOnly: readOnly, onFailure: noteFailure
+                client: client, language: language, kind: .nutrition, readOnly: readOnly, onFailure: noteResourceFailure
             )
         case .healthGoals:
             JarvisHealthGoalsSettingsView(language: language)
         case .healthCredential:
-            JarvisHealthCredentialView(client: client, language: language, onFailure: noteFailure)
+            JarvisHealthCredentialView(client: client, language: language, onFailure: noteResourceFailure)
         case .owner:
-            JarvisOwnerSettingsView(client: client, language: language, onFailure: noteFailure)
+            JarvisOwnerSettingsView(client: client, language: language, onFailure: noteResourceFailure)
         case .credentials:
             JarvisCredentialsSettingsView(
                 client: client,
@@ -510,12 +516,12 @@ struct JarvisSettingsArea: View {
                     )
                     Task { await JarvisAppCache.invalidate(.settings) }
                 },
-                onFailure: noteFailure
+                onFailure: noteResourceFailure
             )
         case .deployments:
-            JarvisDeploymentsSettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteFailure)
+            JarvisDeploymentsSettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteResourceFailure)
         case .newDeployment:
-            JarvisNewDeploymentView(client: client, language: language, readOnly: readOnly, onFailure: noteFailure)
+            JarvisNewDeploymentView(client: client, language: language, readOnly: readOnly, onFailure: noteResourceFailure)
         default:
             JarvisSettingsEditorView(
                 detail: detail == .personality || detail == .identity ? .instructions : detail,
@@ -530,7 +536,7 @@ struct JarvisSettingsArea: View {
                         storedTheme = theme
                     }
                 },
-                onFailure: noteFailure
+                onFailure: noteResourceFailure
             )
         }
     }
@@ -538,17 +544,20 @@ struct JarvisSettingsArea: View {
     /// Reads through the repository: the cached settings show at once, a stale entry refreshes in the background
     /// and a failed refresh keeps what is on screen.
     private func reload(force: Bool = false) async {
+        loadGeneration += 1
+        let generation = loadGeneration
         guard let client else {
             loadError = .unavailable
             loading = false
             return
         }
-        loading = response == nil
+        loading = true
         let repository: JarvisRepository<JarvisSettingsResponse> = await JarvisAppCache.repository(.settings) {
             try await client.fetchSettings(validator: $0)
         }
+        guard !Task.isCancelled, loadGeneration == generation else { return }
         for await update in repository.updates(force: force) {
-            if Task.isCancelled { return }
+            guard !Task.isCancelled, loadGeneration == generation else { return }
             switch update {
             case .cached(let fresh, _), .fresh(let fresh):
                 response = fresh
@@ -563,13 +572,21 @@ struct JarvisSettingsArea: View {
                 noteFailure(error)
             }
         }
-        loading = false
+        if loadGeneration == generation { loading = false }
     }
 
     private func noteFailure(_ error: Error) {
         let mapped = error as? JarvisSettingsClientError ?? .offline
         loadError = mapped
-        readOnly = mapped == .offline || mapped == .unavailable || mapped == .notOwner || mapped == .signInRequired
+        if mapped == .notOwner || mapped == .signInRequired || mapped == .httpStatus(403) {
+            readOnly = true
+        }
+    }
+
+    private func noteResourceFailure(_ error: Error) {
+        guard let error = error as? JarvisSettingsClientError,
+              error == .notOwner || error == .signInRequired || error == .httpStatus(403) else { return }
+        noteFailure(error)
     }
 
     private func signOut(allDevices: Bool) async {

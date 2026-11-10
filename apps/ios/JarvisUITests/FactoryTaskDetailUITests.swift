@@ -35,6 +35,27 @@ final class FactoryTaskDetailUITests: XCTestCase {
         capture("short-request")
     }
 
+    func testRefreshRetainsExpandedRequest() {
+        launch(language: "en", long: true)
+        defer { app.terminate() }
+        openBoardTask()
+        let request = reveal(app.staticTexts["factory.request.text"])
+        let original = request.label
+        let collapsedHeight = request.frame.height
+        reveal(app.buttons["factory.request.toggle"]).tap()
+        let expanded = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in request.exists && request.frame.height > collapsedHeight * 1.5 },
+            object: request
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [expanded], timeout: 5), .completed)
+        refreshDetail(language: "en")
+        XCTAssertEqual(request.label, original)
+        XCTAssertGreaterThan(request.frame.height, collapsedHeight * 1.5,
+                             "Same-task refresh must preserve request expansion")
+        XCTAssertEqual(app.buttons["factory.request.toggle"].label, "Show less")
+        capture("expanded-request-retained-after-refresh")
+    }
+
     func testEnglishOfflineReplayShowsPartialOldestHistoryWithoutClaimingLatest() {
         launch(language: "en", long: true, replay: "--ui-test-factory-offline-replay")
         defer { app.terminate() }

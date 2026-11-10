@@ -7,6 +7,50 @@ final class NotesRedesignUITests: XCTestCase {
     func testLibraryPinsFoldersRawAndEditingDark() { exercise(theme: "dark") }
     func testLibraryPinsFoldersRawAndEditingLight() { exercise(theme: "light") }
 
+    func testStaticStructureAndTasksDoNotWaitForSlowGraph() {
+        app.launchArguments = ["--ui-test-navigation", "--ui-test-notes-slow-graph",
+                               "-jarvis.appLanguage", "en", "-AppleLanguages", "(en)"]
+        app.launch()
+        defer { app.terminate() }
+        tap("navigation.openSidebar")
+        tap("navigation.notes")
+        XCTAssertTrue(app.buttons["notes.tab.tasks"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.descendants(matching: .any)["notes.hero"].exists)
+        XCTAssertTrue(app.buttons["notes.plus"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["notes.search"].exists)
+        capture("notes-static-structure-before-graph")
+        app.buttons["notes.tab.tasks"].tap()
+        let task = app.descendants(matching: .any)["notes.task.row." + String(repeating: "1", count: 64)]
+        XCTAssertTrue(task.waitForExistence(timeout: 2), "Tasks must finish without waiting for the graph")
+    }
+
+    func testFailedRefreshRetainsLibraryAndOffersRetry() {
+        app.launchArguments = ["--ui-test-navigation", "--ui-test-notes-refresh-failure",
+                               "-jarvis.appLanguage", "en", "-AppleLanguages", "(en)"]
+        app.launch()
+        defer { app.terminate() }
+        tap("navigation.openSidebar")
+        tap("navigation.notes")
+        let note = app.buttons["notes.note.welcome.md"]
+        XCTAssertTrue(note.waitForExistence(timeout: 8))
+        let scroll = app.scrollViews["notes.scroll"]
+        scroll.swipeDown()
+        let retry = app.buttons["notes.retry"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 8))
+        XCTAssertTrue(note.exists, "A failed refresh must not remove the last library")
+        XCTAssertTrue(app.buttons["notes.tab.notes"].isSelected)
+        XCTAssertTrue(app.buttons["notes.plus"].exists)
+        capture("notes-retained-library-refresh-failure")
+        for _ in 0..<3 {
+            if retry.isHittable { break }
+            scroll.swipeDown()
+        }
+        XCTAssertTrue(retry.isHittable)
+        retry.tap()
+        let recovered = NSPredicate { _, _ in !retry.exists && note.exists }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: recovered, object: nil)], timeout: 8), .completed)
+    }
+
     func testLargeLibrarySidebarOpensAfterScrollingAndReturnsToChat() {
         app.launchArguments = ["--ui-test-navigation", "--ui-test-large-notes",
                                "-jarvis.appLanguage", "en", "-jarvis.appTheme", "dark",

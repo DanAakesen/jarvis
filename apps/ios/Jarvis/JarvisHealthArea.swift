@@ -3,14 +3,16 @@ import Foundation
 import JarvisCore
 import SwiftUI
 
-enum JarvisHealthFailure: Equatable {
+enum JarvisHealthFailure: Error, Equatable {
     case offline
     case denied
     case unavailable
     case failed
 
     init(_ error: Error) {
-        if let error = error as? JarvisClientError {
+        if let failure = error as? JarvisHealthFailure {
+            self = failure
+        } else if let error = error as? JarvisClientError {
             switch error {
             case .networkFailure, .timedOut, .serviceUnavailable, .rateLimited:
                 self = .offline
@@ -71,8 +73,8 @@ struct JarvisHealthRead {
 
     init(error: Error, previous: JarvisHealthRead?) {
         let failure = JarvisHealthFailure(error)
-        if let previous, !previous.items.isEmpty {
-            state = .available
+        if let previous, previous.state == .available || previous.state == .empty {
+            state = previous.state
             items = previous.items
             hasMore = previous.hasMore
             updatedAt = previous.updatedAt
@@ -219,6 +221,8 @@ struct JarvisHealthArea: View {
     @State private var searchText = ""
     @State private var refreshVersion = 0
     @State private var dashboard: JarvisHealthDashboardData?
+    @State private var dashboardPeriod: JarvisHealthPeriod?
+    @State private var dashboardLoadID: UUID?
     @State private var isLoading = false
     @State private var trackWorkout = false
     @State private var editedLift: JarvisEditableLift?
@@ -229,19 +233,27 @@ struct JarvisHealthArea: View {
     @State private var lifts: [[String: JSONValue]] = []
     @State private var vaultLifts: [[String: JSONValue]] = []
     @State private var vaultLiftsLoading = false
+    @State private var vaultLoadID: UUID?
+    @State private var vaultLiftsLoaded = false
     @State private var vaultLiftsPartial = false
     @State private var vaultLiftsFailed = false
     @State private var deviceWorkouts: [JarvisGymLogEntry]?
     @State private var deviceWorkoutsFailed = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var deviceActivity: JarvisDailyActivitySnapshot?
     @State private var deviceActivityFailed = false
     @State private var deviceSteps: JarvisStepsSnapshot?
     @State private var pastExercises: [[String: JSONValue]] = []
+    @State private var exercisesLoading = true
+    @State private var exercisesLoaded = false
+    @State private var exerciseFailure: JarvisHealthFailure?
     @State private var exercisesPartial = false
     @State private var liftCursor: JSONValue?
-    @State private var liftsLoading = false
+    @State private var liftsLoading = true
+    @State private var liftsLoaded = false
     @State private var liftLoadID: UUID?
+    @State private var exerciseLoadID: UUID?
     @State private var liftFailure: JarvisHealthFailure?
     @State private var previewSheetPresented = false
 
@@ -278,6 +290,12 @@ struct JarvisHealthArea: View {
     // Body measurements are intermittent: Today must not hide a valid recent weight.
     private var bodyPeriod: JarvisHealthPeriod { JarvisHealthPeriod.make(.thirtyDays, now: now) }
 
+    private var currentDashboard: JarvisHealthDashboardData {
+        guard dashboardPeriod == period, let dashboard else {
+            return JarvisHealthDashboardData(preset: periodPreset)
+        }
+        return dashboard
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -290,13 +308,18 @@ struct JarvisHealthArea: View {
                             .accessibilityIdentifier("health.lift.writeError")
                     }
                     if trackWorkout {
-                        if let liftFailure { failureRow(liftFailure) }
+                        if let failure = liftFailure ?? exerciseFailure { failureRow(failure) }
+                        else if vaultLiftsFailed { failureRow(.failed) }
                         JarvisHealthLiftLog(
                             lifts: combinedLiftRows,
                             exercises: combinedExerciseRows,
                             searchText: searchText,
                             loading: liftsLoading || vaultLiftsLoading,
+                            exercisesLoading: exercisesLoading || vaultLiftsLoading,
+                            historyLoaded: liftsLoaded && (vaultLiftsLoaded || gymModel?.notesClient == nil),
+                            exercisesLoaded: exercisesLoaded && (vaultLiftsLoaded || gymModel?.notesClient == nil),
                             failed: liftFailure != nil || vaultLiftsFailed,
+                            exercisesFailed: exerciseFailure != nil || vaultLiftsFailed,
                             hasMore: liftCursor != nil,
                             exercisesPartial: exercisesPartial || vaultLiftsPartial || vaultLiftsFailed,
                             language: language,
@@ -307,50 +330,47 @@ struct JarvisHealthArea: View {
                         )
                     } else {
                         if let headline { JarvisPageHeadline(phrase: headline) }
-                        if let rawDashboard = dashboard {
-                            let dashboard = withDeviceWorkouts(rawDashboard)
-                            if let failure = dashboard.failure {
-                                failureRow(failure)
-                            }
-                            if dashboard.failure == nil && dashboard.hasFailure {
-                                failureRow(firstFailure(in: dashboard))
-                            }
-                            if let capabilities = dashboard.capabilities, capabilities.availableSources.isEmpty {
-                                ContentUnavailableView(
-                                    copy.text(.notAuthorised),
-                                    systemImage: "heart.text.square"
-                                )
-                                .accessibilityIdentifier("health.empty")
-                            } else if dashboard.capabilities != nil {
-                                JarvisHealthHeroCarousel(
-                                    data: dashboard,
-                                    period: period,
-                                    goals: goals,
-                                    client: client,
-                                    language: language
-                                ) { periodMenu }
-                                lastLiftsSection
-                                JarvisHealthSessionsSection(
-                                    read: dashboard.workouts,
-                                    period: period,
-                                    client: client,
-                                    capabilities: dashboard.capabilities,
-                                    language: language
-                                )
-                                JarvisHealthBodySection(
-                                    metrics: visibleMetrics(in: dashboard),
-                                    dashboard: dashboard,
-                                    period: bodyPeriod,
-                                    client: client,
-                                    language: language,
-                                    hasSearch: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                                )
-                                if dashboard.isStale || dashboard.isPartial {
-                                    freshnessLine(dashboard)
-                                }
-                            }
-                        } else {
-                            JarvisPageLoadingView(title: copy.text(.loading), identifier: "health.loading")
+                        if let liftFailure, liftFailure != .unavailable { failureRow(liftFailure) }
+                        else if vaultLiftsFailed { failureRow(.failed) }
+                        let dashboard = withDeviceWorkouts(currentDashboard)
+                        if let failure = dashboard.failure {
+                            failureRow(failure)
+                        }
+                        if dashboard.failure == nil && dashboard.hasFailure {
+                            failureRow(firstFailure(in: dashboard))
+                        }
+                        if let capabilities = dashboard.capabilities, capabilities.availableSources.isEmpty {
+                            ContentUnavailableView(
+                                copy.text(.notAuthorised),
+                                systemImage: "heart.text.square"
+                            )
+                            .accessibilityIdentifier("health.empty")
+                        }
+                        JarvisHealthHeroCarousel(
+                            data: dashboard,
+                            period: period,
+                            goals: goals,
+                            client: client,
+                            language: language
+                        ) { periodMenu }
+                        lastLiftsSection
+                        JarvisHealthSessionsSection(
+                            read: dashboard.workouts,
+                            period: period,
+                            client: client,
+                            capabilities: dashboard.capabilities,
+                            language: language
+                        )
+                        JarvisHealthBodySection(
+                            metrics: visibleMetrics(in: dashboard),
+                            dashboard: dashboard,
+                            period: bodyPeriod,
+                            client: client,
+                            language: language,
+                            hasSearch: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        )
+                        if dashboard.isStale || dashboard.isPartial {
+                            freshnessLine(dashboard)
                         }
                     }
                 }
@@ -364,22 +384,20 @@ struct JarvisHealthArea: View {
                 await refreshFromPull()
             }
             .jarvisPageFooter {
-                if dashboard != nil || trackWorkout {
-                    VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
-                        segmentSwitcher
-                            .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
-                        HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
-                            searchBar
-                            plusMenu
-                        }
+                VStack(spacing: JarvisDesignTokens.healthSectionSpacing) {
+                    segmentSwitcher
                         .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
+                    HStack(spacing: JarvisDesignTokens.notesInlineSpacing) {
+                        searchBar
+                        plusMenu
                     }
-                    .padding(.vertical, JarvisDesignTokens.healthSectionSpacing)
+                    .padding(.horizontal, JarvisDesignTokens.healthHorizontalInset)
                 }
+                .padding(.vertical, JarvisDesignTokens.healthSectionSpacing)
             }
         }
         .jarvisPageHeader { header }
-        .animation(.easeInOut(duration: 0.25), value: dashboard?.preset)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dashboard?.preset)
         .onAppear { goals = JarvisHealthGoals.load() }
         .jarvisAmbientBackground()
         .tint(JarvisDesignTokens.healthAccent)
@@ -387,7 +405,7 @@ struct JarvisHealthArea: View {
         .task(id: "\(periodPreset.rawValue)-\(refreshVersion)") {
             await loadDashboard(force: refreshVersion > 0)
         }
-        .task(id: "\(liftsAvailable)-\(refreshVersion)") {
+        .task(id: "\(dashboard?.capabilities != nil || dashboard?.failure != nil)-\(liftsAvailable)-\(refreshVersion)") {
             await loadLifts()
         }
         .task(id: refreshVersion) { await loadVaultLifts() }
@@ -450,14 +468,13 @@ struct JarvisHealthArea: View {
         healthSyncState = await onSyncAppleHealth?()
         guard !Task.isCancelled else { return }
         // Read all affected sources after the upload, not just the previously cached dashboard.
-        await loadDashboard(force: true)
-        guard !Task.isCancelled else { return }
+        async let dashboard: Void = loadDashboard(force: true)
         async let lifts: Void = loadLifts()
         async let vault: Void = loadVaultLifts()
         async let workouts: Void = loadDeviceWorkouts()
         async let steps: Void = loadDeviceSteps()
         async let activity: Void = loadDeviceActivity()
-        _ = await (lifts, vault, workouts, steps, activity)
+        _ = await (dashboard, lifts, vault, workouts, steps, activity)
     }
 
     private var header: some View {
@@ -477,6 +494,7 @@ struct JarvisHealthArea: View {
                 Label(copy.text(.logLift), systemImage: "dumbbell")
             }
             .disabled(gymModel == nil)
+            .accessibilityHint(copy.text(gymModel == nil ? .unavailable : .logLift))
             .accessibilityIdentifier("health.logLift")
             Button {
                 newWorkoutPresented = true
@@ -484,12 +502,14 @@ struct JarvisHealthArea: View {
                 Label(copy.text(.logWorkout), systemImage: "figure.run")
             }
             .disabled(gymModel == nil)
+            .accessibilityHint(copy.text(gymModel == nil ? .unavailable : .logWorkout))
             .accessibilityIdentifier("health.logWorkout")
         }
     }
 
     private var headline: JarvisPagePhrase? {
-        guard let dashboard, let capabilities = dashboard.capabilities, !capabilities.availableSources.isEmpty else { return nil }
+        let dashboard = currentDashboard
+        guard let capabilities = dashboard.capabilities, !capabilities.availableSources.isEmpty else { return nil }
         let visible = withDeviceWorkouts(dashboard)
         guard visible.workouts.state == .available || visible.workouts.state == .empty else { return nil }
         let rings = JarvisHealthRingsSection(data: visible, period: period, language: language)
@@ -516,9 +536,10 @@ struct JarvisHealthArea: View {
                     newLiftPresented = true
                 }
                 .disabled(gymModel == nil)
+                .accessibilityHint(copy.text(gymModel == nil ? .unavailable : .logLift))
             }
             JarvisRowGroup {
-                if (liftsLoading || vaultLiftsLoading) && combinedLiftRows.isEmpty {
+                if ((liftsLoading && !liftsLoaded) || (vaultLiftsLoading && !vaultLiftsLoaded)) && combinedLiftRows.isEmpty {
                     JarvisHealthStateLine(state: .loading, language: language).jarvisListRow(separator: false)
                 } else if let liftFailure, combinedLiftRows.isEmpty, vaultLiftsFailed || gymModel?.notesClient == nil {
                     Text(liftFailure.title(language: language)).foregroundStyle(.secondary)
@@ -670,12 +691,16 @@ struct JarvisHealthArea: View {
         guard observeRefreshEvents else { return }
         if let gymModel {
             await gymModel.refreshActivity()
+            guard !Task.isCancelled else { return }
             deviceActivity = gymModel.dailyActivity.value
             deviceActivityFailed = gymModel.dailyActivity.failure != nil
         } else {
             do {
-                deviceActivity = try await JarvisHealthKitActivitySource().activity(now: now, days: 30)
+                let activity = try await JarvisHealthKitActivitySource().activity(now: now, days: 30)
+                try Task.checkCancellation()
+                deviceActivity = activity
                 deviceActivityFailed = false
+            } catch is CancellationError {
             } catch { deviceActivityFailed = true }
         }
     }
@@ -757,13 +782,16 @@ struct JarvisHealthArea: View {
     @MainActor
     private func loadVaultLifts() async {
         guard observeRefreshEvents, let notes = gymModel?.notesClient else { return }
+        let loadID = UUID()
+        vaultLoadID = loadID
         vaultLiftsLoading = true
-        defer { vaultLiftsLoading = false }
+        defer { if vaultLoadID == loadID { vaultLiftsLoading = false } }
         do {
             let history = try await JarvisVaultGymLogStore(client: notes).recentLifts(
                 since: JarvisHealthSyncWindow.recentStart(now: now)
             )
             try Task.checkCancellation()
+            guard vaultLoadID == loadID else { return }
             let formatter = ISO8601DateFormatter()
             vaultLifts = history.entries.compactMap { entry in
                 guard let lift = entry.lift else { return nil }
@@ -779,49 +807,76 @@ struct JarvisHealthArea: View {
             }
             vaultLiftsPartial = history.partial
             vaultLiftsFailed = false
+            vaultLiftsLoaded = true
         } catch is CancellationError {
         } catch {
-            vaultLiftsFailed = true
+            if vaultLoadID == loadID { vaultLiftsFailed = true }
         }
     }
 
     @MainActor
     private func loadLifts(more: Bool = false) async {
         guard !more || !liftsLoading else { return }
+        guard dashboard?.capabilities != nil || dashboard?.failure != nil else { return }
         let loadID = UUID()
         liftLoadID = loadID
         guard let client, liftsAvailable else {
             liftsLoading = false
+            exercisesLoading = false
+            exerciseLoadID = nil
             liftFailure = .unavailable
             return
         }
         liftsLoading = true
-        defer {
-            if liftLoadID == loadID { liftsLoading = false }
+        if more {
+            await loadLiftHistory(client, more: true, loadID: loadID)
+        } else {
+            exerciseLoadID = loadID
+            exercisesLoading = true
+            async let history: Void = loadLiftHistory(client, more: false, loadID: loadID)
+            async let exercises: Void = loadPastExercises(client, loadID: loadID)
+            _ = await (history, exercises)
+            if liftLoadID == loadID, !Task.isCancelled, exerciseFailure == nil,
+               presentNewLiftAfterLoading, !previewSheetPresented {
+                previewSheetPresented = true
+                newLiftPresented = true
+            }
         }
+    }
+
+    @MainActor
+    private func loadLiftHistory(_ client: JarvisHealthClient, more: Bool, loadID: UUID) async {
+        defer { if liftLoadID == loadID { liftsLoading = false } }
         do {
             let history = try await client.query(JarvisHealthQuery(
                 source: .lifts, limit: 100, cursor: more ? liftCursor : nil
             ))
-            let latest = more ? nil : try await client.queryAll(JarvisHealthQuery(
-                source: .lifts, limit: 100, lastPerExercise: true
-            ))
             try Task.checkCancellation()
             guard liftLoadID == loadID else { return }
             lifts = more ? lifts + history.items : history.items
+            liftsLoaded = true
             liftCursor = history.coverage.next
-            if let latest {
-                pastExercises = latest.items
-                exercisesPartial = latest.coverage.hasMore
-                if presentNewLiftAfterLoading && !previewSheetPresented {
-                    previewSheetPresented = true
-                    newLiftPresented = true
-                }
-            }
             liftFailure = nil
         } catch is CancellationError {
         } catch {
             if liftLoadID == loadID { liftFailure = JarvisHealthFailure(error) }
+        }
+    }
+
+    @MainActor
+    private func loadPastExercises(_ client: JarvisHealthClient, loadID: UUID) async {
+        defer { if exerciseLoadID == loadID { exercisesLoading = false } }
+        do {
+            let latest = try await client.queryAll(JarvisHealthQuery(source: .lifts, limit: 100, lastPerExercise: true))
+            try Task.checkCancellation()
+            guard exerciseLoadID == loadID else { return }
+            pastExercises = latest.items
+            exercisesLoaded = true
+            exercisesPartial = latest.coverage.hasMore
+            exerciseFailure = nil
+        } catch is CancellationError {
+        } catch {
+            if exerciseLoadID == loadID { exerciseFailure = JarvisHealthFailure(error) }
         }
     }
 
@@ -843,6 +898,7 @@ struct JarvisHealthArea: View {
         }
         .foregroundStyle(failure == .offline ? .secondary : .primary)
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("health.failure")
     }
 
     private func freshnessLine(_ data: JarvisHealthDashboardData) -> some View {
@@ -877,127 +933,172 @@ struct JarvisHealthArea: View {
 
     private func firstFailure(in data: JarvisHealthDashboardData) -> JarvisHealthFailure {
         data.trainingTargetFailure ?? data.nutritionTargetFailure ??
-            [data.workouts, data.steps, data.nutritionDays, data.meals, data.sleep, data.metricCatalog, data.sync]
+            [data.workouts, data.steps, data.activeEnergy, data.exerciseTime, data.nutritionDays,
+             data.meals, data.sleep, data.metricCatalog, data.sync]
             .compactMap(\.failure).first ?? data.bodyMetrics.compactMap(\.read.failure).first ?? .failed
     }
 
     /// Reads through the repositories. A cache-only pass paints the cached dashboard at once (no request), then the
     /// normal pass refreshes only what is stale. `force` (pull to refresh, a saved workout, a sync event) refreshes
     /// everything.
+    @MainActor
     private func loadDashboard(force: Bool = false) async {
         if observeRefreshEvents { now = Date() }
+        let selectedPeriod = period
+        let loadID = UUID()
+        dashboardLoadID = loadID
         isLoading = true
-        defer { isLoading = false }
-        if dashboard == nil {
-            dashboard = JarvisHealthDashboardData(preset: periodPreset)
-            if !force { await buildDashboard(mode: JarvisHealthLoadMode(cacheOnly: true)) }
+        defer {
+            if dashboardLoadID == loadID { isLoading = false }
         }
-        await buildDashboard(mode: JarvisHealthLoadMode(force: force))
+        if dashboardPeriod != selectedPeriod || dashboard == nil {
+            dashboardPeriod = selectedPeriod
+            dashboard = JarvisHealthDashboardData(preset: periodPreset)
+            if !force {
+                await buildDashboard(mode: JarvisHealthLoadMode(cacheOnly: true), period: selectedPeriod, loadID: loadID)
+            }
+        }
+        guard ownsDashboardLoad(loadID, period: selectedPeriod) else { return }
+        await buildDashboard(mode: JarvisHealthLoadMode(force: force), period: selectedPeriod, loadID: loadID)
     }
 
-    private func buildDashboard(mode: JarvisHealthLoadMode) async {
-        let previous = dashboard?.preset == periodPreset ? dashboard : nil
+    private func ownsDashboardLoad(_ loadID: UUID, period selectedPeriod: JarvisHealthPeriod) -> Bool {
+        !Task.isCancelled && dashboardLoadID == loadID && period == selectedPeriod
+    }
+
+    @MainActor
+    private func buildDashboard(mode: JarvisHealthLoadMode, period selectedPeriod: JarvisHealthPeriod, loadID: UUID) async {
         guard let client else {
-            var failure = JarvisHealthDashboardData(preset: periodPreset)
-            failure.failure = .unavailable
-            failure.loading = false
-            dashboard = failure
+            dashboard?.failure = .unavailable
+            finishUnavailableReads(.unavailable)
+            dashboard?.loading = false
             return
         }
 
-        var next = JarvisHealthDashboardData(preset: periodPreset)
-        let selectedPeriod = period
+        async let training: Void = loadTrainingTargets(client: client, mode: mode, period: selectedPeriod, loadID: loadID)
+        async let nutrition: Void = loadNutritionTargets(client: client, mode: mode, period: selectedPeriod, loadID: loadID)
+        await loadDashboardReads(client: client, mode: mode, period: selectedPeriod, loadID: loadID)
+        _ = await (training, nutrition)
+        guard ownsDashboardLoad(loadID, period: selectedPeriod) else { return }
+        dashboard?.loading = false
+    }
+
+    @MainActor
+    private func loadDashboardReads(
+        client: JarvisHealthClient, mode: JarvisHealthLoadMode, period selectedPeriod: JarvisHealthPeriod, loadID: UUID
+    ) async {
         let capabilitiesRead: (value: JarvisHealthCapabilities?, failure: JarvisHealthFailure?) = await resolved(
             .health, scope: "capabilities", mode: mode
         ) { try await client.fetchCapabilities(validator: $0) }
-        if Task.isCancelled { return }
-        next.failure = capabilitiesRead.failure
-        guard let capabilities = capabilitiesRead.value else {
+        guard ownsDashboardLoad(loadID, period: selectedPeriod) else { return }
+        dashboard?.failure = capabilitiesRead.failure
+        guard let capabilities = capabilitiesRead.value ?? dashboard?.capabilities else {
             if mode.cacheOnly { return }
-            if var stale = previous {
-                stale.failure = next.failure ?? .failed
-                stale.loading = false
-                dashboard = stale
-            } else {
-                next.failure = next.failure ?? .failed
-                next.loading = false
-                dashboard = next
-            }
+            dashboard?.failure = capabilitiesRead.failure ?? .failed
+            finishUnavailableReads(capabilitiesRead.failure ?? .failed)
             return
         }
-        next.capabilities = capabilities
+        dashboard?.capabilities = capabilities
 
-        let training: (value: JarvisHealthTargets?, failure: JarvisHealthFailure?) = await resolved(
+        async let workouts: Void = publishRead(
+            \.workouts, source: .workouts, queryPeriod: selectedPeriod, limit: 200,
+            client: client, mode: mode, period: selectedPeriod, loadID: loadID
+        )
+        async let steps: Void = publishRead(
+            \.steps, source: .metrics, queryPeriod: chartPeriod(selectedPeriod), metric: "step_count", limit: 500,
+            client: client, mode: mode, period: selectedPeriod, loadID: loadID
+        )
+        async let energy: Void = publishRead(
+            \.activeEnergy, source: .metrics, queryPeriod: selectedPeriod, metric: "active_energy_burned", limit: 100,
+            client: client, mode: mode, period: selectedPeriod, loadID: loadID
+        )
+        async let exercise: Void = publishRead(
+            \.exerciseTime, source: .metrics, queryPeriod: selectedPeriod, metric: "apple_exercise_time", limit: 100,
+            client: client, mode: mode, period: selectedPeriod, loadID: loadID
+        )
+        async let nutrition: Void = publishRead(
+            \.nutritionDays, source: .nutritionDays, queryPeriod: chartPeriod(selectedPeriod), limit: 400,
+            client: client, mode: mode, period: selectedPeriod, loadID: loadID
+        )
+        async let meals: Void = publishRead(
+            \.meals, source: .meals, queryPeriod: selectedPeriod, limit: 100,
+            client: client, mode: mode, period: selectedPeriod, loadID: loadID
+        )
+        async let sleep: Void = publishRead(
+            \.sleep, source: .sleep, queryPeriod: chartPeriod(sleepPeriod(selectedPeriod)), limit: 500,
+            client: client, mode: mode, period: selectedPeriod, loadID: loadID
+        )
+        async let catalog: Void = publishRead(
+            \.metricCatalog, source: .metricCatalog, queryPeriod: bodyPeriod, limit: 500,
+            client: client, mode: mode, period: selectedPeriod, loadID: loadID
+        )
+        async let sync: Void = publishRead(
+            \.sync, source: .sync, queryPeriod: nil, limit: nil,
+            client: client, mode: mode, period: selectedPeriod, loadID: loadID
+        )
+        _ = await (workouts, steps, energy, exercise, nutrition, meals, sleep, catalog, sync)
+    }
+
+    @MainActor
+    private func loadTrainingTargets(
+        client: JarvisHealthClient, mode: JarvisHealthLoadMode, period selectedPeriod: JarvisHealthPeriod, loadID: UUID
+    ) async {
+        let result: (value: JarvisHealthTargets?, failure: JarvisHealthFailure?) = await resolved(
             .health, scope: "training-targets", mode: mode
         ) { try await client.fetchTrainingTargets(validator: $0) }
-        next.trainingTargets = training.value ?? previous?.trainingTargets
-        next.trainingTargetFailure = training.failure
-        let nutrition: (value: JarvisNutritionTargets?, failure: JarvisHealthFailure?) = await resolved(
+        guard ownsDashboardLoad(loadID, period: selectedPeriod) else { return }
+        dashboard?.trainingTargets = result.value ?? dashboard?.trainingTargets
+        dashboard?.trainingTargetFailure = result.failure
+    }
+
+    @MainActor
+    private func loadNutritionTargets(
+        client: JarvisHealthClient, mode: JarvisHealthLoadMode, period selectedPeriod: JarvisHealthPeriod, loadID: UUID
+    ) async {
+        let result: (value: JarvisNutritionTargets?, failure: JarvisHealthFailure?) = await resolved(
             .health, scope: "nutrition-targets", mode: mode
         ) { try await client.fetchNutritionTargets(validator: $0) }
-        next.nutritionTargets = nutrition.value ?? previous?.nutritionTargets
-        next.nutritionTargetFailure = nutrition.failure
-        if Task.isCancelled { return }
+        guard ownsDashboardLoad(loadID, period: selectedPeriod) else { return }
+        dashboard?.nutritionTargets = result.value ?? dashboard?.nutritionTargets
+        dashboard?.nutritionTargetFailure = result.failure
+    }
 
-        next.workouts = await read(
-            .workouts, period: selectedPeriod, limit: 200,
-            capabilities: next.capabilities, previous: previous?.workouts, client: client, mode: mode
+    @MainActor
+    private func publishRead(
+        _ keyPath: WritableKeyPath<JarvisHealthDashboardData, JarvisHealthRead>,
+        source: JarvisHealthSource, queryPeriod: JarvisHealthPeriod?, metric: String? = nil, limit: Int?,
+        client: JarvisHealthClient, mode: JarvisHealthLoadMode, period selectedPeriod: JarvisHealthPeriod, loadID: UUID
+    ) async {
+        guard ownsDashboardLoad(loadID, period: selectedPeriod) else { return }
+        let result = await read(
+            source, period: queryPeriod, metric: metric, limit: limit,
+            capabilities: dashboard?.capabilities, previous: dashboard?[keyPath: keyPath], client: client, mode: mode
         )
-        guard !Task.isCancelled else { return }
-        next.steps = await read(
-            .metrics, period: chartPeriod(selectedPeriod), metric: "step_count", limit: 500,
-            capabilities: next.capabilities, previous: previous?.steps, client: client, mode: mode
-        )
-        guard !Task.isCancelled else { return }
-        next.activeEnergy = await read(
-            .metrics, period: selectedPeriod, metric: "active_energy_burned", limit: 100,
-            capabilities: next.capabilities, previous: previous?.activeEnergy, client: client, mode: mode
-        )
-        next.exerciseTime = await read(
-            .metrics, period: selectedPeriod, metric: "apple_exercise_time", limit: 100,
-            capabilities: next.capabilities, previous: previous?.exerciseTime, client: client, mode: mode
-        )
-        next.activityNow = now
-        next.dailyActivity = .server(rows: next.activeEnergy.items + next.exerciseTime.items, fetchedAt: now)
-        next.dailyActivityStale = next.activeEnergy.isStale || next.exerciseTime.isStale
-            || next.activeEnergy.failure != nil || next.exerciseTime.failure != nil
-        guard !Task.isCancelled else { return }
-        next.nutritionDays = await read(
-            .nutritionDays, period: chartPeriod(selectedPeriod), limit: 400,
-            capabilities: next.capabilities, previous: previous?.nutritionDays, client: client, mode: mode
-        )
-        guard !Task.isCancelled else { return }
-        next.meals = await read(
-            .meals, period: selectedPeriod, limit: 100,
-            capabilities: next.capabilities, previous: previous?.meals, client: client, mode: mode
-        )
-        guard !Task.isCancelled else { return }
-        next.sleep = await read(
-            .sleep, period: chartPeriod(sleepPeriod(selectedPeriod)), limit: 500,
-            capabilities: next.capabilities, previous: previous?.sleep, client: client, mode: mode
-        )
-        guard !Task.isCancelled else { return }
-        next.metricCatalog = await read(
-            .metricCatalog, period: bodyPeriod, limit: 500,
-            capabilities: next.capabilities, previous: previous?.metricCatalog, client: client, mode: mode
-        )
-        guard !Task.isCancelled else { return }
-        next.sync = await read(
-            .sync, period: nil, limit: nil,
-            capabilities: next.capabilities, previous: previous?.sync, client: client, mode: mode
-        )
-        guard !Task.isCancelled else { return }
-        next.bodyMetrics = await loadBodyMetrics(
-            catalog: next.metricCatalog,
-            period: bodyPeriod,
-            capabilities: next.capabilities,
-            previous: previous?.bodyMetrics ?? [],
-            client: client,
-            mode: mode
-        )
-        next.loading = false
-        guard !Task.isCancelled else { return }
-        dashboard = next
+        guard ownsDashboardLoad(loadID, period: selectedPeriod) else { return }
+        dashboard?[keyPath: keyPath] = result
+        if source == .metrics, metric == "active_energy_burned" || metric == "apple_exercise_time",
+           var data = dashboard {
+            data.activityNow = now
+            data.dailyActivity = .server(rows: data.activeEnergy.items + data.exerciseTime.items, fetchedAt: now)
+            data.dailyActivityStale = data.activeEnergy.isStale || data.exerciseTime.isStale
+                || data.activeEnergy.failure != nil || data.exerciseTime.failure != nil
+            dashboard = data
+        }
+        if source == .metricCatalog {
+            await loadBodyMetrics(
+                catalog: result, period: bodyPeriod, capabilities: dashboard?.capabilities,
+                client: client, mode: mode, selectedPeriod: selectedPeriod, loadID: loadID
+            )
+        }
+    }
+
+    private func finishUnavailableReads(_ failure: JarvisHealthFailure) {
+        let keyPaths: [WritableKeyPath<JarvisHealthDashboardData, JarvisHealthRead>] = [
+            \.workouts, \.steps, \.activeEnergy, \.exerciseTime, \.nutritionDays, \.meals, \.sleep, \.metricCatalog, \.sync,
+        ]
+        for keyPath in keyPaths where dashboard?[keyPath: keyPath].state == .loading {
+            dashboard?[keyPath: keyPath] = JarvisHealthRead(error: failure, previous: nil)
+        }
     }
 
     /// One cached read: the value (cached or fresh) and, when the refresh failed, the failure beside it. A
@@ -1061,14 +1162,16 @@ struct JarvisHealthArea: View {
         }
     }
 
+    @MainActor
     private func loadBodyMetrics(
         catalog: JarvisHealthRead,
         period: JarvisHealthPeriod,
         capabilities: JarvisHealthCapabilities?,
-        previous: [JarvisHealthMetricSeries],
         client: JarvisHealthClient,
-        mode: JarvisHealthLoadMode
-    ) async -> [JarvisHealthMetricSeries] {
+        mode: JarvisHealthLoadMode,
+        selectedPeriod: JarvisHealthPeriod,
+        loadID: UUID
+    ) async {
         let definitions: [(JarvisHealthLogic.BodyMetric, JarvisHealthLocalizationKey)] = [
             (.weight, .weight), (.fatPercent, .bodyFat), (.leanMass, .leanMass),
         ]
@@ -1078,15 +1181,28 @@ struct JarvisHealthArea: View {
                 .first(where: { JarvisHealthLogic.bodyMetricName($0, matching: kind) }) else {
                 continue
             }
-            let old = previous.first { $0.metricName == metricName }?.read
-            let read = await self.read(
-                .metrics, period: period, metric: metricName, limit: 500,
-                capabilities: capabilities, previous: old, client: client, mode: mode
-            )
-            if Task.isCancelled { return metrics }
-            metrics.append(JarvisHealthMetricSeries(metricName: metricName, title: title, read: read))
+            let old = dashboard?.bodyMetrics.first { $0.metricName == metricName }?.read
+            metrics.append(JarvisHealthMetricSeries(metricName: metricName, title: title, read: old ?? .loading))
         }
-        return metrics
+        guard ownsDashboardLoad(loadID, period: selectedPeriod) else { return }
+        if catalog.state == .loading || (catalog.failure != nil && catalog.items.isEmpty) { return }
+        dashboard?.bodyMetrics = metrics
+        await withTaskGroup(of: Void.self) { group in
+            for metric in metrics {
+                let name = metric.metricName
+                group.addTask { @MainActor [self] in
+                    let result = await read(
+                        .metrics, period: period, metric: name, limit: 500,
+                        capabilities: capabilities,
+                        previous: dashboard?.bodyMetrics.first { $0.metricName == name }?.read,
+                        client: client, mode: mode
+                    )
+                    guard ownsDashboardLoad(loadID, period: selectedPeriod),
+                          let index = dashboard?.bodyMetrics.firstIndex(where: { $0.metricName == name }) else { return }
+                    dashboard?.bodyMetrics[index] = JarvisHealthMetricSeries(metricName: name, title: metric.title, read: result)
+                }
+            }
+        }
     }
 
     /// The hero charts always show the last seven days, so reads reach back that far whatever the period.
