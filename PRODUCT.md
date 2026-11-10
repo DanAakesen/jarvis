@@ -2732,3 +2732,8 @@ Target the owner's Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as wa
 ## Intelligent proactive notifications — 9 November 2026
 
 The owner approves connecting cross-app context, computing facts from saved data/goals, and using the existing model to select and write useful notifications. Health/training, nutrition, notes, memory and ordinary task commitments join existing proactive sources. Notifications show actual useful details to the sole owner. No shadow mode, added delivery-policy stage or feedback-learning feature is required. Existing preferences, pause, quiet hours, budget, source evidence/schema checks and receipts remain. Normal model insights can notify through iPhone APNs or browser fallback, and Check now can exercise that path. New context is read-only and cannot create automatic tasks. This extends earlier deadline-only push scope for normal informational insights, without activating unrelated Daily coaching/writers. See [implementation/handoff](docs/research/intelligent-proactive-notifications.md).
+
+
+## Watch steps complication — 10 November 2026
+
+The owner approved the amber vertical-stem steps design (second concept in the final steps exploration). The rectangular complication shows only a large daily step count and a full-width cumulative steps chart with a dashed goal reference. Remove the target text, time labels, calorie footer and weekly workout column. Small complications stay unchanged. Weekly workout concepts are deferred, not approved for implementation.

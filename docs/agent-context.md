@@ -8041,3 +8041,8 @@ read timeout despite the backend's 270-second generation budget. Two regression
 tests reproduced the default/configured mismatch. Image calls now use the existing
 long-tool setting (320 seconds by default), like web research. This requires
 releasing the Jarvis agent as well as the backend. No total chat deadline is added.
+
+
+## Watch steps follow-up — 10 November 2026
+
+Use existing PR-only Apple Watch build workflow for unsigned Watch simulator, physical Watch Release architecture and paired iPhone compilation. JarvisCore includes WatchStepsPlotTests for goal crossing, missing/zero and partial-day coverage; full CI is pending. No local/native or installed-device success is claimed. Startup alert PR #1692 is implemented and separately qualified at 5de65c01; it is not merged or released. Do not duplicate its recovery patch. Primary owns integration/deployment. Weekly workout concepts are deferred.

@@ -12,65 +12,68 @@ struct WatchHealthView: View {
     private var health: WatchHealthSnapshot? { entry.current ? entry.health : nil }
     private func number(_ value: Int?) -> String { value.map { $0.formatted() } ?? "—" }
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(alignment: .top, spacing: 3) {
-                    Text(number(health?.steps)).font(.system(size: 24, weight: .semibold, design: .rounded)).minimumScaleFactor(0.65).lineLimit(1)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("/ \(health?.stepGoal.map { String($0) } ?? "—")")
-                        Text("steps")
-                    }.font(.system(size: 8)).foregroundStyle(WatchStyle.stone)
-                }
-                WatchStepsChart(values: health?.cumulativeSteps ?? []).frame(maxHeight: .infinity)
-                HStack {
-                    Text("00"); Spacer(minLength: 0); Text("06"); Spacer(minLength: 0); Text("12"); Spacer(minLength: 0); Text("18")
-                }.font(.system(size: 6)).foregroundStyle(WatchStyle.stone).accessibilityHidden(true)
-                HStack(spacing: 2) {
-                    Image(systemName: "flame.fill")
-                    Text("\(number(health?.dailyKcal)) kcal")
-                    Spacer(minLength: 0); Text("Daily").foregroundStyle(WatchStyle.stone)
-                }.font(.system(size: 8))
-            }.frame(maxWidth: .infinity)
-            VStack(alignment: .leading, spacing: 3) {
-                goal("dumbbell.fill", value: health?.gym, target: health?.gymGoal, tint: WatchStyle.amber)
-                goal("figure.run", value: health?.runs, target: health?.runGoal, tint: WatchStyle.stone)
-                HStack(spacing: 2) { Image(systemName: "flame.fill"); Text("\(number(health?.weeklyKcal)) kcal").minimumScaleFactor(0.7).lineLimit(1) }
-                    .font(.system(size: 10))
-                HStack { Spacer(minLength: 0); Text("Weekly").font(.system(size: 8)).foregroundStyle(WatchStyle.stone) }
-            }.frame(width: 64)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(number(health?.steps))
+                .font(.system(size: 34, weight: .bold, design: .rounded))
+                .minimumScaleFactor(0.75).lineLimit(1)
+            WatchStepsChart(
+                values: health?.steps == nil ? [] : health?.cumulativeSteps ?? [],
+                goal: health?.stepGoal
+            ).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(entry.current ? "Daily steps \(number(health?.steps)), active calories \(number(health?.dailyKcal)). Weekly gym \(number(health?.gym)) of \(number(health?.gymGoal)), runs \(number(health?.runs)) of \(number(health?.runGoal)), active calories \(number(health?.weeklyKcal))." : "Health unavailable. Open Jarvis on iPhone.")
-    }
-    private func goal(_ icon: String, value: Int?, target: Int?, tint: Color) -> some View {
-        VStack(spacing: 1) {
-            HStack(spacing: 2) { Image(systemName: icon); Spacer(minLength: 0); Text("\(number(value))/\(number(target))") }.font(.system(size: 10))
-            GeometryReader { proxy in
-                let ratio = target.map { $0 > 0 ? min(1, Double(value ?? 0) / Double($0)) : 0 } ?? 0
-                Capsule().fill(.white.opacity(0.12))
-                Capsule().fill(tint).frame(width: proxy.size.width * ratio)
-            }.frame(height: 3)
-        }
+        .accessibilityLabel(health?.steps != nil
+            ? "Daily steps \(number(health?.steps)), target \(number(health?.stepGoal))."
+            : "Steps unavailable. Open Jarvis on iPhone.")
     }
 }
 struct WatchStepsChart: View {
     var values: [Int]
+    var goal: Int? = nil
     var body: some View {
-        GeometryReader { proxy in
-            let points = values.enumerated().map { index, value in
-                CGPoint(x: proxy.size.width * CGFloat(index) / 23, y: proxy.size.height * (1 - CGFloat(value) / CGFloat(max(values.max() ?? 1, 1))))
+        Canvas { context, size in
+            let plot = WatchStepsPlot(values: values, goal: goal)
+            let inset: CGFloat = 1
+            let width = max(0, size.width - 2 * inset)
+            let height = max(0, size.height - 2 * inset)
+            let baseline = inset + height
+            if let target = plot.goalHeight {
+                var reference = Path()
+                let y = baseline - height * target
+                reference.move(to: CGPoint(x: inset, y: y))
+                reference.addLine(to: CGPoint(x: inset + width, y: y))
+                context.stroke(reference, with: .color(.white.opacity(0.55)),
+                               style: StrokeStyle(lineWidth: 0.7, dash: [3, 2]))
             }
-            let line = Path { path in
-                if let first = points.first { path.move(to: first); points.dropFirst().forEach { path.addLine(to: $0) } }
+            guard !plot.values.isEmpty, width > 0, height > 0 else { return }
+            let points = plot.values.enumerated().map { index, value in
+                CGPoint(x: inset + width * CGFloat(index) / 23,
+                        y: baseline - height * value / plot.ceiling)
             }
-            Path { path in
-                guard let first = points.first, let last = points.last else { return }
-                path.move(to: CGPoint(x: first.x, y: proxy.size.height)); path.addLine(to: first)
-                points.dropFirst().forEach { path.addLine(to: $0) }
-                path.addLine(to: CGPoint(x: last.x, y: proxy.size.height)); path.closeSubpath()
-            }.fill(LinearGradient(colors: [WatchStyle.amber.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom))
-            line.stroke(WatchStyle.amber, style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
+            // Fine luminous stems follow the measured curve without adding future hours.
+            let lastX = points.last?.x ?? inset
+            let count = Int(width / 3)
+            for index in 0...max(0, count) {
+                let x = inset + CGFloat(index) * 3
+                guard x <= lastX, let value = plot.height(at: Double((x - inset) / width * 23)) else { continue }
+                let y = baseline - height * value
+                let rect = CGRect(x: x, y: y, width: 1.8, height: max(0, baseline - y))
+                context.fill(Path(roundedRect: rect, cornerRadius: 0.9),
+                             with: .linearGradient(
+                                Gradient(colors: [WatchStyle.amber, WatchStyle.amber.opacity(0.03)]),
+                                startPoint: CGPoint(x: x, y: y), endPoint: CGPoint(x: x, y: baseline)))
+            }
+            var line = Path()
+            if let first = points.first {
+                line.move(to: first)
+                points.dropFirst().forEach { line.addLine(to: $0) }
+                if points.count == 1 {
+                    context.fill(Path(ellipseIn: CGRect(x: first.x - 1, y: first.y - 1, width: 2, height: 2)),
+                                 with: .color(WatchStyle.amber))
+                }
+            }
+            context.stroke(line, with: .color(WatchStyle.amber),
+                           style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
         }.accessibilityHidden(true)
     }
 }
-

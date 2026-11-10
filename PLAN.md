@@ -4751,3 +4751,8 @@ listener-disposal race on the first attempt and passed on retry. PR #1694 merged
 as 9eb1e87f. Production deployment 42685720635 passed: backend and Jarvis
 agent activation, deterministic readiness and live conversation acceptance.
 No native build is required. Live image generation remains unverified until the credential exists.
+
+
+## Watch follow-up — 10 November 2026
+
+Implement the approved steps-only rectangular complication on `feature/watch-steps-complication`, based on main cb360ca7. Weekly workout designs are deferred. Core plot regressions and unsigned native builds are pending. The startup reconnect alert is already implemented separately in PR #1692 (not merged): exact source 5de65c01 passed 551 Core tests, CI, CodeQL and unsigned Watch simulator/physical architecture/paired iPhone builds. Its broad iPhone suite has six Notes/push-navigation failures; physical Watch acceptance remains open. Primary owns integration and release of both changes.
