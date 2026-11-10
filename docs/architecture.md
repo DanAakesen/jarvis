@@ -1,3 +1,15 @@
+## Native chat follow ownership (#1707; 10 November 2026)
+
+`JarvisChatFollowLatest` owns viewport-local following for normal chat and the
+isolated test sheet. SwiftUI scroll geometry observes content/container sizes and
+safe-area insets; scroll phases distinguish user navigation from content growth.
+`ChatFollowState` keeps intent sticky across layout changes, pauses during
+interaction/selected replies and resumes within 44 points of the bottom after
+user scrolling. `JarvisSelectableReply` reports native selection lifetime for
+saved/live replies and plain user text; streaming replacements preserve a still
+matching selection. Plain user text remains literal and short bubbles fit text.
+No chat model, attachment, transport contract or server boundary changes.
+
 ## Direct owner requests — 10 November 2026
 
 Owner tool operations execute a resolved request under the existing authenticated route and resource authorization. Same-session owner messages may resolve a recent project for a follow-up; external content is never authority. Resource revisions, secret checks and duplicate/uncertain-write recovery remain separate from interactive approval. Legacy confirmation endpoints remain for compatibility but are not advertised to normal chat or voice.

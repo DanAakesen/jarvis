@@ -1,3 +1,16 @@
+## Chat follow-latest — 10 November 2026 (#1707)
+
+Implemented shared geometry-driven following for normal and isolated native
+chat, with user-scroll/selection protection and deterministic tool-only fixtures.
+Local checks: 574 JarvisCore tests, 138 web chat tests, web TypeScript/scoped
+ESLint, Swift syntax parsing and diff checks pass. The web tool-only failure was
+not reproduced in its component fixture; retain its existing observers.
+Next/blocker: macOS simulator compilation, before/after reproduction, dock
+geometry and interaction captures, Now visibility transitions, reduced motion,
+Dynamic Type, link/selection checks and physical-iPhone validation. Do not mark
+native acceptance complete. Orchestrator owns integration and release; preserve
+#1712/#1714 photo changes and #1704's chat-model refresh fixes.
+
 ## Explicit reminder quiet-hours repair — 10 November 2026 (#1706)
 
 Implemented on the existing task branch: owner create/update/snooze accepts night

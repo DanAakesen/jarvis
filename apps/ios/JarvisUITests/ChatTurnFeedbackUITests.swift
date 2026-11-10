@@ -27,7 +27,7 @@ final class ChatTurnFeedbackUITests: XCTestCase {
             nil, nil, true
         )
         XCTAssertTrue(app.descendants(matching: .any)["chat.tools.live"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["I’ll check the synthetic project."].exists)
+        XCTAssertEqual(app.textViews["chat.reply.acknowledgment"].value as? String, "I’ll check the synthetic project.")
         attach(app, "chat-acknowledgment-live-tools-and-working-state")
         input.tap()
         input.typeText("?")

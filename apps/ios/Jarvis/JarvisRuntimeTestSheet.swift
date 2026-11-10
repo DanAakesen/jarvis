@@ -268,11 +268,10 @@ struct JarvisRuntimeTestSheet: View {
                     }
                     .padding(JarvisDesignTokens.chatHorizontalInset)
                 }
-                .onChange(of: model.partial) { _, _ in proxy.scrollTo("runtimeTest.bottom", anchor: .bottom) }
-                .onChange(of: model.messages.count) { _, _ in proxy.scrollTo("runtimeTest.bottom", anchor: .bottom) }
                 .safeAreaInset(edge: .bottom) {
                     if model.session != nil { composer }
                 }
+                .modifier(JarvisChatFollowLatest(proxy: proxy, bottomID: "runtimeTest.bottom"))
             }
             .navigationTitle(model.session?.runtimeTest.map { "\(label($0)) · \(copy(.runtimeTitle))" } ?? copy(.runtimeTest))
             .navigationBarTitleDisplayMode(.inline)
@@ -350,14 +349,14 @@ struct JarvisRuntimeTestSheet: View {
                                 language: appLanguage, identifier: "runtimeTest.elapsed")
         }
         if !model.acknowledgment.isEmpty {
-            Text(.init(model.acknowledgment)).textSelection(.enabled)
-                .accessibilityIdentifier("runtimeTest.acknowledgment")
+            JarvisSelectableReply(text: model.acknowledgment, identifier: "runtimeTest.acknowledgment")
         }
         ForEach(Array(model.progressUpdates.enumerated()), id: \.offset) { index, text in
-            Text(.init(text)).textSelection(.enabled)
-                .accessibilityIdentifier("runtimeTest.update.\(index)")
+            JarvisSelectableReply(text: text, identifier: "runtimeTest.update.\(index)")
         }
-        if !model.partial.isEmpty { Text(.init(model.partial)).textSelection(.enabled) }
+        if !model.partial.isEmpty {
+            JarvisSelectableReply(text: model.partial, identifier: "runtimeTest.reply.streaming")
+        }
         if model.sending || !model.tools.isEmpty {
             VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
                 JarvisRowButton(identifier: model.sending ? "runtimeTest.progress" : "runtimeTest.tools",

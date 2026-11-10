@@ -1,3 +1,12 @@
+## Chat follow-latest (#1707; 10 November 2026)
+
+Normal and test chat should follow live tools, progress and replies while the
+owner is at or near the latest content. Keep the latest row above the actual
+composer/Now dock, including viewport and text-size changes. Pause during user
+scrolling and text selection; returning to the latest content resumes following.
+Keep tool activity in the transcript and retain transparent, floating controls.
+Native simulator and physical-iPhone acceptance remain pending.
+
 ## Direct owner requests — 10 November 2026
 
 A clear, authenticated owner instruction authorizes the requested operation without a second yes. Ask only for details needed to identify the intended action or target. Keep device and all-device sign-out confirmations. Treat credentials as non-storable and distinguish requested sensitive saves from automatic capture.
