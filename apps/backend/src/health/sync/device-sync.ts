@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 
 /** Wire contract of `POST /health/sync`, sent by the iPhone app. */
-export interface DeviceSample { id: string; metric: string; unit: string; start: string; end: string; value: number; source: string | null }
+export interface DeviceSample { id: string; metric: string; unit: string; start: string; end: string; value: number; source: string | null; aggregation?: 'daily_total' }
 export interface DeviceSleepSegment { id: string; stage: string; start: string; end: string; source: string | null }
 export interface DeviceWorkout { id: string; activity: string; start: string; end: string; activeEnergyKcal: number | null; distanceMetres: number | null }
 export interface DeviceSyncBatch {
@@ -69,7 +69,11 @@ export function parseDeviceSync(body: unknown): DeviceSyncParse {
         typeof row.unit !== 'string' || row.unit.length < 1 || row.unit.length > 32 || !times || !finite(row.value) || source === undefined) {
       return { ok: false, reason: 'Invalid Health sample.' };
     }
-    samples.push({ id: row.id, metric: row.metric, unit: row.unit, ...times, value: row.value, source });
+    if (row.aggregation !== undefined && (row.aggregation !== 'daily_total' ||
+        !['step_count', 'active_energy_burned', 'active_energy', 'apple_exercise_time'].includes(row.metric) ||
+        row.value < 0)) return { ok: false, reason: 'Invalid daily activity total.' };
+    samples.push({ id: row.id, metric: row.metric, unit: row.unit, ...times, value: row.value, source,
+      ...(row.aggregation === 'daily_total' ? { aggregation: 'daily_total' as const } : {}) });
   }
   const sleep: DeviceSleepSegment[] = [];
   for (const row of rawSleep) {
@@ -110,7 +114,7 @@ export function deviceSyncPayload(batch: DeviceSyncBatch): unknown {
   }
   const metrics: unknown[] = [...groups.values()].map(group => ({
     name: group[0]!.metric, units: group[0]!.unit,
-    data: group.map(sample => ({ date: sample.start, endDate: sample.end, qty: sample.value, ...(sample.source ? { source: sample.source } : {}) })),
+    data: group.map(sample => ({ date: sample.start, endDate: sample.end, qty: sample.value, ...(sample.aggregation === 'daily_total' ? { healthkitDailyTotal: true } : {}), ...(sample.source ? { source: sample.source } : {}) })),
   }));
   if (batch.sleep.length) {
     metrics.push({

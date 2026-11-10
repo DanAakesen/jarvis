@@ -30,11 +30,20 @@ struct WatchHealthList: View {
     @State private var loading = true
     @State private var failure: String?
     @State private var showAdd = false
+    @State private var readID = UUID()
     var body: some View {
         List {
-            if lifts { Button { showAdd = true } label: { Label("Add lift", systemImage: "plus") } }
+            if lifts {
+                HStack { Spacer(minLength: 0); WatchAddButton(title: "Add lift") { showAdd = true } }
+                    .listRowBackground(Color.clear).listRowInsets(EdgeInsets())
+            }
             if loading { ProgressView() }
-            if let failure { Text(failure); Button("Retry") { Task { await load() } } }
+            if let failure {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(failure).font(.footnote)
+                    Button("Retry") { Task { await load() } }
+                }.listRowBackground(Color.clear)
+            }
             else if !loading && rows.isEmpty { Text(lifts ? "No lifts recorded" : "No workouts in the last 7 days") }
             ForEach(0..<rows.count, id: \.self) { index in
                 let row = rows[index]
@@ -61,8 +70,13 @@ struct WatchHealthList: View {
             }
             if rows.count == 30 { Text("Showing the latest 30. Open iPhone for full history.").font(.caption2) }
         }.navigationTitle(lifts ? "Lifts" : "Workouts")
-        .task { await load() }.refreshable { await load() }
+        .task(id: connection.reachable) { await load() }.refreshable { await load() }
         .sheet(isPresented: $showAdd) { NavigationStack { WatchLiftEditor { Task { await load() } } } }
+        .task {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--watch-screen=new-lift") { showAdd = true }
+            #endif
+        }
     }
     private func liftSummary(_ row: [String: JSONValue]) -> some View {
         VStack(alignment: .leading) {
@@ -75,10 +89,18 @@ struct WatchHealthList: View {
         }
     }
     private func load() async {
+        let read = UUID(); readID = read
         loading = true; failure = nil
-        defer { loading = false }
-        do { rows = try await connection.load(lifts ? .lifts : .workouts) }
-        catch { rows = []; failure = (error as? WatchFailure)?.message ?? "History unavailable" }
+        defer { if readID == read { loading = false } }
+        guard connection.reachable else { failure = WatchFailure.unavailable.message; return }
+        do {
+            let result: [[String: JSONValue]] = try await connection.load(lifts ? .lifts : .workouts)
+            guard readID == read, !Task.isCancelled else { return }
+            rows = result
+        } catch {
+            guard readID == read, !Task.isCancelled else { return }
+            failure = (error as? WatchFailure)?.message ?? "History unavailable"
+        }
     }
 }
 
@@ -94,31 +116,61 @@ struct WatchLiftEditor: View {
     @State private var submissionID = UUID()
     @State private var busy = false
     @State private var failure: String?
-    @State private var confirmDelete = false
+    @State private var initialized = false
+    @State private var unsupportedRecord = false
+    @State private var previewReps = false
     private var id: String? { row["id"]?.stringValue }
     private var value: WatchLiftInput { .init(submissionID: submissionID, exercise: exercise, kilograms: kilograms, reps: reps, sets: sets) }
     var body: some View {
         Form {
-            TextField("Exercise", text: $exercise)
-            TextField("kg", value: $kilograms, format: .number).accessibilityLabel("Weight in kilograms")
-            Stepper("\(reps) reps", value: $reps, in: 1...100)
-            Stepper("\(sets) sets", value: $sets, in: 1...100)
+            WatchTextInput(title: "Exercise", text: $exercise).disabled(busy || unsupportedRecord)
+            NavigationLink {
+                WatchWeightEditor(kilograms: $kilograms)
+            } label: { LabeledContent("Weight", value: "\(kilograms.formatted()) kg") }
+                .disabled(busy || unsupportedRecord)
+            HStack(spacing: 16) {
+                NavigationLink {
+                    WatchCountPicker(title: "Reps", value: $reps, range: 1...1000)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Reps").font(.caption).foregroundStyle(.secondary)
+                        Text(reps.formatted()).font(.title3)
+                    }.frame(maxWidth: .infinity, minHeight: 38, alignment: .leading).contentShape(Rectangle())
+                }.accessibilityLabel("Reps").accessibilityValue(reps.formatted())
+                NavigationLink {
+                    WatchCountPicker(title: "Sets", value: $sets)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Sets").font(.caption).foregroundStyle(.secondary)
+                        Text(sets.formatted()).font(.title3)
+                    }.frame(maxWidth: .infinity, minHeight: 38, alignment: .leading).contentShape(Rectangle())
+                }.accessibilityLabel("Sets").accessibilityValue(sets.formatted())
+            }.buttonStyle(.plain).disabled(busy || unsupportedRecord)
             if let failure { Text(failure).font(.caption) }
             Button(busy ? "Saving…" : "Save") { Task { await save() } }
-                .disabled(busy || !value.isValid || !connection.reachable || (!row.isEmpty && id == nil))
-            if id != nil { Button("Delete lift", role: .destructive) { confirmDelete = true }.disabled(busy || !connection.reachable) }
+                .disabled(busy || unsupportedRecord || !value.isValid || !connection.reachable || (!row.isEmpty && id == nil))
+            if id != nil { Button("Delete lift", role: .destructive) { Task { await remove() } }.disabled(busy || !connection.reachable) }
         }.navigationTitle(id == nil ? "New lift" : "Edit lift")
         .onAppear {
-            exercise = row["exerciseName"]?.stringValue ?? ""
-            kilograms = row["weightKg"]?.numberValue ?? 0
-            reps = Int(row["reps"]?.numberValue ?? 8); sets = Int(row["sets"]?.numberValue ?? 3)
+            guard !initialized else { return }; initialized = true
+            if !row.isEmpty {
+                guard let record = WatchLiftInput(record: row) else {
+                    unsupportedRecord = true
+                    failure = "This lift cannot be edited on Watch. Open it on iPhone."
+                    return
+                }
+                exercise = record.exercise; kilograms = record.kilograms
+                reps = record.reps; sets = record.sets
+            }
+            #if DEBUG
+            previewReps = ProcessInfo.processInfo.arguments.contains("--watch-picker=reps")
+            #endif
         }
-        .confirmationDialog("Delete this lift?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) { Task { await remove() } }
-        }
+        .sheet(isPresented: $previewReps) { NavigationStack { WatchCountPicker(title: "Reps", value: $reps) } }
+
     }
     private func save() async {
-        guard !busy, value.isValid else { return }
+        guard !busy, !unsupportedRecord, value.isValid, connection.reachable else { return }
         busy = true; defer { busy = false }
         do {
             _ = try await connection.request(.init(action: .saveLift, itemID: id, data: WatchCodec.encode(value), id: submissionID))
@@ -136,6 +188,8 @@ struct WatchLiftEditor: View {
 struct WatchFactoryView: View {
     @EnvironmentObject private var connection: WatchConnection
     @State private var projects: [FactoryProject] = []
+    @State private var previewProject: FactoryProject?
+    @State private var previewTasks = false
     @State private var error: String?
     @State private var loading = true
     var body: some View {
@@ -144,11 +198,21 @@ struct WatchFactoryView: View {
             if let error { Text(error); Button("Retry") { Task { await load() } } }
             else if !loading && projects.isEmpty { Text("No projects") }
             ForEach(projects) { project in NavigationLink(project.name) { WatchFactoryTasks(project: project) } }
-        }.navigationTitle("Factory").task { await load() }
+        }.navigationTitle("Factory").task(id: connection.reachable) { await load() }
+        .sheet(item: $previewProject) { project in NavigationStack { WatchFactoryTaskEditor(project: project) {} } }
+        .navigationDestination(isPresented: $previewTasks) {
+            if let project = projects.first { WatchFactoryTasks(project: project) }
+        }
     }
     private func load() async {
         loading = true; error = nil; defer { loading = false }
-        do { projects = try await connection.load(.projects) }
+        do {
+            projects = try await connection.load(.projects)
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("--watch-screen=new-task") { previewProject = projects.first }
+            if ProcessInfo.processInfo.arguments.contains("--watch-screen=project") { previewTasks = true }
+            #endif
+        }
         catch { self.error = (error as? WatchFailure)?.message ?? "Factory unavailable" }
     }
 }
@@ -156,10 +220,13 @@ struct WatchFactoryTasks: View {
     var project: FactoryProject
     @EnvironmentObject private var connection: WatchConnection
     @State private var tasks: [WatchFactoryTask] = []
+    @State private var showCreate = false
     @State private var error: String?
     @State private var loading = true
     var body: some View {
         List {
+            HStack { Spacer(minLength: 0); WatchAddButton(title: "New task") { showCreate = true } }
+                .listRowBackground(Color.clear).listRowInsets(EdgeInsets())
             if loading { ProgressView() }
             if let error { Text(error); Button("Retry") { Task { await load() } } }
             else if !loading && tasks.isEmpty { Text("No tasks") }
@@ -176,7 +243,11 @@ struct WatchFactoryTasks: View {
                 }
             }
             if tasks.count == 10 { Text("Latest 10 tasks. Full board on iPhone.").font(.caption2) }
-        }.navigationTitle(project.name).task { await load() }.refreshable { await load() }
+        }.navigationTitle(project.name)
+        .task(id: connection.reachable) { await load() }.refreshable { await load() }
+        .sheet(isPresented: $showCreate) {
+            NavigationStack { WatchFactoryTaskEditor(project: project) { Task { await load() } } }
+        }
     }
     private func load() async {
         loading = true; error = nil; defer { loading = false }

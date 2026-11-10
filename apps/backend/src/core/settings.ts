@@ -30,6 +30,10 @@ export interface Settings {
   presentation: {
     showWork: boolean;
   };
+  homeBrief: {
+    instruction: string;
+    maxVisibleLines: number;
+  };
   decisions: {
     /** Which service scores decisions: Jev (Typesafe) or Microsoft-Decision-1 (Foundry). */
     provider: DecisionProviderId;
@@ -123,6 +127,10 @@ export function publishSettingsChanged(app: Pick<FastifyInstance, 'nowEventHub'>
 export const defaultSettings: Settings = {
   identity: { description: '' },
   presentation: { showWork: true },
+  homeBrief: {
+    instruction: 'Give a concise, useful brief of my day. Prioritise time-sensitive commitments and helpful connections in the available data. Be specific and honest about missing or stale sources.',
+    maxVisibleLines: 3,
+  },
   decisions: { provider: defaultDecisionProvider },
   appearance: { theme: 'light' },
   jarvis: { model: defaultRoleModels.chat, reasoning: 'none' },
@@ -207,6 +215,7 @@ export const settingsOptions = {
 const settingKeys = {
   identity: { description: 'identity.description' },
   presentation: { showWork: 'presentation.show_work' },
+  homeBrief: { instruction: 'homeBrief.instruction', maxVisibleLines: 'homeBrief.maxVisibleLines' },
   decisions: { provider: 'decisions.provider' },
   appearance: {
     theme: 'appearance.theme',
@@ -312,6 +321,10 @@ function validSetting(
   catalogue: ModelCatalogue = fallbackModelCatalogue(),
 ): boolean {
   if (area === 'identity') return key === 'description' && validInstruction(value);
+  if (area === 'homeBrief') {
+    if (key === 'instruction') return validInstruction(value);
+    if (key === 'maxVisibleLines') return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 6;
+  }
   if (area === 'presentation') return key === 'showWork' && typeof value === 'boolean';
   if (area === 'decisions') return key === 'provider' && isOption(value, settingsOptions.decisionProviders);
   if (area === 'appearance') {
@@ -481,6 +494,13 @@ const settingsPatchSchema = {
         identity: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: { description: { type: 'string', maxLength: 2_000 } },
+        },
+        homeBrief: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: {
+            instruction: { type: 'string', maxLength: 2_000 },
+            maxVisibleLines: { type: 'integer', minimum: 1, maximum: 6 },
+          },
         },
         presentation: {
           type: 'object', minProperties: 1, additionalProperties: true,

@@ -1,3 +1,40 @@
+## Native UI alignment correction
+
+The earlier WIP native run passed its Home normal/English/Danish/accessibility cases, but exposed a Health carousel regression: the additional activity quality caption made the fixed-height Training page overflow and moved its header relative to Sleep. The caption now sits below the fixed-height carousel, with the shared card/header components unchanged. The new four-period and visible-line-limit UI cases still require execution against this correction. The broader suite also has Notes and notification-to-chat failures already recorded by primary; this branch does not take over those separate fixes.
+
+## Implementation handoff — 9 November 2026
+
+Draft PR: [#1689](https://github.com/DanAakesen/jarvis/pull/1689). Branch: `feature/home-brief-daily-activity`.
+Qualified code revision: `c9837c00abe1c0e524a4f9b1ff0569b9d36d8623`, with main `70c669c99204fd5b1ed34ea5e3ac66c07ec09307` preserved.
+Primary session `01a1adc7-aebe-76f2-b63d-a852c887204f` owns integration, deployment and acceptance.
+
+Implemented: grounded cached Home brief; canonical native/web Instructions editor with independent existing scopes; Home-only instruction and integer visible-line setting (default 3, range 1–6) through existing settings/chat/voice tools; shared merged all-day active kcal and Apple exercise minutes for Today/7d/14d/30d; replacement daily sync/provenance and missing/zero/partial/stale handling. Accepted shared surfaces and transparent chrome are retained.
+
+Qualified at the code revision above:
+- Backend lint, 7,414 tests (no skips), TypeScript build and container smoke.
+- Web lint, 2,535 tests and production build.
+- 278 isolated loopback SQL Server migration/database tests.
+- Swift build and 553 JarvisCore tests.
+- 135 offline Foundry contracts and 1,317 hosted-agent Python tests.
+- Unsigned physical Watch release, Watch Simulator and iPhone Simulator builds with Xcode 26.6: [native build run](https://github.com/DanAakesen/jarvis/actions/runs/42663871323).
+- [Aggregate CI](https://github.com/DanAakesen/jarvis/actions/runs/42663871241) and CodeQL passed.
+
+Unfinished automated checks: the full iPhone UI/screenshot run is queued behind an older cancelled capture that is uploading results. The four English/Danish, normal/accessibility line-limit cases and the saved-instruction editor UI case are implemented but are **not claimed passed**. Current results must be checked on the PR before treating visual qualification as complete. No screenshots of this exact revision have been inspected.
+
+Remaining physical-device/model checks: HealthKit permissions and no-data ambiguity; a real zero versus unavailable quantity; late Watch synchronization; foreground across Copenhagen midnight/DST; actual Home/Health parity; real English/Danish brief quality; final visual/accessibility acceptance.
+
+Runtime/rollout dependencies: deploy the compatible backend before the native client, because the new brief endpoint, Home settings and additive `daily_total` sync marker require it. Existing model deployment/credentials and connected calendar/task sources are reused. Legacy raw activity rows cannot establish all-day totals; a merged HealthKit sync refreshes the last 30 days. The Home brief excludes legacy health context facts until that adapter carries authoritative daily provenance; Home/Health activity tiles use the new readings.
+
+No PR merge, deployment, infrastructure change, live settings mutation or live data modification was performed by this secondary thread.
+
+## Secondary implementation — PR #1689
+
+Branch: `feature/home-brief-daily-activity`. Backend/native/web implementation is in progress; isolated CI qualification is pending. Primary owns integration/deployment. No live settings, data or infrastructure were changed.
+
+The Home brief currently uses calendar/tasks and optional nutrition/weather context. Health source facts are deliberately excluded until their context adapter carries the merged-daily provenance required to quote all-day activity safely. This does not affect the Home/Health activity tiles. Existing model deployment/credentials are reused; no new deployment is provisioned.
+
+Remaining checks: installed iPhone/Watch HealthKit permissions and unavailable readings, late Watch synchronization, midnight/DST behavior, real English/Danish brief quality and final visual acceptance. Detailed tests and exact revision will be recorded in the draft PR after qualification.
+
 # Home brief and activity totals — secondary implementation handoff
 
 Investigated against main `6601dbb8ca074e3f8059300f34fc9d8a4733bfcb` on

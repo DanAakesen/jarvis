@@ -290,3 +290,18 @@ describe('Jarvis settings tools', () => {
     expect(settingsStore.write).not.toHaveBeenCalled();
   });
 });
+
+describe('Home preferences through chat and voice tools', () => {
+  it('uses the same persisted Home scope for both transports', async () => {
+    const { app, values } = fixture();
+    const update = await app.inject({ method: 'POST', url: '/tools/update_settings', headers,
+      payload: { settings: { homeBrief: { instruction: 'Focus on my next commitment', maxVisibleLines: 2 } } } });
+    expect(update.json().outcome).toBe('ok');
+    expect(values['homeBrief.maxVisibleLines']).toBe('2');
+    const read = await app.inject({ method: 'POST', url: '/tools/get_settings',
+      headers: { authorization: headers.authorization, 'x-jarvis-voice-item-id': 'home-voice' },
+      payload: { area: 'homeBrief' } });
+    expect(read.json().outcome).toBe('ok');
+    expect(JSON.stringify(read.json().result)).toContain('Focus on my next commitment');
+  });
+});

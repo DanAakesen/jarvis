@@ -136,6 +136,31 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('SettingsPage', () => {
+  it('edits Home and presence instructions in one destination and preserves other scopes', async () => {
+    const current = {
+      ...settings,
+      identity: { description: 'Saved identity' },
+      personality: { ...settings.personality, customInstructions: 'Saved general',
+        modeInstructions: { present: 'Saved present', away: 'Saved away', on_the_move: 'Saved move' } },
+      homeBrief: { instruction: 'Saved Home', maxVisibleLines: 3 },
+    };
+    const updated = { ...current, homeBrief: { instruction: 'Deadlines first', maxVisibleLines: 6 } };
+    fetchMock.mockResolvedValueOnce(response(settingsResponse(current)))
+      .mockResolvedValueOnce(response(settingsResponse(updated)));
+    renderSettingsPage();
+    const instruction = await screen.findByRole('textbox', { name: 'Home brief instruction' });
+    expect(screen.getAllByRole('heading', { name: 'Instructions' })).toHaveLength(1);
+    expect(screen.getByRole('textbox', { name: 'Identity and role description' })).toHaveProperty('value', 'Saved identity');
+    expect(screen.getByRole('textbox', { name: 'Custom instructions' })).toHaveProperty('value', 'Saved general');
+    fireEvent.change(instruction, { target: { value: 'Deadlines first' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Maximum visible lines' }), { target: { value: '6' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    expect(await screen.findByText('Saved')).not.toBeNull();
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      settings: { homeBrief: { instruction: 'Deadlines first', maxVisibleLines: 6 } },
+    });
+  });
+
   it.each([
     { hash: 'health-upload', key: 'settings.health-upload' },
     { hash: 'projects', key: 'settings.projects' },

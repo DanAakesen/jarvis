@@ -1331,3 +1331,16 @@ describe('backend log capability awareness', () => {
     }
   });
 });
+
+describe('Home brief preferences', () => {
+  it('defaults to three lines and persists independent scopes', async () => {
+    const { store } = createStore();
+    await store.write({ identity: { description: 'Owner identity' }, homeBrief: { instruction: 'Deadlines first', maxVisibleLines: 4 } });
+    expect((await readSettings(store)).homeBrief).toEqual({ instruction: 'Deadlines first', maxVisibleLines: 4 });
+    expect((await readSettings(store)).identity.description).toBe('Owner identity');
+    expect((await readSettings(createStore().store)).homeBrief.maxVisibleLines).toBe(3);
+  });
+  it.each([0, 7, 1.5, '3', null])('rejects invalid Home line limit %s', value => {
+    expect(validateSettingsPatch({ homeBrief: { maxVisibleLines: value } })).toBeNull();
+  });
+});

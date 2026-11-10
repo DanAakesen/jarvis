@@ -211,3 +211,13 @@ describe('source-shaped synthetic health normalization', () => {
     expect(() => validateNormalized(output)).toThrow('invalid_identifier');
   });
 });
+
+describe('merged daily provenance scope', () => {
+  it('does not grant replacement authority to unrelated metric metadata', () => {
+    const result = normalizeHealth({ data: { metrics: [
+      metric('body_mass', 'kg', [{ ...point(75), healthkitDailyTotal: true }]),
+    ] } });
+    expect(result.metrics[0]?.value).toBe(75);
+    expect(result.metrics[0]?.fields_json).not.toHaveProperty('healthkit_daily_total');
+  });
+});

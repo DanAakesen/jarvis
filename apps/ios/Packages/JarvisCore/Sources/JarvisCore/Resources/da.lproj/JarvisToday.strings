@@ -28,7 +28,7 @@
 "today.tasksUnavailable" = "Opgaver ikke tilgængelige";
 "today.markDone" = "Markér som udført";
 "today.workouts" = "Træning";
-"today.activeTime" = "Aktiv tid";
+"today.activeTime" = "Træningsminutter";
 "today.activeKcal" = "Aktive kcal";
 "today.workoutsByType" = "Træninger efter type";
 "today.workoutsEmpty" = "Ingen træninger";
@@ -102,3 +102,12 @@
 "today.setDate" = "Vælg dato";
 "today.clearDate" = "Ryd dato";
 "today.dateRequired" = "Vælg en dato for at gemme";
+
+"today.activityUnavailable" = "Nogle aktivitetsmålinger er ikke tilgængelige.";
+"today.activityPartial" = "Delvise aktivitetsdata; de viste totaler er et minimum.";
+"today.activityStale" = "Viser ældre aktivitetsmålinger.";
+
+"today.briefUnavailable" = "Dit overblik er ikke tilgængeligt. Opdater for at prøve igen.";
+
+"today.briefStale" = "Tidligere overblik: ";
+"today.briefLoading" = "Forbereder dit overblik…";

@@ -1,6 +1,14 @@
+## Direct owner requests — 10 November 2026
+
+Task cancellation and recovery, routine/memory deletion, workspace removal, deployment removal and Watch lift deletion act from the selected control. Surface failures and retain busy-state protection. Legacy approval cards and composer buttons do not displace current chat or activity; real task alerts remain visible. Sign-out dialogs stay.
+
 ## Watch startup connection feedback — 9 November 2026
 
 Keep the approved Watch layout and controls. Startup and idle connectivity changes use the existing quiet connection status. History read failures stay inside the chat scroll area. The modal Jarvis alert is reserved for actual user-action/interruption feedback.
+
+## Home brief and daily activity implementation — 9 November 2026
+
+Preserve the accepted Home layout, typography, shared glass surfaces and transparent chrome. The brief uses its configured visible-line limit at every Dynamic Type size; its full text remains available to accessibility. Settings → General → Jarvis → Instructions keeps identity, general/personality, presence modes and Home instructions in distinct saved scopes. Unknown activity is an em dash, partial coverage is identified, and stale retained readings are labeled.
 
 ## Owner actions without approval interruptions — 9 November 2026
 
@@ -3784,6 +3792,15 @@ Owner-selected scope keeps the existing Proactive page and source settings. Add 
 Notification entry preserves normal finding actions for open items and marks them
 seen. Historical notifications remain read-only. Failed network loads expose the
 shared Retry control without losing the requested finding identifier.
+
+
+## Watch forms correction — 10 November 2026
+
+The owner's installed-device photos show clipped, oversized reps/sets steppers and a misleading connection notice in Lifts. Retain existing Watch typography/material, with compact labelled Reps/Sets rows opening dedicated native wheel pickers; values remain editable by vertical swipe/Digital Crown. Keep exercise/weight fields and Save in the scrollable form. Returning from a picker must preserve the entered exercise and weight. Move Add lift into a compact visible plus action row.
+
+After Factory project selection, show a plus action opening New task with Title, Request and native Agent picker. Reuse WatchTextInput for exercise, title, request and chat draft: native text editing plus an explicit mic action opening the system text-input interface. Dictation appends to the draft and never submits. No new colour theme, large custom control or complication redesign. Native fixtures/captures are synthetic; installed-device acceptance remains open.
+
+Native capture correction: Watch toolbar primary actions were not visible, so Add lift/New task use compact clear-background plus rows within each list. Free-text fields are clean tap-to-edit rows with mic controls; the native typing field lives in a separate editor, avoiding nested field backgrounds. Weight opens its native numeric editor. Reps/Sets share one compact row.
 
 
 ## Watch steps-only revision — 10 November 2026

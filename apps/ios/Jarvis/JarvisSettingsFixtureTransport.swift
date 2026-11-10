@@ -17,13 +17,23 @@ actor JarvisSettingsFixtureTransport: HTTPTransport {
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         if request.url.path == "/api/settings" {
             if request.method == .patch, let data = request.body,
-               let patch = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let area = patch["area"] as? String, let key = patch["key"] as? String {
+               let patch = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 var root = try JSONSerialization.jsonObject(with: settings) as! [String: Any]
                 var values = root["settings"] as! [String: Any]
-                var section = values[area] as? [String: Any] ?? [:]
-                section[key] = patch["value"]
-                values[area] = section
+                func merged(_ before: [String: Any], _ after: [String: Any]) -> [String: Any] {
+                    var result = before
+                    for (key, value) in after {
+                        if let nested = value as? [String: Any] {
+                            result[key] = merged(result[key] as? [String: Any] ?? [:], nested)
+                        } else { result[key] = value }
+                    }
+                    return result
+                }
+                if let areas = patch["settings"] as? [String: Any] {
+                    values = merged(values, areas)
+                } else if let area = patch["area"] as? String, let key = patch["key"] as? String {
+                    values = merged(values, [area: [key: patch["value"] ?? NSNull()]])
+                }
                 root["settings"] = values
                 settings = try JSONSerialization.data(withJSONObject: root)
             }

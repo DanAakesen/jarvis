@@ -1,6 +1,14 @@
+## Direct owner requests — 10 November 2026
+
+The approval-cleanup branch implements direct request handling and removes selected repeat prompts. Qualification and integration are in progress; see `docs/approval-cleanup-2026-11-10.md` for actual status. No production or device acceptance is implied by this entry.
+
 ## Watch startup connection feedback — 9 November 2026
 
 Implemented on fix/watch-startup-connectivity-alert: suppress bootstrap/idle disconnect alerts, guard passive history reads, retain inline history errors and preserve explicit action recovery. Four composer recovery regression scenarios are added. CI/native builds and physical startup/reconnection checks remain unverified until their results are recorded in the PR. Primary owns integration and deployment.
+
+## Home brief and daily activity implementation — 9 November 2026
+
+Implemented in draft PR #1689 on feature/home-brief-daily-activity. General CI and three native builds passed at the code revision recorded in docs/ios/design/home-brief-activity-handoff.md. Native UI measurements/screenshots remain queued; installed-device checks include HealthKit authorization/no-data ambiguity, midnight/DST, late Watch sync and actual model output in English/Danish. Primary owns integration and deployment. No deployment or owner acceptance is claimed.
 
 ## Direct owner actions — 9 November 2026
 
@@ -4755,6 +4763,13 @@ listener-disposal race on the first attempt and passed on retry. PR #1694 merged
 as 9eb1e87f. Production deployment 42685720635 passed: backend and Jarvis
 agent activation, deterministic readiness and live conversation acceptance.
 No native build is required. Live image generation remains unverified until the credential exists.
+
+
+## Watch Factory/lift follow-up — 10 November 2026
+
+Branch feature/watch-factory-lift-inputs starts from latest main cb360ca7. Implemented: selected-project new-task plus/form, bounded/idempotent Factory submissions through iPhone, reusable typing/dictation fields, reps/sets wheel pickers, preserved form drafts, and correct empty history handling with reconnect reads. Eight focused Core regressions and isolated Watch captures are added; all 555 Core tests, full CI and CodeQL passed at e4a5ab28. Native run 42775120796 attempt 2 passed Watch simulator, physical Watch Release and paired iPhone simulator builds. Four native fixture views were inspected; selected-project capture still shows startup and is not visual proof.
+
+Primary is already integrating steps/startup recovery in #1697. Do not duplicate, merge or deploy that work. This branch has separate edits in WatchContract, WatchChatView and WatchConnection that primary must preserve alongside #1697; no startup recovery code is copied here. Remaining: primary integration with #1697, selected-project visual/device verification, actual typing/dictation/Crown and phone transport acceptance. See docs/ios/design/watch/factory-lift-inputs-handoff-2026-11-10.md. No live task execution is used for testing.
 
 
 ## Watch follow-up — 10 November 2026

@@ -28,6 +28,24 @@ public struct JarvisTodayGreeting: Equatable, Sendable {
 
     public var plainText: String { segments.map(\.text).joined() }
 
+    public static func brief(text: String, highlights: [String]) -> Self {
+        var segments: [Segment] = []
+        var remaining = text[...]
+        let labels = highlights.filter { !$0.isEmpty }.prefix(5)
+        while !remaining.isEmpty {
+            let matches = labels.compactMap { remaining.range(of: $0) }
+            guard let next = matches.min(by: { $0.lowerBound < $1.lowerBound }) else {
+                segments.append(Segment(text: String(remaining), isKey: false)); break
+            }
+            if next.lowerBound > remaining.startIndex {
+                segments.append(Segment(text: String(remaining[..<next.lowerBound]), isKey: false))
+            }
+            segments.append(Segment(text: String(remaining[next]), isKey: true))
+            remaining = remaining[next.upperBound...]
+        }
+        return Self(segments: segments)
+    }
+
     public static func make(
         timeOfDay: JarvisTimeOfDay,
         nextEvent: JarvisTodayCalendarEntry?,
@@ -291,9 +309,11 @@ public struct JarvisTodayActivityDisplay: Equatable, Sendable {
 
     public let segments: [Segment]
     public let totalWorkouts: Int
-    /// Summed workout minutes and active kilocalories for the range, rounded.
-    public let activeMinutes: Int
-    public let activeKilocalories: Int
+    /// Independent Apple Health exercise minutes and all-day active energy, never workout sums.
+    public let activeMinutes: Int?
+    public let activeKilocalories: Int?
+    public let exerciseTotal: JarvisActivityTotal
+    public let energyTotal: JarvisActivityTotal
     public let centerCount: Int
     public let centerSession: JarvisGymSessionType?
     public let bars: [JarvisStepBar]
@@ -306,6 +326,8 @@ public struct JarvisTodayActivityDisplay: Equatable, Sendable {
         state: JarvisTodayActivityState,
         workouts: [JarvisGymLogEntry],
         steps: JarvisStepsSnapshot,
+        dailyActivity: JarvisDailyActivitySnapshot? = nil,
+        activityIsStale: Bool = false,
         now: Date,
         language: JarvisAppLanguage,
         calendar: Calendar = .current
@@ -317,9 +339,15 @@ public struct JarvisTodayActivityDisplay: Equatable, Sendable {
             return Segment(session: $0, count: count, fraction: total > 0 ? Double(count) / Double(total) : 0)
         }
         totalWorkouts = total
-        let inRange = JarvisTodayActivity.entriesInRange(workouts, range: state.range, now: now, calendar: calendar)
-        activeMinutes = Int(inRange.reduce(0) { $0 + $1.durationMinutes }.rounded())
-        activeKilocalories = Int(inRange.reduce(0) { $0 + $1.activeKilocalories }.rounded())
+        let end = JarvisHealthPeriod.make(.today, now: now, timeZone: calendar.timeZone).endDate
+        let start = calendar.date(byAdding: .day, value: -(state.range.dayCount - 1), to: now) ?? now
+        let period = JarvisHealthPeriod(startDate: JarvisHealthPeriod.make(.today, now: start,
+            timeZone: calendar.timeZone).startDate, endDate: end)!
+        let readings = dailyActivity ?? JarvisDailyActivitySnapshot(days: [:], fetchedAt: now)
+        exerciseTotal = readings.total(\.exerciseMinutes, period: period, now: now, stale: activityIsStale)
+        energyTotal = readings.total(\.activeKilocalories, period: period, now: now, stale: activityIsStale)
+        activeMinutes = exerciseTotal.value.flatMap { Int(exactly: $0.rounded()) }
+        activeKilocalories = energyTotal.value.flatMap { Int(exactly: $0.rounded()) }
         centerSession = state.selectedSegment
         centerCount = state.selectedSegment.map { counts[$0] ?? 0 } ?? total
 

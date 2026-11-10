@@ -23,8 +23,11 @@ struct JarvisTodayTaskData: Equatable {
 struct JarvisTodayDependencies {
     var calendar: any JarvisTodayCalendarSource = JarvisUnavailableCalendarSource()
     var steps: any JarvisTodayStepsSource = JarvisUnavailableStepsSource()
+    var dailyActivity: any JarvisDailyActivitySource = JarvisUnavailableDailyActivitySource()
     var gym: any JarvisGymLogStore = JarvisUnavailableGymLogStore()
     var notes: JarvisNotesClient?
+    var briefClient: JarvisHomeBriefClient?
+    var healthClient: JarvisHealthClient?
     var now: () -> Date = { Date() }
     var fixture: JarvisTodayFixture?
 }
@@ -35,12 +38,15 @@ final class JarvisTodayModel: ObservableObject {
     @Published private(set) var taskData = JarvisTodaySection<JarvisTodayTaskData>()
     @Published private(set) var notes = JarvisTodaySection<[VaultNoteSummary]>()
     @Published private(set) var steps = JarvisTodaySection<JarvisStepsSnapshot>()
+    @Published private(set) var dailyActivity = JarvisTodaySection<JarvisDailyActivitySnapshot>()
     @Published private(set) var workouts = JarvisTodaySection<[JarvisGymLogEntry]>()
+    @Published private(set) var brief = JarvisTodaySection<JarvisHomeBrief>()
+    private var briefGeneration = 0
     @Published private(set) var now: Date
     @Published var activity = JarvisTodayActivityState()
 
     private let dependencies: JarvisTodayDependencies
-    private let timeCalendar = Calendar.current
+    private let timeCalendar = JarvisHealthSyncWindow.calendar
 
     init(dependencies: JarvisTodayDependencies) {
         self.dependencies = dependencies
@@ -53,13 +59,46 @@ final class JarvisTodayModel: ObservableObject {
     // MARK: Derived
 
     func greeting(language: JarvisAppLanguage) -> JarvisTodayGreeting {
-        JarvisTodayGreeting.make(
-            timeOfDay: JarvisTimeOfDay(date: now, calendar: timeCalendar),
-            nextEvent: JarvisTodayAgenda.nextEntry(calendar.value ?? [], now: now, calendar: timeCalendar),
-            tasksDueToday: taskData.value?.lists.today.count ?? 0,
-            language: language,
-            calendar: timeCalendar
-        )
+        if let fixture = dependencies.fixture { return fixture.brief(language: language).greeting }
+        if let value = brief.value, value.language == language.rawValue,
+           JarvisHealthLogic.day(value.generatedAt) == JarvisHealthPeriod.make(.today, now: now).startDate {
+            if brief.failure != nil, value.state == "generated" {
+                return .brief(text: JarvisTodayLocalization.string(.briefStale, language: language) + value.text,
+                    highlights: value.highlights ?? [])
+            }
+            return value.greeting
+        }
+        if brief.isLoading {
+            return .brief(text: JarvisTodayLocalization.string(.briefLoading, language: language), highlights: [])
+        }
+        return .brief(text: JarvisTodayLocalization.string(.briefUnavailable, language: language), highlights: [])
+    }
+
+    var briefMaxVisibleLines: Int {
+        if let fixture = dependencies.fixture { return fixture.maxBriefLines }
+        return brief.value?.maxVisibleLines ?? 3
+    }
+
+    func refreshBrief(language: JarvisAppLanguage, force: Bool = false) async {
+        if let fixture = dependencies.fixture {
+            brief = JarvisTodaySection(value: fixture.brief(language: language), isLoading: false)
+            return
+        }
+        guard let client = dependencies.briefClient else {
+            brief = Self.merged(brief, .failure(.unavailable))
+            return
+        }
+        briefGeneration += 1
+        let generation = briefGeneration
+        do {
+            let value = try await client.fetch(language: language, refresh: force)
+            guard !Task.isCancelled, generation == briefGeneration else { return }
+            brief = JarvisTodaySection(value: value, isLoading: false,
+                failure: value.state == "generated" ? nil : .unavailable)
+        } catch {
+            guard !Task.isCancelled, generation == briefGeneration else { return }
+            brief = Self.merged(brief, .failure(Self.failure(for: error)))
+        }
     }
 
     func display(language: JarvisAppLanguage) -> JarvisTodayActivityDisplay {
@@ -67,6 +106,8 @@ final class JarvisTodayModel: ObservableObject {
             state: activity,
             workouts: workouts.value ?? [],
             steps: steps.value ?? .empty,
+            dailyActivity: dailyActivity.value,
+            activityIsStale: dailyActivity.failure != nil,
             now: now,
             language: language,
             calendar: timeCalendar
@@ -130,7 +171,8 @@ final class JarvisTodayModel: ObservableObject {
         async let loadedTasks: Void = loadTasks(force: force)
         async let loadedSteps: Void = loadSteps()
         async let loadedWorkouts: Void = loadWorkouts()
-        _ = await (loadedCalendar, loadedTasks, loadedSteps, loadedWorkouts)
+        async let loadedActivity: Void = loadActivity()
+        _ = await (loadedCalendar, loadedTasks, loadedSteps, loadedWorkouts, loadedActivity)
     }
 
     func refreshWorkouts() async {
@@ -192,6 +234,7 @@ final class JarvisTodayModel: ObservableObject {
         notes = JarvisTodaySection(value: fixture.notes, isLoading: false)
         steps = JarvisTodaySection(value: fixture.steps, isLoading: false)
         workouts = JarvisTodaySection(value: fixture.gymEntries, isLoading: false)
+        dailyActivity = JarvisTodaySection(value: fixture.dailyActivity, isLoading: false)
     }
 
     private func loadCalendar(force: Bool) async {
@@ -245,6 +288,30 @@ final class JarvisTodayModel: ObservableObject {
                 self[keyPath: section] = Self.merged(self[keyPath: section], .failure(Self.failure(for: error)))
             }
         }
+    }
+
+    func refreshActivity() async {
+        guard !isFixture else { return }
+        now = dependencies.now()
+        await loadActivity()
+    }
+
+    private func loadActivity() async {
+        let now = self.now
+        let localSource = dependencies.dailyActivity
+        let serverClient = dependencies.healthClient
+        let result = await fetch {
+            async let localRead = try? localSource.activity(now: now, days: 30)
+            async let serverRead = try? serverClient?.dailyActivity(now: now, days: 30)
+            let (local, retained) = await (localRead, serverRead)
+            if let retained, let local { return retained.merging(local: local) }
+            if let local { return local }
+            if let retained {
+                return retained.merging(local: JarvisDailyActivitySnapshot(days: [:], fetchedAt: now))
+            }
+            throw JarvisTodayDataError.unavailable
+        }
+        dailyActivity = Self.merged(dailyActivity, result)
     }
 
     private func loadSteps() async {

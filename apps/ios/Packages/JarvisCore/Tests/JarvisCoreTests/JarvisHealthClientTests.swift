@@ -36,8 +36,8 @@ final class JarvisHealthClientTests: XCTestCase {
         XCTAssertNil(JarvisHealthPeriod(startDate: "2026-10-31", endDate: "2026-10-30"))
     }
 
-    func testDashboardHasOnlyThreePeriodsAndRecognizesOlderHealthKitWorkoutNames() {
-        XCTAssertEqual(JarvisHealthPeriodPreset.dashboardPresets, [.today, .sevenDays, .thirtyDays])
+    func testDashboardHasFourAlignedPeriodsAndRecognizesOlderHealthKitWorkoutNames() {
+        XCTAssertEqual(JarvisHealthPeriodPreset.dashboardPresets, [.today, .sevenDays, .fourteenDays, .thirtyDays])
         XCTAssertEqual(JarvisHealthLogic.workoutKind("HKWorkoutActivityType(rawValue: 50)"), .gym)
         XCTAssertEqual(JarvisHealthLogic.workoutKind("HKWorkoutActivityType(rawValue: 37)"), .run)
         XCTAssertEqual(JarvisHealthLogic.workoutKind("traditional_strength_training"), .gym)

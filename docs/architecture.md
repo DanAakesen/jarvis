@@ -1,6 +1,14 @@
+## Direct owner requests — 10 November 2026
+
+Owner tool operations execute a resolved request under the existing authenticated route and resource authorization. Same-session owner messages may resolve a recent project for a follow-up; external content is never authority. Resource revisions, secret checks and duplicate/uncertain-write recovery remain separate from interactive approval. Legacy confirmation endpoints remain for compatibility but are not advertised to normal chat or voice.
+
 ## Watch startup connection feedback — 9 November 2026
 
 WatchConnection emits onDisconnect for a reachable-to-unreachable transition while still failing pending requests. WatchModel consults WatchComposer.handleConnectionLoss before presenting interrupted-action feedback. The composer preserves draft/acknowledgement semantics. Passive history reads require reachability, use an independent inline error and discard stale results when a typed/voice action supersedes them. WatchConnectivity wire format, credentials, permissions and infrastructure are unchanged.
+
+## Home brief and daily activity implementation — 9 November 2026
+
+GET /home/brief is owner-scoped and reuses existing settings, context sources and bounded Foundry JSON completion transport. Context reads coalesce and cache for 60 seconds; evidence/instruction/day/language/model fingerprints cache generation for 15 minutes. Home preferences persist in existing settings and are exposed through get_settings/update_settings. HealthKit cumulative daily statistics carry daily_total provenance; normalized daily rows replace previous coverage and cannot be overwritten by legacy raw sums. Home and Health share JarvisDailyActivitySnapshot and Copenhagen calendar periods.
 
 ## Direct owner execution — 9 November 2026
 
@@ -9376,6 +9384,13 @@ recovery for inspection. Final inventory/evidence and source cleanup are pending
 Read-only readiness 42646690853 confirmed production APNs and all delivery flags
 remain configured on ready revision `0000568` after the final Factory cutover.
 This configuration check did not send a push notification.
+
+
+## Watch Factory creation and input boundary — 10 November 2026
+
+An additive createFactoryTask action carries the existing FactoryTaskSubmission through the paired allow-list. Watch binds the selected project and request UUID to the payload submission ID, caps request text at 8 KB and retains identities for unchanged/revisited drafts. The phone checks that the project exists, calls the existing authenticated Factory client and returns a compact task receipt. Existing backend submission idempotency and phone reply caching remain in use; no new endpoint, credential, policy, infrastructure or automatic retry.
+
+WatchTextInput uses native SwiftUI text editing and WatchKit system text input for mic entry. Dedicated native pickers own reps/sets bindings. Read history accepts the actual empty status and distinguishes health-source unavailability from transport loss. The additive action/failure require the updated paired iPhone/Watch bundle for full behavior; old peers fail visibly. DEBUG WatchPreview handles fixture calls in memory before any WatchConnectivity send; it never starts a live Factory task.
 
 
 ## Watch steps rendering — 10 November 2026

@@ -2,6 +2,10 @@
 
 The Watch startup fix keeps transient activation/idle reachability changes quiet and history refresh failures inline. Real interrupted chat/voice actions retain feedback and draft recovery. Implementation is separate from deployment/device acceptance; primary owns delivery.
 
+## Home brief and daily activity implementation — 9 November 2026
+
+Home brief instructions and max visible lines are available from a single native/web Instructions destination, with existing chat/voice settings tools. Home and Health share all-day active kcal and exercise minutes for Today/7d/14d/30d; workout count remains separate. Qualification and device limitations are tracked in PR #1689.
+
 ## Notification conversation continuity — 9 November 2026
 
 Implemented on the secondary branch, with CI tracked in PR #1686: proactive pushes open

@@ -1,3 +1,7 @@
+## Direct owner requests — 10 November 2026
+
+Dan directs Jarvis to execute owner-requested actions without another approval or prescribed wording, and to preserve the two sign-out dialogs. Interpret a request using the conversation; retain owner authentication, resource checks, stale-write handling, secret protection and safe treatment of untrusted content. Telephony is a separate unused integration, not browser/app voice.
+
 ## Watch startup connection feedback — 9 November 2026
 
 An initial unreachable WCSession callback is connection status, not evidence that a send failed. Reserve interrupted-action alerts for actual active interactions. Keep passive history errors inline and discard obsolete read results. Preserve pending drafts, acknowledgement boundaries and manual recovery; do not add an offline queue or automatic resend.
@@ -5,6 +9,16 @@ An initial unreachable WCSession callback is connection status, not evidence tha
 ## 2026-11-10 — Simplify the Watch rectangular complication
 
 The owner approved the amber vertical-stem steps concept after rejecting small text on the Ultra 2. Show only the large daily step count, full-width cumulative chart and dashed daily-goal reference; remove all other visible labels and metrics. Preserve missing data and actual hourly coverage. Weekly workout designs are deferred. Startup reconnect recovery remains separate in PR #1692; neither change is merged or deployed by this secondary thread. The actual shared view was inspected in an isolated Ultra-family Health preview; installed watch-face rendering and physical acceptance remain unverified.
+
+## 2026-11-10 — Watch task creation and native form inputs
+
+The owner requests a Factory plus after project selection, typing/dictation for every free-text field, dictatable exercise and swipe/Crown reps/sets. Extend the old read-only Factory boundary for explicit task creation only, via the existing authenticated iPhone Factory client and idempotent submission contract. Replace oversized steppers with native pickers and treat valid empty health history as empty rather than disconnected. Preserve the primary's separate #1697 startup/steps integration. Secondary tests use isolated fixtures and never execute live Factory work. Implementation/CI/device acceptance are distinct; all 555 Core tests, CI, CodeQL and all three unsigned native builds passed at e4a5ab28. Four native views were inspected; selected-project visual verification and real device interaction remain open.
+
+## 9 November 2026 — Configurable Home brief and independent daily activity
+
+The owner requests a model-generated, evidence-grounded Home brief with an editable instruction and 1–6 visible lines (default 3). Consolidate identity, general/personality, presence-mode and Home editors in one Instructions destination while preserving separate scopes and stored values; expose the same preferences through web and existing settings tools. Home guidance must not become ordinary chat instructions.
+
+Active kcal means merged HealthKit activeEnergyBurned, including activity outside workouts and excluding basal energy. Exercise minutes means appleExerciseTime, independently of workout count. Home and Health share these definitions across Today/7d/14d/30d in Copenhagen time. Missing readings remain unknown; explicit zero is preserved. Repeated daily sync replaces coverage rather than adding another source. Secondary implementation and qualification are tracked in PR #1689; primary owns integration/deployment and device acceptance.
 
 ## 2026-11-09 — Execute resolved owner requests directly
 

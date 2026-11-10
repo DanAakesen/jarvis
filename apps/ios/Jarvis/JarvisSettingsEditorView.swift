@@ -39,15 +39,19 @@ struct JarvisSettingsEditorView: View {
             return [
                 choice("appearance.theme", .theme, response.options["themes"]?.arrayValues ?? []),
             ]
-        case .personality:
+        case .instructions, .personality, .identity:
             return [
+                multiline("identity.description", .identityDescription, maximumLength: 2_000),
                 choice("personality.tone", .tone, response.options["personalityTones"]?.arrayValues ?? []),
                 choice("personality.responseStyle", .responseStyle, response.options["personalityResponseStyles"]?.arrayValues ?? []),
-                multiline("personality.customInstructions", .instructions, maximumLength: 2_000),
+                multiline("personality.customInstructions", .generalInstructions, maximumLength: 2_000),
+                multiline("personality.modeInstructions.present", .presentInstructions, maximumLength: 2_000),
+                multiline("personality.modeInstructions.away", .awayInstructions, maximumLength: 2_000),
+                multiline("personality.modeInstructions.on_the_move", .onTheMoveInstructions, maximumLength: 2_000),
+                multiline("homeBrief.instruction", .homeBriefInstruction, maximumLength: 2_000),
+                number("homeBrief.maxVisibleLines", .homeBriefLines, integer: true),
                 toggle("presentation.showWork", .showWork),
             ]
-        case .identity:
-            return [multiline("identity.description", .identityDescription, maximumLength: 2_000)]
         case .voice:
             return [
                 choice("voice.defaultLanguage", .defaultLanguage, response.options["languages"]?.arrayValues ?? []),
@@ -102,8 +106,7 @@ struct JarvisSettingsEditorView: View {
     private var title: String {
         let key: JarvisSettingsLocalizationKey = switch detail {
         case .appearance: .appearanceRow
-        case .personality: .personalityRow
-        case .identity: .identityRow
+        case .instructions, .personality, .identity: .instructionsRow
         case .voice: .voiceRow
         case .research: .researchRow
         case .jarvisModel: .jarvisModelRow
@@ -269,8 +272,8 @@ struct JarvisSettingsEditorView: View {
         guard let response else { return "" }
         let parts = id.split(separator: ".", maxSplits: 2).map(String.init)
         let value: JarvisSettingsValue?
-        if parts.first == "roles", parts.count == 3 {
-            value = response.settings["roles"]?[parts[1]]?[parts[2]]
+        if parts.count == 3 {
+            value = response.settings[parts[0]]?[parts[1]]?[parts[2]]
         } else if parts.count == 2 {
             value = response.value(area: parts[0], key: parts[1])
         } else {

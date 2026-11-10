@@ -28,7 +28,7 @@
 "today.tasksUnavailable" = "Tasks unavailable";
 "today.markDone" = "Mark done";
 "today.workouts" = "Workouts";
-"today.activeTime" = "Active time";
+"today.activeTime" = "Exercise min";
 "today.activeKcal" = "Active kcal";
 "today.workoutsByType" = "Workouts by type";
 "today.workoutsEmpty" = "No workouts";
@@ -102,3 +102,12 @@
 "today.setDate" = "Set date";
 "today.clearDate" = "Clear date";
 "today.dateRequired" = "Set a date to save";
+
+"today.activityUnavailable" = "Some activity readings are unavailable.";
+"today.activityPartial" = "Partial activity data; shown totals are a minimum.";
+"today.activityStale" = "Showing older activity readings.";
+
+"today.briefUnavailable" = "Your brief is unavailable. Refresh to try again.";
+
+"today.briefStale" = "Earlier brief: ";
+"today.briefLoading" = "Preparing your brief…";

@@ -1,6 +1,14 @@
+## Direct owner requests — 10 November 2026
+
+For the approval cleanup, run backend, web, agent Python, iOS and Watch checks against the final combined head. Verify direct repository follow-ups, intent-based sensitive saves, food writes, task recovery and legacy pending activity, including real-device acceptance after release. See `docs/approval-cleanup-2026-11-10.md`; current branch results are not deployment evidence.
+
 ## Watch startup connection feedback — 9 November 2026
 
 The owner reported an interrupted-send modal on ordinary Ultra 2 startup. The initial WCSession activation callback was treated as a disconnect even with no active interaction. The fix remains a separate branch from Home PR #1689. No deployment is authorized in this secondary thread. Device checks must include startup/foreground, phone background/lock, notification opening, idle range loss and active send/voice interruption.
+
+## Home brief and daily activity implementation — 9 November 2026
+
+PR #1689 is secondary-owned implementation/qualification of configurable Home briefs and canonical merged daily activity. No live changes. Home instruction scope must never become general chat instructions. All-day activity must never fall back to workout sums or basal energy. Missing quantities are unknown, not zero. Primary owns integration/deployment and installed-device acceptance.
 
 ## Owner-action delivery evidence — 9 November 2026
 
@@ -8045,6 +8053,13 @@ read timeout despite the backend's 270-second generation budget. Two regression
 tests reproduced the default/configured mismatch. Image calls now use the existing
 long-tool setting (320 seconds by default), like web research. This requires
 releasing the Jarvis agent as well as the backend. No total chat deadline is added.
+
+
+## Watch Factory/lift input follow-up — 10 November 2026
+
+Use existing isolated Actions Core and unsigned native workflows. WatchInputFlowTests cover stable retry identity, project/request binding, limits, attempt bounds and valid empty versus unavailable history. The existing Watch preview step also captures Lifts, New lift, Reps and New task using --watch-fixture; the DEBUG responder never calls live Factory/Health. Only test captures are extended; no infrastructure provisioning, deployment workflow, entitlement or live settings change.
+
+Primary owns #1697 steps/startup integration and must preserve its WatchContract/Chat/Connection changes when combining this branch. Native keyboard/dictation availability, Digital Crown behavior, large text, actual disconnected/empty/error states and real paired-device round trips remain device checks. Never test by starting/recovering live Factory tasks in this secondary thread.
 
 
 ## Watch steps follow-up — 10 November 2026
