@@ -72,6 +72,16 @@
 "factory.steeringMessage" = "Steering message";
 "factory.sendSteering" = "Send message";
 "factory.request" = "Request";
+"factory.showMore" = "Show more";
+"factory.showLess" = "Show less";
+"factory.timelineHistory" = "View timeline history";
+"factory.timelineCount" = "%ld loaded events · %ld activities";
+"factory.timelineAttentionCount" = "%ld events need attention in loaded history";
+"factory.agentUpdate" = "Agent update";
+"factory.notifications" = "Agent notifications";
+"factory.eventCount" = "%ld events";
+"factory.eventDiagnostics" = "Event details";
+"factory.historyLoadFailed" = "Could not load more history. Try again.";
 "factory.metadata" = "Details";
 "factory.timeline" = "Timeline";
 "factory.usage" = "Usage";

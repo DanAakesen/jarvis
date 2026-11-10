@@ -195,6 +195,7 @@ jobs:
             -only-testing:JarvisUITests/URLSessionTransportTests \
             -only-testing:JarvisUITests/TodayUITests \
             -only-testing:JarvisUITests/ComponentGalleryUITests \
+            -only-testing:JarvisUITests/FactoryTaskDetailUITests \
             -parallel-testing-enabled NO \
             -test-timeouts-enabled YES \
             -default-test-execution-time-allowance 120 \

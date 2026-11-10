@@ -1,3 +1,21 @@
+## 10 November 2026 — Native Factory task detail (#1708)
+
+Use the owner-requested Actions / Details / Request / Timeline / Usage / Artifacts
+order. Cap Request at five rendered lines and measure real overflow. Condense
+adjacent ACP transport noise and preserve exact public message chunks, error
+visibility and loaded counts; keep expanded history separate from the compact
+task page. Diagnostics must not expose raw ACP parameters, thoughts or tool
+inputs/outputs. Removing the Disk section does not remove monitoring or alerts.
+
+Source inspection confirms the publisher's top-level fallback produces
+“acp notification” while public text is nested in
+`data.params.update.content.text` for `session/update` / `agent_message_chunk`.
+Production event distribution was not measured, and live task 24 was not touched.
+Preserve PR #1704's task-detail structure/retention/request guards from head
+`0bffc61d30ae5d66a6203684aa8f53d975e8d1c7`; the primary orchestrator owns final
+main integration and release. Simulator captures and device acceptance are not
+claimed from the Linux development environment.
+
 ## Direct owner requests — 10 November 2026
 
 Dan directs Jarvis to execute owner-requested actions without another approval or prescribed wording, and to preserve the two sign-out dialogs. Interpret a request using the conversation; retain owner authentication, resource checks, stale-write handling, secret protection and safe treatment of untrusted content. Telephony is a separate unused integration, not browser/app voice.

@@ -4058,6 +4058,15 @@ rename waits for all of them. The rows above keep their original working titles.
 
 ## P15 — iOS app
 
+Issue #1708 native Factory task-detail implementation: section reordering,
+measured five-line Request disclosure, condensed public ACP activity and compact
+history preview are implemented. Keep PR #1704's loading/retention/context-safety
+changes in the shared task-detail file. Local qualification: 565 selected Core
+tests, 242 targeted backend tests and four runner message/disk-safety tests pass.
+Native simulator interaction/capture and final combined-main qualification
+remain pending with the primary orchestrator. Do not disturb #1706 task 24 for
+reproduction.
+
 P15-41 / [#1484](https://github.com/DanAakesen/jarvis/issues/1484): sidebar input
 recovery and repeated bilingual iPhone navigation tests are implemented, with
 results retained by the existing iOS gate. Run 41286956749 compiled the app and

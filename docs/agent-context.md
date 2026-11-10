@@ -6770,6 +6770,43 @@ evidence.
 
 ### Software Factory UI fixture and screenshots (P15-19)
 
+For #1708, Linux can build/test Core but cannot run Xcode, an iPhone simulator,
+VoiceOver or physical-device checks. The existing simulator job selects
+`FactoryTaskDetailUITests` and retains its screenshot attachments; native
+acceptance remains pending until those artifacts are captured and inspected.
+Its opt-in `--ui-test-factory-long-detail` scenario (with the existing
+`--ui-test-navigation --ui-test-notification-tasks` flags) provides a synthetic
+long request and 1,200 mixed events on task 21, without changing ordinary fixture
+data. HTTP pages remain repeatable and oldest-first.
+Preserve the task-detail loading/refresh/context guards reviewed against
+PR #1704 head `0bffc61d30ae5d66a6203684aa8f53d975e8d1c7` during integration.
+Do not mutate live acceptance task 24 (#1706).
+
+Apple documentation consulted through indexed excerpts for this change:
+[lineLimit](https://developer.apple.com/documentation/swiftui/view/linelimit(_:reservesspace:))
+(rendered line limits),
+[onGeometryChange](https://developer.apple.com/documentation/swiftui/view/ongeometrychange(for:of:action:))
+(geometry observation), and HIG
+[Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
+(adaptable interfaces and system accessibility).
+Direct page retrieval and browser navigation were blocked; this is not a
+full-page documentation review. The Request uses native `lineLimit`,
+`textSelection` and hidden width-matched geometry preferences for overflow,
+with shared labelled buttons. Native Dynamic Type and VoiceOver behavior
+still require simulator/device inspection.
+
+Local #1708 qualification on Linux:
+`swift build` and `swift test --skip JarvisDesignSystemGuardTests` from
+`apps/ios/Packages/JarvisCore` passed (565 selected tests); the native source
+guard was excluded from this run of agent-authored UI changes.
+`npm test --workspace @jarvis/backend -- src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts src/factory/dispatcher.test.ts`
+passed all 242 tests.
+From `runner`, `.venv/bin/python -m pytest tests/test_app.py -k 'assistant_text_chunks or disk_low_threshold or low_disk_emits or runner_event_publisher'`
+passed four tests, including low-disk turn shutdown. Native task-detail source
+parsed with `swiftc -frontend -parse`; this is not SwiftUI typechecking or a native
+build. No simulator screenshots, width/VoiceOver inspection, live-task read or
+physical-device verification were performed here.
+
 `JarvisFactoryFixtureScenario` in `apps/ios/Jarvis/` supplies the Factory
 previews and simulator screenshots through `FixtureTransport`; its project,
 board, task, release, event, usage and commit values are synthetic. CI selects

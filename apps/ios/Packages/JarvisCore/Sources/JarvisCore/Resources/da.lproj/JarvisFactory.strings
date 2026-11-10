@@ -72,6 +72,16 @@
 "factory.steeringMessage" = "Styringsbesked";
 "factory.sendSteering" = "Send besked";
 "factory.request" = "Anmodning";
+"factory.showMore" = "Vis mere";
+"factory.showLess" = "Vis mindre";
+"factory.timelineHistory" = "Vis tidslinjehistorik";
+"factory.timelineCount" = "%ld indlæste hændelser · %ld aktiviteter";
+"factory.timelineAttentionCount" = "%ld hændelser kræver opmærksomhed i den indlæste historik";
+"factory.agentUpdate" = "Opdatering fra agent";
+"factory.notifications" = "Agentnotifikationer";
+"factory.eventCount" = "%ld hændelser";
+"factory.eventDiagnostics" = "Hændelsesdetaljer";
+"factory.historyLoadFailed" = "Kunne ikke indlæse mere historik. Prøv igen.";
 "factory.metadata" = "Oplysninger";
 "factory.timeline" = "Tidslinje";
 "factory.usage" = "Forbrug";
