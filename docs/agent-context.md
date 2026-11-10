@@ -8113,6 +8113,10 @@ Actual local verification:
 - Combined fixture typechecking on Linux is limited by existing Darwin
   CoreFoundation bridging in `JarvisChatFeedbackFixtureTransport.swift`; the
   Settings fixture itself passed strict Swift 6 typechecking.
+- Changed-file secret scanning found no secrets. CodeQL reported no Actions or
+  Python alerts; Swift database creation failed in this environment, so Swift
+  CodeQL analysis is unverified. Read-only review findings were fixed, including
+  Factory revisit freshness, paginated Workspaces retention and chart identity.
 
 This Linux runner has Swift but no Xcode/Simulator. Native captures, before/after
 comparisons, VoiceOver, English/Danish accessibility sizes, reduced motion,

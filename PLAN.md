@@ -7,7 +7,9 @@ Today/Upcoming screen, model, fixture, tests and core Today strings/data; those
 files must remain untouched here. Screen coverage and verification limitations
 are recorded in `docs/agent-context.md` under “iOS loading coverage — 10 November 2026”.
 Local Core validation passed 587 tests; focused workflow-selection and existing
-Simulator-gate checks both passed. Native Simulator build, retained captures and
+Simulator-gate checks both passed. Secret scanning and Actions/Python CodeQL
+were clean; Swift CodeQL database creation was unavailable. Native Simulator
+build, retained captures and
 device accessibility/scroll/motion checks remain required; primary owns
 integration and deployment. No merge or deployment is part of this issue.
 
