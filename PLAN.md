@@ -1,3 +1,32 @@
+## Combined direct-main delivery — 10 November 2026 (#1728 / #1729)
+
+Current delivery is **#1729 → main**, superseding the separate/child delivery
+directions below. Main `ddc626ff60a78580059a8376fa0e658703cf3545` was verified
+against the remote. True merges retain all of chat #1727
+`25f8ed781f31c6d0ef534b21d8d48f62f5e08bdd` and Watch #1722
+`9e4c76c0e211e943e5581b6e12e9a75fc4c08ed1`; integration merge is
+`39764627fe474761acd842e3e48b4015d1471c3e`. Six documentation conflicts retain
+both sides. Source PRs and live Factory task 24 remain untouched.
+
+Runtime follow-up `c09b462db5dc4bdb739144b2074ce89e03523eef` accepts canonical
+whitespace in saved edit titles without losing source identity or resending,
+removes the extra ten-second parser cap, and initializes DEBUG capture routes
+before scene rendering instead of chaining startup navigation/sheets.
+Final runtime `6669570bebb8510c9cb3a79df9c0cceadfa6abf8` adds rendered-content
+capture checks, direct Factory preview entry and approved task/dashboard layout
+repairs. The native fix is not yet demonstrated. Current local checks:
+**701 Core tests, 349 workflow tests**, 48 task-capture tests, backend build/lint pass. See
+`docs/agent-context.md` and the Watch implementation record for qualification.
+
+**Active step:** exact-final-head qualification and review, not feature development.
+Watch run 42883542851 is queued at earlier `c09b462d`. Initial aggregate CI
+42883543109 and iPhone 42883543263 skipped while draft. The orchestrator made
+#1729 ready and corrected its title; title run 42885709984 passed. Later CI
+42885710209 is running and iPhone 42885710449 is queued, still at `c09b462d`.
+Do not treat skipped checks or source-head builds as combined-head acceptance.
+The orchestrator owns review, final checks, merge and release.
+Deployment/TestFlight is authorized after qualification; no new approval gate.
+
 ## Direct-main chat/loading integration — 10 November 2026 (#1726)
 
 Merged approved chat head `1f154ca3973b2ac5d0c1d80f08ee60872ae6fec9`

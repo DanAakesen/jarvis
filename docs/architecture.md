@@ -1,3 +1,26 @@
+## Combined iPhone/Watch delivery boundary (#1728; 10 November 2026)
+
+#1729 combines the existing chat/loading and Watch boundaries below without a new
+service, queue, credential or migration beyond the source implementations.
+Watch edits recognize whitespace-normalized saved titles while still matching
+task identity, source and submitted fields. Auto parsing now uses the caller's
+abort signal and removes its additional ten-second deadline; existing iPhone
+20-second, Watch 25-second and backend 30-second request bounds remain. A timed-out
+mutation remains uncertain and frozen for duplicate-safe retry/refresh, not
+automatic resubmission. Real-provider latency/device behavior is unverified.
+
+DEBUG capture entry uses initial navigation state and direct task detail/editor
+destinations, avoiding startup push/push/sheet chains. Release routes are unchanged.
+External URL checks still call `simctl openurl` and require `onOpenURL` and target
+receipts; fixture navigation does not substitute for external delivery or prove
+that a screenshot shows the destination. URL checks now run independently after
+capture failure, and missing receipts retain explicitly failed diagnostic images.
+Native captures also use Apple's built-in Vision OCR to require destination-specific
+visible content before publishing a successful PNG. Unknown destinations, startup
+screens and missing/wrapped required labels fail closed; recognized text and image
+hashes are retained. The Linux tests cover the content matcher, not Apple's OCR or
+native rendering, and this gate does not replace reference/interaction review.
+
 ## Combined chat/loading delivery (#1726; 10 November 2026)
 
 The direct-main integration retains the existing boundaries: `JarvisChatModel`

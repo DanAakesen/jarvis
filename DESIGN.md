@@ -1,3 +1,35 @@
+## Combined release evidence (#1728; 10 November 2026)
+
+This integration introduces no new visual direction. The exact approved chat
+photo, Watch dashboard/task and quick-lift PNGs are restored from their recorded
+approval revisions at `docs/ios/design/chat/photo-preview-approved.png`,
+`docs/ios/design/watch/watch-home-approved-revision.png`,
+`docs/ios/design/watch/{tasks-today-screen,task-detail-screen,task-create-auto,task-create-manual}-proposal.png`
+and `docs/ios/design/watch/log-lift/`. “Proposal” filenames do not revoke the
+recorded task-screen approval. Nutrition/task-list complication reference images
+remain missing; earlier descriptive requirements are retained, not new approval.
+
+Source-run 42875315079 attempt 2 captures were visually compared with the
+references: dashboard shows only Up Next, so lower sections remain unverified;
+Tasks shows Today/Overdue but Upcoming wraps and reference count/chevrons differ;
+project/task-detail are startup scenes despite receipts. New task is the Factory
+form, not personal Auto/Manual. No edit, personal-create, installed complication
+or external-URL acceptance follows from those artifacts. Exact combined-head
+images, interactions, accessibility/reduced-motion and physical-device checks
+remain outstanding. See the Watch implementation record for hashes and limits.
+
+The follow-up gives Today/Upcoming full width with single-line compact labels
+and an accessible vertical fallback, moves + to the native top-right toolbar,
+uses the actual loaded Today count (with “+” while pagination is incomplete),
+and restores explicit row chevrons. Counts hide when unavailable rather than
+reusing a sample number. Task titles remain readable at large sizes.
+Dashboard now uses small amber section markers, an amber current-time timeline
+guide, a three-hour scale and prominent relative event timing. Native system clock
+and bottom page indicators remain instead of duplicating reference header dots;
+the ornamental vertical section connector is intentionally omitted under the
+no-accent-border rule. These are implementation choices, not post-change native
+visual acceptance. All four lower sections have isolated capture entry points.
+
 ## Chat follow-latest (#1707; 10 November 2026)
 
 Preserve the approved transparent header/footer, floating glass and shared dock.

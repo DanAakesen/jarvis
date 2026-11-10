@@ -1,3 +1,14 @@
+## One qualified iPhone/Watch release (#1728; 10 November 2026)
+
+Deliver the complete approved chat live-follow/photo and Watch dashboard/tasks/
+complications/quick-lift implementations together with current-main loading and
+Factory behavior. #1728 supersedes separate or stacked delivery instructions,
+not the underlying #1707/#1712/#1701/#1705/#1702/#1708 requirements. #1701's
+Today semantics include overdue tasks. Preserve account, security, accessibility,
+explicit-save and duplicate-safety guards. Merge and release remain orchestrator
+owned; deployment and TestFlight are authorized once the combined tree qualifies.
+Do not add an owner-approval gate or exercise live Factory task 24.
+
 ## Chat follow-latest (#1707; 10 November 2026)
 
 Normal and test chat should follow live tools, progress and replies while the

@@ -1,3 +1,39 @@
+## 10 November 2026 — One integration and qualification target (#1728)
+
+Use #1729 directly against verified main `ddc626ff`, retaining the complete
+#1727 `25f8ed78` and #1722 `9e4c76c0` histories. This supersedes older separate/
+child release directions, not their approved feature requirements. Restore the
+exact approved reference assets from `ada3116a`, `009750f` and `c3d69b5d`; do not
+recreate them or invent missing nutrition/task-list reference images.
+
+Source Watch attempt 2 passed all three unsigned builds, but failed fresh
+task-edit receipt collection and logged a scene-create watchdog violation.
+Earlier task-detail/project receipts also accompanied startup screenshots.
+Initialize DEBUG destinations before rendering and avoid nested startup task
+presentations; retain failed screenshots and independently exercise actual
+external URL delivery. This is a targeted repair pending native confirmation,
+not a claim that the underlying simulator failure or URL error 115 is resolved.
+
+Accept whitespace-canonicalized edit results while retaining identity checks and
+the durable saved receipt, with direct-result/restart regressions preventing
+duplicate writes. Remove the unsupported ten-second Auto parser cap; retain the
+caller's finite lifetime, cancellation listener cleanup, concurrency/rate limits,
+frozen request/defaults and durable idempotency. Provider latency is not measured
+by the local model-port regression.
+
+No live Factory task 24 changes, source-PR mutations or owner-approval gate.
+The orchestrator owns review metadata, merge and release after exact-head
+qualification; the owner's deployment/TestFlight authorization already exists.
+
+Owner artifact feedback on #1729 also requires visible-content checks and task/
+dashboard reference reconciliation. Native screenshot publication now requires
+Apple Vision-recognized target content, independently of fresh receipts, without
+adding a package or external service. Local matcher tests are not OCR validation.
+Adaptive task tabs/counts/chevrons and dashboard timing/markers restore material
+reference details. Keep native page indicators/system clock and omit the forbidden
+ornamental section rail; fresh native evidence must assess these deliberate
+platform/design-rule deviations. Final runtime revision: `6669570b`.
+
 ## 10 November 2026 — Deliver existing chat integration directly to main (#1726)
 
 Use main `ddc626ff60a78580059a8376fa0e658703cf3545` plus complete #1719 head

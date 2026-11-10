@@ -1,3 +1,7 @@
+Current delivery is **#1729 → main (#1728)**. The combined qualification section
+at the end supersedes historical child/stacked directions and separates source
+evidence from final-head acceptance.
+
 ## Dashboard and personal tasks — 10 November 2026 (#1701)
 
 Source implementation is complete on the issue branch. The current base already
@@ -372,3 +376,117 @@ The exact-head native run 42874479453 was still queued when checked. No intended
 new captures or successful external URL delivery are established by that run.
 Child PR #1722 has the correct Home base; its generated `[WIP]` title still needs
 the requested `fix-main:` prefix. This environment has no PR metadata-write tool.
+## Combined direct-main qualification (#1728; 10 November 2026)
+
+Current delivery **#1729 → main** supersedes the older child/stacked directions
+below. Full source heads are #1727 `25f8ed781f31c6d0ef534b21d8d48f62f5e08bdd`
+and #1722 `9e4c76c0e211e943e5581b6e12e9a75fc4c08ed1`, on main
+`ddc626ff60a78580059a8376fa0e658703cf3545`. Integration merge:
+`39764627fe474761acd842e3e48b4015d1471c3e`; runtime repair:
+`c09b462db5dc4bdb739144b2074ce89e03523eef`. Source PRs and live Factory task 24
+remain untouched. This is not a Watch redesign or a new approval gate.
+
+Final runtime **`6669570bebb8510c9cb3a79df9c0cceadfa6abf8`** adds the visible
+destination gate and task/dashboard layout repairs described below. Restoring
+references and recording this handoff do not qualify the runtime for release.
+
+### Finished source run and concrete failure
+
+[42875315079 attempt 2](https://github.com/DanAakesen/jarvis/actions/runs/42875315079/attempts/2),
+job **130049104735**, finished with failure at exact source `9e4c76c0`.
+Simulator Watch, physical Watch Release architecture and paired iPhone simulator
+builds all passed; the phone build completed **19:08:28 UTC**. Built/installed
+`WKApplication` and URL scheme checks passed. External URL verification was
+**skipped**, not successful and not a new reproduction of error 115.
+
+Capture log: task-edit launched **18:55:37.866 UTC**, PID **13783**, nonce
+`3835E597-8B30-42AF-835B-65C0C385A249`. At **18:56:11.156**:
+`No fresh destination receipt for task-edit; refusing a launch-spinner capture`.
+Simulator diagnostics record a **10-second scene-create watchdog violation** at
+**18:55:48.998**, with foreground watchdog termination disabled in Simulator.
+This identifies the failing scene/capture, not the precise root cause of the
+watchdog. It was not the step's eight-minute timeout or a failed architecture build.
+
+[Artifact 13793598118](https://github.com/DanAakesen/jarvis/actions/runs/42875315079/artifacts/13793598118)
+contains ten PNGs/receipts, simulator diagnostics and all three build logs
+(archive SHA-256 `e9d2ab701b9ff4e2a2be8df1d03b90817f79d95d78c3916eec860f0afa97d28a`).
+The device was an **Ultra 3 49 mm/watchOS 26.4 simulator**, not physical Ultra 2.
+
+### Actual images versus approved references
+
+All ten source images were inspected together against the approved references.
+Eight show their expected fixture destinations: dashboard, actions, chat, health,
+lifts, new-lift, Factory new-task and tasks. **Project and task-detail show startup
+screens despite matching fresh receipts**. A `.task` receipt is not evidence that
+the compositor has rendered the target. No task-edit, personal Auto/Manual,
+lower-dashboard, smaller-Watch or external-route acceptance follows.
+
+| Actual image | SHA-256 | Observed comparison |
+| --- | --- | --- |
+| dashboard.png | `54568a6b57f509896d95d4ccd832eebbfb9d6884ea55eaa6105d65a69e682072` | Up Next/timeline/event visible; lower dashboard not shown. |
+| tasks.png | `dbdfad60bf933aa9ce682f0d69301d4040d6df525e95a06ffd138ae4faa53c0e` | Overdue and Today visible; Upcoming wraps; reference count badge/chevrons absent and overdue styling differs. |
+| task-detail.png | `f1fb53477a9d84b6fd10ce9d730c9395c32efef0ca7e08275722721cac652df2` | Startup scene, not detail; receipt is insufficient. |
+| project.png | `b3140ed50c3ff8adc830bfbe3f6f43865b022e8bdacdb6e5f0c7caf44c475ece` | Startup scene, not project tasks. |
+| chat.png | `dbc942211d4715d2bb2302e0487d887dd07d10b133cb5ea1576f13c6643c8fa2` | Amber user bubble/plain assistant/input retained; shorter transcript/higher composer than reference. |
+| health.png | `be31786895a352f47a0aeeff3a56977ccd6423b53793c9e0e3015b3add1de9e5` | Count, amber stems/curve and dashed goal retained; not installed-complication proof. |
+
+Exact approved reference bytes are restored, not generated: dashboard/four
+approved task-screen PNGs from `ada3116a996d13de689d3e1d26dcf701205bb4c6`,
+three quick-lift PNGs from `009750f`, photo reference from
+`c3d69b5d78c51131e2b71aca24d55cf88a9fcd8d`. Task “proposal” filenames retain
+their recorded approval. Missing exact nutrition/task-list complication images
+remain a limitation; descriptions or later unapproved refinements are not substitutes.
+
+### Targeted repairs and remaining qualification
+
+DEBUG entry now initializes navigation state before scene rendering and opens
+task detail/edit/create directly rather than chaining startup pushes and sheets.
+Failures retain a `*-failed.png` diagnostic, never a successful capture. External
+URL delivery runs independently after capture failure, still using actual
+`simctl openurl` plus `onOpenURL`/destination receipts. These changes require a
+fresh native run and actual image inspection; no claim that error 115 is fixed.
+
+The capture pipeline now uses Apple's built-in Vision OCR after receipt matching
+to require screen-specific visible labels/content before moving a pending image
+to its successful filename. Unknown screens and startup/wrong-scene content fail
+closed; the Tasks capture also requires unbroken “Upcoming”. Recognized text and
+SHA-256 receipts are retained. URL routes require matching PID/nonce in both
+callback/destination receipts and recognized target content. Linux matcher tests
+are not OCR or native-rendering evidence, and OCR is not reference fidelity or
+interaction acceptance. Project/Factory-create/new-lift capture routes also start
+directly instead of chaining startup presentations.
+
+Today/Upcoming now receive the full row width, use compact unbroken labels and
+adapt vertically at large text sizes. The + is in the native top-right toolbar;
+the actual loaded Today count uses “+” when more pages remain and hides when
+unavailable. Plain navigation rows have explicit chevrons and readable full titles.
+Dashboard uses amber section markers/current-time guide, a three-hour timeline,
+prominent relative timing and a quieter menu. Deliberate deviations: native bottom
+page dots/system clock, count within the Today tab, and no ornamental vertical
+section rail. These preserve native behavior and the project's no-accent-border
+rule; post-change native fidelity has not been inspected. Capture now separately
+targets Workouts, Body Fat, Tasks and Recent Notes, not just the first viewport.
+
+The repair retains Apple's
+[NavigationStack](https://developer.apple.com/documentation/swiftui/navigationstack)
+state-driven navigation and
+[onOpenURL](https://developer.apple.com/documentation/swiftui/view/onopenurl(perform:))
+delivery boundaries. Existing Apple/HIG references in this record remain authoritative;
+fresh retrieval of those API pages was DNS-blocked in this Linux environment.
+No replacement approval step or custom navigation framework is introduced.
+
+Successful edit receipts now accept whitespace-canonicalized titles, preserve
+source identity and remain terminal across restart/refresh without duplicate
+writes. The extra ten-second Auto parser deadline is removed; the caller's finite
+lifetime/cancellation and durable retry identity remain. A model-port test does
+not measure real provider latency or WatchConnectivity behavior.
+
+Local combined runtime checks: **701 Core**, **349 workflow** tests pass;
+backend task capture **48 tests**, build/lint pass. Exact final-head unsigned
+Watch/device/paired-phone, iPhone UI/captures, signed build/upload qualification,
+actual URL routing and physical English/Danish input/voice/accessibility checks
+remain open. Watch run **42883542851** at `c09b462d` is queued; draft aggregate/
+iPhone runs skipped initially. After the orchestrator made #1729 ready and fixed
+its title, CI **42885710209** runs and iPhone **42885710449** queues at `c09b462d`;
+none covers the final runtime follow-up yet. The orchestrator owns review, final acceptance,
+merge and release; deployment/TestFlight is already authorized after qualification.

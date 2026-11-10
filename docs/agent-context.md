@@ -1,3 +1,79 @@
+## Combined direct-main handoff — 10 November 2026 (#1728 / #1729)
+
+Delivery is **#1729 → main**. This supersedes older child/separate delivery
+instructions below. Verified main `ddc626ff60a78580059a8376fa0e658703cf3545`,
+chat #1727 `25f8ed781f31c6d0ef534b21d8d48f62f5e08bdd` and Watch #1722
+`9e4c76c0e211e943e5581b6e12e9a75fc4c08ed1` are ancestors of integration
+`39764627fe474761acd842e3e48b4015d1471c3e`. Runtime follow-up:
+`c09b462db5dc4bdb739144b2074ce89e03523eef`. All six documentation conflicts
+retain both implementations' requirements/evidence; all main native selections,
+chat/photo tests, Watch simulator/device/paired-phone builds, signing/upload
+requirements and account/security guards remain. Source PRs and Factory task 24
+were not changed. Do not separately merge #1727/#1722.
+
+Final runtime is **`6669570bebb8510c9cb3a79df9c0cceadfa6abf8`**, adding visible
+destination verification, direct Factory preview entry and approved task/dashboard
+layout repairs. The later reference/handoff-only commit does not change runtime
+code, but still requires final-head checks.
+
+Local checks on the combined runtime tree:
+- `swift test --package-path apps/ios/Packages/JarvisCore -j 2`: **701 passed**.
+  The new canonical-title regression failed with `invalidRequest` before repair;
+  direct success and restart/refresh now preserve the receipt and reject resends.
+- `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`:
+  **349 passed**, including eight Watch build/capture guards and all 81 pipeline tests.
+- `npm test --workspace @jarvis/backend -- src/vault/watch-task-capture.test.ts`:
+  **48 passed**; cancellation, listener cleanup and caller lifetime are covered.
+  Backend build/lint pass. Read-only validation also passed workspace build/lint,
+  128 ConversationHistory tests and targeted approval/tool/migration/store/vault
+  tests. Its broad Health run had two timing failures in unchanged
+  `src/health/health-upload/backend.test.ts`. The isolated file subsequently passed
+  all 16 tests and the Health suite passed all 1,190 on follow-up; the initial
+  failures remain recorded, not silently counted as first-pass success.
+- Real SQL integration is not locally qualified: it requires the existing
+  isolated-loopback test database guard. No production database was exercised.
+- DEBUG/release Swift syntax parsing passed for edited Watch entrypoints;
+  Linux cannot typecheck Apple frameworks or run native scenes.
+- Screenshot publication now additionally requires destination-specific visible
+  text through Apple's Vision framework. Local matcher regressions reject startup
+  scenes, wrong targets, wrapped Upcoming and unknown captures; they do not
+  execute macOS OCR. Successful PNGs retain recognized-text and SHA-256 evidence.
+- Secret scans found no secrets. CodeQL reported no Actions alerts; initial
+  Python analysis also had none. Swift database creation failed; JavaScript
+  analysis was skipped for size and the later scan timed out before all languages.
+  The final committed-runtime CodeQL request also timed out without a result.
+  These are coverage limitations, not full security qualification. Hosted CodeQL
+  run 42883543019 passed at `c09b462d`, not the later final head. Read-only
+  integration and follow-up reviews found no significant issues.
+
+Native/source evidence:
+- Watch source run **42875315079 attempt 2**, exact `9e4c76c0`: simulator Watch,
+  physical-architecture Release and paired iPhone simulator builds passed.
+  Installed/built URL plist checks passed. Capture failed at task-edit; URL
+  verification skipped. Artifact **13793598118** was downloaded and inspected.
+  See `docs/ios/design/watch/implementation.md` for concrete logs/images.
+- Chat source iPhone run **42880948274**, exact `25f8ed78`, was cancelled,
+  not passed; its job log download returned HTTP 404. No chat native acceptance.
+- At runtime follow-up `c09b462d`, Watch **42883542851** is queued; CI
+  **42883543109** and iPhone **42883543263** skipped because #1729 is draft.
+  These are historical draft results: the orchestrator subsequently made #1729
+  ready and corrected its title; title run **42885709984** passed. CI
+  **42885710209** is running and iPhone **42885710449** queued, also at `c09b462d`.
+  Recheck final-head runs; skipped/source-head results do not qualify the combined
+  tree. Do not weaken these guards to force execution.
+- Earlier ready CI **42885290185** had a PC bridge failure: **196/197 passed**,
+  `Browser_executor_falls_back_to_cdp_when_extension_is_disconnected` threw
+  `ObjectDisposedException` in `FakeCdpTarget.DisposeAsync` line 243. Those files
+  are unchanged by this integration; no test was weakened or unrelated fix made.
+  Its SQL job passed, but that is not final-head SQL qualification.
+
+Remaining: final-head CI/native results, fresh intended images versus restored
+approved references, actual external URL delivery, installed-complication taps,
+English/Danish dictation/voice, accessibility/reduced-motion and physical Ultra 2
+acceptance. Exact nutrition/task-list complication images remain unavailable.
+Merge/release belong to the orchestrator. Deployment/TestFlight is authorized
+after qualification; no additional owner approval is required.
+
 ## Direct-main chat/loading handoff — 10 November 2026 (#1726)
 
 Delivery PR #1727 targets **main**, not a source branch. This supersedes the
