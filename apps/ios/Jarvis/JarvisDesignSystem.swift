@@ -115,6 +115,8 @@ enum JarvisDesignTokens {
     static let chatMessageSpacing: CGFloat = 8
     static let chatMessageDetailSpacing: CGFloat = 6
     static let chatMessageMaximumWidth: CGFloat = 360
+    static let chatComposerPhotoSize: CGFloat = 76
+    static let chatMessagePhotoSize: CGFloat = 220
     /// The one corner radius for floating surfaces: Now bar, composer, bubbles, panels, tiles and sheets of glass.
     static let surfaceRadius: CGFloat = 24
     static let chatBubbleRadius: CGFloat = surfaceRadius

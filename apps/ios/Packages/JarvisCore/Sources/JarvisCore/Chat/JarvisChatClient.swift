@@ -214,6 +214,27 @@ public final class JarvisChatClient: Sendable {
         return page
     }
 
+    /// Resolve a fresh owner-authorized read URL. Never persist the short-lived capability.
+    public func attachmentURL(id: String) async throws -> URL {
+        guard Self.validUUID(id) else { throw JarvisChatClientError.invalidAttachmentIDs }
+        let response = try await client.performAuthenticatedRequest(
+            method: .get,
+            path: ["conversation", "attachments", id, "url"],
+            headers: ["Cache-Control": "no-store"],
+            idempotent: true
+        )
+        struct ReadURL: Decodable { let url: URL }
+        guard response.statusCode == 200,
+              let value = try? JSONDecoder().decode(ReadURL.self, from: response.body),
+              value.url.scheme == "https",
+              let host = value.url.host, host.hasSuffix(".blob.core.windows.net"),
+              value.url.user == nil, value.url.password == nil,
+              value.url.port == nil, value.url.fragment == nil else {
+            throw JarvisChatClientError.invalidResponse
+        }
+        return value.url
+    }
+
     public func uploadAttachment(_ upload: ChatAttachmentUpload) async throws -> ChatAttachmentDescriptor {
         let filename = upload.fileName.replacingOccurrences(of: "\\", with: "/")
         let basename = filename.split(separator: "/", omittingEmptySubsequences: false).last.map(String.init) ?? ""

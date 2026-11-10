@@ -166,6 +166,181 @@ supports retained screenshot evidence;
 guides Dynamic Type and accessible interactions. Documentation/existing native
 artifacts do not replace testing this final implementation.
 
+## Integrated native chat qualification — 10 November 2026 (#1718)
+
+Child #1719 targets `copilot/ios-chat-show-photo-previews`; #1714 remains the
+delivery PR. Requested handoff title: `fix-main: Integrate iOS chat scrolling and
+photo previews` (the automatically created child still has its WIP title).
+#1713 `6d035394` and #1714 `08b0e9ab` were verified before merging. Main
+`741e0378` is already included. No existing delivery PR was changed.
+
+Watch run `42862153219`, job `129990877229`, failed paired-iPhone compilation
+because `accessibilityReduceMotion` is read-only. Removed the invalid write,
+retaining the system read and additive fixture flag. Layout following already
+disables animation. The new pipeline guard checks this contract; parsing alone
+cannot prove iOS compilation.
+
+Local checks: `swift test -j 2` in the Core package passed 579 tests;
+`npm test --workspace @jarvis/backend -- src/core/conversation.test.ts
+src/core/attachment-files.test.ts` passed 80; `npm test --workspace @jarvis/web --
+src/ConversationHistory.test.tsx src/RuntimeTestConversation.test.tsx` passed 138.
+`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests
+-p test_pipeline.py -k ios` passed 26. Changed native Swift syntax parsing passed.
+The full existing workflow/script suite (`PYTHONPATH=.github/scripts python3 -m
+unittest discover -s .github/scripts/tests -v`) passed 339 tests.
+
+Secret scanning passed. CodeQL reported no Python alerts, but Swift database
+creation failed and JavaScript analysis was skipped for database size; neither
+is a successful analysis. Independent diff review found no significant issues.
+On implementation head `aaf71314`, CI `42872380073` and Simulator `42872380299`
+were skipped by the draft gate. Title job `130026700159` failed on the automatic
+WIP title; the orchestrator must apply the `fix-main:` title above and mark ready
+for fresh qualification. Watch run `42872380143` was still running when checked.
+No native pass is claimed from those states.
+
+### Exact-head native follow/photo capture plan
+
+Use the existing macOS CI setup (Xcode 26.6, pinned XcodeGen), not a web mock.
+On the macOS CI checkout, run the following against the final child head:
+
+```bash
+REPO=/Users/runner/work/jarvis/jarvis
+cd "$REPO/apps/ios"
+xcodegen generate
+DEVICE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid // empty')"
+test -n "$DEVICE_ID"
+xcrun simctl bootstatus "$DEVICE_ID" -b
+xcodebuild test -project "$REPO/apps/ios/Jarvis.xcodeproj" -scheme Jarvis \
+  -destination "id=$DEVICE_ID" -derivedDataPath /tmp/jarvis-chat-derived \
+  -resultBundlePath /tmp/jarvis-chat-integration.xcresult \
+  -only-testing:JarvisUITests/ChatComposerUITests \
+  -only-testing:JarvisUITests/ChatPhotoLoaderTests \
+  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO
+xcrun xcresulttool export attachments --path /tmp/jarvis-chat-integration.xcresult \
+  --output-path /tmp/jarvis-chat-integration-captures
+```
+
+Use fresh result/derived paths for each revision. Both test classes are already
+selected by the Simulator workflow. The new combined test launches the real chat
+with `--screenshot-chat-fixture --ui-test-chat-feedback --ui-test-chat-follow
+--ui-test-chat-photos --ui-test-chat-follow-now
+--ui-test-chat-follow-reduced-motion`. Existing tests cover Now absent/present,
+history opt-out/resume, selection, grouped tools and accessibility text size.
+Darwin notifications documented below advance the held stream. XCTest retains
+the combined history/pending-photo, keyboard/multiline and final-state captures.
+
+Inspect those native captures against the approved reference linked in
+`DESIGN.md`: compact removable composer thumbnails, right-aligned sent photos
+below amber text, retained file labels and transparent controls. Observe motion,
+keyboard dismissal and actual Now appearance/disappearance interactively.
+Exercise portrait/landscape, loading/unavailable/retry, navigation/reload,
+selection/link taps, Dynamic Type and VoiceOver, real camera/library selection,
+upload interruption, owner sign-out/account switch, dictation and voice.
+The synthetic fixture bypasses real image authorization/download and hardware;
+backend/Core and native loader tests cover separate boundaries, not live access.
+
+The reference was inspected, but Linux has no Xcode/simulator: no native build,
+captures, accessibility/device acceptance or visual comparison is claimed.
+Apple direct retrieval failed DNS; indexed official excerpts were reviewed for
+[read-only Reduce Motion](https://developer.apple.com/documentation/swiftui/environmentvalues/accessibilityreducemotion),
+[scroll geometry](https://developer.apple.com/documentation/swiftui/view/onscrollgeometrychange(for:of:action:)),
+and [HIG Motion](https://developer.apple.com/design/human-interface-guidelines/motion).
+
+Coordinate final integration with #1715 child #1716: a `git merge-tree
+--write-tree` trial at its `0c6f242c` head automatically combined the chat model
+(only decision-log text conflicted). Do not replace the photo model wholesale
+with loading's version or vice versa. Preserve loading request IDs, independent
+Now/jobs results and errors, attachment metadata and account-scoped preview
+lifetime. This branch does not independently import #1715's separate delivery.
+Refresh both heads and rerun native/paired-Watch qualification after integration.
+
+## iOS chat photo preview qualification — 10 November 2026 (#1712)
+
+Local checks: `swift test` in `apps/ios/Packages/JarvisCore` passed 573 tests;
+`npm test --workspace @jarvis/backend -- src/core/conversation.test.ts
+src/core/attachment-files.test.ts` passed 80 tests. `swiftc -frontend -parse`
+passed for the changed native Swift sources. Existing workflow/script tests
+(`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v`)
+passed 338 tests. Syntax parsing is not an iOS build.
+
+Secret scanning passed. CodeQL reported no Actions alerts; Swift database
+creation failed in this environment, so no successful Swift CodeQL analysis is
+claimed. GitHub runs on implementation commit `a2feaf94` skipped aggregate CI and
+Simulator while the PR was draft. The PR-title log requires a task ID or
+`fix-main:` prefix; primary should use `fix-main: Show iOS chat photo previews`
+and run fresh qualification after marking ready. Do not treat skipped runs as passes.
+
+`ChatComposerUITests` adds synthetic photo draft/removal, multiple sent photos,
+mixed file labels, photo-only history, unavailable/retry, reload, geometry and
+retained screenshot cases. `ChatPhotoLoaderTests` covers credential-free Blob
+requests, no-cache policy, failure/size/MIME rejection, bounded decoding and
+EXIF orientation. Both classes are selected by `.github/workflows/ios-ci.yml`;
+the loader source is also included in the native test target.
+Launch `--screenshot-chat-fixture --ui-test-chat-photos` on a Debug simulator
+for explicitly labelled synthetic portrait/landscape inputs. The fixture
+bypasses live downloads; it is not evidence of production access or camera/
+library hardware. Loader and shared authorization tests exercise those boundaries
+separately. No native build, simulator screenshots, before/after comparison,
+VoiceOver, Dynamic Type or physical-device checks ran on this Linux runner.
+Run and inspect these on macOS, then verify real camera/library selection,
+upload interruption/retry, navigation, owner isolation, dictation and voice.
+
+Apple direct retrieval failed (DNS/network restriction). Reviewed indexed
+official excerpts, not full pages:
+
+- [SwiftUI scaledToFit](https://developer.apple.com/documentation/swiftui/view/scaledtofit()): preserve aspect ratio.
+- [ImageIO thumbnails](https://developer.apple.com/documentation/imageio/cgimagesourcecreatethumbnailatindex(_:_:_:)):
+  derive a thumbnail without altering the source.
+- [Thumbnail orientation](https://developer.apple.com/documentation/imageio/kcgimagesourcecreatethumbnailwithtransform):
+  apply source orientation/aspect ratio; bound maximum pixel size.
+- [URLSession.AsyncBytes](https://developer.apple.com/documentation/foundation/urlsession/asyncbytes):
+  access the transfer task to cancel rejected/abandoned reads.
+- [HIG Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility):
+  perceivable, adaptable interfaces and assistive-technology auditing.
+
+Integration: preserve #1704's independent Now/jobs refresh and stale-response
+guards and #1713/#1707's live-follow, scrolling and viewport changes. These edits
+do not alter those policies. Primary owns integration, assignment and release.
+## Chat follow-latest qualification (#1707; 10 November 2026)
+
+Local checks passed: `swift test -j 2` in `apps/ios/Packages/JarvisCore` (574 tests);
+`npm test -- src/ConversationHistory.test.tsx src/RuntimeTestConversation.test.tsx`
+in `apps/web` (138 tests); scoped ESLint, TypeScript and changed Swift syntax
+parsing. All 25 existing iOS pipeline source-contract checks also pass with
+`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -p test_pipeline.py -k ios`.
+Linux cannot compile SwiftUI/UIKit or run the iPhone simulator. Secret scanning
+passed. CodeQL could not create the Swift database and skipped JavaScript because
+its database was too large; this is not a successful security analysis.
+
+`ChatComposerUITests` (already selected by the simulator workflow) adds held-open
+tool-only SSE updates, grouped disclosures/failures, dock-edge geometry, wrapped
+draft changes, history reading/resume and native selection checks. Launch with
+`--screenshot-chat-fixture --ui-test-chat-feedback --ui-test-chat-follow`; add
+`--ui-test-chat-follow-now` for a visible synthetic Now item and
+`--ui-test-chat-follow-reduced-motion` to force the screen's explicit motion
+policy in the simulator-only feedback fixture without writing the system
+environment value. Darwin notifications
+`com.jarvis.uitests.{tools,fail-tool,progress,stream,finish}-chat-feedback` advance it
+without live services or timers. Captures are retained as XCTest attachments;
+none have been produced or inspected here. Actual Now transitions, simulator
+keyboard behavior, accessibility overrides, reduced motion, link taps and
+physical-device verification remain open.
+
+Web check: mounted the real `ConversationHistory` component in Chromium with
+synthetic history, an explicitly held SSE response and local activity events,
+not the signed-in application shell. At 390×844, twelve tool-only additions kept
+tail gap 0; a reader at scrollTop 8748 stayed at 8748 after a failure update and
+following resumed on returning to bottom. At 390×520 the latest tool bottom was
+404.8px, above composer top 467px; no horizontal overflow. Inspected capture:
+`/tmp/playwright-logs/jarvis-web-tool-only-follow.png` (ephemeral, web only, no Now
+shell). Existing web observers passed the new regression; no web runtime edit.
+The web test conversation has no live tool renderer; its existing tests pass.
+
+Integration: #1704 head `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9` was inspected;
+its model refresh changes are not duplicated or overwritten. Keep concurrent
+#1712/#1714 photo/composer changes; integration and release stay with the
+orchestrator. No work was started on #1706.
+
 ## Explicit timed reminders — 10 November 2026 (#1706)
 
 Owner reminder schedules and current vault `remindAtDue` tasks bypass Copenhagen

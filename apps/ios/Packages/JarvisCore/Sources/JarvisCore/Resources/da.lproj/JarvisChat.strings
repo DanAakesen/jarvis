@@ -167,3 +167,8 @@
 "chat.turn.thinking" = "Tænker";
 
 "chat.turn.showTime" = "Vis beskedens tidspunkt";
+
+"chat.photo.loading" = "Indlæser foto";
+"chat.photo.unavailable" = "Foto utilgængeligt";
+"chat.photo.retry" = "Prøv igen";
+"chat.photo.remove" = "Fjern";
