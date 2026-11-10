@@ -184,14 +184,21 @@ export async function resolveProjectForMessage(
   let identifiedInContext = false;
   if (!identified && !selfIntent && recentOwnerMessages.length > 0 && projectStore) {
     const active = (await projectStore.list()).filter((candidate) => candidate.active);
-    for (const previous of recentOwnerMessages) {
-      const previousName = ` ${normalizedName(previous)} `;
-      const mentioned = active.filter((candidate) =>
-        [candidate.name, candidate.repo].map(normalizedName).filter(Boolean)
-          .some((name) => previousName.includes(` ${name} `)));
-      if (mentioned.length > 0) {
-        identifiedInContext = mentioned.length === 1 && mentioned[0]!.id === project.id;
-        break;
+    const currentProjects = active.filter((candidate) =>
+      [candidate.name, candidate.repo].map(normalizedName).filter(Boolean)
+        .some((name) => messageName.includes(` ${name} `)));
+    const requestsDifferentProject = /\b(?:another|different|other|new|andet|anden|nyt|ny)\s+(?:repo(?:sitory)?|project|projekt)\b/iu.test(message);
+    if (!requestsDifferentProject && (currentProjects.length === 0 ||
+        currentProjects.length === 1 && currentProjects[0]!.id === project.id)) {
+      for (const previous of recentOwnerMessages) {
+        const previousName = ` ${normalizedName(previous)} `;
+        const mentioned = active.filter((candidate) =>
+          [candidate.name, candidate.repo].map(normalizedName).filter(Boolean)
+            .some((name) => previousName.includes(` ${name} `)));
+        if (mentioned.length > 0) {
+          identifiedInContext = mentioned.length === 1 && mentioned[0]!.id === project.id;
+          break;
+        }
       }
     }
   }

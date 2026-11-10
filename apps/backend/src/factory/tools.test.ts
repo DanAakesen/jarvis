@@ -126,7 +126,12 @@ function fixture(registeredProjects: readonly Project[] = [project], approvalInt
   };
   const conversationMessages = [latestMessage];
   const conversationStore = {
-    getHistory: vi.fn(async () => ({ messages: [latestMessage], nextCursor: null })),
+    getHistory: vi.fn(async (query?: { sessionId?: string; before?: string }) => ({
+      messages: query?.before ? conversationMessages.filter((message) =>
+        (!query.sessionId || message.sessionId === query.sessionId) &&
+        BigInt(message.id) < BigInt(query.before!)).reverse() : [latestMessage],
+      nextCursor: null,
+    })),
     getDanMessagesAfter: vi.fn(async ({
       sessionId, after, limit,
     }: { sessionId: string; after: string; limit: number }) => conversationMessages
@@ -314,6 +319,22 @@ describe('Software Factory Jarvis tools', () => {
     expect(test.githubIssueClient.createIssue).toHaveBeenCalledOnce();
     expect(test.githubIssueClient.createIssue.mock.calls[0]?.[0]).toBe(registered.repo);
     expect(test.githubIssueClient.addLabels).toHaveBeenCalledOnce();
+  });
+
+  it.each([true, false])('uses previous owner project context only in the same session: %s', async (sameSession) => {
+    const registered = { ...project, id: '31', name: 'Greeting Runner', repo: 'synthetic/hello-world' };
+    const test = fixture([registered]);
+    test.setLatestMessage({ id: '41', sessionId: sameSession ? 'session' : 'other', role: 'dan',
+      text: 'Let us work on Greeting Runner.', model: null, at: new Date() });
+    test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan',
+      text: 'Please add this to the project.', model: null, at: new Date() });
+    const response = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: { title: 'Add a file', body: 'Create the requested file.' },
+    });
+    expect(response.json().outcome).toBe(sameSession ? 'ok' : 'refused');
+    expect(test.githubIssueClient.createIssue).toHaveBeenCalledTimes(sameSession ? 1 : 0);
+    if (sameSession) expect(test.githubIssueClient.createIssue.mock.calls[0]?.[0]).toBe(registered.repo);
   });
 
   it('writes directly for a unique natural reference included in the original request', async () => {

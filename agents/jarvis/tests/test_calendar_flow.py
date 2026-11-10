@@ -297,6 +297,50 @@ async def test_staging_then_repeated_yes_executes_once_without_restage_or_approv
         await model.close()
 
 
+@pytest.mark.parametrize("voice", [False, True])
+async def test_direct_calendar_request_needs_no_legacy_confirmation(voice):
+    backend = CalendarBackend()
+    backend.catalogue = [
+        tool for tool in backend.catalogue
+        if tool["name"] not in {"calendar_get_pending_change", "calendar_confirm_change"}
+    ]
+    backend.stage_result = {
+        "status": "completed", "detail": "The meeting was moved.",
+        "instruction": "Confirm briefly without reading details aloud.",
+    }
+    model, transport = client([], backend=backend, rounds=[
+        [delta("Shall I move your calendar meeting to 15:00?"), completed()],
+        [completed(tool_call("calendar_move_event"))],
+    ])
+    try:
+        result = await turn(model, [
+            ModelMessage("user", "Move my calendar meeting to 15:00."),
+        ], voice=voice)
+        assert backend.calendar_calls == ["calendar_move_event"]
+        assert "to 15:00?" not in result
+        assert "without another approval" in str(transport.responses.requests[-1]["input"])
+    finally:
+        await model.close()
+
+
+async def test_calendar_suggestion_without_request_does_not_create_an_event():
+    backend = CalendarBackend()
+    backend.catalogue = [
+        tool for tool in backend.catalogue
+        if tool["name"] not in {"calendar_get_pending_change", "calendar_confirm_change"}
+    ]
+    model, transport = client([], backend=backend, rounds=[
+        [delta("Shall I move your calendar meeting to 15:00?"), completed()],
+        [delta("You could move the meeting to 15:00."), completed()],
+    ])
+    try:
+        await turn(model, [ModelMessage("user", "Review my calendar.")])
+        assert backend.calendar_calls == []
+        assert "if he only sought advice" in str(transport.responses.requests[-1]["input"]).lower()
+    finally:
+        await model.close()
+
+
 @pytest.mark.parametrize("provider", ["openai", "anthropic"])
 @pytest.mark.parametrize("older_pending", [None, PENDING])
 @pytest.mark.parametrize("voice,question,offer,yes", [

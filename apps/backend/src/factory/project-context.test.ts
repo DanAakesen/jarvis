@@ -97,6 +97,16 @@ describe('active project resolution', () => {
     )).rejects.toThrow('Do you mean project');
   });
 
+  it('does not use prior context when the current request names a different project', async () => {
+    const jarvis = registeredProject({ id: '31', name: 'Jarvis', repo: 'DanAakesen/jarvis' });
+    const other = registeredProject({ id: '32', name: 'Other', repo: 'synthetic/other' });
+    const store = { list: vi.fn(async () => [jarvis, other]) } as unknown as ProjectStore;
+    for (const message of ['Save this in Other.', 'Save this in another project.']) {
+      await expect(resolveProjectForMessage('31', message, store, ['Work on Jarvis.']))
+        .rejects.toThrow('Do you mean project');
+    }
+  });
+
   it('accepts an exact ID when the request names that project by its registered display name', async () => {
     const project = registeredProject();
     const store = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
