@@ -733,6 +733,15 @@ class SafeFailureTests(unittest.TestCase):
                          "the navigation tests run once, in the capture step, to stay inside the time budget")
         capture = next(step for step in steps if step.get("name") == "Boot iPhone Simulator and capture screenshots")
         self.assertEqual(capture["run"].count("xcodebuild test"), 1)
+        arguments = shlex.split(capture["run"].split("if xcodebuild test ", 1)[1]
+                                .split("; then", 1)[0].replace("\\\n", " "))
+        for option, value in {
+            "-parallel-testing-enabled": "YES",
+            "-parallel-testing-worker-count": "2",
+            "-maximum-parallel-testing-workers": "2",
+        }.items():
+            self.assertEqual(arguments.count(option), 1)
+            self.assertEqual(arguments[arguments.index(option) + 1], value)
         self.assertIn("-only-testing:JarvisUITests/SidebarNavigationTests", capture["run"])
         self.assertIn("-only-testing:JarvisUITests/URLSessionTransportTests", capture["run"])
         self.assertNotIn("-skip-testing", capture["run"])
@@ -747,11 +756,17 @@ class SafeFailureTests(unittest.TestCase):
         self.assertEqual(scheme_evidence["with"]["path"], "${{ runner.temp }}/ios-scheme.xcresult")
         self.assertEqual(scheme_evidence["with"]["retention-days"], 14)
 
-    def test_ios_loading_regressions_are_selected_for_native_execution(self):
+    def test_ios_loading_and_chat_regressions_are_selected_for_native_execution(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
         capture = next(step for step in workflow["jobs"]["macos"]["steps"]
                        if step.get("name") == "Boot iPhone Simulator and capture screenshots")
         cases = {
+            "SidebarNavigationTests": [],
+            "ChatComposerUITests": [],
+            "ChatPhotoLoaderTests": [],
+            "URLSessionTransportTests": [],
+            "TodayUITests": [],
+            "ComponentGalleryUITests": [],
             "FactoryTaskDetailUITests": [],
             "FactoryLoadingUITests": [],
             "WorkspacesLoadingUITests": [],
@@ -771,12 +786,19 @@ class SafeFailureTests(unittest.TestCase):
                                     "testFailedRootRefreshRetainsRowsAndOffersRetry",
                                     "testMemorySearchHidesPreviousContextBeforeNewResultsArrive"],
         }
+        selections = []
         for suite, methods in cases.items():
             source = (ROOT / f"apps/ios/JarvisUITests/{suite}.swift").read_text()
             for method in methods or [""]:
                 selection = f"JarvisUITests/{suite}" + (f"/{method}" if method else "")
+                selections.append(f"-only-testing:{selection}")
                 self.assertIn(f"-only-testing:{selection} \\", capture["run"])
                 self.assertIn(f"func {method}(" if method else f"class {suite}:", source)
+        self.assertCountEqual(
+            [argument for argument in shlex.split(capture["run"].replace("\\\n", " "))
+             if argument.startswith("-only-testing:")],
+            selections,
+        )
 
     def test_ios_capture_recovers_shutdown_destination_without_waiving_test_failures(self):
         workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
@@ -924,6 +946,15 @@ xcrun() {
         self.assertNotIn("showsSidebarToolbarButton", chat)
         tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
         self.assertEqual(tests.count("assertDestinationMenuWorks()"), 5)
+
+    def test_ios_chat_reads_reduce_motion_without_writing_read_only_environment(self):
+        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
+        self.assertIn(r"@Environment(\.accessibilityReduceMotion)", chat)
+        self.assertIn("systemReduceMotion ||", chat)
+        self.assertNotRegex(chat, r"\.environment\(\s*\\\.accessibilityReduceMotion\s*,")
+        follow = (ROOT / "apps/ios/Jarvis/JarvisChatFollowLatest.swift").read_text()
+        self.assertIn("Transaction(animation: nil)", follow)
+        self.assertIn("transaction.disablesAnimations = true", follow)
 
     def test_ios_sign_in_preserves_shell_and_sign_out_resets_shared_navigation(self):
         root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()

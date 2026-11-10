@@ -226,7 +226,7 @@ extension View {
 }
 
 /// The one icon button, identical to the Chat header buttons: Apple glass, 44 pt target, secondary accent icon.
-/// Optional busy state (a progress view in place of the icon), count badge, selected state, tint and short text glyph.
+/// Optional busy state, count badge, selected state, tint, short text glyph and compact photo-removal chrome.
 /// HIG: Buttons, Toolbars, Materials. API: ButtonStyle.glass, ButtonBorderShape.circle.
 struct JarvisIconButton: View {
     let title: String
@@ -239,21 +239,42 @@ struct JarvisIconButton: View {
     var isSelected = false
     var tint: Color?
     var hint = ""
+    var isCompact = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            JarvisControlGlyph(
-                systemImage: systemImage, text: text, badge: badge, isBusy: isBusy,
-                isDisabled: isDisabled, isSelected: isSelected, tint: tint
-            )
+            if isCompact {
+                Image(systemName: systemImage ?? "xmark")
+                    .font(.system(size: JarvisDesignTokens.photoRemoveGlyphSize, weight: .regular))
+                    .foregroundStyle(tint ?? JarvisDesignTokens.secondaryAccent)
+                    .opacity(isDisabled ? 0.4 : 1)
+                    .frame(width: JarvisDesignTokens.photoRemoveDiameter, height: JarvisDesignTokens.photoRemoveDiameter)
+                    .jarvisGlassCircle()
+                    .padding(2)
+                    .frame(
+                        width: JarvisDesignTokens.chatMinimumTapTarget,
+                        height: JarvisDesignTokens.chatMinimumTapTarget,
+                        alignment: .topTrailing
+                    )
+                    .contentShape(Rectangle())
+            } else {
+                glyph
+            }
         }
-        .jarvisControlChrome()
+        .jarvisControlChrome(isCompact: isCompact)
         .disabled(isDisabled || isBusy)
         .accessibilityLabel(title)
         .accessibilityHint(hint)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier(identifier)
+    }
+
+    private var glyph: some View {
+        JarvisControlGlyph(
+            systemImage: systemImage, text: text, badge: badge, isBusy: isBusy,
+            isDisabled: isDisabled, isSelected: isSelected, tint: tint
+        )
     }
 }
 
@@ -964,13 +985,18 @@ private struct JarvisControlGlyph: View {
 }
 
 private extension View {
-    /// One circle for every icon and menu button: a fixed square frame from one token and a Circle glass surface.
+    /// Standard icons and menus share one circle; compact photo controls already contain their smaller glass.
     /// In a toolbar the item must also hide the system container (`sharedBackgroundVisibility(.hidden)`), or the
     /// system draws a second glass around this one.
-    func jarvisControlChrome() -> some View {
-        buttonStyle(.plain)
-            .frame(width: JarvisDesignTokens.iconButtonDiameter, height: JarvisDesignTokens.iconButtonDiameter)
-            .jarvisGlassCircle()
+    @ViewBuilder
+    func jarvisControlChrome(isCompact: Bool = false) -> some View {
+        if isCompact {
+            buttonStyle(.plain)
+        } else {
+            buttonStyle(.plain)
+                .frame(width: JarvisDesignTokens.iconButtonDiameter, height: JarvisDesignTokens.iconButtonDiameter)
+                .jarvisGlassCircle()
+        }
     }
 }
 

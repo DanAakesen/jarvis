@@ -1,3 +1,136 @@
+## Composer correction and qualification continuation — 10 November 2026 (#1732)
+
+Current work continues from exact #1731 `1bf93adb264cff0d95182b77c04cfb42b03b0d33`
+on the prepared child branch `copilot/fix-photo-preview-x`. The previous
+#1731-to-main delivery notes below are historical. The orchestrator owns final
+direct-to-main retargeting and all release operations; no parent/source PR was
+merged, closed or retargeted.
+
+Implemented: shared compact photo-remove chrome (10-point X, 20-point circle,
+independent 44-point target), unchanged removal/VoiceOver labels, a native
+invisible-target removal check, and clearly identified realistic generated
+reference fixtures for dark-mode composer/sent captures. Existing assertions,
+24 selections, two workers and failure gate remain. Watch URL failures now
+retain their transport status/log and broader LaunchServices diagnostics;
+this is diagnostic coverage, not an error-115 repair.
+
+Local checks: 702 Core tests, 350 automation tests (including 81 pipeline and
+nine Watch guards) passed. Implementation `7691793` passed focused read-only
+review and secret scanning; CodeQL has no Actions/Python alerts but could not
+create a Swift database. Swift syntax parses with and without DEBUG.
+No Xcode/simulators are
+available here. Parent Watch run 42890925363 is cancelled, not passed; iPhone
+42890925501 is skipped. Final native two-worker execution, dark composer/sent
+captures, VoiceOver, Watch references/interactions and physical-device checks
+remain blocked/unverified. Loading/Factory failures remain unresolved; the
+Workspace failure is a missing sidebar destination, not established slow data.
+Do not treat this correction as a qualified release.
+
+**Next step:** orchestrator-run final native qualification and evidence review.
+See the #1732 section in `docs/agent-context.md` for precise diagnostic limits.
+
+## Native regression repair and release qualification — 10 November 2026 (#1730)
+
+Current delivery is **#1731 → main**; #1729 remains source evidence, not a
+separate merge target. Merge `02d226f06c258898dd3aa476c7dc4c97a699dec4`
+preserves exact #1729 `a39f1529470eeffc6786319a156e5207777dfa45` on current
+main `ddc626ff60a78580059a8376fa0e658703cf3545`. Its tree initially matched
+that source exactly. All source tests, approved references and Watch changes
+remain; no source PR or live Factory task 24 was changed.
+
+Completed: reproduced and repaired the Watch-to-web 301–400-character task-title
+decoder incompatibility, including Unicode code-point counting (35 adjacent web
+tests, scoped lint, typecheck and production web build pass).
+Native workflow now keeps all 24 selections and captures with two isolated
+simulator workers, retaining per-test limits, exports and the UI failure gate.
+All 81 pipeline tests and 12 embedded shell syntax checks pass; actual macOS
+parallel execution and timing are not yet qualified.
+
+The chat repair contains the live-tool accessibility wrapper (preserving child
+identifiers) and corrects combined photo fixture chronology. Existing assertions
+remain; added checks cover tool identity/disclosure and photo/fallback dock
+visibility. Focused Core tests (56) and the full existing Core suite (701) pass,
+and edited Swift syntax parses with and without DEBUG; native compilation and
+rendering are not qualified by these checks. Focused read-only review found no
+significant issues; local CodeQL has no Actions/Python alerts but lacks Swift
+database/JavaScript analysis coverage.
+
+**Active step:** complete exact-head native qualification and review.
+Implementation checkpoint `61abd21` passed final focused review and secret scans;
+CodeQL retains Swift/JavaScript coverage gaps. Its iPhone run 42890925501 is
+draft-skipped and Watch 42890925363 is running, not accepted.
+Source chat run 42874121366 has 18 failures,
+not a passing capture result. Ten ComponentGallery failures reproduce on current
+main; all four Today failures also reproduce on a verified code-equivalent
+historical main baseline. Loading diagnostics remain partial, not a blanket
+baseline waiver. See `docs/agent-context.md` for evidence and remaining gates.
+
+This runner has no Xcode. Repair-branch simulator run 42888029362 at `02d226f`
+skipped because this PR is draft; the available workflow API returned HTTP 403.
+Implementation `26d57e4` also skips native CI while draft; its generated WIP title
+fails the existing title rule. Use `fix-main: Repair native chat and qualify combined iPhone and Watch release`
+for the orchestrator's ready/run handoff. Exact source-head Watch 42886195288
+passes all three builds; artifact 13798051865 shows correct task details rejected
+because Priority is below the viewport. The matcher now requires visible
+Task/Edit/title/Due, with eight capture tests passing. Actual external URL delivery
+still fails with error 115. Backend compatibility/attachment checks (201), build
+and lint pass. These local checks do not qualify the native release.
+Native reruns, fresh capture review and actual URL delivery remain release
+blockers. Preserve draft/failure guards. Merge and TestFlight remain orchestrator
+owned; the existing owner authorization is unchanged.
+
+## Combined direct-main delivery — 10 November 2026 (#1728 / #1729)
+
+Current delivery is **#1729 → main**, superseding the separate/child delivery
+directions below. Main `ddc626ff60a78580059a8376fa0e658703cf3545` was verified
+against the remote. True merges retain all of chat #1727
+`25f8ed781f31c6d0ef534b21d8d48f62f5e08bdd` and Watch #1722
+`9e4c76c0e211e943e5581b6e12e9a75fc4c08ed1`; integration merge is
+`39764627fe474761acd842e3e48b4015d1471c3e`. Six documentation conflicts retain
+both sides. Source PRs and live Factory task 24 remain untouched.
+
+Runtime follow-up `c09b462db5dc4bdb739144b2074ce89e03523eef` accepts canonical
+whitespace in saved edit titles without losing source identity or resending,
+removes the extra ten-second parser cap, and initializes DEBUG capture routes
+before scene rendering instead of chaining startup navigation/sheets.
+Final runtime `6669570bebb8510c9cb3a79df9c0cceadfa6abf8` adds rendered-content
+capture checks, direct Factory preview entry and approved task/dashboard layout
+repairs. The native fix is not yet demonstrated. Current local checks:
+**701 Core tests, 349 workflow tests**, 48 task-capture tests, backend build/lint pass. See
+`docs/agent-context.md` and the Watch implementation record for qualification.
+
+**Active step:** exact-final-head qualification and review, not feature development.
+Watch run 42883542851 is queued at earlier `c09b462d`. Initial aggregate CI
+42883543109 and iPhone 42883543263 skipped while draft. The orchestrator made
+#1729 ready and corrected its title; title run 42885709984 passed. Later CI
+42885710209 is running and iPhone 42885710449 is queued, still at `c09b462d`.
+Do not treat skipped checks or source-head builds as combined-head acceptance.
+The orchestrator owns review, final checks, merge and release.
+Deployment/TestFlight is authorized after qualification; no new approval gate.
+
+## Direct-main chat/loading integration — 10 November 2026 (#1726)
+
+Merged approved chat head `1f154ca3973b2ac5d0c1d80f08ee60872ae6fec9`
+into current main `ddc626ff60a78580059a8376fa0e658703cf3545` on delivery
+PR #1727. Merge `e6329ee063f80452ee8ebabb2ffea7f4820dee8e` retains both
+histories. All three documentation conflicts retain both entries; the model
+automatically combines loading refresh guards with photo metadata and previews.
+Every main native selection remains, alongside `ChatPhotoLoaderTests`.
+The selection regression now requires chat/photo and loading/Factory together.
+
+This supersedes the older child/stacked delivery directions below: #1727 targets
+main directly. Source PRs and live Factory task 24 remain untouched.
+Local combined-tree checks pass: 611 Core, 341 script, 322 backend attachment/
+Factory and 138 web chat tests; Core build, web typecheck/scoped lint and changed
+Swift syntax parsing pass. Independent integration review found no significant
+issues. Secret scans pass; CodeQL found no Actions/Python alerts, but Swift
+database creation failed and JavaScript analysis was skipped for database size.
+Next: exact-head CI/Simulator evidence. #1727's draft
+gate skipped both workflows and its generated title failed the title check;
+use `fix-main: Integrate approved chat with current iOS loading` and run both
+workflows after readiness. Native captures, device acceptance and release remain
+unqualified; see the current handoff in `docs/agent-context.md`.
+
 ## iOS loading / Factory child integration — 10 November 2026 (#1715)
 
 Integrated #1704 head `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9` into the
@@ -21,6 +154,85 @@ Next: exact-final-head CI/native qualification and screenshot inspection, using
 the #1715 handoff in `docs/agent-context.md`. The four Today line-limit failures
 reproduce on native-equivalent main; Factory timeouts are not established
 baseline. No tests were waived, and native acceptance/release remains pending.
+
+## iOS chat integration — 10 November 2026 (#1718)
+
+Merged #1713 head `6d035394` into the child of #1714 head `08b0e9ab`,
+retaining both histories and features. Removed the unsupported write to the
+read-only Reduce Motion environment value. Combined native fixtures now retain
+photo history and hold tool-only streaming open; a regression covers photos,
+mixed files, removal, keyboard/composer growth, failures and the final reply.
+Local checks pass: 579 Core, 80 backend attachment/conversation, 138 web chat and
+26 iOS source-contract tests; changed native Swift parses successfully.
+Next: exact-final-head macOS build/tests and capture inspection using
+`docs/agent-context.md`, then orchestrator integration with #1715/#1716.
+Native/device acceptance, Swift security analysis and release are not claimed.
+
+## iOS chat photo previews — 10 November 2026 (#1712)
+
+Implemented composer and sent/history photo previews using the approved reference
+and owner-authorized attachment read URLs. Text-required send eligibility, files,
+upload bytes, dictation/voice, refresh and scrolling policies remain unchanged.
+Local qualification: 573 JarvisCore tests and 80 backend attachment/conversation
+tests pass; changed native Swift sources pass syntax parsing. Native loader and
+composer regression cases, including retained screenshot attachments, are added
+to the existing Simulator selection. Next: execute and inspect those captures on
+macOS, exercise library/camera hardware, Dynamic Type and VoiceOver, and integrate
+with #1713/#1707 and #1704. Linux has no Xcode/simulator; native build, captures,
+device acceptance, integration and release remain outstanding and primary-owned.
+## Chat follow-latest — 10 November 2026 (#1707)
+
+Implemented shared geometry-driven following for normal and isolated native
+chat, with user-scroll/selection protection and deterministic tool-only fixtures.
+Local checks: 574 JarvisCore tests, 138 web chat tests, web TypeScript/scoped
+ESLint, Swift syntax parsing and diff checks pass. The web tool-only failure was
+not reproduced in its component fixture; retain its existing observers.
+Next/blocker: macOS simulator compilation, before/after reproduction, dock
+geometry and interaction captures, Now visibility transitions, reduced motion,
+Dynamic Type, link/selection checks and physical-iPhone validation. Do not mark
+native acceptance complete. Orchestrator owns integration and release; preserve
+#1712/#1714 photo changes and #1704's chat-model refresh fixes.
+## Watch dashboard and personal-task implementation — 10 November 2026 (#1701)
+
+Source implementation is complete on the issue branch; no PR merge or deployment.
+It preserves the existing steps/startup and Factory/lift work. Shared Today/
+Upcoming filtering, dashboard/full views, four rectangular complications and
+task detail/edit/Auto/Manual capture are implemented.
+
+Qualification reports: 23 targeted Today tests; a 616-test Core run before the
+last integration refinements; 1,241 backend regressions and 94 real SQL tests;
+backend build/lint and targeted follow-up checks passed. The updated capture
+workflow passes YAML/shell syntax checks. Review fixes split the nutrition
+accessibility string into typed steps without changing copy/number formatting,
+and restore the task choice control's top-level declaration. Native diagnostics
+also identified two watchOS-unavailable DisclosureGroups; read-only navigation
+lists now preserve access to those details and the active draft. After synchronizing
+main and these corrections, all 619 Core tests, 1,126 focused backend regressions,
+backend build/lint, Swift parsing and the existing iOS metadata check pass.
+Auto/Manual draft tests cover timeout, malformed success, definite rejection and
+unchanged explicit retry.
+Process-death restoration is not implemented.
+
+Native run 42836136120 failed at the nutrition expression; its physical build was
+skipped. Combined-source run 42857360808 was superseded by the documentation
+head. Run 42859214862 passed nutrition compilation but failed on DisclosureGroup;
+physical compilation and captures were skipped. Corrected runtime `606c299d`
+passes Watch simulator, physical-Watch Release architecture and paired-phone
+builds in run 42860889807. Its artifact contains 21 synthetic native PNG captures;
+the dashboard's top viewport was visually inspected. The image viewer's one-image
+limit prevented inspection of the other captures. Native task interactions,
+remaining visual review and physical-device acceptance are not claimed.
+CI and the separate iPhone UI workflow are draft-skipped, not passing results.
+The earlier filtering checkpoint is not evidence for the combined feature.
+
+Next: inspect the remaining native captures and qualify interactions on a physical
+Watch, including Ultra 2. Exact nutrition/task-list complication image transfer
+remains a visual sign-off blocker. Dashboard and task-screen approvals in the issue supersede
+PR #1700's older unapproved-dashboard note.
+
+## Watch quick lift logging — 10 November 2026 (#1705)
+
+Implemented on this branch: additive shared capture/complication, owner-authenticated natural-language extraction into existing lift history, durable duplicate-safe retry, recorded-value voice receipts and explicit recovery for a confirmed deleted operation. Focused backend/Core checks pass; acceptance remains open. PR #1703 remains separate: integrate into its Workouts section and preserve its dashboard, task flows, Today/Upcoming semantics and existing complications. Primary owns integration/release; do not touch active Factory acceptance task #24. Native builds, simulator interactions/captures, installed Ultra 2 dictation/voice/complication and real history readback remain acceptance work until evidence is recorded in `docs/ios/design/watch/implementation.md`.
 
 ## Explicit reminder quiet-hours repair — 10 November 2026 (#1706)
 
@@ -4855,3 +5067,27 @@ Notes/push-chat iPhone UI failures are documented in the Watch handoff, not
 claimed fixed. Home #1689 and workout design work remain separate. Installed
 Ultra 2 complication, startup, reconnect and active-send/voice checks follow
 TestFlight delivery. See docs/ios/design/watch/steps-reconnect-handoff-2026-11-10.md.
+## Watch child integration — 10 November 2026 (#1721)
+
+PR #1722 is the child delivery into #1703's Home branch, not main. Both current
+source heads are included with a true merge; the original PRs remain intact.
+Dashboard, all complications, shared Today/Upcoming, task capture and both lift
+entry/voice/dictation flows are retained. The temporary duplicate Workouts summary
+is removed. The actual old artifacts contain stale scenes and a launch spinner;
+they are not visual acceptance. Capture now requires fresh destination receipts
+and keeps external URL-delivery failure separate and visible.
+
+Merged-backend qualification: 1,585 targeted tests plus 178 vault/store tests,
+build and lint pass. Real SQL testing is blocked by its isolated-loopback guard.
+Five workflow regressions and parent Watch DEBUG/release parsing pass.
+Task draft/restart qualification is implemented: atomic local create/edit drafts,
+pre-send frozen requests, uncertain/refresh-required restoration and terminal
+saved receipts; restoration never automatically sends. The focused combined Core
+run passes 37 tests. The full run exposed six parent URL-refactor source-literal
+assertions; their guards now follow the shared enum rather than obsolete literals.
+The corrected parent-owned routing/source suite passes all 12 tests.
+Next: run final exact-head native/security checks and inspect intended captures
+against the approved images. Exact #1701
+nutrition/task-list image transfer and physical Watch speech/accessibility/tap
+checks remain open. See `docs/ios/design/watch/implementation.md` for evidence.
+Earlier sections are historical results, not integrated-head qualification.

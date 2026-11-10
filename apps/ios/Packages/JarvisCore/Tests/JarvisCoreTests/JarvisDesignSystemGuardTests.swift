@@ -59,6 +59,30 @@ final class JarvisDesignSystemGuardTests: XCTestCase {
         XCTAssertEqual(try offenders(chrome, allowing: Self.sharedLayer), [])
     }
 
+    func testPhotoRemoveChromeStaysSmallerThanItsAccessibleTarget() throws {
+        let sources = try swiftSources()
+        let controls = try XCTUnwrap(sources.first { $0.name == "JarvisControls.swift" }?.text)
+        let tokens = try XCTUnwrap(sources.first { $0.name == "JarvisDesignSystem.swift" }?.text)
+        let chat = try XCTUnwrap(sources.first { $0.name == "JarvisChatScreen.swift" }?.text)
+        XCTAssertTrue(tokens.contains("static let photoRemoveDiameter: CGFloat = 20"))
+        XCTAssertTrue(tokens.contains("static let photoRemoveGlyphSize: CGFloat = 10"))
+        XCTAssertTrue(chat.contains("isCompact: attachment.contentType.hasPrefix(\"image/\")"))
+        let compactLabel = try XCTUnwrap(controls.components(separatedBy: "if isCompact {").dropFirst().first)
+            .components(separatedBy: "} else {")[0]
+        let glass = try XCTUnwrap(compactLabel.range(of: ".jarvisGlassCircle()"))
+        let target = try XCTUnwrap(compactLabel.range(of: "width: JarvisDesignTokens.chatMinimumTapTarget"))
+        XCTAssertLessThan(glass.lowerBound, target.lowerBound, "Glass must wrap only the glyph, not the hit target.")
+        XCTAssertTrue(compactLabel.contains(".font(.system(size: JarvisDesignTokens.photoRemoveGlyphSize"))
+        XCTAssertTrue(compactLabel.contains(".frame(width: JarvisDesignTokens.photoRemoveDiameter"))
+        XCTAssertTrue(compactLabel.contains("width: JarvisDesignTokens.chatMinimumTapTarget"))
+        XCTAssertTrue(compactLabel.contains("height: JarvisDesignTokens.chatMinimumTapTarget"))
+        XCTAssertTrue(compactLabel.contains(".contentShape(Rectangle())"))
+        let compactChrome = try XCTUnwrap(controls.components(separatedBy: "func jarvisControlChrome").last)
+            .components(separatedBy: "} else {")[0]
+        XCTAssertTrue(compactChrome.contains("buttonStyle(.plain)"))
+        XCTAssertFalse(compactChrome.contains(".jarvisGlassCircle()"))
+    }
+
     func testNoScreenUsesASegmentedPicker() throws {
         XCTAssertEqual(try offenders(#"\.pickerStyle\(\s*\.segmented\b"#, allowing: Self.sharedLayer), [])
     }

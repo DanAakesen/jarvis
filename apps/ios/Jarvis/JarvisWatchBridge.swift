@@ -36,6 +36,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var generation = UUID()
     private var eventQueue: [WatchEvent] = []
     private var delivery: Task<Void, Never>?
+    private var dashboardSnapshot: WatchDashboardSnapshot?
+    private var dashboardBrief: WatchBriefSummary?
+    private var publishingDashboard = false
 
     func activate() {
         guard WCSession.isSupported() else { return }
@@ -45,6 +48,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     func configure(client: JarvisClient) { self.client = client; activate() }
     func disconnect() async {
         generation = UUID(); client = nil; chatSession = nil
+        dashboardSnapshot = nil; dashboardBrief = nil
         chatTask?.cancel(); chatTask = nil
         delivery?.cancel(); delivery = nil; eventQueue.removeAll()
         await stopVoice(); replies.removeAll(); running.removeAll()
@@ -119,14 +123,22 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             guard epoch == generation else { return .init(id: request.id, failure: .signInRequired) }
             reply = .init(id: request.id, data: data)
         } catch {
-            let failure: WatchFailure
-            if let known = error as? WatchFailure { failure = known }
-            else if let known = error as? JarvisClientError, case .signInRequired = known { failure = .signInRequired }
-            else { failure = .failed }
-            reply = .init(id: request.id, failure: failure)
+            if let known = error as? JarvisWatchTasksClientError, case .failure(let detail) = known {
+                reply = .init(id: request.id, taskError: detail)
+            } else if let detail = error as? WatchTaskMutationFailure {
+                reply = .init(id: request.id, taskError: detail)
+            } else {
+                let failure: WatchFailure
+                if let known = error as? WatchFailure { failure = known }
+                else if let known = error as? JarvisClientError, case .signInRequired = known { failure = .signInRequired }
+                else if let known = error as? JarvisWatchTasksClientError, case .invalidRequest = known { failure = .invalidRequest }
+                else { failure = .failed }
+                reply = .init(id: request.id, failure: failure)
+            }
         }
         // Do not retain audio, health or message bodies unnecessarily. Never auto-replay mutations.
-        if reply.failure == nil && ![.audio, .voiceHeartbeat, .snapshot, .history, .tasks, .workouts, .lifts, .projects, .factoryTasks].contains(request.action) {
+        if reply.failure == nil && reply.taskError == nil && ![.audio, .voiceHeartbeat, .snapshot, .dashboard, .brief, .agenda, .bodyFat, .notes, .note, .nutrition,
+                                    .history, .tasks, .workouts, .lifts, .projects, .factoryTasks].contains(request.action) {
             if replies.count >= 100 { replies.removeAll() }
             replies[request.id] = (request, reply)
         }
@@ -136,10 +148,62 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         let health = JarvisHealthClient(client: client)
         switch r.action {
         case .snapshot:
+            let epoch = generation
             let snapshot = try await snapshot(client: client)
+            guard epoch == generation else { throw WatchFailure.signInRequired }
             let data = try encode(snapshot)
-            try? WCSession.default.updateApplicationContext(["health": data])
+            publishContext(health: data)
             return data
+        case .dashboard:
+            let epoch = generation
+            var value = try await dashboard(client: client)
+            guard epoch == generation else { throw WatchFailure.signInRequired }
+            if let dashboardBrief, dashboardBrief.isCurrent(at: Date()) { value.brief = dashboardBrief }
+            value = try value.bounded()
+            dashboardSnapshot = value
+            let data = try encode(value)
+            publishContext(dashboard: data)
+            return data
+        case .brief:
+            let epoch = generation
+            let appLanguage: JarvisAppLanguage = language == .en ? .en : .da
+            let reader = WatchDashboardReader(client: client)
+            let value = try await WatchDashboardReader.boundedRead(timeout: .seconds(20)) {
+                try await reader.brief(language: appLanguage)
+            }
+            guard epoch == generation else { throw WatchFailure.signInRequired }
+            dashboardBrief = value
+            if var snapshot = dashboardSnapshot, snapshot.isCurrent(at: Date()) {
+                snapshot.brief = value
+                snapshot = try snapshot.bounded()
+                dashboardSnapshot = snapshot
+                publishContext(dashboard: try encode(snapshot))
+            }
+            return try encode(value)
+        case .agenda:
+            let page = try dashboardPage(r)
+            let reader = WatchDashboardReader(client: client)
+            return try encode(try await WatchDashboardReader.boundedRead {
+                try await reader.agenda(offset: page.offset)
+            })
+        case .bodyFat:
+            let reader = WatchDashboardReader(client: client)
+            return try encode(try await WatchDashboardReader.boundedRead { try await reader.bodyFat() })
+        case .notes:
+            let page = try dashboardPage(r)
+            let reader = WatchDashboardReader(client: client)
+            return try encode(try await WatchDashboardReader.boundedRead { try await reader.notes(offset: page.offset) })
+        case .note:
+            let page = try dashboardPage(r)
+            guard let path = r.text ?? r.itemID, JarvisNotesLogic.validNotePath(path) else { throw WatchFailure.invalidRequest }
+            let reader = WatchDashboardReader(client: client)
+            return try encode(try await WatchDashboardReader.boundedRead { try await reader.note(path: path, page: page) })
+        case .nutrition:
+            let reader = WatchDashboardReader(client: client)
+            let goals = explicitNutritionGoals()
+            return try encode(try await WatchDashboardReader.boundedRead {
+                try await reader.nutrition(carbsGoalGrams: goals.carbs, fatGoalGrams: goals.fat, proteinGoalGrams: goals.protein)
+            })
         case .history:
             let history = try await JarvisChatClient(client: client).history(limit: 20).messages
             var compact = history.sorted { $0.at < $1.at }.suffix(6).map {
@@ -176,7 +240,33 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             }
             return nil
         case .tasks:
-            return try encode(try await todayTasks(client: client))
+            if let id = r.itemID {
+                let reader = WatchDashboardReader(client: client)
+                return try encode(try await WatchDashboardReader.boundedRead { try await reader.task(id: id) })
+            }
+            if r.data == nil { return try encode(try await todayTasks(client: client)) }
+            let page = try dashboardPage(r)
+            let reader = WatchDashboardReader(client: client)
+            return try encode(try await WatchDashboardReader.boundedRead { try await reader.taskPage(offset: page.offset) })
+        case .createWatchTask:
+            guard let value = r.createWatchTaskRequest else { throw WatchFailure.invalidRequest }
+            return try encode(try await JarvisWatchTasksClient(client: client).create(value))
+        case .updateWatchTask:
+            guard let value = r.updateWatchTaskRequest else { throw WatchFailure.invalidRequest }
+            return try encode(try await JarvisWatchTasksClient(client: client).update(value))
+        case .completeWatchTask:
+            guard let task = r.completionWatchTask, let done = r.flag else { throw WatchFailure.invalidRequest }
+            let notes = JarvisNotesClient(client: client)
+            do {
+                return try encode(try await WatchDashboardReader.boundedRead {
+                    try await notes.setTaskDone(task, done: done)
+                })
+            } catch JarvisNotesClientError.taskConflict {
+                throw WatchTaskMutationFailure(code: "task_conflict",
+                                               message: "This task changed. Refresh it before trying again.",
+                                               retryable: false, outcomeUnknown: false)
+            } catch JarvisClientError.signInRequired { throw WatchFailure.signInRequired }
+            catch { throw WatchTaskMutationFailure.unknown }
         case .workouts:
             guard try await health.capabilities().availableSources.contains(JarvisHealthSource.workouts.rawValue) else { throw WatchFailure.healthUnavailable }
             let period = JarvisHealthPeriod.make(.sevenDays)
@@ -186,6 +276,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             guard try await health.capabilities().availableSources.contains(JarvisHealthSource.lifts.rawValue) else { throw WatchFailure.healthUnavailable }
             let result = try await health.query(.init(source: .lifts, limit: 30))
             return try encode(WatchHealthHistory.items(from: result))
+        case .captureLift:
+            guard let capture = r.liftCapture else { throw WatchFailure.invalidRequest }
+            return try encode(try await health.captureLift(capture))
         case .saveLift:
             guard let data = r.data, let value = try? JSONDecoder().decode(WatchLiftInput.self, from: data), value.isValid else { throw WatchFailure.invalidRequest }
             if let id = r.itemID {
@@ -313,14 +406,37 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         default: break
         }
     }
-    private func todayTasks(client: JarvisClient) async throws -> [VaultTask] {
-        guard case .modified(let list, _) = try await JarvisNotesClient(client: client).fetchOpenTasks(validator: nil), !list.truncated else { throw WatchFailure.failed }
-        return list.items.filter { !$0.done && $0.dueDate == list.today }
+    private func todayTasks(client: JarvisClient, now: Date = Date(), calendar: Calendar = .current) async throws -> [VaultTask] {
+        try await WatchDashboardReader(client: client).taskLists(now: now, calendar: calendar).today
+    }
+    private func dashboard(client: JarvisClient) async throws -> WatchDashboardSnapshot {
+        let reader = WatchDashboardReader(client: client)
+        let goals = explicitNutritionGoals()
+        return try await reader.dashboard(carbsGoalGrams: goals.carbs, fatGoalGrams: goals.fat, proteinGoalGrams: goals.protein)
+    }
+    private func dashboardPage(_ request: WatchRequest) throws -> WatchPageRequest {
+        guard let data = request.data else { return .init() }
+        guard let page = try? JSONDecoder().decode(WatchPageRequest.self, from: data), page.isValid else { throw WatchFailure.invalidRequest }
+        return page
+    }
+    private func explicitNutritionGoals() -> (carbs: Double?, fat: Double?, protein: Double?) {
+        func read(_ key: JarvisHealthGoals.Key) -> Double? {
+            guard let value = UserDefaults.standard.object(forKey: key.rawValue) as? NSNumber else { return nil }
+            let number = value.doubleValue
+            return number.isFinite && number > 0 ? number : nil
+        }
+        return (read(.carbsGrams), read(.fatGrams), read(.proteinGrams))
+    }
+    private func publishContext(health: Data? = nil, dashboard: Data? = nil) {
+        var context = WCSession.default.applicationContext
+        if let health { context["health"] = health }
+        if let dashboard { context["dashboard"] = dashboard }
+        try? WCSession.default.updateApplicationContext(context)
     }
     private func snapshot(client: JarvisClient) async throws -> WatchHealthSnapshot {
         let now = Date(); let calendar = Calendar.current
         var result = WatchHealthSnapshot(now: now, calendar: calendar)
-        if let tasks = try? await todayTasks(client: client) { result.tasksToday = tasks.count }
+        if let tasks = try? await todayTasks(client: client, now: now, calendar: calendar) { result.tasksToday = tasks.count }
         if let targets = try? await JarvisHealthClient(client: client).trainingTargets().targets {
             result.stepGoal = positiveTarget(targets.dailySteps)
             result.gymGoal = positiveTarget(targets.gymSessionsPerWeek)
@@ -349,7 +465,15 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         let epoch = generation
         guard let client, WCSession.default.activationState == .activated, WCSession.default.isPaired, WCSession.default.isWatchAppInstalled,
               let snapshot = try? await snapshot(client: client), let data = try? encode(snapshot), epoch == generation else { return }
-        try? WCSession.default.updateApplicationContext(["health": data])
+        publishContext(health: data)
+        guard !publishingDashboard else { return }
+        publishingDashboard = true
+        defer { publishingDashboard = false }
+        guard var dashboard = try? await dashboard(client: client), epoch == generation else { return }
+        if let dashboardBrief, dashboardBrief.isCurrent(at: Date()) { dashboard.brief = dashboardBrief }
+        guard let bounded = try? dashboard.bounded(), let dashboardData = try? encode(bounded) else { return }
+        dashboardSnapshot = bounded
+        publishContext(dashboard: dashboardData)
     }
     private func positiveTarget(_ value: Double?) -> Int? {
         guard let value, value.isFinite, value > 0, value < 1_000_000 else { return nil }

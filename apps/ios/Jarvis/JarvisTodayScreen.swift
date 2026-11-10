@@ -204,13 +204,13 @@ struct JarvisTodayScreen: View {
     }
 
     private var tabControl: some View {
-        let today = rows(for: .today).count
-        let due = taskLists?.due.count
+        let today = taskLists?.today.count
+        let due = taskLists?.upcoming.count
         return JarvisSegmentedBar(
             title: copy(.agendaAndTasks),
             identifierPrefix: "today.tab",
             items: [
-                JarvisTabItem(tag: Tab.today, title: "\(copy(.tabToday)) \(today)", identifier: "today.tab.today"),
+                JarvisTabItem(tag: Tab.today, title: today.map { "\(copy(.tabToday)) \($0)" } ?? copy(.tabToday), identifier: "today.tab.today"),
                 JarvisTabItem(
                     tag: Tab.due,
                     title: due.map { "\(copy(.tabDue)) \($0)" } ?? copy(.tabDue),
@@ -228,7 +228,7 @@ struct JarvisTodayScreen: View {
             let entries = JarvisTodayAgenda.upcoming(calendarSection.value ?? [], now: model.now).map(DayRow.entry)
             return entries + (taskLists?.today ?? []).map(DayRow.task)
         case .due:
-            return (taskLists?.due ?? []).map(DayRow.task)
+            return (taskLists?.upcoming ?? []).map(DayRow.task)
         }
     }
 

@@ -1,3 +1,108 @@
+## 10 November 2026 — Separate photo-remove chrome from its target (#1732)
+
+Continue exact #1731 `1bf93adb264cff0d95182b77c04cfb42b03b0d33` on the prepared
+child, preserving its source history and native gates. Use the existing shared
+icon button with an explicit compact treatment for composer photos only:
+10-point glyph, 20-point background, independent 44-point target. This follows
+the owner's correction and Apple's minimum button hit-region guidance
+([HIG Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons)).
+The target extends inward to avoid clipping in the attachment scroll view.
+Keep file/header controls and localized removal labels unchanged.
+
+Use crops of #1712's already-approved generated reference for clearly identified
+realistic photo fixtures; preserve synthetic filenames and test assertions.
+Native comparison and VoiceOver remain required, not inferred from source tests.
+
+Error 115 occurs before demonstrated Watch URL delivery despite matching
+registration. Preserve the real `simctl openurl` call, nonce/PID receipts and
+rendered-destination gate. Add transport-status and LaunchServices evidence;
+do not replace delivery with fixture navigation, add an unproven lifecycle
+handler, or change companion independence without native evidence.
+
+## 10 November 2026 — Preserve the combined source while repairing regressions (#1730)
+
+Use exact #1729 `a39f152` as preserved source history on current main, delivering
+the follow-up through #1731. Source PRs and live Factory task 24 remain untouched;
+the orchestrator retains final merge/TestFlight ownership.
+
+The combined backend expands task titles to 400 characters. Regression checks
+reproduced web decoder rejection at 301 and 400 characters, invalidating unrelated
+tasks too. Match that title bound and the server's Unicode-code-point counting
+without widening heading or identity checks; 401 code points remain rejected.
+
+Use exactly two XCTest workers on isolated simulator clones to reduce serial
+native wall time while retaining every source/main selection, capture, timeout,
+result export and failure gate. Loading run 42874104073 reached the job deadline;
+no test is waived. Local workflow checks establish configuration consistency,
+not native parallel execution or a measured speedup. Draft skips, pending runs
+and screenshot-step success cannot establish release qualification.
+
+Native attachments show the live-tool wrapper shadowing its children's IDs;
+contain accessibility children rather than weaken dock/selection assertions or
+rewrite working follow state. The saved photo fixture was dated a day before
+the long transcript; correct its synthetic chronology, retaining real history
+ordering and Photos behavior. Add explicit child/disclosure and photo dock checks.
+
+Exact-source Watch artifact 13798051865 contains rendered task detail with
+Task/Edit/Call dentist/Due; Priority is below the initial viewport. Match those
+four visible anchors instead of rejecting a valid scene as a startup spinner.
+The exact OCR transcript reproduces the failure before repair; spinner/wrong-scene
+negatives remain. External `simctl openurl` separately returns error 115 despite
+matching built/installed registration; this is unresolved, not a waived gate.
+
+## 10 November 2026 — One integration and qualification target (#1728)
+
+Use #1729 directly against verified main `ddc626ff`, retaining the complete
+#1727 `25f8ed78` and #1722 `9e4c76c0` histories. This supersedes older separate/
+child release directions, not their approved feature requirements. Restore the
+exact approved reference assets from `ada3116a`, `009750f` and `c3d69b5d`; do not
+recreate them or invent missing nutrition/task-list reference images.
+
+Source Watch attempt 2 passed all three unsigned builds, but failed fresh
+task-edit receipt collection and logged a scene-create watchdog violation.
+Earlier task-detail/project receipts also accompanied startup screenshots.
+Initialize DEBUG destinations before rendering and avoid nested startup task
+presentations; retain failed screenshots and independently exercise actual
+external URL delivery. This is a targeted repair pending native confirmation,
+not a claim that the underlying simulator failure or URL error 115 is resolved.
+
+Accept whitespace-canonicalized edit results while retaining identity checks and
+the durable saved receipt, with direct-result/restart regressions preventing
+duplicate writes. Remove the unsupported ten-second Auto parser cap; retain the
+caller's finite lifetime, cancellation listener cleanup, concurrency/rate limits,
+frozen request/defaults and durable idempotency. Provider latency is not measured
+by the local model-port regression.
+
+No live Factory task 24 changes, source-PR mutations or owner-approval gate.
+The orchestrator owns review metadata, merge and release after exact-head
+qualification; the owner's deployment/TestFlight authorization already exists.
+
+Owner artifact feedback on #1729 also requires visible-content checks and task/
+dashboard reference reconciliation. Native screenshot publication now requires
+Apple Vision-recognized target content, independently of fresh receipts, without
+adding a package or external service. Local matcher tests are not OCR validation.
+Adaptive task tabs/counts/chevrons and dashboard timing/markers restore material
+reference details. Keep native page indicators/system clock and omit the forbidden
+ornamental section rail; fresh native evidence must assess these deliberate
+platform/design-rule deviations. Final runtime revision: `6669570b`.
+
+## 10 November 2026 — Deliver existing chat integration directly to main (#1726)
+
+Use main `ddc626ff60a78580059a8376fa0e658703cf3545` plus complete #1719 head
+`1f154ca3973b2ac5d0c1d80f08ee60872ae6fec9`, retaining both histories and both
+implementations rather than restarting either feature. Delivery #1727 targets
+main; older child/stacked target instructions below are historical. Source PRs,
+Factory task 24 and release remain unchanged.
+
+Preserve the automatically combined chat model: main's independent Now/jobs
+refresh and stale-response guards coexist with photo metadata and owner-scoped
+read URLs. Keep shared design, selection-aware layout following and the approved
+#1712 reference. Retain every main loading/Factory native selection and the chat/
+photo suites, including `ChatPhotoLoaderTests`; enforce their coexistence in the
+existing workflow regression. Preserve both sides of documentation conflicts.
+Native acceptance requires a run of the combined final tree, not inherited
+green source checks or skipped draft runs.
+
 ## 10 November 2026 — Integrate loading and Factory details in a child (#1715)
 
 Retain #1704's app-wide static structure, retained refresh and context/account
@@ -45,6 +150,97 @@ coverage warning until HTTP pagination reaches the end, preserving older pages.
 Batch replay in groups of at most 100, yield between groups, and refresh task
 status once at `ready`, not once for every replayed state change. Keep live
 delivery immediate and retain validated short batches on connection failure.
+
+## 10 November 2026 — Integrate chat features on the photo child (#1718)
+
+Keep #1714 as the delivery PR and merge #1713 into its existing child #1719,
+preserving both source histories. Source heads were unchanged at `08b0e9ab` and
+`6d035394`; latest main `741e0378` is already an ancestor. No source PR is merged,
+closed or retargeted.
+
+Remove the unsupported `.environment` write: Apple's
+[Reduce Motion value](https://developer.apple.com/documentation/swiftui/environmentvalues/accessibilityreducemotion)
+is get-only. Keep the system preference and additive fixture override for screen
+motion, and nonanimated layout following. This matches
+[HIG Motion](https://developer.apple.com/design/human-interface-guidelines/motion):
+motion is purposeful and optional, never the only way to expose activity.
+Official indexed excerpts were read; direct Apple retrieval failed DNS.
+
+#1715/#1716 owns the independent loading/Factory delivery. A non-mutating trial
+merge with its `0c6f242c` head combined `JarvisChatModel` automatically; preserve
+its `activityRefreshID`, independent feed/jobs refresh and retained error/data
+state alongside this branch's attachment metadata and photo loader. Only the
+decision log conflicted in that trial. Repeat against both latest heads before
+release; a trial merge is not native execution or final integration acceptance.
+
+## 10 November 2026 — Native chat photo previews (#1712)
+
+Implement approved design 1 with existing shared composer controls, a removable
+compact thumbnail, and right-aligned sent photos below user text. Fit sent images;
+crop only the compact visual thumbnail, never the uploaded source. Keep
+non-image file labels and existing text-required sending.
+
+Reuse owner-scoped attachment authorization and short-lived private Blob URLs,
+not public links, an additional backend endpoint or a persistent image cache.
+Download without forwarding API credentials and reject redirects. Decode bounded,
+orientation-correct thumbnails off the main actor. Preserve per-item filename
+accessibility, shared loading, and explicit unavailable/retry presentation.
+
+The supplied generated reference was inspected. Apple documentation access was
+blocked; indexed official excerpts were reviewed for SwiftUI `scaledToFit`,
+ImageIO thumbnail creation/orientation, URLSession `AsyncBytes.task`, and HIG
+Accessibility (links and actual checks in `docs/agent-context.md`). This is not a
+full-page Apple review or native visual acceptance.
+
+Inspected #1704 at `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9`: its
+`activityRefreshID` and independent Now/jobs refresh fixes are outside these
+edits. #1707/#1713 owns live-follow/layout handling; this change adds attachment
+subviews without modifying transcript follow triggers or composer controls.
+Primary retains integration and release; simulator/device acceptance is pending.
+## 10 November 2026 — Follow chat layout, not only reply events (#1707)
+
+Use the existing safe-area dock plus native scroll geometry/phase observation;
+do not estimate dock height or move progress into Now. Scope the default bottom
+anchor to initial positioning so content-size changes do not override a history
+reader. Coalesce follow requests, cancel superseded work and recheck interaction,
+selection and foreground state before scrolling. Leave `JarvisChatModel` untouched
+to avoid overlap with #1704 and #1712; screen edits cover follow wiring, a dock
+accessibility identifier and shared selection-aware text rendering. Preserve
+literal user text, Markdown replies and short-bubble sizing.
+
+Apple guidance consulted through indexed documentation (direct page retrieval
+was blocked): [onScrollGeometryChange](https://developer.apple.com/documentation/swiftui/view/onscrollgeometrychange(for:of:action:))
+observes transformed geometry, [ScrollPhase](https://developer.apple.com/documentation/swiftui/scrollphase)
+distinguishes tracking/interaction/deceleration from programmatic animation, and
+[defaultScrollAnchor](https://developer.apple.com/documentation/swiftui/view/defaultscrollanchor(_:))
+can otherwise affect content-size repositioning as well as startup.
+[HIG Layout](https://developer.apple.com/design/human-interface-guidelines/layout)
+requires unobscured safe-area content and adaptation to text-size changes.
+Native reproduction/captures are not claimed on the Linux runner.
+## 2026-11-10 — Watch dashboard, personal tasks and Body Fat period (#1701)
+
+Implement the owner's approved dashboard and four task-screen concepts from #1701,
+preserving the existing action page and steps design. Use one Today/Upcoming
+projection: incomplete dated tasks through the owner's local today versus later
+dates; do not rewrite due metadata or pull undated tasks into either list.
+The Body Fat trend uses the preceding three calendar months, selecting one of the
+owner's explicitly permitted options. This fits the existing bounded metric API
+without calling a year-limited result the latest 20 measurements.
+Keep source timestamps/availability visible and do not claim instantaneous
+WatchConnectivity or WidgetKit refresh.
+
+Watch Auto capture has its own independent missing-date and missing-priority
+defaults (submission time +1h and Low), not a new general reminder policy. Save is
+the creation boundary; dictation and mode changes cannot submit. Retain the same
+submission identity/timezone and resolved due instant across manual retries.
+Use native read-only navigation lists for vault metadata and conflict comparison:
+SwiftUI DisclosureGroup is unavailable on watchOS; returning keeps the active draft.
+Native/device validation and exact nutrition/task-list image transfer remain
+separate from concept approval. No merge or release is part of this issue.
+
+## 2026-11-10 — Watch quick logging is one actual lift, not a workout session (#1705)
+
+The owner approved all three quick-lift references and the direct logging flow. Reuse existing SQL lift history and paired-iPhone authentication; the Watch carries no credentials. Dictation edits a draft and explicit Save authorizes capture; Voice uses the existing conversation/tool path without a second approval for complete requests. Missing essential data requires clarification, not guessed values. One set is the default, with actual reps/weight and no dumbbell doubling or estimated maximum. Retry identity must survive uncertain completion and relaunch. Integrate the shortcut into PR #1703's Workouts section, preserving its dashboard, existing complications and task/backend changes. Primary owns integration and release; Factory acceptance task #24 is outside this work.
 
 ## 10 November 2026 — Explicit timed reminders bypass quiet hours (#1706)
 
@@ -12532,3 +12728,26 @@ and preserves existing integer stat consumers while adding explicit unknown
 values to the shared stat component. Primary owns final integration, native
 qualification and deployment. Linux syntax/Core checks do not establish native
 layout, VoiceOver, Dynamic Type, reduced-motion or scroll acceptance.
+## 2026-11-10 — Integrate Watch features in Home child only (#1721)
+
+The owner authorizes combining current #1703 and #1711 on a child targeting the
+existing Home branch; #1703 remains the eventual delivery PR. Preserve both sides
+of navigation, bridge, widgets and backend composition. Reuse the Home Workouts
+block and insert only the lift shortcut. Use one navigation allow-list without
+URL-provided write fields. Keep startup/speech permissions, actual values,
+missing-data handling and existing persistence/idempotency contracts.
+
+The failed native artifacts demonstrate why filenames and fixed sleeps are not
+acceptance: actual lift capture is a launch spinner and some differently named
+screens are byte-identical. Separate simulator startup, fresh destination
+appearance, external URL delivery and visual comparison. Missing source
+registration is not established as the cause of error 115; keep that failure
+visible until a supported native run proves delivery. Device acceptance and
+missing exact #1701 nutrition/task-list reference transfer remain open.
+
+Resolve the task process-death gap with local atomic Watch persistence, matching
+the lift draft pattern rather than adding a backend draft table or expiry.
+Uncertain create requests retain UUID/time/zone/payload; uncertain edits retain
+source/version and require refresh before deliberate reapplication. Do not clear
+an acknowledged task until its terminal receipt is durable. Storage recovery
+fails closed, fixtures never use real drafts, and reconnect/restoration never send.

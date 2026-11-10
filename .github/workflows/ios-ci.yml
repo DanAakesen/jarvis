@@ -193,6 +193,8 @@ jobs:
           ensure_simulator_booted
           xcrun simctl status_bar "$DEVICE_ID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
           xcrun simctl install "$DEVICE_ID" "$APP_PATH"
+          # XCTest isolates fixture state in simulator clones; keep two workers on
+          # this runner and retain the original destination for the capture sweep.
           if xcodebuild test \
             -project apps/ios/Jarvis.xcodeproj \
             -scheme Jarvis \
@@ -201,6 +203,7 @@ jobs:
             -resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult" \
             -only-testing:JarvisUITests/SidebarNavigationTests \
             -only-testing:JarvisUITests/ChatComposerUITests \
+            -only-testing:JarvisUITests/ChatPhotoLoaderTests \
             -only-testing:JarvisUITests/URLSessionTransportTests \
             -only-testing:JarvisUITests/TodayUITests \
             -only-testing:JarvisUITests/ComponentGalleryUITests \
@@ -222,7 +225,9 @@ jobs:
             -only-testing:JarvisUITests/SettingsFieldUITests/testTargetLabelsRemainVisibleDuringFirstLoadAndFailureThenRetry \
             -only-testing:JarvisUITests/SettingsFieldUITests/testFailedRootRefreshRetainsRowsAndOffersRetry \
             -only-testing:JarvisUITests/SettingsFieldUITests/testMemorySearchHidesPreviousContextBeforeNewResultsArrive \
-            -parallel-testing-enabled NO \
+            -parallel-testing-enabled YES \
+            -parallel-testing-worker-count 2 \
+            -maximum-parallel-testing-workers 2 \
             -test-timeouts-enabled YES \
             -default-test-execution-time-allowance 120 \
             -maximum-test-execution-time-allowance 150 \

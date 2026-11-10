@@ -374,6 +374,7 @@ describe('committed SQL manifest', () => {
       '0075_dismiss_success_notifications.sql',
       '0076_proactive_context.sql',
       '0077_proactive_conversation_context.sql',
+      '0078_watch_task_submissions.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

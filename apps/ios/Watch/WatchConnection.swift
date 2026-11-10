@@ -9,10 +9,18 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchConnection()
     @Published private(set) var reachable = false
     @Published private(set) var snapshot: WatchHealthSnapshot?
+    @Published private(set) var dashboard: WatchDashboardSnapshot?
+    var dashboardSnapshot: WatchDashboardSnapshot? { dashboard }
+    @Published private(set) var dashboardError: String?
+    @Published private(set) var briefError: String?
     var onEvent: ((WatchEvent) -> Void)?
     var onDisconnect: (() -> Void)?
     private var pending: [UUID: CheckedContinuation<WatchReply, Error>] = [:]
     private var deadlines: [UUID: Task<Void, Never>] = [:]
+    private var dashboardRefreshing = false
+    private var briefRefreshing = false
+    private var cachedBrief: WatchBriefSummary?
+    private var cacheGeneration = UUID()
     override init() {
         super.init()
         #if DEBUG
@@ -24,9 +32,16 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             sample.gym = 3; sample.gymGoal = 4; sample.runs = 1; sample.runGoal = 2
             sample.dailyKcal = 480; sample.weeklyKcal = 2860; sample.tasksToday = 3
             snapshot = sample
+            dashboard = WatchPreview.dashboard()
             return
         }
         #endif
+        if let data = UserDefaults(suiteName: "group.com.danaakesen.jarvis")?.data(forKey: "watch.dashboard"),
+           data.count <= WatchLimits.payloadBytes,
+           let cached = try? JSONDecoder().decode(WatchDashboardSnapshot.self, from: data), cached.isCurrent(at: Date()) {
+            dashboard = cached
+            cachedBrief = cached.brief
+        }
         guard WCSession.isSupported() else { return }
         WCSession.default.delegate = self; WCSession.default.activate()
     }
@@ -37,8 +52,9 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return try WatchPreview.reply(to: request) }
         #endif
         guard pending[request.id] == nil else { throw WatchFailure.busy }
+        let epoch = cacheGeneration
         let data = try WatchCodec.encode(WatchWire.request(request))
-        return try await withCheckedThrowingContinuation { continuation in
+        let reply: WatchReply = try await withCheckedThrowingContinuation { continuation in
             pending[request.id] = continuation
             deadlines[request.id] = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(25))
@@ -47,16 +63,24 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             }
             WCSession.default.sendMessageData(data, replyHandler: { [weak self] data in
                 Task { @MainActor in
-                    guard let reply = try? JSONDecoder().decode(WatchReply.self, from: data), reply.id == request.id, reply.version == 1 else {
+                    guard data.count < WatchLimits.wireBytes,
+                          let reply = try? JSONDecoder().decode(WatchReply.self, from: data), reply.id == request.id, reply.version == 1,
+                          (reply.data?.count ?? 0) <= WatchLimits.payloadBytes else {
                         self?.complete(request.id, .failure(WatchFailure.failed)); return
                     }
-                    if let failure = reply.failure { self?.complete(request.id, .failure(failure)) }
+                    if let failure = reply.failure {
+                        if failure == .signInRequired { self?.clearCachedData() }
+                        self?.complete(request.id, .failure(failure))
+                    }
+                    else if let taskError = reply.taskError { self?.complete(request.id, .failure(taskError)) }
                     else { self?.complete(request.id, .success(reply)) }
                 }
             }, errorHandler: { [weak self] _ in
                 Task { @MainActor in self?.complete(request.id, .failure(WatchFailure.unavailable)) }
             })
         }
+        guard epoch == cacheGeneration else { throw WatchFailure.signInRequired }
+        return reply
     }
     func load<T: Decodable>(_ action: WatchAction, id: String? = nil, as type: T.Type = T.self) async throws -> T {
         let reply = try await request(.init(action: action, itemID: id))
@@ -67,10 +91,73 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
         #endif
+        async let health: Void = refreshHealth()
+        async let dashboard: Void = refreshDashboard()
+        async let brief: Void = refreshBrief()
+        _ = await (health, dashboard, brief)
+    }
+    private func refreshHealth() async {
+        let epoch = cacheGeneration
         do {
             let value: WatchHealthSnapshot = try await load(.snapshot)
+            guard epoch == cacheGeneration else { return }
             save(value)
-        } catch { /* Screens present their own explicit connection state; no fabricated values. */ }
+        }
+        catch { /* Screens present their own explicit connection state; no fabricated values. */ }
+    }
+    func refreshDashboard() async {
+        guard !dashboardRefreshing else { return }
+        dashboardRefreshing = true
+        defer { dashboardRefreshing = false }
+        let epoch = cacheGeneration
+        do {
+            var value: WatchDashboardSnapshot = try await load(.dashboard)
+            guard epoch == cacheGeneration else { return }
+            if let cachedBrief, cachedBrief.isCurrent(at: Date()) { value.brief = cachedBrief }
+            saveDashboard(value)
+            dashboardError = nil
+        } catch {
+            dashboardError = (error as? WatchFailure)?.message ?? WatchFailure.failed.message
+        }
+    }
+    func refreshBrief() async {
+        guard !briefRefreshing else { return }
+        if let cachedBrief, cachedBrief.isCurrent(at: Date()) { return }
+        briefRefreshing = true
+        defer { briefRefreshing = false }
+        let epoch = cacheGeneration
+        do {
+            let value: WatchBriefSummary = try await load(.brief)
+            guard epoch == cacheGeneration else { return }
+            cachedBrief = value
+            if var current = dashboard {
+                current.brief = value
+                saveDashboard(current)
+            }
+            briefError = nil
+        } catch {
+            briefError = (error as? WatchFailure)?.message ?? WatchFailure.failed.message
+        }
+    }
+    func loadAgenda(offset: Int = 0) async throws -> WatchAgendaPage {
+        try await page(.agenda, options: .init(offset: offset))
+    }
+    func loadTasks(offset: Int = 0) async throws -> WatchTaskPage {
+        try await page(.tasks, options: .init(offset: offset))
+    }
+    func loadTask(id: String) async throws -> VaultTask? {
+        try await load(.tasks, id: id)
+    }
+    func loadNotes(offset: Int = 0) async throws -> WatchNotesPage {
+        try await page(.notes, options: .init(offset: offset))
+    }
+    func loadNote(path: String, offset: Int = 0, revision: String? = nil) async throws -> WatchNoteDetail {
+        try await page(.note, text: path, options: .init(offset: offset, revision: revision))
+    }
+    private func page<T: Decodable>(_ action: WatchAction, text: String? = nil, options: WatchPageRequest) async throws -> T {
+        let reply = try await request(.init(action: action, text: text, data: try JSONEncoder().encode(options)))
+        guard let data = reply.data else { throw WatchFailure.failed }
+        return try JSONDecoder().decode(T.self, from: data)
     }
     private func complete(_ id: UUID, _ result: Result<WatchReply, Error>) {
         deadlines.removeValue(forKey: id)?.cancel()
@@ -80,6 +167,21 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         snapshot = value
         let defaults = UserDefaults(suiteName: "group.com.danaakesen.jarvis")
         defaults?.set(try? JSONEncoder().encode(value), forKey: "watch.health")
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+    private func saveDashboard(_ value: WatchDashboardSnapshot) {
+        guard let data = try? JSONEncoder().encode(value), data.count <= WatchLimits.payloadBytes else { return }
+        dashboard = value
+        UserDefaults(suiteName: "group.com.danaakesen.jarvis")?.set(data, forKey: "watch.dashboard")
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+    private func clearCachedData() {
+        cacheGeneration = UUID()
+        snapshot = nil; dashboard = nil; cachedBrief = nil
+        for id in Array(pending.keys) { complete(id, .failure(WatchFailure.signInRequired)) }
+        let defaults = UserDefaults(suiteName: "group.com.danaakesen.jarvis")
+        defaults?.removeObject(forKey: "watch.health")
+        defaults?.removeObject(forKey: "watch.dashboard")
         WidgetCenter.shared.reloadAllTimelines()
     }
     private func updateReachability() {
@@ -108,12 +210,14 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     }
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         let data = applicationContext["health"] as? Data
+        let dashboardData = applicationContext["dashboard"] as? Data
         Task { @MainActor in
             if let data, let value = try? JSONDecoder().decode(WatchHealthSnapshot.self, from: data) { self.save(value) }
-            else {
-                self.snapshot = nil
-                UserDefaults(suiteName: "group.com.danaakesen.jarvis")?.removeObject(forKey: "watch.health")
-                WidgetCenter.shared.reloadAllTimelines()
+            else if data == nil, dashboardData == nil { self.clearCachedData(); return }
+            if let dashboardData, dashboardData.count <= WatchLimits.payloadBytes,
+               let value = try? JSONDecoder().decode(WatchDashboardSnapshot.self, from: dashboardData) {
+                self.saveDashboard(value)
+                self.cachedBrief = value.brief
             }
         }
     }

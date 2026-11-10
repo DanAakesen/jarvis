@@ -10,6 +10,8 @@ import type { CameraController, ScreenShareController } from './screen-sharing';
 import { JarvisActivityProvider } from './activity-provider';
 import { useJarvisActivity } from './activity-context';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
+import { JarvisActivityContext } from './activity-context';
+import type { JarvisActivityEvent } from '@jarvis/contracts';
 import { ConversationWindowContext } from './conversation-window-state';
 import type { VoiceClientOptions } from './voice-client';
 
@@ -981,6 +983,53 @@ describe('ConversationHistory', () => {
     expect(settled).toBe(false);
     await act(async () => { finish(); });
     expect(settled).toBe(true);
+  });
+
+  it('follows tool-only DOM updates without reply deltas and preserves an older-history reader', async () => {
+    let finish!: () => void;
+    sendChatTurn.mockImplementation(async (_client, _config, _session, _text, onUser) => {
+      onUser(userMessage);
+      await new Promise<void>(resolve => { finish = resolve; });
+      return assistantMessage;
+    });
+    const show = (activity: JarvisActivityEvent | null) => (
+      <JarvisActivityContext.Provider value={{ working: true, workText: null, voiceActivity: null,
+        latestActivity: activity, applyRuntimeActivity: vi.fn(), clearRuntimeActivities: vi.fn() }}>
+        <MemoryRouter><ConversationHistory client={client} getAccessToken={getAccessToken} config={config} /></MemoryRouter>
+      </JarvisActivityContext.Provider>
+    );
+    const view = render(show(null));
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Run synthetic tool checks' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    const transcript = screen.getByLabelText('Conversation history');
+    let height = 600;
+    let top = 300;
+    Object.defineProperty(transcript, 'scrollHeight', { configurable: true, get: () => height });
+    Object.defineProperty(transcript, 'clientHeight', { configurable: true, value: 300 });
+    Object.defineProperty(transcript, 'scrollTop', {
+      configurable: true, get: () => top,
+      set: (value: number) => { top = Math.max(0, Math.min(value, height - 300)); },
+    });
+    fireEvent.scroll(transcript);
+    const activity: JarvisActivityEvent = { type: 'tool-call-started', source: 'chat',
+      activityId: '11111111-1111-4111-8111-111111111111', toolName: 'repo_read' };
+    height = 1000;
+    view.rerender(show(activity));
+    await waitFor(() => expect(transcript.scrollTop).toBe(700));
+    transcript.scrollTop = 100;
+    fireEvent.scroll(transcript);
+    height = 1200;
+    view.rerender(show({ ...activity, type: 'tool-call-finished', outcome: 'error' }));
+    await screen.findByText('Failed');
+    expect(transcript.scrollTop).toBe(100);
+    transcript.scrollTop = 900;
+    fireEvent.scroll(transcript);
+    height = 1500;
+    view.rerender(show({ ...activity, activityId: '22222222-2222-4222-8222-222222222222', toolName: 'vault_search' }));
+    await waitFor(() => expect(transcript.scrollTop).toBe(1200));
+    await act(async () => { finish(); });
   });
 
   it('shows loading and empty states', async () => {

@@ -1,3 +1,452 @@
+## Composer correction handoff — 10 November 2026 (#1732)
+
+Baseline: exact parent #1731 `1bf93adb264cff0d95182b77c04cfb42b03b0d33`.
+The prepared child branch is `copilot/fix-photo-preview-x`; no checkout, merge,
+parent PR mutation, deployment or live Factory task 24 action was performed.
+This section supersedes the older delivery/status statements below.
+Final CI, direct-to-main retargeting, merge, production and TestFlight remain
+orchestrator-owned. This Linux sandbox cannot execute Xcode, `simctl`, native
+VoiceOver or capture final native screens.
+
+### Implemented and locally checked
+
+Implementation revision: **`769179353f5cc48d38065faa3ce083128a4067ef`**.
+Read-only review found no significant issues; all 17 changed files passed secret
+scanning. CodeQL on that committed revision reported no Actions/Python alerts;
+Swift database creation failed, so Swift security analysis remains incomplete.
+The subsequent handoff update changes documentation only.
+
+- `JarvisIconButton.isCompact` separates 20-point photo chrome/10-point X from
+  the inward 44-point target. Normal glyph/chrome, non-image attachments,
+  localized filename labels and disabled/removal behavior are preserved.
+- `ChatComposerUITests` retains all assertions and now taps the invisible
+  bottom-left area of the target, capturing the pending state before removal.
+  Photo tests use the existing `-jarvis.appTheme dark` preference for composer
+  and sent-message captures. Actual native execution/VoiceOver is not claimed.
+- Fixture JPEGs are crops of `docs/ios/design/chat/photo-preview-approved.png`
+  from approval revision `c3d69b5d78c51131e2b71aca24d55cf88a9fcd8d` (#1712),
+  not owner photos. Portrait crop: x80/y1437/w128/h144, cover-resized to 120×180;
+  landscape: x389/y310/w420/h280, resized to 180×120, JPEG quality 90.
+  Existing `Synthetic` labels remain. Existing installed `sharp` generated
+  the crops; no dependency was added. Missing fixture assets fail explicitly.
+  Verified JPEG metadata and SHA-256: portrait
+  `f4dd2b4d08bda020f15285a0daebd368c5d51e23232df4393e32dfa9bb200aa8`;
+  landscape `45a58d21c22c9ed8ae6686e75782a64f272de53e0592e6020b97a62c80f33938`.
+  This metadata check does not establish final native rendered appearance.
+- `swift test --package-path /home/runner/work/jarvis/jarvis/apps/ios/Packages/JarvisCore -j 2`:
+  **702 passed**, including the new compact-chrome source regression.
+- From the repository root,
+  `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`:
+  **350 passed**, including all **81** pipeline checks and **nine** Watch guards.
+  These are local source/tooling checks, not native release qualification.
+
+### Outstanding failures and precise evidence limits
+
+- GitHub logs were inspected for source chat job **130032793210** in run
+  **42874121366**, loading job **130032733014** in **42874104073**, and Watch
+  job **130075316603** in **42886195288**. Earlier failed/cancelled native tests
+  remain failures; no assertions, selections, timeouts or release gates were
+  weakened. The iPhone workflow is unchanged: all 24 selections and exactly
+  two workers remain configured, but final native execution is not proven.
+- Rechecked parent checkpoint `61abd21b233e00a26bdaf1a25c6016c7edd620b7`:
+  Watch **42890925363** is now **cancelled**; iPhone **42890925501** is **skipped**.
+  Neither qualifies this child.
+- Source Watch **42886195288** launched PID **18959** at 19:47:13.501;
+  at 19:47:15.200 `simctl openurl jarvis-watch://tasks` returned
+  `LSApplicationWorkspaceErrorDomain` **115**. Matching installed/built
+  registration does not prove delivery. No URL receipt or deep-link capture
+  establishes routing, and `log-lift` was not exercised after the first failure.
+  Root cause remains unproven. The workflow now exports exact openurl output
+  and failing status plus the current failure screen, any receipts, and broader
+  LaunchServices/Carousel logs. It still exits with the transport failure and
+  requires real delivery plus matching nonce/PID/destination and OCR on success.
+  A companion-installation/registration relationship is a diagnostic hypothesis,
+  not a production independence change or a demonstrated repair.
+- Workspace tests fail at `WorkspacesLoadingUITests.swift:65`, seeking
+  `navigation.workspaces` before data loading. `JarvisDestination.sidebarItems`
+  (`JarvisCore.swift:17–19`) excludes Workspaces. Therefore a longer HTTP delay
+  cannot explain that assertion. No hidden test-only sidebar entry or unapproved
+  navigation change was added.
+- Factory replay deliberately waits 30 seconds before its first chunk so native
+  checks can inspect the oldest HTTP page and use navigation. Its later keepalive
+  is not necessarily on a test's critical path. Reducing either delay without
+  native evidence would not establish a fix for the detail/loading timeouts.
+  Factory, Notes, Health and Settings failures remain open; no timing waiver or
+  blanket historical-baseline classification is made.
+- The #1712 approved generated image was inspected, but there are **no final
+  child native screenshots** yet. Compare dark composer/removal and sent-message
+  geometry, verify VoiceOver and removal on the final revision. Watch #1701/#1705
+  references remain in `docs/ios/design/watch`; final Watch capture/reference and
+  URL interaction review, lower task fields/dashboard sections, Ultra 2/smaller
+  sizes, installed complications and physical dictation/voice remain unverified.
+  The missing exact nutrition/task-list reference images remain a reference gap.
+  Do not equate fixture navigation, parser tests or a successful build with URL
+  delivery, visual acceptance or device verification.
+
+## Native repair handoff — 10 November 2026 (#1730 / #1731)
+
+Current delivery is **#1731 → main**, superseding the delivery targets in the
+historical handoffs below. Exact #1729 `a39f1529470eeffc6786319a156e5207777dfa45`
+is the second parent of merge `02d226f06c258898dd3aa476c7dc4c97a699dec4`;
+the initial merged tree equals that source tree. Main was verified at
+`ddc626ff60a78580059a8376fa0e658703cf3545`. Preserve every source/native selection,
+Watch implementation/reference and loading/Factory guard. No source PR mutation,
+live Factory task 24 action, merge or TestFlight was performed.
+
+Implementation checkpoint: **`61abd21b233e00a26bdaf1a25c6016c7edd620b7`**.
+Final read-only review found no significant issues, secret scanning passed and
+the working tree was clean. CodeQL repeated on that committed implementation:
+Python has no alerts, Actions is unchanged from the prior no-alert analysis,
+Swift database creation still fails and JavaScript is still skipped for size.
+Native iPhone **42890925501** skipped while draft; Watch **42890925363** is
+running at this exact implementation, not passed. The following handoff-only
+documentation update changes no runtime or test selection. Recheck final-head
+workflows after the orchestrator's ready/run step; no native success is claimed.
+
+### Confirmed compatibility repair and available checks
+
+- The integrated Watch/backend allows 400-character task titles; web previously
+  rejected any title longer than 300 and failed the entire task list. New
+  301/400-character regressions failed before the one-line decoder correction.
+  The 401-character title and 301-character heading remain rejected.
+- `npm test --workspace @jarvis/web -- src/tasks/tasks-data.test.ts src/tasks/TasksPanel.test.tsx`:
+  **35 passed** after adding a Unicode 400/401-code-point boundary regression.
+  Scoped ESLint, TypeScript checking and production web build passed. Vite reports
+  the existing large-chunk warning; no chunking or warning threshold was changed.
+- The native workflow keeps all 24 main/source selections and the complete
+  capture sweep, using exactly two XCTest workers on simulator clones. Per-test
+  120/150-second limits, 75-minute job limit, result export and failure gate remain.
+  The workflow agent ran **81 pipeline tests**, all **12 embedded shell syntax
+  checks** and `git diff --check` successfully. Actual speedup/contention remains
+  unverified without macOS.
+- Chat attachment investigation found `chat.tools.live` replacing individual
+  live-tool identifiers, accounting for the missing tool group in the two
+  above-dock checks and selection-growth check. Explicit accessibility containment
+  preserves those children; no follow/selection logic or geometry assertion changed.
+  The combined photo row was timestamped November 6, before November 7 history;
+  it now sorts at the latest synthetic position instead of remaining offscreen.
+  New native coverage requires distinct tool/disclosure identifiers and checks
+  both the saved photo and expired-image Retry above the actual dock.
+- The chat agent ran focused follow/history/tool/grouping/client/design-system
+  Core tests: **56 passed**, then the full existing Core suite: **701 passed**.
+  Edited Swift files parse with and without DEBUG.
+  These checks do not run XCUITest or establish repaired native geometry.
+- Concrete attachment evidence in **13797435729**: hierarchy
+  `88ABCA54-4286-46F3-8016-73330421F87A.txt:128` exposes the `repo list ×3`
+  button as `chat.tools.live`, with no `chat.live.toolGroup.*` identifiers.
+  `57F46C70-0D1A-4D48-8EE9-00CD5A560369.txt` requests the missing group ending
+  `000007`. The two dock predicates therefore fail their existence condition;
+  recordings without hierarchies do not rule out additional geometry problems.
+  Photo hierarchy `CB712B6C-4E20-4FEE-839B-B3A3F73ADE60.txt` ends at history 39,
+  before the incorrectly dated saved photo row.
+- Read-only focused review found no significant issues. Secret scans passed.
+  Local CodeQL on implementation **26d57e4** reported no Actions/Python alerts;
+  Swift database creation failed and JavaScript analysis was skipped for database
+  size. Those languages remain unqualified, not clean analyses.
+- `npm test --workspace @jarvis/backend -- src/vault/watch-task-capture.test.ts src/vault/task-writes.test.ts src/database/watch-task-submission-store.test.ts src/health/lifts/capture.test.ts src/core/conversation.test.ts src/core/attachment-files.test.ts`:
+  **201 passed**. Backend build and lint passed without warnings.
+- The exact-source Watch capture transcript reproduced a readiness false negative:
+  Task/Edit/Call dentist/Due are visible but Priority is below the first viewport.
+  The matcher now requires those four visible anchors; startup and wrong-scene
+  rejection remain. **Eight existing Watch-build/capture tests passed**.
+
+### Native evidence and execution constraints
+
+- Source chat **42874121366/job 130032793210**, head `1f154ca`, executed 92 UI
+  tests with **18 failures**. Capture/upload success does not override its failed
+  UI gate. Artifacts: result **13795673724**, captures **13796402122**, native
+  attachments **13797435729**.
+- Main **42877998951/job 130046372428**, head `ddc626ff`, reproduces all ten
+  ComponentGallery failures at the same assertions. This is a baseline finding,
+  not a resolution or waiver of those failures.
+- Loading/Factory **42874104073/job 130032733014**, head `f43a97a`, was cancelled
+  at the job limit during native testing. It uploaded result **13797261356**;
+  screenshot and separate attachment uploads failed because captures had not
+  completed. Its diagnostics must not be reported as a native pass.
+- Source Watch **42875315079 attempt 2**, artifact **13793598118**, was downloaded.
+  Task-detail was independently viewed and is a startup spinner despite its
+  receipt; Tasks was independently viewed and wraps Upcoming. Simulator logs
+  record a ten-second `scene-create` watchdog provision violation for task-edit
+  PID 13783 at 18:55:48.998; the simulator explicitly disabled termination, so
+  this log alone does not establish a process crash. Existing #1729 repairs and
+  fail-closed rendered-content gates are retained.
+- Exact source-head Watch **42886195288/job 130075316603** passed simulator/device
+  and paired-phone builds. Artifact **13798051865** was downloaded; SHA-256
+  `39b0716e4541a4a66b76ca12103a6d3c36be49dd21f42e0ed95f16c7c85c5bdd`
+  matches GitHub's digest. Nine destinations passed OCR, including project and
+  Tasks with unwrapped Upcoming. Task-detail was correctly rendered but rejected
+  by its below-the-fold Priority requirement; subsequent captures did not run.
+  The independent URL step failed at `jarvis-watch://tasks` with
+  `LSApplicationWorkspaceErrorDomain` **115** at 19:47:15, before route evidence.
+  Log lift URL was consequently not exercised. Built/installed registrations
+  match; no demonstrated URL repair exists. Exact-head iPhone **42886195890**
+  remained pending. Neither run establishes final repair-head acceptance.
+- Repair branch simulator **42888029362**, merge `02d226f`, skipped because #1731
+  is draft. This Linux runner has Swift but no Xcode/simulators; available workflow
+  API access returned HTTP 403. Native reruns require the orchestrator's existing
+  ready/run path, not removal of draft guards.
+- Implementation **26d57e4** also has skipped CI **42889074791** and iPhone
+  **42889074475** while draft. PR-title gate **42889078328** failed because the
+  generated WIP title lacks the required prefix. The orchestrator's ready/run
+  handoff should use **`fix-main: Repair native chat and qualify combined iPhone and Watch release`**;
+  do not change validation rules to accept the generated title.
+
+### Other native failures: verified baseline versus open diagnosis
+
+Source chat run checked out synthetic merge **526b605** (`1f154ca` into
+`89a8699`), not just its PR head. Its 92 tests took 2430.350 seconds; all 18
+failures remain failures regardless of later screenshot success. The following
+`ComponentGalleryUITests` failures match current-main run **42877998951**:
+
+| Test | Matching failure |
+| --- | --- |
+| `testHealthPeriodsDarkEnglish` | line 256: trailing edge 413.667 vs 367 ±2 |
+| `testHealthPeriodsLightDanish` | line 256: trailing edge 414.333 vs 367 ±2 |
+| `testHistoricalProactiveNotificationOpensChatWithoutSending` | line 441: missing empty-composer `chat.send` |
+| `testProactiveNotificationOpensExistingChatWithoutSending` | line 441: missing empty-composer `chat.send` |
+| `testNewFolderPersistsAnEmptyChildOfTheSelectedParent` | line 679: missing folder-title field |
+| `testNewNoteCreatesFolderInsideTheOpenFolder` | line 862: `notes.folder.Work` unreachable |
+| `testNotesRootFoldersCountsBackAndRecentlyOpened` | line 626: missing folder-count snapshot |
+| `testNotificationsHasHeroAndKeepsApprovalActionsInBothLanguages` | line 418: missing synthetic approval action |
+| `testSharedPagesAtAccessibilityTextSize` | line 377: Body Mass chart/detail unreachable above dock |
+| `testTransientProactiveNotificationFailureShowsChatRecovery` | line 452: recovery text absent |
+
+Two notification hierarchies actually reach `chat.input` and Voice `chat.mode`;
+the tests expect a disabled Send that the empty composer intentionally replaces
+with Voice. The missing Send is not proof of failed navigation. Notes tests
+expect folder rows on the Recent library instead of entering Browse folders;
+period alignment may involve horizontal overflow. Those are scoped diagnosis
+findings, not authorization to rewrite baseline tests here. The Body Mass failure
+image `CF8B4F0B-A7D1-44AB-B9D7-31455C7AD3F8.png` was inspected: large-text chart
+content overlaps the floating dock. That baseline UI defect remains unresolved.
+
+All four `TodayUITests.testBriefVisibleLineLimit{Accessibility,Normal}{Danish,English}`
+fail at line 76: 325.667 > 321.3 at accessibility size, 199.333 > 189 normally.
+Historical main **42802233122/job 129809558284**, actual head
+`f005486069afb0ef2a741a08bbb0d0c587b00ded`, reproduces those four exact assertions
+and measurements. Git comparisons verify identical Today screen/model/fixture/
+tests, activity card, tokens, controls and app/root entrypoints through current
+main `ddc626ff`; the intervening shared-header changes do not affect greeting
+geometry. Later Watch changes affect task lists, not the fixed brief fixture or
+greeting typography. This is a verified code-equivalent historical baseline,
+not a final-head pass. The six-line height calculation may omit the five explicit
+four-point interline gaps; that hypothesis does not justify widening assertions.
+
+Loading source **42874104073** tested synthetic merge **3c688f9** (`f43a97a` into
+`e9e3f6d`). Logs show four Factory detail cases reaching 120-second timeouts:
+`testDanishNotificationLongRequestAndHistoryAtAccessibilityXXXL`,
+`testEnglishBoardLongRequestAndHistory`,
+`testEnglishLiveReplayReachesActualLastEventWithoutDuplicatesAndKeepsNavigationResponsive`,
+and `testEnglishOfflineReplayShowsPartialOldestHistoryWithoutClaimingLatest`.
+Each restart cost roughly 35–54 seconds. Other observed assertions:
+FactoryLoading 13/29/44; FactoryTaskDetail 327; HealthHero 115; Insights 92/129;
+NotesRedesign 39; SettingsField 78/114/130/132/133. Those results are not all
+baseline-classified. The legacy initial-loading test also expects hidden controls,
+contradicting the newer static-controls-loading requirement; retain it pending
+separate diagnosis rather than silently dropping coverage.
+Result artifact **13797261356** contains unfinished xcresult Data/Staging records,
+not a finalized summary: 93 started, 64 passed, 23 failed, five explicit timeouts
+and one unfinished Today case were recovered. These are partial records, not
+final XCTest totals. Child `xcodebuild` continued during artifact upload after
+the job deadline; cancellation cannot be interpreted as successful completion.
+
+Remaining release gates: focused native chat reruns and captures; complete final
+native test outcomes and baseline classification; fresh Watch destinations and
+reference comparison (including lower dashboard sections); actual external URL
+delivery, installed complications and physical-device acceptance. Do not equate
+receipts, OCR matcher tests, unsigned builds or source-head checks with these gates.
+
+## Combined direct-main handoff — 10 November 2026 (#1728 / #1729)
+
+Delivery is **#1729 → main**. This supersedes older child/separate delivery
+instructions below. Verified main `ddc626ff60a78580059a8376fa0e658703cf3545`,
+chat #1727 `25f8ed781f31c6d0ef534b21d8d48f62f5e08bdd` and Watch #1722
+`9e4c76c0e211e943e5581b6e12e9a75fc4c08ed1` are ancestors of integration
+`39764627fe474761acd842e3e48b4015d1471c3e`. Runtime follow-up:
+`c09b462db5dc4bdb739144b2074ce89e03523eef`. All six documentation conflicts
+retain both implementations' requirements/evidence; all main native selections,
+chat/photo tests, Watch simulator/device/paired-phone builds, signing/upload
+requirements and account/security guards remain. Source PRs and Factory task 24
+were not changed. Do not separately merge #1727/#1722.
+
+Final runtime is **`6669570bebb8510c9cb3a79df9c0cceadfa6abf8`**, adding visible
+destination verification, direct Factory preview entry and approved task/dashboard
+layout repairs. The later reference/handoff-only commit does not change runtime
+code, but still requires final-head checks.
+
+Local checks on the combined runtime tree:
+- `swift test --package-path apps/ios/Packages/JarvisCore -j 2`: **701 passed**.
+  The new canonical-title regression failed with `invalidRequest` before repair;
+  direct success and restart/refresh now preserve the receipt and reject resends.
+- `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`:
+  **349 passed**, including eight Watch build/capture guards and all 81 pipeline tests.
+- `npm test --workspace @jarvis/backend -- src/vault/watch-task-capture.test.ts`:
+  **48 passed**; cancellation, listener cleanup and caller lifetime are covered.
+  Backend build/lint pass. Read-only validation also passed workspace build/lint,
+  128 ConversationHistory tests and targeted approval/tool/migration/store/vault
+  tests. Its broad Health run had two timing failures in unchanged
+  `src/health/health-upload/backend.test.ts`. The isolated file subsequently passed
+  all 16 tests and the Health suite passed all 1,190 on follow-up; the initial
+  failures remain recorded, not silently counted as first-pass success.
+- Real SQL integration is not locally qualified: it requires the existing
+  isolated-loopback test database guard. No production database was exercised.
+- DEBUG/release Swift syntax parsing passed for edited Watch entrypoints;
+  Linux cannot typecheck Apple frameworks or run native scenes.
+- Screenshot publication now additionally requires destination-specific visible
+  text through Apple's Vision framework. Local matcher regressions reject startup
+  scenes, wrong targets, wrapped Upcoming and unknown captures; they do not
+  execute macOS OCR. Successful PNGs retain recognized-text and SHA-256 evidence.
+- Secret scans found no secrets. CodeQL reported no Actions alerts; initial
+  Python analysis also had none. Swift database creation failed; JavaScript
+  analysis was skipped for size and the later scan timed out before all languages.
+  The final committed-runtime CodeQL request also timed out without a result.
+  These are coverage limitations, not full security qualification. Hosted CodeQL
+  run 42883543019 passed at `c09b462d`, not the later final head. Read-only
+  integration and follow-up reviews found no significant issues.
+
+Native/source evidence:
+- Watch source run **42875315079 attempt 2**, exact `9e4c76c0`: simulator Watch,
+  physical-architecture Release and paired iPhone simulator builds passed.
+  Installed/built URL plist checks passed. Capture failed at task-edit; URL
+  verification skipped. Artifact **13793598118** was downloaded and inspected.
+  See `docs/ios/design/watch/implementation.md` for concrete logs/images.
+- Chat source iPhone run **42880948274**, exact `25f8ed78`, was cancelled,
+  not passed; its job log download returned HTTP 404. No chat native acceptance.
+- At runtime follow-up `c09b462d`, Watch **42883542851** is queued; CI
+  **42883543109** and iPhone **42883543263** skipped because #1729 is draft.
+  These are historical draft results: the orchestrator subsequently made #1729
+  ready and corrected its title; title run **42885709984** passed. CI
+  **42885710209** is running and iPhone **42885710449** queued, also at `c09b462d`.
+  Recheck final-head runs; skipped/source-head results do not qualify the combined
+  tree. Do not weaken these guards to force execution.
+- Earlier ready CI **42885290185** had a PC bridge failure: **196/197 passed**,
+  `Browser_executor_falls_back_to_cdp_when_extension_is_disconnected` threw
+  `ObjectDisposedException` in `FakeCdpTarget.DisposeAsync` line 243. Those files
+  are unchanged by this integration; no test was weakened or unrelated fix made.
+  Its SQL job passed, but that is not final-head SQL qualification.
+
+Remaining: final-head CI/native results, fresh intended images versus restored
+approved references, actual external URL delivery, installed-complication taps,
+English/Danish dictation/voice, accessibility/reduced-motion and physical Ultra 2
+acceptance. Exact nutrition/task-list complication images remain unavailable.
+Merge/release belong to the orchestrator. Deployment/TestFlight is authorized
+after qualification; no additional owner approval is required.
+
+## Direct-main chat/loading handoff — 10 November 2026 (#1726)
+
+Delivery PR #1727 targets **main**, not a source branch. This supersedes the
+stacked/child delivery directions in the historical #1715/#1718 handoffs below.
+Do not merge, close or retarget source PRs, deploy, or touch live Factory task 24.
+The orchestrator owns final check acceptance, merge and release.
+
+Verified remote revisions before integration:
+
+| Source | SHA |
+| --- | --- |
+| current main | `ddc626ff60a78580059a8376fa0e658703cf3545` |
+| #1719 complete chat integration | `1f154ca3973b2ac5d0c1d80f08ee60872ae6fec9` |
+| common ancestor | `741e03782c8d887c5da6f67263b10d43f0c65af1` |
+| true merge commit | `e6329ee063f80452ee8ebabb2ffea7f4820dee8e` |
+
+Actual conflicts were only `PLAN.md`, this file and `docs/decisions.md`; both
+sides' entries were retained. `JarvisChatModel` automatically retains main's
+`activityRefreshID`, independent feed/jobs refresh and retained error/data state,
+plus #1719's attachment metadata and owner-authorized photo loading. Factory
+task/history/loading sources are unchanged from main. All main native test
+selections remain; `ChatPhotoLoaderTests` is added. No assertions, timeout limits,
+draft gates or failure reporting were relaxed.
+
+### CI evidence inspected during integration
+
+- #1719 head `1f154ca`: [CI 42874120945](https://github.com/DanAakesen/jarvis/actions/runs/42874120945)
+  completed successfully. Earlier [CI 42873020916](https://github.com/DanAakesen/jarvis/actions/runs/42873020916)
+  failed in `CI result` / `pipeline_evidence.py` despite successful component
+  jobs; the inspected log does not establish a more specific cause.
+- At inspection, [source Simulator 42874121366](https://github.com/DanAakesen/jarvis/actions/runs/42874121366)
+  (job `130032793210`) and [main Simulator 42877998951](https://github.com/DanAakesen/jarvis/actions/runs/42877998951)
+  (job `130046372428`, head `ddc626f`) were still running UI tests/captures.
+  Both native build steps succeeded. Unfinished runs are not passes, and neither
+  run tests this combined delivery.
+- Older main [Simulator 42802233122](https://github.com/DanAakesen/jarvis/actions/runs/42802233122)
+  failed; its logs were retrieved. Keep the historical Today/Factory findings
+  below separate from exact-final-head qualification.
+
+### Combined-tree qualification
+
+The Linux runner has Swift 6.2.1 but no Xcode, iPhone Simulator, camera/library
+hardware or VoiceOver. Syntax parsing and Core tests cannot establish native
+compilation, rendered geometry, motion, accessibility or device acceptance.
+Local checks on the combined tree (merge `e6329ee` plus the selection regression
+and documentation follow-up; no subsequent production-code change):
+
+- `swift test -j 2 --filter 'ChatFollowStateTests|JarvisChatClientTests|JarvisDesignSystemGuardTests'`
+  in the Core package: **46 passed**.
+- `swift build -j 2` and `swift test -j 2` in the Core package:
+  **build passed, 611 tests passed**, including loading/cache/Factory coverage.
+- `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -p test_pipeline.py -k ios`:
+  **28 passed**; full script discovery without the final two filters:
+  **341 passed**.
+- `npm test --workspace @jarvis/backend -- src/core/conversation.test.ts src/core/attachment-files.test.ts src/factory/tasks.test.ts src/factory/heartbeat.test.ts src/factory/task-lifecycle.test.ts src/factory/dispatcher.test.ts`:
+  **322 passed**, including owner-scoped attachment authorization/fallback and
+  Factory behavior.
+- `npm test --workspace @jarvis/web -- src/ConversationHistory.test.tsx src/RuntimeTestConversation.test.tsx`:
+  **138 passed**. Existing jsdom canvas warnings remain; no web runtime edits.
+- In the web workspace, `npm exec -- eslint src/ConversationHistory.test.tsx --max-warnings 0`
+  and `npm exec -- tsc --noEmit`: **passed**.
+- Changed Swift files passed `swiftc -frontend -parse`; `git diff --check`
+  passed. A set comparison confirmed **all 23 main native selections** and all
+  six source selections survive in the combined workflow's 24 selections.
+  Factory detail/history sources and `ios-simulator.yml` are unchanged from main.
+- Independent read-only integration review found no significant issues.
+  Changed-file secret scans passed before both commits. CodeQL on implementation
+  revision `ae5c2e000d029bdae517cc1edfc78659f56744a2` found no Actions/Python
+  alerts; Swift database creation failed and JavaScript analysis was skipped for
+  database size. These last two languages remain unverified, not clean analyses.
+
+On merge `e6329ee`, [CI 42879297219](https://github.com/DanAakesen/jarvis/actions/runs/42879297219)
+and [Simulator 42879297425](https://github.com/DanAakesen/jarvis/actions/runs/42879297425)
+were **skipped** because #1727 is draft, not passed. The referenced synthetic
+merge was `899e1925739e52923387971321260d34b64f375c`; skipped jobs establish no
+checkout/build/test evidence. Title job `130050947820` failed because the
+generated WIP title has no task ID or accepted prefix. Required handoff title:
+**fix-main: Integrate approved chat with current iOS loading**. The orchestrator
+must apply that title and ensure fresh aggregate **and separate Simulator** runs
+on the final head after readiness. The current automatic ready workflow explicitly
+dispatches aggregate CI only; do not assume it also started Simulator.
+
+The approved generated #1712 image was inspected from the design branch (blob
+`f474aa4e52c73f7e691fc827731a39c4e6088f10`); the pinned reference in `DESIGN.md`
+is preserved. This is reference inspection, not a combined-tree screenshot or
+before/after visual acceptance.
+
+Final implementation revision is `ae5c2e000d029bdae517cc1edfc78659f56744a2`;
+subsequent edits only record this handoff. Its tree
+`8e750ea07038919bd7887370de1e30ab15d1edbc` exactly matches GitHub's synthetic
+merge `0617a81ad2515da1af5ab6c1179c3b229c0a0c65` (`git diff --exit-code`).
+The iOS subtree is `a431a1a2727a7d05924ab4549ca87c29ddc1a5e2` and
+`ios-ci.yml` blob is `d450a10456fed7ce2839f449bc894614dd952931`.
+At **18:56 UTC**, implementation-head [CI 42879973149](https://github.com/DanAakesen/jarvis/actions/runs/42879973149)
+and [Simulator 42879973413](https://github.com/DanAakesen/jarvis/actions/runs/42879973413)
+again skipped the draft; [title run 42879973173](https://github.com/DanAakesen/jarvis/actions/runs/42879973173)
+failed. Watch build `42879972961` was pending. Source/main Simulator runs above
+were still in progress when rechecked. No combined-tree native result bundle,
+screenshot artifact, physical-device acceptance or successful native security
+analysis is available. The final-head CI/Simulator execution requirement remains
+open; tree equality alone is not execution evidence.
+
+Require both aggregate CI and the separate `ios-simulator.yml` on the published
+final #1727 head. Draft-gated/skipped jobs are not qualification: make the delivery
+ready for review and verify job execution without weakening gates. Record run
+URLs, head SHA, checkout SHA/tree and artifact IDs; if checkout is a synthetic
+merge, compare its tree with the intended final tree. Repeat after base/source
+changes. The workflow retains every loading/Factory selection and both native
+chat/photo suites; use its full selection, not only the narrower diagnostic
+commands in the historical handoffs. Inspect retained captures against the
+approved #1712 reference and exercise combined photo/follow fixtures, selection,
+history opt-out/resume, tool-only growth, failures/final reply, keyboard/multiline
+dock geometry, Now visibility, Dynamic Type and reduced motion. Verify real
+camera/library, upload retry, account isolation, dictation and voice separately.
+
 ## iOS loading / Factory integration handoff — 10 November 2026 (#1715)
 
 Requested child PR: **fix-main: Integrate iOS loading and Factory task details**,
@@ -165,6 +614,186 @@ supports retained screenshot evidence;
 [HIG Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
 guides Dynamic Type and accessible interactions. Documentation/existing native
 artifacts do not replace testing this final implementation.
+
+## Integrated native chat qualification — 10 November 2026 (#1718)
+
+Child #1719 targets `copilot/ios-chat-show-photo-previews`; #1714 remains the
+delivery PR. Requested handoff title: `fix-main: Integrate iOS chat scrolling and
+photo previews` (the automatically created child still has its WIP title).
+#1713 `6d035394` and #1714 `08b0e9ab` were verified before merging. Main
+`741e0378` is already included. No existing delivery PR was changed.
+
+Watch run `42862153219`, job `129990877229`, failed paired-iPhone compilation
+because `accessibilityReduceMotion` is read-only. Removed the invalid write,
+retaining the system read and additive fixture flag. Layout following already
+disables animation. The new pipeline guard checks this contract; parsing alone
+cannot prove iOS compilation.
+
+Local checks: `swift test -j 2` in the Core package passed 579 tests;
+`npm test --workspace @jarvis/backend -- src/core/conversation.test.ts
+src/core/attachment-files.test.ts` passed 80; `npm test --workspace @jarvis/web --
+src/ConversationHistory.test.tsx src/RuntimeTestConversation.test.tsx` passed 138.
+`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests
+-p test_pipeline.py -k ios` passed 26. Changed native Swift syntax parsing passed.
+The full existing workflow/script suite (`PYTHONPATH=.github/scripts python3 -m
+unittest discover -s .github/scripts/tests -v`) passed 339 tests.
+
+Secret scanning passed. CodeQL reported no Python alerts, but Swift database
+creation failed and JavaScript analysis was skipped for database size; neither
+is a successful analysis. Independent diff review found no significant issues.
+On implementation head `aaf71314`, CI `42872380073` and Simulator `42872380299`
+were skipped by the draft gate. Title job `130026700159` failed on the automatic
+WIP title; the orchestrator must apply the `fix-main:` title above and mark ready
+for fresh qualification. Watch run `42872380143` was still running when checked.
+No native pass is claimed from those states.
+
+### Exact-head native follow/photo capture plan
+
+Use the existing macOS CI setup (Xcode 26.6, pinned XcodeGen), not a web mock.
+On the macOS CI checkout, run the following against the final child head:
+
+```bash
+REPO=/Users/runner/work/jarvis/jarvis
+cd "$REPO/apps/ios"
+xcodegen generate
+DEVICE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid // empty')"
+test -n "$DEVICE_ID"
+xcrun simctl bootstatus "$DEVICE_ID" -b
+xcodebuild test -project "$REPO/apps/ios/Jarvis.xcodeproj" -scheme Jarvis \
+  -destination "id=$DEVICE_ID" -derivedDataPath /tmp/jarvis-chat-derived \
+  -resultBundlePath /tmp/jarvis-chat-integration.xcresult \
+  -only-testing:JarvisUITests/ChatComposerUITests \
+  -only-testing:JarvisUITests/ChatPhotoLoaderTests \
+  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO
+xcrun xcresulttool export attachments --path /tmp/jarvis-chat-integration.xcresult \
+  --output-path /tmp/jarvis-chat-integration-captures
+```
+
+Use fresh result/derived paths for each revision. Both test classes are already
+selected by the Simulator workflow. The new combined test launches the real chat
+with `--screenshot-chat-fixture --ui-test-chat-feedback --ui-test-chat-follow
+--ui-test-chat-photos --ui-test-chat-follow-now
+--ui-test-chat-follow-reduced-motion`. Existing tests cover Now absent/present,
+history opt-out/resume, selection, grouped tools and accessibility text size.
+Darwin notifications documented below advance the held stream. XCTest retains
+the combined history/pending-photo, keyboard/multiline and final-state captures.
+
+Inspect those native captures against the approved reference linked in
+`DESIGN.md`: compact removable composer thumbnails, right-aligned sent photos
+below amber text, retained file labels and transparent controls. Observe motion,
+keyboard dismissal and actual Now appearance/disappearance interactively.
+Exercise portrait/landscape, loading/unavailable/retry, navigation/reload,
+selection/link taps, Dynamic Type and VoiceOver, real camera/library selection,
+upload interruption, owner sign-out/account switch, dictation and voice.
+The synthetic fixture bypasses real image authorization/download and hardware;
+backend/Core and native loader tests cover separate boundaries, not live access.
+
+The reference was inspected, but Linux has no Xcode/simulator: no native build,
+captures, accessibility/device acceptance or visual comparison is claimed.
+Apple direct retrieval failed DNS; indexed official excerpts were reviewed for
+[read-only Reduce Motion](https://developer.apple.com/documentation/swiftui/environmentvalues/accessibilityreducemotion),
+[scroll geometry](https://developer.apple.com/documentation/swiftui/view/onscrollgeometrychange(for:of:action:)),
+and [HIG Motion](https://developer.apple.com/design/human-interface-guidelines/motion).
+
+Coordinate final integration with #1715 child #1716: a `git merge-tree
+--write-tree` trial at its `0c6f242c` head automatically combined the chat model
+(only decision-log text conflicted). Do not replace the photo model wholesale
+with loading's version or vice versa. Preserve loading request IDs, independent
+Now/jobs results and errors, attachment metadata and account-scoped preview
+lifetime. This branch does not independently import #1715's separate delivery.
+Refresh both heads and rerun native/paired-Watch qualification after integration.
+
+## iOS chat photo preview qualification — 10 November 2026 (#1712)
+
+Local checks: `swift test` in `apps/ios/Packages/JarvisCore` passed 573 tests;
+`npm test --workspace @jarvis/backend -- src/core/conversation.test.ts
+src/core/attachment-files.test.ts` passed 80 tests. `swiftc -frontend -parse`
+passed for the changed native Swift sources. Existing workflow/script tests
+(`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v`)
+passed 338 tests. Syntax parsing is not an iOS build.
+
+Secret scanning passed. CodeQL reported no Actions alerts; Swift database
+creation failed in this environment, so no successful Swift CodeQL analysis is
+claimed. GitHub runs on implementation commit `a2feaf94` skipped aggregate CI and
+Simulator while the PR was draft. The PR-title log requires a task ID or
+`fix-main:` prefix; primary should use `fix-main: Show iOS chat photo previews`
+and run fresh qualification after marking ready. Do not treat skipped runs as passes.
+
+`ChatComposerUITests` adds synthetic photo draft/removal, multiple sent photos,
+mixed file labels, photo-only history, unavailable/retry, reload, geometry and
+retained screenshot cases. `ChatPhotoLoaderTests` covers credential-free Blob
+requests, no-cache policy, failure/size/MIME rejection, bounded decoding and
+EXIF orientation. Both classes are selected by `.github/workflows/ios-ci.yml`;
+the loader source is also included in the native test target.
+Launch `--screenshot-chat-fixture --ui-test-chat-photos` on a Debug simulator
+for explicitly labelled synthetic portrait/landscape inputs. The fixture
+bypasses live downloads; it is not evidence of production access or camera/
+library hardware. Loader and shared authorization tests exercise those boundaries
+separately. No native build, simulator screenshots, before/after comparison,
+VoiceOver, Dynamic Type or physical-device checks ran on this Linux runner.
+Run and inspect these on macOS, then verify real camera/library selection,
+upload interruption/retry, navigation, owner isolation, dictation and voice.
+
+Apple direct retrieval failed (DNS/network restriction). Reviewed indexed
+official excerpts, not full pages:
+
+- [SwiftUI scaledToFit](https://developer.apple.com/documentation/swiftui/view/scaledtofit()): preserve aspect ratio.
+- [ImageIO thumbnails](https://developer.apple.com/documentation/imageio/cgimagesourcecreatethumbnailatindex(_:_:_:)):
+  derive a thumbnail without altering the source.
+- [Thumbnail orientation](https://developer.apple.com/documentation/imageio/kcgimagesourcecreatethumbnailwithtransform):
+  apply source orientation/aspect ratio; bound maximum pixel size.
+- [URLSession.AsyncBytes](https://developer.apple.com/documentation/foundation/urlsession/asyncbytes):
+  access the transfer task to cancel rejected/abandoned reads.
+- [HIG Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility):
+  perceivable, adaptable interfaces and assistive-technology auditing.
+
+Integration: preserve #1704's independent Now/jobs refresh and stale-response
+guards and #1713/#1707's live-follow, scrolling and viewport changes. These edits
+do not alter those policies. Primary owns integration, assignment and release.
+## Chat follow-latest qualification (#1707; 10 November 2026)
+
+Local checks passed: `swift test -j 2` in `apps/ios/Packages/JarvisCore` (574 tests);
+`npm test -- src/ConversationHistory.test.tsx src/RuntimeTestConversation.test.tsx`
+in `apps/web` (138 tests); scoped ESLint, TypeScript and changed Swift syntax
+parsing. All 25 existing iOS pipeline source-contract checks also pass with
+`PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -p test_pipeline.py -k ios`.
+Linux cannot compile SwiftUI/UIKit or run the iPhone simulator. Secret scanning
+passed. CodeQL could not create the Swift database and skipped JavaScript because
+its database was too large; this is not a successful security analysis.
+
+`ChatComposerUITests` (already selected by the simulator workflow) adds held-open
+tool-only SSE updates, grouped disclosures/failures, dock-edge geometry, wrapped
+draft changes, history reading/resume and native selection checks. Launch with
+`--screenshot-chat-fixture --ui-test-chat-feedback --ui-test-chat-follow`; add
+`--ui-test-chat-follow-now` for a visible synthetic Now item and
+`--ui-test-chat-follow-reduced-motion` to force the screen's explicit motion
+policy in the simulator-only feedback fixture without writing the system
+environment value. Darwin notifications
+`com.jarvis.uitests.{tools,fail-tool,progress,stream,finish}-chat-feedback` advance it
+without live services or timers. Captures are retained as XCTest attachments;
+none have been produced or inspected here. Actual Now transitions, simulator
+keyboard behavior, accessibility overrides, reduced motion, link taps and
+physical-device verification remain open.
+
+Web check: mounted the real `ConversationHistory` component in Chromium with
+synthetic history, an explicitly held SSE response and local activity events,
+not the signed-in application shell. At 390×844, twelve tool-only additions kept
+tail gap 0; a reader at scrollTop 8748 stayed at 8748 after a failure update and
+following resumed on returning to bottom. At 390×520 the latest tool bottom was
+404.8px, above composer top 467px; no horizontal overflow. Inspected capture:
+`/tmp/playwright-logs/jarvis-web-tool-only-follow.png` (ephemeral, web only, no Now
+shell). Existing web observers passed the new regression; no web runtime edit.
+The web test conversation has no live tool renderer; its existing tests pass.
+
+Integration: #1704 head `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9` was inspected;
+its model refresh changes are not duplicated or overwritten. Keep concurrent
+#1712/#1714 photo/composer changes; integration and release stay with the
+orchestrator. No work was started on #1706.
+## Watch quick lift capture — 10 November 2026 (#1705)
+
+Quick capture uses the paired-phone `captureLift` action and owner-only `/health/lifts/capture`; no Watch credentials or offline sends. Input is bounded to 2,000 UTF-16 units with unsupported controls rejected before submission. Never rotate the persisted operation key after an uncertain result. Missing details permit editing the retained text under that key; only a confirmed terminal result permits explicitly starting another lift. Preserve both sides of PR #1703's shared Watch root/contract/bridge/widget changes and use its existing Workouts section rather than duplicate the dashboard. The implementation handoff in `docs/ios/design/watch/implementation.md` lists exact integration anchors, Apple sources, tests and remaining native/device checks. Primary owns integration/release; do not interact with active Factory acceptance task #24.
+
+The existing Watch CI capture step includes synthetic quick-lift states and a deep-link launch. Local Linux Swift tests/parsing do not compile SwiftUI against watchOS, install a complication or exercise speech. Treat native build/capture results and installed Ultra 2 acceptance separately.
 
 ## Explicit timed reminders — 10 November 2026 (#1706)
 
@@ -8197,6 +8826,16 @@ results separate and retain actual native captures before claiming UI acceptance
 
 Source: apps/ios/Watch, apps/ios/WatchWidgets and iPhone JarvisWatchBridge.swift. Build: apps/ios/project.yml. Tests: `swift test --package-path apps/ios/Packages/JarvisCore --filter WatchContractTests` or full swift test. Native check after xcodegen generate in apps/ios: `xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build`. PR-only watch-build.yml builds Watch and phone unsigned and captures isolated DEBUG --watch-fixture views on an available Ultra simulator. Fixtures are not real health or successful connectivity. Primary owns signing, installation, integration and deployment. References, decisions and unverified checks: docs/ios/design/watch/.
 
+For #1701, preserve the integrated steps/startup and Factory/lift paths while
+adding dashboard and personal-task flows. The owner approved the dashboard and
+four personal-task screen concepts; PR #1700's older status is not authoritative.
+Its exact nutrition/task-list complication reference images are still missing,
+so do not claim final visual sign-off. Body Fat uses the last 20 measurements.
+Watch task Save must reuse its submission identity/time/zone on retry; dictation
+only edits the draft. Backend persistence changes require normal primary
+integration before native rollout. Use isolated fixtures/stubbed models for
+testing, never live task creation as a secondary-thread check.
+
 
 ### 8 November: subscription access corrected
 
@@ -8404,3 +9043,16 @@ its shared detail-view/workflow changes still need primary-owned integration,
 without replacing either branch wholesale. Final-head Actions and native
 captures remain separate qualification requirements; this Linux environment has
 no Xcode/Simulator or authenticated workflow-dispatch CLI.
+## Watch child integration qualification — 10 November 2026 (#1721)
+
+Use child PR #1722 targeting `copilot/implement-watch-home-complications`; do not
+push to or retarget #1703/#1711. Primary owns integration/release. Check current
+heads again before handoff. This runner's Swift 6.4.2 is available by adding
+`/usr/share/swift/usr/bin` to PATH; Xcode, `xcrun` and physical devices are absent.
+Use existing Core tests, backend checks and the PR-only Watch workflow.
+The workflow records exact head and installed plist metadata and requires
+nonce/destination/PID receipts before captures; inspect the actual PNGs as well.
+External URL failure remains a failed check, not a fixture-navigation pass.
+Source artifacts showed launch spinners and stale scenes under valid filenames.
+See `docs/ios/design/watch/implementation.md` for the retrieved approved images,
+Apple sources, exact commands and unverified acceptance. No live writes/deployment.

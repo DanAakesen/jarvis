@@ -1,3 +1,80 @@
+## Combined-release compatibility and qualification (#1730; 10 November 2026)
+
+The web vault-task decoder accepts the same 400-Unicode-code-point title bound as
+the integrated Watch/backend contract; a valid long task must not invalidate
+unrelated list entries. Heading, identity, date and response-size checks remain.
+Native CI runs the same selected suites on two XCTest-managed simulator clones,
+then exports the same result bundle and captures on the original destination.
+Fixture state remains simulator/process-local. Native timing and contention
+still need macOS verification; no server or persistence boundary changes.
+
+The live-tool wrapper is a containing accessibility element so its identifier
+does not replace individual tool/disclosure identifiers. Follow intent,
+scroll geometry, selection lifetime and the real photo loading path are unchanged.
+The combined photo fixture's saved row sorts after the synthetic history, not
+one day before it; history ordering remains the production timestamp ordering.
+
+Watch task-detail readiness checks require visible Task/Edit/title/Due content;
+Priority remains available by scrolling, not a mandatory initial-viewport OCR
+anchor. Fresh PID/nonce receipts, OCR, image hashes and external URL delivery
+remain independent gates. URL error 115 is not treated as fixture success.
+
+## Combined iPhone/Watch delivery boundary (#1728; 10 November 2026)
+
+#1729 combines the existing chat/loading and Watch boundaries below without a new
+service, queue, credential or migration beyond the source implementations.
+Watch edits recognize whitespace-normalized saved titles while still matching
+task identity, source and submitted fields. Auto parsing now uses the caller's
+abort signal and removes its additional ten-second deadline; existing iPhone
+20-second, Watch 25-second and backend 30-second request bounds remain. A timed-out
+mutation remains uncertain and frozen for duplicate-safe retry/refresh, not
+automatic resubmission. Real-provider latency/device behavior is unverified.
+
+DEBUG capture entry uses initial navigation state and direct task detail/editor
+destinations, avoiding startup push/push/sheet chains. Release routes are unchanged.
+External URL checks still call `simctl openurl` and require `onOpenURL` and target
+receipts; fixture navigation does not substitute for external delivery or prove
+that a screenshot shows the destination. URL checks now run independently after
+capture failure, and missing receipts retain explicitly failed diagnostic images.
+Native captures also use Apple's built-in Vision OCR to require destination-specific
+visible content before publishing a successful PNG. Unknown destinations, startup
+screens and missing/wrapped required labels fail closed; recognized text and image
+hashes are retained. The Linux tests cover the content matcher, not Apple's OCR or
+native rendering, and this gate does not replace reference/interaction review.
+
+## Combined chat/loading delivery (#1726; 10 November 2026)
+
+The direct-main integration retains the existing boundaries: `JarvisChatModel`
+owns independent, request-guarded Now/feed and background-job refresh alongside
+sent attachment metadata; `JarvisChatFollowLatest` owns viewport-local following;
+photo previews obtain owner-authorized short-lived read URLs through
+`JarvisChatClient` and download without API credentials or persistent caching.
+Factory task history, HTTP pagination and SSE replay remain main's implementation.
+No new API, storage, authorization or deployment boundary is introduced.
+
+## Native chat follow ownership (#1707; 10 November 2026)
+
+`JarvisChatFollowLatest` owns viewport-local following for normal chat and the
+isolated test sheet. SwiftUI scroll geometry observes content/container sizes and
+safe-area insets; scroll phases distinguish user navigation from content growth.
+`ChatFollowState` keeps intent sticky across layout changes, pauses during
+interaction/selected replies and resumes within 44 points of the bottom after
+user scrolling. `JarvisSelectableReply` reports native selection lifetime for
+saved/live replies and plain user text; streaming replacements preserve a still
+matching selection. Plain user text remains literal and short bubbles fit text.
+No chat model, attachment, transport contract or server boundary changes.
+
+The #1718 integration reads the system Reduce Motion preference without trying
+to write its read-only environment key. The screen's explicit fixture override
+only adds reduced motion; continuous layout following uses a nonanimated
+transaction in either mode. Photo and follow fixtures can run together without
+replacing photo history or prematurely completing the held stream.
+## Watch quick lift capture — 10 November 2026 (#1705)
+
+Quick logging follows Watch → allow-listed WatchConnectivity request → authenticated iPhone JarvisClient → owner-only `POST /health/lifts/capture`. Text extraction reuses the configured Foundry JSON model port without giving it mutation tools. The server validates extracted exercise/weight/reps, defaults unspecified sets to one, and writes through the existing owner-scoped LiftEntriesStore/Gym log path. Durable idempotency lookup precedes extraction, so uncertain retries return the original persisted result rather than reinterpreting or overwriting it. Clarifications do not write. The Watch preserves its draft and operation identity; Voice remains the existing WatchModel/paired-phone voice session with the existing gym tool. No new credentials, storage table, workout-session service or offline queue.
+
+PR #1703 independently extends the same Watch root, bridge, contract and widget bundle. Integration must preserve its additions and insert the quick-lift shortcut inside its existing Workouts section rather than retain two Home summaries. See `docs/ios/design/watch/implementation.md` for integration and verification evidence.
+
 ## Direct owner requests — 10 November 2026
 
 Owner tool operations execute a resolved request under the existing authenticated route and resource authorization. Same-session owner messages may resolve a recent project for a follow-up; external content is never authority. Resource revisions, secret checks and duplicate/uncertain-write recovery remain separate from interactive approval. Legacy confirmation endpoints remain for compatibility but are not advertised to normal chat or voice.
@@ -1842,6 +1919,20 @@ payloads were checked against `apps/web/src/conversation-history.ts`,
 no contract gap requiring backend work was found.
 
 ### iOS Chat screen (P15-10)
+
+Photo previews (#1712) resolve fresh read capabilities using the existing
+authenticated, owner-scoped `GET /conversation/attachments/:id/url` path.
+`JarvisChatClient.attachmentURL` validates attachment IDs and HTTPS Azure Blob
+origins. `JarvisChatPhotoLoader` downloads without API credentials, cookies,
+redirects or persistent caching; it bounds response bytes and cancels abandoned
+transfers. An ImageIO actor decodes orientation-correct, bounded thumbnails from
+pending or downloaded bytes without changing the upload. Decoded images belong
+only to their mounted preview; no attachment URL or photo is written to the
+repository cache. The existing session-epoch screen identity discards preview
+state on account changes. Backend ownership checks and retention remain authoritative.
+Accepted outgoing messages retain attachment metadata until final history
+replaces it. A failed/expired read or failed decode renders a filename-accessible
+fallback; retry obtains a fresh capability rather than reusing a signed URL.
 
 P15-38 centralizes native backdrop rendering in `JarvisDesignSystem.swift`:
 The reconciled implementation reuses main's `JarvisScreenBackground`, already
@@ -9330,6 +9421,30 @@ backend execution, authorization, provider catalogue or audit semantics.
 
 XcodeGen JarvisWatch embeds JarvisWatchWidgets and is embedded by the phone app. Both use portable JarvisCore; Watch-native shared controls live under apps/ios/Watch. A Codable WatchConnectivity allow-list connects Watch to the paired phone. JarvisWatchBridge owns authenticated chat/health/lift/Factory reads/writes and VoiceSessionClient; credentials remain on phone. Watch VoiceAudioEngine captures/plays PCM16 through ordered acknowledged messages. Phone expires voice after 15 seconds without Watch heartbeat. Existing VoiceLiveActivityController controls the same session. No backend endpoint, infrastructure or production configuration is added. Display-only Health snapshots cross application context and expire in 15 minutes or date rollover. No offline mutation queue. See docs/ios/design/watch/implementation.md for verification limits.
 
+### Watch dashboard and personal-task extension (#1701)
+
+The new dashboard extends the paired-phone allow-list rather than creating a
+standalone Watch API client. Calendar, task, note, nutrition, body-measurement and
+Home-brief reads reuse their existing clients and permissions. Missing sections
+are distinct from successful empty reads. Display snapshots are bounded and
+cached in the existing Watch App Group; WidgetKit refresh is system-budgeted,
+not an instantaneous background channel. The existing steps snapshot/rendering
+and voice/dictation/Factory routes remain.
+
+`JarvisTodayTaskLists` is the shared date-only projection for iPhone Home and Watch:
+open dated tasks through the owner's local today versus later dates. The phone
+supplies local day boundaries without rewriting vault metadata. A task selection
+retains the source identity and version for optimistic editing.
+
+Watch Auto creation adds an owner-only backend boundary for structured model
+parsing and the existing vault task writer. It captures the first Save's UUID,
+submission instant and IANA timezone; durable receipts retain resolved fields
+before the external write, and vault compare-and-swap/idempotency protects
+ambiguous retries. Notes and timezone metadata remain attached to the existing
+vault task, not a second task system. Auto defaults are isolated from ordinary
+task creation/reminder rules. New persistence must precede the compatible backend
+and native client; integration/deployment remains primary-controlled.
+
 ### Notes recent-library projection
 
 JarvisNotesArea keys its cancellable projection by graph nodes, local visit history
@@ -9452,3 +9567,22 @@ WatchTextInput uses native SwiftUI text editing and WatchKit system text input f
 ## Watch steps rendering — 10 November 2026
 
 `WatchStepsPlot` in JarvisCore projects the existing bounded 24-hour cumulative snapshot and positive daily goal onto a shared scale with headroom. `WatchStepsChart` draws the chart and gradient stems in SwiftUI Canvas. No new transport, persistence, HealthKit query, credential, entitlement or backend boundary. Existing snapshot freshness and midnight expiry remain authoritative. The separate startup-alert recovery patch is PR #1692, not a dependency of chart rendering.
+## Watch child integration — 10 November 2026 (#1721)
+
+The Home/dashboard/task and quick-lift branches are combined on a child of Home,
+with their existing paired-phone handlers, owner-authenticated backend services
+and all WidgetKit kinds preserved. `WatchAppLink` supplies the shared navigation
+allow-list used by widgets and `onOpenURL`; links do not carry write payloads.
+No new Watch credentials, independent API client, offline queue or infrastructure
+is introduced. DEBUG capture receipts are confined to synthetic fixture launches
+and identify process/destination appearance; they are not production state or
+visual/device acceptance. Build metadata and external URL delivery are checked
+separately from rendering in the existing Watch workflow.
+
+`WatchTaskDraftStore` atomically persists one create draft and task-ID-keyed edit
+drafts under Watch ApplicationSupport, isolated from synthetic fixtures. Records
+retain both mode drafts, field controls, source/version and the frozen request
+before transport. Restarted creates become uncertain; interrupted edits require
+source refresh. Confirmed saved receipts persist before UI acknowledgement, and
+new creates require an explicit action. Corrupt/unwritable storage blocks saving
+instead of allocating a fresh operation. Backend receipts/migration are unchanged.

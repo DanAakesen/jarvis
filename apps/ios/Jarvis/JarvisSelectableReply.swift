@@ -5,8 +5,10 @@ import UIKit
 struct JarvisSelectableReply: UIViewRepresentable {
     let text: String
     let identifier: String
+    var rendersMarkdown = true
     var onTap: (() -> Void)? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.chatSelectionChanged) private var selectionChanged
 
     func makeUIView(context: Context) -> UITextView {
         let view = UITextView()
@@ -18,6 +20,7 @@ struct JarvisSelectableReply: UIViewRepresentable {
         view.textContainer.lineFragmentPadding = 0
         view.adjustsFontForContentSizeCategory = true
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        view.delegate = context.coordinator
         let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped))
         tap.cancelsTouchesInView = false
         tap.delaysTouchesBegan = false
@@ -29,9 +32,26 @@ struct JarvisSelectableReply: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate, UITextViewDelegate {
         var onTap: (() -> Void)?
+        var selectionChanged: ((Bool) -> Void)?
+        var isUpdatingView = false
+        var isDetached = false
+        private var hasSelection = false
         private var touchBeganAt: TimeInterval = 0
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            guard !isUpdatingView, !isDetached else { return }
+            let selected = textView.selectedRange.length > 0
+            guard selected != hasSelection else { return }
+            hasSelection = selected
+            selectionChanged?(selected)
+        }
+
+        func clearSelection() {
+            if hasSelection { selectionChanged?(false) }
+            hasSelection = false
+        }
+
         @objc func tapped() {
             // A long press belongs to UIKit text selection. Do not reflow the
             // reply by revealing its timestamp when the selection touch ends.
@@ -60,22 +80,61 @@ struct JarvisSelectableReply: UIViewRepresentable {
 
     func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.onTap = onTap
+        context.coordinator.selectionChanged = { selectionChanged(identifier, $0) }
         _ = dynamicTypeSize
         view.accessibilityIdentifier = identifier
         let value = attributedText(traits: view.traitCollection)
         // Activity updates must not reset the owner's selection.
-        if !view.attributedText.isEqual(to: value) { view.attributedText = value }
+        if !view.attributedText.isEqual(to: value) {
+            let selection = view.selectedRange
+            let previous = view.attributedText.string as NSString
+            let updated = value.string as NSString
+            context.coordinator.isUpdatingView = true
+            view.attributedText = value
+            if selection.length > 0, NSMaxRange(selection) <= updated.length,
+               NSMaxRange(selection) <= previous.length,
+               previous.substring(with: selection) == updated.substring(with: selection) {
+                view.selectedRange = selection
+            }
+            context.coordinator.isUpdatingView = false
+            // Programmatic text replacement need not deliver a selection delegate callback.
+            DispatchQueue.main.async { [weak view, weak coordinator = context.coordinator] in
+                if let view { coordinator?.textViewDidChangeSelection(view) }
+            }
+        }
         view.linkTextAttributes = [.foregroundColor: UIColor(JarvisDesignTokens.primaryAccent)]
     }
 
+    static func dismantleUIView(_ uiView: UITextView, coordinator: Coordinator) {
+        coordinator.isDetached = true
+        coordinator.clearSelection()
+        uiView.delegate = nil
+    }
+
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
-        let width = proposal.width ?? JarvisDesignTokens.chatMessageMaximumWidth
+        let proposedWidth = proposal.width ?? JarvisDesignTokens.chatMessageMaximumWidth
+        let width: CGFloat
+        if rendersMarkdown {
+            width = proposedWidth
+        } else {
+            // Plain user bubbles still fit short text rather than stretching across the chat.
+            width = min(proposedWidth, max(1, ceil(uiView.attributedText.boundingRect(
+                with: CGSize(width: proposedWidth, height: .greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil
+            ).width)))
+        }
         return CGSize(width: width, height: ceil(uiView.sizeThatFits(
             CGSize(width: width, height: .greatestFiniteMagnitude)
         ).height))
     }
 
     private func attributedText(traits: UITraitCollection) -> NSAttributedString {
+        if !rendersMarkdown {
+            return NSAttributedString(string: text, attributes: [
+                .font: UIFont.preferredFont(forTextStyle: .body, compatibleWith: traits),
+                .foregroundColor: UIColor.label,
+            ])
+        }
         let result = NSMutableAttributedString(string: "")
         for (index, block) in ChatMarkdownBlock.parse(text).enumerated() {
             if index > 0 { result.append(NSAttributedString(string: "\n")) }
