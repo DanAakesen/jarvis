@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import {
-  acceptedContent, createMcpHandler, createRequestStateCodec, inputRequired, inputResponse, McpServer,
+  createMcpHandler, createRequestStateCodec, inputResponse, McpServer,
   type CallToolResult, type InputRequiredResult,
 } from '@modelcontextprotocol/server';
 import { z } from 'zod';
@@ -12,7 +12,7 @@ import type { AuthConfig } from '../../auth/config.js';
 import type { HealthMcpAuditRecord } from '../../core/tool-calls.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import type { createNutritionHandlers, NutritionExecution } from '../nutrition/handlers.js';
-import { canonicalJson, prepareMeal, preparePlan, type FavoriteInput, type PlanRequest } from '../nutrition/model.js';
+import { prepareMeal, preparePlan, type FavoriteInput, type PlanRequest } from '../nutrition/model.js';
 import { resolveHealthOwner } from '../owner.js';
 import { healthResultByteLimit, projectNutritionRecord, type HealthQueryService } from '../query.js';
 import { healthMcpPaths } from './paths.js';
@@ -75,8 +75,6 @@ const lookupSchema = z.object({
   components: foodLookupComponents.optional(),
   savedName: exactText(2000).optional(),
 }).strict().refine(input => (input.components !== undefined) !== (input.savedName !== undefined));
-// MCP form schemas exclude additionalProperties; validate returned content strictly.
-const confirmSchema = z.object({ confirm: z.boolean() });
 const pendingSchema = z.object({
   owner: z.string(), clientId: z.string(), tool: z.string(), digest: z.string(), requestTime: z.string(),
 }).strict();
@@ -206,25 +204,13 @@ export function healthMcpRoutes(query: Pick<HealthQueryService, 'query'>, option
           execution(request, AbortSignal.any([signal, mcpSignal]), requestTime, intent);
         const handler = createMcpHandler(() => {
           const server = new McpServer({ name: 'jarvis-nutrition', version: '1.0.0' }, { requestState: { verify: codec.verify } });
-          const approve = async (tool: string, payload: unknown, state: unknown, responses: Responses, requestTime = now()): Promise<InputRequiredResult | undefined> => {
-            const owner = authorize(request, true);
-            const digest = createHash('sha256').update(canonicalJson(payload)).digest('hex');
-            const parsed = pendingSchema.safeParse(state);
-            if (!parsed.success) {
-              const message = `Review this exact ${tool} proposal. Nothing has changed.\n${JSON.stringify(payload, null, 2)}`;
-              if (message.length > 20000) throw new ToolRefusal('This proposal is too large to review safely. Use a smaller food entry.');
-              return inputRequired({
-                requestState: await codec.mint({ owner, clientId, tool, digest, requestTime }),
-                inputRequests: { confirm: inputRequired.elicit({ message, requestedSchema: confirmSchema }) },
-              });
-            }
-            const pending = parsed.data;
-            if (pending.owner !== owner || pending.clientId !== request.healthConnectorPrincipal?.clientId ||
-                pending.tool !== tool || pending.digest !== digest) throw new ToolRefusal('The proposal changed. Start a new review; nothing was authorised.');
-            const answer = inputResponse(responses, 'confirm');
-            if (answer.kind !== 'elicit' || answer.action !== 'accept' || acceptedContent(responses, 'confirm', confirmSchema.strict())?.confirm !== true) {
-              throw new ToolRefusal('The proposal was not accepted. Nothing was changed by this call.');
-            }
+          // A direct write from the authenticated, scoped owner connector is the
+          // request; no second review form is needed. Revision and idempotency
+          // checks still apply at the storage boundary.
+          const approve = async (...args: [string, unknown, unknown, Responses, string?]): Promise<InputRequiredResult | undefined> => {
+            void args;
+            authorize(request, true);
+            return undefined;
           };
           server.registerTool('read_nutrition', {
             title: 'Read nutrition', description: 'Read bounded meal history, per-day totals derived from retained non-deleted meals, saved favourites or meal plans. Nutrients missing from every meal are unknown; partial totals are lower bounds. Definitions and plans are not eaten meals.',
@@ -272,7 +258,7 @@ export function healthMcpRoutes(query: Pick<HealthQueryService, 'query'>, option
           }));
           if (writes) {
             server.registerTool('manage_saved_food', {
-              title: 'Manage saved food', description: 'Save favourites/aliases from an owned intake or reviewed definition; save plans from owned favourites; soft-delete plans; or like/dislike/clear a canonical favourite. Always native-review first. Read current revisions (0 for new) and keep operation IDs/expected revisions unchanged on retries. Plans and definitions never log intake or export Health.',
+              title: 'Manage saved food', description: 'Save favourites/aliases from an owned intake or reviewed definition; save plans from owned favourites; soft-delete plans; or like/dislike/clear a canonical favourite. Execute the requested change directly. Read current revisions (0 for new) and keep operation IDs/expected revisions unchanged on retries. Plans and definitions never log intake or export Health.',
               _meta: security(true), inputSchema: savedChangeSchema,
               annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true, idempotentHint: true },
             }, async (input, ctx) => safe(request, 'manage_saved_food', challenge(true), async () => {
@@ -342,7 +328,7 @@ export function healthMcpRoutes(query: Pick<HealthQueryService, 'query'>, option
                 record: projectHealthRecord(row, ['meal_key', 'preference', 'revision', 'created_at', 'updated_at']) });
             }));
             server.registerTool('log_food', {
-              title: 'Log food', description: 'Log eaten food only after native review. Keep operationId unchanged on retries. Supplied nutrients are not independently verified; no Apple Health export occurs.',
+              title: 'Log food', description: 'Log the requested eaten food directly. Keep operationId unchanged on retries. Supplied nutrients are not independently verified; no Apple Health export occurs.',
               _meta: security(true),
               inputSchema: logSchema, annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false, idempotentHint: true },
             }, async (input, ctx) => safe(request, 'log_food', challenge(true), async () => {
