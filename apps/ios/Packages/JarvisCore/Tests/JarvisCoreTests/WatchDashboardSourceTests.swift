@@ -104,6 +104,12 @@ final class WatchDashboardSourceTests: XCTestCase {
         XCTAssertTrue(dashboard.contains("let width = min(193, proxy.size.width)"))
     }
 
+    func testTaskChoiceBarIsTopLevelAndKeepsSelectionAccessibility() throws {
+        let input = try source("apps/ios/Watch/WatchTextInput.swift")
+        XCTAssertTrue(input.contains("\n}\n\nstruct WatchChoiceBar<Value: Hashable>: View {"))
+        XCTAssertTrue(input.contains(".accessibilityAddTraits(selection == value ? .isSelected : [])"))
+    }
+
     func testSourceAgePartialFieldsAndTaskCountFallbackAreExplicit() throws {
         let shared = try source("apps/ios/Watch/WatchComplicationViews.swift")
         let full = try source("apps/ios/Watch/WatchDashboardFullViews.swift")

@@ -114,25 +114,25 @@ struct WatchAddButton: View {
         Button(action: action) { Image(systemName: "plus").font(.title3).frame(width: 44, height: 44) }
             .buttonStyle(.plain).foregroundStyle(WatchStyle.amber).accessibilityLabel(title)
     }
+}
 
-    struct WatchChoiceBar<Value: Hashable>: View {
-        let choices: [(Value, String)]
-        @Binding var selection: Value
-        var body: some View {
-            HStack(spacing: 4) {
-                ForEach(choices.indices, id: \.self) { index in
-                    let (value, title) = choices[index]
-                    Button { selection = value } label: {
-                        Text(title).font(.system(.body, design: .rounded, weight: .semibold))
-                            .frame(maxWidth: .infinity, minHeight: 40)
-                            .background {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .fill(selection == value ? WatchStyle.surface : .clear)
-                            }
-                    }.buttonStyle(.plain)
-                        .foregroundStyle(selection == value ? WatchStyle.amber : WatchStyle.stone)
-                        .accessibilityAddTraits(selection == value ? .isSelected : [])
-                }
+struct WatchChoiceBar<Value: Hashable>: View {
+    let choices: [(Value, String)]
+    @Binding var selection: Value
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(choices.indices, id: \.self) { index in
+                let (value, title) = choices[index]
+                Button { selection = value } label: {
+                    Text(title).font(.system(.body, design: .rounded, weight: .semibold))
+                        .frame(maxWidth: .infinity, minHeight: 40)
+                        .background {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(selection == value ? WatchStyle.surface : .clear)
+                        }
+                }.buttonStyle(.plain)
+                    .foregroundStyle(selection == value ? WatchStyle.amber : WatchStyle.stone)
+                    .accessibilityAddTraits(selection == value ? .isSelected : [])
             }
         }
     }
