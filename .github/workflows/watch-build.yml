@@ -161,7 +161,15 @@ jobs:
             done
             test "$READY" = true || { echo "::error::App startup not ready for external URL test"; exit 1; }
             rm "$CONTAINER/Documents/watch-capture.json"
-            xcrun simctl openurl "$WATCH_ID" "jarvis-watch://$ROUTE"
+            if xcrun simctl openurl "$WATCH_ID" "jarvis-watch://$ROUTE" > "$RUNNER_TEMP/watch-screenshots/$ROUTE-openurl.log" 2>&1; then
+              cat "$RUNNER_TEMP/watch-screenshots/$ROUTE-openurl.log"
+            else
+              STATUS=$?
+              cat "$RUNNER_TEMP/watch-screenshots/$ROUTE-openurl.log"
+              echo "$STATUS" > "$RUNNER_TEMP/watch-screenshots/$ROUTE-openurl-status.txt"
+              echo "::error::External URL transport failed for $ROUTE (exit $STATUS); no delivery is established"
+              exit "$STATUS"
+            fi
             DELIVERED=false
             for ATTEMPT in {1..30}; do
               if [[ -f "$CONTAINER/Documents/watch-open-url.json" ]] &&
@@ -190,8 +198,16 @@ jobs:
           done
       - name: Preserve simulator failure diagnostics
         if: ${{ failure() && env.WATCH_ID != '' }}
+        timeout-minutes: 2
         run: |
-          xcrun simctl spawn "$WATCH_ID" log show --last 3m --style compact --predicate 'eventMessage CONTAINS "com.danaakesen.jarvis.watchkitapp"' > "$RUNNER_TEMP/watch-screenshots/simulator.log"
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/failure-current-screen.png"
+          CONTAINER="$(xcrun simctl get_app_container "$WATCH_ID" com.danaakesen.jarvis.watchkitapp data)"
+          for RECEIPT in watch-open-url watch-capture; do
+            if [[ -f "$CONTAINER/Documents/$RECEIPT.json" ]]; then
+              cp "$CONTAINER/Documents/$RECEIPT.json" "$RUNNER_TEMP/watch-screenshots/failure-$RECEIPT.json"
+            fi
+          done
+          xcrun simctl spawn "$WATCH_ID" log show --last 3m --style compact --predicate 'eventMessage CONTAINS "com.danaakesen.jarvis.watchkitapp" OR eventMessage CONTAINS "jarvis-watch" OR subsystem CONTAINS[c] "launchservices" OR process == "Carousel"' > "$RUNNER_TEMP/watch-screenshots/simulator.log"
       - name: Build paired iPhone bridge without signing
         if: ${{ !cancelled() }}
         working-directory: apps/ios

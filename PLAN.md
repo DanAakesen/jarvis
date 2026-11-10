@@ -1,3 +1,31 @@
+## Composer correction and qualification continuation — 10 November 2026 (#1732)
+
+Current work continues from exact #1731 `1bf93adb264cff0d95182b77c04cfb42b03b0d33`
+on the prepared child branch `copilot/fix-photo-preview-x`. The previous
+#1731-to-main delivery notes below are historical. The orchestrator owns final
+direct-to-main retargeting and all release operations; no parent/source PR was
+merged, closed or retargeted.
+
+Implemented: shared compact photo-remove chrome (10-point X, 20-point circle,
+independent 44-point target), unchanged removal/VoiceOver labels, a native
+invisible-target removal check, and clearly identified realistic generated
+reference fixtures for dark-mode composer/sent captures. Existing assertions,
+24 selections, two workers and failure gate remain. Watch URL failures now
+retain their transport status/log and broader LaunchServices diagnostics;
+this is diagnostic coverage, not an error-115 repair.
+
+Local checks: 702 Core tests, 350 automation tests (including 81 pipeline and
+nine Watch guards) passed. Native Swift parsing passed. No Xcode/simulators are
+available here. Parent Watch run 42890925363 is cancelled, not passed; iPhone
+42890925501 is skipped. Final native two-worker execution, dark composer/sent
+captures, VoiceOver, Watch references/interactions and physical-device checks
+remain blocked/unverified. Loading/Factory failures remain unresolved; the
+Workspace failure is a missing sidebar destination, not established slow data.
+Do not treat this correction as a qualified release.
+
+**Next step:** orchestrator-run final native qualification and evidence review.
+See the #1732 section in `docs/agent-context.md` for precise diagnostic limits.
+
 ## Native regression repair and release qualification — 10 November 2026 (#1730)
 
 Current delivery is **#1731 → main**; #1729 remains source evidence, not a

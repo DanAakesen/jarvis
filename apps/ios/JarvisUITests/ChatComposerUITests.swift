@@ -13,7 +13,10 @@ final class ChatComposerUITests: XCTestCase {
         XCTAssertTrue(app.images["Synthetic landscape.jpg"].waitForExistence(timeout: 5))
         XCTAssertGreaterThanOrEqual(removeLandscape.frame.width, 44)
         XCTAssertGreaterThanOrEqual(removeLandscape.frame.height, 44)
-        removeLandscape.tap()
+        XCTAssertTrue(removeLandscape.isHittable)
+        capturePhotos(app, name: "dark-photo-remove-before-removal-synthetic-fixtures")
+        // Tap the invisible target, away from the small top-right visible X.
+        removeLandscape.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.9)).tap()
         XCTAssertFalse(removeLandscape.exists)
         XCTAssertTrue(removePortrait.exists)
         XCTAssertTrue(app.buttons["Remove Synthetic notes.txt"].exists)
@@ -505,6 +508,9 @@ final class ChatComposerUITests: XCTestCase {
             "-AppleLanguages", "(\(language))",
             "-AppleLocale", language == "da" ? "da_DK" : "en_US",
         ] + extraArguments
+        if extraArguments.contains("--ui-test-chat-photos") {
+            app.launchArguments += ["-jarvis.appTheme", "dark"]
+        }
         app.launch()
         return app
     }

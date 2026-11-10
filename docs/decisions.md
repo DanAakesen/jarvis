@@ -1,3 +1,24 @@
+## 10 November 2026 — Separate photo-remove chrome from its target (#1732)
+
+Continue exact #1731 `1bf93adb264cff0d95182b77c04cfb42b03b0d33` on the prepared
+child, preserving its source history and native gates. Use the existing shared
+icon button with an explicit compact treatment for composer photos only:
+10-point glyph, 20-point background, independent 44-point target. This follows
+the owner's correction and Apple's minimum button hit-region guidance
+([HIG Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons)).
+The target extends inward to avoid clipping in the attachment scroll view.
+Keep file/header controls and localized removal labels unchanged.
+
+Use crops of #1712's already-approved generated reference for clearly identified
+realistic photo fixtures; preserve synthetic filenames and test assertions.
+Native comparison and VoiceOver remain required, not inferred from source tests.
+
+Error 115 occurs before demonstrated Watch URL delivery despite matching
+registration. Preserve the real `simctl openurl` call, nonce/PID receipts and
+rendered-destination gate. Add transport-status and LaunchServices evidence;
+do not replace delivery with fixture navigation, add an unproven lifecycle
+handler, or change companion independence without native evidence.
+
 ## 10 November 2026 — Preserve the combined source while repairing regressions (#1730)
 
 Use exact #1729 `a39f152` as preserved source history on current main, delivering

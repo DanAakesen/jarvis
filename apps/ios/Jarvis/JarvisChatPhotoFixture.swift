@@ -1,7 +1,8 @@
 import JarvisCore
 import UIKit
 
-/// Clearly synthetic, simulator-only inputs for the real composer and history presentation.
+/// Simulator-only inputs cropped from #1712's approved generated reference, not owner photos.
+/// Synthetic filenames identify the fixtures and keep removal/accessibility checks stable.
 enum JarvisChatPhotoFixture {
     static var isEnabled: Bool {
 #if DEBUG && targetEnvironment(simulator)
@@ -62,14 +63,10 @@ enum JarvisChatPhotoFixture {
     }
 
     private static func image(portrait: Bool) -> Data {
-        let size = portrait ? CGSize(width: 120, height: 180) : CGSize(width: 180, height: 120)
-        return UIGraphicsImageRenderer(size: size).image { context in
-            (portrait ? UIColor.systemOrange : UIColor.systemTeal).setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            ("SYNTHETIC\n\(portrait ? "Portrait" : "Landscape")" as NSString).draw(
-                at: CGPoint(x: 8, y: 12),
-                withAttributes: [.font: UIFont.systemFont(ofSize: 14), .foregroundColor: UIColor.black]
-            )
-        }.jpegData(compressionQuality: 0.9)!
+        let name = portrait ? "ChatPhotoFixturePortrait" : "ChatPhotoFixtureLandscape"
+        guard let data = UIImage(named: name)?.jpegData(compressionQuality: 0.9) else {
+            preconditionFailure("Missing generated photo fixture: \(name)")
+        }
+        return data
     }
 }

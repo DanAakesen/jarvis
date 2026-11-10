@@ -1,3 +1,20 @@
+## Composer photo removal correction (#1732; 10 November 2026)
+
+The shared `JarvisIconButton` compact treatment uses a 10-point X in a 20-point
+glass circle, inset two points at the thumbnail's top right. Its independent
+44-point rectangular target extends inward over the thumbnail, not into
+adjacent attachments or the draft. Glass is applied before the target frame;
+the target itself has no visible background. Other icon buttons and file
+attachments retain their existing shared geometry. Removal labels, button
+semantics and sending-time disabling are unchanged.
+
+The inspected #1712 generated reference shows a small badge relative to its
+thumbnail, unlike the former 48-point control on a 76-point photo. This source
+correction still needs a final native comparison, not acceptance by token size.
+Dark-mode photo tests now use distinct food-photo crops from that approved
+generated reference; existing “Synthetic” filenames identify fixture data.
+They are not owner photos or evidence that the final app was rendered.
+
 ## Native repair evidence (#1730; 10 November 2026)
 
 The follow-up preserves the approved layout and existing follow/selection state.

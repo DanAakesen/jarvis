@@ -74,6 +74,21 @@ class WatchBuildTests(unittest.TestCase):
         capture = next(step["run"] for step in self.steps if step.get("name", "").startswith("Capture intended"))
         self.assertIn('$name-failed.png', capture)
 
+    def test_external_url_failure_retains_transport_status_and_launchservices_evidence(self):
+        delivery = next(step["run"] for step in self.steps if step.get("name", "").startswith("Verify external URL"))
+        self.assertIn('if xcrun simctl openurl', delivery)
+        self.assertIn('STATUS=$?', delivery)
+        self.assertIn('$ROUTE-openurl.log', delivery)
+        self.assertIn('$ROUTE-openurl-status.txt', delivery)
+        self.assertIn('exit "$STATUS"', delivery)
+        diagnostics = next(step for step in self.steps if step.get("name") == "Preserve simulator failure diagnostics")
+        self.assertEqual(diagnostics["if"], "${{ failure() && env.WATCH_ID != '' }}")
+        self.assertEqual(diagnostics["timeout-minutes"], 2)
+        self.assertIn('failure-current-screen.png', diagnostics["run"])
+        self.assertIn('failure-$RECEIPT.json', diagnostics["run"])
+        self.assertIn('subsystem CONTAINS[c] "launchservices"', diagnostics["run"])
+        self.assertIn('process == "Carousel"', diagnostics["run"])
+
     def test_receipt_alone_cannot_publish_a_screenshot(self):
         capture = next(step["run"] for step in self.steps if step.get("name", "").startswith("Capture intended"))
         self.assertIn('verify-watch-capture" "$name"', capture)

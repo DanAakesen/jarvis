@@ -1,3 +1,14 @@
+## Composer correction and release continuation (#1732; 10 November 2026)
+
+Continue from #1731 head `1bf93adb264cff0d95182b77c04cfb42b03b0d33` without
+reimplementing its combined iPhone/Watch changes. Composer photos use a small
+visible X and closely padded background, independently of a usable accessible
+remove target. Removal must preserve the other attachments and editable draft.
+Keep the 24 native selections, two-worker execution and fail-closed gate.
+The child is for parent-branch review; the orchestrator owns direct-to-main
+retargeting, final CI, merge, production and TestFlight. No stacked merge or live
+Factory task 24 action is part of this correction.
+
 ## Combined-release repair scope (#1730; 10 November 2026)
 
 Carry exact #1729 `a39f152` forward in #1731 directly to main, preserving its

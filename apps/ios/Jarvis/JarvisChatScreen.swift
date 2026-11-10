@@ -668,7 +668,8 @@ struct JarvisChatScreen: View {
             title: "\(copy(.photoRemove)) \(attachment.name)",
             systemImage: attachment.contentType.hasPrefix("image/") ? "xmark" : "xmark.circle.fill",
             identifier: "chat.attachment.remove",
-            isDisabled: model.isSending
+            isDisabled: model.isSending,
+            isCompact: attachment.contentType.hasPrefix("image/")
         ) { model.removeAttachment(attachment) }
     }
 

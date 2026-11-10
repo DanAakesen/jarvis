@@ -1,3 +1,78 @@
+## Composer correction handoff — 10 November 2026 (#1732)
+
+Baseline: exact parent #1731 `1bf93adb264cff0d95182b77c04cfb42b03b0d33`.
+The prepared child branch is `copilot/fix-photo-preview-x`; no checkout, merge,
+parent PR mutation, deployment or live Factory task 24 action was performed.
+This section supersedes the older delivery/status statements below.
+Final CI, direct-to-main retargeting, merge, production and TestFlight remain
+orchestrator-owned. This Linux sandbox cannot execute Xcode, `simctl`, native
+VoiceOver or capture final native screens.
+
+### Implemented and locally checked
+
+- `JarvisIconButton.isCompact` separates 20-point photo chrome/10-point X from
+  the inward 44-point target. Normal glyph/chrome, non-image attachments,
+  localized filename labels and disabled/removal behavior are preserved.
+- `ChatComposerUITests` retains all assertions and now taps the invisible
+  bottom-left area of the target, capturing the pending state before removal.
+  Photo tests use the existing `-jarvis.appTheme dark` preference for composer
+  and sent-message captures. Actual native execution/VoiceOver is not claimed.
+- Fixture JPEGs are crops of `docs/ios/design/chat/photo-preview-approved.png`
+  from approval revision `c3d69b5d78c51131e2b71aca24d55cf88a9fcd8d` (#1712),
+  not owner photos. Portrait crop: x80/y1437/w128/h144, cover-resized to 120×180;
+  landscape: x389/y310/w420/h280, resized to 180×120, JPEG quality 90.
+  Existing `Synthetic` labels remain. Existing installed `sharp` generated
+  the crops; no dependency was added. Missing fixture assets fail explicitly.
+- `swift test --package-path /home/runner/work/jarvis/jarvis/apps/ios/Packages/JarvisCore -j 2`:
+  **702 passed**, including the new compact-chrome source regression.
+- From the repository root,
+  `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`:
+  **350 passed**, including all **81** pipeline checks and **nine** Watch guards.
+  These are local source/tooling checks, not native release qualification.
+
+### Outstanding failures and precise evidence limits
+
+- GitHub logs were inspected for source chat job **130032793210** in run
+  **42874121366**, loading job **130032733014** in **42874104073**, and Watch
+  job **130075316603** in **42886195288**. Earlier failed/cancelled native tests
+  remain failures; no assertions, selections, timeouts or release gates were
+  weakened. The iPhone workflow is unchanged: all 24 selections and exactly
+  two workers remain configured, but final native execution is not proven.
+- Rechecked parent checkpoint `61abd21b233e00a26bdaf1a25c6016c7edd620b7`:
+  Watch **42890925363** is now **cancelled**; iPhone **42890925501** is **skipped**.
+  Neither qualifies this child.
+- Source Watch **42886195288** launched PID **18959** at 19:47:13.501;
+  at 19:47:15.200 `simctl openurl jarvis-watch://tasks` returned
+  `LSApplicationWorkspaceErrorDomain` **115**. Matching installed/built
+  registration does not prove delivery. No URL receipt or deep-link capture
+  establishes routing, and `log-lift` was not exercised after the first failure.
+  Root cause remains unproven. The workflow now exports exact openurl output
+  and failing status plus the current failure screen, any receipts, and broader
+  LaunchServices/Carousel logs. It still exits with the transport failure and
+  requires real delivery plus matching nonce/PID/destination and OCR on success.
+  A companion-installation/registration relationship is a diagnostic hypothesis,
+  not a production independence change or a demonstrated repair.
+- Workspace tests fail at `WorkspacesLoadingUITests.swift:65`, seeking
+  `navigation.workspaces` before data loading. `JarvisDestination.sidebarItems`
+  (`JarvisCore.swift:17–19`) excludes Workspaces. Therefore a longer HTTP delay
+  cannot explain that assertion. No hidden test-only sidebar entry or unapproved
+  navigation change was added.
+- Factory replay deliberately waits 30 seconds before its first chunk so native
+  checks can inspect the oldest HTTP page and use navigation. Its later keepalive
+  is not necessarily on a test's critical path. Reducing either delay without
+  native evidence would not establish a fix for the detail/loading timeouts.
+  Factory, Notes, Health and Settings failures remain open; no timing waiver or
+  blanket historical-baseline classification is made.
+- The #1712 approved generated image was inspected, but there are **no final
+  child native screenshots** yet. Compare dark composer/removal and sent-message
+  geometry, verify VoiceOver and removal on the final revision. Watch #1701/#1705
+  references remain in `docs/ios/design/watch`; final Watch capture/reference and
+  URL interaction review, lower task fields/dashboard sections, Ultra 2/smaller
+  sizes, installed complications and physical dictation/voice remain unverified.
+  The missing exact nutrition/task-list reference images remain a reference gap.
+  Do not equate fixture navigation, parser tests or a successful build with URL
+  delivery, visual acceptance or device verification.
+
 ## Native repair handoff — 10 November 2026 (#1730 / #1731)
 
 Current delivery is **#1731 → main**, superseding the delivery targets in the
