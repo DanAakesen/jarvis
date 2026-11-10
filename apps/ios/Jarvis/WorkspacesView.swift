@@ -67,19 +67,6 @@ struct WorkspacesView: View {
                 .disabled(renameTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             Button(text(.cancel), role: .cancel) { renameTarget = nil }
         }
-        .confirmationDialog(
-            removeTarget.map { formatted(.removeQuestion, $0.title) } ?? text(.removeFallbackQuestion),
-            isPresented: Binding(
-                get: { removeTarget != nil },
-                set: { if !$0 { removeTarget = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button(text(.remove), role: .destructive) { Task { await remove() } }
-            Button(text(.cancel), role: .cancel) { removeTarget = nil }
-        } message: {
-            Text(text(.removeMessage))
-        }
         .environment(\.locale, language.locale)
     }
 
@@ -326,6 +313,7 @@ struct WorkspacesView: View {
                 }
                 Button(text(.remove), systemImage: "trash", role: .destructive) {
                     removeTarget = item
+                    Task { await remove() }
                 }
             }
         }
@@ -346,6 +334,7 @@ struct WorkspacesView: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button(text(.remove), systemImage: "trash", role: .destructive) {
                 removeTarget = item
+                    Task { await remove() }
             }
             .disabled(busyItems.contains(item.id))
         }
