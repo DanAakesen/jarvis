@@ -229,11 +229,13 @@ def project_awareness(settings: ModelSettings) -> str:
         "  Wait for a clear choice before writing. "
         "Name alternatives when several match. Never substitute Jarvis's repository for a named "
         "non-self project, or automatically register/unarchive one. A registry read failure is not "
-        "evidence that no project exists. Resolve the selected project from the continuing conversation,\n"
-        "and supply its selector instead of defaulting to another repository. Ask only when genuinely ambiguous.\n"
+        "evidence that no project exists. Resolve the selected project from the continuing "
+        "conversation, and supply its selector instead of defaulting to another repository. "
+        "Ask only when genuinely ambiguous.\n"
         "- Before create_project or manage_repository, check this list (or "
         "list_projects). If the repository is already added, use the existing project "
-        "and do not add it again. If Dan requests adding a repository, add it directly without another approval."
+        "and do not add it again. If Dan requests adding a repository, add it directly "
+        "without another approval."
     )
 
 def mode_context(settings: ModelSettings) -> str:
@@ -280,12 +282,9 @@ def runtime_instructions(instructions: str, role: str, *, phone: bool = False) -
             "Backend permissions and approval checks still apply. "
             "For every meal estimate, "
             "show actual returned protein (g), calories (kcal) and fat (g) as a "
-            "bulleted list; unknown stays unknown. Food estimates "
-            "must be staged with health_food_review log_estimate before inviting "
-            "confirmation; prose or lookup alone creates no pending proposal. "
-            "Only a new reply bound by the backend to the exact pending proposal "
-            "can approve it; never use historical agreement or claim a write "
-            "without a committed tool receipt."
+            "bulleted list; unknown stays unknown. When Dan asks to log an estimate, "
+            "use health_food_review log_estimate directly. Questions or previews alone "
+            "do not request a write. Never claim a write without a committed tool receipt."
         )
     instructions += (
         "\n\nFor an overall capability overview, after get_system_health with "

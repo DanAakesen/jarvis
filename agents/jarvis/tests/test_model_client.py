@@ -1882,7 +1882,8 @@ async def test_trusted_channel_does_not_infer_telephone_from_mobile_history(
         expected = {"chat": "browser chat", "voice": "browser voice", "phone": "telephone call"}
         assert f"Trusted runtime channel: {expected[channel]}." in request["instructions"]
         assert "not device wording or earlier refusals" in request["instructions"]
-        assert "prose or lookup alone creates no pending proposal" in request["instructions"]
+        assert "use health_food_review log_estimate directly" in request["instructions"]
+        assert "Questions or previews alone do not request a write" in request["instructions"]
         assert "committed tool receipt" in request["instructions"]
         assert "protein (g), calories (kcal) and fat (g)" in request["instructions"]
         assert "bulleted list; unknown stays unknown" in request["instructions"]

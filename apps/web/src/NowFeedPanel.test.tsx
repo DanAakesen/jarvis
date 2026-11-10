@@ -405,55 +405,23 @@ describe('live Now panel', () => {
     expect(screen.queryByRole('button', { name: /need attention/ })).toBeNull();
   });
 
-  it('shows browser approvals, records the owner’s choice, and refreshes the queue', async () => {
+  it('keeps genuine activity visible without showing legacy confirmations', async () => {
     const user = userEvent.setup();
     const confirmation = {
-      id: 'A'.repeat(43),
-      actionKind: 'merge' as const,
-      summary: 'Merge the reviewed change.',
-      expiresAt: '2026-10-04T00:05:00.000Z',
-    };
-    loadNowFeed.mockResolvedValueOnce({ ...feed, confirmations: [confirmation] })
-      .mockResolvedValue({ ...feed, confirmations: [] });
-    resolveNowConfirmation.mockResolvedValue(undefined);
-    streamNowFeed.mockImplementation(async ({ signal }) =>
-      new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true })),
-    );
-    render(<MemoryRouter><HeaderFeed client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>);
-
-    await user.click(await screen.findByRole('button', { name: '2 items need attention' }));
-    await user.click(await screen.findByRole('button', { name: 'Approve Merge' }));
-
-    await waitFor(() => expect(resolveNowConfirmation).toHaveBeenCalledWith(
-      'https://api.example.com', confirmation.id, 'approve', getAccessToken,
-    ));
-    await waitFor(() => expect(loadNowFeed).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('Approval recorded.')).not.toBeNull();
-  });
-
-  it('shows browser confirmation failures and permits a retry', async () => {
-    const user = userEvent.setup();
-    const confirmation = {
-      id: 'B'.repeat(43),
-      actionKind: 'delete' as const,
-      summary: 'Delete the old branch.',
-      expiresAt: '2026-10-04T00:05:00.000Z',
+      id: 'A'.repeat(43), actionKind: 'merge' as const,
+      summary: 'Merge the reviewed change.', expiresAt: '2026-10-04T00:05:00.000Z',
     };
     loadNowFeed.mockResolvedValue({ ...feed, confirmations: [confirmation] });
-    resolveNowConfirmation.mockRejectedValueOnce(new Error('Temporary network failure'))
-      .mockResolvedValueOnce(undefined);
     streamNowFeed.mockImplementation(async ({ signal }) =>
       new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true })),
     );
     render(<MemoryRouter><HeaderFeed client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} /></MemoryRouter>);
 
-    await user.click(await screen.findByRole('button', { name: '2 items need attention' }));
-    const rejectButton = await screen.findByRole('button', { name: 'Reject Delete' });
-    await user.click(rejectButton);
-    expect((await screen.findByRole('alert')).textContent).toContain('could not record your response');
-
-    await user.click(rejectButton);
-    await waitFor(() => expect(resolveNowConfirmation).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('Request rejected.')).not.toBeNull();
+    await user.click(await screen.findByRole('button', { name: '1 item needs attention' }));
+    expect(screen.getByRole('link', { name: 'Sandbox crashed' })).not.toBeNull();
+    expect(screen.queryByText('Merge the reviewed change.')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Approve Merge' })).toBeNull();
+    expect(resolveNowConfirmation).not.toHaveBeenCalled();
   });
+
 });
