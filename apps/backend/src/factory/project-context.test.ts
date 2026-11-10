@@ -85,6 +85,18 @@ describe('active project resolution', () => {
     expect(resolved).toMatchObject({ id: project.id, repo: project.repo });
   });
 
+  it('uses recent owner context for a follow-up without accepting a later different project', async () => {
+    const jarvis = registeredProject({ id: '31', name: 'Jarvis', repo: 'DanAakesen/jarvis' });
+    const other = registeredProject({ id: '32', name: 'Other', repo: 'synthetic/other' });
+    const store = { list: vi.fn(async () => [jarvis, other]) } as unknown as ProjectStore;
+    await expect(resolveProjectForMessage(
+      'Jarvis', 'Save the requirements in the repo.', store, ['Let us work on Jarvis.'],
+    )).resolves.toMatchObject({ id: '31' });
+    await expect(resolveProjectForMessage(
+      'Jarvis', 'Save the requirements in the repo.', store, ['Now work on Other.', 'Let us work on Jarvis.'],
+    )).rejects.toThrow('Do you mean project');
+  });
+
   it('accepts an exact ID when the request names that project by its registered display name', async () => {
     const project = registeredProject();
     const store = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
