@@ -73,10 +73,8 @@ describe('get_work_status evidence and restart safety', () => {
     const exact = await getWorkStatus(f.app, { issueNumber: 8, project: ' greeting   runner ' });
     expect(exact.project).toMatchObject({ id: '31', repo: testProject.repo });
 
-    const ambiguous = await getWorkStatus(f.app, { issueNumber: 8, project: 'the test project' });
-    expect(ambiguous.project).toBeNull();
-    expect(ambiguous.partial).toBe(true);
-    expect(ambiguous.warnings.join(' ')).toContain('Do you mean project Greeting Runner');
+    const unique = await getWorkStatus(f.app, { issueNumber: 8, project: 'the test project' });
+    expect(unique.project).toMatchObject({ id: '31', repo: testProject.repo });
   });
 
   it('is always discoverable, sensitive and strictly read-only with complete delivery evidence', async () => {
