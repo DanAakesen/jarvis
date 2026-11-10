@@ -3784,3 +3784,8 @@ Owner-selected scope keeps the existing Proactive page and source settings. Add 
 Notification entry preserves normal finding actions for open items and marks them
 seen. Historical notifications remain read-only. Failed network loads expose the
 shared Retry control without losing the requested finding identifier.
+
+
+## Watch steps-only revision — 10 November 2026
+
+Use one large white rounded step count above a full-width amber curve, with fine vertical gradient stems beneath it and a thin dashed white daily-goal reference on the same scale. No other visible text, axes or footer. Preserve real hourly positions; do not stretch an incomplete day or invent future readings. VoiceOver describes steps and goal. This supersedes the previous rectangular daily/weekly composition only. Approved concept: [amber stem reference](docs/ios/design/watch/steps-approved-2026-11-10.png) from the secondary design conversation. Native installed-size acceptance remains open.

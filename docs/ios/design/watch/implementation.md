@@ -81,3 +81,15 @@ A follow-up generation guard prevents an old cancelled chat from clearing the
 new account's chat-task ownership. Current repair #1658 is integrated without
 changing the qualified iOS tree fd5467327a30ac926c91ec055a06d8f940092c8c.
 Focused native interaction run 42521342696, signing and upload remain pending.
+
+
+## Steps-only complication follow-up — 10 November 2026
+
+Owner approved the amber vertical-stem steps concept. Implementation removes all small text, the target text, time axis, calorie footer and weekly workout column. A large white count and full-width amber cumulative curve/stems remain, with a dashed goal line. The existing hourly snapshot, positive configured step goal, freshness and midnight rules are reused. Missing readings show an em dash and no invented curve; true zero remains zero. Over-goal days expand the common scale rather than clipping progress. Partial days retain their actual hourly extent. Small complications and Watch chat controls are unchanged.
+
+Branch `feature/watch-steps-complication` starts from main cb360ca7. Core tests cover goal crossing, missing/zero/invalid goals and partial-hour interpolation without future extrapolation. All 550 Core tests, CI and CodeQL passed at 6490aa2. Native run 42765852671 passed all three unsigned builds. The [isolated Health preview](steps-native-preview-2026-11-10.png) was inspected for count, full-width chart, stems and target line; it uses the actual shared view, not an installed watch-face complication. Final picker-copy/reference/docs follow-up checks are pending. Physical Watch verification is not claimed. Device checks: installed rectangular family at Ultra 2 size, long counts, Always On/tint, VoiceOver, before/after goal, missing/zero readings, late sync and midnight.
+
+Reconnect alert: the owner reported the same startup modal again. Main still has the defect; PR #1692 at 5de65c01 implements quiet startup/idle connectivity and inline passive history errors, retaining feedback for active sends/voice. It passed 551 Core tests and all three unsigned native builds. It remains unmerged; broad iPhone UI qualification reports six Notes/push-navigation failures. Primary owns integration, release and actual connectivity acceptance. Weekly gym/run chart designs are deferred.
+
+
+[Full steps/reconnect handoff](steps-reconnect-handoff-2026-11-10.md) records exact tested commits, CI, remaining checks and primary ownership. The stable widget kind is preserved; its picker name/description now describe daily steps. [Approved concept](steps-approved-2026-11-10.png) is generated design evidence, not a native capture.

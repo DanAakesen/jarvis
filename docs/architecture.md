@@ -9376,3 +9376,8 @@ recovery for inspection. Final inventory/evidence and source cleanup are pending
 Read-only readiness 42646690853 confirmed production APNs and all delivery flags
 remain configured on ready revision `0000568` after the final Factory cutover.
 This configuration check did not send a push notification.
+
+
+## Watch steps rendering — 10 November 2026
+
+`WatchStepsPlot` in JarvisCore projects the existing bounded 24-hour cumulative snapshot and positive daily goal onto a shared scale with headroom. `WatchStepsChart` draws the chart and gradient stems in SwiftUI Canvas. No new transport, persistence, HealthKit query, credential, entitlement or backend boundary. Existing snapshot freshness and midnight expiry remain authoritative. The separate startup-alert recovery patch is PR #1692, not a dependency of chart rendering.
