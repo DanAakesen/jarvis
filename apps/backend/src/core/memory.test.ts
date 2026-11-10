@@ -152,10 +152,8 @@ describe('long-term memory tools', () => {
     expect(store.save).toHaveBeenCalledWith(expect.objectContaining({ sourceMessageId: source.messageId }), expect.any(AbortSignal));
   });
 
-  it('saves requested health or banking context without a magic word, and rejects credentials', async () => {
-    const store = memoryStore({
-      getSourceMessage: vi.fn(async () => ({ ...source, text: 'Save my bank details for later.' })),
-    });
+  it('requires the explicit word remember before retaining sensitive information', async () => {
+    const store = memoryStore();
     const { app } = appFor(store);
     const response = await app.inject({
       method: 'POST',
@@ -163,21 +161,21 @@ describe('long-term memory tools', () => {
       headers: userHeaders,
       payload: { category: 'preference', key: 'bank', content: 'Dan has a bank account.' },
     });
-    expect(response.json()).toMatchObject({ outcome: 'ok' });
-    expect(store.save).toHaveBeenCalled();
 
-    const secretStore = memoryStore({
-      getSourceMessage: vi.fn(async () => ({ ...source, text: 'Remember my password.' })),
+    expect(response.json()).toMatchObject({ outcome: 'refused' });
+    expect(store.save).not.toHaveBeenCalled();
+
+    const explicitStore = memoryStore({
+      getSourceMessage: vi.fn(async () => ({ ...source, text: 'Remember that this is my bank account.' })),
     });
-    const secretApp = appFor(secretStore).app;
-    const secret = await secretApp.inject({
+    const explicitApp = appFor(explicitStore).app;
+    const explicit = await explicitApp.inject({
       method: 'POST',
       url: '/tools/memory_remember',
       headers: userHeaders,
-      payload: { category: 'preference', key: 'credential', content: 'A password.' },
+      payload: { category: 'preference', key: 'bank', content: 'Dan has a bank account.' },
     });
-    expect(secret.json()).toMatchObject({ outcome: 'refused' });
-    expect(secretStore.save).not.toHaveBeenCalled();
+    expect(explicit.json()).toMatchObject({ outcome: 'ok' });
   });
 
   it('corrects the existing stable key and forgets only the selected memory', async () => {
