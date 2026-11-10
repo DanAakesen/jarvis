@@ -33,6 +33,9 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     func request(_ request: WatchRequest) async throws -> WatchReply {
         guard reachable else { throw WatchFailure.unavailable }
         guard request.isValid else { throw WatchFailure.invalidRequest }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return try WatchPreview.reply(to: request) }
+        #endif
         guard pending[request.id] == nil else { throw WatchFailure.busy }
         let data = try WatchCodec.encode(WatchWire.request(request))
         return try await withCheckedThrowingContinuation { continuation in

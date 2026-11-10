@@ -6,6 +6,10 @@ An initial unreachable WCSession callback is connection status, not evidence tha
 
 The owner approved the amber vertical-stem steps concept after rejecting small text on the Ultra 2. Show only the large daily step count, full-width cumulative chart and dashed daily-goal reference; remove all other visible labels and metrics. Preserve missing data and actual hourly coverage. Weekly workout designs are deferred. Startup reconnect recovery remains separate in PR #1692; neither change is merged or deployed by this secondary thread. The actual shared view was inspected in an isolated Ultra-family Health preview; installed watch-face rendering and physical acceptance remain unverified.
 
+## 2026-11-10 — Watch task creation and native form inputs
+
+The owner requests a Factory plus after project selection, typing/dictation for every free-text field, dictatable exercise and swipe/Crown reps/sets. Extend the old read-only Factory boundary for explicit task creation only, via the existing authenticated iPhone Factory client and idempotent submission contract. Replace oversized steppers with native pickers and treat valid empty health history as empty rather than disconnected. Preserve the primary's separate #1697 startup/steps integration. Secondary tests use isolated fixtures and never execute live Factory work. Implementation/CI/device acceptance are distinct; all 555 Core tests, CI, CodeQL and all three unsigned native builds passed at e4a5ab28. Four native views were inspected; selected-project visual verification and real device interaction remain open.
+
 ## 2026-11-09 — Execute resolved owner requests directly
 
 Dan explicitly rejected approval cards, repeated confirmation turns, prescribed

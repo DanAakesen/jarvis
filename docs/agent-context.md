@@ -8047,6 +8047,13 @@ long-tool setting (320 seconds by default), like web research. This requires
 releasing the Jarvis agent as well as the backend. No total chat deadline is added.
 
 
+## Watch Factory/lift input follow-up — 10 November 2026
+
+Use existing isolated Actions Core and unsigned native workflows. WatchInputFlowTests cover stable retry identity, project/request binding, limits, attempt bounds and valid empty versus unavailable history. The existing Watch preview step also captures Lifts, New lift, Reps and New task using --watch-fixture; the DEBUG responder never calls live Factory/Health. Only test captures are extended; no infrastructure provisioning, deployment workflow, entitlement or live settings change.
+
+Primary owns #1697 steps/startup integration and must preserve its WatchContract/Chat/Connection changes when combining this branch. Native keyboard/dictation availability, Digital Crown behavior, large text, actual disconnected/empty/error states and real paired-device round trips remain device checks. Never test by starting/recovering live Factory tasks in this secondary thread.
+
+
 ## Watch steps follow-up — 10 November 2026
 
 Use existing PR-only Apple Watch build workflow for unsigned Watch simulator, physical Watch Release architecture and paired iPhone compilation. JarvisCore includes WatchStepsPlotTests for goal crossing, missing/zero and partial-day coverage; 550 tests, CI and CodeQL passed at 6490aa2. Native run 42765852671 passed all three unsigned builds. The isolated Health preview was inspected; it is not an installed watch-face screenshot. Final picker-copy/reference/docs follow-up checks are pending; no installed-device success is claimed. Startup alert PR #1692 is implemented and separately qualified at 5de65c01; it is not merged or released. Do not duplicate its recovery patch. Primary owns integration/deployment. Weekly workout concepts are deferred.

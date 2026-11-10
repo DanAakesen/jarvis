@@ -83,6 +83,17 @@ changing the qualified iOS tree fd5467327a30ac926c91ec055a06d8f940092c8c.
 Focused native interaction run 42521342696, signing and upload remain pending.
 
 
+## Factory creation and lift input correction — 10 November 2026
+
+The owner now requests a selected-project Factory plus action and typed/dictated free text, extending the earlier read-only Watch scope only for explicit task creation. New task reuses existing FactoryTaskSubmission/backend idempotency through the paired phone, defaults the project agent and preserves unchanged/revisited draft identities on manual retry. No policy/recovery/merge/deployment controls or offline send queue.
+
+WatchTextInput adds system mic entry alongside native typing for Exercise, Factory Title/Request and Message draft. Reps/Sets now open bounded swipe/Crown wheel pickers; returning preserves the rest of the form. Add lift is a visible plus action row. Empty health query status is accepted; unavailable health no longer claims the phone is disconnected. Histories reload after reachability changes.
+
+Branch feature/watch-factory-lift-inputs is independent from primary's #1697 steps/startup bundle. WatchContract, WatchChatView and WatchConnection have distinct changes to preserve at integration. Eight Core regressions and new DEBUG-only in-memory fixture captures are included. All 555 Core tests, full CI and CodeQL passed at e4a5ab28. Native run 42775120796 attempt 2 passed all three unsigned builds. Lifts, New lift, Reps and New task fixture views were visually inspected; the selected-project capture is a startup frame and is not visual proof. No live task was created. [Final handoff](factory-lift-inputs-handoff-2026-11-10.md) records evidence and device checks. Required device checks: native typing/dictation on every free-text field, cancellation/draft retention, swipe/Crown Reps/Sets at large text, save/edit/delete lift, empty versus disconnected histories, project-scoped task receipt and unchanged manual retry. Do not start live Factory tasks during secondary testing.
+
+Review correction: stored high-rep lifts are preserved without clamping. Watch validation now reuses JarvisLiftDraft; reps support 1–1,000 and sets 1–100. Unsupported/corrupt records are explicitly blocked from Save instead of normalized. Regression tests cover an unrelated weight edit preserving 150 reps and invalid/fractional/huge counts without conversion traps.
+
+
 ## Steps-only complication follow-up — 10 November 2026
 
 Owner approved the amber vertical-stem steps concept. Implementation removes all small text, the target text, time axis, calorie footer and weekly workout column. A large white count and full-width amber cumulative curve/stems remain, with a dashed goal line. The existing hourly snapshot, positive configured step goal, freshness and midnight rules are reused. Missing readings show an em dash and no invented curve; true zero remains zero. Over-goal days expand the common scale rather than clipping progress. Partial days retain their actual hourly extent. Small complications and Watch chat controls are unchanged.

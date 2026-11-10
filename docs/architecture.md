@@ -9378,6 +9378,13 @@ remain configured on ready revision `0000568` after the final Factory cutover.
 This configuration check did not send a push notification.
 
 
+## Watch Factory creation and input boundary — 10 November 2026
+
+An additive createFactoryTask action carries the existing FactoryTaskSubmission through the paired allow-list. Watch binds the selected project and request UUID to the payload submission ID, caps request text at 8 KB and retains identities for unchanged/revisited drafts. The phone checks that the project exists, calls the existing authenticated Factory client and returns a compact task receipt. Existing backend submission idempotency and phone reply caching remain in use; no new endpoint, credential, policy, infrastructure or automatic retry.
+
+WatchTextInput uses native SwiftUI text editing and WatchKit system text input for mic entry. Dedicated native pickers own reps/sets bindings. Read history accepts the actual empty status and distinguishes health-source unavailability from transport loss. The additive action/failure require the updated paired iPhone/Watch bundle for full behavior; old peers fail visibly. DEBUG WatchPreview handles fixture calls in memory before any WatchConnectivity send; it never starts a live Factory task.
+
+
 ## Watch steps rendering — 10 November 2026
 
 `WatchStepsPlot` in JarvisCore projects the existing bounded 24-hour cumulative snapshot and positive daily goal onto a shared scale with headroom. `WatchStepsChart` draws the chart and gradient stems in SwiftUI Canvas. No new transport, persistence, HealthKit query, credential, entitlement or backend boundary. Existing snapshot freshness and midnight expiry remain authoritative. The separate startup-alert recovery patch is PR #1692, not a dependency of chart rendering.

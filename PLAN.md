@@ -4757,6 +4757,13 @@ agent activation, deterministic readiness and live conversation acceptance.
 No native build is required. Live image generation remains unverified until the credential exists.
 
 
+## Watch Factory/lift follow-up — 10 November 2026
+
+Branch feature/watch-factory-lift-inputs starts from latest main cb360ca7. Implemented: selected-project new-task plus/form, bounded/idempotent Factory submissions through iPhone, reusable typing/dictation fields, reps/sets wheel pickers, preserved form drafts, and correct empty history handling with reconnect reads. Eight focused Core regressions and isolated Watch captures are added; all 555 Core tests, full CI and CodeQL passed at e4a5ab28. Native run 42775120796 attempt 2 passed Watch simulator, physical Watch Release and paired iPhone simulator builds. Four native fixture views were inspected; selected-project capture still shows startup and is not visual proof.
+
+Primary is already integrating steps/startup recovery in #1697. Do not duplicate, merge or deploy that work. This branch has separate edits in WatchContract, WatchChatView and WatchConnection that primary must preserve alongside #1697; no startup recovery code is copied here. Remaining: primary integration with #1697, selected-project visual/device verification, actual typing/dictation/Crown and phone transport acceptance. See docs/ios/design/watch/factory-lift-inputs-handoff-2026-11-10.md. No live task execution is used for testing.
+
+
 ## Watch follow-up — 10 November 2026
 
 Implement the approved steps-only rectangular complication on `feature/watch-steps-complication`, based on main cb360ca7. Weekly workout designs are deferred. All 550 Core tests, CI, CodeQL and unsigned Watch simulator/physical Watch Release/paired iPhone builds passed at runtime commit 6490aa2. Final evidence changes add references/docs and correct the picker name/description; fresh checks on that metadata-only follow-up are pending. The startup reconnect alert is already implemented separately in PR #1692 (not merged): exact source 5de65c01 passed 551 Core tests, CI, CodeQL and unsigned Watch simulator/physical architecture/paired iPhone builds. Its broad iPhone suite has six Notes/push-navigation failures; physical Watch acceptance remains open. Primary owns integration and release of both changes.
