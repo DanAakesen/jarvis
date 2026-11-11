@@ -165,10 +165,9 @@ struct WatchDashboardView: View {
             if let points, let latest = points.last {
                 Text(WatchDashboardFormatting.percentage(latest.percent))
                     .font(.system(.title2, design: .rounded, weight: .semibold))
-                WatchBodyFatChart(dates: points.compactMap { WatchDashboardFormatting.day($0.date) }, percentages: points.map(\.percent))
+                WatchBodyFatChart(dates: points.compactMap { WatchDashboardFormatting.day($0.date) },
+                                  percentages: points.map(\.percent), showDates: false)
                     .frame(height: 76)
-                Text(WatchBodyFatSummary.trend(points)).font(.caption2).foregroundStyle(.secondary)
-                Text("Measured \(latest.date)").font(.caption2).foregroundStyle(.secondary)
             } else { missing(points == nil ? (loading ? "Loading body fat…" : "Body fat unavailable") : "No body fat measurements") }
         }
     }
@@ -216,9 +215,15 @@ struct WatchDashboardSection<Content: View>: View {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 WatchDashboardHeading(title: title)
                 Spacer(minLength: 0)
-                NavigationLink("See more", value: route)
-                    .font(.caption2).foregroundStyle(WatchStyle.amber)
-                    .frame(minHeight: 32)
+                NavigationLink(value: route) {
+                    Text("See more")
+                        .font(.system(size: 10, relativeTo: .caption2))
+                        .underline()
+                        .foregroundStyle(WatchStyle.amber)
+                        .frame(minHeight: 32)
+                        .contentShape(Rectangle())
+                }
+                    .buttonStyle(.plain)
                     .accessibilityLabel("See more \(title)")
             }
             content
