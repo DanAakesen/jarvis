@@ -107,7 +107,8 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         var first = true
         while !Task.isCancelled {
             if WCSession.default.activationState == .notActivated { WCSession.default.activate() }
-            updateReachability()
+            let current = WCSession.default.activationState == .activated && WCSession.default.isReachable
+            if current != reachable { updateReachability() }
             if reachable && (first || dashboardError != nil || dashboard?.isCurrent(at: Date()) != true || snapshot?.isCurrent(at: Date()) != true) {
                 await refresh()
             }
