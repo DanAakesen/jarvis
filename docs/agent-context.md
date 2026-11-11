@@ -17,8 +17,8 @@
 - **Exceptions.** `ManagedPolicyClient` keeps the full catalogue (`lookup_tools = False`)
   because its native definition registers it. The chat smoke role keeps its fixed read-only
   tools. `GET /tools` is unchanged and still supplies names and effect metadata to the agent.
-  The Danish route uses the same relay session update; `agents/jarvis/voice_runtime.py` builds
-  no tool list, and the hosted voice fallback uses the chat loop.
+  English and Danish speech use the same `/voice` relay session; `agents/jarvis/voice_runtime.py`
+  builds no tool list.
 
 ## Voice idle close — 12 November 2026
 
@@ -36,8 +36,9 @@
   after they are seen in use. Decision: `docs/decisions.md`, 2026-11-11.
 - **Voice prompt.** The realtime voice path builds its instructions in
   `apps/backend/src/voice/realtime.ts` and uses `voiceCapabilityInstructions`; chat and the hosted
-  agent use the full `capabilityInstructions`. English and Danish sessions share one prompt text;
-  only voice, phrase list and transcription settings differ. Decision: `docs/decisions.md`, 2026-11-12.
+  agent use the full `capabilityInstructions`. Both spoken languages use the same `/voice` route,
+  realtime model, Ryan HD voice and prompt; Azure Speech transcription detects the language.
+  Decision: `docs/decisions.md`, 2026-11-12.
 - **Native validation changed.** The iOS Simulator workflow, the `JarvisUITests` target and the
   UI test and screenshot evidence are removed. The older instructions below that require the
   separate iOS Simulator workflow or select `JarvisUITests` (see "Exact-final-head
@@ -5939,25 +5940,21 @@ the most recent 12 messages, bounded to 24,000 characters total and 8,000 per
 message. The context endpoint is agent-authorized and adds no configuration or
 secret. SQL-backed context behavior is covered by the database integration suite.
 
-### Danish voice provisioning
+### Bilingual realtime voice
 
-The `Danish voice agent` workflow provisions `jarvis-voice-mai` after a successful
-`Deploy` when its inputs change, or on manual dispatch from `main`. It checks out
-the deployment commit, reads `foundryAdminEndpoint` from the `jarvis-infra`
-deployment, and authenticates with GitHub OIDC. The hash-locked SDK inputs are
-`agents/jarvis/requirements-voice-provisioner.in` and
-`agents/jarvis/requirements-voice-provisioner.txt`. To check locally:
+Browser and iPhone sessions use only the authenticated `/voice` WebSocket with
+`gpt-realtime-2.1`, Ryan HD and the shared prompt. Azure Speech transcription
+omits a fixed language hint and detects Danish or English. Removed settings that
+reference `mai-transcribe` fall back to `azure-speech`; the legacy Danish voice
+setting is ignored. Danish app localization, chat, notes and the composer’s
+chat-language choice remain.
 
-```sh
-python -m pip install --require-hashes -r agents/jarvis/requirements-voice-provisioner.txt
-python agents/jarvis/scripts/provision_danish_voice.py
-```
-
-The script requires `FOUNDRY_PROJECT_ENDPOINT` and an Azure CLI identity authorized
-to manage project agents. The Deploy smoke step grants its identity `Foundry User`
-on the project; Bicep grants the backend the same role. The backend receives the
-project endpoint from Bicep and uses its managed identity; do not put credentials
-in the browser.
+The provisioning workflow and its script are removed. Do not edit Azure
+resources manually: the Foundry hosted agent `jarvis-voice-mai`, MAI Transcribe
+deployment and MAI Voice deployment are unused and require later manual cleanup.
+The ACS phone-call bridge used the hosted-agent `session.start`/`session.ready`
+protocol and is not registered; it needs a separate protocol bridge before
+phone voice can be re-enabled.
 
 Agent configuration (environment variables, no secrets):
 

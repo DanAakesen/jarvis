@@ -249,10 +249,10 @@ public actor VoiceSessionClient {
         machine.state
     }
 
-    public func start(accessToken: String, language: ChatLanguage) async throws {
+    public func start(accessToken: String) async throws {
         guard machine.state == .idle else { throw VoiceProtocolError.invalidState }
         guard Self.isValidSubprotocolToken(accessToken) else { throw VoiceProtocolError.invalidToken }
-        let target = try VoiceEndpoint.url(baseURL: baseURL, language: language)
+        let target = try VoiceEndpoint.url(baseURL: baseURL)
         endpoint = target
         subprotocols = [VoiceEndpoint.subprotocol, "jarvis.auth.\(accessToken)"]
         apply(.start)

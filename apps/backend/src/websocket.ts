@@ -37,7 +37,7 @@ export function registerWebSocketPlugin<Logger extends FastifyBaseLogger>(
         const path = request.url?.split('?')[0];
         const expected = path === '/pc-bridge/connect'
           ? PC_BRIDGE_SUBPROTOCOL
-          : path === '/voice' || path === '/voice/da' ? VOICE_SUBPROTOCOL : undefined;
+          : path === '/voice' ? VOICE_SUBPROTOCOL : undefined;
         return expected && protocols.has(expected) ? expected : false;
       },
     },

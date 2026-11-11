@@ -310,9 +310,9 @@ voice-mode access and mobile overflow need separate design.
 | Sign-in | Sign-in screen; account-control placement remains undecided. |
 | Chat | Main workspace in typing mode; fixed bottom-centred input. |
 | English voice | Full-page voice workspace, started with the input's small orb. |
-| Danish voice | Same voice workspace; language selected through the shared More → Language menu or Settings. |
+| Danish speech | Same voice workspace and route as English; the realtime model follows speech. Chat language remains a separate composer choice. |
 | Interrupt and reconnect | Voice workspace and orb state; manual controls remain to be designed. |
-| Language toggle | Implemented in P8-36 as the shared More menu's Language flyout (Danish/English, checked choice) in the composer and the compact voice bar; detailed preferences in Settings. |
+| Chat language | Danish/English choice in the composer More menu; it does not select a voice route. |
 | Voice transcripts | Conversation view on request during voice; session history in typing mode. |
 | Task context | Background capability; relevant context can appear in requested/generated views. |
 | Honest confirmations | Outcome beside the action or in its generated view; spoken confirmation in voice. |

@@ -308,7 +308,6 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             let voiceEpoch = generation
             if let voiceID { return try encode(voiceID) }
             guard VoiceLiveActivityActions.session == nil else { throw WatchFailure.busy }
-            let voiceLanguage = try await client.voiceDefaultLanguage()
             guard let token = try await KeychainTokenStore().read() else { throw WatchFailure.signInRequired }
             guard voiceEpoch == generation else { throw WatchFailure.signInRequired }
             guard cancelledVoiceStarts.remove(r.id) == nil else { throw WatchFailure.unavailable }
@@ -342,11 +341,11 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             })
             voice = session; voiceMuted = false
             VoiceLiveActivityActions.session = self
-            do { try await session.start(accessToken: token, language: voiceLanguage)
+            do { try await session.start(accessToken: token)
                 guard voiceEpoch == generation, voiceID == id else {
                     try? await session.end(); throw WatchFailure.unavailable
                 }
-                try? liveActivity.start(sessionID: id, language: voiceLanguage == .en ? .en : .da)
+                try? liveActivity.start(sessionID: id, language: language)
             }
             catch { await stopVoice(); throw error }
             return try encode(id)

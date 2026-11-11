@@ -548,7 +548,7 @@ resource gpt6LunaVisionDeployment 'Microsoft.CognitiveServices/accounts/deployme
   }
 }
 
-// Dan's choice, 10 October: stronger models for research, Danish voice chat and Codex. Deployed one at a
+// Dan's choice, 10 October: stronger models for research and Codex. Deployed one at a
 // time like the others (Foundry allows one operation per account). Capacity was 50 like gpt-6-luna and is
 // 150 since 23 October (#1232): the live acceptance run sends over 50K input tokens in one minute to the
 // Chat model and throttled itself with rate_limit_exceeded. Global Standard bills per token, so capacity is

@@ -22,7 +22,6 @@ export interface PartialSpeechRecognizer {
 }
 
 export interface PartialSpeechRecognizerOptions {
-  readonly language: 'da' | 'en';
   readonly phraseHints: readonly string[];
   readonly onRecognizing: (text: string) => void;
   readonly onFailure: (reason?: string) => void;
@@ -53,11 +52,9 @@ export function createAzureSpeechEndpoint(runtimeEndpoint: string): URL {
 export function createAzureSpeechConfig(
   endpoint: URL,
   token: string,
-  language: 'da' | 'en',
 ): SpeechSDK.SpeechConfig {
   const speechConfig = SpeechSDK.SpeechConfig.fromEndpoint(endpoint);
   speechConfig.authorizationToken = token;
-  speechConfig.speechRecognitionLanguage = language === 'da' ? 'da-DK' : 'en-GB';
   return speechConfig;
 }
 
@@ -116,18 +113,19 @@ export function createAzureSpeechPartialRecognizerFactory(
   getToken: (scope: string, signal: AbortSignal) => Promise<string>,
 ): PartialSpeechRecognizerFactory {
   const endpoint = createAzureSpeechEndpoint(runtimeEndpoint);
-  return async ({ language, phraseHints, onRecognizing, onFailure }, signal) => {
+  return async ({ phraseHints, onRecognizing, onFailure }, signal) => {
     const token = await getToken(SPEECH_AUTH_SCOPE, AbortSignal.any([signal, AbortSignal.timeout(10_000)]));
     if (!token || token.length > MAX_TOKEN_LENGTH || /[\r\n]/u.test(token)) {
       throw new Error('Speech authentication unavailable');
     }
     if (signal.aborted) throw signal.reason;
 
-    const speechConfig = createAzureSpeechConfig(endpoint, token, language);
+    const speechConfig = createAzureSpeechConfig(endpoint, token);
     const streamFormat = SpeechSDK.AudioStreamFormat.getWaveFormatPCM(24_000, 16, 1);
     const inputStream = SpeechSDK.AudioInputStream.createPushStream(streamFormat);
     const audioConfig = SpeechSDK.AudioConfig.fromStreamInput(inputStream);
-    const recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+    const autoDetect = SpeechSDK.AutoDetectSourceLanguageConfig.fromLanguages(['da-DK', 'en-GB']);
+    const recognizer = SpeechSDK.SpeechRecognizer.FromConfig(speechConfig, autoDetect, audioConfig);
     SpeechSDK.PhraseListGrammar.fromRecognizer(recognizer).addPhrases(safePhraseHints(phraseHints));
     recognizer.recognizing = (_sender, event) => {
       const text = event.result.text;

@@ -127,10 +127,9 @@ enum JarvisFixtureScenario {
               "presentation": {"showWork": true},
               "voice": {
                 "defaultLanguage": "da",
-                "speechToTextModel": "mai-transcribe",
+                "speechToTextModel": "azure-speech",
                 "englishModel": "gpt-realtime-2.1",
-                "englishVoice": "en-GB-Ryan:DragonHDLatestNeural",
-                "danishVoice": "da-DK-JeppeNeural"
+                "englishVoice": "en-GB-Ryan:DragonHDLatestNeural"
               },
               "research": {"depth": "standard", "maxSources": 5},
               "jarvis": {"model": "fixture-model", "reasoning": "medium"},
@@ -161,11 +160,10 @@ enum JarvisFixtureScenario {
               "themes": ["light", "dark", "system"],
               "personalityTones": ["british_butler", "warm", "direct", "playful"],
               "personalityResponseStyles": ["concise", "balanced", "detailed"],
-              "languages": ["da", "en"],
-              "speechToTextModels": ["mai-transcribe"],
+              "chatLanguages": ["da", "en"],
+              "speechToTextModels": ["azure-speech"],
               "englishModels": ["gpt-realtime-2.1"],
               "englishVoices": ["en-GB-Ryan:DragonHDLatestNeural"],
-              "danishVoices": ["da-DK-JeppeNeural"],
               "researchDepths": ["quick", "standard", "deep"],
               "jarvisModels": ["fixture-model"],
               "reasoningEfforts": ["none", "low", "medium", "high"],

@@ -999,13 +999,11 @@ Outside touch blurs only Message Jarvis, without cancelling the tap.
 Do not animate keyboard fitting or treat pinch zoom as keyboard space.
 Controlled actual-component Chromium checks are not physical Safari proof.
 
-## Fixed Danish voice in Settings (13 October 2026)
+## Unified bilingual voice (12 November 2026)
 
-The Voice section shows **Jeppe (Danish)** in a labelled read-only field.
-Reuse the existing Settings grid, field styling and collapsible section.
-There is no selectable Danish voice, new animation or additional save action.
-Legacy Harper payloads still display the actual live voice without dirtying
-the form.
+Voice has one authenticated route and uses the existing realtime model and shared
+prompt for English and Danish speech. Do not add a voice-language or route picker.
+The composer keeps its separate Danish/English chat-language choice.
 
 ## Remaining UI release (13 October 2026)
 

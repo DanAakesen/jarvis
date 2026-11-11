@@ -178,11 +178,6 @@ Owner requests execute without another approval in every presence mode.`;
   return [style, mode, contextual].join('\n\n');
 }
 
-export const DANISH_REALTIME_VOICE = 'da-DK-JeppeNeural';
-const DANISH_PHRASE_LIST = [
-  'Jarvis', 'Codex', 'Copilot', 'YouTube', 'Chrome', 'GitHub', 'pull request', 'README', 'Teams', 'Gmail',
-];
-
 function voiceCapabilityGuidance(
   mode: 'discovery' | 'lazy' = 'discovery', toolIndex = '',
 ): string {
@@ -344,7 +339,6 @@ export function createRealtimeSessionUpdate(
   tools: ToolRegistry,
   personality: Settings['personality'] = defaultSettings.personality,
   presence: AwayModeState = defaultAwayModeState,
-  language: 'da' | 'en' = 'en',
   projects: readonly ProjectContextEntry[] = [],
   transcriptionModel = defaultSettings.roles.transcription.model,
   voiceTuning: VoiceTuningSettings = defaultSettings.voice,
@@ -353,7 +347,6 @@ export function createRealtimeSessionUpdate(
   identity: Settings['identity'] = defaultSettings.identity,
   capabilityMode: RealtimeCapabilityMode = 'direct',
 ) {
-  const danish = language === 'da';
   const proactiveEnabled = tools.get('proactive_recent_items') !== undefined;
   const proactivePreferencesEnabled = tools.get('proactive_preferences') !== undefined;
   const ownerRemindersEnabled = tools.get('owner_reminders') !== undefined;
@@ -375,28 +368,14 @@ export function createRealtimeSessionUpdate(
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },
       input_audio_echo_cancellation: { type: 'server_echo_cancellation' },
-      // Semantic end-of-turn detection has no Danish model, so Danish uses server VAD. A higher
-      // threshold and a minimum speech length stop background noise from interrupting replies.
-      turn_detection: danish
-        ? {
-          type: 'server_vad',
-          threshold: voiceTuning.serverVadThreshold,
-          prefix_padding_ms: voiceTuning.prefixPaddingMs,
-          silence_duration_ms: voiceTuning.silenceDurationMs,
-          speech_duration_ms: 350,
-          create_response: false,
-          interrupt_response: voiceTuning.bargeInEnabled,
-        }
-        : {
-          type: 'azure_semantic_vad_en', threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 500,
-          speech_duration_ms: 300, remove_filler_words: true, create_response: false,
-          interrupt_response: voiceTuning.bargeInEnabled,
-        },
+      turn_detection: {
+        type: 'azure_semantic_vad_en', threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 500,
+        speech_duration_ms: 300, remove_filler_words: true, create_response: false,
+        interrupt_response: voiceTuning.bargeInEnabled,
+      },
       max_response_output_tokens: voiceTuning.maxSpokenReplyTokens,
-      input_audio_transcription: danish
-        ? { model: transcriptionModel, language: 'da', phrase_list: DANISH_PHRASE_LIST }
-        : { model: transcriptionModel },
-      voice: { name: danish ? DANISH_REALTIME_VOICE : ENGLISH_REALTIME_VOICE, type: 'azure-standard' },
+      input_audio_transcription: { model: transcriptionModel },
+      voice: { name: ENGLISH_REALTIME_VOICE, type: 'azure-standard' },
       tools: capabilityMode === 'discovery'
         ? voiceCapabilityToolDefinitions()
         : capabilityMode === 'lazy' ? lookupToolDefinitions() : directToolDefinitions(tools),
@@ -410,7 +389,7 @@ export function createEnglishSessionUpdate(
   personality: Settings['personality'] = defaultSettings.personality,
   presence: AwayModeState = defaultAwayModeState,
 ) {
-  return createRealtimeSessionUpdate(tools, personality, presence, 'en');
+  return createRealtimeSessionUpdate(tools, personality, presence);
 }
 
 export interface RealtimeFunctionCall {

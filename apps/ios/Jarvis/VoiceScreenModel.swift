@@ -83,7 +83,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             transport: VoiceActivityScreenshotSocket()
         )
         do {
-            try await sessionClient?.start(accessToken: "fixture.voice", language: .da)
+            try await sessionClient?.start(accessToken: "fixture.voice")
             voiceState = phase
             isAudioReady = true
             try liveActivity.start(
@@ -160,7 +160,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             )
             sessionClient = client
             do {
-                try await client.start(accessToken: "fixture.voice", language: .da)
+                try await client.start(accessToken: "fixture.voice")
                 voiceState = .listening
                 isAudioReady = true
             } catch {
@@ -199,9 +199,6 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             let httpClient = try JarvisComposition.makeClient(
                 accessTokenProvider: MissingVoiceAccessTokenProvider()
             )
-            let language = try await httpClient.voiceDefaultLanguage()
-            guard sessionGeneration == generation else { return }
-            try Task.checkCancellation()
             let microphoneAllowed = await VoiceAudioEngine.requestMicrophonePermission()
             guard sessionGeneration == generation else { return }
             try Task.checkCancellation()
@@ -243,7 +240,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 }
             }
             sessionClient = client
-            try await client.start(accessToken: token, language: language)
+            try await client.start(accessToken: token)
             guard sessionGeneration == generation else { return }
             try Task.checkCancellation()
             startScreenShareMonitoring()
@@ -621,15 +618,14 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 self.failAudioCapture()
             }
             if let sessionID = liveActivitySessionID {
-                let language = JarvisAppLanguage(
-                    rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-                ) ?? .default
+                let language = appLanguage
                 do {
                     try liveActivity.start(sessionID: sessionID, language: language)
                     liveActivity.update(state: voiceState, isMuted: isMuted)
                 } catch {
                     errorMessage = VoiceLiveActivityCopy.updateFailed.text(language: language)
                 }
+
             }
             captureTask = Task { @MainActor [weak self] in
                 for await pcm16 in stream {
@@ -663,6 +659,12 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         } catch {
             failAudioCapture()
         }
+    }
+
+    private var appLanguage: JarvisAppLanguage {
+        JarvisAppLanguage(
+            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
+        ) ?? .default
     }
 
     private func failAudioCapture() {

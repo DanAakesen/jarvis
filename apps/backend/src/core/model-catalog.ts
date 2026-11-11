@@ -271,7 +271,7 @@ export const defaultRoleModels: Readonly<Record<ModelRole, string>> = Object.fre
   vision: 'gpt-6-luna',
   research: 'gpt-5.6-luna',
   voice: 'gpt-realtime-2.1',
-  transcription: 'mai-transcribe',
+  transcription: 'azure-speech',
   embedding: 'text-embedding-3-small',
   codex: 'default',
   copilot: 'default',
@@ -313,7 +313,7 @@ const roleCapabilities: Partial<Record<ModelRole, readonly ModelCapability[]>> =
 export function modelsForRole(catalogue: ModelCatalogue, role: ModelRole): string[] {
   if (role === 'codex') return [...codexModels];
   if (role === 'copilot') return [...copilotModels];
-  if (role === 'transcription') return ['mai-transcribe'];
+  if (role === 'transcription') return ['azure-speech'];
   if (role === 'voice') {
     return voiceLiveModels.filter((model) =>
       catalogue.deployments.some((deployment) => deployment.name === model && deployment.capabilities.includes('realtime')));

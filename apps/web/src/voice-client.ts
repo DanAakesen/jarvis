@@ -2,7 +2,6 @@ import { isCameraRequest, isScreenRequest } from './vision-request';
 import { parseVisualResult, parseVisualTurnContext, type VisualResult, type VisualTurnContext } from './visual-context';
 import { isOwnerSessionToken } from './owner-session';
 
-export type VoiceLanguage = 'da' | 'en';
 export type VoiceStatus = 'stopped' | 'connecting' | 'ready' | 'stopping' | 'listening' | 'thinking' | 'speaking' | 'reconnecting' | 'error';
 
 type VoiceSocket = Omit<Pick<WebSocket, 'addEventListener' | 'removeEventListener' | 'send' | 'close' | 'readyState'>, 'readyState'> & {
@@ -39,7 +38,6 @@ export interface VoiceClientOptions {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   confirmSession?: (token: string) => Promise<'expired' | 'changed' | 'valid' | 'temporary'>;
-  language?: VoiceLanguage;
   onStatus: (status: VoiceStatus, message: string) => void;
   onMicrophoneState?: (state: MicrophoneState) => void;
   onSessionEnded?: () => void;
@@ -92,7 +90,7 @@ function requestedVisionSource(transcript: string): 'camera' | 'screen' | undefi
   return undefined;
 }
 
-function voiceUrl(backendUrl: string | null, language: VoiceLanguage): string {
+function voiceUrl(backendUrl: string | null): string {
   let url: URL;
   try {
     if (!backendUrl) throw new TypeError();
@@ -104,7 +102,7 @@ function voiceUrl(backendUrl: string | null, language: VoiceLanguage): string {
     throw new Error('Voice unavailable. Try again.');
   }
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-  url.pathname = `${url.pathname.replace(/\/+$/u, '')}/voice${language === 'da' ? '/da' : ''}`;
+  url.pathname = `${url.pathname.replace(/\/+$/u, '')}/voice`;
   return url.href;
 }
 
@@ -457,7 +455,6 @@ function microphoneProblem(error: unknown): Exclude<MicrophoneProblem, 'requesti
 }
 
 export class BrowserVoiceClient {
-  private language: VoiceLanguage;
   private readonly audio: VoiceAudio;
   private readonly makeSocket: (url: string, protocols: string[]) => VoiceSocket;
   private readonly delay: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -484,7 +481,6 @@ export class BrowserVoiceClient {
   private cameraState: boolean | undefined;
 
   constructor(private readonly options: VoiceClientOptions) {
-    this.language = options.language ?? 'da';
     this.audio = options.createAudio?.() ?? browserAudio();
     this.makeSocket = options.createSocket ?? createSocket;
     this.delay = options.delay ?? abortableDelay;
@@ -552,10 +548,6 @@ export class BrowserVoiceClient {
     } catch {
       this.finishStop(false, true);
     }
-  }
-
-  setLanguage(language: VoiceLanguage): void {
-    this.language = language;
   }
 
   setMuted(muted: boolean): void {
@@ -741,19 +733,12 @@ export class BrowserVoiceClient {
             this.publish('error', 'Your Microsoft sign-in needs attention. Sign in again.');
             return;
           }
-          const url = voiceUrl(this.options.backendUrl, this.language);
+          const url = voiceUrl(this.options.backendUrl);
           socket = this.makeSocket(url, ['jarvis.voice.v1', `jarvis.auth.${token}`]);
           this.socket = socket;
           socket.addEventListener('message', this.receiveBound);
           await waitForSocketEvent(socket, 'open', signal, CONNECTION_TIMEOUT_MS);
-          if (this.language === 'da') {
-            // The Danish voice wrapper speaks the Voice Live realtime protocol and owns its own
-            // session configuration and greeting. `session.start`/`session.ready` and a `/diag`
-            // warm-up belong to the hosted agent's Bridge Protocol, not to this route (L98).
-            await waitForVoiceEvent(socket, ['session.created', 'session.updated'], signal, WARMUP_TIMEOUT_MS);
-          } else {
-            await waitForVoiceEvent(socket, ['session.updated'], signal, WARMUP_TIMEOUT_MS);
-          }
+          await waitForVoiceEvent(socket, ['session.updated'], signal, WARMUP_TIMEOUT_MS);
           if (!this.running || signal.aborted) break;
           if (this.stopping) {
             await waitForClose(socket, signal);

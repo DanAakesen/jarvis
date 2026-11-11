@@ -1,3 +1,20 @@
+## 12 November 2026 — One bilingual realtime voice route (P15-110 / #1770)
+
+Use the existing English realtime deployment (`gpt-realtime-2.1`) and shared
+prompt for both English and Danish speech through `/voice`. Azure Speech
+transcription uses automatic language detection; the spoken language, not a
+voice-language selection, determines the response. Remove `/voice/da`, the
+`jarvis-voice-mai` hosted-agent setup, Danish-only voice settings and route
+pickers. Preserve Danish app localization, chat, notes and the chat-language
+choice.
+
+Stored `mai-transcribe` selections fall back to `azure-speech`; removed
+`voice.da.voice` settings are ignored. Do not edit Azure resources by hand.
+`jarvis-voice-mai`, its MAI Transcribe deployment and its MAI Voice deployment
+become unused and need later manual cleanup. The ACS phone-call bridge requires
+the hosted-agent protocol and cannot use the realtime socket as-is, so it stays
+unregistered until a separate protocol bridge is implemented.
+
 ## 10 November 2026 — Integrate loading and Factory details in a child (#1715)
 
 Retain #1704's app-wide static structure, retained refresh and context/account

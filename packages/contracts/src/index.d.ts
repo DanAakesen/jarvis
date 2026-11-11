@@ -135,16 +135,10 @@ export function isClipboardText(value: unknown): value is string;
 export function isClipboardReadResult(value: unknown): value is ClipboardReadResult;
 export function isClipboardWriteResult(value: unknown): value is ClipboardWriteResult;
 export interface VoiceTuningSettings {
-  serverVadThreshold: number;
-  prefixPaddingMs: number;
-  silenceDurationMs: number;
   bargeInEnabled: boolean;
   maxSpokenReplyTokens: number;
 }
 export const voiceTuningSettingsBounds: Readonly<{
-  serverVadThreshold: Readonly<{ minimum: 0; maximum: 1 }>;
-  prefixPaddingMs: Readonly<{ minimum: 0; maximum: 2000 }>;
-  silenceDurationMs: Readonly<{ minimum: 100; maximum: 5000 }>;
   maxSpokenReplyTokens: Readonly<{ minimum: 1; maximum: 4096 }>;
 }>;
 export const voiceTuningSettingsSchema: Readonly<{

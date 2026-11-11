@@ -349,7 +349,7 @@ struct JarvisSettingsArea: View {
                 row("language", .language, .appLanguage, value: copy(language == .da ? .danish : .english)),
                 row("appearance", .appearanceRow, .appearance, setting: "appearance", key: "theme"),
                 row("instructions", .instructionsRow, .instructions),
-                row("voice", .voiceRow, .voice, setting: "voice", key: "defaultLanguage"),
+                row("voice", .voiceRow, .voice),
                 row("research", .researchRow, .research, setting: "research", key: "depth"),
                 row("proactive", .proactiveRow, .proactive),
                 row(

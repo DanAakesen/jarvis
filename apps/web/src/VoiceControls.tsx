@@ -7,8 +7,7 @@ import { ConversationMoreMenu, type MoreMenuAction } from './ConversationMoreMen
 import { ConversationToast, type ConversationNotification } from './ConversationToast';
 import { InputOrbCore } from './InputOrbCore';
 import { VoiceOrbStatus } from './VoiceOrbStatus';
-import { BrowserVoiceClient, type MicrophoneState, type VoiceLanguage, type VoiceStatus } from './voice-client';
-import { languageName } from './voice-language';
+import { BrowserVoiceClient, type MicrophoneState, type VoiceStatus } from './voice-client';
 import { useSessionCommandRegistry } from './session-commands';
 import { voicePresentation } from './voice-presentation';
 import { VoiceStageContext } from './voice-stage-context';
@@ -48,8 +47,6 @@ function MenuGlyph({ name }: { name: 'microphone' | 'microphone-off' | 'screen' 
 export function VoiceControls({
   getAccessToken,
   config,
-  language = 'da',
-  onLanguageChange,
   onSessionEnded,
   onActiveChange,
   onStartAvailable,
@@ -60,8 +57,6 @@ export function VoiceControls({
   client: PublicClientApplication;
   getAccessToken?: () => Promise<string>;
   config: PublicConfig;
-  language?: VoiceLanguage;
-  onLanguageChange?: (language: VoiceLanguage) => void;
   onSessionEnded?: () => void;
   onActiveChange?: (active: boolean) => void;
   onStartAvailable?: (start: (() => void) | null) => void;
@@ -112,12 +107,8 @@ export function VoiceControls({
   const cameraStopped = useCallback((message: string) => { stopCamera?.(); notify(message, true); }, [stopCamera, notify]);
   const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', screenSessionId, cameraStopped);
 
-  const [localLanguage, setLocalLanguage] = useState<VoiceLanguage>(language);
-  const [sessionLanguage, setSessionLanguage] = useState<VoiceLanguage | null>(null);
   // Runtime activity that already existed when this session started belongs to an earlier session.
   const [staleActivity, setStaleActivity] = useState<JarvisActivityEvent | null>(null);
-  const selectedLanguage = onLanguageChange ? language : localLanguage;
-  const changeLanguage = onLanguageChange ?? setLocalLanguage;
   const sessionActivity = voiceActivity?.source === 'voice' && voiceActivity !== staleActivity ? voiceActivity : null;
   const presentation = voicePresentation({
     status: clientStatus,
@@ -205,7 +196,6 @@ export function VoiceControls({
     onActiveChange?.(true);
     screenSessionIdRef.current = null;
     setScreenSessionId(null);
-    setSessionLanguage(selectedLanguage);
     setStaleActivity(voiceActivity);
     dismissNotification();
     setMuted(false);
@@ -214,7 +204,6 @@ export function VoiceControls({
       backendUrl: config.backendUrl,
       getAccessToken: tokenProvider,
       confirmSession: (token) => confirmOwnerSession(config, token),
-      language: selectedLanguage,
       ...(onSessionEnded ? { onSessionEnded } : {}),
       onSessionReady: (sessionId) => {
         if (client.current !== voice) return;
@@ -273,7 +262,6 @@ export function VoiceControls({
           for (const done of stopWaiters.current) done();
           stopWaiters.current.clear();
           stage.setSignals(null);
-          setSessionLanguage(null);
           screenSessionIdRef.current = null;
           setScreenSessionId(null);
           captures.current.screenShare?.stop();
@@ -513,11 +501,6 @@ export function VoiceControls({
     ...screenActions,
     ...cameraActions,
   ];
-  const languageNote = !sessionLanguage ? ''
-    : sessionLanguage !== selectedLanguage
-      ? `${languageName(selectedLanguage)} is selected for chat and your next voice session. This session continues in ${languageName(sessionLanguage)}.`
-      : `This voice session uses ${languageName(sessionLanguage)}. A new choice applies to chat now and to your next voice session.`;
-
   return (
     <div className="voice-controls" data-active={active}>
       {!active && <p id="voice-start-guidance" className="visually-hidden">{initialMessage}</p>}
@@ -530,8 +513,7 @@ export function VoiceControls({
           </div>
           <div ref={voiceBar} className="voice-bar luminous-glass" role="group" aria-label="Voice controls"
             data-state={presentation.state}>
-            <ConversationMoreMenu language={selectedLanguage} onLanguageChange={changeLanguage} actions={menuActions}
-              {...(languageNote ? { languageNote } : {})} />
+            <ConversationMoreMenu actions={menuActions} />
             <span className="voice-bar-divider" aria-hidden="true" />
             <button ref={stopButton} className="voice-end-control" type="button"
               onClick={stop} disabled={clientStatus === 'stopping'} aria-describedby="voice-status voice-status-detail">
