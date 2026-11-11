@@ -5,6 +5,7 @@ import {
   type ToolBudgetMemory, type ToolBudgetRung,
 } from './tool-budget.js';
 import { createVoiceDiagnostics, VOICE_STARTUP_CLOSE_CODE, VoiceStageTimeout } from './diagnostics.js';
+import { createSessionLimits, SESSION_LIMIT_CHECK_MS, type SessionEndReason } from './session-limits.js';
 import { workspaceContext } from '../core/workspace-context.js';
 import { runModelToolCall } from '../core/tool-origin.js';
 import { approvalDeciderFor } from '../core/approval-interpreter.js';
@@ -19,6 +20,7 @@ import {
   calendarTurnContext,
   ENGLISH_REALTIME_MODEL,
   executeRealtimeCapabilityCall,
+  executeLazyVoiceToolCall,
   executeRealtimeToolCall,
   isBrowserControlledToolOutput,
   parseVoiceEvent,
@@ -424,6 +426,7 @@ function registerVoiceRoute(
         ?? (() => {})
       : () => {};
     let upstream: WebSocket | undefined;
+    const limits = createSessionLimits();
     const toolBudgetRungs = english && toolBudgetMemory ? createToolBudgetRungs(app.jarvisTools) : undefined;
     let activeRung: ToolBudgetRung | undefined = toolBudgetRungs?.[TOOL_BUDGET_COLD_START_RUNG];
     let rungIndex = toolBudgetRungs ? TOOL_BUDGET_COLD_START_RUNG : 0;
@@ -433,6 +436,8 @@ function registerVoiceRoute(
     let attemptFrame: ReturnType<typeof diagnostics.measure> | undefined;
     controller.signal.addEventListener('abort', () => clearTimeout(attemptTimer), { once: true });
     const activeTools = () => activeRung?.tools ?? app.jarvisTools;
+    // Without a rung (the hosted Danish fallback) the lazy core set still applies.
+    const activeCapabilityMode = () => activeRung?.capabilityMode ?? 'lazy';
     const discoveredCapabilities = new Set<string>();
     let proactiveContext: string | undefined;
     const refreshProactiveContext = async () => {
@@ -441,7 +446,7 @@ function registerVoiceRoute(
     const sessionUpdate = (rung: ToolBudgetRung | undefined = activeRung) => {
       const update = createRealtimeSessionUpdate(
         rung?.tools ?? app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
-        rung?.instructions, identitySettings, rung?.capabilityMode,
+        rung?.instructions, identitySettings, rung?.capabilityMode ?? 'lazy',
       );
       if (proactiveContext) update.session.instructions += '\n\n' + proactiveContext;
       return update;
@@ -1920,6 +1925,7 @@ function registerVoiceRoute(
       const toolName = capabilityName ?? call.name;
       if (toolName === 'research') request.announceResearchCompletion = announceResearchCompletion;
       seenCallIds.add(call.call_id);
+      limits.touch();
       pendingToolCalls += 1;
       toolCallsInResponse = true;
       const toolTurnTiming = turnTiming;
@@ -1999,9 +2005,11 @@ function registerVoiceRoute(
         ]);
         if (latestDanMessage) request.jarvisConversationMessage = latestDanMessage;
         try {
-          const output = await runModelToolCall(request, () => activeRung?.capabilityMode === 'discovery'
+          const output = await runModelToolCall(request, () => activeCapabilityMode() === 'discovery'
             ? executeRealtimeCapabilityCall(call, activeTools(), request, signal, discoveredCapabilities)
-            : executeRealtimeToolCall(call, activeTools(), request, signal));
+            : activeCapabilityMode() === 'lazy'
+              ? executeLazyVoiceToolCall(call, activeTools(), request, signal, discoveredCapabilities)
+              : executeRealtimeToolCall(call, activeTools(), request, signal));
           if (toolName.startsWith('calendar_')) calendarConversation = true;
           else if (toolName.startsWith('mail_')) calendarConversation = false;
           let outcome: 'ok' | 'refused' | 'error' = 'error';
@@ -2053,27 +2061,42 @@ function registerVoiceRoute(
       });
     };
 
+    // The browser gets the same `jarvis.session.ended` as for a user-requested end, so clients treat it as a normal end.
+    const endSessionCleanly = (reason?: SessionEndReason) => {
+      if (endRequested) return;
+      endRequested = true;
+      if (reason) diagnostics.endReason(reason);
+      finishSharedScreenContextWait(null, true);
+      closeAnnouncements();
+      stopPartialRecognition();
+      void finalizeSession().then(() => {
+        if (browser.readyState !== WebSocket.OPEN) return;
+        browser.send(JSON.stringify({ type: 'jarvis.session.ended' }), (error) => {
+          if (error) closeSocket(browser, 1011, 'Voice session could not be saved');
+          else close(1000, 'Voice session ended');
+        });
+      }).catch(() => {
+        request.log.warn('voice.session_persistence_failed');
+        closeSocket(browser, 1011, 'Voice session could not be saved');
+      });
+    };
+    const limitTimer = setInterval(() => {
+      if (endRequested) return;
+      const reason = limits.due(userSpeaking || pendingToolCalls > 0);
+      if (reason) endSessionCleanly(reason);
+    }, SESSION_LIMIT_CHECK_MS);
+    limitTimer.unref();
+    controller.signal.addEventListener('abort', () => clearInterval(limitTimer), { once: true });
+
     browser.on('message', (data, binary) => {
       const event = parseVoiceEvent(data, binary);
       if (event?.type === 'jarvis.session.end') {
-        if (endRequested) return;
-        endRequested = true;
-        finishSharedScreenContextWait(null, true);
-        closeAnnouncements();
-        stopPartialRecognition();
-        void finalizeSession().then(() => {
-          if (browser.readyState !== WebSocket.OPEN) return;
-          browser.send(JSON.stringify({ type: 'jarvis.session.ended' }), (error) => {
-            if (error) closeSocket(browser, 1011, 'Voice session could not be saved');
-            else close(1000, 'Voice session ended');
-          });
-        }).catch(() => {
-          request.log.warn('voice.session_persistence_failed');
-          closeSocket(browser, 1011, 'Voice session could not be saved');
-        });
+        endSessionCleanly();
         return;
       }
       if (endRequested) return;
+      // Older clients may send typed or touch requests straight through the relay.
+      if (event?.type === 'conversation.item.create' || event?.type === 'response.create') limits.touch();
       if (event?.type === 'jarvis.camera.state') {
         if (typeof event.on !== 'boolean') {
           close(1008, 'Invalid camera state');
@@ -2568,6 +2591,7 @@ function registerVoiceRoute(
               receiveTranscriptionDelta(event);
             }
             if (event?.type === 'input_audio_buffer.speech_started') {
+              limits.touch();
               clearCameraImage();
               pendingImageUsageItem = undefined;
               cameraGeneration += 1;

@@ -7,7 +7,7 @@ export interface ToolBudgetRung {
   readonly name: ToolBudgetRungName;
   readonly tools: ToolRegistry;
   readonly instructions: RealtimeInstructionMode;
-  readonly capabilityMode: 'direct' | 'discovery';
+  readonly capabilityMode: 'direct' | 'discovery' | 'lazy';
   /** Deadline from socket connect until `session.updated`. */
   readonly deadlineMs: number;
 }
@@ -20,7 +20,7 @@ export const TOOL_BUDGET_FALLBACK_DEADLINE_MS = 6_000;
 export function createToolBudgetRungs(registry: ToolRegistry): readonly ToolBudgetRung[] {
   return Object.freeze([
     {
-      name: 'R1', tools: registry, instructions: 'full', capabilityMode: 'direct',
+      name: 'R1', tools: registry, instructions: 'full', capabilityMode: 'lazy',
       deadlineMs: TOOL_BUDGET_FIRST_DEADLINE_MS,
     },
     {

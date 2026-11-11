@@ -242,6 +242,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     }
     if (typeof input.lastStage === 'string' && voiceStages.has(input.lastStage)) fields.lastStage = input.lastStage;
     if (['browser', 'upstream', 'relay', 'shutdown'].includes(String(input.closedBy))) fields.closedBy = input.closedBy;
+    if (input.endReason === 'inactivity' || input.endReason === 'max_duration') fields.endReason = input.endReason;
     if (nonnegative(input.closeCode) && input.closeCode >= 1000 && input.closeCode <= 4999) {
       fields.closeCode = input.closeCode;
     }

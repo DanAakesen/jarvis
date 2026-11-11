@@ -45,6 +45,7 @@ export function createVoiceDiagnostics(
   let watchdog: ReturnType<typeof setTimeout> | undefined;
   let update = { toolCount: 0, totalBytes: 0, largestTools: [] as { name: string; bytes: number }[] };
   let toolBudget: { toolBudgetRung: string | null; toolBudgetAttempts: number } | undefined;
+  let endReason: 'inactivity' | 'max_duration' | undefined;
   const measure = (message: unknown, serialized: string) => {
     const session = (message as { session?: { instructions?: unknown; tools?: { name?: unknown }[] } }).session;
     const tools = session?.tools ?? [];
@@ -90,6 +91,7 @@ export function createVoiceDiagnostics(
       return { toolCount, toolBytes, instructionsBytes, frameBytes: totalBytes };
     },
     toolBudget(rung: string | null, attempts: number) { toolBudget = { toolBudgetRung: rung, toolBudgetAttempts: attempts }; },
+    endReason(reason: 'inactivity' | 'max_duration') { endReason = reason; },
     watchdog(name: 'upstream_connecting' | 'upstream_ready', fail: () => void) {
       clearWatchdog();
       watchdog = setTimeout(() => { timeout(name, 15_000); fail(); }, 15_000);
@@ -125,7 +127,7 @@ export function createVoiceDiagnostics(
       signal.removeEventListener('abort', clearWatchdog);
       log.info({
         language, closedBy, closeCode, durationMs: elapsed(), stages,
-        events: [...events], ...update, ...toolBudget,
+        events: [...events], ...update, ...toolBudget, ...(endReason ? { endReason } : {}),
       }, 'voice.session_summary');
     },
   };
