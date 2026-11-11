@@ -328,7 +328,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     const fields: Record<string, unknown> = {};
     if (input.path === 'image' || input.path === 'caption') fields.path = input.path;
     if (typeof input.reason === 'string' && visualPathReasons.has(input.reason)) fields.reason = input.reason;
-    if (input.channel === 'chat' || input.channel === 'voice-en' || input.channel === 'voice-da') {
+    if (input.channel === 'chat' || input.channel === 'voice') {
       fields.channel = input.channel;
     }
     if (typeof input.latencyMs === 'number' && Number.isFinite(input.latencyMs) &&

@@ -84,16 +84,6 @@ public enum VoiceScreenUnavailableReason: String, Codable, Equatable, Sendable {
 }
 
 public extension JarvisClient {
-    func voiceDefaultLanguage() async throws -> ChatLanguage {
-        let response = try await performAuthenticatedRequest(
-            method: .get,
-            path: ["settings"],
-            idempotent: true
-        )
-        let settings = try JSONDecoder().decode(VoiceSettingsEnvelope.self, from: response.body)
-        return settings.settings.voice.defaultLanguage ?? .da
-    }
-
     func uploadVoiceFrame(
         sessionId: String,
         jpeg: Data,
@@ -173,18 +163,6 @@ public extension JarvisClient {
 
     private static func validVoiceReference(_ value: String) -> Bool {
         value.range(of: #"^[A-Za-z0-9_-]{1,128}$"#, options: .regularExpression) != nil
-    }
-}
-
-private struct VoiceSettingsEnvelope: Decodable {
-    let settings: Settings
-
-    struct Settings: Decodable {
-        let voice: Voice
-    }
-
-    struct Voice: Decodable {
-        let defaultLanguage: ChatLanguage?
     }
 }
 

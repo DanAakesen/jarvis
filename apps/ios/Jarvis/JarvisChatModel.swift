@@ -115,7 +115,7 @@ final class JarvisChatModel: ObservableObject {
     @Published private(set) var backgroundTasks: [BackgroundTaskRecord] = []
     @Published var activityError: String?
     @Published var activityMessage: String?
-    @Published private(set) var voiceLanguage: ChatLanguage = .da
+    @Published private(set) var chatLanguage: ChatLanguage = .da
 
     private let client: JarvisChatClient?
     private let nowClient: JarvisNowFeedClient?
@@ -224,7 +224,7 @@ final class JarvisChatModel: ObservableObject {
             historyError = message(for: error)
         }
         isLoading = false
-        await loadVoiceLanguage()
+        await loadChatLanguage()
         if !fixtureMode, let settingsClient { _ = await deviceLocation.sync(using: settingsClient) }
         await refreshActivity()
 
@@ -294,8 +294,8 @@ final class JarvisChatModel: ObservableObject {
         return try await photoLoader.data(from: url)
     }
 
-    func setVoiceLanguage(_ language: ChatLanguage) async {
-        guard !fixtureMode, !isSending, language != voiceLanguage, let settingsClient else { return }
+    func setChatLanguage(_ language: ChatLanguage) async {
+        guard !fixtureMode, !isSending, language != chatLanguage, let settingsClient else { return }
         do {
             _ = try await settingsClient.saveSettings(
                 JarvisSettingsPatch(
@@ -304,12 +304,12 @@ final class JarvisChatModel: ObservableObject {
                     value: .string(language.rawValue)
                 )
             )
-            voiceLanguage = language
+            chatLanguage = language
             self.language = language
             sessionID = nil
             actionError = nil
         } catch {
-            actionError = JarvisChatLocalization.string(.voiceLanguageUpdateFailed, language: appLanguage)
+            actionError = JarvisChatLocalization.string(.chatLanguageUpdateFailed, language: appLanguage)
         }
     }
 
@@ -745,7 +745,7 @@ final class JarvisChatModel: ObservableObject {
         messages.removeAll { $0.id == id }
     }
 
-    private func loadVoiceLanguage() async {
+    private func loadChatLanguage() async {
         guard !fixtureMode, let settingsClient else { return }
         do {
             let settings = try await settingsClient.loadSettings()
@@ -761,12 +761,12 @@ final class JarvisChatModel: ObservableObject {
             guard let language = ChatLanguage(rawValue: rawLanguage) else {
                 throw JarvisSettingsClientError.invalidResponse
             }
-            voiceLanguage = language
+            chatLanguage = language
             if sessionID == nil { self.language = language }
         } catch {
-            voiceLanguage = .da
+            chatLanguage = .da
             if sessionID == nil { language = .da }
-            actionError = JarvisChatLocalization.string(.voiceLanguageLoadFailed, language: appLanguage)
+            actionError = JarvisChatLocalization.string(.chatLanguageLoadFailed, language: appLanguage)
         }
     }
 

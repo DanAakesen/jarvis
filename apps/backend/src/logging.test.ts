@@ -465,7 +465,7 @@ describe('structured log export', () => {
     expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
   });
 
-  it.each(['chat', 'voice-en', 'voice-da'])('exports visual path metadata for %s without identifiers or content', (channel) => {
+  it.each(['chat', 'voice'])('exports visual path metadata for %s without identifiers or content', (channel) => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
     const sink = { ...sdk, trackTrace: vi.fn() };
@@ -513,7 +513,7 @@ describe('structured log export', () => {
     const sink = { ...sdk, trackTrace: vi.fn() };
     const logger = createLogger({ logLevel: 'info' }, sink, output);
     for (const latencyMs of [-1, 600_001, Infinity, -Infinity, NaN, '42', null, undefined]) {
-      logger.info({ path: 'private', reason: 'arbitrary_code', channel: 'voice', latencyMs, captionMs: latencyMs }, 'visual.path');
+      logger.info({ path: 'private', reason: 'arbitrary_code', channel: 'voice-da', latencyMs, captionMs: latencyMs }, 'visual.path');
       expect(JSON.parse(records.at(-1)!)).toEqual({
         level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'visual.path',
       });

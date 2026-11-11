@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import type { VoiceLanguage } from './voice-client';
-import { voiceLanguages } from './voice-language';
+import type { ChatLanguage } from './chat-language';
+import { chatLanguages } from './chat-language';
 import { returnFocusAfterOutsidePress } from './overlay-focus';
 import { useOverlayMotion } from './overlay-motion';
 
@@ -48,8 +48,8 @@ function focusItem(container: HTMLElement | null, move: 'first' | 'last' | 'next
 }
 
 /**
- * Shared three-dot conversation menu. Leading actions precede the optional Language row; remaining
- * actions follow it. Language opens a Danish/English flyout bound to the caller's state.
+ * Shared three-dot conversation menu. Leading actions precede the optional chat-language row;
+ * remaining actions follow it. The row opens a Danish/English flyout bound to the caller's state.
  */
 export function ConversationMoreMenu({
   language,
@@ -60,20 +60,17 @@ export function ConversationMoreMenu({
   className,
   label = 'More options',
   icon = 'more',
-  languageNote,
   topLayer = false,
   onTestRuntime,
 }: {
-  language?: VoiceLanguage;
-  onLanguageChange?: (language: VoiceLanguage) => void;
+  language?: ChatLanguage;
+  onLanguageChange?: (language: ChatLanguage) => void;
   leadingActions?: MoreMenuAction[];
   actions?: MoreMenuAction[];
   align?: 'start' | 'end';
   className?: string;
   label?: string;
   icon?: 'more' | 'attach' | 'plus';
-  /** Explains how a language choice applies, shown inside the Language flyout. */
-  languageNote?: string;
   /** Escape the composer backdrop root while retaining native picker and focus ancestry. */
   topLayer?: boolean;
   /** Opt in only when the caller supplies a working runtime test flow. */
@@ -83,7 +80,6 @@ export function ConversationMoreMenu({
   const id = useId();
   const menuId = `${id}-menu`;
   const languageMenuId = `${id}-language`;
-  const languageNoteId = `${id}-language-note`;
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
@@ -303,14 +299,14 @@ export function ConversationMoreMenu({
               onClick={() => (languageOpen ? closeLanguage() : openLanguage())}
             >
               <MenuIcon name="globe" />
-              <span className="more-menu-label">Language</span>
+              <span className="more-menu-label">Chat language</span>
               <MenuIcon name="chevron" />
             </button>
             {languageOpen && (
               <div ref={languageMenuRef} id={languageMenuId} className="more-menu-flyout luminous-glass" popover={renderInTopLayer ? 'manual' : undefined} role="menu"
-                aria-label="Language" aria-describedby={languageNote ? languageNoteId : undefined}
+                aria-label="Chat language"
                 onKeyDown={(event) => onMenuKeyDown(event, true)}>
-                {voiceLanguages.map((option) => (
+                {chatLanguages.map((option) => (
                   <button
                     key={option.value}
                     className="more-menu-item"
@@ -327,7 +323,6 @@ export function ConversationMoreMenu({
                     <span className="more-menu-check"><MenuIcon name="check" /></span>
                   </button>
                 ))}
-                {languageNote && <p id={languageNoteId} role="none" className="more-menu-note">{languageNote}</p>}
               </div>
             )}
           </div>}

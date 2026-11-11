@@ -31,8 +31,6 @@ interface Settings {
     speechToTextModel: string;
     englishModel: string;
     englishVoice: string;
-    danishVoice: string;
-    defaultLanguage: 'da' | 'en';
     minimizeWindowsOnVoiceStart: boolean;
   } & Partial<VoiceTuningSettings>;
   /** Present on backends with role-based models and tuning (P9-13); older backends omit them. */
@@ -67,8 +65,6 @@ interface SettingsOptions {
   speechToTextModels: string[];
   englishModels: string[];
   englishVoices: string[];
-  danishVoices: string[];
-  languages: string[];
   codexModels: string[];
   codexReasoningEfforts: string[];
   copilotModels: string[];
@@ -93,7 +89,7 @@ type LoadState = 'loading' | 'ready' | 'error';
 const optionLabels: Record<string, string> = {
   'gpt-5.6-luna': 'GPT-5.6 Luna',
   'gpt-realtime-2.1': 'GPT Realtime 2.1',
-  'mai-transcribe': 'MAI Transcribe',
+  'azure-speech': 'Azure Speech',
   jev: 'Jev',
   microsoft: 'Microsoft Decision-1',
   british_butler: 'British butler',
@@ -104,7 +100,6 @@ const optionLabels: Record<string, string> = {
   balanced: 'Balanced',
   detailed: 'Detailed',
   'en-GB-Ryan:DragonHDLatestNeural': 'Ryan HD (British English)',
-  'da-DK-JeppeNeural': 'Jeppe (Danish)',
   da: 'Danish',
   en: 'English',
   default: 'Provider default',
@@ -165,7 +160,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
   const optionKeys: (keyof SettingsOptions)[] = [
     'themes', 'jarvisModels', 'reasoningEfforts', 'personalityTones', 'personalityResponseStyles',
     'speechToTextModels', 'englishModels',
-    'englishVoices', 'danishVoices', 'languages', 'codexModels',
+    'englishVoices', 'codexModels',
     'codexReasoningEfforts', 'copilotModels', 'projectVisibilities', 'projectAgents',
     'projectPolicies',
   ];
@@ -195,8 +190,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     settings.personality.customInstructions.length <= 2_000 &&
     !hasUnsupportedControlCharacters(settings.personality.customInstructions) &&
     typeof settings.voice.speechToTextModel === 'string' && typeof settings.voice.englishModel === 'string' &&
-    typeof settings.voice.englishVoice === 'string' && typeof settings.voice.danishVoice === 'string' &&
-    (settings.voice.defaultLanguage === 'da' || settings.voice.defaultLanguage === 'en') &&
+    typeof settings.voice.englishVoice === 'string' &&
     typeof settings.voice.minimizeWindowsOnVoiceStart === 'boolean' &&
     typeof settings.codex.model === 'string' && typeof settings.codex.reasoning === 'string' &&
     typeof settings.copilot.model === 'string' && typeof settings.global.maxParallelTasks === 'number' &&
@@ -525,7 +519,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
     !hasUnsupportedControlCharacters(settings.identity.description);
   // Role-based models replace the older per-area model menus when the backend provides them.
   const roleModels = settings && options && isRoleSettings(settings.roles) && isRoleOptions(options.roles) ? options.roles : null;
-  const hasVoiceTuning = settings !== null && typeof settings.voice.serverVadThreshold === 'number';
+  const hasVoiceTuning = settings !== null && typeof settings.voice.maxSpokenReplyTokens === 'number';
   const problems = settings ? advancedProblems(settings) : {};
   const advancedValid = Object.keys(problems).length === 0;
   const personalityIsDefault = settings !== null &&
@@ -818,13 +812,6 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
               <SelectField id="english-voice" label="English voice" value={settings.voice.englishVoice}
                 options={options.englishVoices} disabled={saving}
                 onChange={(value) => update('voice', 'englishVoice', value)} />
-              <div className="settings-field">
-                <label htmlFor="danish-voice">Danish voice</label>
-                <input id="danish-voice" value={optionLabels['da-DK-JeppeNeural']} readOnly />
-              </div>
-              <SelectField id="default-language" label="Default language" value={settings.voice.defaultLanguage}
-                options={options.languages} disabled={saving}
-                onChange={(value) => update('voice', 'defaultLanguage', value as 'da' | 'en')} />
             </div>
             <label className="choice" htmlFor="minimize-windows-on-voice-start">
               <input

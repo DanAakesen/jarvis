@@ -1,3 +1,20 @@
+## 12 November 2026 — One bilingual realtime voice route (P15-110 / #1770)
+
+Use the existing English realtime deployment (`gpt-realtime-2.1`) and shared
+prompt for both English and Danish speech through `/voice`. Azure Speech
+transcription uses automatic language detection; the spoken language, not a
+voice-language selection, determines the response. Remove `/voice/da`, the
+`jarvis-voice-mai` hosted-agent setup, Danish-only voice settings and route
+pickers. Preserve Danish app localization, chat, notes and the chat-language
+choice.
+
+Stored `mai-transcribe` selections fall back to `azure-speech`; removed
+`voice.da.voice` settings are ignored. Do not edit Azure resources by hand.
+`jarvis-voice-mai`, its MAI Transcribe deployment and its MAI Voice deployment
+become unused and need later manual cleanup. The ACS phone-call bridge requires
+the hosted-agent protocol and cannot use the realtime socket as-is, so it stays
+unregistered until a separate protocol bridge is implemented.
+
 ## 10 November 2026 — Integrate loading and Factory details in a child (#1715)
 
 Retain #1704's app-wide static structure, retained refresh and context/account
@@ -8304,7 +8321,8 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
-| 2026-11-12 | The realtime voice path uses one prompt for both languages. The Danish session no longer has its own base prompt, capability guidance or compact-mode text; it uses the same short English prompt, which already says Dan speaks Danish and English, so the language follows the speaker. The identity text is the English version for both (the Danish identity text is a translation of it). Language-specific voice and speech settings stay: the Danish voice, the phrase list, the Danish transcription language and the Danish turn detection. | Dan asked for a single prompt. It removes the risk of two prompts drifting apart and a translated copy of every rule. With default settings the Danish full instructions fall from about 10,790 to 10,434 characters, equal to English; compact mode changes from 8,900 and 8,994 to 8,934 characters for both. No live voice session was run. | Confirmed by Dan |
+| 2026-11-12 | Start each realtime voice session with a brief greeting in the client's app language: Danish for `da`, English otherwise. Then continue following the language Dan speaks. | Dan requested issue #1778; the client sends the existing app-language preference to the shared `/voice` session, which starts the greeting after realtime session readiness. The shared base prompt wording is unchanged. | Confirmed by Dan |
+| 2026-11-12 | The realtime voice path uses one prompt for both languages. The Danish session no longer has its own base prompt, capability guidance or compact-mode text; it uses the same short English prompt, which already says Dan speaks Danish and English, so the language follows the speaker. The identity text is the English version for both (the Danish identity text is a translation of it). At that point, language-specific voice and speech settings remained; this was superseded by the P15-110 decision above to use the one English realtime setup for both languages. | Dan asked for a single prompt. It removes the risk of two prompts drifting apart and a translated copy of every rule. With default settings the Danish full instructions fall from about 10,790 to 10,434 characters, equal to English; compact mode changes from 8,900 and 8,994 to 8,934 characters for both. No live voice session was run. | Superseded |
 | 2026-11-12 | The realtime voice path now uses the same short base prompt as the hosted-agent fallback, in English and in a faithful Danish version. Voice sessions also use a trimmed capability text (`voiceCapabilityInstructions`): the shared core, safety rules, untrusted-content rules and a few cross-tool routing hints stay, and per-tool usage prose is dropped because `find_tools` already returns each tool's description and schema. Chat and the hosted agent keep the full `capabilityInstructions` unchanged. With default settings and no listed projects the voice instructions fall from about 21,200 to about 10,400 characters in English (about 5,300 to 2,600 tokens at 4 characters per token) and from about 21,500 to about 10,800 in Danish. | The earlier prompt change touched only the Python fallback, while the production voice path built its own long instructions in `realtime.ts`. The measured cost was dominated by `capabilityInstructions` at about 14,000 characters. No live voice session was run; Dan checks the result in use and fixes bugs afterwards. | Implemented; prompt text confirmed by Dan, capability trim not yet verified live |
 | 2026-11-11 | The three Azure Monitor log-alert rules (deployment failure, sandbox crash, credential expiry) are removed; the `jarvis-alerts` action group stays because the budget alerts at 80% and 100% use it. | Dan: "Alerts ~25 Remove this completely". The rules cost about 25 DKK a month and nobody acts on them. | Confirmed by Dan |
 | 2026-11-11 | The iOS package check builds and tests JarvisCore in the official `swift:6.2` container instead of the Swift setup action. | The setup action verifies signing keys against `keyserver.ubuntu.com`, which did not resolve for more than four hours on 11 November 2026 and blocked every iOS pull request. The container needs no key server, costs nothing extra (GitHub Actions is free for this public repository) and runs the same `swift build` and `swift test`. The Copilot setup workflow still uses the setup action. | Confirmed by Dan |

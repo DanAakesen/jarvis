@@ -77,10 +77,8 @@
 "settings.instructions" = "Custom instructions";
 "settings.identityDescription" = "Description";
 "settings.showWork" = "Show work";
-"settings.defaultLanguage" = "Default language";
 "settings.speechToText" = "Speech-to-text model";
 "settings.englishVoice" = "English voice";
-"settings.danishVoice" = "Danish voice";
 "settings.englishModel" = "English speech model";
 "settings.researchDepth" = "Research depth";
 "settings.maximumSources" = "Maximum sources";

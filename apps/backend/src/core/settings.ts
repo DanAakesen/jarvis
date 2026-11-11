@@ -64,7 +64,6 @@ export interface Settings {
     speechToTextModel: string;
     englishModel: string;
     englishVoice: string;
-    danishVoice: string;
     defaultLanguage: 'da' | 'en';
     minimizeWindowsOnVoiceStart: boolean;
   };
@@ -142,15 +141,11 @@ export const defaultSettings: Settings = {
     modeInstructions: { ...builtInModeInstructions },
   },
   voice: {
-    speechToTextModel: 'mai-transcribe',
+    speechToTextModel: 'azure-speech',
     englishModel: 'gpt-realtime-2.1',
     englishVoice: 'en-GB-Ryan:DragonHDLatestNeural',
-    danishVoice: 'da-DK-JeppeNeural',
     defaultLanguage: 'da',
     minimizeWindowsOnVoiceStart: false,
-    serverVadThreshold: 0.7,
-    prefixPaddingMs: 300,
-    silenceDurationMs: 600,
     bargeInEnabled: true,
     maxSpokenReplyTokens: 4_096,
   },
@@ -201,8 +196,7 @@ export const settingsOptions = {
   personalityTones: ['british_butler', 'warm', 'direct', 'playful'],
   personalityResponseStyles: ['concise', 'balanced', 'detailed'],
   englishVoices: ['en-GB-Ryan:DragonHDLatestNeural'],
-  danishVoices: ['da-DK-JeppeNeural'],
-  languages: ['da', 'en'],
+  chatLanguages: ['da', 'en'],
   voiceTuning: voiceTuningSettingsBounds,
   researchDepths,
   researchSettings: researchSettingsBounds,
@@ -244,12 +238,8 @@ const settingKeys = {
     speechToTextModel: 'voice.stt.model',
     englishModel: 'voice.en.model',
     englishVoice: 'voice.en.voice',
-    danishVoice: 'voice.da.voice',
     defaultLanguage: 'voice.default_language',
     minimizeWindowsOnVoiceStart: 'voice.minimize_windows_on_voice_start',
-    serverVadThreshold: 'voice.server_vad_threshold',
-    prefixPaddingMs: 'voice.prefix_padding_ms',
-    silenceDurationMs: 'voice.silence_duration_ms',
     bargeInEnabled: 'voice.barge_in_enabled',
     maxSpokenReplyTokens: 'voice.max_spoken_reply_tokens',
   },
@@ -363,15 +353,9 @@ function validSetting(
     if (key === 'speechToTextModel') return typeof value === 'string' && modelsForRole(catalogue, 'transcription').includes(value);
     if (key === 'englishModel') return typeof value === 'string' && modelsForRole(catalogue, 'voice').includes(value);
     if (key === 'englishVoice') return isOption(value, settingsOptions.englishVoices);
-    if (key === 'danishVoice') return isOption(value, settingsOptions.danishVoices);
-    if (key === 'defaultLanguage') return isOption(value, settingsOptions.languages);
+    if (key === 'defaultLanguage') return isOption(value, settingsOptions.chatLanguages);
     if (key === 'minimizeWindowsOnVoiceStart') return typeof value === 'boolean';
-    if (key === 'serverVadThreshold') {
-      return typeof value === 'number' && Number.isFinite(value) &&
-        value >= voiceTuningSettingsBounds.serverVadThreshold.minimum &&
-        value <= voiceTuningSettingsBounds.serverVadThreshold.maximum;
-    }
-    if (key === 'prefixPaddingMs' || key === 'silenceDurationMs' || key === 'maxSpokenReplyTokens') {
+    if (key === 'maxSpokenReplyTokens') {
       const bounds = voiceTuningSettingsBounds[key];
       return typeof value === 'number' && Number.isSafeInteger(value) &&
         value >= bounds.minimum && value <= bounds.maximum;
@@ -556,8 +540,7 @@ const settingsPatchSchema = {
             speechToTextModel: boundedModelSchema,
             englishModel: boundedModelSchema,
             englishVoice: selectSchema(settingsOptions.englishVoices),
-            danishVoice: selectSchema(settingsOptions.danishVoices),
-            defaultLanguage: selectSchema(settingsOptions.languages),
+            defaultLanguage: selectSchema(settingsOptions.chatLanguages),
             minimizeWindowsOnVoiceStart: { type: 'boolean' },
             ...voiceTuningSettingsSchema.properties,
           },
@@ -1255,7 +1238,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
         settings?: { voice?: Record<string, unknown> };
       } | undefined)?.settings?.voice;
       if (voice && typeof voice === 'object' && !Array.isArray(voice)) {
-        const numericTuning = ['serverVadThreshold', 'prefixPaddingMs', 'silenceDurationMs', 'maxSpokenReplyTokens'];
+        const numericTuning = ['maxSpokenReplyTokens'];
         if (numericTuning.some((key) => voice[key] !== undefined && typeof voice[key] !== 'number') ||
             (voice.bargeInEnabled !== undefined && typeof voice.bargeInEnabled !== 'boolean')) {
           return reply.code(400).send({ error: 'Invalid setting value' });

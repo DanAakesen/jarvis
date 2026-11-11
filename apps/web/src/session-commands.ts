@@ -1,14 +1,14 @@
 import { createContext, useContext } from 'react';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import type { CameraController } from './screen-sharing';
-import type { VoiceLanguage } from './voice-client';
+import type { ChatLanguage } from './chat-language';
 
 export type SessionCommand = Extract<WorkspaceCommand, { operation: 'session' }>;
 export type SessionCommandResult = { applied: true } | { applied: false; reason: string };
 
 /** What the mounted conversation can do for a current-session command. Each owner registers only its own part. */
 export interface SessionCommandHandlers {
-  setLanguage: (language: VoiceLanguage) => void;
+  setLanguage: (language: ChatLanguage) => void;
   /** Ends the running voice session and resolves once it has stopped; false when none is running. */
   endVoice: () => Promise<boolean>;
 }

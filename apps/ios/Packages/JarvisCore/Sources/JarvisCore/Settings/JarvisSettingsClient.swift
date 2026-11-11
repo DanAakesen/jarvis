@@ -738,7 +738,7 @@ public enum JarvisSettingsLogic {
                     valid = validSettingsFieldValue(value, options: ["default"] + reasoning)
                 case ("jarvis", "model"), ("codex", "model"), ("copilot", "model"),
                      ("voice", "speechToTextModel"), ("voice", "englishModel"),
-                     ("voice", "englishVoice"), ("voice", "danishVoice"):
+                     ("voice", "englishVoice"):
                     valid = validSettingsFieldValue(value, maximumLength: 128, allowEmpty: false)
                 case ("voice", "defaultLanguage"):
                     valid = validSettingsFieldValue(value, options: ["da", "en"])

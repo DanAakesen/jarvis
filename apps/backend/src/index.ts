@@ -5,7 +5,6 @@ import { handleIssueLabel } from './factory/issue-label.js';
 import { randomUUID } from 'node:crypto';
 import { DefaultAzureCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
-import { CallAutomationClient } from '@azure/communication-call-automation';
 import { buildApp } from './app.js';
 import { BlobServiceClient } from '@azure/storage-blob';
 import { ConfigurationError, loadConfig } from './config.js';
@@ -56,7 +55,6 @@ import {
 import { factoryModule } from './factory/index.js';
 import type { BackendModule } from './modules.js';
 import {
-  createDanishVoiceConnector,
   createVoiceLiveConnector,
   createVoiceRelayModule,
   normalizeFoundryProjectEndpoint,
@@ -123,8 +121,6 @@ import { createConfirmationStore } from './database/confirmation-store.js';
 import { createOwnerInteractionService } from './core/owner-interactions.js';
 import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
-import { createPhoneCallModule } from './phone/calls.js';
-import { parsePhoneAllowlist } from './phone/caller.js';
 import { createOpenAIImageGenerator } from './core/openai-images.js';
 import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
@@ -370,23 +366,6 @@ try {
   const webhookSecretClient = config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
     : undefined;
-  const phoneSecretClient = config.phone && config.keyVaultUri && credential
-    ? new SecretClient(config.keyVaultUri, credential)
-    : undefined;
-  let phoneAllowlist: ReturnType<typeof parsePhoneAllowlist> | undefined;
-  let phoneAllowlistRequest: Promise<ReturnType<typeof parsePhoneAllowlist>> | undefined;
-  const getPhoneAllowlist = () => {
-    if (phoneAllowlist) return Promise.resolve(phoneAllowlist);
-    if (!phoneSecretClient) return Promise.reject(new Error('Phone allow-list is unavailable'));
-    phoneAllowlistRequest ??= phoneSecretClient.getSecret('jarvis-phone-allowlist')
-      .then(({ value }) => {
-        if (!value) throw new Error('Phone allow-list is unavailable');
-        phoneAllowlist = parsePhoneAllowlist(value);
-        return phoneAllowlist;
-      })
-      .finally(() => { phoneAllowlistRequest = undefined; });
-    return phoneAllowlistRequest;
-  };
   const jevSecretClient = config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
     : undefined;
@@ -908,25 +887,8 @@ try {
       await projectPolicyEvaluator?.handle(mapping);
     },
   });
-  const phoneCallModule = config.phone && phoneSessionStore && phoneSecretClient && credential &&
-    config.foundryProjectEndpoint
-    ? createPhoneCallModule({
-      client: new CallAutomationClient(config.phone.acsEndpoint, credential),
-      store: phoneSessionStore,
-      ownerObjectId: config.auth.ownerObjectId,
-      teamsResourceAccountObjectId: config.phone.teamsResourceAccountObjectId,
-      publicOrigin: config.phone.publicOrigin,
-      getAllowlist: getPhoneAllowlist,
-      getToken: async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Foundry voice identity unavailable');
-        return token.token;
-      },
-      connect: createDanishVoiceConnector(config.foundryProjectEndpoint),
-    })
-    : undefined;
   const phoneStatusModule = createPhoneStatusModule({
-    configured: phoneCallModule !== undefined,
+    configured: false,
     store: phoneSessionStore ?? null,
   });
   const browserAgentModule = browserAgent ? createBrowserAgentModule(browserAgent) : undefined;
@@ -963,7 +925,7 @@ try {
     visionWatch = new VisionWatchService(screenVisionModel, visionUsage, createConversationStore(database.pool));
     visionWatchModule = createVisionWatchModule(visionWatch);
   }
-  const voiceRelayModule = (config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential
+  const voiceRelayModule = config.voiceLiveEndpoint && credential
     ? createVoiceRelayModule({
       frameStore,
       ...(screenVision && settingsStore ? {
@@ -990,13 +952,7 @@ try {
         if (!token) throw new Error('Voice identity unavailable');
         return token.token;
       },
-      ...(config.voiceLiveEndpoint ? { connect: createVoiceLiveConnector(config.voiceLiveEndpoint) } : {}),
-      ...(config.foundryProjectEndpoint
-        ? {
-          connectDanish: createDanishVoiceConnector(config.foundryProjectEndpoint),
-          ...(phoneCallModule ? { registerPhoneMediaRoute: phoneCallModule.registerMediaRoute } : {}),
-        }
-        : {}),
+      connect: createVoiceLiveConnector(config.voiceLiveEndpoint),
       ...(config.foundryEndpoints
         ? {
           createPartialRecognizer: createAzureSpeechPartialRecognizerFactory(
@@ -1052,7 +1008,7 @@ try {
     google: googleModule,
     githubWebhook: githubWebhookModule,
     pcBridge: pcBridgeModule,
-    phoneCall: phoneCallModule,
+    phoneCall: undefined,
     phoneStatus: phoneStatusModule,
     browserAgent: browserAgentModule,
     imageGeneration: imageGenerationModule,

@@ -69,13 +69,11 @@ After deployment, the owner should make one voice attempt, end it, and find its
 milliseconds since `request.started`: session creation, credential, settings,
 away mode, project context, upstream connecting/open, update sent and readiness.
 `session_update_sent` means the socket send completed, not that Azure accepted
-the configuration. Both Danish and English Voice Live wait for `session.updated`;
-the hosted Danish voice-agent fallback retains its native `session.created`
-readiness contract.
+the configuration. The single bilingual Voice Live route waits for
+`session.updated`.
 
 Voice Live uses the bounded tool-budget attempts below for connecting and
-readiness. The hosted Danish fallback warns after 15 seconds connecting or
-awaiting readiness. A readiness failure closes the browser with **4010**, “Voice
+readiness. A readiness failure closes the browser with **4010**, “Voice
 service did not become ready”; the client shows a plain retry message and keeps
 its existing backoff.
 Settings plus model-catalogue, away-mode and project-context reads each have a
@@ -111,9 +109,7 @@ counts/sizes, outcome (`ready`, `timeout`, `error` or `closed`) and elapsed
 milliseconds. `voice.tool_budget_selected` records the acknowledged rung, and
 the session summary carries `toolBudgetRung` and `toolBudgetAttempts`. These
 diagnostics contain no conversation content, tool arguments or health records.
-There is no background probe setting or probe sequence. The hosted Danish
-voice-agent fallback is separate: it retains provider-owned setup and its
-`session.created` readiness contract rather than using the Voice Live rungs.
+there is no background probe setting or probe sequence.
 
 Neither local readiness tests nor the earlier 21 October R0/R1 timings establish
 a provider schema/context limit or live responsiveness. For production

@@ -67,9 +67,6 @@ export function advancedProblems(settings: {
   const check = (key: string, value: unknown, range: { minimum: number; maximum: number }, integer = false) => {
     if (value !== undefined && !within(value, range, integer)) problems[key] = `Use ${range.minimum}–${range.maximum}${integer ? ' (whole number)' : ''}.`;
   };
-  check('voice.serverVadThreshold', settings.voice.serverVadThreshold, bounds.voice.serverVadThreshold);
-  check('voice.prefixPaddingMs', settings.voice.prefixPaddingMs, bounds.voice.prefixPaddingMs, true);
-  check('voice.silenceDurationMs', settings.voice.silenceDurationMs, bounds.voice.silenceDurationMs, true);
   check('voice.maxSpokenReplyTokens', settings.voice.maxSpokenReplyTokens, bounds.voice.maxSpokenReplyTokens, true);
   if (settings.research) {
     check('research.maxSources', settings.research.maxSources, bounds.research.maxSources, true);
