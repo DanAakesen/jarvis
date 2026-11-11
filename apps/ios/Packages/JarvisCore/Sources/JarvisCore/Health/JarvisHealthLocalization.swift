@@ -64,6 +64,23 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
     case lastSync = "health.lastSync"
     case noSync = "health.noSync"
     case workout = "health.workout"
+    case workoutTraditionalStrength = "health.workout.traditionalStrength"
+    case workoutFunctionalStrength = "health.workout.functionalStrength"
+    case workoutCore = "health.workout.core"
+    case workoutCrossTraining = "health.workout.crossTraining"
+    case workoutHIIT = "health.workout.hiit"
+    case workoutRunning = "health.workout.running"
+    case workoutWalking = "health.workout.walking"
+    case workoutCycling = "health.workout.cycling"
+    case workoutSwimming = "health.workout.swimming"
+    case workoutHiking = "health.workout.hiking"
+    case workoutYoga = "health.workout.yoga"
+    case workoutRowing = "health.workout.rowing"
+    case workoutElliptical = "health.workout.elliptical"
+    case workoutStairClimbing = "health.workout.stairClimbing"
+    case workoutFlexibility = "health.workout.flexibility"
+    case workoutMixedCardio = "health.workout.mixedCardio"
+    case workoutJumpRope = "health.workout.jumpRope"
     case sleepNight = "health.sleepNight"
     case meals = "health.meals"
     case metricTrend = "health.metricTrend"
@@ -130,6 +147,33 @@ public enum JarvisHealthLocalizationKey: String, CaseIterable, Sendable {
 }
 
 public enum JarvisHealthLocalization {
+    public static func workoutName(_ value: String?, language: JarvisAppLanguage) -> String {
+        let normalized = JarvisHealthLogic.normalizedWorkoutType(value)
+        let key: JarvisHealthLocalizationKey
+        switch normalized {
+        case "50", "healthkit50", "traditionalstrengthtraining": key = .workoutTraditionalStrength
+        case "20", "healthkit20", "functionalstrengthtraining": key = .workoutFunctionalStrength
+        case "59", "healthkit59", "coretraining": key = .workoutCore
+        case "11", "healthkit11", "crosstraining": key = .workoutCrossTraining
+        case "63", "healthkit63", "highintensityintervaltraining", "hiit": key = .workoutHIIT
+        case "37", "healthkit37", "running", "run": key = .workoutRunning
+        case "walking": key = .workoutWalking
+        case "cycling": key = .workoutCycling
+        case "swimming": key = .workoutSwimming
+        case "hiking": key = .workoutHiking
+        case "yoga": key = .workoutYoga
+        case "rowing": key = .workoutRowing
+        case "elliptical": key = .workoutElliptical
+        case "stairclimbing", "stairs", "steptraining": key = .workoutStairClimbing
+        case "flexibility": key = .workoutFlexibility
+        case "mixedcardio": key = .workoutMixedCardio
+        case "jumprope": key = .workoutJumpRope
+        case "gym", "strengthtraining": key = .gym
+        default: key = .workout
+        }
+        return string(key, language: language)
+    }
+
     public static func string(
         _ key: JarvisHealthLocalizationKey,
         language: JarvisAppLanguage = .default

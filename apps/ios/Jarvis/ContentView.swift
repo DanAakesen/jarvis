@@ -576,12 +576,15 @@ struct ContentView: View {
             dependencies.steps = JarvisHealthKitStepsSource(calendar: JarvisHealthSyncWindow.calendar)
             dependencies.dailyActivity = JarvisHealthKitActivitySource()
             if let notes {
-                dependencies.gym = JarvisCombinedGymLogStore(
+                let local = JarvisCombinedGymLogStore(
                     primary: JarvisCombinedGymLogStore(
                         primary: JarvisVaultGymLogStore(client: notes),
                         others: health.map { [JarvisManualWorkoutSource(client: $0)] } ?? []
                     ),
                     others: [JarvisHealthKitWorkoutSource()]
+                )
+                dependencies.gym = JarvisCombinedGymLogStore(
+                    primary: local, others: health.map { [JarvisSyncedWorkoutSource(client: $0)] } ?? []
                 )
                 dependencies.calendar = notes.calendarSource
             }

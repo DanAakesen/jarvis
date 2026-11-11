@@ -6,6 +6,8 @@ A clear, authenticated owner instruction authorizes the requested operation with
 
 Ordinary Watch startup, foreground connection warm-up and passive history refresh must not display an interrupted-send alert. Show connection/history status inline. Actual user-action failures and interrupted active chat/voice still report errors; preserve unsent drafts and never automatically resend an accepted request.
 
+Watch Home retries passive connection and dashboard reads while open. Its workout preview uses the same last-seven-days history as See more; weekly HealthKit goal counts remain separately labeled. Workout names are shared and localized on Watch and iPhone.
+
 ## Home brief and daily activity implementation — 9 November 2026
 
 Home briefs are grounded in available calendar/tasks and optional nutrition/weather context, generated through the existing model infrastructure. The owner edits Home instructions and a 1–6 visible-line limit (default 3) in the canonical Instructions destination. All-day Active kcal uses merged HealthKit activeEnergyBurned; exercise minutes uses appleExerciseTime. Workout counts remain separate.

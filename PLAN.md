@@ -59,6 +59,8 @@ The approval-cleanup branch implements direct request handling and removes selec
 
 Implemented on fix/watch-startup-connectivity-alert: suppress bootstrap/idle disconnect alerts, guard passive history reads, retain inline history errors and preserve explicit action recovery. Four composer recovery regression scenarios are added. CI/native builds and physical startup/reconnection checks remain unverified until their results are recorded in the PR. Primary owns integration and deployment.
 
+P15-108 updates foreground recovery, Watch Home links and body-fat content, and Watch/iPhone workout sources and names. Native builds, Watch rendering, paired-device reconnection and owner acceptance remain unverified on this Linux runner. Available history does not establish whether build 93 or 94 introduced the reported startup symptom.
+
 ## Home brief and daily activity implementation — 9 November 2026
 
 Implemented in draft PR #1689 on feature/home-brief-daily-activity. General CI and three native builds passed at the code revision recorded in docs/ios/design/home-brief-activity-handoff.md. Native UI measurements/screenshots remain queued; installed-device checks include HealthKit authorization/no-data ambiguity, midnight/DST, late Watch sync and actual model output in English/Danish. Primary owns integration and deployment. No deployment or owner acceptance is claimed.
