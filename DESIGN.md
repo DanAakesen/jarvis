@@ -1,5 +1,7 @@
 ## Watch complications and home exploration — 10 November 2026
 
+Existing Watch Home and complications retain stale values with a compact localized saved-age label instead of replacing them with an expiry message. Installed-device layout and locked display remain unverified.
+
 The owner approved nutrition option 3 and task-list option 1, and selected
 home-phrase option 1 with orange words and body-fat option 1 with a top-left
 title. The two refinements and three new scrollable Watch home directions await
@@ -13,6 +15,8 @@ Task cancellation and recovery, routine/memory deletion, workspace removal, depl
 ## Watch startup connection feedback — 9 November 2026
 
 Keep the approved Watch layout and controls. Startup and idle connectivity changes use the existing quiet connection status. History read failures stay inside the chat scroll area. The modal Jarvis alert is reserved for actual user-action/interruption feedback.
+
+Watch Home uses smaller, underlined, background-free See more links and keeps the body-fat chart without the date and summary lines beneath it. The workout preview shows recent history separately from weekly goal counts.
 
 ## Home brief and daily activity implementation — 9 November 2026
 

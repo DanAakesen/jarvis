@@ -204,6 +204,8 @@ public final class JarvisWorkspaceClient: Sendable {
             decoded = .activityChanged
         case "job":
             decoded = .activityChanged
+        case "board":
+            decoded = .factoryBoardChanged
         case "status":
             guard let status = try? JSONDecoder().decode(WorkspaceStatusEvent.self, from: Data(event.data.utf8)) else {
                 throw JarvisWorkspaceClientError.invalidResponse

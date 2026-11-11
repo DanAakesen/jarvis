@@ -387,6 +387,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
         }
         if (job) {
           if (status === 'done' && reason === null) await job.done('proactive');
+          else if (status === 'cancelled') await job.cancelled(jobReasons[reason ?? 'internal_error'] ?? jobReasons.internal_error!);
           else await job.fail(jobReasons[reason ?? 'internal_error'] ?? jobReasons.internal_error!);
         }
       } catch { options.logger?.warn({ runId: run.id, reason: 'job_update_failed' }, 'proactive.failed'); }

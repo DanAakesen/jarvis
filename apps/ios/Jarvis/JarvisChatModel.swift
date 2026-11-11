@@ -522,6 +522,8 @@ final class JarvisChatModel: ObservableObject {
                     await refreshActivity()
                     // Replies that finish while the user is in voice or screen sharing must show up without a message.
                     if !isSending { await refreshHistory() }
+                case .factoryBoardChanged:
+                    await refreshActivity()
                 case .workspaceReady:
                     await refreshActivity()
                     await reattachActiveTurnIfNeeded()

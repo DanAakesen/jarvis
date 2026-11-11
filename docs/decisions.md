@@ -12560,3 +12560,15 @@ and preserves existing integer stat consumers while adding explicit unknown
 values to the shared stat component. Primary owns final integration, native
 qualification and deployment. Linux syntax/Core checks do not establish native
 layout, VoiceOver, Dynamic Type, reduced-motion or scroll acceptance.
+## 11 November 2026 — Watch data while locked (#1769)
+
+Retain last-known Watch Home and complication data locally after first unlock, including failed sections, with a saved-age label. Do not mark these owner-requested complications privacy-sensitive; explicit phone sign-out still clears the cache. This deliberately makes their health and task content visible while the Watch is locked. The earlier expiry-to-empty behavior and locked-device redaction conflict with the owner's request; physical-device verification remains open.
+
+## 11 November 2026 — Keep activity status faithful (#1763)
+
+Refresh iOS activity on Factory board events rather than inferring a task's state
+from age. Record deliberate proactive cancellations as cancelled, not failed;
+retain actual failure reasons. Task 24 handled #1706; the Factory bot reported it
+Done on 10 November and #1709 was merged. Its current production state and the
+reported proactive failure reasons have not been verified here. Historical job
+records remain unchanged.

@@ -6,6 +6,8 @@ Owner tool operations execute a resolved request under the existing authenticate
 
 WatchConnection emits onDisconnect for a reachable-to-unreachable transition while still failing pending requests. WatchModel consults WatchComposer.handleConnectionLoss before presenting interrupted-action feedback. The composer preserves draft/acknowledgement semantics. Passive history reads require reachability, use an independent inline error and discard stale results when a typed/voice action supersedes them. WatchConnectivity wire format, credentials, permissions and infrastructure are unchanged.
 
+While foregrounded, Watch retries activation and unavailable passive dashboard reads; mutations are never replayed. Watch Home reads the same bounded seven-day workout history as its detail list, independently of weekly HealthKit goal counts. iPhone Home also merges retained synced workouts with local and manual entries, matching HealthKit identifiers before legacy session/time matching. Shared Health localization formats workout names for both devices.
+
 ## Home brief and daily activity implementation — 9 November 2026
 
 GET /home/brief is owner-scoped and reuses existing settings, context sources and bounded Foundry JSON completion transport. Context reads coalesce and cache for 60 seconds; evidence/instruction/day/language/model fingerprints cache generation for 15 minutes. Home preferences persist in existing settings and are exposed through get_settings/update_settings. HealthKit cumulative daily statistics carry daily_total provenance; normalized daily rows replace previous coverage and cannot be overwritten by legacy raw sums. Home and Health share JarvisDailyActivitySnapshot and Copenhagen calendar periods.
@@ -9323,7 +9325,7 @@ backend execution, authorization, provider catalogue or audit semantics.
 
 ## Apple Watch companion boundary (8 November 2026)
 
-XcodeGen JarvisWatch embeds JarvisWatchWidgets and is embedded by the phone app. Both use portable JarvisCore; Watch-native shared controls live under apps/ios/Watch. A Codable WatchConnectivity allow-list connects Watch to the paired phone. JarvisWatchBridge owns authenticated chat/health/lift/Factory reads/writes and VoiceSessionClient; credentials remain on phone. Watch VoiceAudioEngine captures/plays PCM16 through ordered acknowledged messages. Phone expires voice after 15 seconds without Watch heartbeat. Existing VoiceLiveActivityController controls the same session. No backend endpoint, infrastructure or production configuration is added. Display-only Health snapshots cross application context and expire in 15 minutes or date rollover. No offline mutation queue. See docs/ios/design/watch/implementation.md for verification limits.
+XcodeGen JarvisWatch embeds JarvisWatchWidgets and is embedded by the phone app. Both use portable JarvisCore; Watch-native shared controls live under apps/ios/Watch. A Codable WatchConnectivity allow-list connects Watch to the paired phone. JarvisWatchBridge owns authenticated chat/health/lift/Factory reads/writes and VoiceSessionClient; credentials remain on phone. Watch VoiceAudioEngine captures/plays PCM16 through ordered acknowledged messages. Phone expires voice after 15 seconds without Watch heartbeat. Existing VoiceLiveActivityController controls the same session. No backend endpoint, infrastructure or production configuration is added. Display-only health and dashboard snapshots cross application context and are atomically persisted in the Watch app group with after-first-unlock file protection; legacy defaults migrate on Watch startup. Failed or partial reads retain prior values with conservative saved ages; timelines keep stale entries after 15 minutes or date rollover. Explicit phone sign-out clears the cache. No offline mutation queue. See docs/ios/design/watch/implementation.md for verification limits.
 
 ### Notes recent-library projection
 
@@ -9447,3 +9449,10 @@ WatchTextInput uses native SwiftUI text editing and WatchKit system text input f
 ## Watch steps rendering — 10 November 2026
 
 `WatchStepsPlot` in JarvisCore projects the existing bounded 24-hour cumulative snapshot and positive daily goal onto a shared scale with headroom. `WatchStepsChart` draws the chart and gradient stems in SwiftUI Canvas. No new transport, persistence, HealthKit query, credential, entitlement or backend boundary. Existing snapshot freshness and midnight expiry remain authoritative. The separate startup-alert recovery patch is PR #1692, not a dependency of chart rendering.
+
+## Notification activity status — 11 November 2026
+
+Factory board events refresh the iOS Now feed and Live Activity reconciliation while
+the app observes the stream. Proactive runs cancelled for quiet hours or changed
+preferences finish their background jobs as cancelled; genuine failures remain
+failed. Existing historical jobs are not rewritten.
