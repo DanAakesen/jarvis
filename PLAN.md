@@ -4855,3 +4855,7 @@ Notes/push-chat iPhone UI failures are documented in the Watch handoff, not
 claimed fixed. Home #1689 and workout design work remain separate. Installed
 Ultra 2 complication, startup, reconnect and active-send/voice checks follow
 TestFlight delivery. See docs/ios/design/watch/steps-reconnect-handoff-2026-11-10.md.
+
+Watch review follow-up #1750: undated tasks are reachable under Upcoming and Home
+detail uses the full brief. Linux parsing and existing Core tests pass; native
+Watch build and device interaction checks remain pending.
