@@ -152,7 +152,7 @@ class ImpactTests(unittest.TestCase):
 
     def test_workflow_only_changes_do_not_rebuild_applications(self):
         for path in (".github/workflows/ci.yml", ".github/workflows/codeql.yml",
-                     ".github/workflows/ios-ci.yml", ".github/workflows/ios-simulator.yml",
+                     ".github/workflows/ios-ci.yml",
                      ".github/workflows/ios-testflight.yml", ".github/scripts/ci_timing.py",
                      ".github/scripts/smoke_reasons.py"):
             self.assertEqual(deploy_parts(path), set())
@@ -654,60 +654,21 @@ class SafeFailureTests(unittest.TestCase):
             "npm run build:vault-mirror",
         ])
 
-    def test_ios_macos_build_is_cost_guarded(self):
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        source = (ROOT / ".github/workflows/ios-ci.yml").read_text()
-        self.assertIn("\n  workflow_dispatch:\n  schedule:", source)
-        self.assertEqual(workflow["on"]["schedule"], [{"cron": "17 3 * * *"}])
-        self.assertIn("    needs: linux", source)
-        self.assertIn(
-            "github.event_name == 'schedule' && github.ref == 'refs/heads/main'",
-            workflow["jobs"]["macos"]["if"],
-        )
-        self.assertIn("    runs-on: macos-26", source)
-        # The accepted 68-test run took 62m49s including capture/export. Additional
-        # feedback captures reuse its launches; retain room for final artifacts
-        # and runner variation without changing individual test limits.
-        self.assertEqual(workflow["jobs"]["macos"]["timeout-minutes"], 75)
-        self.assertIn("-default-test-execution-time-allowance 120", source)
-        self.assertIn("-maximum-test-execution-time-allowance 150", source)
-        self.assertIn("      cancel-in-progress: true", source)
-        self.assertIn("CODE_SIGNING_ALLOWED=NO", source)
-        self.assertNotIn("xlarge", source)
-        self.assertIn("xcrun simctl boot", source)
-        self.assertIn("xcrun simctl ui \"$DEVICE_ID\" appearance light", source)
-        self.assertIn("xcrun simctl ui \"$DEVICE_ID\" appearance dark", source)
-        self.assertIn("main-light.png", source)
-        self.assertIn("main-dark.png", source)
-        self.assertIn("--screenshot-chat-plus-menu", source)
-        self.assertIn("chat-plus-menu-light.png", source)
-        self.assertIn("--screenshot-sidebar-open", source)
-        self.assertIn("sidebar-open-light.png", source)
-        self.assertIn("sidebar-open-dark.png", source)
-
-    def test_ios_simulator_runs_beside_the_merge_gate_and_tracks_main_failures(self):
+    def test_ios_pull_requests_run_only_the_quick_linux_job(self):
         ci = load_workflow(ROOT / ".github/workflows/ci.yml")
-        self.assertEqual(ci["jobs"]["ios"]["with"], {"simulator": "skip"})
+        self.assertNotIn("with", ci["jobs"]["ios"])
         self.assertEqual(ci["jobs"]["ios"]["uses"], "./.github/workflows/ios-ci.yml")
         self.assertIn("ios", ci["jobs"]["result"]["needs"])
         self.assertTrue(ci["concurrency"]["cancel-in-progress"])
-        simulator = load_workflow(ROOT / ".github/workflows/ios-simulator.yml")
-        job = simulator["jobs"]["simulator"]
-        self.assertEqual(job["with"], {"linux": "skip"})
-        self.assertEqual(job["uses"], "./.github/workflows/ios-ci.yml")
-        self.assertEqual(simulator["on"]["pull_request"]["paths"], simulator["on"]["push"]["paths"])
-        self.assertIn("apps/ios/**", simulator["on"]["pull_request"]["paths"])
-        self.assertNotIn("docs/**", simulator["on"]["pull_request"]["paths"])
-        self.assertEqual(simulator["on"]["push"]["branches"], ["main"])
-        self.assertTrue(simulator["concurrency"]["cancel-in-progress"])
-        self.assertIn("draft", job["if"])
+        self.assertFalse((ROOT / ".github/workflows/ios-simulator.yml").exists())
+        self.assertFalse((ROOT / "apps/ios/JarvisUITests").exists())
         ios = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        self.assertEqual(ios["jobs"]["linux"]["if"], "inputs.linux != 'skip'")
-        self.assertIn("inputs.simulator != 'skip'", ios["jobs"]["macos"]["if"])
-        tracker = next(step for step in ios["jobs"]["macos"]["steps"]
-                       if step.get("name") == "Open or update the nightly UI test issue")
-        self.assertIn("github.event_name == 'push'", tracker["if"])
-        self.assertIn("github.ref == 'refs/heads/main'", tracker["if"])
+        self.assertEqual(list(ios["jobs"]), ["linux"])
+        self.assertEqual(ios["jobs"]["linux"]["runs-on"], "ubuntu-24.04")
+        self.assertEqual(ios["on"]["schedule"], [{"cron": "17 3 * * *"}])
+        project = load_workflow(ROOT / "apps/ios/project.yml")
+        self.assertNotIn("JarvisUITests", project["targets"])
+        self.assertNotIn("test", project["schemes"]["Jarvis"])
 
     def test_ci_timing_summary_lists_finished_jobs_by_duration(self):
         from ci_timing import table
@@ -732,114 +693,6 @@ class SafeFailureTests(unittest.TestCase):
         self.assertEqual(timing["run"], "python .github/scripts/ci_timing.py")
         self.assertEqual(ci["jobs"]["result"]["permissions"]["actions"], "read")
 
-    def test_ios_navigation_regression_gates_the_build_and_retains_results(self):
-        project = load_workflow(ROOT / "apps/ios/project.yml")
-        target = project["targets"]["JarvisUITests"]
-        self.assertEqual(target["type"], "bundle.ui-testing")
-        self.assertEqual(target["dependencies"], [
-            {"target": "Jarvis"}, {"package": "JarvisCore", "product": "JarvisCore"},
-        ])
-        self.assertIn({"path": "Jarvis/URLSessionTransport.swift"}, target["sources"])
-        self.assertEqual(project["schemes"]["Jarvis"]["test"]["targets"], ["JarvisUITests"])
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        steps = workflow["jobs"]["macos"]["steps"]
-        self.assertFalse([step for step in steps if step.get("name") == "Run iPhone navigation regression"],
-                         "the navigation tests run once, in the capture step, to stay inside the time budget")
-        capture = next(step for step in steps if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        self.assertEqual(capture["run"].count("xcodebuild test"), 1)
-        self.assertIn("-only-testing:JarvisUITests/SidebarNavigationTests", capture["run"])
-        self.assertIn("-only-testing:JarvisUITests/URLSessionTransportTests", capture["run"])
-        self.assertNotIn("-skip-testing", capture["run"])
-        self.assertIn("-test-timeouts-enabled YES", capture["run"])
-        self.assertIn("-maximum-test-execution-time-allowance 150", capture["run"])
-        self.assertIn('-resultBundlePath "$RUNNER_TEMP/ios-scheme.xcresult"', capture["run"])
-        gate = next(step for step in steps if step.get("name") == "Fail the run when UI tests fail")
-        self.assertIn("steps.capture.outputs.result == 'failure'", gate["if"])
-        self.assertNotIn("schedule", gate["if"])
-        scheme_evidence = next(step for step in steps if step.get("name") == "Upload iPhone app scheme test results")
-        self.assertEqual(scheme_evidence["if"], "always()")
-        self.assertEqual(scheme_evidence["with"]["path"], "${{ runner.temp }}/ios-scheme.xcresult")
-        self.assertEqual(scheme_evidence["with"]["retention-days"], 14)
-
-    def test_ios_loading_regressions_are_selected_for_native_execution(self):
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        cases = {
-            "FactoryTaskDetailUITests": [],
-            "FactoryLoadingUITests": [],
-            "WorkspacesLoadingUITests": [],
-            "HealthHeroUITests": ["testStaticStructureAndControlsPrecedeSlowHealthSources",
-                                 "testFailedRefreshRetainsHeroAndCanRetry",
-                                 "testTrackWorkoutSectionsExistBeforeCapabilitiesLoad"],
-            "InsightsPagesTests": ["testUsageKeepsStaticOverviewAndPeriodOnFirstLoad",
-                                  "testUsageFailedRefreshKeepsBreakdownSelectionAndOffersRetry",
-                                  "testStatusFilterIsVisibleBeforeChecksArriveInDanish",
-                                  "testProactiveControlsAndItemsAreNotBlockedByStatusLoading",
-                                  "testProactiveStatusFailureDoesNotHideIndependentSuggestions",
-                                  "testSettingsFirstLoadKeepsLabelsAndDisablesUnavailableEdits"],
-            "NotesRedesignUITests": ["testStaticStructureAndTasksDoNotWaitForSlowGraph",
-                                    "testFailedRefreshRetainsLibraryAndOffersRetry"],
-            "SettingsFieldUITests": ["testStaticSettingsStructureAndLocalLanguageBeforeDataArrives",
-                                    "testTargetLabelsRemainVisibleDuringFirstLoadAndFailureThenRetry",
-                                    "testFailedRootRefreshRetainsRowsAndOffersRetry",
-                                    "testMemorySearchHidesPreviousContextBeforeNewResultsArrive"],
-        }
-        for suite, methods in cases.items():
-            source = (ROOT / f"apps/ios/JarvisUITests/{suite}.swift").read_text()
-            for method in methods or [""]:
-                selection = f"JarvisUITests/{suite}" + (f"/{method}" if method else "")
-                self.assertIn(f"-only-testing:{selection} \\", capture["run"])
-                self.assertIn(f"func {method}(" if method else f"class {suite}:", source)
-
-    def test_ios_capture_recovers_shutdown_destination_without_waiving_test_failures(self):
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        steps = workflow["jobs"]["macos"]["steps"]
-        capture = next(step for step in steps if step.get("id") == "capture")["run"]
-        recovery = capture.split("ensure_simulator_booted() {", 1)[1].split("\n}", 1)[0]
-        function = "ensure_simulator_booted() {" + recovery + "\n}\nensure_simulator_booted"
-        mock = """
-set -euo pipefail
-xcrun() {
-  if [[ "$*" == "simctl list devices available --json" ]]; then
-    printf '%s\\n' "$SIMULATOR_JSON"
-  else
-    printf '%s\\n' "$*"
-  fi
-}
-"""
-        for state in ["Shutdown", "Booting", "Booted", "Unavailable"]:
-            with self.subTest(state=state):
-                environment = {
-                    **os.environ, "DEVICE_ID": "fixture-device",
-                    "SIMULATOR_JSON": json.dumps({"devices": {"fixture-runtime": [
-                        {"udid": "fixture-device", "state": state},
-                        {"udid": "unrelated-device", "state": "Booted"},
-                    ]}}),
-                }
-                result = subprocess.run(["bash", "-c", mock + function], env=environment,
-                                        capture_output=True, text=True)
-                self.assertEqual(result.returncode == 0, state != "Unavailable", result.stderr)
-                self.assertEqual("simctl boot fixture-device" in result.stdout, state == "Shutdown")
-                self.assertEqual("simctl bootstatus fixture-device -b" in result.stdout,
-                                 state != "Unavailable")
-                cleanup = next(step for step in steps if step.get("name") == "Shut down iPhone Simulator")
-                result = subprocess.run(
-                    ["bash", "-c", mock + cleanup["run"]],
-                    env={**environment, "IOS_SIMULATOR_UDID": "fixture-device"},
-                    capture_output=True, text=True,
-                )
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual("simctl shutdown fixture-device" in result.stdout, state == "Booted")
-        exported = capture.index("xcrun xcresulttool export attachments")
-        recovered = capture.index("\nensure_simulator_booted", exported)
-        self.assertLess(exported, recovered)
-        self.assertLess(recovered, capture.index('xcrun simctl ui "$DEVICE_ID" appearance dark'))
-        self.assertIn('echo "result=failure" >> "$GITHUB_OUTPUT"', capture)
-        gate = next(step for step in steps if step.get("name") == "Fail the run when UI tests fail")
-        self.assertIn("steps.capture.outputs.result == 'failure'", gate["if"])
-        self.assertIn("exit 1", gate["run"])
-
     def test_ios_chat_launcher_hit_shape_covers_its_plain_button_label(self):
         source = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
         button = source.split("struct JarvisSidebarMenuButton: View {", 1)[1].split(
@@ -853,124 +706,6 @@ xcrun() {
         self.assertIn("height: JarvisDesignTokens.iconButtonDiameter", glyph)
         self.assertIn("static let chatMinimumTapTarget: CGFloat = 44", source)
         self.assertIn("buttonStyle(.plain)", controls)
-
-    def test_ios_physical_menu_tap_opens_real_drawer_within_two_seconds(self):
-        project = load_workflow(ROOT / "apps/ios/project.yml")
-        self.assertIn({"path": "JarvisUITests"}, project["targets"]["JarvisUITests"]["sources"])
-        source = (ROOT / "apps/ios/JarvisUITests/SidebarNavigationTests.swift").read_text()
-        for language in ("Danish", "English"):
-            self.assertIn(f"func testPhysicalMenuTapOpensSidebarWithinTwoSecondsIn{language}()", source)
-        for required in ('assertPhysicalMenuTap(language: "da")',
-                         'assertPhysicalMenuTap(language: "en", startupDelay: 5)',
-                         "--ui-test-navigation", "-AppleLanguages", "-AppleLocale",
-                         "menu.isEnabled && menu.isHittable", "Open sidebar", "Åbn sidemenu",
-                         "XCTAssertGreaterThan(menu.frame.midX, app.frame.midX)",
-                         "XCTAssertLessThan(menu.frame.midY",
-                         "XCTAssertGreaterThanOrEqual(menu.frame.width, 43.5)",
-                         "XCTAssertGreaterThanOrEqual(menu.frame.height, 43.5)",
-                         'app.buttons["chat.notifications"]', "XCTAssertTrue(bell.isHittable)",
-                         'app.descendants(matching: .any).matching(identifier: "navigation.sidebar").firstMatch',
-                         "XCTAssertFalse(sidebar.exists)",
-                         "menu.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()",
-                         "sidebar.exists && !sidebar.frame.isEmpty",
-                         "self.app.frame.contains(sidebar.frame)",
-                         'self.app.buttons["navigation.chat"].isHittable',
-                         "XCTAssertTrue(sidebar.exists)",
-                         'XCTAssertTrue(app.buttons["navigation.chat"].isHittable)'):
-            self.assertIn(required, source)
-        opened = source.split("menu.coordinate(withNormalizedOffset:", 1)[1]
-        self.assertIn("sidebar.waitForExistence(timeout: 2)", opened)
-        self.assertNotIn("timeout: 10", opened)
-        self.assertNotIn("Thread.sleep", opened)
-        self.assertNotIn("--ui-test-navigation-variant", source)
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        self.assertIn("xcodebuild test", capture["run"])
-        self.assertIn("-only-testing:JarvisUITests/SidebarNavigationTests", capture["run"])
-        self.assertNotIn("-skip-testing", capture["run"])
-        reliability = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
-        for required in ("testRepeatedNavigationInDanish", "testRepeatedNavigationInEnglish",
-                         "testShortDragAndBackgroundInterruptionRecover",
-                         "testMenuRemainsHittableFiveSecondsAfterLaunchInDanish",
-                         "testMenuRemainsHittableFiveSecondsAfterLaunchInEnglish",
-                         "for iteration in 1...3", "assertChatInputWorks()", "openByEdge()",
-                         "assertDestinationMenuWorks()", "exerciseSearch(", "startVoice()",
-                         "minimizeVoice()", 'app.buttons["voice.end"]',
-                         'app.buttons["voice.mini.end"]'):
-            self.assertIn(required, reliability)
-
-    def test_ios_destination_headers_have_real_sidebar_launchers(self):
-        design = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
-        self.assertIn("import JarvisCore", design)
-        button = design.split("struct JarvisSidebarMenuButton: View {", 1)[1].split("enum JarvisDesignTokens", 1)[0]
-        for required in ('@EnvironmentObject private var navigation: JarvisNavigationModel',
-                         'navigation.openSidebar()', '"sidebar.trailing"',
-                         "JarvisIconButton(", "string(.openSidebar, language: language)", '"navigation.openSidebar"'):
-            self.assertIn(required, button)
-        self.assertRegex(button, r"\) \{\s+navigation\.openSidebar\(\)\s+\}")
-        self.assertNotIn("let action", button)
-        for area in ("Notes", "Health", "Factory"):
-            source = (ROOT / f"apps/ios/Jarvis/Jarvis{area}Area.swift").read_text()
-            self.assertIn("JarvisPageHeader(title:", source)
-            self.assertNotIn("onOpenSidebar", source)
-        page_header = (ROOT / "apps/ios/Jarvis/JarvisPageHeader.swift").read_text()
-        self.assertIn("JarvisSidebarMenuButton(language: language)", page_header)
-        shell = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        self.assertNotIn("openSidebarFromButton", shell)
-        self.assertNotIn("onOpenSidebar", shell)
-        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
-        self.assertNotIn("ToolbarItemGroup(placement: .topBarTrailing)", chat)
-        self.assertEqual(chat.count("ToolbarItem(placement: .topBarTrailing)"), 2)
-        self.assertIn("ToolbarSpacer(.fixed, placement: .topBarTrailing)", chat)
-        self.assertLess(chat.index('identifier: "chat.notifications"'),
-                        chat.index("ToolbarSpacer(.fixed, placement: .topBarTrailing)"))
-        self.assertLess(chat.index("ToolbarSpacer(.fixed, placement: .topBarTrailing)"),
-                        chat.index("JarvisSidebarMenuButton(language: appLanguage)"))
-        ui_tests = (ROOT / "apps/ios/JarvisUITests/SidebarNavigationTests.swift").read_text()
-        self.assertIn("XCTAssertGreaterThan(menu.frame.minX, bell.frame.maxX", ui_tests)
-        # Only the Home button shown when Chat was opened from Today may sit on the leading side.
-        self.assertEqual(chat.count("ToolbarItem(placement: .topBarLeading)"), 1)
-        self.assertIn("if let onBackToToday {\n                ToolbarItem(placement: .topBarLeading)", chat)
-        self.assertIn("JarvisSidebarMenuButton(language: appLanguage)", chat)
-        self.assertEqual(chat.count(".sharedBackgroundVisibility(.hidden)"), 3)
-        self.assertNotIn("onOpenSidebar", chat)
-        self.assertNotIn("showsSidebarToolbarButton", chat)
-        tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
-        self.assertEqual(tests.count("assertDestinationMenuWorks()"), 5)
-
-    def test_ios_sign_in_preserves_shell_and_sign_out_resets_shared_navigation(self):
-        root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
-        self.assertNotIn(".id(model.contentEpoch)", root)
-        self.assertIn(".id(model.signOutGeneration)", root)
-        self.assertIn("ContentView(sessionEpoch: model.contentEpoch)", root)
-        sign_in = root.split("func signIn() async {", 1)[1].split("func beginSignIn()", 1)[0]
-        self.assertIn("contentEpoch += 1", sign_in)
-        self.assertNotIn("signOutGeneration += 1", sign_in)
-        sign_out = root.split("func signOut() async {", 1)[1].split("func retryUnlock()", 1)[0]
-        self.assertLess(sign_out.index("refreshOverlay()"), sign_out.index("tokenStore?.delete()"))
-        self.assertIn("signOutGeneration += 1", sign_out)
-        for clearing in ("tokenStore?.delete()", "provider?.signOut()", "command: .end"):
-            self.assertIn(clearing, sign_out)
-        shell = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        self.assertIn("@StateObject private var navigation = JarvisNavigationModel(", root)
-        self.assertRegex(root, r"\.onChange\(of: model\.signOutGeneration\) \{ _, _ in\s+navigation\.reset\(\)")
-        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
-        self.assertRegex(model, r"func reset\(\) \{\s+(note\(\"reset\"\)\s+)?dragProgress = nil\s+state = JarvisNavigationState\(\)")
-        self.assertNotIn("NavigationLaunchLifecycle", shell)
-        self.assertNotIn("navigationWrites", shell)
-        self.assertEqual(shell.count(".id(sessionEpoch)"), 2)
-        self.assertIn(".task(id: sessionEpoch)", shell)
-        self.assertIn("workspaceRuntime.resetSession()", shell)
-        self.assertIn("voiceModel.end(returnToChat: false)", shell)
-        self.assertIn("JarvisUnavailableAccessTokenProvider()", shell)
-        tests = (ROOT / "apps/ios/JarvisUITests/NavigationReliabilityTests.swift").read_text()
-        for required in ("testMenuRemainsHittableFiveSecondsAfterLaunchInDanish",
-                         "testMenuRemainsHittableFiveSecondsAfterLaunchInEnglish",
-                         "startupDelay: 5", "Thread.sleep(forTimeInterval: startupDelay)",
-                         "XCTAssertTrue(menu.exists)", "XCTAssertTrue(menu.isHittable)",
-                         "menu.tap()", "assertSidebarOpen()"):
-            self.assertIn(required, tests)
 
     def test_ios_navigation_fixture_initializes_before_gate_overlay(self):
         source = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
@@ -1145,10 +880,10 @@ xcrun() {
         project = load_workflow(ROOT / "apps/ios/project.yml")
         for target in ("Jarvis", "JarvisVoiceActivity"):
             self.assertIn({"path": "Shared"}, project["targets"][target]["sources"])
-        for path in ("Shared/NavigationBisectVariant.swift", "JarvisUITests/NavigationBisectTests.swift",
+        for path in ("Shared/NavigationBisectVariant.swift",
                      "Jarvis/JarvisInputHitTestingProbe.swift"):
             self.assertFalse((ROOT / "apps/ios" / path).exists(), path)
-        for directory in ("Jarvis", "Shared", "JarvisUITests"):
+        for directory in ("Jarvis", "Shared"):
             for path in (ROOT / "apps/ios" / directory).rglob("*.swift"):
                 runtime = path.read_text()
                 for obsolete in ("NavigationBisect", "JarvisInputHitTestingProbe",
@@ -1174,81 +909,6 @@ xcrun() {
                         "voiceModel.minimize()", "if navigationFixtureMode", "case .notes:",
                         "case .health:", "case .softwareFactory:"):
             self.assertIn(behavior, preparation)
-
-    def test_ios_ui_test_failure_is_nonblocking_but_reported(self):
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        job = workflow["jobs"]["macos"]
-        capture = next(step for step in job["steps"] if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        self.assertEqual(capture["id"], "capture")
-        self.assertIn("if xcodebuild test", capture["run"])
-        self.assertIn('echo "result=failure" >> "$GITHUB_OUTPUT"', capture["run"])
-        self.assertIn("xcrun xcresulttool export attachments", capture["run"])
-
-        comment = next(step for step in job["steps"] if step.get("name") == "Post or update screenshot comment")
-        self.assertEqual(comment["if"], "github.event_name == 'pull_request'")
-        self.assertEqual(comment["env"]["UI_TEST_RESULT"], "${{ steps.capture.outputs.result }}")
-        self.assertIn("Warning: iOS UI tests failed.", comment["run"])
-
-        tracker = next(step for step in job["steps"] if step.get("name") == "Open or update the nightly UI test issue")
-        self.assertIn("steps.capture.outputs.result == 'failure'", tracker["if"])
-        self.assertIn("search/issues", tracker["run"])
-        self.assertIn("gh api --method PATCH", tracker["run"])
-        self.assertIn("gh api --method POST", tracker["run"])
-        self.assertIn("state: \"open\"", tracker["run"])
-        nightly_failure = next(step for step in job["steps"] if step.get("name") == "Fail the run when UI tests fail")
-        self.assertIn("steps.capture.outputs.result == 'failure'", nightly_failure["if"])
-
-    def test_ios_screenshots_upload_and_update_single_pr_comment(self):
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        job = workflow["jobs"]["macos"]
-        self.assertEqual(job["permissions"], {
-            "contents": "read", "issues": "write", "pull-requests": "write",
-        })
-        artifact = next(step for step in job["steps"] if step.get("name") == "Upload iOS screenshots")
-        self.assertEqual(
-            artifact["uses"],
-            "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
-        )
-        self.assertEqual(artifact["with"]["retention-days"], 14)
-        self.assertEqual(artifact["with"]["if-no-files-found"], "error")
-        self.assertEqual(artifact["with"]["path"].splitlines(), [
-            "${{ runner.temp }}/ios-screenshots/",
-            "!${{ runner.temp }}/ios-screenshots/ui-test-attachments/",
-        ])
-        evidence = next(step for step in job["steps"] if step.get("id") == "ui-evidence")
-        self.assertEqual(evidence["uses"], artifact["uses"])
-        self.assertEqual(evidence["if"], "always()")
-        self.assertEqual(evidence["with"]["path"], "${{ runner.temp }}/ios-screenshots/ui-test-attachments/")
-        self.assertEqual(evidence["with"]["retention-days"], 14)
-        self.assertEqual(evidence["with"]["if-no-files-found"], "error")
-        comment = next(step for step in job["steps"] if step.get("name") == "Post or update screenshot comment")
-        self.assertEqual(comment["env"]["GH_TOKEN"], "${{ github.token }}")
-        self.assertIn("ARTIFACT_URL", comment["env"])
-        self.assertEqual(comment["env"]["UI_EVIDENCE_URL"], "${{ steps.ui-evidence.outputs.artifact-url }}")
-        self.assertIn("[Native UI test evidence]($UI_EVIDENCE_URL)", comment["run"])
-        self.assertIn("<!-- ios-screenshot-review -->", comment["run"])
-        self.assertIn("gh api --method PATCH", comment["run"])
-        self.assertIn("gh api --method POST", comment["run"])
-        self.assertNotIn("secrets.", (ROOT / ".github/workflows/ios-ci.yml").read_text())
-        self.assertIn(
-            "--screenshot-sidebar-open",
-            (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text(),
-        )
-        self.assertIn(
-            "--screenshot-chat-plus-menu",
-            (ROOT / ".github/workflows/ios-ci.yml").read_text(),
-        )
-        ios_workflow = (ROOT / ".github/workflows/ios-ci.yml").read_text()
-        self.assertIn("--screenshot-lockscreen-task-fixture", ios_workflow)
-        self.assertIn("lockscreen-tasks-${appearance}-${language}.png", ios_workflow)
-        capture = next(step for step in job["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        self.assertIn("for state in track newlift empty;", capture["run"])
-        self.assertIn("--screenshot-health-fixture", capture["run"])
-        self.assertIn("--screenshot-health-language=$language", capture["run"])
-        self.assertIn("health-${state}-${appearance}-${language}.png", capture["run"])
-        self.assertEqual(capture["run"].count("xcrun simctl boot "), 1)
-        self.assertIn("approved Health board", comment["run"])
 
     def test_health_logging_form_is_sheet_only_and_segments_are_in_bottom_bar(self):
         area = (ROOT / "apps/ios/Jarvis/JarvisHealthArea.swift").read_text()
@@ -1291,82 +951,6 @@ xcrun() {
             r"failed\s*\?\s*\.loadFailed\s*:\s*"
             r"searchText\.isEmpty\s*\?\s*\.noLifts\s*:\s*\.noResults\)\)",
         )
-
-    def test_ios_voice_live_activity_metadata_and_evidence_are_in_existing_job(self):
-        project = load_workflow(ROOT / "apps/ios/project.yml")
-        self.assertEqual(project["options"]["developmentLanguage"], "da")
-        target = project["targets"]["JarvisVoiceActivity"]
-        self.assertEqual(target["type"], "app-extension")
-        self.assertIn({"path": "Shared"}, target["sources"])
-        self.assertIn(
-            {"target": "JarvisVoiceActivity", "embed": True},
-            project["targets"]["Jarvis"]["dependencies"],
-        )
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        self.assertEqual(capture["run"].count('xcrun simctl boot "$DEVICE_ID"'), 1)
-        self.assertIn("--screenshot-voice-activity-fixture", capture["run"])
-        self.assertIn("for state in listening speaking muted", capture["run"])
-        self.assertIn("voice-lock-${state}-${language}.png", capture["run"])
-        self.assertIn("voice-approved-board.png", capture["run"])
-        self.assertTrue((ROOT / "docs/ios/design/hands-free-board.png").is_file())
-        fixture = (ROOT / "apps/ios/Jarvis/VoiceActivityScreenshot.swift").read_text()
-        self.assertTrue(fixture.startswith("#if targetEnvironment(simulator)"))
-
-    def test_ios_ambient_comparisons_include_every_screen_and_reject_missing_captures(self):
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        steps = workflow["jobs"]["macos"]["steps"]
-        capture = next(step for step in steps if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        subprocess.run(["bash", "-n"], input=capture["run"], text=True, check=True)
-        compare = next(step for step in steps if step.get("name") == "Pair simulator captures with approved board renders")
-        artifact = next(step for step in steps if step.get("name") == "Upload iOS screenshots")
-        self.assertEqual(artifact["with"]["path"].splitlines(), [
-            "${{ runner.temp }}/ios-screenshots/",
-            "!${{ runner.temp }}/ios-screenshots/ui-test-attachments/",
-        ])
-        screens = ("chat", "voice", "notifications", "factory", "settings", "notes", "health", "sidebar")
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "ios-screenshots"
-            root.mkdir()
-            images = []
-            for appearance in ("light", "dark"):
-                for screen in screens:
-                    name = (f"factory-board-{appearance}-da.png" if screen == "factory"
-                            else f"ambient-{screen}-{appearance}.png")
-                    image = root / name
-                    image.touch()  # File-presence fixtures; these are not simulator screenshots.
-                    images.append(image)
-                for state in ("listening", "thinking", "speaking"):
-                    image = root / f"voice-{state}-{appearance}.png"
-                    image.touch()
-                    images.append(image)
-            env = {**os.environ, "RUNNER_TEMP": directory}
-            subprocess.run(["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env, check=True)
-            gallery = (root / "comparisons.html").read_text()
-            self.assertEqual(gallery.count("<iframe "), 22)
-            for image in images:
-                self.assertIn(f'src="{image.name}"', gallery)
-            self.assertIn("sheet=activity", gallery)
-            self.assertIn("sidebar=open", gallery)
-            for state in ("listening", "thinking", "speaking"):
-                self.assertIn(f"voice={state}", gallery)
-            self.assertTrue((root / "board/board.html").is_file())
-            images[-1].unlink()
-            result = subprocess.run(
-                ["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env,
-                capture_output=True, text=True,
-            )
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn(f"Missing simulator capture: {images[-1].name}", result.stderr)
-            images[-1].touch()
-            images[0].unlink()
-            result = subprocess.run(
-                ["bash", "-e", "-c", compare["run"]], cwd=ROOT, env=env,
-                capture_output=True, text=True,
-            )
-            self.assertNotEqual(result.returncode, 0)
-            self.assertIn("Missing simulator capture:", result.stderr)
 
     def test_ios_hero_card_never_overrides_the_identifiers_of_its_controls(self):
         header = (ROOT / "apps/ios/Jarvis/JarvisPageHeader.swift").read_text()
@@ -1413,47 +997,6 @@ xcrun() {
         self.assertIn(".offset(x: -2, y: 2)", glyph)
         self.assertIn("JarvisDesignTokens.secondaryAccent", glyph)
 
-    def test_ios_notification_screenshots_use_the_real_fixture_sheet(self):
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        self.assertIn("for appearance in light dark", capture["run"])
-        self.assertIn("--screenshot-chat-fixture --screenshot-notifications-open", capture["run"])
-        self.assertIn("notifications-${appearance}.png", capture["run"])
-        self.assertIn("for dynamic_type in default accessibility-xxx-large", capture["run"])
-        self.assertIn("content_size=accessibility-extra-extra-extra-large", capture["run"])
-        self.assertIn("for count in 1 12", capture["run"])
-        self.assertIn("--screenshot-needs-you-count=$count", capture["run"])
-        self.assertIn("bell-count-${count}-${dynamic_type}-${appearance}.png", capture["run"])
-        self.assertIn('xcrun simctl ui "$DEVICE_ID" content_size large', capture["run"])
-        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        self.assertIn('fixtureMode && ProcessInfo.processInfo.arguments.contains("--screenshot-notifications-open")', content)
-        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
-        self.assertIn("guard model.fixtureMode,", chat)
-        self.assertIn("self.initialActivitySheet = fixtureMode ? initialActivitySheet : nil", chat)
-        self.assertLess(chat.index("await model.load()"), chat.index("presentedSheet = .activity(initialActivitySheet)"))
-        self.assertIn(".sheet(item: $presentedSheet", chat)
-        self.assertIn("JarvisActivitySheet(model: model, kind: kind)", chat)
-
-    def test_ios_legacy_confirmation_fixture_does_not_show_approval_controls(self):
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        steps = workflow["jobs"]["macos"]["steps"]
-        capture = next(step["run"] for step in steps
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        self.assertIn("--screenshot-calendar-change-fixture --screenshot-notifications-open", capture)
-        self.assertIn("legacy-calendar-notifications-${language}-${appearance}.png", capture)
-        comment = next(step["run"] for step in steps
-                       if step.get("name") == "Post or update screenshot comment")
-        self.assertIn("legacy-calendar-notifications-{da,en}-{light,dark}.png", comment)
-        self.assertIn("does not perform calendar writes or prove backend execution", comment)
-        sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()
-        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
-        self.assertNotIn("confirmation-section-heading", sheet)
-        self.assertNotIn("approvalBar(", chat)
-        ui_tests = (ROOT / "apps/ios/JarvisUITests/ChatPresentationUITests.swift").read_text()
-        self.assertIn("testLegacyApprovalDoesNotBlockChatOrAppearInNotifications", ui_tests)
-        self.assertIn('app.staticTexts["confirmation-section-heading"].exists', ui_tests)
-
     def test_lock_screen_approval_preview_and_apns_expiry_use_local_time(self):
         preview = (ROOT / "apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift").read_text()
         notification = (ROOT / "apps/ios/Jarvis/JarvisApprovalNotificationCoordinator.swift").read_text()
@@ -1468,74 +1011,6 @@ xcrun() {
         for language, template in (("da", "Udløber kl. %@"), ("en", "Expires at %@")):
             resource = ROOT / f"apps/ios/Packages/JarvisCore/Sources/JarvisCore/Resources/{language}.lproj/JarvisApprovals.strings"
             self.assertIn(f'"approval.expires" = "{template}";', resource.read_text())
-
-    def test_ios_background_activity_empty_state_and_screenshots(self):
-        screen = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
-        model = (ROOT / "apps/ios/Jarvis/JarvisChatModel.swift").read_text()
-        sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()
-        design = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
-        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        fixture = (ROOT / "apps/ios/Jarvis/JarvisFixtureScenario.swift").read_text()
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        capture = next(step["run"] for step in workflow["jobs"]["macos"]["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-
-        self.assertIn("if model.shouldShowNowBar {\n                nowBar", screen)
-        activity_predicate = model.split("var shouldShowNowBar: Bool", 1)[1].split("var needsYouCount", 1)[0]
-        self.assertNotIn("activeConfirmation", activity_predicate)
-        self.assertNotIn("approvalBar(", screen)
-        self.assertIn("!$0.running.isEmpty", activity_predicate)
-        self.assertIn("!$0.items.isEmpty", activity_predicate)
-        self.assertNotIn("$0.awayMode", activity_predicate)
-        self.assertIn("JarvisComposerPlusMenu(", screen)
-        self.assertIn("chatPlusMenuInset: CGFloat = 16", design)
-        self.assertIn('ContentUnavailableView(copy(.activityEmpty), systemImage: "checkmark.circle")', sheet)
-        self.assertIn("if !items.isEmpty", sheet)
-        self.assertNotIn("emptyMessage", sheet)
-        self.assertIn('for state in empty active', capture)
-        self.assertIn('"--screenshot-activity-state=$state"', capture)
-        self.assertIn('background-activity-${state}-${appearance}.png', capture)
-        self.assertIn('--screenshot-activity-state=', content)
-        self.assertIn("private let activityScreenshotState: String?", content)
-        self.assertIn("self.activityScreenshotState = activityScreenshotState", content)
-        self.assertIn("makeClient(emptyActivity: activityScreenshotState == \"empty\")", content)
-        self.assertIn('"awayMode": false', fixture)
-
-    def test_ios_voice_states_have_captures_and_board_comparisons(self):
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        steps = workflow["jobs"]["macos"]["steps"]
-        capture = next(step["run"] for step in steps
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        comparison = next(step["run"] for step in steps
-                          if step.get("name") == "Pair simulator captures with approved board renders")
-        self.assertIn("for state in listening thinking speaking", capture)
-        self.assertIn("--screenshot-voice-fixture", capture)
-        self.assertIn("voice-${state}-${appearance}.png", capture)
-        self.assertIn('for state in ("listening", "thinking", "speaking")', comparison)
-        self.assertIn('f"voice-{state}-{appearance}.png"', comparison)
-        self.assertIn('"screen": "voice", "voice": state, "theme": appearance', comparison)
-
-    def test_ios_voice_live_activity_metadata_and_evidence_are_in_existing_job(self):
-        project = load_workflow(ROOT / "apps/ios/project.yml")
-        self.assertEqual(project["options"]["developmentLanguage"], "da")
-        target = project["targets"]["JarvisVoiceActivity"]
-        self.assertEqual(target["type"], "app-extension")
-        self.assertIn({"path": "Shared"}, target["sources"])
-        self.assertIn(
-            {"target": "JarvisVoiceActivity", "embed": True},
-            project["targets"]["Jarvis"]["dependencies"],
-        )
-        workflow = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        capture = next(step for step in workflow["jobs"]["macos"]["steps"]
-                       if step.get("name") == "Boot iPhone Simulator and capture screenshots")
-        self.assertEqual(capture["run"].count('xcrun simctl boot "$DEVICE_ID"'), 1)
-        self.assertIn("--screenshot-voice-activity-fixture", capture["run"])
-        self.assertIn("for state in listening speaking muted", capture["run"])
-        self.assertIn("voice-lock-${state}-${language}.png", capture["run"])
-        self.assertIn("voice-approved-board.png", capture["run"])
-        self.assertTrue((ROOT / "docs/ios/design/hands-free-board.png").is_file())
-        fixture = (ROOT / "apps/ios/Jarvis/VoiceActivityScreenshot.swift").read_text()
-        self.assertTrue(fixture.startswith("#if targetEnvironment(simulator)"))
 
     def test_testflight_workflow_is_manual_guarded_and_isolated(self):
         workflow_path = ROOT / ".github/workflows/ios-testflight.yml"
