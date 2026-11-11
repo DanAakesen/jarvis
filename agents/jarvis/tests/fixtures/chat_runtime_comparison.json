@@ -104,8 +104,6 @@
     }
   ],
   "sharedVoiceChecks": [
-    {"path": "apps/backend/src/voice/realtime.test.ts", "covers": "EN/DA Voice Live configuration and audio/tool contracts"},
-    {"path": "apps/backend/src/voice/relay.test.ts", "covers": "Audio events, transcripts, interruption and tool integration"},
     {"path": "agents/jarvis/tests/test_voice_runtime.py", "covers": "Retained hosted voice fallback"}
   ],
   "observations": ["runtime", "model", "reasoningEffort", "configurationDifferences", "terminalOutcome", "completionEvidence", "textReview", "durationMs", "inputTokens", "outputTokens", "reasoningTokens", "billedCost", "currency", "costUnavailableReason"],
