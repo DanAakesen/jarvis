@@ -12542,3 +12542,12 @@ and preserves existing integer stat consumers while adding explicit unknown
 values to the shared stat component. Primary owns final integration, native
 qualification and deployment. Linux syntax/Core checks do not establish native
 layout, VoiceOver, Dynamic Type, reduced-motion or scroll acceptance.
+
+## 11 November 2026 — Keep activity status faithful (#1763)
+
+Refresh iOS activity on Factory board events rather than inferring a task's state
+from age. Record deliberate proactive cancellations as cancelled, not failed;
+retain actual failure reasons. Task 24 handled #1706; the Factory bot reported it
+Done on 10 November and #1709 was merged. Its current production state and the
+reported proactive failure reasons have not been verified here. Historical job
+records remain unchanged.
