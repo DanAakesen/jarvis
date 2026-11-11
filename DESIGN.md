@@ -3016,10 +3016,11 @@ the camera tile remains draggable in the thumb zone.
 
 Use system glass buttons, SF Symbols, semantic colours, type styles, permission
 prompts, sheets and the ReplayKit picker. Voice reuses the shared Jarvis orb, with
-state-driven motion and muted/offline treatments. Live captions use a labeled
-glass surface with a dismiss action; the CC control restores a hidden caption
-surface. Orb and caption geometry and motion values come from the shared iOS token
-layer. The camera tile remains custom for its live preview.
+state-driven motion and muted/offline treatments. Live captions are centered,
+unframed text with Dynamic Type-scaled typography, comfortable line spacing and
+reduced-motion-aware updates; the CC control toggles captions. Accessibility sizes
+reserve additional caption space. Orb and caption geometry and motion values come
+from the shared iOS token layer. The camera tile remains custom for its live preview.
 The minimized bar preserves voice access outside the screen, and the share bar
 keeps Stop visible while broadcasting.
 Ending voice returns to Chat and closes the sidebar through the existing
