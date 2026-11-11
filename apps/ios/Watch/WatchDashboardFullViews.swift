@@ -251,9 +251,9 @@ struct WatchHomeBriefView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                WatchReadState(loading: loading, failure: failure, empty: brief == nil,
+                WatchReadState(loading: loading, failure: failure, empty: brief == nil && connection.dashboard?.brief == nil,
                                emptyText: "Your Home brief is unavailable") { Task { await load() } }
-                if let brief {
+                if let brief = brief ?? connection.dashboard?.brief {
                     WatchBriefText(
                         text: brief.fullText ?? brief.text,
                         highlightedTerms: brief.fullText == nil ? brief.highlights : (brief.fullHighlights ?? brief.highlights),
@@ -269,11 +269,10 @@ struct WatchHomeBriefView: View {
         guard !loading else { return }
         loading = true; failure = nil
         defer { loading = false }
-        do {
-            let result: WatchBriefSummary = try await connection.load(.brief)
-            guard !Task.isCancelled else { return }
-            brief = result
-        } catch { failure = (error as? WatchFailure)?.message ?? "Home brief unavailable. Try again." }
+        await connection.refreshBrief(force: true)
+        guard !Task.isCancelled else { return }
+        brief = connection.dashboard?.brief
+        failure = connection.briefError
     }
 }
 

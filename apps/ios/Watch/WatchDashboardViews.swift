@@ -30,8 +30,7 @@ struct WatchDashboardView: View {
                     let snapshot = connection.dashboard
                     Group {
                         if let snapshot, !snapshot.isCurrent(at: context.date) {
-                            Text("Saved \(snapshot.generatedAt.formatted(date: .abbreviated, time: .shortened)) · not current")
-                                .font(.caption2).foregroundStyle(.secondary)
+                            WatchSnapshotAge(date: snapshot.generatedAt)
                         }
                         upNext(snapshot, now: context.date)
                         Divider()
@@ -54,7 +53,8 @@ struct WatchDashboardView: View {
                                     Text("\(preview.totalCount) today, including overdue").font(.caption2).foregroundStyle(.secondary)
                                     WatchTaskPreviewRows(titles: preview.tasks.map(\.text))
                                 }
-                            } else if let health = connection.snapshot, health.isCurrent(at: context.date), let count = health.tasksToday {
+                            } else if let health = connection.snapshot, let count = health.tasksToday {
+                                if !health.isCurrent(at: context.date) { WatchSnapshotAge(date: health.generatedAt) }
                                 Text(count == 0 ? "No tasks due today" : "\(count) today, including overdue")
                                     .font(.caption).foregroundStyle(.secondary)
                                 if count > 0 { missing("Task titles unavailable. Open the full list.") }
@@ -106,29 +106,33 @@ struct WatchDashboardView: View {
     private func upNext(_ snapshot: WatchDashboardSnapshot?, now: Date) -> some View {
         NavigationLink(value: WatchRoute.agenda) {
             VStack(alignment: .leading, spacing: 9) {
-                let entries = snapshot?.agenda?.filter { $0.end > now } ?? []
+                let current = snapshot?.isCurrent(at: now) == true
+                let entries = current ? (snapshot?.agenda?.filter { $0.end > now } ?? []) : (snapshot?.agenda ?? [])
                 let next = entries.first
                 HStack(alignment: .firstTextBaseline) {
                     WatchDashboardHeading(title: "Up Next")
                     Spacer(minLength: 3)
-                    if let next, snapshot?.isCurrent(at: now) == true { Text(next.start, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(WatchStyle.amber) }
+                    if let next { Text(next.start, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(WatchStyle.amber) }
                 }
                 if snapshot == nil {
                     missing(loading ? "Loading agenda…" : "Agenda unavailable")
-                } else if snapshot?.isCurrent(at: now) != true {
-                    missing("Saved agenda · open to refresh")
                 } else if snapshot?.agenda != nil {
-                    WatchAgendaTimeline(intervals: entries.map { DateInterval(start: $0.start, end: max($0.start, $0.end)) }, now: now)
+                    if current {
+                        WatchAgendaTimeline(intervals: entries.map { DateInterval(start: $0.start, end: max($0.start, $0.end)) }, now: now)
+                    }
                     if let next {
                         Text(next.title).font(.system(.body, design: .rounded, weight: .semibold))
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(next.start > now ? next.start.formatted(.relative(presentation: .named)) : "Happening now")
-                            .font(.system(.body, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.amber)
+                        if current {
+                            Text(next.start > now ? next.start.formatted(.relative(presentation: .named)) : "Happening now")
+                                .font(.system(.body, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.amber)
+                        }
                         Text(next.start.formatted(date: .omitted, time: .shortened) + "–" +
                              next.end.formatted(date: Calendar.current.isDate(next.start, inSameDayAs: next.end) ? .omitted : .abbreviated,
                                                 time: .shortened))
                             .font(.caption).foregroundStyle(.secondary)
-                    } else { missing("No more events today") }
+                    } else if current { missing("No more events today") }
+                    else { Text("No events in saved agenda").font(.caption).foregroundStyle(.secondary) }
                 } else { missing("Agenda unavailable") }
             }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityHint("Opens your agenda")
@@ -137,7 +141,7 @@ struct WatchDashboardView: View {
         VStack(alignment: .leading, spacing: 8) {
             if let health = connection.snapshot {
                 if !health.isCurrent(at: now) {
-                    Text("Saved workout counts · not current").font(.caption2).foregroundStyle(.secondary)
+                    WatchSnapshotAge(date: health.generatedAt)
                 }
                 HStack(spacing: 18) {
                     workoutCount("Gym", count: health.gym, goal: health.gymGoal)

@@ -4859,3 +4859,6 @@ TestFlight delivery. See docs/ios/design/watch/steps-reconnect-handoff-2026-11-1
 Watch review follow-up #1750: undated tasks are reachable under Upcoming and Home
 detail uses the full brief. Linux parsing and existing Core tests pass; native
 Watch build and device interaction checks remain pending.
+## Watch last-known data repair — 11 November 2026 (#1769)
+
+Watch snapshots now persist in the shared Watch container with after-first-unlock protection and remain visible with their age on refresh failure or expiry. Next: qualify native Watch build, locked-device behavior and complication layouts; Linux cannot run Xcode or a Watch simulator.

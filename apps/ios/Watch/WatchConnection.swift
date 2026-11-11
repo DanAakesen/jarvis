@@ -36,10 +36,15 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             return
         }
         #endif
-        if let data = UserDefaults(suiteName: "group.com.danaakesen.jarvis")?.data(forKey: "watch.dashboard"),
+        if let data = WatchSnapshotStore.appGroup()?.load(.health),
            data.count <= WatchLimits.payloadBytes,
-           let cached = try? JSONDecoder().decode(WatchDashboardSnapshot.self, from: data), cached.isCurrent(at: Date()) {
-            dashboard = cached
+           let cached = try? JSONDecoder().decode(WatchHealthSnapshot.self, from: data), cached.version == 1 {
+            save(cached)
+        }
+        if let data = WatchSnapshotStore.appGroup()?.load(.dashboard),
+           data.count <= WatchLimits.payloadBytes,
+           let cached = try? JSONDecoder().decode(WatchDashboardSnapshot.self, from: data), cached.version == 1 {
+            saveDashboard(cached)
             cachedBrief = cached.brief
         }
         guard WCSession.isSupported() else { return }
@@ -69,7 +74,6 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
                         self?.complete(request.id, .failure(WatchFailure.failed)); return
                     }
                     if let failure = reply.failure {
-                        if failure == .signInRequired { self?.clearCachedData() }
                         self?.complete(request.id, .failure(failure))
                     }
                     else if let taskError = reply.taskError { self?.complete(request.id, .failure(taskError)) }
@@ -113,16 +117,18 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         do {
             var value: WatchDashboardSnapshot = try await load(.dashboard)
             guard epoch == cacheGeneration else { return }
-            if let cachedBrief, cachedBrief.isCurrent(at: Date()) { value.brief = cachedBrief }
+            if let cachedBrief, value.brief == nil || cachedBrief.generatedAt > value.brief!.generatedAt {
+                value.brief = cachedBrief
+            }
             saveDashboard(value)
             dashboardError = nil
         } catch {
             dashboardError = (error as? WatchFailure)?.message ?? WatchFailure.failed.message
         }
     }
-    func refreshBrief() async {
+    func refreshBrief(force: Bool = false) async {
         guard !briefRefreshing else { return }
-        if let cachedBrief, cachedBrief.isCurrent(at: Date()) { return }
+        if !force, let cachedBrief, cachedBrief.isCurrent(at: Date()) { return }
         briefRefreshing = true
         defer { briefRefreshing = false }
         let epoch = cacheGeneration
@@ -130,10 +136,9 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             let value: WatchBriefSummary = try await load(.brief)
             guard epoch == cacheGeneration else { return }
             cachedBrief = value
-            if var current = dashboard {
-                current.brief = value
-                saveDashboard(current)
-            }
+            var current = dashboard ?? WatchDashboardSnapshot(now: value.generatedAt)
+            current.brief = value
+            saveDashboard(current)
             briefError = nil
         } catch {
             briefError = (error as? WatchFailure)?.message ?? WatchFailure.failed.message
@@ -163,25 +168,71 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         deadlines.removeValue(forKey: id)?.cancel()
         pending.removeValue(forKey: id)?.resume(with: result)
     }
-    private func save(_ value: WatchHealthSnapshot) {
+    private func save(_ incoming: WatchHealthSnapshot) {
+        guard incoming.version == 1 else { return }
+        var value = incoming
+        if let old = snapshot {
+            guard incoming.generatedAt >= old.generatedAt else { return }
+            var retained = false
+            if value.steps == nil, let steps = old.steps {
+                value.steps = steps; value.hourlySteps = old.hourlySteps; retained = true
+            }
+            if value.stepGoal == nil, let v = old.stepGoal { value.stepGoal = v; retained = true }
+            if value.gym == nil, let v = old.gym { value.gym = v; retained = true }
+            if value.gymGoal == nil, let v = old.gymGoal { value.gymGoal = v; retained = true }
+            if value.runs == nil, let v = old.runs { value.runs = v; retained = true }
+            if value.runGoal == nil, let v = old.runGoal { value.runGoal = v; retained = true }
+            if value.dailyKcal == nil, let v = old.dailyKcal { value.dailyKcal = v; retained = true }
+            if value.weeklyKcal == nil, let v = old.weeklyKcal { value.weeklyKcal = v; retained = true }
+            if value.tasksToday == nil, let v = old.tasksToday { value.tasksToday = v; retained = true }
+            if retained {
+                value.generatedAt = old.generatedAt
+                value.dayStart = old.dayStart
+                value.weekStart = old.weekStart
+            }
+        }
         snapshot = value
-        let defaults = UserDefaults(suiteName: "group.com.danaakesen.jarvis")
-        defaults?.set(try? JSONEncoder().encode(value), forKey: "watch.health")
+        do {
+            guard let store = WatchSnapshotStore.appGroup() else { throw WatchFailure.failed }
+            try store.save(JSONEncoder().encode(value), kind: .health)
+        } catch { NSLog("Watch health snapshot could not be saved.") }
         WidgetCenter.shared.reloadAllTimelines()
     }
-    private func saveDashboard(_ value: WatchDashboardSnapshot) {
-        guard let data = try? JSONEncoder().encode(value), data.count <= WatchLimits.payloadBytes else { return }
+    private func saveDashboard(_ incoming: WatchDashboardSnapshot) {
+        guard incoming.version == 1 else { return }
+        var value = incoming
+        if let old = dashboard {
+            guard incoming.generatedAt >= old.generatedAt else { return }
+            var retained = false
+            if value.agenda == nil, let v = old.agenda { value.agenda = v; retained = true }
+            if value.bodyFat == nil, let v = old.bodyFat { value.bodyFat = v; retained = true }
+            if value.todayTasks == nil, let v = old.todayTasks { value.todayTasks = v; retained = true }
+            if value.upcomingTasks == nil, let v = old.upcomingTasks { value.upcomingTasks = v; retained = true }
+            if value.notes == nil, let v = old.notes { value.notes = v; retained = true }
+            if value.nutrition == nil, let v = old.nutrition { value.nutrition = v; retained = true }
+            if let brief = old.brief, value.brief == nil || brief.generatedAt > value.brief!.generatedAt {
+                value.brief = brief
+            }
+            if retained { value.generatedAt = old.generatedAt }
+        }
+        guard let bounded = try? value.bounded(), let data = try? JSONEncoder().encode(bounded),
+              data.count <= WatchLimits.payloadBytes else {
+            NSLog("Watch dashboard snapshot could not be encoded.")
+            return
+        }
+        value = bounded
         dashboard = value
-        UserDefaults(suiteName: "group.com.danaakesen.jarvis")?.set(data, forKey: "watch.dashboard")
+        do {
+            guard let store = WatchSnapshotStore.appGroup() else { throw WatchFailure.failed }
+            try store.save(data, kind: .dashboard)
+        } catch { NSLog("Watch dashboard snapshot could not be saved.") }
         WidgetCenter.shared.reloadAllTimelines()
     }
     private func clearCachedData() {
         cacheGeneration = UUID()
         snapshot = nil; dashboard = nil; cachedBrief = nil
         for id in Array(pending.keys) { complete(id, .failure(WatchFailure.signInRequired)) }
-        let defaults = UserDefaults(suiteName: "group.com.danaakesen.jarvis")
-        defaults?.removeObject(forKey: "watch.health")
-        defaults?.removeObject(forKey: "watch.dashboard")
+        WatchSnapshotStore.appGroup()?.clear()
         WidgetCenter.shared.reloadAllTimelines()
     }
     private func updateReachability() {
@@ -212,12 +263,13 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         let data = applicationContext["health"] as? Data
         let dashboardData = applicationContext["dashboard"] as? Data
         Task { @MainActor in
-            if let data, let value = try? JSONDecoder().decode(WatchHealthSnapshot.self, from: data) { self.save(value) }
+            if let data, data.count <= WatchLimits.payloadBytes,
+               let value = try? JSONDecoder().decode(WatchHealthSnapshot.self, from: data) { self.save(value) }
             else if data == nil, dashboardData == nil { self.clearCachedData(); return }
             if let dashboardData, dashboardData.count <= WatchLimits.payloadBytes,
                let value = try? JSONDecoder().decode(WatchDashboardSnapshot.self, from: dashboardData) {
                 self.saveDashboard(value)
-                self.cachedBrief = value.brief
+                self.cachedBrief = self.dashboard?.brief
             }
         }
     }

@@ -8250,6 +8250,8 @@ results separate and retain actual native captures before claiming UI acceptance
 
 Source: apps/ios/Watch, apps/ios/WatchWidgets and iPhone JarvisWatchBridge.swift. Build: apps/ios/project.yml. Tests: `swift test --package-path apps/ios/Packages/JarvisCore --filter WatchContractTests` or full swift test. Native check after xcodegen generate in apps/ios: `xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build`. PR-only watch-build.yml builds Watch and phone unsigned and captures isolated DEBUG --watch-fixture views on an available Ultra simulator. Fixtures are not real health or successful connectivity. Primary owns signing, installation, integration and deployment. References, decisions and unverified checks: docs/ios/design/watch/.
 
+For #1769, the documented WatchContractTests filter matches no tests in this checkout. Run the existing full JarvisCore suite and the native Watch build; verify persistence after first Watch unlock, locked complications, offline/partial refresh, age labels and sign-out on paired devices. Linux cannot verify Apple file protection or WidgetKit rendering.
+
 
 ### 8 November: subscription access corrected
 
