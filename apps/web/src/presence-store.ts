@@ -90,12 +90,6 @@ export function publishPresenceMode(mode: string) {
   else setState({ status: 'ready', mode, source: 'jarvis', changedAt: new Date().toISOString(), saving: null, error: '' });
 }
 
-export function resetPresenceForTests() {
-  state = { status: 'idle' };
-  inflight = null;
-  lastDeviceSync = 0;
-}
-
 // Phones are where Dan is on the move (Dan, 8 October, P9-44): a touch device with a phone-sized screen. A narrow
 // desktop window is not a phone, so the pointer decides as well as the size.
 export const phoneDeviceQuery = '(pointer: coarse) and (max-width: 900px), (pointer: coarse) and (max-height: 500px)';
