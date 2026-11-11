@@ -523,10 +523,24 @@ class ReleaseStateTests(unittest.TestCase):
         self.assertEqual(self.record_fixture(dict.fromkeys(PARTS, True), results)[0], 1)
         for key in results:
             for status in ("failure", "cancelled", "skipped"):
+                if (key, status) == ("acceptance", "skipped"):
+                    continue
                 broken = copy.deepcopy(results)
                 broken[key]["result"] = status
                 self.assertEqual(self.record_fixture(dict.fromkeys(PARTS, True), broken,
                                                      evidence=smoke())[0], 1)
+
+    def test_manual_only_live_acceptance_is_not_run_and_does_not_block_release(self):
+        results = {key: {"result": "success"} for key in ("plan", *PARTS, "smoke")}
+        results["acceptance"] = {"result": "skipped"}
+        code, receipt = self.record_fixture(dict.fromkeys(PARTS, True), results)
+        self.assertEqual(code, 0)
+        self.assertTrue(receipt["accepted"])
+        self.assertEqual(receipt["checks"]["acceptance"], "skipped")
+        self.assertEqual(receipt["acceptance_evidence"], "not run; live acceptance is manual only")
+        self.assertNotIn("acceptance", receipt)
+        results["smoke"]["result"] = "failure"
+        self.assertEqual(self.record_fixture(dict.fromkeys(PARTS, True), results)[0], 1)
 
     def test_known_or_unknown_functional_failure_cannot_become_accepted(self):
         results = {key: {"result": "success"} for key in ("plan", *PARTS, "smoke", "acceptance")}
@@ -1660,6 +1674,7 @@ xcrun() {
         self.assertIn("if: github.ref == 'refs/heads/main'", deploy)
         self.assertIn("release_state.py plan", deploy)
         self.assertIn("name: Live conversation acceptance", deploy)
+        self.assertIn("github.event_name == 'workflow_dispatch' && inputs.live_acceptance == true", deploy)
         self.assertIn('and .status != "ok"', deploy)
         self.assertNotIn('cat "$response"', deploy)
         self.assertIn("'docs/features.md'", deploy)

@@ -1,6 +1,7 @@
 # Production deploy for main. Exact-tree CI precedes Azure access. Immutable
 # receipts retain compatible applied components even when acceptance failed.
-# Readiness and live conversation acceptance remain separate required results.
+# Readiness is a required result. Live conversation acceptance spends hosted-agent
+# and model money, so it runs only when started by hand (live_acceptance input).
 # The concurrency
 # group is shared with Runner deploy: one deploy at a time, queued in order,
 # never cancelled. Azure access uses the bootstrap OIDC identity (main only).
@@ -36,6 +37,12 @@ on:
 
       diagnose_managed_chat:
         description: Compare fixed synthetic request shapes on the existing target without activation
+        type: boolean
+        default: false
+        required: false
+
+      live_acceptance:
+        description: Run the paid live conversation acceptance (8 live chat checks); never runs automatically
         type: boolean
         default: false
         required: false
@@ -533,7 +540,7 @@ jobs:
   acceptance:
     name: Live conversation acceptance
     needs: [plan, smoke]
-    if: ${{ !cancelled() && needs.plan.outputs.superseded != 'true' && needs.smoke.result == 'success' }}
+    if: ${{ !cancelled() && needs.plan.outputs.superseded != 'true' && needs.smoke.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.live_acceptance == true }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
