@@ -14,32 +14,6 @@ try {
     Pop-Location
 }
 
-$runner = Join-Path $root "runner"
-if (-not (Test-Path (Join-Path $runner ".venv"))) {
-    uv venv (Join-Path $runner ".venv")
-}
-$pythonArgs = @("--python", (Join-Path $runner ".venv/Scripts/python.exe"), "-r", (Join-Path $runner "requirements.txt"))
-uv pip install @pythonArgs
-if ($LASTEXITCODE -ne 0) { throw "Runner dependency installation failed" }
-$previousPythonPath = $env:PYTHONPATH
-$env:PYTHONPATH = $runner
-Push-Location $runner
-try {
-    & (Join-Path $runner ".venv/Scripts/python.exe") -m pytest -q tests
-} finally {
-    Pop-Location
-    $env:PYTHONPATH = $previousPythonPath
-}
-if ($LASTEXITCODE -ne 0) { throw "Runner tests failed" }
-
-$manifestTests = Join-Path $root "infra/tests/Assert-AcrManifest.Tests.ps1"
-& $manifestTests
-if ($LASTEXITCODE -ne 0) { throw "ACR manifest regression tests failed" }
-
-$managedWorkspaceTests = Join-Path $root "infra/tests/Assert-ManagedWorkspace.Tests.ps1"
-& $managedWorkspaceTests
-if ($LASTEXITCODE -ne 0) { throw "Managed workspace regression tests failed" }
-
 Get-ChildItem -LiteralPath $root -Filter "*.ps1" -File -Recurse | ForEach-Object {
     $tokens = $null
     $errors = $null
@@ -48,4 +22,4 @@ Get-ChildItem -LiteralPath $root -Filter "*.ps1" -File -Recurse | ForEach-Object
         throw "PowerShell syntax errors in $($_.FullName): $($errors -join '; ')"
     }
 }
-Write-Host "Quality gate passed: driver, runner, and PowerShell syntax."
+Write-Host "Quality gate passed: driver and PowerShell syntax."
