@@ -51,6 +51,7 @@ from jarvis_tools import (
     INSTRUCTIONS,
     SMOKE_TOOL_ORDER,
     BackendToolClient,
+    ToolExecutionMetadata,
     backend_settings_from_environment,
     compose_identity_instructions,
     current_chat_acknowledgment_enabled,
@@ -73,6 +74,7 @@ from model_contract import (
     public_update_boundaries,
 )
 from state import DEFAULT_MODEL_SETTINGS, ModelMessage, ModelSettings
+from tool_lookup import CALL_TOOL, FIND_TOOLS, LOOKUP_TOOLS, resolve_lookup_calls
 from visual_context import (
     ImageInputRejected,
     current_image_reservation,
@@ -546,6 +548,10 @@ def parse_chat_max_output_tokens(value: str | None) -> int:
 
 class AzureOpenAIResponsesClient(StreamingModelClient):
     """Streaming Responses client whose tools are the backend's registered tools."""
+
+    # Models see find_tools and call_tool instead of every schema. A subclass whose provider
+    # request must carry the registered catalogue turns this off.
+    lookup_tools = True
 
     def __init__(
         self,
@@ -1098,7 +1104,12 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             for name in SMOKE_TOOL_ORDER if name in definitions
                         ]
                     else:
-                        tools = chat_model_tools(list(definitions.values()))
+                        tools = (
+                            list(LOOKUP_TOOLS) if self.lookup_tools
+                            else chat_model_tools(list(definitions.values()))
+                        )
+                        execution_metadata[FIND_TOOLS] = ToolExecutionMetadata("read")
+                        execution_metadata[CALL_TOOL] = ToolExecutionMetadata("read")
                     prompt_span.set_attribute("message.count", len(model_input))
                     prompt_span.set_attribute("tool.count", len(tools))
                 steering_fetcher = current_steering_fetcher.get()
@@ -1139,6 +1150,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 completed_tool_calls: dict[
                     tuple[str, str], tuple[tuple[str, str], dict[str, Any]]
                 ] = {}
+                discovered_tools: set[str] = set()
                 uncertain_action_results: dict[
                     tuple[str, tuple[str, str]], dict[str, Any]
                 ] = {}
@@ -1391,6 +1403,11 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     if force_final_synthesis and calls:
                         raise ToolLoopStalled(
                             "The model requested tools again after a final-only retry."
+                        )
+                    if role != "smoke" and self.lookup_tools:
+                        calls = resolve_lookup_calls(
+                            calls, catalogue, discovered_tools, use_anthropic=use_anthropic,
+                            shape_definitions=chat_model_tools,
                         )
                     usage = final.usage
                     input_tokens = getattr(usage, "input_tokens", None)
@@ -1744,6 +1761,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "request. Use calendar_create_events with the complete list."
                                 )},
                             }
+                        elif cached_entry is None and getattr(call, "local_result", None):
+                            result = call.local_result
                         elif cached_entry is None:
                             result = (
                                 combined_calendar if combined_calendar is not None else

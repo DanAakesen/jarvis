@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { defaultAwayModeState, presenceModes } from './away-mode.js';
 import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js';
 import { capabilityInstructions, CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS } from './capability-instructions.js';
+import { capabilityIndex } from './capability-index.js';
 import { builtInModeInstructions } from './presence-instructions.js';
 import {
   homeLocationSettingsSchema, isModelCatalogue, modelRoles, reasoningEfforts, researchDepths, researchSettingsBounds,
@@ -1049,6 +1050,7 @@ export async function buildAgentSettingsPayload(
       app.jarvisTools.get('proactive_preferences') !== undefined,
       app.jarvisTools.get('owner_reminders') !== undefined,
       app.backendLogsConfigured && app.jarvisTools.get('read_backend_logs') !== undefined,
+      capabilityIndex(app.jarvisTools),
     ),
     timeouts: settings.timeouts,
     personality: settings.personality,

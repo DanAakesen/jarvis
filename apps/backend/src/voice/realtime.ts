@@ -12,7 +12,8 @@ import type { VoiceTuningSettings } from '@jarvis/contracts';
 import { toolArgumentRefusal, unexpectedToolArgument } from '../core/tool-arguments.js';
 import { classifyApprovalReply } from '../core/approval.js';
 import { startWorkPresentation } from '../core/work-presentation.js';
-import { isVoiceCoreTool, isVoiceToolAllowed, searchVoiceTools, shortenVoiceDescription, VOICE_CALL_TOOL, VOICE_FIND_TOOLS_TOOL } from './voice-tools.js';
+import { isVoiceToolAllowed, searchVoiceTools, shortenVoiceDescription, VOICE_CALL_TOOL, VOICE_FIND_TOOLS_TOOL } from './voice-tools.js';
+import { capabilityIndex } from '../core/capability-index.js';
 
 export const ENGLISH_REALTIME_MODEL = defaultSettings.roles.voice.model;
 export const ENGLISH_REALTIME_VOICE = 'en-GB-Ryan:DragonHDLatestNeural';
@@ -69,15 +70,13 @@ function voiceCapabilityToolDefinitions() {
   ];
 }
 
-function directToolDefinitions(tools: ToolRegistry, coreOnly = false) {
-  return tools.list()
-    .filter((tool) => isCurrentAssistantTool(tool.name) && (!coreOnly || isVoiceCoreTool(tool.name)))
-    .map((tool) => ({
-      type: 'function' as const,
-      name: tool.name,
-      description: coreOnly ? shortenVoiceDescription(tool.description) : tool.description,
-      parameters: toModelToolSchema(tool.inputSchema),
-    }));
+function directToolDefinitions(tools: ToolRegistry) {
+  return tools.list().filter((tool) => isCurrentAssistantTool(tool.name)).map((tool) => ({
+    type: 'function' as const,
+    name: tool.name,
+    description: tool.description,
+    parameters: toModelToolSchema(tool.inputSchema),
+  }));
 }
 
 const voiceFindToolsSchema = {
@@ -97,19 +96,18 @@ const voiceCallToolSchema = {
   additionalProperties: false,
 } as const;
 
-function lazyToolDefinitions(tools: ToolRegistry) {
+function lookupToolDefinitions() {
   return [
-    ...directToolDefinitions(tools, true),
     {
       type: 'function' as const,
       name: VOICE_FIND_TOOLS_TOOL,
-      description: 'Look up a Jarvis tool that is not listed, by a few keywords. Returns names, descriptions and argument schemas.',
+      description: 'Jarvis tools are not listed. Look one up by a few keywords to get its description and argument schema, then use call_tool.',
       parameters: toModelToolSchema(voiceFindToolsSchema),
     },
     {
       type: 'function' as const,
       name: VOICE_CALL_TOOL,
-      description: 'Run a tool returned by find_tools, using its exact name and arguments that follow its schema.',
+      description: 'Run a tool that find_tools returned, with its exact name and arguments that follow its schema.',
       parameters: toModelToolSchema(voiceCallToolSchema),
     },
   ];
@@ -208,11 +206,14 @@ ${additionalRealtimeInstructions(
   )}`;
 }
 
-function voiceCapabilityGuidance(language: 'da' | 'en', mode: 'discovery' | 'lazy' = 'discovery'): string {
+function voiceCapabilityGuidance(
+  language: 'da' | 'en', mode: 'discovery' | 'lazy' = 'discovery', toolIndex = '',
+): string {
   if (mode === 'lazy') {
+    const index = toolIndex ? `\n${toolIndex}` : '';
     return language === 'da'
-      ? `Kun få værktøjer er opført. Til alt andet: kald find_tools med få nøgleord, og kald derefter call_tool med det præcise navn og argumenter efter det fundne skema. Hvis intet værktøj findes, sig det klart. Dans anmodning giver tilladelse: udfør uden endnu en godkendelse. Backend kontrollerer adgang og argumenter. Bekræft kun det faktiske værktøjsresultat.`
-      : `Only a few tools are listed. For anything else, call find_tools with a few keywords, then call_tool with the exact name and arguments that follow the returned schema. If no tool fits, say so plainly. Dan's request authorizes its scope: execute without another approval. The backend validates access and arguments. Report only actual tool results.`;
+      ? `Der er ingen værktøjer opført med skema. Kald find_tools med få nøgleord for det præcise skema, og kald derefter call_tool med det præcise navn og argumenter. Et værktøj, du allerede har fundet i denne session, kan kaldes direkte med call_tool. Hvis intet værktøj findes, sig det klart. Dans anmodning giver tilladelse: udfør uden endnu en godkendelse. Backend kontrollerer adgang og argumenter. Bekræft kun det faktiske værktøjsresultat. find_tools kan finde:${index}`
+      : `No tools are listed with schemas. Call find_tools with a few keywords for the exact schema, then call_tool with the exact name and arguments. A tool already found in this session can be called with call_tool again directly. If no tool fits, say so plainly. Dan's request authorizes its scope: execute without another approval. The backend validates access and arguments. Report only actual tool results. find_tools can look up:${index}`;
   }
   return language === 'da'
       ? `Brug jarvis_discover_capabilities og derefter jarvis_execute_capability med det fundne skema. Dans anmodning giver tilladelse: udfør uden endnu en godkendelse. Brug samtalens kontekst; spørg kun efter nødvendige manglende oplysninger. Backend kontrollerer adgang og argumenter. Bekræft kun det faktiske værktøjsresultat.`
@@ -409,7 +410,7 @@ export function createRealtimeSessionUpdate(
     session: {
       instructions: `${capabilityMode === 'direct'
         ? instructions
-        : `${instructions}\n\n${voiceCapabilityGuidance(language, capabilityMode)}`}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call. Earlier refusals in history do not change this channel. Backend permissions still apply. For every meal estimate, show actual returned protein (g), calories (kcal) and fat (g) as a bulleted list; unknown stays unknown. When Dan asks to log an estimate, use health_food_review log_estimate directly without another approval. Questions or previews only require lookup. Never claim a write without a committed tool receipt.`,
+        : `${instructions}\n\n${voiceCapabilityGuidance(language, capabilityMode, capabilityMode === 'lazy' ? capabilityIndex(tools) : '')}`}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call. Earlier refusals in history do not change this channel. Backend permissions still apply. For every meal estimate, show actual returned protein (g), calories (kcal) and fat (g) as a bulleted list; unknown stays unknown. When Dan asks to log an estimate, use health_food_review log_estimate directly without another approval. Questions or previews only require lookup. Never claim a write without a committed tool receipt.`,
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },
@@ -438,7 +439,7 @@ export function createRealtimeSessionUpdate(
       voice: { name: danish ? DANISH_REALTIME_VOICE : ENGLISH_REALTIME_VOICE, type: 'azure-standard' },
       tools: capabilityMode === 'discovery'
         ? voiceCapabilityToolDefinitions()
-        : capabilityMode === 'lazy' ? lazyToolDefinitions(tools) : directToolDefinitions(tools),
+        : capabilityMode === 'lazy' ? lookupToolDefinitions() : directToolDefinitions(tools),
       tool_choice: 'auto',
     },
   };
@@ -660,9 +661,10 @@ const MAX_FIND_TOOLS_FULL_RESULTS = 3;
 const MAX_FIND_TOOLS_OTHER_RESULTS = 5;
 
 /**
- * Lazy voice tools: a small core is advertised directly; any other catalogue tool is looked up with
- * find_tools and run with call_tool. Both paths end in executeRealtimeToolCall, so validation,
- * policy, ToolRefusal/ToolFailure mapping and confirmation are the same as for a direct call.
+ * Lookup voice tools: no per-tool schema is advertised. find_tools returns the best catalogue matches
+ * with their schemas; call_tool runs a tool found earlier in this session. Both paths end in
+ * executeRealtimeToolCall, so validation, policy, ToolRefusal/ToolFailure mapping and confirmation
+ * are the same as for a direct call.
  */
 export async function executeLazyVoiceToolCall(
   call: RealtimeFunctionCall,
@@ -674,7 +676,7 @@ export async function executeLazyVoiceToolCall(
   presentResult = true,
 ): Promise<string> {
   const unavailable = (name: string) => toolOutput(name, 'refused', {
-    refused: 'No such tool is available. Use find_tools to look one up, or say plainly that this needs chat. Nothing was executed.',
+    refused: 'Unknown tool, or not looked up yet. Call find_tools first, then call_tool. Nothing was executed.',
   });
   if (call.name === VOICE_FIND_TOOLS_TOOL) {
     const input = parsedArguments(call);
@@ -689,7 +691,7 @@ export async function executeLazyVoiceToolCall(
       tools: full.map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.inputSchema })),
       otherMatches: matches.slice(MAX_FIND_TOOLS_FULL_RESULTS, MAX_FIND_TOOLS_FULL_RESULTS + MAX_FIND_TOOLS_OTHER_RESULTS)
         .map((tool) => ({ name: tool.name, description: shortenVoiceDescription(tool.description) })),
-      note: matches.length === 0 ? 'No matching tool. Say plainly that this needs chat.' : undefined,
+      note: matches.length === 0 ? 'No matching tool. Say so plainly.' : undefined,
     });
   }
   if (call.name === VOICE_CALL_TOOL) {

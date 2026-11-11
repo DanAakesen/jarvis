@@ -223,6 +223,9 @@ class ManagedPolicyClient(AzureOpenAIResponsesClient):
     route. Application owns injected clients, durable leases and overall deadline.
     """
 
+    # The native definition registers the full catalogue and requests must match it.
+    lookup_tools = False
+
     def __init__(
         self, *, client: Any, backend: BackendToolClient, target: ManagedPolicyTarget,
         bindings: NativeConversationBindings,
