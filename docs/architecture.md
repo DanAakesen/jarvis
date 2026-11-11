@@ -6,6 +6,8 @@ Owner tool operations execute a resolved request under the existing authenticate
 
 WatchConnection emits onDisconnect for a reachable-to-unreachable transition while still failing pending requests. WatchModel consults WatchComposer.handleConnectionLoss before presenting interrupted-action feedback. The composer preserves draft/acknowledgement semantics. Passive history reads require reachability, use an independent inline error and discard stale results when a typed/voice action supersedes them. WatchConnectivity wire format, credentials, permissions and infrastructure are unchanged.
 
+While foregrounded, Watch retries activation and unavailable passive dashboard reads; mutations are never replayed. Watch Home reads the same bounded seven-day workout history as its detail list, independently of weekly HealthKit goal counts. iPhone Home also merges retained synced workouts with local and manual entries, matching HealthKit identifiers before legacy session/time matching. Shared Health localization formats workout names for both devices.
+
 ## Home brief and daily activity implementation — 9 November 2026
 
 GET /home/brief is owner-scoped and reuses existing settings, context sources and bounded Foundry JSON completion transport. Context reads coalesce and cache for 60 seconds; evidence/instruction/day/language/model fingerprints cache generation for 15 minutes. Home preferences persist in existing settings and are exposed through get_settings/update_settings. HealthKit cumulative daily statistics carry daily_total provenance; normalized daily rows replace previous coverage and cannot be overwritten by legacy raw sums. Home and Health share JarvisDailyActivitySnapshot and Copenhagen calendar periods.

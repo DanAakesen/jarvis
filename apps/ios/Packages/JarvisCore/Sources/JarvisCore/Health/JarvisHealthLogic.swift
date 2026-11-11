@@ -127,16 +127,26 @@ public enum JarvisHealthLogic {
             if [20, 50, 11, 59, 63].contains(code) { return .gym }
             if code == 37 { return .run }
         }
-        let normalized = (value ?? "")
-            .replacingOccurrences(of: #"^HKWorkoutActivityType[._ -]*"#, with: "", options: .regularExpression)
-            .filter { $0.isLetter || $0.isNumber }
-            .lowercased()
+        let normalized = normalizedWorkoutType(value)
+        if ["healthkit20", "healthkit50", "healthkit11", "healthkit59", "healthkit63"].contains(normalized) { return .gym }
+        if normalized == "healthkit37" { return .run }
         if ["gym", "strengthtraining", "traditionalstrengthtraining", "functionalstrengthtraining",
             "highintensityintervaltraining", "hiit", "crosstraining", "coretraining"].contains(normalized) {
             return .gym
         }
         if ["run", "running"].contains(normalized) { return .run }
         return .other
+    }
+
+    public static func normalizedWorkoutType(_ value: String?) -> String {
+        let raw = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let numeric = raw.replacingOccurrences(of: #"^HKWorkoutActivityType\(rawValue: ([0-9]+)\)$"#,
+                                               with: "$1", options: [.regularExpression, .caseInsensitive])
+        return numeric
+            .replacingOccurrences(of: #"^HKWorkoutActivityType[._ -]*"#, with: "", options: [.regularExpression, .caseInsensitive])
+            .filter { $0.isLetter || $0.isNumber }
+            .lowercased()
+            .replacingOccurrences(of: "strenght", with: "strength")
     }
 
     /// Date-only API fields are already local days. Timestamp fallbacks use the backend's Copenhagen day.

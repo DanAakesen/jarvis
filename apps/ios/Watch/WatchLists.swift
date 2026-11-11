@@ -5,6 +5,7 @@ import SwiftUI
 struct WatchHealthList: View {
     var lifts: Bool
     @EnvironmentObject private var connection: WatchConnection
+    @Environment(\.locale) private var locale
     @State private var rows: [[String: JSONValue]] = []
     @State private var loading = true
     @State private var failure: String?
@@ -33,7 +34,7 @@ struct WatchHealthList: View {
                 } else {
                     NavigationLink {
                         List {
-                            Text(row["workout_type"]?.stringValue ?? "Workout").font(.headline)
+                            Text(workoutName(row)).font(.headline)
                             if let start = row["start_at"]?.stringValue ?? row["workout_date"]?.stringValue { Text(start) }
                             if let seconds = row["duration_seconds"]?.numberValue { Text("\(Int(seconds / 60)) min") }
                             if let kcal = row["active_energy_value"]?.numberValue { Text("\(Int(kcal)) active \(row["active_energy_unit"]?.stringValue ?? "")") }
@@ -41,7 +42,7 @@ struct WatchHealthList: View {
                         }.navigationTitle("Workout")
                     } label: {
                         VStack(alignment: .leading) {
-                            Text(row["workout_type"]?.stringValue ?? "Workout")
+                            Text(workoutName(row))
                             if let seconds = row["duration_seconds"]?.numberValue { Text("\(Int(seconds / 60)) min").font(.caption).foregroundStyle(.secondary) }
                         }
                     }
@@ -56,6 +57,10 @@ struct WatchHealthList: View {
             if ProcessInfo.processInfo.arguments.contains("--watch-screen=new-lift") { showAdd = true }
             #endif
         }
+    }
+    private func workoutName(_ row: [String: JSONValue]) -> String {
+        JarvisHealthLocalization.workoutName(row["workout_type"]?.stringValue,
+                                             language: locale.identifier.lowercased().hasPrefix("da") ? .da : .en)
     }
     private func liftSummary(_ row: [String: JSONValue]) -> some View {
         VStack(alignment: .leading) {
@@ -240,7 +245,7 @@ struct WatchFactoryTasks: View {
     }
 }
 
-private extension JSONValue {
+extension JSONValue {
     var stringValue: String? { if case .string(let value) = self { return value }; return nil }
     var numberValue: Double? { if case .number(let value) = self { return value }; return nil }
 }
