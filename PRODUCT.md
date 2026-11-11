@@ -172,6 +172,8 @@ The approved Voice screen presents one orb and one short live status, with mute,
 add, captions and end controls during a session. A downward swipe minimizes
 without ending the session. Ending voice, including from the minimized bar, returns
 to Chat with a cleared navigation stack and a usable sidebar.
+Captions appear as centered, unframed text with readable, Dynamic Type-scaled
+typography and no separate dismiss action; the CC control toggles them.
 Reopening Voice after End connects automatically with a fresh transport and audio
 session. The red End control follows the approved board. The shared dark-glass,
 cyan-rimmed orb reserves its space; its orange/amber centre animates in place,
@@ -319,7 +321,8 @@ composer top-corner borders only on mobile with the chat window shown.
 ## Chat bubble readability (#1324; 26 October 2026)
 
 Frost the background behind both speakers' chat bubbles like the Plus menu,
-retaining sharp text, translucency, existing layout and the desktop top-edge fade.
+retaining sharp text, translucency and the desktop top-edge fade.
+Give owner and Jarvis bubbles matching outer vertical breathing room.
 
 ## iPhone Chat screen (P15-10; owner-approved concept, 30 October 2026)
 

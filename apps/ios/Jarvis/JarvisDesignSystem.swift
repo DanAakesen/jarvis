@@ -113,6 +113,7 @@ enum JarvisDesignTokens {
     static let chatHorizontalInset: CGFloat = 16
     static let chatVerticalInset: CGFloat = 12
     static let chatMessageSpacing: CGFloat = 8
+    static let chatBubbleVerticalInset: CGFloat = 4
     static let chatMessageDetailSpacing: CGFloat = 6
     static let chatMessageMaximumWidth: CGFloat = 360
     static let chatComposerPhotoSize: CGFloat = 76
@@ -188,12 +189,9 @@ enum JarvisDesignTokens {
     static let voiceScreenShareBarHeight: CGFloat = 58
     static let voiceScreenShareBarSpacing: CGFloat = 14
     static let voiceCaptionMaximumHeight: CGFloat = 132
-    static let voiceCaptionHorizontalExtension: CGFloat = 8
-    static let voiceCaptionPanelRadius: CGFloat = 19
+    static let voiceAccessibilityCaptionMaximumHeight: CGFloat = 288
     static let voiceCaptionSpeakerSpacing: CGFloat = 6
     static let voiceCaptionLineSpacing: CGFloat = 4
-    static let voiceCaptionFontSize: CGFloat = 15
-    static let voiceCaptionSpeakerFontSize: CGFloat = 12
     static let voiceStatusFontSize: CGFloat = 17
     static let voiceContentSpacing: CGFloat = 14
     static let voiceMinimizeDragDistance: CGFloat = 32
@@ -216,6 +214,7 @@ enum JarvisDesignTokens {
     static let sheetRowMinimumHeight: CGFloat = 40
     static let labelledHorizontalPadding: CGFloat = 16
     static let labelledVerticalPadding: CGFloat = 10
+    static let periodSelectorHorizontalInset: CGFloat = 10
     static let notesGraphNodeRadius: CGFloat = 5
     static let notesGraphEdgeWidth: CGFloat = 1
     static let notesInlineSpacing: CGFloat = 4

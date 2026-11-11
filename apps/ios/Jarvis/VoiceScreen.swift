@@ -5,6 +5,7 @@ import SwiftUI
 
 struct VoiceScreenView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject var model: VoiceScreenModel
     let language: JarvisAppLanguage
@@ -18,7 +19,6 @@ struct VoiceScreenView: View {
     @State private var showsCameraViewfinder = false
     @State private var screenSharePickerToken = 0
     @State private var screenShareProblem: String?
-    @State private var captionsHidden = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -62,7 +62,7 @@ struct VoiceScreenView: View {
                     if model.showsConnectionRecovery {
                         connectionRecoveryActions
                     } else {
-                        if model.isCaptionsEnabled, !captionsHidden, hasCaptions {
+                        if model.isCaptionsEnabled, hasCaptions {
                             captions
                         }
                         if let errorMessage = model.errorMessage {
@@ -209,11 +209,20 @@ struct VoiceScreenView: View {
     }
 
     private var voiceBottomReservation: CGFloat {
-        JarvisDesignTokens.voiceCaptionMaximumHeight +
+        let captionReservation = dynamicTypeSize.isAccessibilitySize && model.isCaptionsEnabled && hasCaptions
+            ? captionMaximumHeight
+            : JarvisDesignTokens.voiceCaptionMaximumHeight
+        return captionReservation +
             JarvisDesignTokens.voiceControlDiameter +
             JarvisDesignTokens.voiceControlBottomInset +
             JarvisDesignTokens.voiceScreenShareBarHeight +
             JarvisDesignTokens.voiceContentSpacing * 2
+    }
+
+    private var captionMaximumHeight: CGFloat {
+        dynamicTypeSize.isAccessibilitySize
+            ? JarvisDesignTokens.voiceAccessibilityCaptionMaximumHeight
+            : JarvisDesignTokens.voiceCaptionMaximumHeight
     }
 
     private func sentMediaLabel(_ kind: VoiceSentMedia.Kind) -> String {
@@ -244,46 +253,39 @@ struct VoiceScreenView: View {
                         .accessibilityLabel(sentMediaLabel(media.kind))
                 }
             }
-            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private var captions: some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.voiceCaptionLineSpacing) {
+        VStack(alignment: .center, spacing: JarvisDesignTokens.voiceCaptionLineSpacing) {
             if !model.sentMedia.isEmpty {
                 sentMediaStrip
             }
             if !model.userCaption.isEmpty {
                 captionLine(
                     label: JarvisNotesLocalization.string(.voiceCaptionYou, language: appLanguage),
-                    text: model.userCaption,
-                    color: .secondary
+                    text: model.userCaption
                 )
             }
             if !model.assistantCaption.isEmpty {
                 captionLine(
                     label: JarvisNotesLocalization.string(.voiceCaptionJarvis, language: appLanguage),
-                    text: model.assistantCaption,
-                    color: JarvisDesignTokens.primaryAccent
+                    text: model.assistantCaption
                 )
             }
         }
         .padding(.vertical, JarvisDesignTokens.voiceStatusSpacing)
-        .padding(.leading, JarvisDesignTokens.voiceStatusSpacing)
-        .padding(.trailing, JarvisDesignTokens.voiceControlDiameter - JarvisDesignTokens.voiceStatusSpacing)
+        .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
         .frame(maxWidth: .infinity)
-        .frame(maxHeight: JarvisDesignTokens.voiceCaptionMaximumHeight)
+        .frame(maxHeight: captionMaximumHeight)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(captionAccessibilityLabel)
-        .jarvisGlassSurface(cornerRadius: JarvisDesignTokens.voiceCaptionPanelRadius)
-        .padding(.horizontal, -JarvisDesignTokens.voiceCaptionHorizontalExtension)
-        .overlay(alignment: .topTrailing) {
-            JarvisIconButton(
-                title: JarvisNotesLocalization.string(.voiceHideCaptions, language: appLanguage),
-                systemImage: "xmark",
-                identifier: "voice.captions.hide"
-            ) { captionsHidden = true }
-        }
+        .accessibilityAddTraits(.updatesFrequently)
+        .animation(
+            reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration),
+            value: captionAccessibilityLabel
+        )
     }
 
     private var captionAccessibilityLabel: String {
@@ -302,19 +304,21 @@ struct VoiceScreenView: View {
         ) ?? .default
     }
 
-    private func captionLine(label: String, text: String, color: Color) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: JarvisDesignTokens.voiceCaptionSpeakerSpacing) {
+    private func captionLine(label: String, text: String) -> some View {
+        VStack(spacing: JarvisDesignTokens.voiceCaptionSpeakerSpacing) {
             Text(label)
-                .font(.system(size: JarvisDesignTokens.voiceCaptionSpeakerFontSize, weight: .bold))
-                .tracking(0.48)
-                .textCase(.uppercase)
-                .foregroundStyle(color)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
             Text(text)
-                .font(.system(size: JarvisDesignTokens.voiceCaptionFontSize))
+                .font(.body.weight(.medium))
                 .foregroundStyle(.primary)
+                .multilineTextAlignment(.center)
                 .lineLimit(2)
+                .lineSpacing(JarvisDesignTokens.voiceCaptionLineSpacing)
+                .fixedSize(horizontal: false, vertical: true)
+                .contentTransition(.opacity)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .center)
         .accessibilityElement(children: .combine)
     }
 
@@ -400,18 +404,14 @@ struct VoiceScreenView: View {
             VoiceControlButton(
                 symbol: nil,
                 label: JarvisNotesLocalization.string(
-                    model.isCaptionsEnabled && !captionsHidden ? .voiceHideCaptions : .voiceShowCaptions,
+                    model.isCaptionsEnabled ? .voiceHideCaptions : .voiceShowCaptions,
                     language: appLanguage
                 ),
-                isSelected: model.isCaptionsEnabled && !captionsHidden,
+                isSelected: model.isCaptionsEnabled,
                 disabled: false,
                 title: "CC"
             ) {
-                if captionsHidden {
-                    captionsHidden = false
-                } else {
-                    model.toggleCaptions()
-                }
+                model.toggleCaptions()
             }
 
             VoiceControlButton(
