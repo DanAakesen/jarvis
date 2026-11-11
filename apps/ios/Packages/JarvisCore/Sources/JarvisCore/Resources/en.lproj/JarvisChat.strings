@@ -36,7 +36,7 @@
 "chat.plus.cameraPermissionDenied" = "Allow Jarvis to use the camera in Settings.";
 "chat.plus.cameraFrameUnavailable" = "The camera frame is not available yet.";
 "chat.plus.screenFrameUnavailable" = "The screen frame is not available yet.";
-"chat.plus.menuHint" = "Open camera, file, video, screen sharing, and voice language tools.";
+"chat.plus.menuHint" = "Open camera, file, video, screen sharing, and chat language options.";
 "chat.done" = "Done";
 "chat.screenShareStarting" = "Starting screen sharing…";
 "chat.screenShareLive" = "Sharing your screen with Jarvis.";

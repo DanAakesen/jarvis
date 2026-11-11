@@ -1138,7 +1138,7 @@ function registerVoiceRoute(
               }));
               request.log.info({
                 path: visualContext.visualPath, reason: visualContext.visualReason,
-                channel: `voice-${language}`, latencyMs: performance.now() - startedAt,
+                channel: 'voice', latencyMs: performance.now() - startedAt,
                 ...(captionMs === undefined ? {} : { captionMs }),
               }, 'visual.path');
               cameraInstructions = visualContext.visualPath === 'image'
@@ -1160,7 +1160,7 @@ function registerVoiceRoute(
               }));
               request.log.info({
                 path: 'caption', reason: visualReason,
-                channel: `voice-${language}`, latencyMs: performance.now() - startedAt,
+                channel: 'voice', latencyMs: performance.now() - startedAt,
                 ...(captionMs === undefined ? {} : { captionMs }),
               }, 'visual.path');
             }

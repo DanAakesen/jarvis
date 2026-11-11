@@ -4806,7 +4806,7 @@ Verified in Codex cloud for P0-02:
 | Focused P3-11 checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx src/factory/ProjectsPage.test.tsx src/factory/TasksPage.test.tsx` |
 | Focused P3-13 checks | `npm --workspace @jarvis/backend test -- --run src/github-app.test.ts src/factory/projects.test.ts`; `npm --workspace @jarvis/web test -- --run src/factory/ProjectsPage.test.tsx` |
 | Focused P8-17 settings/theme checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
-| Focused P9-97 fixed Danish voice checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/settings-tools.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
+| Focused P15-110 shared voice and legacy-settings checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/settings-tools.test.ts src/voice/realtime.test.ts`; `npm test --workspace @jarvis/web -- --run src/SettingsPage.test.tsx` |
 | Focused P8-32 appearance checks | `npm test --workspace @jarvis/backend -- --run src/core/settings.test.ts src/core/theme.test.ts`; `npm test --workspace @jarvis/web -- --run src/theme-preference.test.tsx src/SettingsPage.test.tsx src/JarvisStage.test.tsx src/styles.test.tsx src/ConversationHistory.test.tsx`; `npm run lint --workspace @jarvis/web`; `npm run build --workspace @jarvis/web` |
 | Focused P3-12 contracts | `npm test --workspace @jarvis/backend -- --run src/credentials/repo-admin.test.ts src/factory/new-project.test.ts src/factory/heartbeat.test.ts`; `runner/.venv/bin/python -m pytest -q runner/tests/test_app.py` from repository root |
 | Focused chat UI and API tests | `npm test --workspace @jarvis/web -- --run src/ConversationHistory.test.tsx src/conversation-history.test.ts`; `npm test --workspace @jarvis/web -- --run src/App.test.tsx` |
@@ -5943,11 +5943,12 @@ secret. SQL-backed context behavior is covered by the database integration suite
 ### Bilingual realtime voice
 
 Browser and iPhone sessions use only the authenticated `/voice` WebSocket with
-`gpt-realtime-2.1`, Ryan HD and the shared prompt. Azure Speech transcription
-omits a fixed language hint and detects Danish or English. Removed settings that
-reference `mai-transcribe` fall back to `azure-speech`; the legacy Danish voice
-setting is ignored. Danish app localization, chat, notes and the composer’s
-chat-language choice remain.
+`gpt-realtime-2.1`, Ryan HD and the shared prompt. Final Voice Live transcription
+uses `azure-speech` without a fixed language hint; parallel Azure Speech interim
+recognition detects `da-DK` or `en-GB`. Removed settings that reference
+`mai-transcribe` fall back to `azure-speech`; the legacy Danish voice setting is
+ignored. Danish app localization, chat, notes and the composer’s chat-language
+choice remain independent of voice routing.
 
 The provisioning workflow and its script are removed. Do not edit Azure
 resources manually: the Foundry hosted agent `jarvis-voice-mai`, MAI Transcribe
@@ -5982,9 +5983,9 @@ also need the stored message ID from P4-03, supplied by the caller in P4-06.
 P9-83 verification: run `npm test --workspace @jarvis/backend -- src/voice/relay.test.ts`
 for real local WebSocket image acknowledgement/fallback/correlation regressions.
 These use fake upstream providers, not Azure. After deploy the coordinator must
-inspect `visual.path` for `channel` values `chat`, `voice-en` and `voice-da` and
-confirm `path: image` using a non-private fixture. EN and production DA both use
-the realtime connector; the hosted DA fallback remains caption-only. Verify
+inspect `visual.path` for `channel` values `chat` and `voice` and confirm
+`path: image` using a non-private fixture. Danish and English use the same
+realtime connector. Verify
 the configured deployment's modality-specific tariff and reported image tokens
 before treating reservations as billed image cost. Cloud agents must not run
 Azure capability probes. No new migration or shared instruction-budget change
@@ -6188,8 +6189,8 @@ Preserve the public 1–128-character parser bound; never resolve in the browser
 Chat/Danish-text image input is implemented but live model acceptance is
 unverified. Deployed #706 (P9-83, closing #705) adds EN/DA realtime image
 admission, image-budget accounting and content-free `visual.path` diagnostics;
-hosted DA fallback remains caption-only. Actual realtime model image
-acceptance is also unverified; #703 stays open until live evidence exists.
+realtime image acceptance is also unverified; #703 stays open until live
+evidence exists.
 Final-shaped synthetic desktop/phone fixtures pass
 with handles, correlated voice items, caption-only labels and recovery.
 Actual image/audio acceptance and Dan's UI review/release remain required.
