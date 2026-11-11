@@ -1,3 +1,16 @@
+## Test policy and Azure cost — 11 November 2026
+
+- **Tests are a minimal safety net.** Only authorization, secrets and redaction, database
+  migrations, deploy pipeline safety rules and one smoke test per area remain (about 165
+  tests, down from about 8,060), plus lint, typecheck and build. Do not add broad test suites
+  or UI/simulator tests; the iOS simulator run is no longer a pull-request gate. Fix bugs
+  after they are seen in use. Decision: `docs/decisions.md`, 2026-11-11.
+- **Automated tests must not cost money.** The deploy no longer runs live chat acceptance
+  automatically; start Deploy by hand with `live_acceptance` to run it. The hosted agent idle
+  timeout is 120 seconds and the `jarvis` database is a fixed Standard S0 tier.
+- The Azure subscription is pay-as-you-go with no monthly credit applied (the invoices show
+  an Azure credit of 0), so all running cost is billed.
+
 ## iOS loading / Factory integration handoff — 10 November 2026 (#1715)
 
 Requested child PR: **fix-main: Integrate iOS loading and Factory task details**,
