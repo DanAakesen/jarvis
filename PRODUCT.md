@@ -6,6 +6,8 @@ A clear, authenticated owner instruction authorizes the requested operation with
 
 Ordinary Watch startup, foreground connection warm-up and passive history refresh must not display an interrupted-send alert. Show connection/history status inline. Actual user-action failures and interrupted active chat/voice still report errors; preserve unsent drafts and never automatically resend an accepted request.
 
+Watch Home retries passive connection and dashboard reads while open. Its workout preview uses the same last-seven-days history as See more; weekly HealthKit goal counts remain separately labeled. Workout names are shared and localized on Watch and iPhone.
+
 ## Home brief and daily activity implementation — 9 November 2026
 
 Home briefs are grounded in available calendar/tasks and optional nutrition/weather context, generated through the existing model infrastructure. The owner edits Home instructions and a 1–6 visible-line limit (default 3) in the canonical Instructions destination. All-day Active kcal uses merged HealthKit activeEnergyBurned; exercise minutes uses appleExerciseTime. Workout counts remain separate.
@@ -2775,6 +2777,8 @@ never recover an uncertain write by blind replay.
 ## Apple Watch companion (8 November 2026)
 
 Target the owner's Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as watchOS 27.2, unverified. Voice and dictation are primary. Dictation fills an editable input for manual sending. Home adds read-only Factory; menu provides tasks, workouts and lift management. The four approved complications expose daily/weekly health, Tasks Today, Dictation and Voice. Follow the paired iPhone with no standalone credentials or offline send queue. Voice should continue until ended, with an End Session live tile; background behavior and mirrored Activity actions remain unverified. Owner accepts testing on their Watch after primary installation. See docs/ios/design/watch/implementation.md for limits; visual approval is separate from device acceptance.
+
+Watch Home and complications retain the last available data on the Watch when refresh or connectivity fails. Show its age when stale and allow display while locked after the Watch's first unlock. Explicit phone sign-out clears the Watch cache.
 
 ## Intelligent proactive notifications — 9 November 2026
 

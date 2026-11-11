@@ -3,7 +3,11 @@ import SwiftUI
 
 struct WatchDashboardView: View {
     @EnvironmentObject private var connection: WatchConnection
+    @Environment(\.locale) private var locale
     @State private var loading = false
+    @State private var workoutRows: [[String: JSONValue]]?
+    @State private var workoutReadAt: Date?
+    @State private var workoutFailed = false
     var body: some View {
         TimelineView(.periodic(from: .now, by: 60)) { context in
             ScrollViewReader { proxy in
@@ -22,16 +26,18 @@ struct WatchDashboardView: View {
                     }
                     if let failure = connection.dashboardError, connection.reachable {
                         Text(failure).font(.caption).foregroundStyle(.secondary)
-                        Button("Retry") { Task { await refresh() } }.disabled(loading)
                     }
                     if !connection.reachable {
-                        Text("Open Jarvis on your iPhone to connect.").font(.caption).foregroundStyle(.secondary)
+                        if connection.connecting {
+                            Text("Connecting to iPhone…").font(.caption).foregroundStyle(.secondary)
+                        } else {
+                            Text("Open Jarvis on your iPhone to connect.").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     let snapshot = connection.dashboard
                     Group {
                         if let snapshot, !snapshot.isCurrent(at: context.date) {
-                            Text("Saved \(snapshot.generatedAt.formatted(date: .abbreviated, time: .shortened)) · not current")
-                                .font(.caption2).foregroundStyle(.secondary)
+                            WatchSnapshotAge(date: snapshot.generatedAt)
                         }
                         upNext(snapshot, now: context.date)
                         Divider()
@@ -54,7 +60,8 @@ struct WatchDashboardView: View {
                                     Text("\(preview.totalCount) today, including overdue").font(.caption2).foregroundStyle(.secondary)
                                     WatchTaskPreviewRows(titles: preview.tasks.map(\.text))
                                 }
-                            } else if let health = connection.snapshot, health.isCurrent(at: context.date), let count = health.tasksToday {
+                            } else if let health = connection.snapshot, let count = health.tasksToday {
+                                if !health.isCurrent(at: context.date) { WatchSnapshotAge(date: health.generatedAt) }
                                 Text(count == 0 ? "No tasks due today" : "\(count) today, including overdue")
                                     .font(.caption).foregroundStyle(.secondary)
                                 if count > 0 { missing("Task titles unavailable. Open the full list.") }
@@ -80,10 +87,6 @@ struct WatchDashboardView: View {
                             } else { missing(loading ? "Loading recent notes…" : "Recent notes unavailable") }
                         }.id("notes")
                     }
-                    if snapshot == nil && !loading && connection.dashboardError == nil {
-                        missing("Dashboard unavailable. Open Jarvis on iPhone, then refresh.")
-                        Button("Refresh") { Task { await refresh() } }
-                    }
                 }.padding(.horizontal, 4).padding(.bottom, 22)
             }
             .task {
@@ -101,43 +104,48 @@ struct WatchDashboardView: View {
             }
         }
         .task(id: connection.reachable) { await refresh() }
+        .task(id: connection.reachable) { await refreshWorkouts() }
         .refreshable { await refresh() }
     }
     private func upNext(_ snapshot: WatchDashboardSnapshot?, now: Date) -> some View {
         NavigationLink(value: WatchRoute.agenda) {
             VStack(alignment: .leading, spacing: 9) {
-                let entries = snapshot?.agenda?.filter { $0.end > now } ?? []
+                let current = snapshot?.isCurrent(at: now) == true
+                let entries = current ? (snapshot?.agenda?.filter { $0.end > now } ?? []) : (snapshot?.agenda ?? [])
                 let next = entries.first
                 HStack(alignment: .firstTextBaseline) {
                     WatchDashboardHeading(title: "Up Next")
                     Spacer(minLength: 3)
-                    if let next, snapshot?.isCurrent(at: now) == true { Text(next.start, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(WatchStyle.amber) }
+                    if let next { Text(next.start, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(WatchStyle.amber) }
                 }
                 if snapshot == nil {
                     missing(loading ? "Loading agenda…" : "Agenda unavailable")
-                } else if snapshot?.isCurrent(at: now) != true {
-                    missing("Saved agenda · open to refresh")
                 } else if snapshot?.agenda != nil {
-                    WatchAgendaTimeline(intervals: entries.map { DateInterval(start: $0.start, end: max($0.start, $0.end)) }, now: now)
+                    if current {
+                        WatchAgendaTimeline(intervals: entries.map { DateInterval(start: $0.start, end: max($0.start, $0.end)) }, now: now)
+                    }
                     if let next {
                         Text(next.title).font(.system(.body, design: .rounded, weight: .semibold))
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(next.start > now ? next.start.formatted(.relative(presentation: .named)) : "Happening now")
-                            .font(.system(.body, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.amber)
+                        if current {
+                            Text(next.start > now ? next.start.formatted(.relative(presentation: .named)) : "Happening now")
+                                .font(.system(.body, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.amber)
+                        }
                         Text(next.start.formatted(date: .omitted, time: .shortened) + "–" +
                              next.end.formatted(date: Calendar.current.isDate(next.start, inSameDayAs: next.end) ? .omitted : .abbreviated,
                                                 time: .shortened))
                             .font(.caption).foregroundStyle(.secondary)
-                    } else { missing("No more events today") }
+                    } else if current { missing("No more events today") }
+                    else { Text("No events in saved agenda").font(.caption).foregroundStyle(.secondary) }
                 } else { missing("Agenda unavailable") }
             }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityHint("Opens your agenda")
     }
     private func workouts(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let health = connection.snapshot {
+            if let health = connection.snapshot, health.gym != nil || health.runs != nil {
                 if !health.isCurrent(at: now) {
-                    Text("Saved workout counts · not current").font(.caption2).foregroundStyle(.secondary)
+                    WatchSnapshotAge(date: health.generatedAt)
                 }
                 HStack(spacing: 18) {
                     workoutCount("Gym", count: health.gym, goal: health.gymGoal)
@@ -145,7 +153,27 @@ struct WatchDashboardView: View {
                 }
                 Text("Week of \(health.weekStart.formatted(.dateTime.month(.abbreviated).day()))")
                     .font(.caption2).foregroundStyle(.secondary)
-            } else { missing(loading ? "Loading weekly workouts…" : "Weekly workouts unavailable") }
+            }
+            if let rows = workoutRows {
+                if workoutFailed || workoutReadAt.map({ now.timeIntervalSince($0) >= 900 }) != false {
+                    Text("Saved workouts · not current").font(.caption2).foregroundStyle(.secondary)
+                }
+                if rows.isEmpty {
+                    Text("No workouts in the last 7 days").font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(rows.prefix(2).enumerated()), id: \.offset) { _, row in
+                        Text(JarvisHealthLocalization.workoutName(
+                            row["workout_type"]?.stringValue,
+                            language: locale.identifier.lowercased().hasPrefix("da") ? .da : .en
+                        )).font(.caption)
+                    }
+                }
+                Text("Last 7 days").font(.caption2).foregroundStyle(.secondary)
+            } else if workoutFailed || (!connection.reachable && !connection.connecting) {
+                Text("Workouts unavailable").font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("Loading workouts…").font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
     private func workoutCount(_ title: String, count: Int?, goal: Int?) -> some View {
@@ -165,10 +193,9 @@ struct WatchDashboardView: View {
             if let points, let latest = points.last {
                 Text(WatchDashboardFormatting.percentage(latest.percent))
                     .font(.system(.title2, design: .rounded, weight: .semibold))
-                WatchBodyFatChart(dates: points.compactMap { WatchDashboardFormatting.day($0.date) }, percentages: points.map(\.percent))
+                WatchBodyFatChart(dates: points.compactMap { WatchDashboardFormatting.day($0.date) },
+                                  percentages: points.map(\.percent), showDates: false)
                     .frame(height: 76)
-                Text(WatchBodyFatSummary.trend(points)).font(.caption2).foregroundStyle(.secondary)
-                Text("Measured \(latest.date)").font(.caption2).foregroundStyle(.secondary)
             } else { missing(points == nil ? (loading ? "Loading body fat…" : "Body fat unavailable") : "No body fat measurements") }
         }
     }
@@ -180,6 +207,25 @@ struct WatchDashboardView: View {
         loading = true
         defer { loading = false }
         await connection.refresh()
+    }
+    private func refreshWorkouts() async {
+        guard connection.reachable else {
+            workoutFailed = !connection.connecting
+            return
+        }
+        while !Task.isCancelled {
+            do {
+                let rows: [[String: JSONValue]] = try await connection.load(.workouts)
+                guard !Task.isCancelled else { return }
+                workoutRows = rows
+                workoutReadAt = Date()
+                workoutFailed = false
+            } catch {
+                guard !Task.isCancelled else { return }
+                workoutFailed = true
+            }
+            do { try await Task.sleep(for: .seconds(workoutFailed ? 15 : 300)) } catch { return }
+        }
     }
 }
 
@@ -198,13 +244,14 @@ struct WatchDashboardHeading: View {
         HStack(spacing: 6) {
             Image(systemName: "circle.fill").font(.system(size: 6))
                 .foregroundStyle(WatchStyle.amber).accessibilityHidden(true)
-            Text(title).font(.system(.headline, design: .rounded))
+            Text(LocalizedStringKey(title)).font(.system(.headline, design: .rounded))
                 .accessibilityAddTraits(.isHeader)
         }
     }
 }
 
 struct WatchDashboardSection<Content: View>: View {
+    @ScaledMetric(relativeTo: .caption2) private var seeMoreFontSize: CGFloat = 10
     let title: String
     let route: WatchRoute
     let content: Content
@@ -216,10 +263,17 @@ struct WatchDashboardSection<Content: View>: View {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 WatchDashboardHeading(title: title)
                 Spacer(minLength: 0)
-                NavigationLink("See more", value: route)
-                    .font(.caption2).foregroundStyle(WatchStyle.amber)
-                    .frame(minHeight: 32)
-                    .accessibilityLabel("See more \(title)")
+                NavigationLink(value: route) {
+                    Text("See more")
+                        .font(.system(size: seeMoreFontSize))
+                        .underline()
+                        .foregroundStyle(WatchStyle.amber)
+                        .frame(minHeight: 32)
+                        .contentShape(Rectangle())
+                }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("See more \(String(localized: String.LocalizationValue(title)))")
+                    .accessibilityHint("Opens \(String(localized: String.LocalizationValue(title)))")
             }
             content
         }.frame(maxWidth: .infinity, alignment: .leading)

@@ -135,7 +135,9 @@ final class JarvisTodayModel: ObservableObject {
         case 1: ago = JarvisTodayLocalization.string(.agoYesterday, language: language)
         default: ago = JarvisTodayLocalization.string(.agoDays, count: days, language: language)
         }
-        return last.session.shortTitle(language: language) + " · " + ago
+        let name = last.healthActivity.map { JarvisHealthLocalization.workoutName($0, language: language) }
+            ?? last.session.shortTitle(language: language)
+        return name + " · " + ago
     }
 
     /// "Bench press · 80 kg", or nil while there is nothing true to say yet.

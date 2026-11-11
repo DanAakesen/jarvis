@@ -10,6 +10,29 @@ struct WatchEntry: TimelineEntry {
     var dashboardStale = false
 }
 
+struct WatchSnapshotAge: View {
+    let date: Date
+    var body: some View {
+        (Text("Saved") + Text(" ") + Text(date, style: .relative))
+            .font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
+    }
+}
+
+struct WatchComplicationWithAge<Content: View>: View {
+    let date: Date?
+    let content: Content
+    init(date: Date?, @ViewBuilder content: () -> Content) {
+        self.date = date
+        self.content = content()
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            content
+            if let date { WatchSnapshotAge(date: date) }
+        }
+    }
+}
+
 struct WatchMacroBar: View {
     let label: String
     let consumed: Double?
@@ -243,7 +266,7 @@ struct WatchNutritionComplicationView: View {
 struct WatchHomeComplicationView: View {
     let entry: WatchEntry
     var body: some View {
-        if let brief = entry.dashboard?.brief, brief.isCurrent(at: entry.date), !brief.text.isEmpty {
+        if let brief = entry.dashboard?.brief, !brief.text.isEmpty {
             WatchBriefText(text: brief.text, highlightedTerms: brief.highlights, lines: 4, compact: true)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                 .accessibilityLabel(brief.text)
@@ -267,7 +290,7 @@ struct WatchTasksComplicationView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
                     .accessibilityLabel("\(preview.totalCount) tasks today, including overdue. " + preview.tasks.prefix(3).map(\.text).joined(separator: ". "))
             }
-        } else if entry.current, let count = entry.health?.tasksToday {
+        } else if let count = entry.health?.tasksToday {
             WatchComplicationUnavailable(title: "Tasks", message: count == 0 ? "No tasks due today" : "\(count) today. Open for task titles")
         } else {
             WatchComplicationUnavailable(title: "Tasks", message: entry.dashboardStale ? "Data expired. Open Jarvis on iPhone" : "Open Jarvis on iPhone")
@@ -306,7 +329,7 @@ struct WatchBodyFatComplicationView: View {
 
 struct WatchHealthView: View {
     let entry: WatchEntry
-    private var health: WatchHealthSnapshot? { entry.current ? entry.health : nil }
+    private var health: WatchHealthSnapshot? { entry.health }
     private func number(_ value: Int?) -> String { value.map { $0.formatted() } ?? "—" }
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -317,11 +340,15 @@ struct WatchHealthView: View {
                 values: health?.steps == nil ? [] : health?.cumulativeSteps ?? [],
                 goal: health?.stepGoal
             ).frame(maxWidth: .infinity, maxHeight: .infinity)
+            if !entry.current, let health { WatchSnapshotAge(date: health.generatedAt) }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(health?.steps != nil
             ? "Daily steps \(number(health?.steps)), target \(number(health?.stepGoal))."
             : "Steps unavailable. Open Jarvis on iPhone.")
+        .accessibilityValue(!entry.current && health != nil
+                            ? Text("Saved") + Text(" ") + Text(health!.generatedAt, style: .relative)
+                            : Text(""))
     }
 }
 struct WatchStepsChart: View {
