@@ -16,14 +16,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: swift-actions/setup-swift@7ca6abe6b3b0e8b5421b88be48feee39cbf52c6a # v2.4.0
-        with:
-          swift-version: "6.2"
       - name: Build and test JarvisCore
-        working-directory: apps/ios/Packages/JarvisCore
         run: |
-          swift build
-          swift test
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$GITHUB_WORKSPACE:/work" \
+            -w /work/apps/ios/Packages/JarvisCore swift:6.2 bash -c "swift build && swift test"
       - name: Check iOS project and platform metadata
         run: |
           ruby -ryaml -e '
