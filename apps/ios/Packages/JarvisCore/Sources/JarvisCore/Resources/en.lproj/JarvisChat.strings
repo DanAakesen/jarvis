@@ -167,3 +167,8 @@
 "chat.turn.thinking" = "Thinking";
 
 "chat.turn.showTime" = "Show message time";
+
+"chat.photo.loading" = "Loading photo";
+"chat.photo.unavailable" = "Photo unavailable";
+"chat.photo.retry" = "Retry";
+"chat.photo.remove" = "Remove";

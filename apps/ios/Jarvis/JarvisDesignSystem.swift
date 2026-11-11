@@ -115,6 +115,10 @@ enum JarvisDesignTokens {
     static let chatMessageSpacing: CGFloat = 8
     static let chatMessageDetailSpacing: CGFloat = 6
     static let chatMessageMaximumWidth: CGFloat = 360
+    static let chatComposerPhotoSize: CGFloat = 76
+    static let photoRemoveDiameter: CGFloat = 20
+    static let photoRemoveGlyphSize: CGFloat = 10
+    static let chatMessagePhotoSize: CGFloat = 220
     /// The one corner radius for floating surfaces: Now bar, composer, bubbles, panels, tiles and sheets of glass.
     static let surfaceRadius: CGFloat = 24
     static let chatBubbleRadius: CGFloat = surfaceRadius
@@ -137,7 +141,7 @@ enum JarvisDesignTokens {
     /// How far the composer rim's pulse travels outwards before it fades.
     static let rimRippleReach: CGFloat = 7
     static let chatMinimumTapTarget: CGFloat = 44
-    /// The one diameter of every circular icon or menu button, in the Chat header and everywhere else.
+    /// The standard circular icon/menu diameter; photo removal keeps its smaller visible chrome.
     static let iconButtonDiameter: CGFloat = 48
     static let iconButtonGlyphSize: CGFloat = 20
     static let chatSheetCornerRadius: CGFloat = 28

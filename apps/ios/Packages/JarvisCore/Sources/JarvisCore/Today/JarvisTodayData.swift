@@ -82,15 +82,24 @@ public enum JarvisTodayCorrelation {
     }
 }
 
-/// Splits open vault tasks into the two Today lists: due today, and everything else with a date.
+/// Date-only task metadata stays unchanged; the caller supplies the owner's local day.
 public struct JarvisTodayTaskLists: Equatable, Sendable {
     public let today: [VaultTask]
-    public let due: [VaultTask]
+    public let upcoming: [VaultTask]
 
     public init(tasks: [VaultTask], today: String) {
         let groups = JarvisNotesLogic.taskGroups(tasks, today: today)
-        self.today = groups.today
-        self.due = groups.overdue + groups.upcoming
+        self.today = groups.overdue + groups.today
+        self.upcoming = groups.upcoming
+    }
+
+    public init(tasks: [VaultTask], now: Date, calendar: Calendar = .current) {
+        self.init(tasks: tasks, today: Self.dayKey(now, calendar: calendar))
+    }
+
+    public static func dayKey(_ date: Date, calendar: Calendar = .current) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 }
 

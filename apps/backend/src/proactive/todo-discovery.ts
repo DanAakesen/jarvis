@@ -1,7 +1,7 @@
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { MAX_VAULT_FILE_BYTES, VaultFileTooLargeError } from '../vault/github-client.js';
 import { isVaultNotePath } from '../vault/index.js';
-import { parseTodosWithContext, type ParsedTodo, type ParsedVaultTodo } from './todo-file.js';
+import { parseTodosWithContext, sanitizeFactText, type ParsedTodo, type ParsedVaultTodo } from './todo-file.js';
 
 type VaultReader = Pick<ReturnType<typeof createGitHubVaultClient>, 'tree' | 'read'>;
 export const MAX_TODO_FILES = 256;
@@ -114,7 +114,7 @@ export function readVaultTasks(vault: VaultReader, signal: AbortSignal): Promise
 
 export async function readVaultTodos(vault: VaultReader, signal: AbortSignal): Promise<ParsedTodo[]> {
   return (await readVaultTasks(vault, signal)).map(({ text, dueAt, dueHasTime, done, highPriority, remindAtDue }) =>
-    ({ text, dueAt, dueHasTime, done, highPriority, ...(remindAtDue ? { remindAtDue } : {}) }));
+    ({ text: sanitizeFactText(text), dueAt, dueHasTime, done, highPriority, ...(remindAtDue ? { remindAtDue } : {}) }));
 }
 
 export type VaultTaskState = 'open' | 'done' | 'all';

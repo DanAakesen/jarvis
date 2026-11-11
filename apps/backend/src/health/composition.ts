@@ -3,6 +3,7 @@ import type sql from 'mssql';
 import { AuthenticationDenied } from '../auth/verify.js';
 import { ConfigurationError } from '../configuration-error.js';
 import type { BackendModule } from '../modules.js';
+import type { ApprovalModelPort } from '../core/approval-interpreter.js';
 import { HealthReadModel } from './health/read-model.js';
 import { createHealthModules } from './index.js';
 import { FridaLookupAdapter } from './nutrition/frida.js';
@@ -21,6 +22,7 @@ export interface HealthCompositionOptions {
   readonly ownerObjectId: string;
   /** The vault client for the Gym log copy. Without it saved entries stay pending and are never reported as copied. */
   readonly gymVault?: HealthGymVault;
+  readonly liftCaptureModel?: ApprovalModelPort;
 }
 
 const uuid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/iu;
@@ -36,8 +38,8 @@ export function composeHealth(options: HealthCompositionOptions): BackendModule 
   if (!options.pool) throw new ConfigurationError('SQL is required for Health');
   if (!uuid.test(options.ownerObjectId)) throw new ConfigurationError('The Health owner must be a UUID');
   const { pool } = options;
-  const data = createHealthData(pool, options.ownerObjectId, Date.now, new FridaLookupAdapter(),
-    options.gymVault);
+  const data = { ...createHealthData(pool, options.ownerObjectId, Date.now, new FridaLookupAdapter(),
+    options.gymVault), ...(options.liftCaptureModel ? { liftCaptureModel: options.liftCaptureModel } : {}) };
   // createHealthData applies this check to its own accessors; the two composed here get the same one.
   const owned = (request: FastifyRequest) => {
     if (resolveHealthOwner(request).toLowerCase() !== options.ownerObjectId.toLowerCase()) throw new AuthenticationDenied(403);

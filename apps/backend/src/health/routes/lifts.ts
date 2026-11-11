@@ -4,8 +4,11 @@ import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { parseLiftCreate, parseLiftPatch } from '../lifts/lifts.js';
 import type { LiftEntriesAccess } from '../lifts/lifts-store.js';
 import { resolveHealthOwner } from '../owner.js';
+import type { ApprovalModelPort } from '../../core/approval-interpreter.js';
+import { createLiftCapture, LiftCaptureDeleted } from '../lifts/capture.js';
 
-export function liftRoutes(access: LiftEntriesAccess): FastifyPluginAsync {
+export function liftRoutes(access: LiftEntriesAccess, model?: ApprovalModelPort): FastifyPluginAsync {
+  const capture = createLiftCapture(access, model);
   return async app => {
     const guard = async (request: FastifyRequest, reply: FastifyReply) => {
       resolveHealthOwner(request);
@@ -21,6 +24,7 @@ export function liftRoutes(access: LiftEntriesAccess): FastifyPluginAsync {
       reply.raw.once('close', disconnect);
       try { return await work(controller.signal); }
       catch (error) {
+        if (error instanceof LiftCaptureDeleted) return reply.code(410).send({ error: error.message, code: 'lift_deleted' });
         if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
         if (error instanceof ToolFailure) return reply.code(503).send({ error: error.message });
         throw error;
@@ -29,6 +33,9 @@ export function liftRoutes(access: LiftEntriesAccess): FastifyPluginAsync {
         reply.raw.off('close', disconnect);
       }
     };
+
+    app.post('/health/lifts/capture', { bodyLimit: 16 * 1024, onRequest: guard }, async (request, reply) =>
+      bounded(request, reply, signal => capture(request.body, request, signal)));
 
     app.post('/health/lifts', { bodyLimit: 1024, onRequest: guard }, async (request, reply) => {
       const parsed = parseLiftCreate(request.body);

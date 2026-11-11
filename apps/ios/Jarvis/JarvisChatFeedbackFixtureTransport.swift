@@ -6,7 +6,7 @@ import JarvisCore
 actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     static var isEnabled: Bool {
 #if DEBUG && targetEnvironment(simulator)
-        ProcessInfo.processInfo.arguments.contains("--ui-test-chat-feedback")
+        ProcessInfo.processInfo.arguments.contains("--ui-test-chat-feedback") || JarvisChatPhotoFixture.isEnabled
 #else
         false
 #endif
@@ -18,22 +18,52 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     private var listeners: [UUID: AsyncThrowingStream<Data, any Error>.Continuation] = [:]
     private var activity: [[String: Any]] = []
     private var language = "en"
+    private var photoUploads: [[String: Any]] = []
     private var completionObserver: ChatFixtureCompletionObserver?
     private var acknowledgmentObserver: ChatFixtureCompletionObserver?
     private var progressObserver: ChatFixtureCompletionObserver?
+    private var toolsObserver: ChatFixtureCompletionObserver?
+    private var failureObserver: ChatFixtureCompletionObserver?
+    private var streamObserver: ChatFixtureCompletionObserver?
+    private var toolCount = 0
+    private var didSeedHistory = false
 
-    init(base: any HTTPTransport) { self.base = base }
+    init(base: any HTTPTransport) {
+        self.base = base
+        if JarvisChatPhotoFixture.isEnabled { history = JarvisChatPhotoFixture.history }
+    }
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         guard Self.isEnabled else { return try await base.send(request) }
         switch request.url.path {
-        case "/api/conversation/history": return try json(["messages": history, "nextCursor": NSNull()])
+        case "/api/conversation/attachments" where JarvisChatPhotoFixture.isEnabled:
+            guard let body = request.body, let upload = JarvisChatPhotoFixture.upload(body) else {
+                return HTTPResponse(statusCode: 400)
+            }
+            photoUploads.append(upload)
+            return try json(upload, status: 201)
+        case "/api/conversation/history":
+            if !didSeedHistory, ProcessInfo.processInfo.arguments.contains("--ui-test-chat-follow") {
+                let photoHistory = JarvisChatPhotoFixture.isEnabled ? JarvisChatPhotoFixture.history : []
+                history = (1...(40 - photoHistory.count)).map { index in
+                    message(id: String(index), role: index.isMultiple(of: 2) ? "jarvis" : "dan",
+                            text: "Synthetic history \(index). Read the [Apple guide](https://developer.apple.com/documentation/swiftui). " +
+                                String(repeating: "Earlier conversation remains available while tools run. ", count: 4))
+                }
+                history += photoHistory
+                didSeedHistory = true
+            }
+            return try json(["messages": history, "nextCursor": NSNull()])
         case "/api/conversation/turns/active": return try json(["turns": []])
         case "/api/conversation/sessions":
             let body = try JSONSerialization.jsonObject(with: request.body!) as! [String: Any]
             language = body["language"] as! String
             return try json(["id": "12", "channel": "chat", "language": language], status: 201)
-        case "/api/now": return try json(["running": [], "items": [], "confirmations": [], "awayMode": false, "updatedAt": "2026-11-07T12:00:00Z"])
+        case "/api/now":
+            let items: [[String: Any]] = ProcessInfo.processInfo.arguments.contains("--ui-test-chat-follow-now") ?
+                [["id": "1", "category": "attention", "title": "Synthetic background activity",
+                  "at": "2026-11-07T12:00:00Z"]] : []
+            return try json(["running": [], "items": items, "confirmations": [], "awayMode": false, "updatedAt": "2026-11-07T12:00:00Z"])
         case "/api/jobs": return try json(["jobs": []])
         case "/api/conversation/sessions/12/steer":
             guard turn != nil else { return HTTPResponse(statusCode: 409) }
@@ -64,11 +94,19 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
         registerTestCompletion()
         let requestBody = try JSONSerialization.jsonObject(with: request.body!) as! [String: Any]
         var saved = message(id: "42", role: "dan", text: requestBody["text"] as! String)
+        if JarvisChatPhotoFixture.isEnabled {
+            let ids = requestBody["attachmentIds"] as? [String] ?? []
+            saved["attachments"] = photoUploads.filter { ids.contains($0["id"] as? String ?? "") }
+        }
         saved["toolCalls"] = [["id": "tool-42", "tool": "repo_read", "outcome": "ok"]]
         history.append(saved)
         let body = AsyncThrowingStream<Data, any Error> { continuation in
             turn = continuation
             continuation.yield(event("user", saved))
+        }
+        if JarvisChatPhotoFixture.isEnabled,
+           !ProcessInfo.processInfo.arguments.contains("--ui-test-chat-follow") {
+            finishTurn()
         }
         return HTTPStreamResponse(statusCode: 200, headers: ["content-type": "text/event-stream"], body: body)
     }
@@ -92,6 +130,11 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
 
     private func finishTurn() {
         guard turn != nil else { return }
+        if toolCount > 0, let index = history.firstIndex(where: { $0["id"] as? String == "42" }) {
+            history[index]["toolCalls"] = (1...toolCount).map { index in
+                ["id": toolID(index), "tool": toolName(index), "outcome": index == toolCount ? "error" : "ok"]
+            }
+        }
         let saved = message(id: "45", role: "jarvis", text: "The synthetic check is complete.")
         history.append(saved)
         turn?.yield(event("delta", ["text": "The synthetic check is complete."]))
@@ -114,6 +157,43 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
         completionObserver = ChatFixtureCompletionObserver(name: "com.jarvis.uitests.finish-chat-feedback") { [weak self] in
             Task { await self?.finishTurn() }
         }
+        toolsObserver = ChatFixtureCompletionObserver(name: "com.jarvis.uitests.tools-chat-feedback") { [weak self] in
+            Task { await self?.appendTools() }
+        }
+        failureObserver = ChatFixtureCompletionObserver(name: "com.jarvis.uitests.fail-tool-chat-feedback") { [weak self] in
+            Task { await self?.failLatestTool() }
+        }
+        streamObserver = ChatFixtureCompletionObserver(name: "com.jarvis.uitests.stream-chat-feedback") { [weak self] in
+            Task { await self?.appendReplyText() }
+        }
+    }
+
+    private func appendReplyText() {
+        turn?.yield(event("delta", ["text": "The synthetic project check is continuing. "]))
+    }
+
+    private func appendTools() {
+        guard turn != nil else { return }
+        for index in (toolCount + 1)...(toolCount + 9) {
+            let item: [String: Any] = ["type": "tool-call-started", "source": "chat",
+                "activityId": toolID(index), "messageId": "42", "toolName": toolName(index)]
+            turn?.yield(event("tool_activity", item))
+            if !index.isMultiple(of: 9) {
+                turn?.yield(event("tool_activity", item.merging(["type": "tool-call-finished", "outcome": "ok"]) { _, new in new }))
+            }
+        }
+        toolCount += 9
+    }
+
+    private func failLatestTool() {
+        guard turn != nil, toolCount > 0 else { return }
+        turn?.yield(event("tool_activity", ["type": "tool-call-finished", "source": "chat",
+            "activityId": toolID(toolCount), "messageId": "42", "toolName": toolName(toolCount), "outcome": "error"]))
+    }
+
+    private func toolID(_ index: Int) -> String { String(format: "00000000-0000-4000-8000-%012d", index) }
+    private func toolName(_ index: Int) -> String {
+        (index - 1) % 9 >= 6 ? "repo_list" : "synthetic_project_configuration_check_\(index)"
     }
 
     private func publishTool(finished: Bool) {
@@ -126,7 +206,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
 
     private func message(id: String, role: String, text: String) -> [String: Any] {
         ["id": id, "sessionId": "12", "channel": "chat", "language": language, "role": role,
-         "text": text, "at": "2026-11-07T12:00:\(id)Z", "interrupted": false, "toolCalls": [], "attachments": []]
+         "text": text, "at": "2026-11-07T12:00:\(String(format: "%02d", Int(id) ?? 0))Z", "interrupted": false, "toolCalls": [], "attachments": []]
     }
 
     private func removeListener(_ id: UUID) { listeners[id] = nil }

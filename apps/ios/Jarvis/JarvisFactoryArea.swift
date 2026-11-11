@@ -322,6 +322,7 @@ struct JarvisFactoryArea: View {
         }
         .padding(.horizontal, JarvisDesignTokens.factoryHorizontalInset)
         .padding(.bottom, JarvisPageHeaderMetrics.actionSpacing)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("factory.segmentRow")
     }
 
