@@ -46,6 +46,7 @@
 "notes.conflict" = "Conflict";
 "notes.reload" = "Reload latest";
 "notes.titleField" = "Title";
+"notes.edit" = "Edit";
 "notes.folderField" = "Folder";
 "notes.newFolder" = "New folder";
 "notes.contentField" = "Text";

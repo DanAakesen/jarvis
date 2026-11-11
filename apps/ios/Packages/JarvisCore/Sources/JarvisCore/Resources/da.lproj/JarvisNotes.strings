@@ -46,6 +46,7 @@
 "notes.conflict" = "Konflikt";
 "notes.reload" = "Genindlæs seneste";
 "notes.titleField" = "Titel";
+"notes.edit" = "Rediger";
 "notes.folderField" = "Mappe";
 "notes.newFolder" = "Ny mappe";
 "notes.contentField" = "Tekst";

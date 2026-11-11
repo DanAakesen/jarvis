@@ -29,6 +29,7 @@ struct JarvisTaskListRow: View {
     let isWorking: Bool
     let isFirst: Bool
     let isLast: Bool
+    var accessibilityPrefix = "notes.task"
     let onComplete: () -> Void
     let onOpen: () -> Void
 
@@ -86,7 +87,7 @@ struct JarvisTaskListRow: View {
         HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center, spacing: 4) {
             JarvisCheckButton(
                 title: task.done ? copy.completed : copy.complete,
-                identifier: "notes.task.complete",
+                identifier: "\(accessibilityPrefix).complete",
                 isWorking: isWorking,
                 isChecked: task.done,
                 tint: priorityColor,
@@ -94,30 +95,33 @@ struct JarvisTaskListRow: View {
             )
             .accessibilityValue(JarvisTaskTitle.plain(task.text))
             Button(action: onOpen) {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 4) {
-                        title
-                        metadata
-                        dueLabel
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    HStack(spacing: 8) {
-                        VStack(alignment: .leading, spacing: 2) {
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 4) {
                             title
                             metadata
+                            dueLabel
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        dueLabel
-                            .frame(maxWidth: maximumDueWidth, alignment: .trailing)
-                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                title
+                                metadata
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            dueLabel
+                                .frame(maxWidth: maximumDueWidth, alignment: .trailing)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(JarvisTaskTitle.plain(task.text))
             .accessibilityValue([scope, priority, due].compactMap { $0 }.joined(separator: ", "))
-            .accessibilityIdentifier("notes.task.open")
+            .accessibilityIdentifier("\(accessibilityPrefix).open")
         }
         .padding(.leading, 8)
         .padding(.trailing, 16)
@@ -129,7 +133,7 @@ struct JarvisTaskListRow: View {
         }
         .clipShape(shape)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("notes.task.row.\(task.id)")
+        .accessibilityIdentifier("\(accessibilityPrefix).row.\(task.id)")
     }
 
     private var title: some View {

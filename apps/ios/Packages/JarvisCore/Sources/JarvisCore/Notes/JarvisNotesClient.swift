@@ -484,6 +484,46 @@ public final class JarvisNotesClient: Sendable {
         }
     }
 
+    public func editTask(
+        _ task: VaultTask,
+        text: String,
+        due: String?,
+        time: String?,
+        priority: VaultTask.Priority
+    ) async throws -> VaultTaskWrite {
+        let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.validTask(task),
+              (1...400).contains(cleanText.unicodeScalars.count),
+              (due.map(Self.validDate) ?? true),
+              (time.map(Self.validTime) ?? true),
+              time == nil || due != nil else {
+            throw JarvisNotesClientError.invalidRequest
+        }
+        let body = TaskEditRequest(
+            path: task.path, line: task.line, text: task.text, version: task.version,
+            newText: cleanText, due: due, time: time, priority: priority
+        )
+        do {
+            let response = try await request(
+                method: .put,
+                path: ["vault", "tasks"],
+                body: try JSONEncoder().encode(body),
+                idempotent: false,
+                additionalSuccessStatuses: [409]
+            )
+            if response.statusCode == 409 { throw JarvisNotesClientError.taskConflict }
+            return try decodeTaskWrite(response.body)
+        } catch JarvisClientError.serviceUnavailable {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.networkFailure {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.timedOut {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.responseDecodingFailure {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        }
+    }
+
     public func createTask(
         text: String,
         scope: VaultTaskScope,
@@ -719,6 +759,33 @@ private struct TaskCompleteRequest: Encodable {
     let text: String
     let version: String
     let done: Bool
+}
+
+private struct TaskEditRequest: Encodable {
+    let path: String
+    let line: Int
+    let text: String
+    let version: String
+    let newText: String
+    let due: String?
+    let time: String?
+    let priority: VaultTask.Priority
+
+    private enum CodingKeys: String, CodingKey {
+        case path, line, text, version, newText, due, time, priority
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(path, forKey: .path)
+        try container.encode(line, forKey: .line)
+        try container.encode(text, forKey: .text)
+        try container.encode(version, forKey: .version)
+        try container.encode(newText, forKey: .newText)
+        try container.encode(due, forKey: .due)
+        try container.encode(time, forKey: .time)
+        try container.encode(priority, forKey: .priority)
+    }
 }
 
 private struct TaskCreateRequest: Encodable {
