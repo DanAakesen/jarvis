@@ -43,9 +43,12 @@ only during startup. Driver errors and SQL text are not logged or returned.
 
 Run offline tests with `npm test --workspace @jarvis/backend`. Aggregate CI calls
 `database-ci.yml`, starts disposable SQL Server and runs
-`npm run test:database --workspace @jarvis/backend`. These integration checks
-cover repeat and concurrent application, rollback, immutable history, app-lock
-contention, request cancellation, and down migrations. Test-password authentication is allowed
+`npm run test:database --workspace @jarvis/backend`. This integration check
+`database.integration.test.ts` is the only integration check kept in this
+package. It covers
+repeat and concurrent application, rollback, immutable history, app-lock
+contention and request cancellation. Down migrations are covered offline by
+`migrations.test.ts`, which requires a same-named down script for every migration. Test-password authentication is allowed
 only with `NODE_ENV=test` on `127.0.0.1`; CI generates and deletes unique isolated
 databases. Neither agents nor Actions tests connect to Azure SQL.
 
@@ -56,11 +59,3 @@ store use the group-one schema in `0001_core_tables.sql` (#15);
 (#27), `0003_sandbox_agent_name.sql` adds the heartbeat routing field, and
 `0005_task_event_archives.sql` indexes committed task-event blobs. Real Azure
 identity connectivity and new-revision/restart acceptance remain issue #11.
-`schema.integration.test.ts` checks the schema's constraints, and reverts and
-reapplies every committed migration in its own database. It also exercises
-`owner-session-store.ts` (the optional owner session, #1217; table in
-`0064_owner_sessions.sql`): the active-session limit under concurrency, eviction,
-revocation and owner-scoped purge.
-`conversation-store.integration.test.ts` exercises conversation writes, history
-pagination, tool-call/task references and session closure against that isolated
-SQL Server.
