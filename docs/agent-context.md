@@ -36,7 +36,8 @@
   after they are seen in use. Decision: `docs/decisions.md`, 2026-11-11.
 - **Voice prompt.** The realtime voice path builds its instructions in
   `apps/backend/src/voice/realtime.ts` and uses `voiceCapabilityInstructions`; chat and the hosted
-  agent use the full `capabilityInstructions`. Decision: `docs/decisions.md`, 2026-11-12.
+  agent use the full `capabilityInstructions`. English and Danish sessions share one prompt text;
+  only voice, phrase list and transcription settings differ. Decision: `docs/decisions.md`, 2026-11-12.
 - **Native validation changed.** The iOS Simulator workflow, the `JarvisUITests` target and the
   UI test and screenshot evidence are removed. The older instructions below that require the
   separate iOS Simulator workflow or select `JarvisUITests` (see "Exact-final-head
