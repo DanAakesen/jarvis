@@ -352,7 +352,10 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 guard voiceEpoch == generation, voiceID == id else {
                     try? await session.end(); throw WatchFailure.unavailable
                 }
-                try? liveActivity.start(sessionID: id, language: language)
+                try? liveActivity.start(
+                    sessionID: id,
+                    language: language == .en ? .en : .da
+                )
             }
             catch { await stopVoice(); throw error }
             return try encode(id)
