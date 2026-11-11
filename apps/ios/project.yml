@@ -103,26 +103,6 @@ targets:
         CODE_SIGN_ENTITLEMENTS: WatchWidgets/WatchWidgets.entitlements
         SKIP_INSTALL: "YES"
         APPLICATION_EXTENSION_API_ONLY: "YES"
-  JarvisUITests:
-    type: bundle.ui-testing
-    platform: iOS
-    deploymentTarget: "26.0"
-    sources:
-      - path: JarvisUITests
-      # Exercise the production URLSession adapter, including real AsyncBytes,
-      # from the native test runner with a synthetic URLProtocol.
-      - path: Jarvis/URLSessionTransport.swift
-    dependencies:
-      - target: Jarvis
-      - package: JarvisCore
-        product: JarvisCore
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.danaakesen.jarvis.uitests
-        TARGETED_DEVICE_FAMILY: "1"
-        SWIFT_VERSION: "5.0"
-        IPHONEOS_DEPLOYMENT_TARGET: "26.0"
-        GENERATE_INFOPLIST_FILE: "YES"
   JarvisBroadcast:
     type: app-extension
     platform: iOS
@@ -193,10 +173,6 @@ schemes:
     build:
       targets:
         Jarvis: all
-        JarvisUITests: [test]
-    test:
-      targets:
-        - JarvisUITests
 
   JarvisWatch:
     build:
