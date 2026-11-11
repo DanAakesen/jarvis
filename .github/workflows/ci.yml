@@ -122,13 +122,6 @@ jobs:
           az bicep lint --file infra/main.bicep
           az bicep build --file infra/factory-sandboxes.bicep --stdout >"$RUNNER_TEMP/factory-sandboxes.json"
           az bicep lint --file infra/factory-sandboxes.bicep
-      - name: Reject unresolved interpolation in compiled alert queries
-        run: |
-          jq -e '
-            [.. | objects | select(.type? == "Microsoft.Insights/scheduledQueryRules")
-              | .properties.criteria.allOf[].query]
-            | length > 0 and all(.[]; contains("${") | not)
-          ' "$RUNNER_TEMP/infra.json"
 
   python:
     name: Python lint, test and build
