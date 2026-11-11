@@ -8,6 +8,7 @@ import WidgetKit
 final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchConnection()
     @Published private(set) var reachable = false
+    @Published private(set) var connecting = true
     @Published private(set) var snapshot: WatchHealthSnapshot?
     @Published private(set) var dashboard: WatchDashboardSnapshot?
     var dashboardSnapshot: WatchDashboardSnapshot? { dashboard }
@@ -95,10 +96,30 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
         #endif
+        guard reachable else { return }
         async let health: Void = refreshHealth()
         async let dashboard: Void = refreshDashboard()
         async let brief: Void = refreshBrief()
         _ = await (health, dashboard, brief)
+    }
+    func maintainConnection() async {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
+        #endif
+        guard WCSession.isSupported() else { connecting = false; return }
+        connecting = !reachable
+        var first = true
+        while !Task.isCancelled {
+            if WCSession.default.activationState == .notActivated { WCSession.default.activate() }
+            let current = WCSession.default.activationState == .activated && WCSession.default.isReachable
+            if current != reachable { updateReachability() }
+            if reachable && (first || dashboardError != nil || dashboard?.isCurrent(at: Date()) != true || snapshot?.isCurrent(at: Date()) != true) {
+                await refresh()
+            }
+            first = false
+            do { try await Task.sleep(for: .seconds(15)) } catch { return }
+            connecting = false
+        }
     }
     private func refreshHealth() async {
         let epoch = cacheGeneration
@@ -240,6 +261,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     private func updateReachability() {
         let wasReachable = reachable
         reachable = WCSession.default.activationState == .activated && WCSession.default.isReachable
+        if reachable { connecting = false }
         UserDefaults(suiteName: "group.com.danaakesen.jarvis")?.set(reachable, forKey: "watch.reachable")
         WidgetCenter.shared.reloadAllTimelines()
         if !reachable {

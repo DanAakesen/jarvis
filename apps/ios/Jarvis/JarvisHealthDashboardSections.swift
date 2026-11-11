@@ -304,11 +304,7 @@ struct JarvisHealthSessionsSection: View {
     }
 
     private func sessionTitle(_ raw: String?) -> String {
-        switch JarvisHealthLogic.workoutKind(raw) {
-        case .gym: copy.text(.gym)
-        case .run: copy.text(.run)
-        case .other: copy.text(.workout)
-        }
+        JarvisHealthLocalization.workoutName(raw, language: language)
     }
 
     private func sessionSymbol(_ raw: String?) -> String {

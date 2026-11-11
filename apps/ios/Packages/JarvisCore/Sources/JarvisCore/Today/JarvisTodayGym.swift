@@ -315,8 +315,11 @@ public struct JarvisCombinedGymLogStore: JarvisGymLogStore {
                     // One source row can enrich only one primary row. Pick the nearest log,
                     // so several nearby lifts cannot each receive the same workout's totals.
                     let index = primaryEntries.indices.filter {
-                        !matched.contains($0)
-                            && Self.sameWorkout(primaryEntries[$0].session, candidate.session)
+                        guard !matched.contains($0) else { return false }
+                        if let existingID = primaryEntries[$0].healthKitID, let candidateID = candidate.healthKitID {
+                            return existingID.lowercased() == candidateID.lowercased()
+                        }
+                        return Self.sameWorkout(primaryEntries[$0].session, candidate.session)
                             && abs(primaryEntries[$0].performedAt.timeIntervalSince(candidate.performedAt)) < 7200
                     }.min {
                         abs(primaryEntries[$0].performedAt.timeIntervalSince(candidate.performedAt))

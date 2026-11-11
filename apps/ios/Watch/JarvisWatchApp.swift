@@ -148,8 +148,8 @@ struct WatchRoot: View {
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in
             if model.voiceID != nil { Task { await model.endVoice() } }
         }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active { Task { await connection.refresh() } }
+        .task(id: scenePhase) {
+            if scenePhase == .active { await connection.maintainConnection() }
         }
     }
     private var actionPage: some View {
