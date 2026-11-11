@@ -65,7 +65,7 @@ Creates `rg-jarvis-voice-poc` (Sweden Central): Foundry account and project (fre
 | V3, V4 through the deployed agent | `.venv\Scripts\python.exe tests\run_intent.py deployed` | `results\intent-deployed.json` |
 | V1, V2, V5 synthetic Danish speech | `.venv\Scripts\python.exe tests\run_voice.py` | `results\voice.json` |
 | V6 interruption | `.venv\Scripts\python.exe tests\run_interrupt.py` | `results\interrupt.json` |
-| Unit tests | `cd agent; ..\.venv\Scripts\python.exe -m pytest -q` and `cd tests; ..\.venv\Scripts\python.exe -m pytest -q test_scoring.py` | |
+| Unit tests | `cd agent; ..\.venv\Scripts\python.exe -m pytest -q` | |
 
 Set `$env:PYTHONIOENCODING = "utf-8"` first so Danish letters print correctly. Actual billed cost per meter: `.\infra\cost.ps1` (works after teardown; billing lags 8–24 hours).
 
