@@ -30,19 +30,8 @@ From the repository root, after `npm ci`:
 ```sh
 npm run build --workspace @jarvis/backend
 npx --no-install eslint --config apps/backend/src/foundry/lint.config.mjs apps/backend/src/foundry --max-warnings 0
-npx --no-install vitest run --config apps/backend/src/foundry/vitest.config.mts
 ```
 
-The backend production compiler excludes the contract tests and their standalone config. The dedicated Foundry contract CI workflow runs the build and these tests independently of the server skeleton. The backend test suite also includes `*.test.mts`, so root `npm test` checks the Foundry contract alongside the server tests.
+The dedicated Foundry contract CI workflow runs the lint and the build independently of the server skeleton. The contract tests and the recorded runner responses were removed when the backend suite was cut to a minimal safety set.
 
-## Recording provenance
-
-`fixtures/runner-responses.json` contains actual responses recorded offline from the production runner handlers, with source commit and working-tree provenance in the recording. The capture uses fixed time and IDs and stubs external ACP execution. Start and resume records include their repository/default/task branch request fields. Running/completed/cancelled status, steer, both pause acknowledgements, cancellation and missing-invocation responses also come from those handlers. The JSON is kept as captured, including field names, nulls, result and event structure.
-
-`fixtures/capture_runner.py` reproduces the recording after `runner/` and its Python environment are available. It imports the actual runner module, disables telemetry export, and executes handlers without Azure or a CLI process:
-
-```sh
-runner/.venv/bin/python apps/backend/src/foundry/fixtures/capture_runner.py runner /tmp/jarvis-runner-captured-responses.json
-```
-
-These are runner response recordings, not Azure runtime envelope captures. DELETE acknowledgements and administration list envelopes use synthetic fixtures. HTTP 424/404 after a crash and healthy status during an event gap replay the statuses observed in the preserved [restart report](../../../../docs/reference/coding-sandbox-prototype/RESTART-REPORT.md); the original Azure error bodies were not retained. Additional malformed-body, timeout, cancellation and response-size cases are deliberately synthetic. Live Azure routing, authorization, response envelopes and end-to-end ACP behavior remain unverified until deployment and task-control validation.
+Live Azure routing, authorization, response envelopes and end-to-end ACP behavior remain unverified until deployment and task-control validation.

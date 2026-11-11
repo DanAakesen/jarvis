@@ -32,7 +32,6 @@ afterAll(async () => {
   await administrator.close();
 });
 
-// The committed domain schema is checked in its own database by schema.integration.test.ts.
 describe('real SQL Server migration contract', () => {
   it('serializes concurrent backend replicas and applies the same migration exactly once', async () => {
     const other = new sql.ConnectionPool({ ...configuration, database });
