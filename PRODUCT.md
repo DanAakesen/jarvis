@@ -1075,7 +1075,9 @@ During voice sessions, Jarvis announces task completion, tasks needing attention
 
 English and Danish speech use the authenticated backend `/voice` WebSocket,
 the `gpt-realtime-2.1` deployment, Ryan HD and the shared prompt. Azure Speech
-transcription does not pin a language. The former hosted agent
+transcription does not pin a language. A voice session opens with a brief
+greeting in the app language (Danish for `da`, English otherwise), then follows
+the spoken language. The former hosted agent
 `jarvis-voice-mai`, MAI Transcribe and MAI Voice deployments are unused; they
 are not deleted by this code change and require later manual Azure cleanup.
 

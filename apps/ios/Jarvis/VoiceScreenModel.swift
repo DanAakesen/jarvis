@@ -217,6 +217,9 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             let client = VoiceSessionClient(
                 baseURL: baseURL,
                 transport: URLSessionWebSocketTransport(),
+                appLanguage: JarvisAppLanguage(
+                    rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
+                ) ?? .default,
                 onMessage: { [weak self] message in
                     Task { @MainActor in
                         guard let self, self.sessionGeneration == generation else { return }

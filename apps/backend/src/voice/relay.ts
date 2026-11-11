@@ -370,6 +370,7 @@ function registerVoiceRoute(
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
     const controller = new AbortController();
+    const appLanguage = (request.query as Record<string, unknown> | undefined)?.appLanguage === 'da' ? 'da' : 'en';
     const diagnostics = createVoiceDiagnostics(request.log, language, controller.signal, request.requestStartedAt);
     if (app.isStopping) {
       diagnostics.summary('shutdown', 1012);
@@ -419,6 +420,7 @@ function registerVoiceRoute(
     };
     let configured = false;
     let upstreamSessionReady = false;
+    let initialGreetingSent = false;
     let queuedBytes = 0;
     const queued: { data: RawData; binary: boolean }[] = [];
     const seenCallIds = new Set<string>();
@@ -2526,6 +2528,17 @@ function registerVoiceRoute(
                   sessionId,
                   (text) => statusAnnouncer?.announce(text) ?? false,
                 );
+              }
+              if (!initialGreetingSent) {
+                initialGreetingSent = true;
+                sendResponseCreate({
+                  type: 'response.create',
+                  response: {
+                    instructions: `Greet Dan briefly in ${appLanguage === 'da' ? 'Danish' : 'English'} as the voice session opens, without waiting for him to speak.`,
+                    tools: [],
+                    tool_choice: 'none',
+                  },
+                });
               }
               applyQueuedSettingsUpdate();
             }

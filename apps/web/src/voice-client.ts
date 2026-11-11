@@ -103,6 +103,8 @@ function voiceUrl(backendUrl: string | null): string {
   }
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.pathname = `${url.pathname.replace(/\/+$/u, '')}/voice`;
+  const browserLanguage = typeof navigator === 'undefined' ? '' : navigator.language.toLowerCase();
+  url.searchParams.set('appLanguage', browserLanguage.startsWith('da') ? 'da' : 'en');
   return url.href;
 }
 

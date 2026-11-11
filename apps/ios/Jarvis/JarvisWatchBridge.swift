@@ -319,26 +319,33 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                     if Date().timeIntervalSince(self.lastVoiceContact) > 15 { await self.stopVoice(); return }
                 }
             }
-            let session = VoiceSessionClient(baseURL: try JarvisComposition.apiBaseURL(), transport: URLSessionWebSocketTransport(), onMessage: { [weak self] message in
-                Task { @MainActor in self?.receiveVoice(message, id: id) }
-            }, onAction: { [weak self] _ in
-                Task { @MainActor in self?.emit(.init(.interrupt, requestID: id)) }
-            }, onStateChange: { [weak self] state in
-                Task { @MainActor in
-                    guard let self, self.voiceID == id else { return }
-                    let label: String
-                    switch state {
-                    case .listening: label = "Listening"
-                    case .speaking: label = "Speaking"
-                    case .ready: label = "Thinking"
-                    case .ended: label = "Ended"
-                    case .failed: label = "Disconnected"
-                    default: label = "Connecting"
+            let session = VoiceSessionClient(
+                baseURL: try JarvisComposition.apiBaseURL(),
+                transport: URLSessionWebSocketTransport(),
+                appLanguage: JarvisAppLanguage(rawValue: language.rawValue) ?? .default,
+                onMessage: { [weak self] message in
+                    Task { @MainActor in self?.receiveVoice(message, id: id) }
+                },
+                onAction: { [weak self] _ in
+                    Task { @MainActor in self?.emit(.init(.interrupt, requestID: id)) }
+                },
+                onStateChange: { [weak self] state in
+                    Task { @MainActor in
+                        guard let self, self.voiceID == id else { return }
+                        let label: String
+                        switch state {
+                        case .listening: label = "Listening"
+                        case .speaking: label = "Speaking"
+                        case .ready: label = "Thinking"
+                        case .ended: label = "Ended"
+                        case .failed: label = "Disconnected"
+                        default: label = "Connecting"
+                        }
+                        self.emit(.init(.voiceState, requestID: id, text: label, muted: self.voiceMuted))
+                        self.liveActivity.update(state: state, isMuted: self.voiceMuted)
                     }
-                    self.emit(.init(.voiceState, requestID: id, text: label, muted: self.voiceMuted))
-                    self.liveActivity.update(state: state, isMuted: self.voiceMuted)
                 }
-            })
+            )
             voice = session; voiceMuted = false
             VoiceLiveActivityActions.session = self
             do { try await session.start(accessToken: token)
