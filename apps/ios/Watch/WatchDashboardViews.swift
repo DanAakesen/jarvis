@@ -247,6 +247,7 @@ struct WatchDashboardHeading: View {
 }
 
 struct WatchDashboardSection<Content: View>: View {
+    @ScaledMetric(relativeTo: .caption2) private var seeMoreFontSize: CGFloat = 10
     let title: String
     let route: WatchRoute
     let content: Content
@@ -260,7 +261,7 @@ struct WatchDashboardSection<Content: View>: View {
                 Spacer(minLength: 0)
                 NavigationLink(value: route) {
                     Text("See more")
-                        .font(.system(size: 10, relativeTo: .caption2))
+                        .font(.system(size: seeMoreFontSize))
                         .underline()
                         .foregroundStyle(WatchStyle.amber)
                         .frame(minHeight: 32)
