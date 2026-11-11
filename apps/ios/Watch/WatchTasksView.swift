@@ -19,6 +19,9 @@ struct WatchTasksView: View {
     private var groups: JarvisTodayTaskLists {
         .init(tasks: tasks, today: taskDay ?? JarvisTodayTaskLists.dayKey(Date()))
     }
+    private var undated: [VaultTask] {
+        JarvisNotesLogic.taskGroups(tasks, today: taskDay ?? JarvisTodayTaskLists.dayKey(Date())).noDate
+    }
     private var visible: [VaultTask] { tab == .today ? groups.today : groups.upcoming }
     private var tabCounts: [Tab: String] {
         guard !loading, failure == nil, connection.reachable else { return [:] }
@@ -38,20 +41,19 @@ struct WatchTasksView: View {
                     Button("Retry") { Task { await load() } }
                 }.listRowBackground(Color.clear)
             }
-            if !loading && failure == nil && visible.isEmpty && !hasMore {
+            if !loading && failure == nil && visible.isEmpty && !hasMore && (tab == .today || undated.isEmpty) {
                 Text(tab == .today ? "No open tasks due today" : "No upcoming tasks")
                     .foregroundStyle(.secondary).listRowBackground(Color.clear)
             }
             ForEach(visible) { task in
-                NavigationLink {
-                    WatchTaskDetailView(task: task, today: taskDay) { changed in
-                        replace(changed)
-                        Task { await load(); await connection.refresh() }
+                taskRow(task)
+            }
+            if tab == .upcoming && !undated.isEmpty {
+                Section("No due date") {
+                    ForEach(undated) { task in
+                        taskRow(task)
                     }
-                } label: { WatchPersonalTaskRow(task: task, today: taskDay) }
-                    .buttonStyle(.plain)
-                    .accessibilityHint("Opens task details")
-                    .listRowBackground(Color.clear)
+                }
             }
             if hasMore {
                 if visible.isEmpty {
@@ -86,6 +88,18 @@ struct WatchTasksView: View {
         )) {
             if let task = previewDetail { WatchTaskDetailView(task: task, today: taskDay) { replace($0) } }
         }
+    }
+
+    private func taskRow(_ task: VaultTask) -> some View {
+        NavigationLink {
+            WatchTaskDetailView(task: task, today: taskDay) { changed in
+                replace(changed)
+                Task { await load(); await connection.refresh() }
+            }
+        } label: { WatchPersonalTaskRow(task: task, today: taskDay) }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens task details")
+            .listRowBackground(Color.clear)
     }
 
     private func replace(_ task: VaultTask) {
