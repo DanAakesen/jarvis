@@ -1,3 +1,11 @@
+## Watch complications and home exploration — 10 November 2026
+
+The owner approved nutrition option 3 and task-list option 1, and selected
+home-phrase option 1 with orange words and body-fat option 1 with a top-left
+title. The two refinements and three new scrollable Watch home directions await
+visual approval. See [design record](docs/ios/design/watch/next-complications-and-home-2026-11-10.md).
+This is a design record, not an implementation or device verification claim.
+
 ## Direct owner requests — 10 November 2026
 
 Task cancellation and recovery, routine/memory deletion, workspace removal, deployment removal and Watch lift deletion act from the selected control. Surface failures and retain busy-state protection. Legacy approval cards and composer buttons do not displace current chat or activity; real task alerts remain visible. Sign-out dialogs stay.
