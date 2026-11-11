@@ -807,23 +807,17 @@ resource sqlDatabase 'Microsoft.Sql/servers/databases@2025-01-01' = {
   parent: sqlServer
   name: 'jarvis'
   location: resourceGroup().location
+  // A small fixed DTU tier: the backend and the 10-minute mirror job keep the database busy, so
+  // serverless never paused and billed vCore time around the clock (about 61 DKK a day).
   sku: {
-    name: 'GP_S_Gen5_1'
-    tier: 'GeneralPurpose'
-    family: 'Gen5'
-    capacity: 1
+    name: 'S0'
+    tier: 'Standard'
   }
   tags: {
     project: 'jarvis'
   }
   properties: {
-    maxSizeBytes: 34359738368
-    autoPauseDelay: 60
-    minCapacity: json('0.5')
-    useFreeLimit: true
-    // Keep running past the free monthly allowance (Dan approved, 6 October; L104). Azure
-    // cannot switch back to AutoPause once BillOverUsage is set.
-    freeLimitExhaustionBehavior: 'BillOverUsage'
+    maxSizeBytes: 10737418240
   }
 }
 

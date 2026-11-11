@@ -5780,9 +5780,10 @@ boundary are described in the camera section below.
 The deployed backend configuration has `minReplicas: 1` / `maxReplicas: 1`;
 this is not a Foundry hosted-agent replica setting. `.github/workflows/deploy.yml`
 sets the hosted Jarvis version's `session_configuration.idle_timeout_seconds` to
-3600 (the 60-minute maximum in [Manage hosted agent sessions](https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-sessions))
-and routes all traffic to the active version. This allows longer session reuse;
-it does not establish an always-warm hosted container.
+120 and routes all traffic to the active version. Hosted sessions bill vCPU and
+memory for their whole lifetime, including the idle timeout, so the timeout is
+kept short; the deploy's live acceptance opens several sessions per run. It does
+not establish an always-warm hosted container.
 
 P9-99 replaces UUIDv5 chat affinity with the voice path's random 32-hex
 `agent_session_id`, sent only in the Invocations query string. A process-local

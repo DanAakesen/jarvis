@@ -682,8 +682,9 @@ or choose finite Job execution for work that cannot fit safely. Neither option
 requires changing sleep settings or enabling always-ready compute.
 
 SQL is the key cost risk: [the current database definition](../infra/main.bicep)
-sets serverless `autoPauseDelay: 60` and `BillOverUsage`. Frequent reads/writes
-can prevent useful idle periods even when worker compute stops. Select batching,
+is a fixed Standard S0 tier, because serverless `autoPauseDelay: 60` never paused
+under frequent reads/writes and billed around the clock. Frequent reads/writes
+still matter for the database size and tier. Select batching,
 cadence and active windows from measured total Job/Function, backend, SQL,
 Foundry/model, storage and monitoring costs. No numerical price, free-operation
 promise or polling interval is selected. Avoid keep-alive checks; close worker
