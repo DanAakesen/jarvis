@@ -34,6 +34,9 @@
   tests, down from about 8,060), plus lint, typecheck and build. Do not add broad test suites
   or UI/simulator tests; the iOS simulator run is no longer a pull-request gate. Fix bugs
   after they are seen in use. Decision: `docs/decisions.md`, 2026-11-11.
+- **Voice prompt.** The realtime voice path builds its instructions in
+  `apps/backend/src/voice/realtime.ts` and uses `voiceCapabilityInstructions`; chat and the hosted
+  agent use the full `capabilityInstructions`. Decision: `docs/decisions.md`, 2026-11-12.
 - **Native validation changed.** The iOS Simulator workflow, the `JarvisUITests` target and the
   UI test and screenshot evidence are removed. The older instructions below that require the
   separate iOS Simulator workflow or select `JarvisUITests` (see "Exact-final-head

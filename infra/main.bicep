@@ -165,65 +165,6 @@ resource alertActionGroup 'Microsoft.Insights/actionGroups@2023-01-01' = {
   }
 }
 
-var appAlertTypes = [
-  'deployment_failure'
-  'sandbox_crash'
-  'credential_expiry'
-]
-
-resource appAlertRules 'Microsoft.Insights/scheduledQueryRules@2023-12-01' = [for alertType in appAlertTypes: {
-  name: 'jarvis-${alertType}'
-  location: resourceGroup().location
-  tags: {
-    project: 'jarvis'
-  }
-  kind: 'LogAlert'
-  properties: {
-    displayName: 'Jarvis ${replace(alertType, '_', ' ')}'
-    description: 'One stateful notification for each distinct Jarvis alert condition.'
-    enabled: true
-    evaluationFrequency: 'PT5M'
-    windowSize: 'PT10M'
-    severity: 2
-    autoMitigate: true
-    scopes: [
-      logAnalytics.id
-    ]
-    criteria: {
-      allOf: [
-        {
-          query: replace('''
-            AppTraces
-            | where TimeGenerated >= ago(10m)
-            | where Message == "jarvis.alert"
-            | extend alertType = tostring(Properties.alertType), alertKey = tostring(Properties.alertKey)
-            | where alertType == "__ALERT_TYPE__"
-            | summarize alertCount = count() by alertKey
-          ''', '__ALERT_TYPE__', alertType)
-          timeAggregation: 'Total'
-          metricMeasureColumn: 'alertCount'
-          operator: 'GreaterThan'
-          threshold: 0
-          dimensions: [
-            {
-              name: 'alertKey'
-              operator: 'Include'
-              values: [
-                '*'
-              ]
-            }
-          ]
-        }
-      ]
-    }
-    actions: {
-      actionGroups: [
-        alertActionGroup.id
-      ]
-    }
-  }
-}]
-
 resource budgetReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(resourceGroup().id, backendIdentity.id, costManagementReaderRoleId)
   scope: resourceGroup()

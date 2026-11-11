@@ -75,19 +75,10 @@ authentication logs are added to deployment output.
 
 ## Application alerts
 
-The three scheduled-query rules match `jarvis.alert` traces whose
-`Properties.alertType` is `credential_expiry`, `deployment_failure` or
-`sandbox_crash`, matching the backend emitter. Bicep multi-line strings do not
-interpolate: each rule uses `replace()` to insert its type into the query.
-Infrastructure CI rejects compiled alert queries containing literal `${`.
-The backend also records `budget_threshold`; budget notifications use the
-separate Azure Consumption budget resource, not these three trace rules.
-
-Once deployed, this correction may notify the existing action group for alerts
-that were previously silent. After the normal Deploy, read back each
-`jarvis-<alertType>` rule in Azure Monitor and confirm its query contains
-`alertType == "<alertType>"` with the corresponding type and no `${`.
-Offline build/lint does not verify deployed rules or email delivery.
+The three `jarvis.alert` log-alert rules (credential expiry, deployment failure,
+sandbox crash) were removed on 11 November 2026 to save about 25 DKK a month.
+Only the email action group and the budget notifications remain; the backend
+still writes `jarvis.alert` traces to the logs.
 
 ## Required deployment inputs
 
