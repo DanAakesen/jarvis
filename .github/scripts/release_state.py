@@ -310,12 +310,15 @@ def record() -> int:
             components["backend"]["state"] = "applied"
     expected = {"plan", *PARTS, "smoke", "acceptance"}
     superseded = bool(plan and plan["superseded"])
+    # Live acceptance spends money, so it only runs by hand; a skipped run is "not run", not a failure.
+    acceptance_not_run = results.get("acceptance", {}).get("result") == "skipped"
     accepted = (
         set(results) == expected and results["plan"]["result"] == "success" and not superseded
         and all(item.get("state") in {"applied", "reused"} for item in components.values())
         and all(results[key]["result"] == ("success" if plan["selected"][key] else "skipped")
                 for key in PARTS)
-        and all(results[key]["result"] == "success" for key in ("smoke", "acceptance"))
+        and results["smoke"]["result"] == "success"
+        and (results["acceptance"]["result"] == "success" or acceptance_not_run)
     )
     statuses = {"success", "failure", "cancelled", "skipped"}
     receipt = {
@@ -337,10 +340,13 @@ def record() -> int:
     if smoke.exists() and smoke.stat().st_size <= 65536:
         from smoke_reasons import report_ok, safe_report
         receipt["acceptance"] = safe_report(json.loads(smoke.read_text(encoding="utf-8")))
-    if accepted and ("acceptance" not in receipt or not report_ok(receipt["acceptance"])):
+    if accepted and not acceptance_not_run and (
+            "acceptance" not in receipt or not report_ok(receipt["acceptance"])):
         receipt["accepted"] = accepted = False
     receipt["acceptance_evidence"] = (
-        "retained" if "acceptance" in receipt else "unavailable; inspect failing pipeline step ID"
+        "retained" if "acceptance" in receipt
+        else "not run; live acceptance is manual only" if acceptance_not_run
+        else "unavailable; inspect failing pipeline step ID"
     )
     Path("release-evidence.json").write_text(json.dumps(receipt, indent=2), encoding="utf-8")
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:

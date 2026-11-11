@@ -5782,8 +5782,8 @@ this is not a Foundry hosted-agent replica setting. `.github/workflows/deploy.ym
 sets the hosted Jarvis version's `session_configuration.idle_timeout_seconds` to
 120 and routes all traffic to the active version. Hosted sessions bill vCPU and
 memory for their whole lifetime, including the idle timeout, so the timeout is
-kept short; the deploy's live acceptance opens several sessions per run. It does
-not establish an always-warm hosted container.
+kept short and the deploy's live conversation acceptance runs only when started by hand (the
+`live_acceptance` input of the Deploy workflow). It does not establish an always-warm hosted container.
 
 P9-99 replaces UUIDv5 chat affinity with the voice path's random 32-hex
 `agent_session_id`, sent only in the Invocations query string. A process-local
