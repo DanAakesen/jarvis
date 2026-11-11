@@ -7,11 +7,12 @@ struct JarvisTodayScreen: View {
     private enum Tab: Hashable { case today, due }
 
     private enum Sheet: Identifiable {
-        case task, note, workout, lift
+        case task, taskDetail(VaultTask), note, workout, lift
 
         var id: String {
             switch self {
             case .task: "task"
+            case .taskDetail(let task): "task.detail.\(task.id)"
             case .note: "note"
             case .workout: "workout"
             case .lift: "lift"
@@ -259,6 +260,10 @@ struct JarvisTodayScreen: View {
                 .listRowInsets(agendaInsets)
             }
         } else {
+            let tasks = visibleRows.compactMap { row -> VaultTask? in
+                if case .task(let task) = row { return task }
+                return nil
+            }
             ForEach(Array(visibleRows.prefix(expansion.visible).enumerated()), id: \.element.id) { index, row in
                 let shape = UnevenRoundedRectangle(
                     topLeadingRadius: index == 0 ? JarvisDesignTokens.surfaceRadius : 0,
@@ -268,16 +273,26 @@ struct JarvisTodayScreen: View {
                 )
                 Group {
                     switch row {
-                    case .entry(let entry): calendarRow(entry)
-                    case .task(let task): taskRow(task)
+                    case .entry(let entry):
+                        calendarRow(entry)
+                            .jarvisListRow(separator: index < expansion.visible - 1)
+                            .background(.regularMaterial, in: shape)
+                            .clipShape(shape)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(agendaInsets)
+                    case .task(let task):
+                        let taskIndex = tasks.firstIndex(where: { $0.id == task.id }) ?? 0
+                        taskRow(
+                            task,
+                            isFirst: taskIndex == 0,
+                            isLast: taskIndex == tasks.count - 1
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 16))
                     }
                 }
-                .jarvisListRow(separator: index < expansion.visible - 1)
-                .background(.regularMaterial, in: shape)
-                .clipShape(shape)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .listRowInsets(agendaInsets)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                     if case .task(let task) = row {
                         Button {
@@ -424,29 +439,18 @@ struct JarvisTodayScreen: View {
         }
     }
 
-    private func taskRow(_ task: VaultTask) -> some View {
-        HStack(alignment: .top, spacing: JarvisPageHeaderMetrics.spacing) {
-            agendaIcon("checklist")
-            VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                Text(JarvisTaskTitle.formatted(task.text)).font(.body)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let due = dueText(task) {
-                    Text(due)
-                        .font(.footnote)
-                        .foregroundStyle(isOverdue(task) ? JarvisDesignTokens.primaryAccent : Color.secondary)
-                }
-            }
-            Spacer(minLength: 0)
-            if pendingTaskIDs.contains(task.id) { JarvisLoadingView(size: .inline) }
-        }
-        .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(copy(.newTask)): \(JarvisTaskTitle.plain(task.text))")
-        .accessibilityValue(pendingTaskIDs.contains(task.id) ? copy(.saving) : (dueText(task) ?? ""))
-        .accessibilityAction(named: Text(copy(.markDone))) {
-            Task { await completeTask(task) }
-        }
-        .accessibilityIdentifier("today.task.\(task.id)")
+    private func taskRow(_ task: VaultTask, isFirst: Bool, isLast: Bool) -> some View {
+        JarvisTaskListRow(
+            task: task,
+            copy: JarvisNotesCopy(language: language),
+            today: model.taskData.value?.today ?? "",
+            isWorking: pendingTaskIDs.contains(task.id),
+            isFirst: isFirst,
+            isLast: isLast,
+            accessibilityPrefix: "today.task",
+            onComplete: { Task { await completeTask(task) } },
+            onOpen: { sheet = .taskDetail(task) }
+        )
     }
 
     private func completeTask(_ task: VaultTask) async {
@@ -468,18 +472,6 @@ struct JarvisTodayScreen: View {
             }
             taskCompletionFailed = true
         }
-    }
-
-    private func isOverdue(_ task: VaultTask) -> Bool {
-        guard let due = task.dueDate, let today = model.taskData.value?.today else { return false }
-        return due < today
-    }
-
-    private func dueText(_ task: VaultTask) -> String? {
-        guard let due = task.dueDate else { return nil }
-        if isOverdue(task) { return copy(.overdue) + " · " + due }
-        if let time = task.dueTime { return due + " " + time }
-        return tab == .due ? due : task.dueTime
     }
 
     private func expandButton(
@@ -735,6 +727,21 @@ struct JarvisTodayScreen: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
+        case .taskDetail(let task):
+            JarvisTaskDetailSheet(
+                task: task,
+                today: model.taskData.value?.today ?? "",
+                copy: JarvisNotesCopy(language: language),
+                client: model.notesClient,
+                onComplete: { Task { await completeTask(task) } },
+                onSaved: {
+                    sheet = nil
+                    successConfirmation = JarvisSuccessConfirmation(message: JarvisNotesCopy(language: language).saved)
+                    Task { await model.refreshTasks() }
+                }
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         case .note:
             if let client = model.notesClient {
                 JarvisNewNoteSheet(

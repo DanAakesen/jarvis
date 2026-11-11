@@ -74,6 +74,7 @@ struct JarvisNotesCopy {
     var conflict: String { text(.conflict) }
     var reload: String { text(.reload) }
     var titleField: String { text(.titleField) }
+    var edit: String { text(.edit) }
     var folderField: String { text(.folderField) }
     var priority: String { text(.priority) }
     var source: String { text(.source) }
@@ -899,48 +900,21 @@ struct JarvisNotesArea: View {
     }
 
     private func taskDetail(_ task: VaultTask, today: String) -> some View {
-        JarvisForm {
-            Section {
-                Text(JarvisTaskTitle.formatted(task.text)).font(.headline)
+        JarvisTaskDetailSheet(
+            task: task,
+            today: today,
+            copy: copy,
+            client: client,
+            onComplete: {
+                openedTask = nil
+                Task { await completeTask(task) }
+            },
+            onSaved: {
+                openedTask = nil
+                successConfirmation = JarvisSuccessConfirmation(message: copy.saved)
+                refreshVersion += 1
             }
-            Section {
-                LabeledContent(copy.scope, value: task.scope == .work ? copy.work : copy.personal)
-                if let due = task.dueDate {
-                    LabeledContent(
-                        copy.dueDate,
-                        value: due == today ? copy.today : JarvisNotesLocalization.formattedDueDate(due, language: copy.language)
-                    )
-                }
-                if let time = task.dueTime {
-                    LabeledContent(
-                        copy.dueTime,
-                        value: JarvisNotesLocalization.formattedDueTime(time, language: copy.language)
-                    )
-                }
-                Text(priorityText(task.priority))
-            }
-            Section {
-                Text(task.path)
-                    .font(.footnote)
-                    .accessibilityIdentifier("notes.task.source.path")
-                if let heading = task.heading, !heading.isEmpty {
-                    Text(heading)
-                        .font(.footnote)
-                        .accessibilityIdentifier("notes.task.source.heading")
-                }
-            } header: {
-                Text(copy.source).foregroundStyle(.primary)
-            }
-            if !task.done {
-                Section {
-                    JarvisLabelledButton(title: copy.complete) {
-                        openedTask = nil
-                        Task { await completeTask(task) }
-                    }
-                }
-            }
-        }
-        .accessibilityIdentifier("notes.task.detail")
+        )
     }
 
     private func stateView(icon: String, title: String, retry: (() -> Void)?) -> some View {
@@ -1236,14 +1210,6 @@ struct JarvisNotesArea: View {
     private func refreshCurrent() {
         if client == nil { onRetryConfiguration() }
         refreshVersion += 1
-    }
-
-    private func priorityText(_ priority: VaultTask.Priority) -> String {
-        switch priority {
-        case .high: copy.priorityHigh
-        case .medium: copy.priorityMedium
-        case .normal: copy.priorityNormal
-        }
     }
 
     private func message(for error: Error) -> String {

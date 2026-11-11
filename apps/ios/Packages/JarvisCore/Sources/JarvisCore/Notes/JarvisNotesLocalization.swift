@@ -64,6 +64,7 @@ public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
     case conflict = "notes.conflict"
     case reload = "notes.reload"
     case titleField = "notes.titleField"
+    case edit = "notes.edit"
     case folderField = "notes.folderField"
     case newFolder = "notes.newFolder"
     case priority = "notes.priority"
