@@ -104,3 +104,10 @@ Reconnect alert: the owner reported the same startup modal again. Main still has
 
 
 [Full steps/reconnect handoff](steps-reconnect-handoff-2026-11-10.md) records exact tested commits, CI, remaining checks and primary ownership. The stable widget kind is preserved; its picker name/description now describe daily steps. [Approved concept](steps-approved-2026-11-10.png) is generated design evidence, not a native capture.
+
+## Task and Home brief review fixes — 11 November 2026
+
+Upcoming includes an undated section using the same task details and actions. Home
+detail shows the full brief and highlights; previews retain the shortened version.
+Linux Swift parsing and all 10 existing Core tests passed. Watch build, localized
+layout, navigation and device interaction remain unverified without Xcode or a Watch.

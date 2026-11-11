@@ -254,7 +254,11 @@ struct WatchHomeBriefView: View {
                 WatchReadState(loading: loading, failure: failure, empty: brief == nil,
                                emptyText: "Your Home brief is unavailable") { Task { await load() } }
                 if let brief {
-                    WatchBriefText(text: brief.text, highlightedTerms: brief.highlights, lines: nil)
+                    WatchBriefText(
+                        text: brief.fullText ?? brief.text,
+                        highlightedTerms: brief.fullText == nil ? brief.highlights : (brief.fullHighlights ?? brief.highlights),
+                        lines: nil
+                    )
                     WatchReadFreshness(date: brief.generatedAt, label: "Generated")
                 }
             }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
