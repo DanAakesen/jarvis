@@ -1,5 +1,7 @@
 ## Watch complications and home exploration — 10 November 2026
 
+Existing Watch Home and complications retain stale values with a compact localized saved-age label instead of replacing them with an expiry message. Installed-device layout and locked display remain unverified.
+
 The owner approved nutrition option 3 and task-list option 1, and selected
 home-phrase option 1 with orange words and body-fat option 1 with a top-left
 title. The two refinements and three new scrollable Watch home directions await
