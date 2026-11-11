@@ -547,6 +547,7 @@ struct JarvisChatScreen: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+        .padding(.vertical, JarvisDesignTokens.chatBubbleVerticalInset)
     }
 
     private func messageText(_ text: String, role: ConversationRole, messageID: String, onTap: (() -> Void)?) -> some View {

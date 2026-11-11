@@ -724,7 +724,9 @@ private struct JarvisSelectionRow<Tag: Hashable>: View {
                         .foregroundStyle(selection == item.tag ? JarvisDesignTokens.primaryAccent : Color.secondary)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, JarvisDesignTokens.labelledHorizontalPadding)
+                        .padding(.horizontal, layout == .period
+                                   ? JarvisDesignTokens.periodSelectorHorizontalInset
+                                   : JarvisDesignTokens.labelledHorizontalPadding)
                         .padding(.vertical, JarvisDesignTokens.labelledVerticalPadding)
                         .frame(
                             minWidth: JarvisDesignTokens.controlMinimumHeight,

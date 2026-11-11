@@ -314,7 +314,8 @@ composer top-corner borders only on mobile with the chat window shown.
 ## Chat bubble readability (#1324; 26 October 2026)
 
 Frost the background behind both speakers' chat bubbles like the Plus menu,
-retaining sharp text, translucency, existing layout and the desktop top-edge fade.
+retaining sharp text, translucency and the desktop top-edge fade.
+Give owner and Jarvis bubbles matching outer vertical breathing room.
 
 ## iPhone Chat screen (P15-10; owner-approved concept, 30 October 2026)
 

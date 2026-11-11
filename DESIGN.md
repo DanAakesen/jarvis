@@ -3470,10 +3470,11 @@ is claimed yet. Reference: the owner's 6 November board screenshot and unchanged
 The owner requests a native glass selected lens and a soft press/rebound across
 all equivalent choice controls. Segmented bars, period selectors and scrolling
 tabs now share one selection row and press style; workspace filter chips opt into
-the same response. Labels use the existing shared horizontal and vertical control
-padding. Period rows scroll when needed instead of squeezing labels against their
-neighbors or edges. Reduce Motion removes custom movement, Reduce Transparency
-uses a solid lens, and selected traits/touch targets remain intact. Section
+the same response. Period choices use a compact horizontal inset while retaining
+44-point targets; scrolling remains contained within the available width. Period
+rows scroll when needed instead of squeezing labels against their neighbors or
+edges. Reduce Motion removes custom movement, Reduce Transparency uses a solid
+lens, and selected traits/touch targets remain intact. Section
 headings use semantic primary text (white in dark mode, dark in light mode),
 including task groups; counts and metadata remain secondary.
 
@@ -3714,11 +3715,12 @@ was uploaded in 42419435807; owner visual and Notes editing acceptance remains p
 ## Chat reply grouping (8 November 2026)
 
 Treat each message's timestamp, reply and completed tool disclosure as one compact
-vertical group. Jarvis's unboxed reply has no bubble padding; the message-detail
-spacing token supplies the gaps around it. Keep the tool disclosure's full touch
-target, leading alignment and expansion behavior, readable paragraph spacing and
-the existing separation between conversation messages. Applies to normal Chat and
-both test runtimes through their shared screen.
+vertical group. Give owner and Jarvis message bubbles matching 4-point outer
+vertical spacing; Jarvis's reply remains unboxed, with its message-detail spacing
+and readable paragraph spacing intact. Keep the tool disclosure's full touch
+target, leading alignment and expansion behavior and the existing separation
+between conversation messages. Applies to normal Chat and both test runtimes through
+their shared screen.
 
 
 The owner reiterates that Thinking/Working/Writing reply/reconnecting feedback is

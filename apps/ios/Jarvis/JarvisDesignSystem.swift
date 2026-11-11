@@ -113,6 +113,7 @@ enum JarvisDesignTokens {
     static let chatHorizontalInset: CGFloat = 16
     static let chatVerticalInset: CGFloat = 12
     static let chatMessageSpacing: CGFloat = 8
+    static let chatBubbleVerticalInset: CGFloat = 4
     static let chatMessageDetailSpacing: CGFloat = 6
     static let chatMessageMaximumWidth: CGFloat = 360
     static let chatComposerPhotoSize: CGFloat = 76
@@ -216,6 +217,7 @@ enum JarvisDesignTokens {
     static let sheetRowMinimumHeight: CGFloat = 40
     static let labelledHorizontalPadding: CGFloat = 16
     static let labelledVerticalPadding: CGFloat = 10
+    static let periodSelectorHorizontalInset: CGFloat = 10
     static let notesGraphNodeRadius: CGFloat = 5
     static let notesGraphEdgeWidth: CGFloat = 1
     static let notesInlineSpacing: CGFloat = 4
