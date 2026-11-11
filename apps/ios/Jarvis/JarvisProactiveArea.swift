@@ -469,6 +469,7 @@ struct JarvisProactiveArea: View {
                         .jarvisListRow(separator: false)
                 }
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("proactive.items")
         }
     }

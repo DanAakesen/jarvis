@@ -35,6 +35,7 @@ struct WatchFactoryTaskEditor: View {
                 .disabled(busy || !draft.isValid || !connection.reachable)
         }.navigationTitle("New task")
         .interactiveDismissDisabled(busy)
+        .watchCaptureReady("new-task")
     }
     private func submit() async {
         guard !busy, connection.reachable else { return }

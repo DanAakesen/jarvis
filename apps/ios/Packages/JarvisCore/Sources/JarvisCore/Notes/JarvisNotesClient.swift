@@ -75,6 +75,21 @@ public struct VaultTask: Codable, Equatable, Sendable, Identifiable {
     public let line: Int
     public let heading: String?
     public let version: String
+    public let notes: String?
+    public let timeZone: String?
+    public let remindAtDue: Bool?
+
+    public init(
+        id: String, text: String, done: Bool, dueDate: String?, dueTime: String?, dueAt: String?,
+        priority: Priority, path: String, line: Int, heading: String?, version: String,
+        notes: String? = nil, timeZone: String? = nil, remindAtDue: Bool? = nil
+    ) {
+        self.id = id; self.text = text; self.done = done
+        self.dueDate = dueDate; self.dueTime = dueTime; self.dueAt = dueAt
+        self.priority = priority; self.path = path; self.line = line
+        self.heading = heading; self.version = version; self.notes = notes; self.timeZone = timeZone
+        self.remindAtDue = remindAtDue
+    }
 
     public enum Priority: String, Codable, Equatable, Sendable {
         case high
@@ -622,11 +637,13 @@ public final class JarvisNotesClient: Sendable {
 
     private static func validTask(_ task: VaultTask) -> Bool {
         Self.validFingerprint(task.id) && Self.validFingerprint(task.version) &&
-            task.text.utf16.count <= 300 && JarvisNotesLogic.validFolder(task.path) &&
+            task.text.unicodeScalars.count <= 400 && JarvisNotesLogic.validFolder(task.path) &&
             (1...1_000_000).contains(task.line) &&
             (task.dueDate.map(validDate) ?? true) &&
             (task.dueTime.map(validTime) ?? true) &&
-            (task.dueAt.map(JarvisNotesLogic.isISODateTime) ?? true)
+            (task.dueAt.map(JarvisNotesLogic.isISODateTime) ?? true) &&
+            (task.notes.map { $0.unicodeScalars.count <= 2_000 } ?? true) &&
+            (task.timeZone.map { $0.utf8.count <= 100 && TimeZone(identifier: $0) != nil } ?? true)
     }
 
     private static func validGraph(_ graph: KnowledgeGraph) -> Bool {

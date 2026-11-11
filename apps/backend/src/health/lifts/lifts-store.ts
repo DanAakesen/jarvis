@@ -232,6 +232,21 @@ export class LiftEntriesStore {
     return { entry: await this.finish(entry, signal), replayed: !created };
   }
 
+  async findByIdempotencyKey(key: string, signal: AbortSignal): Promise<ReturnType<typeof presentLiftWrite> | null> {
+    if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(key)) throw new TypeError('Invalid lift idempotency key');
+    let entry: LiftEntry | null;
+    try {
+      const row = (await run(bindOwner(databaseReadRequest(this.pool), this.owner)
+        .input('idempotencyKey', sql.UniqueIdentifier, key),
+      `SELECT ${rowFields} FROM daily.lift_entries WHERE owner_object_id = @owner AND idempotency_key = @idempotencyKey;`, signal)).recordset[0];
+      entry = row ? decode(row) : null;
+    } catch {
+      if (signal.aborted) throw signal.reason;
+      throw new ToolFailure('Lift save status is unavailable. Retry with the same idempotency key.');
+    }
+    return entry ? this.finish(entry, signal) : null;
+  }
+
   async update(id: string, patch: LiftPatch, signal: AbortSignal): Promise<ReturnType<typeof presentLiftWrite> | null> {
     signal.throwIfAborted();
     const checked = parseLiftPatch(patch);
@@ -303,4 +318,5 @@ export class LiftEntriesStore {
   }
 }
 
-export type LiftEntriesAccess = (request: FastifyRequest) => Pick<LiftEntriesStore, 'history' | 'create' | 'update' | 'delete'>;
+export type LiftEntriesAccess = (request: FastifyRequest) => Pick<LiftEntriesStore, 'history' | 'create' | 'update' | 'delete'> &
+  Partial<Pick<LiftEntriesStore, 'findByIdempotencyKey'>>;

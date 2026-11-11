@@ -216,6 +216,8 @@ public final class JarvisClient: Sendable {
                     throw JarvisClientError.signInRequired
                 case 403:
                     throw JarvisClientError.notOwner
+                case let status where additionalSuccessStatuses.contains(status):
+                    return response
                 case 429:
                     let retryAfter = Self.parseRetryAfter(response.header("Retry-After"))
                     let delayIsBounded = retryAfter.map { $0 <= configuration.retryPolicy.maximumDelay } ?? true
@@ -233,8 +235,6 @@ public final class JarvisClient: Sendable {
                     }
                     throw JarvisClientError.serviceUnavailable
                 case 200..<300:
-                    return response
-                case let status where additionalSuccessStatuses.contains(status):
                     return response
                 default:
                     throw JarvisClientError.httpStatus(response.statusCode)

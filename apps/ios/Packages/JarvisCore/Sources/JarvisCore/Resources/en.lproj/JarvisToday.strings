@@ -14,7 +14,7 @@
 "today.tomorrow" = "Tomorrow";
 "today.overdue" = "Overdue";
 "today.tab.today" = "Today";
-"today.tab.due" = "Tasks due";
+"today.tab.due" = "Upcoming";
 "today.agendaAndTasks" = "Today and tasks due";
 "today.add" = "Add";
 "today.newTask" = "Task";
@@ -23,7 +23,7 @@
 "today.showMore" = "Show %ld more";
 "today.nothingPlanned" = "Nothing planned";
 "today.nothingToday" = "Nothing today";
-"today.nothingDue" = "Nothing due";
+"today.nothingDue" = "No upcoming tasks";
 "today.calendarUnavailable" = "Calendar is not connected to the app yet, so no events are shown. Ask Jarvis in chat for your calendar.";
 "today.tasksUnavailable" = "Tasks unavailable";
 "today.markDone" = "Mark done";
