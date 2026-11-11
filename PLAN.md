@@ -4862,3 +4862,11 @@ Watch build and device interaction checks remain pending.
 ## Watch last-known data repair — 11 November 2026 (#1769)
 
 Watch snapshots now persist in the shared Watch container with after-first-unlock protection and remain visible with their age on refresh failure or expiry. Next: qualify native Watch build, locked-device behavior and complication layouts; Linux cannot run Xcode or a Watch simulator.
+
+## Notification activity status (#1763; 11 November 2026)
+
+Factory board events refresh the iOS activity snapshot, and deliberate proactive
+cancellations no longer become failed background jobs. Task 24 handled #1706;
+the Factory bot reported it Done on 10 November and #1709 was merged. Its current
+production state and the reported failure reasons still need live verification.
+Historical jobs are not rewritten.

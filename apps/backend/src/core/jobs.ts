@@ -54,6 +54,7 @@ export interface BackgroundJobHandle {
   ): Promise<void>;
   setResultDelivery(resultDelivery: BackgroundJobResultDelivery): Promise<void>;
   fail(detail: string): Promise<void>;
+  cancelled(detail: string): Promise<void>;
 }
 
 interface TrackedJob {
@@ -177,6 +178,7 @@ export class BackgroundJobRegistry {
         await this.updateResultDelivery(tracked, resultDelivery);
       },
       fail: async (failDetail) => { await this.update(tracked, { status: 'failed', detail: failDetail }); },
+      cancelled: async (detail) => { await this.update(tracked, { status: 'cancelled', detail }); },
     };
   }
 
