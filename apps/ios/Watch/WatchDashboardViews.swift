@@ -22,10 +22,13 @@ struct WatchDashboardView: View {
                     }
                     if let failure = connection.dashboardError, connection.reachable {
                         Text(failure).font(.caption).foregroundStyle(.secondary)
-                        Button("Retry") { Task { await refresh() } }.disabled(loading)
                     }
                     if !connection.reachable {
-                        Text("Open Jarvis on your iPhone to connect.").font(.caption).foregroundStyle(.secondary)
+                        if connection.connecting {
+                            Text("Connecting to iPhone…").font(.caption).foregroundStyle(.secondary)
+                        } else {
+                            Text("Open Jarvis on your iPhone to connect.").font(.caption).foregroundStyle(.secondary)
+                        }
                     }
                     let snapshot = connection.dashboard
                     Group {
@@ -79,10 +82,6 @@ struct WatchDashboardView: View {
                                 }
                             } else { missing(loading ? "Loading recent notes…" : "Recent notes unavailable") }
                         }.id("notes")
-                    }
-                    if snapshot == nil && !loading && connection.dashboardError == nil {
-                        missing("Dashboard unavailable. Open Jarvis on iPhone, then refresh.")
-                        Button("Refresh") { Task { await refresh() } }
                     }
                 }.padding(.horizontal, 4).padding(.bottom, 22)
             }
