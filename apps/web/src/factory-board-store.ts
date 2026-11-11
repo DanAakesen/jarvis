@@ -41,7 +41,3 @@ export function publishFactoryBoardUpdate(backendUrl: string, value: unknown) {
 export function useFactoryBoardLiveState() {
   return useSyncExternalStore(subscribe, () => state, () => initialState);
 }
-
-export function resetFactoryBoardForTests() {
-  publish(initialState);
-}
