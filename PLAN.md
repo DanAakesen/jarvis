@@ -4863,6 +4863,7 @@ Watch build and device interaction checks remain pending.
 ## Notification activity status (#1763; 11 November 2026)
 
 Factory board events refresh the iOS activity snapshot, and deliberate proactive
-cancellations no longer become failed background jobs. Task 24 is the Factory
-acceptance task for #1706; its current production state and the reported failure
-reasons still need live verification. Historical jobs are not rewritten.
+cancellations no longer become failed background jobs. Task 24 handled #1706;
+the Factory bot reported it Done on 10 November and #1709 was merged. Its current
+production state and the reported failure reasons still need live verification.
+Historical jobs are not rewritten.
