@@ -12,6 +12,7 @@ import type { VoiceTuningSettings } from '@jarvis/contracts';
 import { toolArgumentRefusal, unexpectedToolArgument } from '../core/tool-arguments.js';
 import { classifyApprovalReply } from '../core/approval.js';
 import { startWorkPresentation } from '../core/work-presentation.js';
+import { isVoiceCoreTool, isVoiceToolAllowed, searchVoiceTools, shortenVoiceDescription, VOICE_CALL_TOOL, VOICE_FIND_TOOLS_TOOL } from './voice-tools.js';
 
 export const ENGLISH_REALTIME_MODEL = defaultSettings.roles.voice.model;
 export const ENGLISH_REALTIME_VOICE = 'en-GB-Ryan:DragonHDLatestNeural';
@@ -24,7 +25,7 @@ what I will check or do, without claiming success or giving an ETA. Then use the
 useful result once. Answer direct questions without an unnecessary acknowledgment.`;
 
 export type RealtimeInstructionMode = 'full' | 'compact';
-export type RealtimeCapabilityMode = 'direct' | 'discovery';
+export type RealtimeCapabilityMode = 'direct' | 'discovery' | 'lazy';
 
 const MAX_TOOL_ARGUMENT_BYTES = 65_536;
 const MAX_TOOL_RESULT_BYTES = 1_048_576;
@@ -68,13 +69,50 @@ function voiceCapabilityToolDefinitions() {
   ];
 }
 
-function directToolDefinitions(tools: ToolRegistry) {
-  return tools.list().filter((tool) => isCurrentAssistantTool(tool.name)).map((tool) => ({
-    type: 'function' as const,
-    name: tool.name,
-    description: tool.description,
-    parameters: toModelToolSchema(tool.inputSchema),
-  }));
+function directToolDefinitions(tools: ToolRegistry, coreOnly = false) {
+  return tools.list()
+    .filter((tool) => isCurrentAssistantTool(tool.name) && (!coreOnly || isVoiceCoreTool(tool.name)))
+    .map((tool) => ({
+      type: 'function' as const,
+      name: tool.name,
+      description: coreOnly ? shortenVoiceDescription(tool.description) : tool.description,
+      parameters: toModelToolSchema(tool.inputSchema),
+    }));
+}
+
+const voiceFindToolsSchema = {
+  type: 'object',
+  properties: { query: { type: 'string', minLength: 2, maxLength: 100 } },
+  required: ['query'],
+  additionalProperties: false,
+} as const;
+
+const voiceCallToolSchema = {
+  type: 'object',
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 64 },
+    arguments: { type: 'object', additionalProperties: true },
+  },
+  required: ['name', 'arguments'],
+  additionalProperties: false,
+} as const;
+
+function lazyToolDefinitions(tools: ToolRegistry) {
+  return [
+    ...directToolDefinitions(tools, true),
+    {
+      type: 'function' as const,
+      name: VOICE_FIND_TOOLS_TOOL,
+      description: 'Look up a Jarvis tool that is not listed, by a few keywords. Returns names, descriptions and argument schemas.',
+      parameters: toModelToolSchema(voiceFindToolsSchema),
+    },
+    {
+      type: 'function' as const,
+      name: VOICE_CALL_TOOL,
+      description: 'Run a tool returned by find_tools, using its exact name and arguments that follow its schema.',
+      parameters: toModelToolSchema(voiceCallToolSchema),
+    },
+  ];
 }
 
 const toneDescriptions: Record<Settings['personality']['tone'], string> = {
@@ -170,7 +208,12 @@ ${additionalRealtimeInstructions(
   )}`;
 }
 
-function voiceCapabilityGuidance(language: 'da' | 'en'): string {
+function voiceCapabilityGuidance(language: 'da' | 'en', mode: 'discovery' | 'lazy' = 'discovery'): string {
+  if (mode === 'lazy') {
+    return language === 'da'
+      ? `Kun få værktøjer er opført. Til alt andet: kald find_tools med få nøgleord, og kald derefter call_tool med det præcise navn og argumenter efter det fundne skema. Hvis intet værktøj findes, sig det klart. Dans anmodning giver tilladelse: udfør uden endnu en godkendelse. Backend kontrollerer adgang og argumenter. Bekræft kun det faktiske værktøjsresultat.`
+      : `Only a few tools are listed. For anything else, call find_tools with a few keywords, then call_tool with the exact name and arguments that follow the returned schema. If no tool fits, say so plainly. Dan's request authorizes its scope: execute without another approval. The backend validates access and arguments. Report only actual tool results.`;
+  }
   return language === 'da'
       ? `Brug jarvis_discover_capabilities og derefter jarvis_execute_capability med det fundne skema. Dans anmodning giver tilladelse: udfør uden endnu en godkendelse. Brug samtalens kontekst; spørg kun efter nødvendige manglende oplysninger. Backend kontrollerer adgang og argumenter. Bekræft kun det faktiske værktøjsresultat.`
       : `Use jarvis_discover_capabilities then jarvis_execute_capability with the discovered schema. Dan's request authorizes its scope: execute without another approval. Use conversation context; ask only for essential missing details. The backend validates access and arguments. Report only actual tool results.`;
@@ -364,9 +407,9 @@ export function createRealtimeSessionUpdate(
   return {
     type: 'session.update',
     session: {
-      instructions: `${capabilityMode === 'discovery'
-        ? `${instructions}\n\n${voiceCapabilityGuidance(language)}`
-        : instructions}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call. Earlier refusals in history do not change this channel. Backend permissions still apply. For every meal estimate, show actual returned protein (g), calories (kcal) and fat (g) as a bulleted list; unknown stays unknown. When Dan asks to log an estimate, use health_food_review log_estimate directly without another approval. Questions or previews only require lookup. Never claim a write without a committed tool receipt.`,
+      instructions: `${capabilityMode === 'direct'
+        ? instructions
+        : `${instructions}\n\n${voiceCapabilityGuidance(language, capabilityMode)}`}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call. Earlier refusals in history do not change this channel. Backend permissions still apply. For every meal estimate, show actual returned protein (g), calories (kcal) and fat (g) as a bulleted list; unknown stays unknown. When Dan asks to log an estimate, use health_food_review log_estimate directly without another approval. Questions or previews only require lookup. Never claim a write without a committed tool receipt.`,
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },
@@ -393,7 +436,9 @@ export function createRealtimeSessionUpdate(
         ? { model: transcriptionModel, language: 'da', phrase_list: DANISH_PHRASE_LIST }
         : { model: transcriptionModel },
       voice: { name: danish ? DANISH_REALTIME_VOICE : ENGLISH_REALTIME_VOICE, type: 'azure-standard' },
-      tools: capabilityMode === 'discovery' ? voiceCapabilityToolDefinitions() : directToolDefinitions(tools),
+      tools: capabilityMode === 'discovery'
+        ? voiceCapabilityToolDefinitions()
+        : capabilityMode === 'lazy' ? lazyToolDefinitions(tools) : directToolDefinitions(tools),
       tool_choice: 'auto',
     },
   };
@@ -525,6 +570,11 @@ export function realtimeCapabilityTarget(
   tools: ToolRegistry,
   discoveredCapabilities: Set<string>,
 ): string | undefined {
+  if (call.name === VOICE_CALL_TOOL) {
+    const input = parsedArguments(call);
+    return input && typeof input.name === 'string' && isVoiceToolAllowed(input.name, discoveredCapabilities) &&
+      tools.get(input.name) ? input.name : undefined;
+  }
   if (call.name !== VOICE_CAPABILITY_EXECUTION_TOOL) return undefined;
   const input = parsedArguments(call);
   if (!input || typeof input.capability !== 'string' || !discoveredCapabilities.has(input.capability) ||
@@ -606,6 +656,57 @@ export async function executeRealtimeCapabilityCall(
   }, tools, request, signal, beforeExecute, presentResult);
 }
 
+const MAX_FIND_TOOLS_FULL_RESULTS = 3;
+const MAX_FIND_TOOLS_OTHER_RESULTS = 5;
+
+/**
+ * Lazy voice tools: a small core is advertised directly; any other catalogue tool is looked up with
+ * find_tools and run with call_tool. Both paths end in executeRealtimeToolCall, so validation,
+ * policy, ToolRefusal/ToolFailure mapping and confirmation are the same as for a direct call.
+ */
+export async function executeLazyVoiceToolCall(
+  call: RealtimeFunctionCall,
+  tools: ToolRegistry,
+  request: FastifyRequest,
+  signal: AbortSignal,
+  discoveredCapabilities: Set<string>,
+  beforeExecute?: (tool: NonNullable<ReturnType<ToolRegistry['get']>>, input: unknown, signal: AbortSignal) => Promise<void>,
+  presentResult = true,
+): Promise<string> {
+  const unavailable = (name: string) => toolOutput(name, 'refused', {
+    refused: 'No such tool is available. Use find_tools to look one up, or say plainly that this needs chat. Nothing was executed.',
+  });
+  if (call.name === VOICE_FIND_TOOLS_TOOL) {
+    const input = parsedArguments(call);
+    if (!input || !hasOnlyKeys(input, ['query']) || typeof input.query !== 'string' || input.query.trim().length < 2 ||
+        input.query.length > 100) {
+      return toolOutput(call.name, 'refused', { refused: 'Invalid tool search. Give a few keywords.' });
+    }
+    const matches = searchVoiceTools(tools, input.query);
+    const full = matches.slice(0, MAX_FIND_TOOLS_FULL_RESULTS);
+    for (const tool of full) discoveredCapabilities.add(tool.name);
+    return toolOutput(call.name, 'ok', {
+      tools: full.map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.inputSchema })),
+      otherMatches: matches.slice(MAX_FIND_TOOLS_FULL_RESULTS, MAX_FIND_TOOLS_FULL_RESULTS + MAX_FIND_TOOLS_OTHER_RESULTS)
+        .map((tool) => ({ name: tool.name, description: shortenVoiceDescription(tool.description) })),
+      note: matches.length === 0 ? 'No matching tool. Say plainly that this needs chat.' : undefined,
+    });
+  }
+  if (call.name === VOICE_CALL_TOOL) {
+    const input = parsedArguments(call);
+    if (!input || !hasOnlyKeys(input, ['name', 'arguments']) || typeof input.name !== 'string' ||
+        !/^[A-Za-z0-9_-]{1,64}$/u.test(input.name) || !schemaRecord(input.arguments)) {
+      return toolOutput(call.name, 'refused', { refused: 'Invalid tool request. Nothing was executed.' });
+    }
+    if (!isVoiceToolAllowed(input.name, discoveredCapabilities) || !tools.get(input.name)) return unavailable(input.name);
+    return executeRealtimeToolCall({
+      ...call, name: input.name, arguments: JSON.stringify(input.arguments),
+    }, tools, request, signal, beforeExecute, presentResult);
+  }
+  if (!isVoiceToolAllowed(call.name, discoveredCapabilities)) return unavailable(call.name);
+  return executeRealtimeToolCall(call, tools, request, signal, beforeExecute, presentResult);
+}
+
 export async function executeRealtimeToolCall(
   call: RealtimeFunctionCall,
   tools: ToolRegistry,
@@ -620,7 +721,12 @@ export async function executeRealtimeToolCall(
 
   if (typeof call.arguments !== 'string') return toolFailure(call.name);
   const tool = tools.get(call.name);
-  if (!tool || Buffer.byteLength(call.arguments) > MAX_TOOL_ARGUMENT_BYTES) return toolFailure(call.name);
+  if (!tool) {
+    return toolOutput(call.name, 'refused', {
+      refused: 'No such tool is available. Use find_tools to look one up, or say plainly that this needs chat. Nothing was executed.',
+    });
+  }
+  if (Buffer.byteLength(call.arguments) > MAX_TOOL_ARGUMENT_BYTES) return toolFailure(call.name);
 
   let outcome: ToolCallOutcome = 'ok';
   let result: unknown;

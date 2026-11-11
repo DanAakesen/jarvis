@@ -1,3 +1,16 @@
+## Voice tools and idle close — 12 November 2026
+
+- **Voice loads tools lazily.** A voice session sends 13 core tools plus `find_tools` and
+  `call_tool` (`apps/backend/src/voice/voice-tools.ts`), about 9 KB instead of the full
+  catalogue. Other tools are found by keyword and run through the same dispatcher, so their
+  schemas cost tokens only when used. Chat is not changed and still sends the full catalogue.
+  The Danish route uses the same relay session update; `agents/jarvis/voice_runtime.py` builds
+  no tool list.
+- **Voice closes when idle.** After 10 minutes without user speech, a typed or touch message or
+  a tool call, and after 30 minutes in total, the relay ends the session with the normal
+  `jarvis.session.ended`. `voice.session_summary` carries `endReason` (`inactivity` or
+  `max_duration`). Decision: `docs/decisions.md`, 2026-11-12.
+
 ## Test policy and Azure cost — 11 November 2026
 
 - **Tests are a minimal safety net.** Only authorization, secrets and redaction, database
