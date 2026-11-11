@@ -20,7 +20,7 @@ describe('tool lookup', () => {
         tool('workspace_command', 'Control Jarvis windows and pages.', heavy),
       ],
     }]);
-    const advertised = createRealtimeSessionUpdate(registry, undefined, undefined, 'en', [], undefined, undefined,
+    const advertised = createRealtimeSessionUpdate(registry, undefined, undefined, [], undefined, undefined,
       undefined, 'full', undefined, 'lazy').session.tools as { name: string }[];
     expect(advertised.map(({ name }) => name)).toEqual(['find_tools', 'call_tool']);
     expect(Buffer.byteLength(JSON.stringify(advertised))).toBeLessThan(1_500);

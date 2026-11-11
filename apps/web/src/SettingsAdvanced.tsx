@@ -238,15 +238,7 @@ export function VoiceTuningFields({ voice, problems, disabled, onChange }: {
   return (
     <div className="advanced-group">
       <h3>Listening and replies</h3>
-      <RangeField id="voice-vad" label="Speech detection sensitivity" value={voice.serverVadThreshold} min={0} max={1} step={0.05}
-        disabled={disabled} onChange={(value) => onChange('serverVadThreshold', value)} low="Hears more" high="Ignores noise" />
       <div className="settings-grid">
-        <NumberField id="voice-silence" label="Pause before Jarvis replies" unit="ms" value={voice.silenceDurationMs}
-          min={bounds.voice.silenceDurationMs.minimum} max={bounds.voice.silenceDurationMs.maximum}
-          problem={problems['voice.silenceDurationMs']} disabled={disabled} onChange={(value) => onChange('silenceDurationMs', value)} />
-        <NumberField id="voice-padding" label="Audio kept before speech" unit="ms" value={voice.prefixPaddingMs}
-          min={bounds.voice.prefixPaddingMs.minimum} max={bounds.voice.prefixPaddingMs.maximum}
-          problem={problems['voice.prefixPaddingMs']} disabled={disabled} onChange={(value) => onChange('prefixPaddingMs', value)} />
         <NumberField id="voice-reply-tokens" label="Longest spoken reply" unit="tokens" value={voice.maxSpokenReplyTokens}
           min={bounds.voice.maxSpokenReplyTokens.minimum} max={bounds.voice.maxSpokenReplyTokens.maximum}
           problem={problems['voice.maxSpokenReplyTokens']} disabled={disabled} onChange={(value) => onChange('maxSpokenReplyTokens', value)} />

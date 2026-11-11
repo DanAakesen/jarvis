@@ -53,11 +53,9 @@ struct JarvisSettingsEditorView: View {
             ]
         case .voice:
             return [
-                choice("voice.defaultLanguage", .defaultLanguage, response?.options["languages"]?.arrayValues ?? []),
                 choice("voice.speechToTextModel", .speechToText, response?.options["speechToTextModels"]?.arrayValues ?? []),
                 choice("voice.englishModel", .englishModel, response?.options["englishModels"]?.arrayValues ?? []),
                 choice("voice.englishVoice", .englishVoice, response?.options["englishVoices"]?.arrayValues ?? []),
-                choice("voice.danishVoice", .danishVoice, response?.options["danishVoices"]?.arrayValues ?? []),
             ]
         case .research:
             return [

@@ -180,9 +180,12 @@ cyan-rimmed orb reserves its space; its orange/amber centre animates in place,
 more actively when listening or speaking, without overlapping the status.
 Voice status, controls and recovery copy support Danish and English; Reduced
 Motion keeps the centre still.
-Language follows the existing `voice.default_language`
-setting, defaulting to Danish. Microphone capture and speaker playback use the
-existing voice socket contract; speaking over playback interrupts it immediately.
+Voice uses the single authenticated `/voice` route for both languages. The
+`gpt-realtime-2.1` model and shared prompt follow the language Dan speaks, with
+Azure Speech transcription detecting it automatically. The saved chat-language
+choice remains available for chat; it does not select a voice route. Microphone
+capture and speaker playback use the existing voice socket contract; speaking
+over playback interrupts it immediately.
 Camera inspection and screen sharing reuse the web app's existing vision and
 voice-context routes. Denied microphone permission offers a path to Settings.
 Face ID locking is separate; background audio, Bluetooth and route changes, call
@@ -1029,13 +1032,12 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 
 | Area | Setting | Default |
 | --- | --- | --- |
-| Jarvis | Model and reasoning effort | `gpt-6.1-terra` when deployed, otherwise the existing `gpt-5.6-luna`; reasoning `none` (chat and hosted Danish fallback); voice role `gpt-realtime-2.1` (Danish and English Voice Live) |
+| Jarvis | Model and reasoning effort | `gpt-6.1-terra` when deployed, otherwise the existing `gpt-5.6-luna`; reasoning `none` (chat); voice role `gpt-realtime-2.1` for both languages |
 | Appearance | Light, dark, or system mode; approved theme tokens | Light |
 | Identity and role | Shared owner description for chat and voice (up to 2,000 characters) | Broad personal AI assistant |
 | Personality | Tone, response style, base custom instructions, and per-mode instructions (each up to 2,000 characters) | Courteous British-butler tone, concise, no custom instructions |
-| Voice | Speech to text | MAI Transcribe |
-| Voice | Voice per language | English: Ryan HD (British English, may address Dan as "sir"); Danish: Jeppe (`da-DK-JeppeNeural`, native male; live since P5-08) |
-| Voice | Default language | Danish |
+| Voice | Speech to text | Azure Speech with automatic language detection |
+| Voice | Spoken voice | Ryan HD (British English); the realtime model follows the spoken language |
 | Voice | Minimise all windows when starting voice | Off |
 | Global | Screen inspections per day | 300 (configurable from 1 to 300) |
 | Codex | Model and reasoning effort | Codex default |
@@ -1047,19 +1049,18 @@ Presence has three modes: Present (`present`, green), Away (`away`, yellow), and
 GPT-6.1 Terra main-chat preparation (#1337) preserves saved model choices. Changing
 the code default does not replace Dan's saved `roles.chat.model` or legacy
 `jarvis.model`; rollout must inspect that effective setting and update only chat
-through Settings after deployment. Active session choices remain intact. Danish
-`/voice/da` uses the realtime voice role when `options.connect` is configured;
-only the `connectDanish` hosted-agent fallback inherits chat settings. Separate
-voice, vision, research, coding and image-generation defaults are unchanged.
+through Settings after deployment. Active session choices remain intact. English
+and Danish speech use the same `/voice` route, realtime voice role and prompt.
+Separate vision, research, coding and image-generation defaults are unchanged.
 The template requests capacity 150 through the normal authenticated deployment
 path; actual allocation and live acceptance remain unverified. Dan accepts the
 existing budget alerts with USD 20/month authorized for Terra; no new spending
 guard or other role change is part of this work.
 
-English voice sessions use Ryan HD and the British butler persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
+Voice sessions use Ryan HD and the shared persona. The backend owns the realtime session and executes registered tools; the browser never executes tool calls or supplies their results. Jarvis relays the backend-built confirmation for successful, refused, and failed actions.
 
 Browser voice uses the same canonical backend tool registry and execution policy
-for Danish and English. Voice Live first advertises every configured tool with
+for either spoken language. Voice Live first advertises every configured tool with
 its validated schema. If that bounded startup attempt fails, a second attempt
 advertises only paged capability discovery and execution functions; discovery
 reads the same registry, and dispatch still enters the existing validator,
@@ -1071,19 +1072,19 @@ fail explicitly rather than silently truncating the catalogue.
 Each Voice Live startup attempt uses a fresh socket and a six-second
 `session.updated` deadline. The process remembers the last acknowledged
 representation for reconnects. If both attempts fail, the relay closes with
-code 4010 and the browser uses its existing retry backoff. The hosted Danish
-voice-agent fallback retains its provider-owned setup and `session.created`
-readiness path. No background tool-budget probes run. Provider acceptance and
-real browser audio still require an owner attempt after deployment.
+code 4010 and the browser uses its existing retry backoff. No hosted voice-agent
+fallback or background tool-budget probes run. Provider acceptance and real
+browser audio still require an owner attempt after deployment.
 
-During an English voice session, Jarvis announces task completion, tasks needing attention, ready pull requests, and failed deployments. The backend merges bursts and waits until Dan is no longer speaking or Jarvis has finished its current response. Announcements use fixed, short wording rather than task titles, messages, or logs. `get_status_summary` answers status questions with aggregate counts from the Now feed.
+During voice sessions, Jarvis announces task completion, tasks needing attention, ready pull requests, and failed deployments. The backend merges bursts and waits until Dan is no longer speaking or Jarvis has finished its current response. Announcements use fixed, short wording rather than task titles, messages, or logs. `get_status_summary` answers status questions with aggregate counts from the Now feed.
 
-Danish voice uses the authenticated backend `/voice/da` WebSocket to the
-backend-owned Voice Live realtime session, with Jeppe (`da-DK-JeppeNeural`).
-Settings shows Jeppe as read-only: the stored preference does not select the
-live voice. A retired Harper preference remains loadable and resolves to
-Jeppe without changing storage. The provisioned hosted-agent bridge remains
-a fallback when Voice Live is not configured.
+English and Danish speech use the authenticated backend `/voice` WebSocket,
+the `gpt-realtime-2.1` deployment, Ryan HD and the shared prompt. Azure Speech
+transcription does not pin a language. A voice session opens with a brief
+greeting in the app language (Danish for `da`, English otherwise), then follows
+the spoken language. The former hosted agent
+`jarvis-voice-mai`, MAI Transcribe and MAI Voice deployments are unused; they
+are not deleted by this code change and require later manual Azure cleanup.
 
 Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity.
 
@@ -1553,11 +1554,11 @@ the last-release field is explicitly unavailable rather than inferred.
 | Data points | Actions |
 | --- | --- |
 | Appearance: light or dark mode across all signed-in pages | Change; persist across visits |
-| Jarvis: model and reasoning (chat and hosted Danish fallback); voice-role model for Danish and English Voice Live | Change (applies to new sessions) |
+| Jarvis: model and reasoning (chat); voice-role model for the shared English/Danish route | Change (applies to new sessions) |
 | Appearance: light/dark/system and approved theme tokens | Change (persisted across visits) |
 | Identity and role: shared description (up to 2,000 characters), distinct from tone/style | Change; apply to active voice after provider acknowledgement, otherwise reconnect |
 | Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset; preserves the separate identity description |
-| Voice: speech-to-text model, English voice, fixed Danish voice (Jeppe), default language, minimise windows on voice start (off by default) | Change supported preferences; Danish voice is read-only |
+| Voice: speech-to-text model, shared voice, minimise windows on voice start (off by default) | Change supported preferences |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
 | Projects: defaults for new projects (owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch) | Change in the Projects section. The policy default only pre-fills projects Jarvis registers later; every project keeps its own policy and can be changed any time. |

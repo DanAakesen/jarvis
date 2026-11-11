@@ -8,7 +8,7 @@
 "chat.plus.disableVideo" = "Slå video fra";
 "chat.plus.shareScreen" = "Del skærm";
 "chat.plus.stopSharingScreen" = "Stop skærmdeling";
-"chat.plus.voiceLanguage" = "Stemmesprog";
+"chat.plus.chatLanguage" = "Chatsprog";
 "chat.plus.danish" = "Dansk";
 "chat.plus.english" = "Engelsk";
 "chat.plus.takePhoto" = "Tag foto";
@@ -25,8 +25,8 @@
 "chat.plus.voiceSettingsUnavailable" = "Stemmeindstillinger er deaktiveret i eksempeldata.";
 "chat.plus.removeAttachmentHint" = "Fjern en vedhæftning for at tilføje en ny.";
 "chat.plus.chatBusyHint" = "Vent, indtil Jarvis er færdig.";
-"chat.plus.voiceLanguageLoadFailed" = "Det gemte stemmesprog kunne ikke hentes. Viser dansk.";
-"chat.plus.voiceLanguageUpdateFailed" = "Stemmesproget kunne ikke gemmes. Prøv igen.";
+"chat.plus.chatLanguageLoadFailed" = "Det gemte chatsprog kunne ikke hentes. Viser dansk.";
+"chat.plus.chatLanguageUpdateFailed" = "Chatsproget kunne ikke gemmes. Prøv igen.";
 "chat.plus.cancel" = "Annuller";
 "chat.plus.screenShareTitle" = "Del skærm";
 "chat.plus.screenShareInstructions" = "Vælg Start udsendelse for at dele din skærm med Jarvis.";
@@ -36,7 +36,7 @@
 "chat.plus.cameraPermissionDenied" = "Giv Jarvis adgang til kameraet i Indstillinger.";
 "chat.plus.cameraFrameUnavailable" = "Kamerabilledet er ikke tilgængeligt endnu.";
 "chat.plus.screenFrameUnavailable" = "Skærmbilledet er ikke tilgængeligt endnu.";
-"chat.plus.menuHint" = "Åbn værktøjer til kamera, filer, video, skærmdeling og stemmesprog.";
+"chat.plus.menuHint" = "Åbn værktøjer til kamera, filer, video, skærmdeling og chatsprog.";
 "chat.done" = "Færdig";
 "chat.screenShareStarting" = "Starter skærmdeling…";
 "chat.screenShareLive" = "Du deler din skærm med Jarvis.";

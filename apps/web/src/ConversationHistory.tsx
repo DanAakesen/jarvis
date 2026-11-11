@@ -1409,8 +1409,6 @@ export function ConversationHistory({
         config={config}
         {...(screenShare ? { screenShare } : {})}
         {...(camera ? { camera } : {})}
-        language={language}
-        onLanguageChange={setLanguage}
         onActiveChange={updateVoiceActive}
         onStartAvailable={registerVoiceStart}
         onSessionEnded={() => {

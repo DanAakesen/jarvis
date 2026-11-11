@@ -131,10 +131,9 @@ validated settings write path and returns the saved model for the next session.
 The regression test covers the persisted model-only update and both readbacks;
 the hosted-agent regression preserves an explicit session model. Do not claim
 activation from the code fallback alone. Do not rewrite stored settings globally
-or replace explicit session models. Danish `/voice/da` uses the realtime voice
-role when `options.connect` is configured; only the `connectDanish` hosted-agent
-fallback inherits chat settings on its next session. The voice-role default
-remains unchanged.
+or replace explicit session models. English and Danish speech use the same
+authenticated `/voice` route and realtime voice role; the spoken language does
+not select a model or route.
 If the saved effort is `minimal`, the model-only update is refused: resolve a
 supported effort with the owner rather than silently changing it.
 Existing approval interpretation and proactive summarization also read the chat

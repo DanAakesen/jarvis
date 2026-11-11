@@ -1003,13 +1003,11 @@ Outside touch blurs only Message Jarvis, without cancelling the tap.
 Do not animate keyboard fitting or treat pinch zoom as keyboard space.
 Controlled actual-component Chromium checks are not physical Safari proof.
 
-## Fixed Danish voice in Settings (13 October 2026)
+## Unified bilingual voice (12 November 2026)
 
-The Voice section shows **Jeppe (Danish)** in a labelled read-only field.
-Reuse the existing Settings grid, field styling and collapsible section.
-There is no selectable Danish voice, new animation or additional save action.
-Legacy Harper payloads still display the actual live voice without dirtying
-the form.
+Voice has one authenticated route and uses the existing realtime model and shared
+prompt for English and Danish speech. Do not add a voice-language or route picker.
+The composer keeps its separate Danish/English chat-language choice.
 
 ## Remaining UI release (13 October 2026)
 
@@ -2012,7 +2010,7 @@ P9-87/#714, separate from #713's deployed upload-only input. #1265 separately
 requests a compact preview and attachment-menu ordering without changing that
 camera input contract.
 
-- **Camera input evidence (11 October; local UI, deployed backend contract):** backend-reported image/caption input uses ordinary muted body text on Dan's matching chat bubble and the existing dismissible voice toast. It is not a new heading, badge or composer row; preview Live still means local playback only. Missing legacy evidence stays unlabelled, and invalid evidence has visible failure copy rather than an image claim. Voice ignores stale, duplicate and uncorrelated evidence, including after camera replacement/reconnect. Synthetic Chromium checks image-reported and caption-only desktop/320px touch/reduced-motion phone states in both voice languages; they do not prove model image access. The phone preview lets its picture shrink before controls/limit copy, with scrolling for constrained heights, so an open transcript cannot clip recovery text. #704/#706 are deployed with chat and EN/DA realtime image paths; hosted DA fallback remains caption-only, and actual model image acceptance is unverified. Final-shape synthetic 32-character handles also pass desktop/phone caption-only and recovery workflows; forwarding a handle never changes the evidence label by itself.
+- **Camera input evidence (11 October; local UI, deployed backend contract):** backend-reported image/caption input uses ordinary muted body text on Dan's matching chat bubble and the existing dismissible voice toast. It is not a new heading, badge or composer row; preview Live still means local playback only. Missing legacy evidence stays unlabelled, and invalid evidence has visible failure copy rather than an image claim. Voice ignores stale, duplicate and uncorrelated evidence, including after camera replacement/reconnect. Synthetic Chromium checks image-reported and caption-only desktop/320px touch/reduced-motion phone states in both voice languages; they do not prove model image access. The phone preview lets its picture shrink before controls/limit copy, with scrolling for constrained heights, so an open transcript cannot clip recovery text. #704/#706 are deployed with chat and the shared realtime image path; actual model image acceptance is unverified. Final-shape synthetic 32-character handles also pass desktop/phone caption-only and recovery workflows; forwarding a handle never changes the evidence label by itself.
 
 The existing history-error toast keeps Retry; it now targets the failed
 latest/older page correctly even when messages are already displayed. Synthetic

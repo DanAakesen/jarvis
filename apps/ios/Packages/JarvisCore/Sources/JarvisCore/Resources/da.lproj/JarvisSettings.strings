@@ -77,10 +77,8 @@
 "settings.instructions" = "Tilpassede instruktioner";
 "settings.identityDescription" = "Beskrivelse";
 "settings.showWork" = "Vis arbejdsforløb";
-"settings.defaultLanguage" = "Standardsprog";
 "settings.speechToText" = "Talegenkendelsesmodel";
 "settings.englishVoice" = "Engelsk stemme";
-"settings.danishVoice" = "Dansk stemme";
 "settings.englishModel" = "Engelsk talemodel";
 "settings.researchDepth" = "Researchdybde";
 "settings.maximumSources" = "Maksimalt antal kilder";
