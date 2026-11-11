@@ -1,11 +1,27 @@
-## Voice tools and idle close — 12 November 2026
+## Tool lookup for voice and chat — 12 November 2026
 
-- **Voice loads tools lazily.** A voice session sends 13 core tools plus `find_tools` and
-  `call_tool` (`apps/backend/src/voice/voice-tools.ts`), about 9 KB instead of the full
-  catalogue. Other tools are found by keyword and run through the same dispatcher, so their
-  schemas cost tokens only when used. Chat is not changed and still sends the full catalogue.
+- **No tool schemas are sent on each request.** The voice relay (`apps/backend/src/voice`) and
+  the chat Responses loop (`agents/jarvis/model_client.py`, helpers in `tool_lookup.py`) send
+  only `find_tools(query)` and `call_tool(name, arguments)`, under 1 KB. `find_tools` ranks the
+  backend catalogue by name and description and returns the top matches with their schemas;
+  `call_tool` runs a tool found earlier in the same voice session or chat turn. Chat resolves
+  `call_tool` back to the real tool name before dispatch, effect metadata, replay and calendar
+  logic, so those are unchanged. An unknown or not-yet-found name gets a short refusal that says
+  to call `find_tools` first.
+- **The model learns what exists from a generated index.** `capabilityIndex` in
+  `apps/backend/src/core/capability-index.ts` builds about 15 category lines with example tool
+  names from the registry (capped at 1,500 characters) and adds them to the capability
+  instructions for chat and to the voice instructions.
+- **Trade-off.** The first use of a tool in a session or turn costs one extra model round trip
+  (`find_tools`, then `call_tool`). Chat does not carry discovered tools across turns.
+- **Exceptions.** `ManagedPolicyClient` keeps the full catalogue (`lookup_tools = False`)
+  because its native definition registers it. The chat smoke role keeps its fixed read-only
+  tools. `GET /tools` is unchanged and still supplies names and effect metadata to the agent.
   The Danish route uses the same relay session update; `agents/jarvis/voice_runtime.py` builds
-  no tool list.
+  no tool list, and the hosted voice fallback uses the chat loop.
+
+## Voice idle close — 12 November 2026
+
 - **Voice closes when idle.** After 10 minutes without user speech, a typed or touch message or
   a tool call, and after 30 minutes in total, the relay ends the session with the normal
   `jarvis.session.ended`. `voice.session_summary` carries `endReason` (`inactivity` or
