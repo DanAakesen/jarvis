@@ -58,8 +58,3 @@ function subscribe(listener: () => void) {
 export function useWakeStatus() {
   return useSyncExternalStore(subscribe, () => status, () => status);
 }
-
-export function resetWakeForTests() {
-  status = null;
-  wakeListeners.clear();
-}

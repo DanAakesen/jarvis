@@ -148,38 +148,6 @@ function dismissalIds(body: unknown): string[] {
   return body.dismissedJobIds;
 }
 
-export function resetJobsForTests(clearDismissals = true) {
-  generation += 1;
-  loadController?.abort();
-  mutationController?.abort();
-  mutationController = null;
-  loadController = null;
-  jobs = new Map();
-  snapshot = { jobs: [], error: '' };
-  loaded = false;
-  loading = null;
-  dismissedIds = null;
-  storageError = '';
-  legacyIds = new Set();
-  sessionHeaderHiddenIds = new Set();
-  legacyStorageDirty = false;
-  dismissalError = '';
-  mutation = null;
-  liveRevision = 0;
-  liveRevisions = new Map();
-  visibleIds = new Set();
-  deferredJobs = new Map();
-  refreshCurrent = null;
-  refreshQueued = false;
-  seenJobs = false;
-  if (clearDismissals) {
-    for (const key of Object.keys(localStorage)) {
-      if (key.startsWith(dismissalPrefix)) localStorage.removeItem(key);
-    }
-  }
-  scope = null;
-}
-
 function authorizedJobsRequest(backendUrl: string, path: string, token: string, method: 'GET' | 'POST', signal?: AbortSignal, body?: unknown) {
   return backendFetch(`${backendUrl.replace(/\/+$/u, '')}${path}`, {
     method,

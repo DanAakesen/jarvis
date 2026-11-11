@@ -82,8 +82,7 @@ cost, and each call's whole prompt, carried summary included, stays within 40,00
 characters (an over-cap prompt fails as `prompt_too_large` before any model call). Any
 failure keeps the plain window and logs `chat.memory_summary_failed`,
 `chat.memory_summary_skipped`, `chat.memory_summary_gap` or
-`chat.memory_summary_saved` with codes only, never message text. Its tests run
-offline against `tests/fixtures/conversation_memory_300.json`.
+`chat.memory_summary_saved` with codes only, never message text.
 
 P9-99 returns `agent_pre_model` (request entry to first model request),
 `model_request` (first request to stream entry), `model_coordination` (first

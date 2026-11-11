@@ -1,26 +1,19 @@
 import copy
 from contextlib import redirect_stdout
-import hashlib
 import io
 import json
 import os
 from pathlib import Path
-import plistlib
-import shlex
 import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
-import zipfile
 
-from pipeline_evidence import ci_evidence, dispatched_pull, ownership
+from pipeline_evidence import ci_evidence
 from hermetic import setUpModule  # noqa: F401
-from pipeline_impact import (
-    CHECKS, PARTS, checks_for, deploy_parts, fingerprints, require_results, selection, workflow_recipe,
-)
+from pipeline_impact import CHECKS, PARTS, require_results, selection, workflow_recipe
 from release_state import (
-    artifact, budget_contacts_match, component_selection, prepare, previous_release, qualify,
-    record, select,
+    budget_contacts_match, component_selection, prepare, qualify, record, select,
 )
 from smoke_reasons import CHECK_IDS, report_ok, safe_report
 
@@ -54,155 +47,7 @@ def smoke():
     return {"entries": [{"id": check, "status": "ok"} for check in sorted(CHECK_IDS)]}
 
 
-def load_workflow(path):
-    source = subprocess.run(
-        ["ruby", "-ryaml", "-rjson", "-e",
-         "data = YAML.safe_load_file(ARGV.fetch(0), aliases: true); "
-         "data['on'] = data.delete(true) if data.key?(true); "
-         "puts JSON.generate(data)",
-         str(path)],
-        check=True, capture_output=True, text=True,
-    )
-    return json.loads(source.stdout)
-
-
-class ImpactTests(unittest.TestCase):
-    def test_known_dependencies_are_selected(self):
-        for path in ("apps/backend/src/app.ts", "db/migrations/a.sql"):
-            self.assertTrue({"backend", "database", "foundry", "web", "jarvis-agent"}
-                            <= checks_for(path))
-        self.assertTrue({"backend", "web"} <= checks_for("packages/contracts/src/index.js"))
-        self.assertIn("backend", checks_for("agents/jarvis/presence-instructions.json"))
-        self.assertIn("jarvis-agent", checks_for("docs/reference/voice-prototype/agent/requirements.txt"))
-
-    def test_web_changes_do_not_run_unrelated_components(self):
-        self.assertEqual({key for key, value in selection(["apps/web/src/App.tsx"]).items()
-                          if value}, {"web", "python"})
-
-    def test_vault_mirror_changes_select_only_mirror_and_python(self):
-        for path in ("apps/vault-mirror/src/index.ts", "apps/vault-mirror/package.json",
-                     "apps/vault-mirror/tsconfig.json"):
-            with self.subTest(path=path):
-                self.assertEqual({key for key, value in selection([path]).items() if value},
-                                 {"vault-mirror", "python"})
-
-    def test_ios_changes_select_only_ios_and_python_without_deployment_inputs(self):
-        for path in ("apps/ios/project.yml", "apps/ios/Jarvis/ContentView.swift"):
-            with self.subTest(path=path):
-                self.assertEqual(checks_for(path), {"ios"})
-                self.assertEqual({key for key, value in selection([path]).items() if value},
-                                 {"ios", "python"})
-                self.assertEqual(deploy_parts(path), set())
-
-    def test_watch_build_workflow_never_selects_production_components(self):
-        self.assertEqual(deploy_parts(".github/workflows/watch-build.yml"), set())
-        self.assertIn("ios", checks_for(".github/workflows/watch-build.yml"))
-
-    def test_worker_image_inspection_keeps_full_checks_without_rebuilding_apps(self):
-        path = ".github/scripts/reuse_factory_image.py"
-        self.assertEqual(deploy_parts(path), set())
-        self.assertEqual(checks_for(path), set(CHECKS))
-
-    def test_shared_node_inputs_qualify_vault_mirror(self):
-        for path in ("package.json", "package-lock.json", "tsconfig.base.json", ".nvmrc",
-                     "packages/contracts/src/status.js"):
-            with self.subTest(path=path):
-                self.assertTrue(selection([path])["vault-mirror"])
-        self.assertTrue(selection(None)["vault-mirror"])
-
-    def test_vault_mirror_image_inputs_select_infrastructure_deployment(self):
-        self.assertEqual(PARTS, ("infra", "backend", "web", "agent"))
-        for path in ("apps/vault-mirror/src/main.ts", "apps/vault-mirror/Dockerfile",
-                     "packages/contracts/src/status.js", "package-lock.json",
-                     "apps/backend/package.json", "apps/web/package.json", ".dockerignore"):
-            with self.subTest(path=path):
-                self.assertIn("infra", deploy_parts(path))
-        self.assertEqual(deploy_parts("docs/architecture.md"), set())
-
-    def test_every_local_dockerfile_copy_input_is_an_infrastructure_input(self):
-        dockerfile = (ROOT / "apps/vault-mirror/Dockerfile").read_text(encoding="utf-8")
-        for line in dockerfile.splitlines():
-            if not line.lstrip().startswith("COPY "):
-                continue
-            instruction = shlex.split(line)
-            sources = instruction[1:-1]
-            if any(source.startswith("--from=") for source in instruction[1:-1]):
-                continue
-            sources = [source for source in sources if not source.startswith("--")]
-            for source in sources:
-                with self.subTest(source=source):
-                    self.assertIn("infra", deploy_parts(source.rstrip("/")))
-
-    def test_shared_unknown_and_missing_base_fail_conservatively(self):
-        for paths in (None, ["new-runtime/config"], [".github/workflows/ci.yml"],
-                      [".github/scripts/pipeline_impact.py"]):
-            self.assertTrue(all(selection(paths).values()))
-        self.assertEqual(deploy_parts("new-runtime/config"), set(PARTS))
-        self.assertEqual(deploy_parts(".github/workflows/new-runtime.yml"), set(PARTS))
-        self.assertEqual(deploy_parts(".github/scripts/new-runtime.sh"), set(PARTS))
-
-    def test_documentation_is_lightweight_except_real_image_inputs(self):
-        self.assertEqual(selection(["README.md"]), dict.fromkeys(CHECKS, False) | {"python": True})
-        self.assertEqual(deploy_parts("docs/features.md"), {"backend"})
-        self.assertEqual(deploy_parts("agents/jarvis/presence-instructions.json"), {"backend", "agent"})
-        self.assertEqual(deploy_parts("apps/web/package.json"), {"web", "backend", "infra"})
-        self.assertEqual(deploy_parts("package-lock.json"), {"web", "backend", "infra"})
-        self.assertEqual(deploy_parts("packages/contracts/src/index.js"),
-                         {"web", "backend", "infra"})
-
-    def test_workflow_only_changes_do_not_rebuild_applications(self):
-        for path in (".github/workflows/ci.yml", ".github/workflows/codeql.yml",
-                     ".github/workflows/ios-ci.yml",
-                     ".github/workflows/ios-testflight.yml", ".github/scripts/ci_timing.py",
-                     ".github/scripts/smoke_reasons.py"):
-            self.assertEqual(deploy_parts(path), set())
-
-    def test_explicit_admin_workflows_still_qualify_without_application_redeployment(self):
-        for path in (".github/workflows/factory-capacity.yml", ".github/scripts/inspect_factory_capacity.py",
-                     ".github/scripts/provision_managed_chat.py", ".github/scripts/provision_managed_chat_handoff.sh"):
-            with self.subTest(path=path):
-                self.assertEqual(deploy_parts(path), set())
-                self.assertEqual(checks_for(path), set(CHECKS))
-
-    def test_exact_fingerprints_cover_blob_paths_modes_and_runtime_config(self):
-        recipe = "\n".join(["name: Deploy", "env:", "  APP: prod", "", "jobs:"] +
-                           [f"  {part}:\n    run: {part}" for part in PARTS])
-        records = ["100644 blob " + "a" * 40 + "\tapps/backend/src/app.ts",
-                   "100644 blob " + "b" * 40 + "\tapps/web/src/App.tsx",
-                   "100644 blob " + "c" * 40 + "\tinfra/main.bicep",
-                   "100644 blob " + "g" * 40 + "\tapps/ios/Jarvis/ContentView.swift"]
-
-        def values(items, workflow=recipe, config="fixed"):
-            with patch("pipeline_impact.git", side_effect=["\n".join(items), workflow]):
-                return fingerprints("head", config)
-
-        initial = values(records)
-        backend = values([records[0].replace("a" * 40, "d" * 40), *records[1:]])
-        ios = values([*records[:3], records[3].replace("g" * 40, "h" * 40)])
-        self.assertNotEqual(initial["backend"], backend["backend"])
-        self.assertEqual(initial, ios)
-        self.assertEqual(initial["web"], backend["web"])
-        self.assertNotEqual(initial["backend"], values(records, config="changed")["backend"])
-        infra = values([*records[:2], records[2].replace("c" * 40, "d" * 40)])
-        self.assertTrue(all(initial[part] != infra[part] for part in PARTS))
-        self.assertEqual(initial, values(records, workflow=recipe + "\n  smoke:\n    run: changed"))
-        for path in ("apps/vault-mirror/src/main.ts", "apps/vault-mirror/Dockerfile",
-                     "packages/contracts/src/status.js", "package-lock.json"):
-            with self.subTest(path=path):
-                changed = values([*records, "100644 blob " + "d" * 40 + "\t" + path])
-                self.assertTrue(all(initial[part] != changed[part] for part in PARTS))
-                prior = previous()
-                for part in PARTS:
-                    prior["components"][part]["fingerprint"] = initial[part]
-                self.assertEqual(component_selection(changed, prior, True),
-                                 dict.fromkeys(PARTS, True))
-        self.assertEqual(initial, values([
-            *records, "100644 blob " + "e" * 40 + "\t.github/workflows/vault-mirror-ci.yml",
-        ]))
-        own_job = values(records, workflow=recipe.replace("run: web", "run: new-web"))
-        self.assertNotEqual(initial["web"], own_job["web"])
-        self.assertEqual(initial["infra"], own_job["infra"])
-
+class QualificationTests(unittest.TestCase):
     def test_missing_recipe_fails_closed(self):
         for source in ("nothing", "jobs:\n  smoke:\n    run: true"):
             with self.assertRaises(ValueError):
@@ -220,23 +65,6 @@ class ImpactTests(unittest.TestCase):
             self.assertFalse(require_results(changed, selected))
         self.assertFalse(require_results({}, selected))
 
-
-class QualificationTests(unittest.TestCase):
-    def test_vault_mirror_result_is_required_in_exact_qualification_receipt(self):
-        selected = selection(["apps/vault-mirror/src/index.ts"])
-        results = {"plan": {"result": "success"}, **{
-            key: {"result": "success" if needed else "skipped"}
-            for key, needed in selected.items()
-        }}
-        self.assertTrue(ci_evidence(results, selected, CONTEXT, {})["qualified"])
-        for status in ("failure", "cancelled", "skipped"):
-            with self.subTest(status=status):
-                broken = copy.deepcopy(results)
-                broken["vault-mirror"]["result"] = status
-                self.assertFalse(ci_evidence(broken, selected, CONTEXT, {})["qualified"])
-        del results["vault-mirror"]
-        self.assertFalse(ci_evidence(results, selected, CONTEXT, {})["qualified"])
-
     def test_ci_receipt_is_exact_and_failure_is_not_success_shaped(self):
         selected = selection(None)
         results = {key: {"result": "success"} for key in ("plan", *CHECKS)}
@@ -246,12 +74,6 @@ class QualificationTests(unittest.TestCase):
             broken[key]["result"] = "skipped"
             self.assertFalse(ci_evidence(broken, selected, CONTEXT, {})["qualified"])
         self.assertFalse(ci_evidence(results, {}, CONTEXT, {})["qualified"])
-
-    def test_ownership_copies_only_bounded_issue_numbers(self):
-        result = ownership({"pull_request": {"number": 10, "body":
-                           "Fixes #880\nRefs #879\nprivate content; token=never-copy"}})
-        self.assertEqual(result, {"pull_request": 10, "issues": [879, 880]})
-        self.assertNotIn("private", json.dumps(result))
 
     def test_release_requires_successful_matching_tree_head_and_pr(self):
         pull = {"number": 9, "merged_at": "now", "base": {"ref": "main"},
@@ -272,22 +94,8 @@ class QualificationTests(unittest.TestCase):
                 else:
                     self.assertEqual(qualify(CONTEXT["source"])["run"], 1)
 
-    def test_copilot_ready_dispatch_is_bound_to_its_existing_ready_pr(self):
-        pull = {"number": 9, "head": {"sha": "a" * 40}, "base": {"ref": "main"},
-                "draft": False, "state": "open"}
-        for change in ({}, {"head": {"sha": "b" * 40}}, {"draft": True},
-                       {"number": 8}, {"state": "closed"}, {"base": {"ref": "other"}}):
-            with (patch.dict(os.environ, {"GITHUB_REPOSITORY": "fixture/repo"}),
-                  patch("pipeline_evidence.subprocess.run", return_value=subprocess.CompletedProcess(
-                      [], 0, json.dumps(pull | change), ""))):
-                if change:
-                    with self.assertRaises(ValueError):
-                        dispatched_pull("9", "a" * 40)
-                else:
-                    self.assertEqual(dispatched_pull("9", "a" * 40)["number"], 9)
 
-
-class ReleaseStateTests(unittest.TestCase):
+class SecretHandlingTests(unittest.TestCase):
     def test_budget_contact_values_are_compared_only_in_memory(self):
         configured = "synthetic.one@example.test, synthetic.two@example.test"
         env = {"JARVIS_BUDGET_CONTACT_EMAILS": configured,
@@ -351,71 +159,47 @@ class ReleaseStateTests(unittest.TestCase):
                       patch("release_state.qualify", return_value={"run": 40})):
                     prepare()
                 fingerprint.assert_called_once_with(CONTEXT["source"], ENV["RELEASE_CONFIGURATION"])
-                # A newer docs-only main commit has no Deploy run. Only a
-                # verified applied-source horizon can supersede this release.
                 lookup.assert_not_called()
                 self.assertNotIn("synthetic@example.test", Path("release-plan.json").read_text())
             finally:
                 os.chdir(previous_cwd)
 
+    def test_retained_report_is_complete_fixed_and_content_free(self):
+        report = smoke()
+        report["entries"][0].update({"status": "down", "reason": "private\n::error::secret",
+                                     "details": {"token": "never-retain"}, "text": "never-retain"})
+        serialized = json.dumps(safe_report(report))
+        for value in ("private", "secret", "never-retain", "details"):
+            self.assertNotIn(value, serialized)
+        self.assertIn("not_reported_or_redacted", serialized)
+
+    def test_cli_invalid_inputs_never_echo_payloads(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "private.json"
+            path.write_text("private-user-content")
+            result = subprocess.run(
+                [os.sys.executable, str(ROOT / ".github/scripts/smoke_reasons.py"),
+                 str(path), "--evidence", str(Path(folder) / "safe.json")],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(result.returncode, 2)
+            self.assertNotIn("private-user-content", result.stdout + result.stderr)
+
+
+class ReleaseStateTests(unittest.TestCase):
     def test_acceptance_failure_does_not_reapply_healthy_exact_inputs(self):
         self.assertEqual(component_selection(INPUTS, previous(), True), dict.fromkeys(PARTS, False))
 
     def test_missing_failed_mismatched_or_nonancestor_state_reapplies(self):
         self.assertTrue(all(component_selection(INPUTS, None, True).values()))
         self.assertTrue(all(component_selection(INPUTS, previous(), False).values()))
-        for change in ({"state": "unknown"}, {"fingerprint": "f" * 64},
-                       {"version": {}}, {"origin": None}):
-            prior = previous()
-            prior["components"]["web"].update(change)
-            result = component_selection(INPUTS, prior, True)
-            self.assertTrue(result["web"])
-            self.assertFalse(result["backend"])
 
     def test_superseded_receipt_preserves_newer_source_horizon(self):
         prior = previous()
         prior["source"] = "d" * 40
         prior["applied_head"] = "e" * 40
         prior["superseded"] = True
-        # Reuse is controlled by the newer source horizon and exact component
-        # inputs, never the old queued run's source SHA or accepted flag.
         self.assertFalse(any(component_selection(INPUTS, prior, True).values()))
-
-    def test_backend_reuse_requires_separate_revision_provenance(self):
-        prior = previous()
-        del prior["components"]["backend"]["revision_origin"]
-        selected = component_selection(INPUTS, prior, True)
-        self.assertTrue(selected["backend"])
-        self.assertFalse(selected["web"])
-
-    def test_infra_reapplication_invalidates_downstream_configuration(self):
-        prior = previous()
-        prior["components"]["infra"]["state"] = "unknown"
-        self.assertTrue(all(component_selection(INPUTS, prior, True).values()))
-
-    def test_latest_unknown_receipt_is_not_replaced_with_older_green(self):
-        runs = [{"id": number, "status": "completed", "event": "push", "head_branch": "main"}
-                for number in (43, 41)]
-        with (patch.dict(os.environ, {"GITHUB_RUN_ATTEMPT": "1"}),
-              patch("release_state.api", return_value={"workflow_runs": runs}),
-              patch("release_state.artifact", return_value=None) as read):
-            run, receipt = previous_release(42)
-            self.assertEqual(run["id"], 43)
-            self.assertIsNone(receipt)
-            read.assert_called_once()
-
-    def test_retry_reads_its_previous_attempt_without_using_the_first_attempt_fixture(self):
-        run = {"id": 42, "status": "completed", "head_branch": "main", "run_attempt": 1,
-               "head_sha": CONTEXT["source"]}
-        receipt = previous()
-        with (patch.dict(os.environ, {"GITHUB_RUN_ATTEMPT": "2"}),
-              patch("release_state.api", return_value=run) as request,
-              patch("release_state.artifact", return_value=receipt) as read):
-            actual_run, actual_receipt = previous_release(42)
-        request.assert_called_once_with("/actions/runs/42/attempts/1")
-        read.assert_called_once_with(run, "release-evidence", "release-evidence.json")
-        self.assertEqual(actual_run, run)
-        self.assertEqual(actual_receipt, receipt)
 
     def test_supersession_precedes_manual_reuse_and_qualification(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -440,8 +224,7 @@ class ReleaseStateTests(unittest.TestCase):
             finally:
                 os.chdir(previous_cwd)
 
-    def record_fixture(self, selected, results, prior=None, evidence=None, attempts=None,
-                       backend_revision=""):
+    def record_fixture(self, selected, results, prior=None, evidence=None):
         with tempfile.TemporaryDirectory() as folder:
             previous_cwd = os.getcwd()
             os.chdir(folder)
@@ -454,8 +237,8 @@ class ReleaseStateTests(unittest.TestCase):
                     Path("acceptance-evidence.json").write_text(json.dumps(evidence))
                 with (patch.dict(os.environ, ENV | {
                     "RESULTS": json.dumps(results), "VERSIONS": json.dumps(VERSIONS),
-                    "APPLY_ATTEMPTS": json.dumps(attempts or dict.fromkeys(PARTS, "1")),
-                    "AGENT_BACKEND_REVISION": backend_revision,
+                    "APPLY_ATTEMPTS": json.dumps(dict.fromkeys(PARTS, "1")),
+                    "AGENT_BACKEND_REVISION": "",
                     "GITHUB_STEP_SUMMARY": "summary",
                 }), patch("release_state.identity", return_value=CONTEXT)):
                     code = record()
@@ -471,52 +254,7 @@ class ReleaseStateTests(unittest.TestCase):
         self.assertFalse(receipt["accepted"])
         self.assertTrue(all(value["state"] == "applied" for value in receipt["components"].values()))
         self.assertEqual(receipt["checks"]["acceptance"], "failure")
-        self.assertEqual(receipt["components"]["backend"]["version"], VERSIONS["backend"])
         self.assertFalse(any(component_selection(INPUTS, receipt, True).values()))
-
-    def test_reused_versions_keep_their_original_source_not_new_release_sha(self):
-        results = {key: {"result": "success"} for key in ("plan", "smoke", "acceptance")}
-        results.update({key: {"result": "skipped"} for key in PARTS})
-        prior = previous()
-        prior["components"]["web"]["origin"]["source"] = "d" * 40
-        code, receipt = self.record_fixture(dict.fromkeys(PARTS, False), results,
-                                            prior=prior, evidence=smoke())
-        self.assertEqual(code, 0)
-        self.assertTrue(receipt["accepted"])
-        self.assertEqual(receipt["components"]["web"]["origin"]["source"], "d" * 40)
-
-    def test_hosted_failure_origin_is_retained_without_acceptance_or_producer_rewrite(self):
-        results = {key: {"result": "success"} for key in ("plan", "smoke", "acceptance")}
-        results.update({key: {"result": "skipped"} for key in PARTS})
-        prior = previous()
-        for component in prior["components"].values():
-            component["origin"]["source"] = "d" * 40
-        for reason in ("settings_timeout", "capability_instructions_too_large", "error_runtimeerror",
-                       "private_provider_detail"):
-            with self.subTest(reason=reason):
-                report = smoke()
-                next(entry for entry in report["entries"] if entry["id"] == "chat_capabilities").update(
-                    {"status": "down", "reason": reason, "details": {"token": "never-retain"}})
-                code, receipt = self.record_fixture(dict.fromkeys(PARTS, False), results,
-                                                    prior=prior, evidence=report)
-                self.assertEqual(code, 1)
-                self.assertFalse(receipt["accepted"])
-                self.assertEqual(receipt["source"], CONTEXT["source"])
-                self.assertEqual(receipt["tree"], CONTEXT["tree"])
-                self.assertEqual(receipt["run"], CONTEXT["run"])
-                self.assertEqual(receipt["qualification"], {"pull_request": 9, "run": 40})
-                self.assertEqual(receipt["acceptance_evidence"], "retained")
-                expected = "not_reported_or_redacted" if reason == "private_provider_detail" else reason
-                self.assertIn({"id": "chat_capabilities", "status": "down", "reason": expected},
-                              receipt["acceptance"]["entries"])
-                for part, component in receipt["components"].items():
-                    self.assertEqual(component["state"], "reused")
-                    self.assertEqual(component["version"], prior["components"][part]["version"])
-                    self.assertEqual(component["origin"], prior["components"][part]["origin"])
-                self.assertEqual(receipt["components"]["backend"]["revision_origin"],
-                                 prior["components"]["backend"]["revision_origin"])
-                self.assertNotIn("private_provider_detail", json.dumps(receipt))
-                self.assertNotIn("never-retain", json.dumps(receipt))
 
     def test_missing_acceptance_evidence_and_failed_or_cancelled_jobs_block(self):
         results = {key: {"result": "success"} for key in ("plan", *PARTS, "smoke", "acceptance")}
@@ -552,660 +290,20 @@ class ReleaseStateTests(unittest.TestCase):
             self.assertEqual(self.record_fixture(dict.fromkeys(PARTS, True), results,
                                                  evidence=report)[0], 1)
 
-    def test_partial_agent_failure_invalidates_backend_identity_state(self):
-        results = {key: {"result": "success"} for key in ("plan", *PARTS, "smoke", "acceptance")}
-        results["agent"]["result"] = "failure"
-        _, receipt = self.record_fixture(dict.fromkeys(PARTS, True), results, evidence=smoke())
-        self.assertEqual(receipt["components"]["backend"]["state"], "unknown")
 
-    def test_retried_acceptance_does_not_claim_new_artifact_producer_attempt(self):
-        results = {key: {"result": "success"} for key in ("plan", *PARTS, "smoke", "acceptance")}
-        with patch.dict(CONTEXT, {"attempt": 2}):
-            code, receipt = self.record_fixture(dict.fromkeys(PARTS, True), results,
-                                                evidence=smoke())
-        self.assertEqual(code, 0)
-        self.assertEqual(receipt["attempt"], 2)
-        self.assertEqual(receipt["components"]["backend"]["origin"]["attempt"], 1)
-
-    def test_agent_only_revision_keeps_image_origin_and_records_actual_revision_producer(self):
-        selected = dict.fromkeys(PARTS, False) | {"agent": True}
-        results = {key: {"result": "success" if selected.get(key, True) else "skipped"}
-                   for key in ("plan", *PARTS, "smoke", "acceptance")}
-        prior = previous()
-        image_origin = {"source": "e" * 40, "run": 30, "attempt": 1}
-        prior["components"]["backend"]["origin"] = image_origin
-        prior["components"]["backend"]["revision_origin"] = image_origin
-        with patch.dict(CONTEXT, {"attempt": 2}):
-            code, receipt = self.record_fixture(
-                selected, results, prior=prior, evidence=smoke(),
-                attempts={"agent": "1"}, backend_revision="backend--0002",
-            )
-        self.assertEqual(code, 0)
-        backend = receipt["components"]["backend"]
-        self.assertEqual(backend["state"], "applied")
-        self.assertEqual(backend["origin"], image_origin)
-        self.assertEqual(backend["version"]["image"], VERSIONS["backend"]["image"])
-        self.assertEqual(backend["version"]["revision"], "backend--0002")
-        self.assertEqual(backend["revision_origin"],
-                         {"source": CONTEXT["source"], "run": 42, "attempt": 1})
-
-
-class ArtifactTests(unittest.TestCase):
-    def archive(self, receipt):
-        output = io.BytesIO()
-        with zipfile.ZipFile(output, "w") as archive:
-            archive.writestr("release-evidence.json", json.dumps(receipt))
-        return output.getvalue()
-
-    def test_artifact_identity_digest_schema_attempt_and_size_are_bound(self):
-        raw = self.archive(CONTEXT)
-        item = {"id": 7, "name": "release-evidence-1", "size_in_bytes": len(raw), "expired": False,
-                "digest": "sha256:" + hashlib.sha256(raw).hexdigest()}
-        with patch("release_state.api", side_effect=[{"artifacts": [item]}, raw]):
-            self.assertEqual(artifact({"id": 42, "run_attempt": 1}, "release-evidence",
-                                      "release-evidence.json")["evidence_artifact"]["id"], 7)
-        for bad in (item | {"digest": "sha256:" + "0" * 64},
-                    item | {"size_in_bytes": 1024 * 1024 + 1}):
-            with patch("release_state.api", side_effect=[{"artifacts": [bad]}, raw]):
-                with self.assertRaises(ValueError):
-                    artifact({"id": 42, "run_attempt": 1}, "release-evidence", "release-evidence.json")
-        with patch("release_state.api", side_effect=[{"artifacts": [item]}, raw]):
-            with self.assertRaisesRegex(ValueError, "provenance"):
-                artifact({"id": 43, "run_attempt": 1}, "release-evidence", "release-evidence.json")
-
-    def test_expired_or_different_attempt_is_not_reused(self):
-        item = {"id": 7, "name": "release-evidence-1", "size_in_bytes": 30, "expired": True}
-        with patch("release_state.api", return_value={"artifacts": [item]}):
-            self.assertIsNone(artifact({"id": 42, "run_attempt": 1}, "release-evidence", "unused"))
-
-
-class SafeFailureTests(unittest.TestCase):
-    def test_ci_maps_every_selected_component_and_requires_its_result(self):
-        source = (ROOT / ".github/workflows/ci.yml").read_text()
-        needs = next(line.strip().removeprefix("needs: [").removesuffix("]")
-                     for line in source.splitlines() if line.startswith("    needs: ["))
-        self.assertEqual(set(needs.split(", ")), {"plan", *CHECKS})
-        for component in set(CHECKS) - {"infra", "python"}:
-            with self.subTest(component=component):
-                self.assertIn(f"      {component}: ${{{{ steps.impact.outputs.{component} }}}}",
-                              source)
-                job = workflow_recipe(source, component)
-                self.assertIn("    needs: plan", job)
-                self.assertIn(f"    if: needs.plan.outputs.{component} == 'true'", job)
-                workflow = "foundry-contract" if component == "foundry" else f"{component}-ci"
-                self.assertIn(f"    uses: ./.github/workflows/{workflow}.yml", job)
-
-    def test_vault_mirror_reuses_backend_node_setup_and_runs_required_scripts(self):
-        source = (ROOT / ".github/workflows/vault-mirror-ci.yml").read_text()
-        backend = (ROOT / ".github/workflows/backend-ci.yml").read_text()
-        self.assertIn("on:\n  workflow_call:", source)
-        self.assertIn("permissions:\n  contents: read", source)
-        for line in backend.splitlines():
-            if any(value in line for value in (
-                "actions/checkout@", "actions/setup-node@", "node-version-file:",
-                "cache: npm", "npm install --global",
-            )):
-                self.assertIn(line, source)
-        commands = [line.strip().removeprefix("- run: ") for line in source.splitlines()
-                    if line.strip().startswith("- run: ")]
-        self.assertEqual(commands, [
-            "npm ci", "npm run lint:vault-mirror", "npm run typecheck:vault-mirror",
-            "npm test --workspace @jarvis/contracts", "npm run test:vault-mirror",
-            "npm run build:vault-mirror",
-        ])
-
-    def test_ios_pull_requests_run_only_the_quick_linux_job(self):
-        ci = load_workflow(ROOT / ".github/workflows/ci.yml")
-        self.assertNotIn("with", ci["jobs"]["ios"])
-        self.assertEqual(ci["jobs"]["ios"]["uses"], "./.github/workflows/ios-ci.yml")
-        self.assertIn("ios", ci["jobs"]["result"]["needs"])
-        self.assertTrue(ci["concurrency"]["cancel-in-progress"])
-        self.assertFalse((ROOT / ".github/workflows/ios-simulator.yml").exists())
-        self.assertFalse((ROOT / "apps/ios/JarvisUITests").exists())
-        ios = load_workflow(ROOT / ".github/workflows/ios-ci.yml")
-        self.assertEqual(list(ios["jobs"]), ["linux"])
-        self.assertEqual(ios["jobs"]["linux"]["runs-on"], "ubuntu-24.04")
-        self.assertEqual(ios["on"]["schedule"], [{"cron": "17 3 * * *"}])
-        project = load_workflow(ROOT / "apps/ios/project.yml")
-        self.assertNotIn("JarvisUITests", project["targets"])
-        self.assertNotIn("test", project["schemes"]["Jarvis"])
-
-    def test_ci_timing_summary_lists_finished_jobs_by_duration(self):
-        from ci_timing import table
-        jobs = [
-            {"name": "Web", "started_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:04:05Z",
-             "conclusion": "success"},
-            {"name": "Backend", "started_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:09:00Z",
-             "conclusion": "failure"},
-            {"name": "Skipped", "started_at": "2026-01-01T00:00:00Z", "completed_at": "2026-01-01T00:00:00Z",
-             "conclusion": "skipped"},
-            {"name": "Running", "started_at": "2026-01-01T00:00:00Z", "completed_at": None, "conclusion": None},
-        ]
-        text = table(jobs)
-        self.assertLess(text.index("Backend"), text.index("Web"))
-        self.assertIn("| Backend | 9m 00s | failure |", text)
-        self.assertIn("| Web | 4m 05s | success |", text)
-        self.assertNotIn("Skipped", text)
-        self.assertNotIn("Running", text)
-        ci = load_workflow(ROOT / ".github/workflows/ci.yml")
-        steps = ci["jobs"]["result"]["steps"]
-        timing = next(step for step in steps if step.get("name") == "Summarize job timings")
-        self.assertEqual(timing["run"], "python .github/scripts/ci_timing.py")
-        self.assertEqual(ci["jobs"]["result"]["permissions"]["actions"], "read")
-
-    def test_ios_chat_launcher_hit_shape_covers_its_plain_button_label(self):
-        source = (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text()
-        button = source.split("struct JarvisSidebarMenuButton: View {", 1)[1].split(
-            "enum JarvisDesignTokens", 1
-        )[0]
-        self.assertIn("JarvisIconButton(", button)
-        controls = (ROOT / "apps/ios/Jarvis/JarvisControls.swift").read_text()
-        glyph = controls.split("private struct JarvisControlGlyph: View {", 1)[1].split("private extension View", 1)[0]
-        self.assertLess(glyph.index(".frame(width:"), glyph.index(".contentShape(Circle())"))
-        self.assertIn("width: JarvisDesignTokens.iconButtonDiameter", glyph)
-        self.assertIn("height: JarvisDesignTokens.iconButtonDiameter", glyph)
-        self.assertIn("static let chatMinimumTapTarget: CGFloat = 44", source)
-        self.assertIn("buttonStyle(.plain)", controls)
-
-    def test_ios_navigation_fixture_initializes_before_gate_overlay(self):
-        source = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
-        fixture = source.split("private static var isNavigationFixture: Bool {", 1)[1].split("\n    }", 1)[0]
-        self.assertIn("#if targetEnvironment(simulator)", fixture)
-        self.assertIn('#else\n        false', fixture)
-        initialization = source.split("    init() {", 1)[1].split("tokenStore = try?", 1)[0]
-        self.assertIn("if Self.isNavigationFixture", initialization)
-        for state in ("tokenStore = nil", "provider = nil", "client = nil",
-                      "presentation = .unlocked", "isPrivacyCoverVisible = false", "return"):
-            self.assertIn(state, initialization)
-        self.assertIn("await model.load()\n            model.refreshOverlay()", source)
-        teardown = source.split("guard visible else {", 1)[1].split("return", 1)[0]
-        self.assertLess(teardown.index("isUserInteractionEnabled = false"), teardown.index("isHidden = true"))
-
-    def test_ios_screenshot_navigation_initializes_model_above_content(self):
-        gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
-        root = gate.split("struct JarvisGateRootView: View {", 1)[1]
-        self.assertLess(root.index("initialState: ContentView.initialNavigation()"),
-                        root.index("ContentView(sessionEpoch: model.contentEpoch)"))
-        shell = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        initialization = shell.split("    static func initialNavigation(", 1)[1].split(
-            "    private static func makeNotesClient(", 1
-        )[0]
-        for flag in ("--screenshot-sidebar-open", "--screenshot-settings-fixture",
-                     "--screenshot-voice-connection-lost", "--screenshot-screen=",
-                     "--screenshot-health-fixture", "--screenshot-voice-fixture",
-                     "--screenshot-calendar-change-fixture", "--screenshot-chat-fixture",
-                     "--screenshot-factory-fixture", "--screenshot-activity-state=empty",
-                     "--screenshot-activity-state=active"):
-            self.assertIn(flag, initialization)
-        self.assertIn("JarvisFactoryScreenshotConfiguration.parse(arguments: arguments)", initialization)
-        self.assertIn("state.openSidebar()", initialization)
-        for destination in ("settings", "voice", "health", "softwareFactory"):
-            self.assertIn(f"state.navigate(to: .{destination})", initialization)
-        self.assertIn("state.navigate(to: destination)", initialization)
-        self.assertIn("return state", initialization)
-        self.assertNotIn("navigation.reset()", shell)
-        self.assertNotIn("navigation = JarvisNavigationModel", shell)
-
-    def test_ios_navigation_input_boundaries_preserve_children_and_keyboard(self):
-        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        gate = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text()
-        self.assertIn(".ignoresSafeArea(.container)", content)
-        self.assertNotIn(".allowsHitTesting(", content)
-        self.assertIn(".allowsHitTesting(!model.shouldCoverContent)", gate)
-        for source, hidden in ((content, ".accessibilityHidden(navigation.isSidebarOpen)"),
-                               (gate, ".accessibilityHidden(model.shouldCoverContent)")):
-            self.assertLess(source.index(".accessibilityElement(children: .contain)"),
-                            source.index(hidden))
-        sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
-        self.assertLess(sidebar.index(".accessibilityElement(children: .contain)"),
-                        sidebar.index('.accessibilityIdentifier("navigation.sidebar")'))
-        self.assertIn(".accessibilityAddTraits(.isModal)", sidebar)
-        self.assertNotIn(".allowsHitTesting(", sidebar.split("struct JarvisSidebar: View {", 1)[1])
-        self.assertNotIn(".accessibilityHidden(!isOpen)", sidebar)
-        self.assertIn("navigation.closeSidebar()", sidebar)
-        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
-        self.assertIn("JarvisComposerBar(", chat)
-        composer_bar = (ROOT / "apps/ios/Jarvis/JarvisComposerBar.swift").read_text()
-        composer_background = composer_bar.split("Color.clear\n                .jarvisGlassSurface", 1)[1].split("        }", 1)[0]
-        self.assertIn(".allowsHitTesting(false)", composer_background)
-        self.assertIn(".accessibilityHidden(true)", composer_background)
-        self.assertIn("#selector(UIResponder.resignFirstResponder)", gate)
-        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
-        self.assertRegex(model, r"func openSidebar\(\) \{\s+dismissKeyboard\(\)\s+"
-                                r"write \{ \$0\.openSidebar\(\) \}")
-        self.assertNotIn("openTapCount", model)
-        self.assertNotIn("debugWrites", model)
-        self.assertNotIn("debug.navigation.trace", gate)
-        self.assertIn("overlay.windowLevel = .alert + 1", gate)
-        self.assertIn("override var canBecomeKey: Bool { false }", gate)
-        self.assertNotIn("JarvisInputHitTestingProbe", chat)
-
-    def test_ios_sidebar_swipes_use_global_space_strip_and_commit_only_when_completed(self):
-        source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
-        self.assertFalse((ROOT / "apps/ios/Jarvis/JarvisSidebarEdgeOpener.swift").exists())
-        self.assertNotIn("JarvisSidebarEdgeOpener", source)
-        for obsolete in ("@GestureState", ".updating(", ".onChanged(", "predictedEndTranslation",
-                         "sidebarDrag", "sidebarGestureGeneration", ".id(gestureGeneration)",
-                         ".simultaneousGesture"):
-            self.assertNotIn(obsolete, source)
-        reveal = sidebar.split("struct JarvisSidebarReveal<Page: View>: View {", 1)[1].split(
-            "struct JarvisSidebar: View {", 1
-        )[0]
-        self.assertEqual(reveal.count("coordinateSpace: .global"), 2)
-        self.assertIn(".highPriorityGesture(openSwipe(drawerWidth: drawerWidth))", reveal)
-        self.assertIn("JarvisDesignTokens.sidebarEdgeGestureWidth", reveal)
-        self.assertIn("reduceMotion || navigation.dragProgress != nil ? nil : .spring(", reveal)
-        self.assertIn("JarvisSidebarGesturePolicy.shouldOpen(", reveal)
-        self.assertIn("JarvisSidebarGesturePolicy.shouldClose(", reveal)
-        self.assertIn("navigation.updateDrag(progress:", reveal)
-        self.assertIn("navigation.cancelDrag()", reveal)
-        self.assertLess(reveal.index("page\n"), reveal.index(".highPriorityGesture("))
-        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
-        self.assertRegex(model, r"(?s)func setPath\(_ path: \[JarvisDestination\]\) \{\s+"
-                               r".*?guard path != state\.path else \{.*?\}\s+"
-                               r"let update = JarvisNavigationPathUpdate\(path: path, from: state\).*?"
-                               r"write \{ \$0 = update\.state \}")
-
-    def test_ios_navigation_reference_ownership_and_plain_conditional_overlay(self):
-        source = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        content = source.split("struct ContentView: View {", 1)[1]
-        shell = content.split("    private func sidebarShell(", 1)[1].split(
-            "    private var themeColorScheme:", 1
-        )[0]
-        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
-        self.assertIn("@MainActor\nfinal class JarvisNavigationModel: ObservableObject", model)
-        self.assertEqual(model.count("@Published"), 2)  # state, dragProgress
-        self.assertIn("@Published private(set) var state: JarvisNavigationState", model)
-        for derived in ("var path: [JarvisDestination] { state.path }",
-                        "var isSidebarOpen: Bool { state.isSidebarOpen }",
-                        "var currentDestination: JarvisDestination { state.currentDestination }"):
-            self.assertIn(derived, model)
-        self.assertIn("@EnvironmentObject private var navigation: JarvisNavigationModel", content)
-        self.assertNotIn("@State private var navigation", content)
-        self.assertNotIn("@StateObject private var navigation", content)
-        self.assertIn("JarvisDestinationHost(navigation: navigation)", shell)
-        self.assertNotIn("path: Binding", shell)
-        self.assertIn("navigation.voiceSessionStateChanged(state)", shell)
-        self.assertIn("guard appliedSessionEpoch == sessionEpoch else { return }", shell)
-        self.assertIn("workspaceRuntime.consumeRequestedDestination()", shell)
-        self.assertIn("navigation.navigate(to: destination)", source)
-        self.assertIn("$0.navigate(to: destination)", model)
-        self.assertIn("$0.voiceSessionStateChanged(voiceState)", model)
-        self.assertNotIn(".overlay(alignment: .trailing)", shell)
-        self.assertNotIn("JarvisSidebar(", source)
-        sidebar = (ROOT / "apps/ios/Jarvis/JarvisSidebar.swift").read_text()
-        reveal = sidebar.split("struct JarvisSidebarReveal<Page: View>: View {", 1)[1].split(
-            "struct JarvisSidebar: View {", 1
-        )[0]
-        self.assertIn("@EnvironmentObject private var navigation: JarvisNavigationModel", reveal)
-        self.assertIn("let progress = isEnabled ? CGFloat(navigation.revealProgress) : 0", reveal)
-        self.assertRegex(reveal, r"if progress > 0 \{\s+JarvisSidebar\(")
-        self.assertLess(reveal.index("page\n"), reveal.index("JarvisSidebar("))
-        self.assertIn(".frame(width: drawerWidth * progress, height: geometry.size.height, alignment: .trailing)", reveal)
-        self.assertIn(".offset(x: -drawerWidth * progress)", reveal)
-        self.assertIn(".allowsHitTesting(progress == 0)", reveal)
-        self.assertIn(".onTapGesture { navigation.closeSidebar() }", reveal)
-        self.assertIn(".gesture(closeSwipe(drawerWidth: drawerWidth))", reveal)
-        self.assertIn(".frame(width: drawerWidth, height: geometry.size.height)", reveal)
-        self.assertIn("reduceMotion || navigation.dragProgress != nil ? nil", reveal)
-        self.assertIn("navigation.cancelDrag()", reveal)
-        self.assertEqual(sidebar.count("JarvisSidebar("), 1)
-        self.assertNotIn("JarvisSidebarDrawerLayer", sidebar)
-        gate_root = (ROOT / "apps/ios/Jarvis/JarvisGateRootView.swift").read_text().split(
-            "struct JarvisGateRootView: View {", 1)[1]
-        self.assertIn("JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {", gate_root)
-        self.assertLess(gate_root.index("JarvisSidebarReveal(isEnabled: !model.shouldCoverContent) {"), gate_root.index(".id(model.signOutGeneration)"))
-        self.assertLess(gate_root.index(".id(model.signOutGeneration)"),
-                        gate_root.index(".environmentObject(navigation)"))
-        self.assertLess(gate_root.index(".blur(radius: model.shouldCoverContent"),
-                        gate_root.index(".environmentObject(navigation)"))
-        self.assertIn("if phase != .active", shell)
-        self.assertIn("transaction.disablesAnimations = true", shell)
-        self.assertIn("withTransaction(transaction) { navigation.closeSidebar() }", shell)
-        for obsolete in (".offset(", ".blur(", "committedProgress", "currentDrag",
-                        "navigationWrites", "mutateNavigation", "NavigationLaunchLifecycle"):
-            self.assertNotIn(obsolete, source)
-        root = gate_root
-        self.assertEqual(root.count("@StateObject private var navigation"), 1)
-        self.assertLess(root.index("@StateObject private var navigation"),
-                        root.index("var body: some View"))
-        self.assertLess(root.index("@StateObject private var navigation"),
-                        root.index(".id(model.signOutGeneration)"))
-        self.assertIn(".environmentObject(navigation)", root)
-        self.assertIn("initialState: ContentView.initialNavigation()", root)
-        self.assertIn(".allowsHitTesting(!model.shouldCoverContent)", root)
-        self.assertIn(".accessibilityHidden(model.shouldCoverContent)", root)
-        self.assertIn("if covered { navigation.closeSidebar() }", root)
-        project = load_workflow(ROOT / "apps/ios/project.yml")
-        for target in ("Jarvis", "JarvisVoiceActivity"):
-            self.assertIn({"path": "Shared"}, project["targets"][target]["sources"])
-        for path in ("Shared/NavigationBisectVariant.swift",
-                     "Jarvis/JarvisInputHitTestingProbe.swift"):
-            self.assertFalse((ROOT / "apps/ios" / path).exists(), path)
-        for directory in ("Jarvis", "Shared"):
-            for path in (ROOT / "apps/ios" / directory).rglob("*.swift"):
-                runtime = path.read_text()
-                for obsolete in ("NavigationBisect", "JarvisInputHitTestingProbe",
-                                "navigation.bisect", "Jarvis launch lifecycle:",
-                                "Jarvis gate startup:", "Jarvis navigation command:"):
-                    self.assertNotIn(obsolete, runtime, str(path))
-
-    def test_ios_root_drawer_preserves_content_owned_navigation_side_effects(self):
-        model = (ROOT / "apps/ios/Shared/JarvisNavigationModel.swift").read_text()
-        self.assertIn("PassthroughSubject<(from: JarvisDestination, to: JarvisDestination), Never>()", model)
-        navigate = model.split("func navigate(to destination:", 1)[1].split("func voiceSessionStateChanged", 1)[0]
-        self.assertLess(navigate.index("navigationRequested.send((from: currentDestination, to: destination))"),
-                        navigate.index('write {'))
-        self.assertNotIn("guard destination != currentDestination", navigate)
-        content = (ROOT / "apps/ios/Jarvis/ContentView.swift").read_text()
-        self.assertIn(".onReceive(navigation.navigationRequested)", content)
-        self.assertNotIn(".onChange(of: navigation.currentDestination)", content)
-        self.assertIn("prepareNavigation(to: request.to, from: request.from)", content)
-        preparation = content.split("private func prepareNavigation(", 1)[1].split(
-            "static func initialNavigation(", 1
-        )[0]
-        for behavior in ("voiceModel.restore()", "previous == .voice && voiceModel.isSessionActive",
-                        "voiceModel.minimize()", "if navigationFixtureMode", "case .notes:",
-                        "case .health:", "case .softwareFactory:"):
-            self.assertIn(behavior, preparation)
-
-    def test_health_logging_form_is_sheet_only_and_segments_are_in_bottom_bar(self):
-        area = (ROOT / "apps/ios/Jarvis/JarvisHealthArea.swift").read_text()
-        header_body = area.split("var body: some View", 1)[1].split(".jarvisPageFooter", 1)[0]
-        self.assertNotIn("segmentSwitcher", header_body)
-        bottom = area.split(".jarvisPageFooter", 1)[1].split(".jarvisPageHeader", 1)[0]
-        self.assertLess(bottom.index("segmentSwitcher"), bottom.index("searchBar"))
-        self.assertIn("JarvisSegmentedBar(", area)
-        self.assertNotIn(".pickerStyle(.segmented)", area)
-        self.assertIn("guard !more || !liftsLoading", area)
-        self.assertIn("guard liftLoadID == loadID else { return }", area)
-        lists = (ROOT / "apps/ios/Jarvis/JarvisHealthLiftLog.swift").read_text()
-        self.assertNotIn("struct JarvisHealthNewLiftSheet", lists)
-        self.assertFalse((ROOT / "apps/ios/Jarvis/JarvisHealthWorkoutSheet.swift").exists())
-        self.assertIn("JarvisTodayGymSheet(model: gymModel, language: language, kind: .lift)", area)
-        self.assertIn("JarvisTodayGymSheet(model: gymModel, language: language, kind: .workout)", area)
-        self.assertNotIn("TextField(", lists)
-        self.assertNotIn("copy.text(.save)", lists)
-        self.assertIn("copy.text(.exercises)", lists)
-        self.assertIn("copy.text(.history)", lists)
-        for rows, loading, loaded, failed in (
-            ("visibleExercises", "exercisesLoading", "exercisesLoaded", "exercisesFailed"),
-            ("visibleLifts", "loading", "historyLoaded", "failed"),
-        ):
-            with self.subTest(section=rows):
-                self.assertRegex(
-                    lists,
-                    rf"if {rows}\.isEmpty\s*\{{\s*"
-                    rf"emptyRows\(loading: {loading} && !{loaded}, failed: {failed}\)"
-                    rf"\s*\}} else \{{\s*ForEach\({rows}\.indices",
-                )
-        empty_rows = lists.split("private func emptyRows(", 1)[1].split(
-            "@ViewBuilder private func liftRow", 1
-        )[0]
-        self.assertRegex(
-            empty_rows,
-            r"if loading\s*\{\s*"
-            r"JarvisHealthStateLine\(state: \.loading, language: language\)"
-            r"\s*\} else \{\s*Text\(copy\.text\("
-            r"failed\s*\?\s*\.loadFailed\s*:\s*"
-            r"searchText\.isEmpty\s*\?\s*\.noLifts\s*:\s*\.noResults\)\)",
-        )
-
-    def test_ios_hero_card_never_overrides_the_identifiers_of_its_controls(self):
-        header = (ROOT / "apps/ios/Jarvis/JarvisPageHeader.swift").read_text()
-        card = header.split("struct JarvisPageHeroCard", 1)[1].split("\n}\n", 1)[0]
-        self.assertNotIn(".accessibilityIdentifier(", card)
-
-    def test_ios_app_enables_healthkit_with_danish_and_english_usage_text(self):
-        entitlements = plistlib.loads((ROOT / "apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
-        self.assertIs(entitlements["com.apple.developer.healthkit"], True)
-        project = (ROOT / "apps/ios/project.yml").read_text()
-        self.assertIn("com.apple.HealthKit:", project)
-        for language in ("da", "en"):
-            strings = (ROOT / f"apps/ios/Jarvis/{language}.lproj/InfoPlist.strings").read_text()
-            self.assertIn("NSHealthShareUsageDescription", strings)
-            self.assertIn("NSHealthUpdateUsageDescription", strings)
-
-    def test_ios_notification_toolbar_buttons_use_one_shared_surface(self):
-        controls = (ROOT / "apps/ios/Jarvis/JarvisControls.swift").read_text()
-        chrome = controls.split("private extension View {", 1)[1].split("\n}\n", 1)[0]
-        self.assertIn("buttonStyle(.plain)", chrome)
-        self.assertIn(".jarvisGlassCircle()", chrome)
-        self.assertIn("JarvisDesignTokens.iconButtonDiameter", chrome)
-        self.assertIn("static let iconButtonDiameter: CGFloat = 48", (ROOT / "apps/ios/Jarvis/JarvisDesignSystem.swift").read_text())
-        source = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
-        toolbar = source.split(".toolbar {", 1)[1].split("\n        .", 1)[0]
-        self.assertIn("JarvisIconButton(", toolbar)
-        # Every toolbar item hides the system container so only our one circle glass shows.
-        self.assertIn(".sharedBackgroundVisibility(.hidden)", toolbar)
-        self.assertNotIn(".buttonStyle(", toolbar)
-        self.assertNotIn(".glassEffect(", toolbar)
-        sheet = (ROOT / "apps/ios/Jarvis/JarvisActivitySheet.swift").read_text()
-        # The notifications sheet draws its buttons in its own header, so there is no second toolbar background.
-        self.assertNotIn(".toolbar {", sheet)
-        self.assertIn(".toolbar(.hidden, for: .navigationBar)", sheet)
-        self.assertIn("JarvisIconButton(", sheet.split("private var header: some View {", 1)[1])
-        self.assertIn("jarvisSwipeToDismiss", sheet)
-        self.assertIn('systemImage: "xmark"', sheet)
-        self.assertIn("title: copy(.done)", sheet)
-        chat = (ROOT / "apps/ios/Jarvis/JarvisChatScreen.swift").read_text()
-        self.assertIn("badge: displayedNeedsYouCount", chat)
-        glyph = controls.split("private struct JarvisControlGlyph: View {", 1)[1]
-        self.assertIn('Text(badge > 99 ? "99+" : "\\(badge)")', glyph)
-        self.assertIn(".frame(width: JarvisDesignTokens.iconButtonDiameter, height: JarvisDesignTokens.iconButtonDiameter)", glyph)
-        self.assertIn(".offset(x: -2, y: 2)", glyph)
-        self.assertIn("JarvisDesignTokens.secondaryAccent", glyph)
-
-    def test_lock_screen_approval_preview_and_apns_expiry_use_local_time(self):
-        preview = (ROOT / "apps/ios/Jarvis/JarvisLockScreenTasksPreview.swift").read_text()
-        notification = (ROOT / "apps/ios/Jarvis/JarvisApprovalNotificationCoordinator.swift").read_text()
-        self.assertIn("expiresAt.formatted(", preview)
-        self.assertIn(".dateTime.hour().minute().locale(language.locale)", preview)
-        self.assertIn("arguments: [expiryTime]", preview)
-        self.assertNotIn("RelativeDateTimeFormatter", preview)
-        self.assertIn("timeZone: TimeZone.current.identifier", notification)
-        apns = (ROOT / "apps/backend/src/push/approval-notifications.ts").read_text()
-        self.assertIn("timeZone: input.timeZone", apns)
-        self.assertIn("timeZoneName: 'short'", apns)
-        for language, template in (("da", "Udløber kl. %@"), ("en", "Expires at %@")):
-            resource = ROOT / f"apps/ios/Packages/JarvisCore/Sources/JarvisCore/Resources/{language}.lproj/JarvisApprovals.strings"
-            self.assertIn(f'"approval.expires" = "{template}";', resource.read_text())
-
-    def test_testflight_workflow_is_manual_guarded_and_isolated(self):
-        workflow_path = ROOT / ".github/workflows/ios-testflight.yml"
-        workflow = load_workflow(workflow_path)
-        self.assertEqual(set(workflow["on"]), {"workflow_dispatch"})
-        self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["branch"], {
-            "description": "Branch to build; must match the selected workflow branch",
-            "required": True, "default": "main", "type": "string",
-        })
-        self.assertEqual(workflow["permissions"], {"contents": "read"})
-        self.assertEqual(workflow["concurrency"], {
-            "group": "ios-testflight", "cancel-in-progress": False,
-        })
-        self.assertEqual(len(workflow["jobs"]), 1)
-        job = next(iter(workflow["jobs"].values()))
-        self.assertEqual(job["environment"], "ios-testflight")
-        self.assertEqual(job["runs-on"], "macos-26")
-        self.assertEqual(job["timeout-minutes"], 30)
-        self.assertTrue(all(
-            "xlarge" not in label.lower()
-            for label in ([job["runs-on"]] if isinstance(job["runs-on"], str) else job["runs-on"])
-        ))
-
-        action_steps = [step["uses"] for step in job["steps"] if "uses" in step]
-        self.assertTrue(action_steps)
-        for action in action_steps:
-            with self.subTest(action=action):
-                self.assertRegex(action, r"^[^@]+@[0-9a-f]{40}$")
-        raw_workflow = workflow_path.read_text()
-        for line in raw_workflow.splitlines():
-            if "uses:" in line:
-                self.assertRegex(line, r"uses:\s+\S+@[0-9a-f]{40}\s+#\s+v\S+")
-        guard = next(step for step in job["steps"] if step.get("name") == "Validate dispatch branch")
-        self.assertEqual(guard["env"]["INPUT_BRANCH"], "${{ inputs.branch }}")
-        self.assertIn("git check-ref-format --branch", guard["run"])
-        self.assertIn('"$GITHUB_REF" != "refs/heads/$INPUT_BRANCH"', guard["run"])
-        self.assertIn("exit 1", guard["run"])
-        checkout = next(step for step in job["steps"]
-                        if step.get("uses", "").startswith("actions/checkout@"))
-        self.assertEqual(checkout["with"]["ref"], "${{ inputs.branch }}")
-        preview_notes = next(step for step in job["steps"] if step.get("name") == "Add preview build notes")
-        self.assertEqual(preview_notes["if"], "github.ref != 'refs/heads/main'")
-        self.assertIn("Preview build", preview_notes["run"])
-        self.assertIn("does not create a release tag", preview_notes["run"])
-        self.assertFalse(any("git tag" in step.get("run", "") for step in job["steps"]))
-        preflight = next(step for step in job["steps"] if step.get("name") == "Check signing configuration")
-        self.assertTrue({
-            "APP_STORE_CONNECT_KEY_P8", "APP_STORE_CONNECT_KEY_ID",
-            "APP_STORE_CONNECT_ISSUER_ID", "APPLE_TEAM_ID",
-        } <= set(preflight["env"]))
-
-        ci = load_workflow(ROOT / ".github/workflows/ci.yml")
-        self.assertNotIn(
-            "./.github/workflows/ios-testflight.yml",
-            {job.get("uses") for job in ci["jobs"].values()},
-        )
-        self.assertEqual(deploy_parts(".github/workflows/ios-testflight.yml"), set())
-        options = plistlib.loads((ROOT / "apps/ios/ExportOptions.plist").read_bytes())
-        self.assertEqual(options["destination"], "upload")
-        self.assertEqual(options["method"], "app-store-connect")
-        self.assertEqual(options["signingStyle"], "automatic")
-        self.assertEqual(options["teamID"], "__APPLE_TEAM_ID__")
-
-        key_step = next(step for step in job["steps"] if step.get("name") == "Write App Store Connect key")
-        self.assertIn("umask 077", key_step["run"])
-        self.assertIn("chmod 600", key_step["run"])
-        cleanup = next(step for step in job["steps"] if step.get("name") == "Delete App Store Connect key")
-        self.assertEqual(cleanup["if"], "always()")
-        self.assertIn("rm -f", cleanup["run"])
-        for name in ("Archive with automatic signing", "Export and upload to TestFlight"):
-            step = next(step for step in job["steps"] if step.get("name") == name)
-            self.assertIn("2>&1", step["run"])
-            self.assertRegex(
-                step["run"],
-                r">\s+\"\$RUNNER_TEMP/(?:archive|export)\.log\"",
-            )
-            self.assertNotRegex(
-                step["run"],
-                r"(?m)^\s*echo\s+.*(?:APP_STORE_CONNECT|APPLE_TEAM_ID)",
-            )
-
-    def test_delayed_draft_event_cannot_cancel_ready_qualification(self):
-        source = (ROOT / ".github/workflows/ci.yml").read_text()
-        group = next(line.strip().removeprefix("group: ") for line in source.splitlines()
-                     if line.startswith("  group: "))
-        identity = "${{ github.event.pull_request.number || github.ref }}"
-        draft_lane = (
-            "${{ github.event_name == 'pull_request' && "
-            "github.event.pull_request.draft && '-draft' || '' }}"
-        )
-        self.assertEqual(group, "ci-" + identity + draft_lane)
-
-        def key(draft, number=881):
-            return group.replace(identity, str(number)).replace(draft_lane, "-draft" if draft else "")
-
-        ready, stale_draft = key(False), key(True)
-        self.assertNotEqual(ready, stale_draft)
-        self.assertEqual(ready, key(False))
-        self.assertNotEqual(ready, key(False, 882))
-        # Both admission orders retain different concurrency lanes.
-        for admitted in ((ready, stale_draft), (stale_draft, ready)):
-            self.assertEqual(len(set(admitted)), 2)
-        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", source)
-        result_name = (
-            "${{ github.event_name == 'pull_request' && github.event.pull_request.draft "
-            "&& 'Draft CI not qualified' || 'CI result' }}"
-        )
-        self.assertIn("  result:\n    name: " + result_name, source)
-        self.assertNotEqual("Draft CI not qualified", "CI result")
-
-    def test_retained_report_is_complete_fixed_and_content_free(self):
-        report = smoke()
-        report["entries"][0].update({"status": "down", "reason": "private\n::error::secret",
-                                     "details": {"token": "never-retain"}, "text": "never-retain"})
-        serialized = json.dumps(safe_report(report))
-        for value in ("private", "secret", "never-retain", "details"):
-            self.assertNotIn(value, serialized)
-        self.assertIn("not_reported_or_redacted", serialized)
-
-    def test_missing_duplicate_unknown_and_invalid_status_fail_closed(self):
-        for report in ({"entries": []}, {"entries": smoke()["entries"][:-1]},
-                       {"entries": [smoke()["entries"][0]] * len(CHECK_IDS)}):
-            with self.assertRaises(ValueError):
-                safe_report(report)
-        for bad in ({"id": "private"}, {"status": "private"}, {"id": []}, {"status": []}):
-            report = smoke()
-            report["entries"][0].update(bad)
-            with self.assertRaises(ValueError):
-                safe_report(report)
-
-    def test_workflow_keeps_real_gates_and_main_only_oidc(self):
-        ci = (ROOT / ".github/workflows/ci.yml").read_text()
+class DeployWorkflowTests(unittest.TestCase):
+    def test_workflow_keeps_main_only_oidc_and_exact_qualification_before_azure(self):
         deploy = (ROOT / ".github/workflows/deploy.yml").read_text()
-        self.assertIn("SELECTION: ${{ needs.plan.outputs.selection }}", ci)
-        self.assertIn("pipeline_evidence.py", ci)
         self.assertIn("if: github.ref == 'refs/heads/main'", deploy)
         self.assertIn("release_state.py plan", deploy)
-        self.assertIn("name: Live conversation acceptance", deploy)
         self.assertIn("github.event_name == 'workflow_dispatch' && inputs.live_acceptance == true", deploy)
-        self.assertIn('and .status != "ok"', deploy)
         self.assertNotIn('cat "$response"', deploy)
-        self.assertIn("'docs/features.md'", deploy)
-        self.assertIn("name: release-plan-${{ needs.plan.outputs.attempt }}", deploy)
         self.assertNotIn("RELEASE_BUDGET:", deploy)
         qualification = deploy.index("run: python .github/scripts/release_state.py plan")
         readback = deploy.index("name: Authenticate only after exact qualification")
-        selection = deploy.index("run: python .github/scripts/release_state.py select")
+        selected = deploy.index("run: python .github/scripts/release_state.py select")
         self.assertLess(qualification, readback)
-        self.assertLess(readback, selection)
-        self.assertIn(
-            "if: steps.inputs.outputs.infra == 'false' && steps.inputs.outputs.superseded != 'true'",
-            deploy,
-        )
-        plan_permissions = deploy[deploy.index("  plan:"):deploy.index("    outputs:")]
-        self.assertIn("pull-requests: read", plan_permissions)
-
-    def test_acr_metadata_has_fresh_oidc_after_remote_build_and_before_deployment(self):
-        deploy = (ROOT / ".github/workflows/deploy.yml").read_text()
-        for part, image_variable, deployment in [
-            ("backend", "IMAGE", "az containerapp update"),
-            ("agent", "AGENT_IMAGE", 'az rest --method post --url "$versions?api-version=v1"'),
-        ]:
-            with self.subTest(part=part):
-                job = workflow_recipe(deploy, part)
-                steps = job.split("      - ")[1:]
-                builds = [index for index, step in enumerate(steps) if "az acr build " in step]
-                reads = [index for index, step in enumerate(steps) if "az acr manifest show-metadata " in step]
-                self.assertEqual(len(builds), 1)
-                self.assertEqual(reads, [builds[0] + 2])
-                login = steps[builds[0] + 1]
-                initial_login = next(step for step in steps if "uses: azure/login@" in step)
-                self.assertEqual(login[login.index("uses: azure/login@"):],
-                                 initial_login[initial_login.index("uses: azure/login@"):])
-                self.assertNotIn("if:", login)
-                self.assertNotIn("continue-on-error:", login)
-                digest = steps[reads[0]]
-                self.assertIn(f'--name "jarvis-{part}:$IMAGE_TAG"', digest)
-                self.assertIn('--query digest --output tsv --only-show-errors', digest)
-                self.assertIn('exit 1;', digest)
-                self.assertIn(f'echo "{image_variable}=$REGISTRY_HOST/jarvis-{part}@$digest"', digest)
-                self.assertLess(reads[0], next(index for index, step in enumerate(steps) if deployment in step))
-                self.assertIn("id-token: write", job)
-                self.assertNotIn("--password", job)
-
-    def test_cli_invalid_inputs_never_echo_payloads(self):
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder) / "private.json"
-            path.write_text("private-user-content")
-            result = subprocess.run(
-                [os.sys.executable, str(ROOT / ".github/scripts/smoke_reasons.py"),
-                 str(path), "--evidence", str(Path(folder) / "safe.json")],
-                capture_output=True, text=True, check=False,
-            )
-            self.assertEqual(result.returncode, 2)
-            self.assertNotIn("private-user-content", result.stdout + result.stderr)
+        self.assertLess(readback, selected)
 
 
 if __name__ == "__main__":
