@@ -9453,3 +9453,10 @@ WatchTextInput uses native SwiftUI text editing and WatchKit system text input f
 ## Watch steps rendering — 10 November 2026
 
 `WatchStepsPlot` in JarvisCore projects the existing bounded 24-hour cumulative snapshot and positive daily goal onto a shared scale with headroom. `WatchStepsChart` draws the chart and gradient stems in SwiftUI Canvas. No new transport, persistence, HealthKit query, credential, entitlement or backend boundary. Existing snapshot freshness and midnight expiry remain authoritative. The separate startup-alert recovery patch is PR #1692, not a dependency of chart rendering.
+
+## Notification activity status — 11 November 2026
+
+Factory board events refresh the iOS Now feed and Live Activity reconciliation while
+the app observes the stream. Proactive runs cancelled for quiet hours or changed
+preferences finish their background jobs as cancelled; genuine failures remain
+failed. Existing historical jobs are not rewritten.
