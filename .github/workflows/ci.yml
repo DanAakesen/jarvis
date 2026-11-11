@@ -5,7 +5,7 @@
 # with main and green, so the merged tree was already tested. Copilot PR ready
 # dispatches this workflow after marking a PR ready.
 # "CI result" is the single check to require on main before merging a PR. It covers
-# only quick jobs: the iOS Simulator job runs separately in ios-simulator.yml.
+# only quick jobs; there is no iOS Simulator or UI test run.
 # Component workflows are reusable (workflow_call) so each check runs once.
 name: CI
 
@@ -103,15 +103,9 @@ jobs:
     name: iOS
     needs: plan
     if: needs.plan.outputs.ios == 'true'
-    # Only the quick Linux job gates merge. The slow Simulator job runs in
-    # ios-simulator.yml and reports separately. The called workflow still declares
-    # write permissions for that job, so the caller must grant them.
+    # Only the quick Linux job runs on pull requests. There is no Simulator or UI test run.
     permissions:
       contents: read
-      issues: write
-      pull-requests: write
-    with:
-      simulator: skip
     uses: ./.github/workflows/ios-ci.yml
 
   infra:

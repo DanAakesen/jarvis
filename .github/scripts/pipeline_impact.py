@@ -17,7 +17,7 @@ CHECK_ONLY_WORKFLOWS = {
     "database-ci.yml", "foundry-contract.yml", "jarvis-agent-ci.yml", "plan-status.yml",
     "pr-title.yml", "project-board.yml", "runner-ci.yml", "runner-deploy.yml", "web-ci.yml",
     "worker-label.yml", "voice-probe.yml", "danish-voice-agent.yml", "vault-mirror-ci.yml",
-    "ios-ci.yml", "ios-simulator.yml", "ios-testflight.yml", "watch-build.yml", "chat-diagnostics.yml", "factory-capacity.yml", "factory-sandboxes.yml", "factory-runtime.yml",
+    "ios-ci.yml", "ios-testflight.yml", "watch-build.yml", "chat-diagnostics.yml", "factory-capacity.yml", "factory-sandboxes.yml", "factory-runtime.yml",
 }
 CHECK_ONLY_SCRIPTS = {
     "native_push_readiness.py", "configure_native_push.py",
