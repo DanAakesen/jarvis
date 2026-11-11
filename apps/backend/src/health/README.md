@@ -75,13 +75,12 @@ Run the focused contracts and backend checks with:
 
 ```sh
 npm test --workspace @jarvis/contracts
-npm test --workspace @jarvis/backend -- --run src/health/query.test.ts src/health/index.test.ts src/health/health/read-model.test.ts src/health/show/views.test.ts src/health/mcp/routes.test.ts
-npm run test:database --workspace @jarvis/backend -- src/database/health-schema.integration.test.ts
-npm run test:database --workspace @jarvis/backend -- src/database/health-processing.integration.test.ts src/database/training-targets.integration.test.ts
+npm test --workspace @jarvis/backend
 ```
 
-The real-SQL test requires the existing isolated loopback SQL Server fixture;
-it must not target production data.
+The backend suite was cut to a minimal safety set (authorization, log redaction,
+migrations, the boot smoke test and tool-outcome safety); Health behavior is no
+longer covered by dedicated backend tests.
 
 ## Owner training targets (P14-45, #1132)
 

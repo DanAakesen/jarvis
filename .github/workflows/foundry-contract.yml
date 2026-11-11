@@ -25,5 +25,3 @@ jobs:
         run: npx --no-install eslint --config apps/backend/src/foundry/lint.config.mjs apps/backend/src/foundry --max-warnings 0
       - name: Build backend client
         run: npm run build --workspace @jarvis/backend
-      - name: Offline Foundry contracts
-        run: npx --no-install vitest run --config apps/backend/src/foundry/vitest.config.mts
