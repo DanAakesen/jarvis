@@ -245,15 +245,14 @@ struct WatchNoteReaderView: View {
 
 struct WatchHomeBriefView: View {
     @EnvironmentObject private var connection: WatchConnection
-    @State private var brief: WatchBriefSummary?
     @State private var loading = false
     @State private var failure: String?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                WatchReadState(loading: loading, failure: failure, empty: brief == nil && connection.dashboard?.brief == nil,
+                WatchReadState(loading: loading, failure: failure, empty: connection.dashboard?.brief == nil,
                                emptyText: "Your Home brief is unavailable") { Task { await load() } }
-                if let brief = brief ?? connection.dashboard?.brief {
+                if let brief = connection.dashboard?.brief {
                     WatchBriefText(
                         text: brief.fullText ?? brief.text,
                         highlightedTerms: brief.fullText == nil ? brief.highlights : (brief.fullHighlights ?? brief.highlights),
@@ -271,7 +270,6 @@ struct WatchHomeBriefView: View {
         defer { loading = false }
         await connection.refreshBrief(force: true)
         guard !Task.isCancelled else { return }
-        brief = connection.dashboard?.brief
         failure = connection.briefError
     }
 }

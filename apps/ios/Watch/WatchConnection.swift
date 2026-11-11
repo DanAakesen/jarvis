@@ -202,7 +202,9 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         guard incoming.version == 1 else { return }
         var value = incoming
         if let old = dashboard {
-            guard incoming.generatedAt >= old.generatedAt else { return }
+            let onlyBrief = old.agenda == nil && old.bodyFat == nil && old.todayTasks == nil &&
+                old.upcomingTasks == nil && old.notes == nil && old.nutrition == nil
+            guard onlyBrief || incoming.generatedAt >= old.generatedAt else { return }
             var retained = false
             if value.agenda == nil, let v = old.agenda { value.agenda = v; retained = true }
             if value.bodyFat == nil, let v = old.bodyFat { value.bodyFat = v; retained = true }
