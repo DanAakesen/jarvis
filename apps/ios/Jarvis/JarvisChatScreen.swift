@@ -72,6 +72,7 @@ struct JarvisChatScreen: View {
     private let screenShareBridge = VoiceScreenShareBridge()
     @State private var expandedTools = Set<String>()
     @State private var selectedTimestampID: String?
+    @State private var sendRevision = 0
     @State private var liveToolsExpanded = true
 
     private var reduceMotion: Bool {
@@ -398,7 +399,16 @@ struct JarvisChatScreen: View {
                 .accessibilityIdentifier("chat.transcript")
                 .scrollDismissesKeyboard(.interactively)
                 .scrollEdgeEffectHidden()
-                .modifier(JarvisChatFollowLatest(proxy: proxy, bottomID: "conversation-bottom"))
+                .modifier(JarvisChatFollowLatest(
+                    proxy: proxy,
+                    bottomID: "conversation-bottom",
+                    newestMessageID: model.messages.last(where: { $0.role == .jarvis })?.id,
+                    hasIncomingContent: model.acknowledgment != nil
+                        || !model.progressUpdates.isEmpty
+                        || !model.streamingText.isEmpty,
+                    sendRevision: sendRevision,
+                    jumpToLatestTitle: JarvisChatLocalization.string(.jumpToLatest, language: appLanguage)
+                ))
                 .onChange(of: model.isSending) { _, sending in
                     if sending { liveToolsExpanded = true }
                 }
@@ -1011,9 +1021,11 @@ struct JarvisChatScreen: View {
                 model.actionError = copy(source == .screen ? .screenFrameUnavailable : .cameraFrameUnavailable)
                 return
             }
+            sendRevision += 1
             model.send(visualFrame: PendingVisualFrame(source: source, jpeg: frame))
             return
         }
+        sendRevision += 1
         model.send()
     }
 
