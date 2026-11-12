@@ -174,10 +174,13 @@ jobs:
             echo "REGISTRY_HOST=$(jq -er .containerRegistryLoginServer.value "$RUNNER_TEMP/infra-outputs.json")"
             echo "BACKEND_APP=$(jq -r '.backendAppName.value // ""' "$RUNNER_TEMP/infra-outputs.json")"
           } >>"$GITHUB_ENV"
-      - name: Build the backend image in ACR
+      # Built on the free GitHub runner; ACR Tasks (billed per build second) is not used.
+      - name: Build the backend image on the runner and push it to ACR
         run: |
-          az acr build --registry "$REGISTRY" --image "jarvis-backend:$IMAGE_TAG" --file apps/backend/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --build-arg "JARVIS_DEPLOYED_COMMIT=$GITHUB_SHA" --only-show-errors .
-      # A remote build/queue can outlast the assertion used by the first login.
+          az acr login --name "$REGISTRY" --subscription "$SUBSCRIPTION_ID" --only-show-errors
+          docker build --platform linux/amd64 --tag "$REGISTRY_HOST/jarvis-backend:$IMAGE_TAG" --file apps/backend/Dockerfile --build-arg "JARVIS_DEPLOYED_COMMIT=$GITHUB_SHA" .
+          docker push "$REGISTRY_HOST/jarvis-backend:$IMAGE_TAG"
+      # A long build can outlast the assertion used by the first login.
       - name: Refresh Azure login before reading the backend image digest
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
@@ -271,9 +274,11 @@ jobs:
           ensure_role "$deploy_principal" "Foundry Project Manager" "$project_id"
           ensure_role "$deploy_principal" "Foundry User" "$project_id"
           ensure_role "$project_identity" "Foundry User" "$account_id"
-      - name: Build the Jarvis agent image in ACR
+      - name: Build the Jarvis agent image on the runner and push it to ACR
         run: |
-          az acr build --registry "$REGISTRY" --image "jarvis-agent:$IMAGE_TAG" --file agents/jarvis/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --only-show-errors agents/jarvis
+          az acr login --name "$REGISTRY" --subscription "$SUBSCRIPTION_ID" --only-show-errors
+          docker build --platform linux/amd64 --tag "$REGISTRY_HOST/jarvis-agent:$IMAGE_TAG" --file agents/jarvis/Dockerfile agents/jarvis
+          docker push "$REGISTRY_HOST/jarvis-agent:$IMAGE_TAG"
       - name: Refresh Azure login before reading the agent image digest
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:

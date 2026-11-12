@@ -1,3 +1,16 @@
+## Image builds — 12 November 2026
+
+- **Images are built on the GitHub runner, not in ACR Tasks.** Deploy, Runner deploy, Factory
+  runtime and the vault-mirror step in `.github/scripts/deploy_bicep.sh` run `az acr login`
+  after the Azure login, then `docker build --platform linux/amd64` and `docker push` with the
+  same image names, tags and build arguments as before. The digest lookup with
+  `az acr manifest show-metadata` is unchanged. No layer cache is used (the cache would need an
+  extra action; runner minutes are free). Decision: `docs/decisions.md`, 2026-11-12.
+- **Builds per Deploy.** Backend and agent are each built only when the plan selects them
+  (unchanged inputs are reused); an infra change selects both. The vault-mirror image is built
+  only when the infra job runs with the mirror enabled. Runner deploy builds two images on
+  `runner/**` changes.
+
 ## Tool lookup for voice and chat — 12 November 2026
 
 - **No tool schemas are sent on each request.** The voice relay (`apps/backend/src/voice`) and
@@ -8247,6 +8260,8 @@ results separate and retain actual native captures before claiming UI acceptance
 ## Apple Watch companion work (8 November 2026)
 
 Source: apps/ios/Watch, apps/ios/WatchWidgets and iPhone JarvisWatchBridge.swift. Build: apps/ios/project.yml. Tests: `swift test --package-path apps/ios/Packages/JarvisCore --filter WatchContractTests` or full swift test. Native check after xcodegen generate in apps/ios: `xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO build`. PR-only watch-build.yml builds Watch and phone unsigned and captures isolated DEBUG --watch-fixture views on an available Ultra simulator. Fixtures are not real health or successful connectivity. Primary owns signing, installation, integration and deployment. References, decisions and unverified checks: docs/ios/design/watch/.
+
+Voice startup now waits up to eight seconds for the companion connection; Watch dictation can fill a draft offline. Check cold complication launch, iPhone background/lock and first unlock after reboot on paired devices, including failure recovery and no duplicate voice start. Linux parsing and Core tests do not verify WatchConnectivity, dictation presentation or audio.
 
 For #1769, the documented WatchContractTests filter matches no tests in this checkout. Run the existing full JarvisCore suite and the native Watch build; verify persistence after first Watch unlock, locked complications, offline/partial refresh, age labels and sign-out on paired devices. Linux cannot verify Apple file protection or WidgetKit rendering.
 

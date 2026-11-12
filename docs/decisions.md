@@ -1,3 +1,13 @@
+## 12 November 2026 — Build images on the GitHub runner, not in ACR Tasks
+
+Images are built with `docker build` on the GitHub runner and pushed to ACR;
+ACR Tasks (`az acr build`) is no longer used. Reason: ACR build seconds were
+about 10 DKK on a busy deploy day, while Actions minutes are free for this
+public repository and pushing an image costs only storage. Image names, tags,
+build arguments and the digest lookup are unchanged. The deploy identity pushes
+with its existing Contributor role on the resource group, so no new role
+assignment is needed.
+
 ## 12 November 2026 — One bilingual realtime voice route (P15-110 / #1770)
 
 Use the existing English realtime deployment (`gpt-realtime-2.1`) and shared
@@ -12572,3 +12582,7 @@ retain actual failure reasons. Task 24 handled #1706; the Factory bot reported i
 Done on 10 November and #1709 was merged. Its current production state and the
 reported proactive failure reasons have not been verified here. Historical job
 records remain unchanged.
+
+## Watch voice startup and dictation (12 November 2026)
+
+Keep the existing phone-owned authentication and live voice transport. The Watch now waits briefly for WCSession activation/reachability before a single voice-start message; it does not replay a possibly delivered start or queue real-time audio. Dictation edits the Watch draft without a phone, while sending and task creation still require the companion. Queued transfers are opportunistic and cannot support interactive voice or provide immediate task results; blind mutation retries could duplicate writes. Standalone Watch authentication and backend transport are not implemented. Paired-device cold launch, locked-phone and network behavior remain unverified.

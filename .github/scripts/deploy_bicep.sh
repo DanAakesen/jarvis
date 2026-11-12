@@ -177,9 +177,10 @@ if [[ "$vault_mirror_enabled" == true ]]; then
     if [[ -z "$registry" || -z "$registry_host" ]]; then
       echo "::notice title=Vault mirror::The existing registry outputs are unavailable; keeping the mirror disabled."
       vault_mirror_enabled=false
-    elif az acr build --registry "$registry" --image "jarvis-vault-mirror:$GITHUB_SHA" \
-      --file apps/vault-mirror/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" \
-      --only-show-errors .; then
+    elif az acr login --name "$registry" --subscription "$SUBSCRIPTION_ID" --only-show-errors &&
+      docker build --platform linux/amd64 --tag "$registry_host/jarvis-vault-mirror:$GITHUB_SHA" \
+        --file apps/vault-mirror/Dockerfile . &&
+      docker push "$registry_host/jarvis-vault-mirror:$GITHUB_SHA"; then
       vault_mirror_digest=$(az acr manifest show-metadata --registry "$registry" \
         --name "jarvis-vault-mirror:$GITHUB_SHA" --subscription "$SUBSCRIPTION_ID" \
         --query digest --output tsv --only-show-errors 2>/dev/null || true)

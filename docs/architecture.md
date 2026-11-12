@@ -7308,7 +7308,7 @@ The deploy script explicitly uses ARM **Incremental** mode. In that mode, resour
 flowchart LR
     Q["Successful exact-tree CI receipt"] --> P["Plan: exact inputs + latest trusted applied receipt"]
     P --> I["Infra: Bicep deployment jarvis-infra"]
-    P --> B["Backend: az acr build, image by digest, Container Apps revision"]
+    P --> B["Backend: docker build on the runner, push to ACR, image by digest, Container Apps revision"]
     I --> B --> W["Web: Vite build with backend URL, Static Web Apps upload"]
     B --> A["Agent: ACR image by digest, Foundry hosted-agent version"]
     I --> A
@@ -9326,6 +9326,8 @@ backend execution, authorization, provider catalogue or audit semantics.
 ## Apple Watch companion boundary (8 November 2026)
 
 XcodeGen JarvisWatch embeds JarvisWatchWidgets and is embedded by the phone app. Both use portable JarvisCore; Watch-native shared controls live under apps/ios/Watch. A Codable WatchConnectivity allow-list connects Watch to the paired phone. JarvisWatchBridge owns authenticated chat/health/lift/Factory reads/writes and VoiceSessionClient; credentials remain on phone. Watch VoiceAudioEngine captures/plays PCM16 through ordered acknowledged messages. Phone expires voice after 15 seconds without Watch heartbeat. Existing VoiceLiveActivityController controls the same session. No backend endpoint, infrastructure or production configuration is added. Display-only health and dashboard snapshots cross application context and are atomically persisted in the Watch app group with after-first-unlock file protection; legacy defaults migrate on Watch startup. Failed or partial reads retain prior values with conservative saved ages; timelines keep stale entries after 15 minutes or date rollover. Explicit phone sign-out clears the cache. No offline mutation queue. See docs/ios/design/watch/implementation.md for verification limits.
+
+Voice start waits up to eight seconds for an activated, reachable session and an installed companion before sending one acknowledged request. Subsequent audio and events still require live reachability. Native Watch dictation only edits the draft and no longer requires reachability; sending and task creation still use the phone. The iPhone activates WCSession at launch, but its authenticated client is configured by the gate model, so a cold background launch may still need sign-in or initialization. Phone-after-reboot unlock, background wake and live audio reliability require paired-device verification.
 
 ### Notes recent-library projection
 

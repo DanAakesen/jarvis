@@ -16,6 +16,8 @@ Task cancellation and recovery, routine/memory deletion, workspace removal, depl
 
 Keep the approved Watch layout and controls. Startup and idle connectivity changes use the existing quiet connection status. History read failures stay inside the chat scroll area. The modal Jarvis alert is reserved for actual user-action/interruption feedback.
 
+Voice startup shows the existing localized connection status while waiting. Dictation remains available without the phone and fills the draft; the connection notice distinguishes voice and sending from offline dictation.
+
 Watch Home uses smaller, underlined, background-free See more links and keeps the body-fat chart without the date and summary lines beneath it. The workout preview shows recent history separately from weekly goal counts.
 
 ## Home brief and daily activity implementation — 9 November 2026
