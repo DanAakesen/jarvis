@@ -10,6 +10,8 @@
 "Recent Notes" = "Seneste noter";
 "Connecting to iPhone…" = "Opretter forbindelse til iPhone…";
 "Open Jarvis on your iPhone to connect." = "Åbn Jarvis på din iPhone for at oprette forbindelse.";
+"iPhone unavailable. Voice and sending need a connection." = "iPhone er ikke tilgængelig. Tale og afsendelse kræver forbindelse.";
+"iPhone unavailable. Keep it nearby and try again." = "iPhone er ikke tilgængelig. Hold den i nærheden, og prøv igen.";
 "Saved workouts · not current" = "Gemte træninger · ikke opdateret";
 "No workouts in the last 7 days" = "Ingen træninger de seneste 7 dage";
 "Last 7 days" = "Seneste 7 dage";

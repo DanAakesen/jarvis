@@ -10,6 +10,8 @@
 "Recent Notes" = "Recent Notes";
 "Connecting to iPhone…" = "Connecting to iPhone…";
 "Open Jarvis on your iPhone to connect." = "Open Jarvis on your iPhone to connect.";
+"iPhone unavailable. Voice and sending need a connection." = "iPhone unavailable. Voice and sending need a connection.";
+"iPhone unavailable. Keep it nearby and try again." = "iPhone unavailable. Keep it nearby and try again.";
 "Saved workouts · not current" = "Saved workouts · not current";
 "No workouts in the last 7 days" = "No workouts in the last 7 days";
 "Last 7 days" = "Last 7 days";

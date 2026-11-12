@@ -168,12 +168,11 @@ struct WatchRoot: View {
                     path.append(.chat); pendingDictation = true
                 }
                 JarvisWatchAction(title: "Factory", kind: .factory) { path.append(.factory) }
-                if !connection.reachable { Text("Open Jarvis on your iPhone to connect.").font(.caption).foregroundStyle(.secondary) }
+                if !connection.reachable { Text("iPhone unavailable. Voice and sending need a connection.").font(.caption).foregroundStyle(.secondary) }
             }
         }.watchCaptureReady("actions")
     }
     private func dictate() {
-        guard connection.reachable else { model.error = "Connect to your iPhone and open Jarvis."; return }
         guard model.voiceID == nil else { model.error = "End voice before dictating a message."; return }
         guard let controller = WKExtension.shared().visibleInterfaceController else {
             model.error = "Tap the message field to enter or dictate text."; return

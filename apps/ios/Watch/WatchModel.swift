@@ -17,6 +17,7 @@ final class WatchModel: ObservableObject {
     @Published private(set) var historyError: String?
     @Published var voiceID: UUID?
     @Published var voiceState = ""
+    @Published private(set) var waitingForVoiceConnection = false
     @Published var muted = false
     let connection = WatchConnection.shared
     private let audio = VoiceAudioEngine()
@@ -88,10 +89,14 @@ final class WatchModel: ObservableObject {
         historyRequest = UUID(); historyError = nil
         busy = true; error = nil
         let epoch = UUID(); voiceGeneration = epoch
-        defer { busy = false }
+        defer { busy = false; waitingForVoiceConnection = false }
         guard await VoiceAudioEngine.requestMicrophonePermission() else { error = "Allow microphone access in Settings."; return }
         guard epoch == voiceGeneration else { return }
         do {
+            waitingForVoiceConnection = true
+            try await connection.waitForVoiceConnection()
+            waitingForVoiceConnection = false
+            guard epoch == voiceGeneration else { return }
             let request = WatchRequest(action: .startVoice)
             // Accept early state events while the phone opens the socket.
             voiceID = request.id; voiceState = "Connecting"
@@ -177,5 +182,11 @@ final class WatchModel: ObservableObject {
         default: break
         }
     }
-    func show(_ error: Error) { self.error = (error as? WatchFailure)?.message ?? "Request failed. Check Jarvis on your iPhone." }
+    func show(_ error: Error) {
+        if let failure = error as? WatchFailure, failure == .unavailable {
+            self.error = NSLocalizedString("iPhone unavailable. Keep it nearby and try again.", comment: "")
+        } else {
+            self.error = (error as? WatchFailure)?.message ?? "Request failed. Check Jarvis on your iPhone."
+        }
+    }
 }
