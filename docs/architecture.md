@@ -7308,7 +7308,7 @@ The deploy script explicitly uses ARM **Incremental** mode. In that mode, resour
 flowchart LR
     Q["Successful exact-tree CI receipt"] --> P["Plan: exact inputs + latest trusted applied receipt"]
     P --> I["Infra: Bicep deployment jarvis-infra"]
-    P --> B["Backend: az acr build, image by digest, Container Apps revision"]
+    P --> B["Backend: docker build on the runner, push to ACR, image by digest, Container Apps revision"]
     I --> B --> W["Web: Vite build with backend URL, Static Web Apps upload"]
     B --> A["Agent: ACR image by digest, Foundry hosted-agent version"]
     I --> A

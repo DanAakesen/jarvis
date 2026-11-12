@@ -45,7 +45,7 @@ See the [Azure constraints](../docs/agent-context.md#azure) and
 ## Authentication after remote image builds
 
 The backend and hosted-agent Deploy jobs obtain a fresh GitHub OIDC assertion
-through the existing pinned `azure/login` action after each remote ACR build and
+through the existing pinned `azure/login` action after each image build and push to ACR (built on the GitHub runner) and
 immediately before reading its manifest digest. The action uses the same existing
 client, tenant and subscription; permissions, image tags, digest guards, deployment
 readiness and release receipts are unchanged. Failed login or metadata resolution

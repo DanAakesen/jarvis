@@ -1,3 +1,13 @@
+## 12 November 2026 — Build images on the GitHub runner, not in ACR Tasks
+
+Images are built with `docker build` on the GitHub runner and pushed to ACR;
+ACR Tasks (`az acr build`) is no longer used. Reason: ACR build seconds were
+about 10 DKK on a busy deploy day, while Actions minutes are free for this
+public repository and pushing an image costs only storage. Image names, tags,
+build arguments and the digest lookup are unchanged. The deploy identity pushes
+with its existing Contributor role on the resource group, so no new role
+assignment is needed.
+
 ## 12 November 2026 — One bilingual realtime voice route (P15-110 / #1770)
 
 Use the existing English realtime deployment (`gpt-realtime-2.1`) and shared

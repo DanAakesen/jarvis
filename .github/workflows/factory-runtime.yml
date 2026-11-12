@@ -71,8 +71,11 @@ jobs:
       - name: Build the exact qualified worker source
         if: inputs.reuse_image_run == ''
         run: |
-          az acr build --registry "$REGISTRY" --image "jarvis-runner-base:$IMAGE_TAG" --file runner/Dockerfile --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
-          az acr build --registry "$REGISTRY" --image "jarvis-runner-dotnet:$IMAGE_TAG" --file runner/Dockerfile.dotnet --build-arg "RUNNER_BASE_IMAGE=$REGISTRY_HOST/jarvis-runner-base:$IMAGE_TAG" --platform linux/amd64 --no-logs --subscription "$SUBSCRIPTION_ID" runner
+          az acr login --name "$REGISTRY" --subscription "$SUBSCRIPTION_ID" --only-show-errors
+          docker build --platform linux/amd64 --tag "$REGISTRY_HOST/jarvis-runner-base:$IMAGE_TAG" --file runner/Dockerfile runner
+          docker push "$REGISTRY_HOST/jarvis-runner-base:$IMAGE_TAG"
+          docker build --platform linux/amd64 --tag "$REGISTRY_HOST/jarvis-runner-dotnet:$IMAGE_TAG" --file runner/Dockerfile.dotnet --build-arg "RUNNER_BASE_IMAGE=$REGISTRY_HOST/jarvis-runner-base:$IMAGE_TAG" runner
+          docker push "$REGISTRY_HOST/jarvis-runner-dotnet:$IMAGE_TAG"
           digest=$(az acr manifest show-metadata --registry "$REGISTRY" --name "jarvis-runner-dotnet:$IMAGE_TAG" --query digest --output tsv --subscription "$SUBSCRIPTION_ID")
           echo "WORKER_IMAGE=$REGISTRY_HOST/jarvis-runner-dotnet@$digest" >> "$GITHUB_ENV"
       - name: Create disposable qualification storage and scope its access
