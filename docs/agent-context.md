@@ -542,7 +542,7 @@ acceptance from synthetic interpreter fixtures. PR #1635 owns iOS stream recover
 ## Notes and Home widgets (P15-89 / #1593; 5 November 2026)
 
 - The new widgets live in `apps/ios/Widgets/JarvisNotesWidgetViews.swift` and `JarvisHomeWidgetViews.swift`; the snapshot types, builders, phrases and `JarvisWidgetLink` are in `Packages/JarvisCore/Sources/JarvisCore/Widgets/`. Check them with `swift test` in `apps/ios/Packages/JarvisCore`; the widget views compile only in the iOS CI Simulator job.
-- Add widget strings to `JarvisWidgetCopy` in both languages with the same placeholders. Do not edit `apps/ios/project.yml` or `.github/workflows/ios-ci.yml` here (owned by the widgets re-enable PR #1591).
+- Add widget strings to `JarvisWidgetCopy` in English with the same placeholders. Do not edit `apps/ios/project.yml` or `.github/workflows/ios-ci.yml` here (owned by the widgets re-enable PR #1591).
 - Widgets in the Notes and Home topics must have no `Button` or intent; tapping opens the app page through `widgetURL`.
 
 ## Widgets embedded again (P15-88 / #1591; 5 November 2026)
@@ -584,10 +584,10 @@ through the browser for the P15-46 screenshot follow-up.
 ## Suggestion approval checks (P15-46 / #1494)
 
 The existing ready-PR iOS CI artifact includes
-`calendar-change-confirmation-{da,en}-{light,dark}.png` and retained
+`calendar-change-confirmation-{light,dark}.png` and retained
 `ui-test-attachments/`. Captures use `--screenshot-calendar-change-fixture`
-with `--screenshot-notifications-open` and process-only language/theme launch
-preferences. The calendar fixture is Simulator-only, uses no live backend,
+with `--screenshot-notifications-open` and a process-only theme preference. The
+calendar fixture is Simulator-only, uses no live backend,
 and visibly explains disabled approval actions. Mac CI must run the XCUI tests
 and captures; Linux parsing/Core checks do not establish rendered acceptance.
 
@@ -6001,8 +6001,8 @@ Browser and iPhone sessions use only the authenticated `/voice` WebSocket with
 uses `azure-speech` without a fixed language hint; parallel Azure Speech interim
 recognition detects `da-DK` or `en-GB`. Removed settings that reference
 `mai-transcribe` fall back to `azure-speech`; the legacy Danish voice setting is
-ignored. Danish app localization, chat, notes and the composer’s chat-language
-choice remain independent of voice routing.
+ignored. App copy and voice configuration are English-only; Danish chat, notes
+and speech remain user content and conversation input.
 
 The provisioning workflow and its script are removed. Do not edit Azure
 resources manually: the Foundry hosted agent `jarvis-voice-mai`, MAI Transcribe
@@ -7059,9 +7059,9 @@ from the repository root for sheet-only layout and screenshot cost-guard checks.
 Linux can parse SwiftUI syntax but cannot compile Apple frameworks or capture
 the simulator.
 
-`--screenshot-health-fixture --screenshot-health-state=track|newlift|empty
---screenshot-health-language=da|en` uses synthetic `FixtureTransport` data only.
-The existing ready-PR, one-boot Mac job captures these states in light/dark and
+`--screenshot-health-fixture --screenshot-health-state=track|newlift|empty`
+uses synthetic `FixtureTransport` data only. The existing ready-PR, one-boot Mac
+job captures these states in light/dark and English-only copy, and
 links its artifact beside the approved Health board in the PR comment.
 The Mac job has a 30-minute limit for the combined Chat, sidebar, notifications,
 Factory, and Health captures, upload, and cleanup; it still boots only once.
@@ -7141,11 +7141,10 @@ failed again, so no successful Swift CodeQL analysis is claimed.
 previews and simulator screenshots through `FixtureTransport`; its project,
 board, task, release, event, usage and commit values are synthetic. CI selects
 the screen with `--screenshot-factory-fixture`,
-`--screenshot-factory-state=<state>` and
-`--screenshot-factory-language=da|en`. Supported states are board, needs,
+`--screenshot-factory-state=<state>`. Supported states are board, needs,
 releases, detail, release, steer, newtask, empty, loading, error, offline,
-stale, reconnecting and search. Capture all those states in light/dark and both
-languages through the existing `ios-ci.yml` simulator boot; do not add a Mac
+stale, reconnecting and search. Capture all those states in light/dark with
+English-only copy through the existing `ios-ci.yml` simulator boot; do not add a Mac
 job, simulator boot or UI-test target.
 
 The app's Factory project menu selects one project at a time. Needs Dan is
@@ -7305,9 +7304,9 @@ SwiftUI compile check.
 
 P15-12 mounts the Notes area at the existing Notes destination. `JarvisNotesClient`
 reuses the shared routes in section 11 of `docs/ios/integration-contract.md`.
-The app-owned language preference selects the complete Notes localization catalog
-and date locale; do not derive it from `GET /settings` or voice language. Keep the
-web/backend source files there authoritative and do not add iOS routes.
+Notes use the English-only localization catalog and date locale; no app-language
+preference is stored. Keep the web/backend source files there authoritative and
+do not add iOS routes.
 Synthetic note/task/graph fixture scenarios and Linux tests live in
 `JarvisCoreTests`. The SwiftUI area provides Notes, Tasks, List and Graph tabs,
 creation sheets, conditional note saves and conflict recovery. It depends on an
@@ -7348,10 +7347,9 @@ existing confirmation endpoint. Successful/failed results appear in the Now
 activity sheet. If notification previews are disabled, the category has no
 Approve/Decline actions.
 
-The `--screenshot-lockscreen-task-fixture` plus
-`--screenshot-lockscreen-language=da|en` launch arguments render synthetic
+The `--screenshot-lockscreen-task-fixture` launch argument renders synthetic
 visual content only. CI captures this shared SwiftUI composition in light/dark
-and Danish/English in the existing single simulator boot; it does not prove the
+with English-only copy in the existing single simulator boot; it does not prove the
 system Lock Screen or notification action behavior. The Linux checks are
 `swift build` and `swift test` from `apps/ios/Packages/JarvisCore`, plus the iOS
 project/plist metadata checks in `.github/workflows/ios-ci.yml`; only the Mac
@@ -7593,11 +7591,10 @@ After an established socket drops, `VoiceScreenModel` shows the localized
 connection-lost surface while `VoiceSessionClient` runs its bounded reconnect
 policy. Retry now cancels the current client and starts another session through
 the same bounded path; stale callbacks are ignored, and End returns to Chat.
-Initial connection failures do not use this surface. Both app-language catalogs
-include its title and actions.
+Initial connection failures do not use this surface. The English-only app catalog
+includes its title and actions.
 The ready-PR Mac job launches the synthetic state with
-`--screenshot-voice-connection-lost` and `--screenshot-voice-language=da|en`,
-uploads both simulator captures with the existing screenshot artifact, and links
+`--screenshot-voice-connection-lost`, uploads both theme captures with the existing screenshot artifact, and links
 the approved surface page in its PR comment. This fixture does not simulate a
 live connection or replace device acceptance.
 

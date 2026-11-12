@@ -775,10 +775,10 @@ struct JarvisTargetsSettingsView: View {
 
     private func localizedUnit(_ value: String) -> String {
         switch value {
-        case "sessions": language == .da ? "pas" : "sessions"
-        case "steps": language == .da ? "skridt" : "steps"
+        case "sessions": "sessions"
+        case "steps": "steps"
         case "kcal": "kcal"
-        case "g": language == .da ? "g" : "g"
+        case "g": "g"
         default: value
         }
     }

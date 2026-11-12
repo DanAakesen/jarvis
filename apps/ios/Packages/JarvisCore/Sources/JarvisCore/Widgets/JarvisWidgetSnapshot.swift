@@ -9,21 +9,18 @@ public struct JarvisWidgetSnapshot: Codable, Equatable, Sendable {
     public static let days = 7
 
     public var version: Int
-    public var language: String
     public var gym: Section<JarvisGymWidgetData>
     public var factory: Section<JarvisFactoryWidgetData>
     public var notes: Section<JarvisNotesWidgetData>
     public var home: Section<JarvisHomeWidgetData>
 
     public init(
-        language: JarvisAppLanguage = .default,
         gym: Section<JarvisGymWidgetData> = .init(),
         factory: Section<JarvisFactoryWidgetData> = .init(),
         notes: Section<JarvisNotesWidgetData> = .init(),
         home: Section<JarvisHomeWidgetData> = .init()
     ) {
         version = Self.currentVersion
-        self.language = language.rawValue
         self.gym = gym
         self.factory = factory
         self.notes = notes
@@ -34,14 +31,11 @@ public struct JarvisWidgetSnapshot: Codable, Equatable, Sendable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         version = try container.decode(Int.self, forKey: .version)
-        language = try container.decode(String.self, forKey: .language)
         gym = try container.decode(Section<JarvisGymWidgetData>.self, forKey: .gym)
         factory = try container.decode(Section<JarvisFactoryWidgetData>.self, forKey: .factory)
         notes = try container.decodeIfPresent(Section<JarvisNotesWidgetData>.self, forKey: .notes) ?? .init()
         home = try container.decodeIfPresent(Section<JarvisHomeWidgetData>.self, forKey: .home) ?? .init()
     }
-
-    public var appLanguage: JarvisAppLanguage { JarvisAppLanguage(rawValue: language) ?? .default }
 
     /// What the app last knew about one widget topic. `value` is kept when a later refresh fails, so the widget
     /// shows the old numbers marked as stale instead of going blank.

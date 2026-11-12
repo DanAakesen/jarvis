@@ -19,9 +19,7 @@ private enum JarvisGatePresentation: Equatable {
 
 private extension JarvisAppLanguage {
     static var current: JarvisAppLanguage {
-        JarvisAppLanguage(
-            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-        ) ?? .default
+        .default
     }
 
     func text(_ key: JarvisNotesLocalizationKey) -> String {
@@ -377,11 +375,7 @@ struct JarvisGateRootView: View {
             Group {
                 if ProcessInfo.processInfo.arguments.contains("--screenshot-lockscreen-task-fixture") {
                     JarvisLockScreenTasksPreview(
-                        language: JarvisAppLanguage(
-                            rawValue: ProcessInfo.processInfo.arguments
-                                .first(where: { $0.hasPrefix("--screenshot-lockscreen-language=") })?
-                                .replacingOccurrences(of: "--screenshot-lockscreen-language=", with: "") ?? ""
-                        ) ?? .default
+                        language: .default
                     )
                 } else {
                     ContentView(sessionEpoch: model.contentEpoch)
@@ -424,10 +418,9 @@ struct JarvisGateRootView: View {
 
 private struct JarvisGateOverlayView: View {
     @ObservedObject var model: JarvisGateModel
-    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
 
     private var language: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+        .default
     }
 
     var body: some View {

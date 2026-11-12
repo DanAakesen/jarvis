@@ -21,7 +21,6 @@ private enum JarvisSettingsSection: String, CaseIterable, Identifiable {
 }
 
 enum JarvisSettingsDetail: String, Hashable {
-    case appLanguage
     case appearance
     case personality
     case identity
@@ -63,7 +62,6 @@ private struct JarvisSettingsGroup: Identifiable {
 
 struct JarvisSettingsArea: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @Binding var storedLanguage: String
     @Binding var storedTheme: String
 
     let client: JarvisSettingsClient?
@@ -83,7 +81,7 @@ struct JarvisSettingsArea: View {
     @State private var loadGeneration = 0
 
     private var language: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+        .default
     }
 
     private func copy(_ key: JarvisSettingsLocalizationKey) -> String {
@@ -171,7 +169,7 @@ struct JarvisSettingsArea: View {
         switch section {
         case .general:
             [
-                .init(id: "appearance", title: copy(.appearanceRow), rowIDs: ["language", "appearance"]),
+                .init(id: "appearance", title: copy(.appearanceRow), rowIDs: ["appearance"]),
                 .init(id: "jarvis", title: "Jarvis", rowIDs: ["instructions", "voice", "research"]),
                 .init(id: "behaviour", title: copy(.behaviour), rowIDs: ["proactive", "notifications", "routines"]),
                 .init(id: "memory", title: copy(.memoryRow), rowIDs: ["memory"]),
@@ -310,7 +308,7 @@ struct JarvisSettingsArea: View {
 
     private func needsSettings(_ detail: JarvisSettingsDetail) -> Bool {
         switch detail {
-        case .appLanguage, .proactive, .routines, .memory, .deployments, .newDeployment,
+        case .proactive, .routines, .memory, .deployments, .newDeployment,
              .trainingTargets, .nutritionTargets, .healthGoals, .healthCredential, .owner:
             false
         default:
@@ -346,7 +344,6 @@ struct JarvisSettingsArea: View {
         switch section {
         case .general:
             return [
-                row("language", .language, .appLanguage, value: copy(language == .da ? .danish : .english)),
                 row("appearance", .appearanceRow, .appearance, setting: "appearance", key: "theme"),
                 row("instructions", .instructionsRow, .instructions),
                 row("voice", .voiceRow, .voice),
@@ -449,7 +446,6 @@ struct JarvisSettingsArea: View {
 
     private func symbol(for id: String) -> String {
         switch id {
-        case "language": "globe"
         case "appearance": "slider.horizontal.3"
         case "instructions": "text.alignleft"
         case "personality": "face.smiling"
@@ -476,8 +472,6 @@ struct JarvisSettingsArea: View {
     @ViewBuilder
     private func detailView(for detail: JarvisSettingsDetail) -> some View {
         switch detail {
-        case .appLanguage:
-            JarvisSettingsLanguageView(language: $storedLanguage, selectedLanguage: language)
         case .proactive:
             JarvisProactiveSettingsView(client: client, language: language, readOnly: readOnly, onFailure: noteResourceFailure)
         case .routines:
@@ -634,8 +628,6 @@ struct JarvisSettingsArea: View {
         case "light": .light
         case "dark": .dark
         case "system": .system
-        case "da": .danish
-        case "en": .english
         case "british_butler": .personalityButler
         case "warm": .personalityWarm
         case "direct": .personalityDirect

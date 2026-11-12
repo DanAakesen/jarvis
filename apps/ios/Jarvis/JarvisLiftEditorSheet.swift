@@ -23,7 +23,6 @@ struct JarvisLiftEditorSheet: View {
         _sets = State(initialValue: String(lift.value.sets))
     }
 
-    private var da: Bool { language == .da }
     private var edit: JarvisLiftEdit? {
         guard let kg = Double(weight.replacingOccurrences(of: ",", with: ".")),
               let r = Int(reps), let s = Int(sets) else { return nil }
@@ -36,23 +35,23 @@ struct JarvisLiftEditorSheet: View {
         NavigationStack {
             JarvisForm {
                 Section {
-                    field(da ? "Øvelse" : "Exercise", text: $name, id: "name", keyboard: .default)
-                    field(da ? "Vægt (kg)" : "Weight (kg)", text: $weight, id: "weight", keyboard: .decimalPad)
-                    field(da ? "Gentagelser" : "Reps", text: $reps, id: "reps", keyboard: .numberPad)
-                    field(da ? "Sæt" : "Sets", text: $sets, id: "sets", keyboard: .numberPad)
+                    field("Exercise", text: $name, id: "name", keyboard: .default)
+                    field("Weight (kg)", text: $weight, id: "weight", keyboard: .decimalPad)
+                    field("Reps", text: $reps, id: "reps", keyboard: .numberPad)
+                    field("Sets", text: $sets, id: "sets", keyboard: .numberPad)
                 }
                 if failed {
-                    Text(da ? "Ændringen kunne ikke bekræftes. Luk og opdater løftene før du prøver igen." : "The change could not be confirmed. Close and refresh lifts before trying again.")
+                    Text("The change could not be confirmed. Close and refresh lifts before trying again.")
                         .foregroundStyle(.red)
                         .accessibilityIdentifier("health.lift.edit.error")
                 }
             }
             .disabled(saving)
-            .navigationTitle(da ? "Rediger løft" : "Edit lift")
+            .navigationTitle("Edit lift")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 JarvisSheetToolbar(
-                    confirmTitle: da ? "Gem" : "Save", closeTitle: da ? "Luk" : "Close",
+                    confirmTitle: "Save", closeTitle: "Close",
                     isWorking: saving, isConfirmDisabled: edit == nil || edit == lift.value || failed,
                     onConfirm: { Task { await save() } }, onClose: { dismiss() }
                 )

@@ -44,7 +44,6 @@ export type Item = {
   feedback: 'useful' | 'wrong' | null;
   runId: string | null;
   todoAdded: boolean;
-  language: 'da' | 'en' | null;
   createdAt: string;
 };
 

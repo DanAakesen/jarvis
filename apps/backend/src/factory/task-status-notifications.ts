@@ -50,18 +50,7 @@ export function taskStatusMessage(
   taskId: string,
   state: TaskNotificationState,
   url?: string,
-  language: 'da' | 'en' = 'en',
 ): string {
-  if (language === 'da') {
-    const outcome = state === 'Done'
-      ? 'er færdig'
-      : state === 'NeedsAttention'
-        ? 'kræver opmærksomhed'
-        : state === 'Cancelled'
-          ? 'blev annulleret'
-          : 'åbnede en pull request';
-    return `Opgave ${taskId} ${outcome}${url ? ` (PR: ${url})` : ''}.`;
-  }
   const outcome = state === 'Done'
     ? 'is done'
     : state === 'NeedsAttention'
@@ -90,8 +79,8 @@ export function createTaskStatusNotificationHandler(options: {
       if (!sessionId) return false;
       const session = await options.conversations.getSession(sessionId);
       if (!session) return false;
-      const text = taskStatusMessage(event.taskId, state, notification.url ?? pullRequestUrl(event, task), session.language);
-      const message = { sessionId, text, language: session.language };
+      const text = taskStatusMessage(event.taskId, state, notification.url ?? pullRequestUrl(event, task));
+      const message = { sessionId, text, language: 'en' as const };
       // A failed transaction leaves no receipt. One bounded retry is safe even if
       // the first connection lost its response after commit: the receipt deduplicates it.
       try { await options.notifications.deliver(event.taskId, state, message); }

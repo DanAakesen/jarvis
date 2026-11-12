@@ -958,7 +958,7 @@ private struct FactoryChecksStatus: View {
 #Preview("Software Factory · Needs Dan") {
     JarvisFactoryArea(
         client: try? JarvisFactoryFixtureScenario.makeClient(state: .needs),
-        language: .da,
+        language: .en,
         onRetryConfiguration: {},
         previewState: .needs,
         liveUpdatesEnabled: false
@@ -980,7 +980,7 @@ private struct FactoryChecksStatus: View {
 #Preview("Software Factory · New task") {
     JarvisFactoryArea(
         client: try? JarvisFactoryFixtureScenario.makeClient(state: .newtask),
-        language: .da,
+        language: .en,
         onRetryConfiguration: {},
         previewState: .newtask,
         liveUpdatesEnabled: false

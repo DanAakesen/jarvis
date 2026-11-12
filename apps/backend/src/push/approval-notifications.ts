@@ -34,7 +34,6 @@ export interface ApprovalNotificationServices {
 }
 
 export interface ApprovalNotificationPayloadInput extends BrowserConfirmation {
-  language: 'da' | 'en';
   showActions: boolean;
   timeZone: string;
 }
@@ -60,13 +59,13 @@ export function approvalNotificationPayload(input: ApprovalNotificationPayloadIn
     return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f) ? ' ' : character;
   }).join('').trim();
   const boundedSummary = [...summary].slice(0, 240).join('');
-  const time = new Intl.DateTimeFormat(input.language === 'da' ? 'da-DK' : 'en-GB', {
+  const time = new Intl.DateTimeFormat('en-GB', {
     hour: 'numeric',
     minute: '2-digit',
     timeZone: input.timeZone,
     timeZoneName: 'short',
   }).format(expiresAt);
-  const expiry = input.language === 'da' ? `Udløber kl. ${time}` : `Expires at ${time}`;
+  const expiry = `Expires at ${time}`;
   const body = `${boundedSummary}\n${expiry}`;
   return Buffer.from(JSON.stringify({
     aps: {
@@ -83,7 +82,6 @@ export interface ReplyNotificationInput {
   sessionId: string;
   messageId: string;
   text: string;
-  language: 'da' | 'en';
   /** Epoch milliseconds when the turn that produced this reply began. */
   turnStartedAt?: number;
 }
@@ -95,7 +93,7 @@ export function replyNotificationPayload(input: ReplyNotificationInput): Buffer 
     const codePoint = character.codePointAt(0);
     return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f) ? ' ' : character;
   }).join('').replace(/\s+/gu, ' ').trim();
-  const body = [...text].slice(0, 160).join('') || (input.language === 'da' ? 'Nyt svar fra Jarvis' : 'New reply from Jarvis');
+  const body = [...text].slice(0, 160).join('') || 'New reply from Jarvis';
   return Buffer.from(JSON.stringify({
     aps: { alert: { title: 'Jarvis', body }, category: replyCategory, 'thread-id': replyCategory, sound: 'default' },
     sessionID: input.sessionId,
@@ -197,15 +195,13 @@ export async function createApprovalNotificationSender(
 function validateRegistration(value: unknown): ApprovalNotificationRegistration | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return;
   const input = value as Record<string, unknown>;
-  if (Object.keys(input).some((key) => !['deviceToken', 'language', 'showActions', 'timeZone'].includes(key)) ||
+  if (Object.keys(input).some((key) => !['deviceToken', 'showActions', 'timeZone'].includes(key)) ||
       typeof input.deviceToken !== 'string' || !deviceTokenPattern.test(input.deviceToken) ||
-      (input.language !== 'da' && input.language !== 'en') ||
       typeof input.showActions !== 'boolean' ||
       typeof input.timeZone !== 'string' || input.timeZone.length === 0 || input.timeZone.length > 64 ||
       !validTimeZone(input.timeZone)) return;
   return {
     deviceToken: input.deviceToken.toLowerCase(),
-    language: input.language,
     showActions: input.showActions,
     timeZone: input.timeZone,
   };
@@ -239,7 +235,6 @@ export function createApprovalNotificationDispatcher(
             registration.deviceToken,
             approvalNotificationPayload({
               ...confirmation,
-              language: registration.language,
               showActions: registration.showActions,
               timeZone: registration.timeZone,
             }),
@@ -276,7 +271,7 @@ export function createReplyNotificationDispatcher(
         try {
           const result = await services.sender.send(
             registration.deviceToken,
-            replyNotificationPayload({ ...reply, language: registration.language }),
+            replyNotificationPayload(reply),
             expiresAt,
             AbortSignal.timeout(6000),
           );

@@ -1,7 +1,7 @@
 name: Jarvis
 options:
   bundleIdPrefix: com.danaakesen
-  developmentLanguage: da
+  developmentLanguage: en
   deploymentTarget:
     iOS: "26.0"
 settings:

@@ -79,7 +79,6 @@ async function runPrompt(
   const response = agent.stream({
     messageId: '1',
     text,
-    language: 'en',
     smoke: true,
     ...options,
     onAgentToolCalls: (calls) => { toolCalls = calls; },

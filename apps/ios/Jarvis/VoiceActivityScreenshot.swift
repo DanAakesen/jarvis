@@ -8,7 +8,7 @@ struct VoiceActivityScreenshotView: View {
     var body: some View {
         VoiceScreenView(
             model: model,
-            language: ProcessInfo.processInfo.arguments.contains("--voice-activity-language=en") ? .en : .da,
+            language: .en,
             onMinimize: {},
             onEnd: {}
         )

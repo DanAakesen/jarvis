@@ -6,7 +6,6 @@ export interface ActivityRegistration {
   kind: 'background_job' | 'factory_task';
   resourceId: string;
   pushToken: string;
-  language: 'da' | 'en';
 }
 export interface ActivityRegistrationStore {
   upsert(owner: string, registration: ActivityRegistration): Promise<boolean>;
@@ -23,7 +22,6 @@ export function createActivityRegistrationStore(pool: sql.ConnectionPool): Activ
         .input('kind', sql.VarChar(16), registration.kind)
         .input('resourceId', sql.VarChar(36), registration.resourceId)
         .input('token', sql.VarChar(512), registration.pushToken)
-        .input('language', sql.Char(2), registration.language)
         .query<{ saved: boolean }>(`SET XACT_ABORT ON;
           BEGIN TRANSACTION;
           DECLARE @lockResult int;
@@ -36,14 +34,14 @@ export function createActivityRegistrationStore(pool: sql.ConnectionPool): Activ
           IF EXISTS (SELECT 1 FROM dbo.activitykit_registrations WHERE owner_object_id=@owner AND activity_id=@activityId)
           BEGIN
             UPDATE dbo.activitykit_registrations SET resource_kind=@kind, resource_id=@resourceId,
-              push_token=@token, language=@language, expires_at=DATEADD(hour, 8, SYSUTCDATETIME())
+              push_token=@token, language='en', expires_at=DATEADD(hour, 8, SYSUTCDATETIME())
               WHERE owner_object_id=@owner AND activity_id=@activityId;
             SET @saved=1;
           END
           ELSE IF (SELECT COUNT(*) FROM dbo.activitykit_registrations WHERE owner_object_id=@owner) < 20
           BEGIN
             INSERT dbo.activitykit_registrations (owner_object_id, activity_id, resource_kind, resource_id, push_token, language, expires_at)
-              VALUES (@owner, @activityId, @kind, @resourceId, @token, @language, DATEADD(hour, 8, SYSUTCDATETIME()));
+              VALUES (@owner, @activityId, @kind, @resourceId, @token, 'en', DATEADD(hour, 8, SYSUTCDATETIME()));
             SET @saved=1;
           END
           COMMIT TRANSACTION;
@@ -54,7 +52,7 @@ export function createActivityRegistrationStore(pool: sql.ConnectionPool): Activ
       const { recordset } = await databaseReadRequest(pool)
         .input('owner', sql.UniqueIdentifier, owner)
         .query<ActivityRegistration>(`SELECT TOP (20) activity_id AS activityId, resource_kind AS kind,
-          resource_id AS resourceId, push_token AS pushToken, language
+          resource_id AS resourceId, push_token AS pushToken
           FROM dbo.activitykit_registrations
           WHERE owner_object_id=@owner AND expires_at > SYSUTCDATETIME()
           ORDER BY activity_id;`);

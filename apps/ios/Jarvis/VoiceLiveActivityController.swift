@@ -20,19 +20,14 @@ final class VoiceLiveActivityController {
         }
     }
 
-    func start(
-        sessionID: UUID, language: JarvisAppLanguage,
-        startedAt: Date = Date(), waveform: [Double]? = nil
-    ) throws {
+    func start(sessionID: UUID, startedAt: Date = Date(), waveform: [Double]? = nil) throws {
         guard activity == nil, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         self.waveform = waveform ?? Array(repeating: 0, count: VoiceWaveform.sampleCount)
         let state = VoiceActivityAttributes.ContentState(
             phase: .listening, isMuted: false, waveform: self.waveform
         )
         activity = try Activity.request(
-            attributes: VoiceActivityAttributes(
-                sessionID: sessionID, startedAt: startedAt, language: language.rawValue
-            ),
+            attributes: VoiceActivityAttributes(sessionID: sessionID, startedAt: startedAt),
             content: ActivityContent(state: state, staleDate: nil),
             pushType: nil
         )

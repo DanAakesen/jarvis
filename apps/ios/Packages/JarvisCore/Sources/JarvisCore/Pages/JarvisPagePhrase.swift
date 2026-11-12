@@ -80,36 +80,27 @@ public enum JarvisFactoryPagePhrase {
     ) -> JarvisPagePhrase {
         let counts = Counts(board: board)
         let project = "{\(projectName)}"
-        let da = language == .da
         if board.columns.allSatisfy({ $0.cards.isEmpty }) {
-            return JarvisPagePhrase(markup: da
-                ? "Dan, der er endnu ingen opgaver i \(project)."
-                : "Dan, there are no tasks in \(project) yet.")
+            return JarvisPagePhrase(markup: "Dan, there are no tasks in \(project) yet.")
         }
-        let needs = da
-            ? count(counts.needs, one: "opgave", many: "opgaver")
-            : count(counts.needs, one: "task", many: "tasks")
+        let needs = count(counts.needs, one: "task", many: "tasks")
         let lead: String
         if counts.needs > 0 {
-            if da {
-                lead = "Dan, {\(needs)} venter på dig" + (counts.failed > 0 ? ", og {\(counts.failed)} er {fejlet}." : ".")
-            } else {
-                lead = "Dan, {\(needs)} \(counts.needs == 1 ? "is" : "are") waiting on you"
-                    + (counts.failed > 0 ? ", and {\(counts.failed)} \(counts.failed == 1 ? "has" : "have") {failed}." : ".")
-            }
+            lead = "Dan, {\(needs)} \(counts.needs == 1 ? "is" : "are") waiting on you"
+                + (counts.failed > 0 ? ", and {\(counts.failed)} \(counts.failed == 1 ? "has" : "have") {failed}." : ".")
         } else {
-            lead = da ? "Dan, intet venter på dig i \(project)." : "Dan, nothing is waiting on you in \(project)."
+            lead = "Dan, nothing is waiting on you in \(project)."
         }
         var live: [String] = []
         if counts.running > 0 {
-            live.append(da ? "{\(counts.running)} kører" : "{\(counts.running)} \(counts.running == 1 ? "is" : "are") running")
+            live.append("{\(counts.running)} \(counts.running == 1 ? "is" : "are") running")
         }
         if counts.review > 0 {
-            live.append(da ? "{\(counts.review)} er til gennemsyn" : "{\(counts.review)} \(counts.review == 1 ? "is" : "are") in review")
+            live.append("{\(counts.review)} \(counts.review == 1 ? "is" : "are") in review")
         }
         let tail = live.isEmpty
-            ? (da ? "Intet kører lige nu." : "Nothing is running right now.")
-            : live.joined(separator: da ? ", og " : ", and ") + "."
+            ? "Nothing is running right now."
+            : live.joined(separator: ", and ") + "."
         return JarvisPagePhrase(markup: lead + " " + tail)
     }
 
@@ -118,29 +109,24 @@ public enum JarvisFactoryPagePhrase {
         projectName: String,
         language: JarvisAppLanguage
     ) -> JarvisPagePhrase {
-        let da = language == .da
         let project = "{\(projectName)}"
         guard !view.releases.isEmpty else {
-            return JarvisPagePhrase(markup: da
-                ? "Dan, der er endnu ingen udgivelser i \(project)."
-                : "Dan, there are no releases in \(project) yet.")
+            return JarvisPagePhrase(markup: "Dan, there are no releases in \(project) yet.")
         }
         let released = view.releases.first { $0.status == .released }
         let running = view.releases.first { $0.status == .deploying || $0.status == .building }
         let failed = view.releases.filter { $0.status == .failed }.count
         var parts: [String] = []
-        if let released { parts.append(da ? "{\(released.version)} er udrullet" : "{\(released.version)} is deployed") }
+        if let released { parts.append("{\(released.version)} is deployed") }
         if let running {
-            parts.append(da ? "{\(running.version)} udrulles nu" : "{\(running.version)} is deploying now")
+            parts.append("{\(running.version)} is deploying now")
         }
         let sentence = parts.isEmpty
-            ? (da ? "intet er udrullet endnu" : "nothing is deployed yet")
-            : parts.joined(separator: da ? ", og " : ", and ")
+            ? "nothing is deployed yet"
+            : parts.joined(separator: ", and ")
         var markup = "Dan, \(sentence)."
         if failed > 0 {
-            markup += da
-                ? " {\(failed)} \(failed == 1 ? "udgivelse" : "udgivelser") fejlede."
-                : " {\(failed)} \(failed == 1 ? "release has" : "releases have") failed."
+            markup += " {\(failed)} \(failed == 1 ? "release has" : "releases have") failed."
         }
         return JarvisPagePhrase(markup: markup)
     }
@@ -165,33 +151,23 @@ public enum JarvisNotesPagePhrase {
 
     public static func tasks(_ list: VaultTaskList, language: JarvisAppLanguage) -> JarvisPagePhrase {
         let counts = TaskCounts(list)
-        let da = language == .da
         func tasks(_ value: Int) -> String {
-            da ? count(value, one: "opgave", many: "opgaver") : count(value, one: "task", many: "tasks")
+            count(value, one: "task", many: "tasks")
         }
         if counts.overdue > 0 {
-            if da {
-                return JarvisPagePhrase(markup: "Dan, {\(tasks(counts.overdue))} er \(counts.overdue == 1 ? "forfaldet" : "forfaldne")"
-                    + (counts.dueToday > 0 ? ", og {\(counts.dueToday)} skal klares i dag." : "."))
-            }
             return JarvisPagePhrase(markup: "Dan, {\(tasks(counts.overdue))} \(counts.overdue == 1 ? "is" : "are") overdue"
                 + (counts.dueToday > 0 ? ", and {\(counts.dueToday)} \(counts.dueToday == 1 ? "is" : "are") due today." : "."))
         }
         if counts.dueToday > 0 {
-            return JarvisPagePhrase(markup: da
-                ? "Dan, {\(tasks(counts.dueToday))} skal klares i dag, og intet er forfaldent."
-                : "Dan, {\(tasks(counts.dueToday))} \(counts.dueToday == 1 ? "is" : "are") due today, and nothing is overdue.")
+            return JarvisPagePhrase(markup: "Dan, {\(tasks(counts.dueToday))} \(counts.dueToday == 1 ? "is" : "are") due today, and nothing is overdue.")
         }
         if counts.open > 0 {
-            return JarvisPagePhrase(markup: da
-                ? "Dan, intet skal klares i dag, og du har {\(tasks(counts.open))} åbne."
-                : "Dan, nothing is due today, and you have {\(tasks(counts.open))} open.")
+            return JarvisPagePhrase(markup: "Dan, nothing is due today, and you have {\(tasks(counts.open))} open.")
         }
-        return JarvisPagePhrase(markup: da ? "Dan, alle dine opgaver er klaret." : "Dan, all your tasks are done.")
+        return JarvisPagePhrase(markup: "Dan, all your tasks are done.")
     }
 
     public static func graph(_ graph: KnowledgeGraph, language: JarvisAppLanguage) -> JarvisPagePhrase {
-        let da = language == .da
         guard !graph.nodes.isEmpty else { return empty(language: language) }
         var degrees: [String: Int] = [:]
         for edge in graph.edges {
@@ -199,22 +175,16 @@ public enum JarvisNotesPagePhrase {
             degrees[edge.target, default: 0] += 1
         }
         let top = graph.nodes.max { (degrees[$0.id] ?? 0) < (degrees[$1.id] ?? 0) }
-        let notes = da ? count(graph.nodes.count, one: "note", many: "noter") : count(graph.nodes.count, one: "note", many: "notes")
+        let notes = count(graph.nodes.count, one: "note", many: "notes")
         let links = count(graph.edges.count, one: "link", many: "links")
         if let top, (degrees[top.id] ?? 0) > 0 {
-            return JarvisPagePhrase(markup: da
-                ? "Dan, dine {\(notes)} er bundet sammen af {\(links)}, og {\(top.title)} er mest forbundet."
-                : "Dan, your {\(notes)} are joined by {\(links)}, and {\(top.title)} is the most connected.")
+            return JarvisPagePhrase(markup: "Dan, your {\(notes)} are joined by {\(links)}, and {\(top.title)} is the most connected.")
         }
-        return JarvisPagePhrase(markup: da
-            ? "Dan, du har {\(notes)}, og de er endnu ikke bundet sammen."
-            : "Dan, you have {\(notes)}, and none are linked yet.")
+        return JarvisPagePhrase(markup: "Dan, you have {\(notes)}, and none are linked yet.")
     }
 
     public static func empty(language: JarvisAppLanguage) -> JarvisPagePhrase {
-        JarvisPagePhrase(markup: language == .da
-            ? "Dan, dit arkiv er tomt. Skriv din første {note}."
-            : "Dan, your vault is empty. Write your first {note}.")
+        JarvisPagePhrase(markup: "Dan, your vault is empty. Write your first {note}.")
     }
 }
 
@@ -237,69 +207,56 @@ public enum JarvisHealthPagePhrase {
     }
 
     public static func make(_ input: Input, language: JarvisAppLanguage) -> JarvisPagePhrase {
-        let da = language == .da
-        let workoutWord = da ? "træning" : "workout"
+        let workoutWord = "workout"
         let goalMet = input.gymTarget.map { Double(input.gymDone) >= $0 } ?? false
         guard let steps = input.steps else {
             if input.gymDone > 0 {
-                let n = da ? count(input.gymDone, one: "træning", many: "træninger") : count(input.gymDone, one: "workout", many: "workouts")
-                return JarvisPagePhrase(markup: da ? "Dan, du har {\(n)} i perioden." : "Dan, you have {\(n)} in this period.")
+                let n = count(input.gymDone, one: "workout", many: "workouts")
+                return JarvisPagePhrase(markup: "Dan, you have {\(n)} in this period.")
             }
-            return JarvisPagePhrase(markup: da
-                ? "Dan, der er endnu ingen sundhedsdata. Så snart {Apple Sundhed} har synkroniseret, dukker dine træninger og skridt op her."
-                : "Dan, there is no health data yet. As soon as {Apple Health} has synced, your workouts and steps show up here.")
+            return JarvisPagePhrase(markup: "Dan, there is no health data yet. As soon as {Apple Health} has synced, your workouts and steps show up here.")
         }
         let stepsText = number(steps, language)
         if input.isToday {
             let stepsPart: String
             if let target = input.stepsTarget, target > 0 {
-                stepsPart = da
-                    ? "du er på {\(stepsText)} af \(number(target, language)) skridt"
-                    : "you are at {\(stepsText)} of \(number(target, language)) steps"
+                stepsPart = "you are at {\(stepsText)} of \(number(target, language)) steps"
             } else {
-                stepsPart = da ? "du har {\(stepsText)} skridt" : "you have {\(stepsText)} steps"
+                stepsPart = "you have {\(stepsText)} steps"
             }
             guard input.gymTarget != nil else {
-                return JarvisPagePhrase(markup: da ? "Dan, \(stepsPart) i dag." : "Dan, \(stepsPart) today.")
+                return JarvisPagePhrase(markup: "Dan, \(stepsPart) today.")
             }
             if goalMet {
-                return JarvisPagePhrase(markup: da
-                    ? "Dagens {\(workoutWord)} er klaret, Dan, og \(stepsPart)."
-                    : "Today’s {\(workoutWord)} is done, Dan, and \(stepsPart).")
+                return JarvisPagePhrase(markup: "Today’s {\(workoutWord)} is done, Dan, and \(stepsPart).")
             }
-            return JarvisPagePhrase(markup: da
-                ? "Dan, \(stepsPart), og dagens {\(workoutWord)} mangler stadig."
-                : "Dan, \(stepsPart), and today’s {\(workoutWord)} is still open.")
+            return JarvisPagePhrase(markup: "Dan, \(stepsPart), and today’s {\(workoutWord)} is still open.")
         }
         let gym: String
         if let target = input.gymTarget {
-            gym = "\(input.gymDone)\(da ? " af " : " of ")\(number(target, language))"
+            gym = "\(input.gymDone) of \(number(target, language))"
         } else {
             gym = "\(input.gymDone)"
         }
         let stepsPart: String
         if let target = input.stepsTarget, target > 0 {
-            let percent = number((steps / target * 100).rounded(), language) + (da ? "\u{00a0}%" : "%")
-            stepsPart = da ? "skridtene står på {\(percent)} af målet" : "your steps are at {\(percent)} of the goal"
+            let percent = number((steps / target * 100).rounded(), language) + "%"
+            stepsPart = "your steps are at {\(percent)} of the goal"
         } else {
-            stepsPart = da ? "du har gået {\(stepsText)} skridt" : "you have taken {\(stepsText)} steps"
+            stepsPart = "you have taken {\(stepsText)} steps"
         }
-        return JarvisPagePhrase(markup: da
-            ? "Dan, {\(gym)} træninger er klaret, og \(stepsPart)."
-            : "Dan, {\(gym)} workouts are done, and \(stepsPart).")
+        return JarvisPagePhrase(markup: "Dan, {\(gym)} workouts are done, and \(stepsPart).")
     }
 }
 
 /// Status header phrase, written from the check results.
 public enum JarvisStatusPagePhrase {
     public static func make(_ snapshot: JarvisStatusSnapshot, language: JarvisAppLanguage, now: Date? = nil) -> JarvisPagePhrase {
-        let da = language == .da
         let healthy = snapshot.entries.filter { $0.status == .ok }.count
         let total = snapshot.entries.count
-        guard total > 0 else { return JarvisPagePhrase(markup: da ? "Dan, der er {ingen tjek endnu}." : "Dan, there are {no checks yet}.") }
+        guard total > 0 else { return JarvisPagePhrase(markup: "Dan, there are {no checks yet}.") }
         if let now, JarvisStatusLogic.isStale(checkedAt: snapshot.checkedAt, now: now) {
-            return JarvisPagePhrase(markup: da ? "Dan, tallene er {forældede}. {\(healthy) af \(total) tjek} var i orden."
-                : "Dan, the numbers are {stale}. {\(healthy) of \(total) checks} were healthy.")
+            return JarvisPagePhrase(markup: "Dan, the numbers are {stale}. {\(healthy) of \(total) checks} were healthy.")
         }
         let issues = JarvisStatusLogic.ordered(snapshot.entries).filter { $0.status != .ok }.prefix(3)
         if !issues.isEmpty {
@@ -307,84 +264,64 @@ public enum JarvisStatusPagePhrase {
                 let name = entry.check.map { JarvisInsightsLocalization.string($0.localizationKey, language: language) }
                     ?? JarvisStatusLogic.readable(entry.id)
                 let state: String = switch entry.status {
-                case .down: da ? "er nede" : "is down"
-                case .degraded: da ? "er forringet" : "is degraded"
-                case .unknown: da ? "er ikke bekræftet" : "is unconfirmed"
-                case .ok: da ? "er i orden" : "is healthy"
+                case .down: "is down"
+                case .degraded: "is degraded"
+                case .unknown: "is unconfirmed"
+                case .ok: "is healthy"
                 }
                 return "{\(name)} \(state)"
             }.joined(separator: ", ")
-            return JarvisPagePhrase(markup: da ? "Dan, \(clauses). {\(healthy) af \(total) tjek} er i orden."
-                : "Dan, \(clauses). {\(healthy) of \(total) checks} are healthy.")
+            return JarvisPagePhrase(markup: "Dan, \(clauses). {\(healthy) of \(total) checks} are healthy.")
         }
-        return JarvisPagePhrase(markup: da ? "Dan, {alle \(total) tjek} er i orden." : "Dan, {all \(total) checks} are healthy.")
+        return JarvisPagePhrase(markup: "Dan, {all \(total) checks} are healthy.")
     }
 }
 
 /// Usage header phrase, written from the period total (cost in DKK when the report has costs).
 public enum JarvisUsagePagePhrase {
     public static func make(_ summary: JarvisUsageSummary, language: JarvisAppLanguage) -> JarvisPagePhrase {
-        let da = language == .da
         guard summary.usesCost, summary.totalValue > 0 else {
-            return JarvisPagePhrase(markup: da ? "Dan, her er dit {forbrug}." : "Dan, here is your {usage}.")
+            return JarvisPagePhrase(markup: "Dan, here is your {usage}.")
         }
         let amount = JarvisNumberFormat.compact(summary.totalValue, language: language)
-        return JarvisPagePhrase(markup: da
-            ? "Dan, dit forbrug er {\(amount) kr}."
-            : "Dan, your usage is {\(amount) DKK}.")
+        return JarvisPagePhrase(markup: "Dan, your usage is {\(amount) DKK}.")
     }
 }
 
 /// Proactive header phrase, written from the open suggestions and the next check.
 public enum JarvisProactivePagePhrase {
     public static func make(status: JarvisProactiveStatus, openItems: Int, language: JarvisAppLanguage, firstTitle: String? = nil) -> JarvisPagePhrase {
-        let da = language == .da
         if status.paused {
-            return JarvisPagePhrase(markup: da ? "Dan, proaktiv er {sat på pause}." : "Dan, proactive is {paused}.")
+            return JarvisPagePhrase(markup: "Dan, proactive is {paused}.")
         }
         if let firstTitle, openItems > 0 {
             let safeTitle = firstTitle.replacingOccurrences(of: "{", with: "(").replacingOccurrences(of: "}", with: ")")
             let next = status.nextSlotAt.flatMap(JarvisInsightsDates.parse).map {
                 JarvisInsightsDates.format($0, language: language, dateStyle: .none, timeStyle: .short)
             }
-            let tail = next.map { da ? " Næste tjek er kl. {\($0)}." : " The next check is at {\($0)}." } ?? ""
-            return JarvisPagePhrase(markup: da
-                ? "Dan, {\(openItems) forslag} er åbne, og {\(safeTitle)} står øverst.\(tail)"
-                : "Dan, {\(openItems) \(openItems == 1 ? "finding is" : "findings are")} open, and {\(safeTitle)} is first.\(tail)")
+            let tail = next.map { " The next check is at {\($0)}." } ?? ""
+            return JarvisPagePhrase(markup: "Dan, {\(openItems) \(openItems == 1 ? "finding is" : "findings are")} open, and {\(safeTitle)} is first.\(tail)")
         }
         if openItems > 0 {
-            let items = da
-                ? count(openItems, one: "forslag", many: "forslag")
-                : count(openItems, one: "suggestion", many: "suggestions")
-            return JarvisPagePhrase(markup: da
-                ? "Dan, Jarvis har {\(items)} til dig."
-                : "Dan, Jarvis has {\(items)} for you.")
+            let items = count(openItems, one: "suggestion", many: "suggestions")
+            return JarvisPagePhrase(markup: "Dan, Jarvis has {\(items)} for you.")
         }
-        return JarvisPagePhrase(markup: da
-            ? "Dan, Jarvis har {ingen nye forslag} til dig."
-            : "Dan, Jarvis has {no new suggestions} for you.")
+        return JarvisPagePhrase(markup: "Dan, Jarvis has {no new suggestions} for you.")
     }
 }
 
 /// Notifications header phrase, written from what needs Dan, what is running and the updates in the feed.
 public enum JarvisNotificationsPagePhrase {
     public static func make(needsYou: Int, running: Int, updates: Int, language: JarvisAppLanguage) -> JarvisPagePhrase {
-        let da = language == .da
         if needsYou > 0 {
-            return JarvisPagePhrase(markup: da
-                ? "Dan, {\(count(needsYou, one: "godkendelse", many: "godkendelser"))} venter på dig."
-                : "Dan, {\(count(needsYou, one: "approval", many: "approvals"))} \(needsYou == 1 ? "is" : "are") waiting for you.")
+            return JarvisPagePhrase(markup: "Dan, {\(count(needsYou, one: "approval", many: "approvals"))} \(needsYou == 1 ? "is" : "are") waiting for you.")
         }
         if updates > 0 {
-            return JarvisPagePhrase(markup: da
-                ? "Dan, du har {\(count(updates, one: "ny opdatering", many: "nye opdateringer"))}."
-                : "Dan, you have {\(count(updates, one: "new update", many: "new updates"))}.")
+            return JarvisPagePhrase(markup: "Dan, you have {\(count(updates, one: "new update", many: "new updates"))}.")
         }
         if running > 0 {
-            return JarvisPagePhrase(markup: da
-                ? "Dan, {\(count(running, one: "opgave", many: "opgaver"))} kører nu."
-                : "Dan, {\(count(running, one: "task", many: "tasks"))} \(running == 1 ? "is" : "are") running.")
+            return JarvisPagePhrase(markup: "Dan, {\(count(running, one: "task", many: "tasks"))} \(running == 1 ? "is" : "are") running.")
         }
-        return JarvisPagePhrase(markup: da ? "Dan, der er {ingen nye notifikationer}." : "Dan, there are {no new notifications}.")
+        return JarvisPagePhrase(markup: "Dan, there are {no new notifications}.")
     }
 }

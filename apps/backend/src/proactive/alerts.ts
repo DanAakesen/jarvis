@@ -18,7 +18,6 @@ interface AlertCandidate {
   dedupeKey: string;
   dueAt: string | null;
   alertClass: AlertClass;
-  language: 'da' | 'en';
 }
 
 export interface ProactiveAlertLogger {
@@ -110,7 +109,6 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
             dedupeKey: finding.dedupeKey,
             dueAt: finding.dueAt,
             alertClass,
-            language: finding.language,
           }]
           : [];
       });
@@ -197,7 +195,6 @@ export function createProactiveAlertHook(options: ProactiveAlertHookOptions) {
       const request: SystemPushRequest = {
         kind: mostUrgent.alertClass === 'insight' ? 'insight' : 'alert',
         count: active.length,
-        language: mostUrgent.language ?? 'en',
         itemId: mostUrgent.itemId,
         origin: 'proactive_alert',
         details: details.filter((detail): detail is NonNullable<typeof detail> => detail !== undefined &&

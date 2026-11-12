@@ -8,9 +8,6 @@
 "chat.plus.disableVideo" = "Disable video";
 "chat.plus.shareScreen" = "Share screen";
 "chat.plus.stopSharingScreen" = "Stop sharing screen";
-"chat.plus.chatLanguage" = "Chat language";
-"chat.plus.danish" = "Danish";
-"chat.plus.english" = "English";
 "chat.plus.takePhoto" = "Take photo";
 "chat.plus.takingPhoto" = "Taking photo…";
 "chat.plus.close" = "Close";
@@ -25,8 +22,6 @@
 "chat.plus.voiceSettingsUnavailable" = "Voice settings are disabled with fixture data.";
 "chat.plus.removeAttachmentHint" = "Remove an attachment to add another.";
 "chat.plus.chatBusyHint" = "Wait until Jarvis has finished.";
-"chat.plus.chatLanguageLoadFailed" = "The saved chat language could not be loaded. Showing Danish.";
-"chat.plus.chatLanguageUpdateFailed" = "The chat language could not be saved. Try again.";
 "chat.plus.cancel" = "Cancel";
 "chat.plus.screenShareTitle" = "Share screen";
 "chat.plus.screenShareInstructions" = "Choose Start Broadcast to share your screen with Jarvis.";

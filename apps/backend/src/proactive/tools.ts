@@ -49,7 +49,7 @@ const preferenceInputSchema = {
 type RecallState = 'new' | 'seen' | 'all';
 
 type RecallItem = Pick<Item,
-  'id' | 'title' | 'body' | 'category' | 'urgency' | 'dueAt' | 'state' | 'createdAt' | 'language'
+  'id' | 'title' | 'body' | 'category' | 'urgency' | 'dueAt' | 'state' | 'createdAt'
 >;
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -91,7 +91,6 @@ function projectItem(item: Item): { item: RecallItem; truncated: boolean } {
       dueAt: item.dueAt,
       state: item.state,
       createdAt: item.createdAt,
-      language: item.language,
     },
     truncated: title.truncated || body.truncated,
   };

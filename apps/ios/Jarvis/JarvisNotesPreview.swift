@@ -7,13 +7,13 @@ import SwiftUI
     NavigationStack {
         JarvisNotesArea(
             client: JarvisNotesPreview.makeClient(),
-            language: .da,
+            language: .en,
             onRetryConfiguration: {},
             selectedTab: $selectedTab
         )
     }
     .environmentObject(JarvisNavigationModel())
-    .environment(\.locale, JarvisAppLanguage.da.locale)
+    .environment(\.locale, JarvisAppLanguage.en.locale)
 }
 
 #Preview("Notes · English") {

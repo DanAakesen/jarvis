@@ -1,7 +1,7 @@
 import sql from 'mssql';
 
 export type TaskNotificationState = 'Done' | 'NeedsAttention' | 'Cancelled' | 'pull_request_opened';
-export interface TaskStatusNotificationMessage { sessionId: string; text: string; language: 'da' | 'en' }
+export interface TaskStatusNotificationMessage { sessionId: string; text: string; language: 'en' }
 export interface TaskStatusNotificationStore {
   /** Atomically writes the conversation message and its task/state deduplication receipt. */
   deliver(taskId: string, state: TaskNotificationState, message: TaskStatusNotificationMessage): Promise<boolean>;
