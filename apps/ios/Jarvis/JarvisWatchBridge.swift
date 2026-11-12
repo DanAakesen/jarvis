@@ -20,6 +20,17 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var voiceResponseID: String?
     private lazy var liveActivity = VoiceLiveActivityController()
     private var voiceMuted = false
+    private struct Dictation {
+        let id: UUID
+        let token: UUID
+        let deadline: ContinuousClock.Instant
+        var audio = Data()
+        var finishing = false
+    }
+    private var dictation: Dictation?
+    private var invalidatedDictations: [UUID: ContinuousClock.Instant] = [:]
+    private var dictationWatchdog: Task<Void, Never>?
+    private var transcription: Task<String, Error>?
     var liveActivitySessionID: UUID? { voiceID }
     func performLiveActivityCommand(_ command: VoiceLiveActivityCommand) async throws {
         guard let voice, let id = voiceID else { throw VoiceLiveActivityError.unavailable }
@@ -48,6 +59,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     func configure(client: JarvisClient) { self.client = client; activate() }
     func disconnect() async {
         generation = UUID(); client = nil; chatSession = nil
+        stopDictation()
         dashboardSnapshot = nil; dashboardBrief = nil
         chatTask?.cancel(); chatTask = nil
         delivery?.cancel(); delivery = nil; eventQueue.removeAll()
@@ -55,10 +67,23 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         try? WCSession.default.updateApplicationContext([:])
     }
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
-    nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
-    nonisolated func sessionDidDeactivate(_ session: WCSession) { session.activate() }
+    nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
+        Task { @MainActor in
+            if WCSession.default.activationState != .activated { self.stopDictation() }
+        }
+    }
+    nonisolated func sessionDidDeactivate(_ session: WCSession) {
+        Task { @MainActor in
+            self.stopDictation()
+            WCSession.default.activate()
+        }
+    }
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
-        if !session.isReachable { Task { @MainActor in await self.stopVoice() } }
+        if !session.isReachable {
+            Task { @MainActor in
+                if !WCSession.default.isReachable { self.stopDictation(); await self.stopVoice() }
+            }
+        }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data, replyHandler: @escaping (Data) -> Void) {
         Task { @MainActor in
@@ -110,7 +135,13 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         }
     }
     private func handle(_ request: WatchRequest) async -> WatchReply {
-        guard request.isValid else { return .init(id: request.id, failure: .invalidRequest) }
+        guard request.isValid else {
+            if [.dictationAudio, .finishDictation, .cancelDictation].contains(request.action),
+               let id = request.itemID.flatMap(UUID.init(uuidString:)), id == dictation?.id {
+                stopDictation()
+            }
+            return .init(id: request.id, failure: .invalidRequest)
+        }
         guard let client else { return .init(id: request.id, failure: .signInRequired) }
         if let previous = replies[request.id] { return previous.request == request ? previous.reply : .init(id: request.id, failure: .invalidRequest) }
         guard running.insert(request.id).inserted else { return .init(id: request.id, failure: .busy) }
@@ -137,7 +168,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             }
         }
         // Do not retain audio, health or message bodies unnecessarily. Never auto-replay mutations.
-        if reply.failure == nil && reply.taskError == nil && ![.audio, .voiceHeartbeat, .snapshot, .dashboard, .brief, .agenda, .bodyFat, .notes, .note, .nutrition,
+        if reply.failure == nil && reply.taskError == nil && ![.audio, .voiceHeartbeat, .startDictation, .dictationAudio, .finishDictation, .cancelDictation, .snapshot, .dashboard, .brief, .agenda, .bodyFat, .notes, .note, .nutrition,
                                     .history, .tasks, .workouts, .lifts, .projects, .factoryTasks].contains(request.action) {
             if replies.count >= 100 { replies.removeAll() }
             replies[request.id] = (request, reply)
@@ -303,7 +334,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             let task = try await factory.createTask(submission)
             return try encode(WatchFactoryTask(task))
         case .startVoice:
-            guard !startingVoice else { throw WatchFailure.busy }
+            guard !startingVoice, dictation == nil else { throw WatchFailure.busy }
             startingVoice = true; defer { startingVoice = false }
             let voiceEpoch = generation
             if let voiceID { return try encode(voiceID) }
@@ -379,7 +410,87 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             }
             guard r.itemID == voiceID?.uuidString else { throw WatchFailure.invalidRequest }
             await stopVoice(); return nil
+        case .startDictation:
+            guard !startingVoice, voiceID == nil, VoiceLiveActivityActions.session?.liveActivitySessionID == nil else { throw WatchFailure.busy }
+            pruneInvalidatedDictations()
+            guard invalidatedDictations[r.id] == nil else { throw WatchFailure.unavailable }
+            if let current = dictation {
+                guard current.id == r.id, !current.finishing, ContinuousClock.now < current.deadline else {
+                    throw WatchFailure.busy
+                }
+                return try encode(current.id)
+            }
+            let token = UUID()
+            dictation = Dictation(id: r.id, token: token, deadline: ContinuousClock.now.advanced(by: WatchLimits.dictationDuration))
+            dictationWatchdog = Task { [weak self] in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(250))
+                    guard let self, !Task.isCancelled, let current = self.dictation, current.token == token else { return }
+                    if ContinuousClock.now >= current.deadline || VoiceLiveActivityActions.session?.liveActivitySessionID != nil {
+                        self.stopDictation(); return
+                    }
+                }
+            }
+            return try encode(r.id)
+        case .dictationAudio:
+            guard let id = r.itemID.flatMap(UUID.init(uuidString:)), dictation?.id == id else {
+                throw WatchFailure.invalidRequest
+            }
+            guard dictation?.finishing == false, let deadline = dictation?.deadline, ContinuousClock.now < deadline,
+                  VoiceLiveActivityActions.session?.liveActivitySessionID == nil, let bytes = r.data,
+                  let count = dictation?.audio.count, count + bytes.count <= WatchLimits.dictationBytes else {
+                stopDictation(); throw WatchFailure.invalidRequest
+            }
+            dictation?.audio.append(bytes)
+            return nil
+        case .finishDictation:
+            guard let id = r.itemID.flatMap(UUID.init(uuidString:)), let current = dictation, current.id == id else {
+                throw WatchFailure.invalidRequest
+            }
+            guard !current.finishing, !current.audio.isEmpty, ContinuousClock.now < current.deadline,
+                  VoiceLiveActivityActions.session?.liveActivitySessionID == nil else {
+                stopDictation(); throw WatchFailure.invalidRequest
+            }
+            dictation?.finishing = true
+            dictationWatchdog?.cancel(); dictationWatchdog = nil
+            dictation?.audio = Data()
+            let token = current.token
+            let audio = current.audio
+            let finishDeadline = ContinuousClock.now.advanced(by: WatchLimits.dictationFinishTimeout)
+            let task = Task {
+                try await WatchDashboardReader.boundedRead(timeout: max(.zero, ContinuousClock.now.duration(to: finishDeadline))) {
+                    try await client.transcribeWatchAudio(audio)
+                }
+            }
+            transcription = task
+            defer { if dictation?.token == token { stopDictation() } }
+            let text = try await task.value
+            guard dictation?.token == token, VoiceLiveActivityActions.session?.liveActivitySessionID == nil else { throw WatchFailure.unavailable }
+            return try encode(text)
+        case .cancelDictation:
+            guard let id = r.itemID.flatMap(UUID.init(uuidString:)) else { throw WatchFailure.invalidRequest }
+            if id == dictation?.id { stopDictation() }
+            else { invalidateDictation(id) }
+            return nil
         }
+    }
+    func stopDictation() {
+        if let id = dictation?.id { invalidateDictation(id) }
+        dictation = nil
+        dictationWatchdog?.cancel(); dictationWatchdog = nil
+        transcription?.cancel(); transcription = nil
+    }
+    private func pruneInvalidatedDictations() {
+        let now = ContinuousClock.now
+        invalidatedDictations = invalidatedDictations.filter { $0.value > now }
+    }
+    private func invalidateDictation(_ id: UUID) {
+        pruneInvalidatedDictations()
+        if invalidatedDictations[id] == nil, invalidatedDictations.count >= 100,
+           let oldest = invalidatedDictations.min(by: { $0.value < $1.value })?.key {
+            invalidatedDictations.removeValue(forKey: oldest)
+        }
+        invalidatedDictations[id] = ContinuousClock.now.advanced(by: .seconds(120))
     }
     private var language: ChatLanguage {
         UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) == "en" ? .en : .da

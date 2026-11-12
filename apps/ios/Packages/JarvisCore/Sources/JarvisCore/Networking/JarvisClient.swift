@@ -150,6 +150,24 @@ public final class JarvisClient: Sendable {
         return try decode(response.body)
     }
 
+    /// Transcribes PCM16 mono audio at 24 kHz without creating a chat or voice turn.
+    public func transcribeWatchAudio(_ audio: Data) async throws -> String {
+        guard !audio.isEmpty, audio.count <= WatchLimits.dictationBytes,
+              audio.count.isMultiple(of: 2) else { throw JarvisClientError.invalidRequest }
+        let response = try await send(
+            method: .post,
+            path: ["watch", "transcribe"],
+            headers: ["Cache-Control": "no-store"],
+            body: try encode(WatchTranscriptionRequest(audio: audio)),
+            authorization: .current,
+            idempotent: false,
+            timeout: WatchLimits.dictationRequestTimeout,
+            limitToConfiguredTimeout: false
+        )
+        let result: WatchTranscriptionResponse = try decode(response.body)
+        return result.text
+    }
+
     public func runTool<Arguments: Encodable & Sendable, Result: Codable & Sendable>(
         _ name: String,
         arguments: Arguments,
@@ -191,7 +209,8 @@ public final class JarvisClient: Sendable {
         queryItems: [URLQueryItem] = [],
         accept: String = "application/json",
         contentType: String? = "application/json",
-        timeout: Duration? = nil
+        timeout: Duration? = nil,
+        limitToConfiguredTimeout: Bool = true
     ) async throws -> HTTPResponse {
         let request = try await makeRequest(
             method: method,
@@ -202,7 +221,9 @@ public final class JarvisClient: Sendable {
             queryItems: queryItems,
             accept: accept,
             contentType: contentType,
-            timeout: min(timeout ?? configuration.requestTimeout, configuration.requestTimeout)
+            timeout: limitToConfiguredTimeout
+                ? min(timeout ?? configuration.requestTimeout, configuration.requestTimeout)
+                : (timeout ?? configuration.requestTimeout)
         )
 
         var retries = 0
@@ -481,6 +502,14 @@ public final class JarvisClient: Sendable {
 
 private struct DeviceLabelRequest: Encodable {
     let deviceLabel: String
+}
+
+private struct WatchTranscriptionRequest: Encodable {
+    let audio: Data
+}
+
+private struct WatchTranscriptionResponse: Decodable {
+    let text: String
 }
 
 extension JarvisClient {

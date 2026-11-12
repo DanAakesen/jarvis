@@ -4,6 +4,11 @@ public enum WatchLimits {
     public static let wireBytes = 64_000
     // Data is base64-encoded inside JSON, so leave room for envelope expansion.
     public static let payloadBytes = 40_000
+    public static let dictationBytes = 2_880_000
+    public static let dictationDuration: Duration = .seconds(60)
+    public static let dictationRequestTimeout: Duration = .seconds(100)
+    public static let dictationFinishTimeout: Duration = .seconds(105)
+    public static let dictationWatchTimeout: Duration = .seconds(110)
     public static func displayText(_ text: String, maximumBytes: Int = 16_000, notice: String = "… Full reply on iPhone.") -> String {
         guard text.utf8.count > maximumBytes else { return text }
         var bytes = Array(text.utf8.prefix(maximumBytes))
@@ -28,6 +33,7 @@ public enum WatchAction: String, Codable, Sendable {
     case dashboard, brief, agenda, bodyFat, notes, note, nutrition
     case createWatchTask, updateWatchTask, completeWatchTask
     case projects, factoryTasks, createFactoryTask, startVoice, voiceHeartbeat, audio, muteVoice, playbackCompleted, endVoice
+    case startDictation, dictationAudio, finishDictation, cancelDictation
 }
 
 public struct WatchRequest: Codable, Equatable, Sendable {
@@ -48,7 +54,22 @@ public struct WatchRequest: Codable, Equatable, Sendable {
             (action != .createWatchTask || createWatchTaskRequest != nil) &&
             (action != .updateWatchTask || updateWatchTaskRequest != nil) &&
             (action != .completeWatchTask || completionWatchTask != nil) &&
-            (action != .captureLift || liftCapture != nil)
+            (action != .captureLift || liftCapture != nil) && validDictation
+    }
+
+    private var validDictation: Bool {
+        switch action {
+        case .startDictation:
+            return text == nil && itemID == nil && data == nil && flag == nil
+        case .dictationAudio:
+            guard text == nil, flag == nil, let itemID, UUID(uuidString: itemID) != nil,
+                  let data, !data.isEmpty, data.count.isMultiple(of: 2) else { return false }
+            return true
+        case .finishDictation, .cancelDictation:
+            return text == nil && flag == nil && data == nil && itemID.flatMap(UUID.init(uuidString:)) != nil
+        default:
+            return true
+        }
     }
 }
 

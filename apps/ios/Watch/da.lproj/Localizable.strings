@@ -17,3 +17,10 @@
 "Last 7 days" = "Seneste 7 dage";
 "Workouts unavailable" = "Træninger er ikke tilgængelige";
 "Loading workouts…" = "Indlæser træninger…";
+"Listening…" = "Lytter…";
+"Transcribing…" = "Transskriberer…";
+"Stop" = "Stop";
+"Cancel" = "Annuller";
+"Dictation unavailable. Connect your iPhone and check the network, or tap Message to type." = "Diktering er ikke tilgængelig. Tilslut din iPhone og tjek netværket, eller tryk på beskedfeltet for at skrive.";
+"Allow microphone access in Settings, or tap Message to type." = "Tillad mikrofonadgang i Indstillinger, eller tryk på beskedfeltet for at skrive.";
+"Dictation stopped. Try again, or tap Message to type." = "Diktering stoppede. Prøv igen, eller tryk på beskedfeltet for at skrive.";

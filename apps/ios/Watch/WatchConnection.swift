@@ -63,7 +63,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         let reply: WatchReply = try await withCheckedThrowingContinuation { continuation in
             pending[request.id] = continuation
             deadlines[request.id] = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(25))
+                try? await Task.sleep(for: request.action == .finishDictation ? WatchLimits.dictationWatchTimeout : .seconds(25))
                 guard !Task.isCancelled else { return }
                 self?.complete(request.id, .failure(WatchFailure.unavailable))
             }

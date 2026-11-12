@@ -120,6 +120,7 @@ import { HtmlArtifactStore } from './database/html-artifact-store.js';
 import { createConfirmationStore } from './database/confirmation-store.js';
 import { createOwnerInteractionService } from './core/owner-interactions.js';
 import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
+import { createAzureWatchTranscriber } from './voice/watch-transcription.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
 import { createOpenAIImageGenerator } from './core/openai-images.js';
 import { createImageGenerationModule } from './core/image-generation.js';
@@ -1207,6 +1208,13 @@ try {
     },
   }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
   const app = buildApp(config, logger, {
+    ...(credential && config.foundryEndpoints ? {
+      watchTranscriber: createAzureWatchTranscriber(config.foundryEndpoints.runtime, async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Speech identity unavailable');
+        return token.token;
+      }),
+    } : {}),
     ...(managedRuntime && readManagedTarget ? {
       managedRuntime,
       conversationRuntimeTests: async () => {

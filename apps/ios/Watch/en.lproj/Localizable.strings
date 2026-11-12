@@ -17,3 +17,10 @@
 "Last 7 days" = "Last 7 days";
 "Workouts unavailable" = "Workouts unavailable";
 "Loading workouts…" = "Loading workouts…";
+"Listening…" = "Listening…";
+"Transcribing…" = "Transcribing…";
+"Stop" = "Stop";
+"Cancel" = "Cancel";
+"Dictation unavailable. Connect your iPhone and check the network, or tap Message to type." = "Dictation unavailable. Connect your iPhone and check the network, or tap Message to type.";
+"Allow microphone access in Settings, or tap Message to type." = "Allow microphone access in Settings, or tap Message to type.";
+"Dictation stopped. Try again, or tap Message to type." = "Dictation stopped. Try again, or tap Message to type.";

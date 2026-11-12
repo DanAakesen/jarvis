@@ -75,8 +75,11 @@ import {
   type ApprovalNotificationServices,
 } from './push/approval-notifications.js';
 import type { BrowserConfirmation } from './core/owner-interactions.js';
+import { registerWatchTranscriptionRoute } from './voice/watch-routes.js';
+import type { WatchTranscriber } from './voice/watch-transcription.js';
 
 export interface BuildAppOptions {
+  readonly watchTranscriber?: WatchTranscriber;
   readonly proactiveConversationContext?: import('./proactive/conversation-context.js').ProactiveConversationContext;
   readonly activityKit?: ActivityKitServices;
   readonly approvalNotifications?: ApprovalNotificationServices;
@@ -485,6 +488,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   }
   // With the switch off these routes are not registered at all, so the paths answer 404.
   if (ownerSessions) app.register(registerOwnerSessionRoutes, { service: ownerSessions });
+  registerWatchTranscriptionRoute(app, options.watchTranscriber);
   registerModules(app, options.modules ?? [
     coreModule,
     conversationModule,

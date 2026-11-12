@@ -6,6 +6,7 @@ import { buildApp, type BuildAppOptions } from './app.js';
 import { loadConfig } from './config.js';
 import { ConversationAttachmentStore } from './database/conversation-attachment-store.js';
 import { createLogger } from './logging.js';
+import type { WatchTranscriber } from './voice/watch-transcription.js';
 
 const staticOrigin = 'https://fixture.azurestaticapps.net';
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: staticOrigin });
@@ -40,6 +41,61 @@ function attachmentStoreFixture() {
 }
 
 describe('Fastify backend', () => {
+  it('protects watch transcription and rejects unsafe audio without logging content', async () => {
+    const transcribe = vi.fn<WatchTranscriber>(async () => 'private transcript');
+    const { app, records } = fixture({ watchTranscriber: transcribe });
+    const headers = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
+    const call = (payload: unknown, authenticated = true) => app.inject({
+      method: 'POST', url: '/watch/transcribe', headers: authenticated ? headers : {}, payload,
+    });
+    expect((await call({ audio: 'AAA=' }, false)).statusCode).toBe(401);
+    for (const audio of ['', 'a===', 'AB==', 'AA==', 'AAAA\n', Buffer.alloc(2_880_002).toString('base64')]) {
+      expect((await call({ audio })).statusCode).toBe(400);
+    }
+    expect((await call({ audio: 'AAA=', extra: true })).statusCode).toBe(400);
+    const response = await call({ audio: 'AAA=' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ text: 'private transcript' });
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(transcribe).toHaveBeenCalledOnce();
+    expect(transcribe.mock.calls[0]?.[0]).toEqual(Buffer.from([0, 0]));
+    expect(records.join('')).not.toContain('private transcript');
+    transcribe.mockRejectedValueOnce(new Error('private provider details'));
+    expect((await call({ audio: 'AAA=' })).statusCode).toBe(503);
+    expect(records.join('')).not.toContain('private provider details');
+    expect((await call({ audio: Buffer.alloc(2_880_000).toString('base64') })).statusCode).toBe(200);
+    expect((await call({ audio: 'A'.repeat(3_850_000) })).statusCode).toBe(413);
+    const agent = fixture({ auth: async () => ({ kind: 'jarvis-agent', objectId: 'agent', tenantId: 'tenant' }), watchTranscriber: transcribe });
+    expect((await agent.app.inject({ method: 'POST', url: '/watch/transcribe', headers, payload: { audio: 'AAA=' } })).statusCode).toBe(403);
+    const unavailable = fixture();
+    expect((await unavailable.app.inject({ method: 'POST', url: '/watch/transcribe', headers, payload: { audio: 'AAA=' } })).statusCode).toBe(503);
+
+    let release!: () => void;
+    let bothStarted!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { bothStarted = resolve; });
+    let active = 0;
+    const limited = fixture({ watchTranscriber: async () => {
+      if (++active === 2) bothStarted();
+      await gate;
+      return '';
+    } });
+    const pending = [1, 2].map(() => Promise.resolve(limited.app.inject({
+      method: 'POST', url: '/watch/transcribe', headers, payload: { audio: 'AAA=' },
+    })));
+    try {
+      await started;
+      const busy = await limited.app.inject({
+        method: 'POST', url: '/watch/transcribe',
+        headers: { ...headers, 'content-type': 'application/json' }, payload: 'x'.repeat(3_850_000),
+      });
+      expect(busy.statusCode).toBe(429);
+    } finally {
+      release();
+      await Promise.all(pending);
+    }
+    expect((await limited.app.inject({ method: 'POST', url: '/watch/transcribe', headers, payload: { audio: 'AAA=' } })).statusCode).toBe(200);
+  });
   it('owns one attachment cleanup timer independently of post-listen re-embedding', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const { store, cleanupExpired } = attachmentStoreFixture();
