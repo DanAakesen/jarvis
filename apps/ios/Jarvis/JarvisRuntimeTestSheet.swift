@@ -30,12 +30,10 @@ private final class JarvisRuntimeTestModel: ObservableObject {
     @Published var nextCursor: String?
     @Published var activeMessageID: String?
     private let client: JarvisChatClient?
-    private let language: ChatLanguage
     private var turn: Task<Void, Never>?
 
-    init(client: JarvisChatClient?, language: ChatLanguage) {
+    init(client: JarvisChatClient?) {
         self.client = client
-        self.language = language
     }
 
     var canSend: Bool {
@@ -69,7 +67,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
         error = nil
         do {
             guard let client else { throw JarvisChatClientError.invalidResponse }
-            session = try await client.createSession(language: language, runtimeTest: selection)
+            session = try await client.createSession(runtimeTest: selection)
         } catch { self.error = .runtimeCreateFailed }
         loading = false
         creating = false
@@ -231,8 +229,8 @@ struct JarvisRuntimeTestSheet: View {
     private let appLanguage: JarvisAppLanguage
     private let fixtureMode: Bool
 
-    init(client: JarvisChatClient?, language: ChatLanguage, appLanguage: JarvisAppLanguage, fixtureMode: Bool = false) {
-        _model = StateObject(wrappedValue: JarvisRuntimeTestModel(client: client, language: language))
+    init(client: JarvisChatClient?, appLanguage: JarvisAppLanguage, fixtureMode: Bool = false) {
+        _model = StateObject(wrappedValue: JarvisRuntimeTestModel(client: client))
         self.appLanguage = appLanguage
         self.fixtureMode = fixtureMode
     }

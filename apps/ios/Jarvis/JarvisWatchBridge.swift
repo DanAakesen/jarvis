@@ -198,10 +198,9 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             return data
         case .brief:
             let epoch = generation
-            let appLanguage: JarvisAppLanguage = language == .en ? .en : .da
             let reader = WatchDashboardReader(client: client)
             let value = try await WatchDashboardReader.boundedRead(timeout: .seconds(20)) {
-                try await reader.brief(language: appLanguage)
+                try await reader.brief()
             }
             guard epoch == generation else { throw WatchFailure.signInRequired }
             dashboardBrief = value
@@ -252,7 +251,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             startingChat = true; defer { startingChat = false }
             let epoch = generation
             let chat = JarvisChatClient(client: client)
-            if chatSession == nil { chatSession = try await chat.createSession(language: language).id }
+            if chatSession == nil { chatSession = try await chat.createSession().id }
             guard let sessionID = chatSession else { throw WatchFailure.failed }
             let stream = try await chat.sendTurn(sessionId: sessionID, text: r.text ?? "")
             guard epoch == generation else { throw WatchFailure.signInRequired }
@@ -356,7 +355,6 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             let session = VoiceSessionClient(
                 baseURL: try JarvisComposition.apiBaseURL(),
                 transport: URLSessionWebSocketTransport(),
-                appLanguage: JarvisAppLanguage(rawValue: language.rawValue) ?? .default,
                 onMessage: { [weak self] message in
                     Task { @MainActor in self?.receiveVoice(message, id: id) }
                 },
@@ -390,10 +388,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 guard voiceEpoch == generation, voiceID == id else {
                     try? await session.end(); throw WatchFailure.unavailable
                 }
-                try? liveActivity.start(
-                    sessionID: id,
-                    language: language == .en ? .en : .da
-                )
+                try? liveActivity.start(sessionID: id)
             }
             catch { await stopVoice(); throw error }
             return try encode(id)
@@ -499,9 +494,6 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             invalidatedDictations.removeValue(forKey: oldest)
         }
         invalidatedDictations[id] = ContinuousClock.now.advanced(by: .seconds(120))
-    }
-    private var language: ChatLanguage {
-        UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) == "en" ? .en : .da
     }
     private func hasActiveVoice(id: UUID) async -> Bool {
         guard voiceID == id else { return false }

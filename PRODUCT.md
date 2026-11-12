@@ -162,7 +162,7 @@ the approved separate UI history. No context wipe is included.
 Microsoft sign-in must open system authentication UI above the Sign-in gate,
 using the highest eligible visible window in an active scene, not the privacy
 cover. Failure to start or a two-minute token-acquisition timeout
-must leave the spinner and show the existing Danish/English failure and retry
+must leave the spinner and show the existing English failure and retry
 copy. Cancelling the sheet returns to idle. Real-device presentation and signed
 TestFlight keychain/Entra configuration require separate verification.
 
@@ -184,12 +184,11 @@ Reopening Voice after End connects automatically with a fresh transport and audi
 session. The red End control follows the approved board. The shared dark-glass,
 cyan-rimmed orb reserves its space; its orange/amber centre animates in place,
 more actively when listening or speaking, without overlapping the status.
-Voice status, controls and recovery copy support Danish and English; Reduced
+Voice status, controls and recovery copy are English-only; Reduced
 Motion keeps the centre still.
-Voice uses the single authenticated `/voice` route for both languages. The
-`gpt-realtime-2.1` model and shared prompt follow the language Dan speaks, with
-Azure Speech transcription detecting it automatically. The saved chat-language
-choice remains available for chat; it does not select a voice route. Microphone
+Voice uses the single authenticated `/voice` route with the `gpt-realtime-2.1`
+model, English prompt and Azure Speech automatic language detection. The model
+follows the language Dan speaks; no chat- or voice-language choice is stored. Microphone
 capture and speaker playback use the existing voice socket contract; speaking
 over playback interrupts it immediately.
 Camera inspection and screen sharing reuse the web app's existing vision and
@@ -235,8 +234,8 @@ expanded beside the approved board are required before acceptance.
 After an established realtime connection drops, Voice shows a muted orb, the
 “Connection lost” title, and Retry now and End actions. Retry now starts another
 session with the existing bounded reconnect policy; End closes the session and
-returns to Chat. Initial connection failures do not use the lost state. Copy
-follows the app's Danish-default language preference.
+returns to Chat. Initial connection failures do not use the lost state. Copy is
+English-only; the realtime model follows the spoken language.
 
 ## Backend log authorization qualification (#1341; 29 October 2026)
 
@@ -501,8 +500,8 @@ a time in a native full-height sheet. Table, list, detail, text, timeline, chart
 task-card, status and image views render natively. HTML apps, knowledge graphs,
 code views and unknown renderers remain non-executable unsupported cards until
 their native presentation is decided. No create action or new backend route is
-introduced. All native Workspaces UI and accessibility copy follows the persisted
-Danish/English app-language preference, defaulting to Danish.
+introduced. All native Workspaces UI and accessibility copy is English-only.
+Danish content opened or edited in Workspaces remains unchanged.
 
 ## iPhone Lock Screen tasks and decisions (P15-36)
 
@@ -513,7 +512,7 @@ time, tracking at most the five most recently started running tasks. Until the b
 indeterminate and never presents invented step counts. Approve and Decline use
 the existing authenticated confirmation endpoint, require device authentication,
 and report success or failure in the Now activity sheet. New labels and recovery
-copy follow the Danish-default, English-selectable app language.
+copy are English-only. Danish conversation and user content are unaffected.
 
 P15-49 (#1498) also starts activities for real background jobs from `/jobs` and
 the job events on `/now/events`. Locking the phone detaches chat observation,
@@ -526,7 +525,7 @@ link before display; a missed acknowledgement is delivery failure, not task fail
 Tasks show running, waiting, done, failed or cancelled state on the Lock Screen
 and Dynamic Island. Terminal state remains briefly visible; disappearance from
 the running-only feed is not treated as completion. Disabled iOS Live Activities
-show Danish/English guidance and an Open Settings link without stopping the task.
+show English guidance and an Open Settings link without stopping the task.
 Task activities register ActivityKit update tokens with the owner-only backend.
 Remote updates require the protected APNs configuration, database migration and
 signed-device provisioning; absent configuration shows a local-only warning.
@@ -1411,9 +1410,10 @@ Notes use the same accessible row and open one shared detail and edit flow;
 task fields are editable immediately, and Save is enabled for valid changes.
 Updates save against the task's returned version. Notes open editable, with
 formatting controls available above the keyboard. Editing sheets dismiss on
-successful saves while retaining failures for recovery. All interface and accessibility copy
-is localized in Danish and English from the app-owned Settings preference,
-defaulting to Danish; it is independent of voice language and device locale.
+successful saves while retaining failures for recovery. All interface and
+accessibility copy is English-only, with no app-language preference. Danish
+user-authored content is unchanged, and the realtime model continues to follow
+the owner's spoken or written language.
 
 This iOS navigation is an approved native presentation of the existing web
 capabilities. The existing task-create route accepts optional priority. Folder
@@ -1969,7 +1969,7 @@ within 24 hours or calendar clash; travel disruption keeps a typed category for 
 future provider. Eligible items share one detailed push, capped at three accepted
 bundles per Copenhagen day. Manual checks, paused settings, quiet hours, cancelled
 runs, missing subscriptions, and findings already seen, snoozed or dismissed do
-not alert. The server composes bounded Danish/English v2 headlines and bodies
+not alert. The server composes bounded English v2 headlines and bodies
 from stored item titles, with a due time for a single item when available.
 Bundles show up to three titles and an overflow count. Failed detail reads still
 send the count headline. The worker validates and clamps v2 text; older payloads
@@ -2055,7 +2055,7 @@ Native iPhone Health logging (P15-39 / #1480) uses only the plus-button
 reps and sets. **Track workout** contains Exercises and History, or the existing
 empty state, without an inline form, Save button or save-status line.
 The Dashboard/Track workout segmented pill sits in the fixed bottom bar above
-search and plus. Visible and accessibility copy follows Danish/English.
+search and plus. Visible and accessibility copy is English-only.
 
 Tool parity is an acceptance requirement for every retained Daily capability,
 not a later convenience. The page and Jarvis chat/voice must use the same

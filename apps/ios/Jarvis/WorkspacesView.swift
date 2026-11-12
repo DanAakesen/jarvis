@@ -4,7 +4,6 @@ import SwiftUI
 struct WorkspacesView: View {
     @ObservedObject var runtime: WorkspaceRuntime
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @State private var loadState: LoadState = .loading
     @State private var signInRequired = false
     @State private var items: [SavedWorkspaceItem] = []
@@ -24,7 +23,7 @@ struct WorkspacesView: View {
     @State private var renameTitle = ""
 
     private var language: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+        .default
     }
 
     var body: some View {

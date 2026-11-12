@@ -9,7 +9,6 @@ export interface SystemPushRequest {
   /** Set only after server-side verification of an explicit timed reminder. */
   ownerRequested?: true;
   count: number;
-  language: 'da' | 'en';
   itemId: string;
   origin: 'proactive_alert' | 'proactive_reminder';
   details?: readonly { title: string; body?: string; dueAt: string | null }[];
@@ -49,31 +48,23 @@ function singleLine(value: string): string {
 }
 
 function countHeadline(request: SystemPushRequest): string {
-  const { kind, count, language } = request;
-  const da = language === 'da';
+  const { kind, count } = request;
   switch (kind) {
     case 'insight': return '';
-    case 'owner_reminder': return da ? 'Påmindelse' : 'Reminder';
-    case 'alert': return da
-      ? count === 1 ? '1 tidskritisk ting kræver din opmærksomhed' : `${count} tidskritiske ting kræver din opmærksomhed`
-      : count === 1 ? '1 time-critical item needs you' : `${count} time-critical items need you`;
-    case 'due_soon': return da
-      ? count === 1 ? 'En todo forfalder inden for en time' : `${count} todos forfalder inden for en time`
-      : count === 1 ? 'A todo is due within the hour' : `${count} todos are due within the hour`;
-    case 'overdue': return da
-      ? count === 1 ? 'En todo er forfalden' : `${count} todos er forfaldne`
-      : count === 1 ? 'A todo is overdue' : `${count} todos are overdue`;
-    case 'mixed': return da ? `${count} todos kræver din opmærksomhed` : `${count} todos need your attention`;
+    case 'owner_reminder': return 'Reminder';
+    case 'alert': return count === 1 ? '1 time-critical item needs you' : `${count} time-critical items need you`;
+    case 'due_soon': return count === 1 ? 'A todo is due within the hour' : `${count} todos are due within the hour`;
+    case 'overdue': return count === 1 ? 'A todo is overdue' : `${count} todos are overdue`;
+    case 'mixed': return `${count} todos need your attention`;
   }
 }
 
 export function buildPushPayload(request: SystemPushRequest, now = new Date()): Buffer {
-  const da = request.language === 'da';
   if (request.kind === 'insight') {
     const detail = request.details?.[0];
     return Buffer.from(JSON.stringify({ v: 2, title: shorten(singleLine(detail?.title ?? ''), 80),
       body: shorten(singleLine(detail?.body ?? ''), 400), itemId: request.itemId, kind: request.kind,
-      count: request.count, lang: request.language }));
+      count: request.count }));
   }
   const details = (request.details ?? []).slice(0, 3).map((detail) => ({
     title: singleLine(detail.title),
@@ -92,15 +83,15 @@ export function buildPushPayload(request: SystemPushRequest, now = new Date()): 
   if (request.count === 1) {
     const detail = visible[0];
     if (request.kind === 'alert' && detail) {
-      title = da ? 'Tidskritisk' : 'Time-critical';
+      title = 'Time-critical';
     } else if (detail?.due) {
       const time = localTimeLabel(detail.due);
       if (detail.due.getTime() > now.getTime()) {
-        title = da ? `Todo forfalder kl. ${time}` : `Todo due at ${time}`;
+        title = `Todo due at ${time}`;
       } else if (dayKey(detail.due) === dayKey(new Date(copenhagenDayStart(now).getTime() - 1))) {
-        title = da ? `Todo forfaldt i går kl. ${time}` : `Todo was due yesterday at ${time}`;
+        title = `Todo was due yesterday at ${time}`;
       } else {
-        title = da ? `Todo forfaldt kl. ${time}` : `Todo was due at ${time}`;
+        title = `Todo was due at ${time}`;
       }
     }
     const suffix = request.kind === 'alert' && detail?.due ? ` · ${localTimeLabel(detail.due)}` : '';
@@ -110,7 +101,7 @@ export function buildPushPayload(request: SystemPushRequest, now = new Date()): 
       `${detail.due ? `${localTimeLabel(detail.due)} ` : ''}${detail.title}`, 80,
     ));
     const remaining = request.count - visible.length;
-    const overflow = visible.length > 0 && remaining > 0 ? `+${remaining} ${da ? 'flere' : 'more'}` : '';
+    const overflow = visible.length > 0 && remaining > 0 ? `+${remaining} more` : '';
     // Reserve the overflow line before fitting detail lines to the total body budget.
     let budget = 240 - (overflow ? Array.from(overflow).length + lines.length : Math.max(0, lines.length - 1));
     body = [...lines.map((line, index) => {
@@ -126,7 +117,6 @@ export function buildPushPayload(request: SystemPushRequest, now = new Date()): 
     itemId: request.itemId,
     kind: request.kind,
     count: request.count,
-    lang: request.language,
   }));
 }
 

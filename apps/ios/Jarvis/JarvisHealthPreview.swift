@@ -6,13 +6,13 @@ import SwiftUI
     NavigationStack {
         JarvisHealthArea(
             client: JarvisHealthPreview.makeClient(),
-            language: .da,
+            language: .en,
             observeRefreshEvents: false,
             now: JarvisHealthPreview.now
         )
     }
     .environmentObject(JarvisNavigationModel())
-    .environment(\.locale, JarvisAppLanguage.da.locale)
+    .environment(\.locale, JarvisAppLanguage.en.locale)
 }
 
 #Preview("Health · English") {

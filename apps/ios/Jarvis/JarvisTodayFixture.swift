@@ -33,13 +33,11 @@ struct JarvisTodayFixture {
             .flatMap { Int($0.dropFirst("--home-brief-lines=".count)) } ?? 3
         return min(6, max(1, value))
     }
-    func brief(language: JarvisAppLanguage) -> JarvisHomeBrief {
+    func brief() -> JarvisHomeBrief {
         let long = ProcessInfo.processInfo.arguments.contains("--home-brief-long")
-        let text = language == .da
-            ? "Design review begynder kl. 15. Du har to opgaver med frist i dag."
-            : "Design review starts at 15:00. You have two tasks due today."
+        let text = "Design review starts at 15:00. You have two tasks due today."
         return JarvisHomeBrief(text: long ? Array(repeating: text, count: 8).joined(separator: " ") : text,
-            maxVisibleLines: maxBriefLines, language: language.rawValue,
+            maxVisibleLines: maxBriefLines,
             generatedAt: "2026-11-02T13:30:00Z", highlights: ["Design review"])
     }
 

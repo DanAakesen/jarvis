@@ -11,6 +11,5 @@ struct FactoryTaskActivityAttributes: ActivityAttributes {
     var taskID: String
     var title: String
     var startedAt: Date?
-    var language: String
     var factoryTitle: String
 }

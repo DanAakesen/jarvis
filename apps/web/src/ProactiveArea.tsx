@@ -94,15 +94,15 @@ function ItemContent({ item, showTitle = true, expanded = false }: {
       {item.kind === 'test' && <span>Test notification</span>}
       {item.todoAdded && <span>Todo added</span>}
     </div>
-    {showTitle && <h3 lang={item.language ?? undefined}>{item.title}</h3>}
-    <p className={`proactive-item-text${expanded ? ' is-expanded' : ''}`} lang={item.language ?? undefined}>{item.body}</p>
+    {showTitle && <h3>{item.title}</h3>}
+    <p className={`proactive-item-text${expanded ? ' is-expanded' : ''}`}>{item.body}</p>
     <div className="proactive-item-meta">
       {item.category && <span>{categoryLabels[item.category]}</span>}
-      {item.dueAt && <span>Due <time dateTime={item.dueAt}>{formatTime(item.dueAt, item.language ?? 'en')}</time></span>}
+      {item.dueAt && <span>Due <time dateTime={item.dueAt}>{formatTime(item.dueAt)}</time></span>}
       {evidence.length > 0 && <span>From {evidence.join(' and ')}</span>}
-      <span>Arrived <time dateTime={item.createdAt}>{formatTime(item.createdAt, item.language ?? 'en')}</time></span>
+      <span>Arrived <time dateTime={item.createdAt}>{formatTime(item.createdAt)}</time></span>
       <span>State: {item.state === 'new' ? 'New' : item.state === 'seen' ? 'Seen' :
-        item.state === 'dismissed' ? 'Dismissed' : `Snoozed${item.snoozedUntil ? ` until ${formatTime(item.snoozedUntil, item.language ?? 'en')}` : ''}`}</span>
+        item.state === 'dismissed' ? 'Dismissed' : `Snoozed${item.snoozedUntil ? ` until ${formatTime(item.snoozedUntil)}` : ''}`}</span>
     </div>
     <span className="proactive-item-feedback-state">
       Feedback: {item.feedback === 'useful' ? 'Useful' : item.feedback === 'wrong' ? 'Wrong' : 'Not rated'}
@@ -114,7 +114,7 @@ function ItemLink({ item }: { item: ProactiveItem }) {
   const [expanded, setExpanded] = useState(false);
   return <>
     <Link className="proactive-item-link" to={`/proactive/${encodeURIComponent(item.id)}`}
-      data-item-link={item.id} aria-label={`Open ${item.title}`} lang={item.language ?? undefined}>
+      data-item-link={item.id} aria-label={`Open ${item.title}`}>
       <ItemContent item={item} expanded={expanded} />
     </Link>
     {item.body.length > 220 && <button type="button" className="proactive-text-toggle"
@@ -647,7 +647,7 @@ function FullProactiveItemPage({ backendUrl, getAccessToken, signIn, proactiveEn
   };
 
   return <main className="proactive-page proactive-detail" aria-labelledby="proactive-detail-heading">
-    <h1 id="proactive-detail-heading" lang={item.state === 'loaded' ? item.value.language ?? undefined : undefined}>
+    <h1 id="proactive-detail-heading">
       {item.state === 'loaded' ? item.value.title : 'Proactive item'}
     </h1>
     <Link to="/proactive">All open items</Link>
@@ -658,7 +658,7 @@ function FullProactiveItemPage({ backendUrl, getAccessToken, signIn, proactiveEn
     {item.state === 'error' && <StateMessage variant="error" message={item.message}
       actionLabel="Retry" onAction={() => setRequestKey((value) => value + 1)} />}
     {item.state === 'loaded' && <>
-      <article className="proactive-detail-item" lang={item.value.language ?? undefined}>
+      <article className="proactive-detail-item">
         <ItemContent item={item.value} showTitle={false} />
         <ItemActionControls item={item.value} now={now()} onAction={action} />
       </article>

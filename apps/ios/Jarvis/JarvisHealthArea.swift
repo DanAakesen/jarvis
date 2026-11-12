@@ -303,7 +303,7 @@ struct JarvisHealthArea: View {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.healthSectionSpacing) {
                     JarvisHealthSyncIssue(state: healthSyncState, language: language)
                     if liftWriteFailed {
-                        Text(language == .da ? "Ændringen kunne ikke bekræftes. Opdater løftene før du prøver igen." : "The change could not be confirmed. Refresh lifts before trying again.")
+                        Text("The change could not be confirmed. Refresh lifts before trying again.")
                             .foregroundStyle(.red)
                             .accessibilityIdentifier("health.lift.writeError")
                     }
@@ -559,8 +559,8 @@ struct JarvisHealthArea: View {
                         if let editable = JarvisEditableLift(row: lift) {
                             JarvisEditableSwipeRow(
                                 identifier: "health.lift." + editable.id,
-                                editTitle: language == .da ? "Rediger" : "Edit",
-                                deleteTitle: language == .da ? "Slet" : "Delete",
+                                editTitle: "Edit",
+                                deleteTitle: "Delete",
                                 isBusy: deletingLiftID == editable.id,
                                 onEdit: { editedLift = editable },
                                 onDelete: { Task { await deleteLift(editable) } }

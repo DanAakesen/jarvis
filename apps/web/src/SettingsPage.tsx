@@ -29,8 +29,6 @@ interface Settings {
   homeBrief?: { instruction: string; maxVisibleLines: number };
   voice: {
     speechToTextModel: string;
-    englishModel: string;
-    englishVoice: string;
     minimizeWindowsOnVoiceStart: boolean;
   } & Partial<VoiceTuningSettings>;
   /** Present on backends with role-based models and tuning (P9-13); older backends omit them. */
@@ -63,8 +61,6 @@ interface SettingsOptions {
   personalityTones: Settings['personality']['tone'][];
   personalityResponseStyles: Settings['personality']['responseStyle'][];
   speechToTextModels: string[];
-  englishModels: string[];
-  englishVoices: string[];
   codexModels: string[];
   codexReasoningEfforts: string[];
   copilotModels: string[];
@@ -88,7 +84,6 @@ type LoadState = 'loading' | 'ready' | 'error';
 
 const optionLabels: Record<string, string> = {
   'gpt-5.6-luna': 'GPT-5.6 Luna',
-  'gpt-realtime-2.1': 'GPT Realtime 2.1',
   'azure-speech': 'Azure Speech',
   jev: 'Jev',
   microsoft: 'Microsoft Decision-1',
@@ -99,9 +94,6 @@ const optionLabels: Record<string, string> = {
   concise: 'Concise',
   balanced: 'Balanced',
   detailed: 'Detailed',
-  'en-GB-Ryan:DragonHDLatestNeural': 'Ryan HD (British English)',
-  da: 'Danish',
-  en: 'English',
   default: 'Provider default',
   none: 'None',
   low: 'Low',
@@ -159,8 +151,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
   const credentials = value.credentials;
   const optionKeys: (keyof SettingsOptions)[] = [
     'themes', 'jarvisModels', 'reasoningEfforts', 'personalityTones', 'personalityResponseStyles',
-    'speechToTextModels', 'englishModels',
-    'englishVoices', 'codexModels',
+    'speechToTextModels', 'codexModels',
     'codexReasoningEfforts', 'copilotModels', 'projectVisibilities', 'projectAgents',
     'projectPolicies',
   ];
@@ -189,8 +180,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     typeof settings.personality.customInstructions === 'string' &&
     settings.personality.customInstructions.length <= 2_000 &&
     !hasUnsupportedControlCharacters(settings.personality.customInstructions) &&
-    typeof settings.voice.speechToTextModel === 'string' && typeof settings.voice.englishModel === 'string' &&
-    typeof settings.voice.englishVoice === 'string' &&
+    typeof settings.voice.speechToTextModel === 'string' &&
     typeof settings.voice.minimizeWindowsOnVoiceStart === 'boolean' &&
     typeof settings.codex.model === 'string' && typeof settings.codex.reasoning === 'string' &&
     typeof settings.copilot.model === 'string' && typeof settings.global.maxParallelTasks === 'number' &&
@@ -674,7 +664,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
           {!roleModels && (
           <CollapsibleSection storageKey="settings.jarvis" headingId="jarvis-settings-heading" title="Jarvis" summary={<>{settings.jarvis.model}</>}>
             <div className="settings-grid">
-              <SelectField id="jarvis-model" label="Chat and Danish voice model" value={settings.jarvis.model}
+              <SelectField id="jarvis-model" label="Chat model" value={settings.jarvis.model}
                 options={options.jarvisModels} disabled={saving}
                 onChange={(value) => update('jarvis', 'model', value)} />
               <SelectField id="jarvis-reasoning" label="Reasoning effort" value={settings.jarvis.reasoning}
@@ -805,13 +795,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, notificatio
               <SelectField id="speech-model" label="Speech-to-text model" value={settings.voice.speechToTextModel}
                 options={options.speechToTextModels} disabled={saving}
                 onChange={(value) => update('voice', 'speechToTextModel', value)} />
-              <SelectField id="english-voice-model" label="English speech-to-speech model" value={settings.voice.englishModel}
-                options={options.englishModels} disabled={saving}
-                onChange={(value) => update('voice', 'englishModel', value)} />
               </>}
-              <SelectField id="english-voice" label="English voice" value={settings.voice.englishVoice}
-                options={options.englishVoices} disabled={saving}
-                onChange={(value) => update('voice', 'englishVoice', value)} />
             </div>
             <label className="choice" htmlFor="minimize-windows-on-voice-start">
               <input

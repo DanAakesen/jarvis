@@ -3,28 +3,22 @@
 const itemIdPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
 const messages = {
   alert: {
-    da: (count) => count === 1 ? '1 tidskritisk ting kræver din opmærksomhed' : `${count} tidskritiske ting kræver din opmærksomhed`,
     en: (count) => count === 1 ? '1 time-critical item needs you' : `${count} time-critical items need you`,
   },
   owner_reminder: {
-    da: () => 'Påmindelse',
     en: () => 'Reminder',
   },
   due_soon: {
-    da: (count) => count === 1 ? 'En todo forfalder inden for en time' : `${count} todos forfalder inden for en time`,
     en: (count) => count === 1 ? 'A todo is due within the hour' : `${count} todos are due within the hour`,
   },
   overdue: {
-    da: (count) => count === 1 ? 'En todo er forfalden' : `${count} todos er forfaldne`,
     en: (count) => count === 1 ? 'A todo is overdue' : `${count} todos are overdue`,
   },
   mixed: {
-    da: (count) => `${count} todos kræver din opmærksomhed`,
     en: (count) => `${count} todos need your attention`,
   },
 };
 const validKinds = new Set(['alert', 'due_soon', 'overdue', 'mixed', 'owner_reminder']);
-const validLanguages = new Set(['da', 'en']);
 
 function truncate(value, limit) {
   const points = Array.from(value);
@@ -52,11 +46,11 @@ function notificationText(payload) {
     }
   }
 
-  const { kind, lang, count } = payload ?? {};
-  if (!validKinds.has(kind) || !validLanguages.has(lang) ||
+  const { kind, count } = payload ?? {};
+  if (!validKinds.has(kind) ||
       !Number.isInteger(count) || count < 1 || count > 99 ||
       (kind === 'mixed' && count < 2)) return { title: 'New item', body: '' };
-  return { title: messages[kind][lang](count), body: '' };
+  return { title: messages[kind].en(count), body: '' };
 }
 
 self.addEventListener('install', (event) => {

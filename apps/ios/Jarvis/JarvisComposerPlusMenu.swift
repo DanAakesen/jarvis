@@ -3,7 +3,6 @@ import SwiftUI
 
 /// What a choice in the composer plus menu asks for. Chat performs it directly; Home hands it to Chat.
 enum JarvisComposerPlusAction: Equatable {
-    case chatLanguage(ChatLanguage)
     case testRuntime
     case shareScreen
     case video
@@ -12,7 +11,7 @@ enum JarvisComposerPlusAction: Equatable {
     case camera
 }
 
-/// The one composer plus menu, shared by Chat and Home so both open exactly the same choices: chat language,
+/// The one composer plus menu, shared by Chat and Home so both open exactly the same choices:
 /// runtime tests, screen sharing, video, attach (files, photo library) and camera. The screens differ only in what they do with
 /// the chosen action and which entries are disabled. Identifiers are `identifier`, `identifier.screenShare`,
 /// `identifier.video`, `identifier.attach` and `identifier.camera`.
@@ -23,10 +22,8 @@ struct JarvisComposerPlusMenu: View {
     let identifier: String
     var isDisabled = false
     let copy: (JarvisChatLocalizationKey) -> String
-    var chatLanguage: ChatLanguage?
     var isScreenSharing = false
     var isVideoEnabled = false
-    var languageDisabled = false
     var screenShareDisabled = false
     var videoDisabled = false
     var attachDisabled = false
@@ -41,13 +38,6 @@ struct JarvisComposerPlusMenu: View {
             hint: hint,
             isDisabled: isDisabled
         ) {
-            Menu {
-                languageOption(.da, title: copy(.danish))
-                languageOption(.en, title: copy(.english))
-            } label: {
-                Label(copy(.chatLanguage), systemImage: "globe")
-            }
-            .disabled(languageDisabled)
             Button(copy(.runtimeTest), systemImage: "flask") { onAction(.testRuntime) }
                 .accessibilityIdentifier("\(identifier).testRuntime")
             Button(
@@ -80,15 +70,4 @@ struct JarvisComposerPlusMenu: View {
         }
     }
 
-    private func languageOption(_ language: ChatLanguage, title: String) -> some View {
-        Button {
-            onAction(.chatLanguage(language))
-        } label: {
-            if chatLanguage == language {
-                Label(title, systemImage: "checkmark")
-            } else {
-                Text(title)
-            }
-        }
-    }
 }

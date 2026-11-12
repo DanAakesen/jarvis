@@ -140,7 +140,7 @@ function realtimeInstructions(
   proactivePreferencesEnabled = false,
   ownerRemindersEnabled = false,
 ): string {
-  return `${composeIdentityInstructions(identity, 'en')}
+  return `${composeIdentityInstructions(identity)}
 
 ${ENGLISH_REALTIME_INSTRUCTIONS}
 
@@ -210,7 +210,7 @@ function compactInstructions(
       memory, proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,
     );
     return [
-      composeIdentityInstructions(identity, 'en'),
+      composeIdentityInstructions(identity),
       style,
       modeContext(presence),
       preferences,

@@ -42,7 +42,6 @@ export interface ConversationAgentInput {
   readonly agentSessionId?: string;
   readonly turnId?: string;
   readonly text: string;
-  readonly language: 'da' | 'en';
   readonly smoke?: boolean;
   readonly smokeHistory?: readonly { readonly role: 'user' | 'assistant'; readonly text: string }[];
   readonly smokeApproval?: boolean;

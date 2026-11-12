@@ -123,7 +123,7 @@ struct JarvisTodayScreen: View {
 #endif
         }
         .task(id: "\(language.rawValue)-\(briefVersion)") {
-            await model.refreshBrief(language: language, force: briefVersion > 0)
+            await model.refreshBrief(force: briefVersion > 0)
         }
         .onChange(of: model.taskData.value) { _, _ in briefVersion += 1 }
         .onChange(of: model.calendar.value) { _, _ in briefVersion += 1 }
@@ -621,7 +621,7 @@ struct JarvisTodayScreen: View {
             }
             do {
                 try dictation.start(
-                    locale: Locale(identifier: language == .da ? "da-DK" : "en-GB"),
+                    locale: .current,
                     base: draft
                 ) { draft = $0 }
                 dictationFailed = false
@@ -659,7 +659,6 @@ struct JarvisTodayScreen: View {
                         hint: chatCopy(.plusMenuHint),
                         identifier: "today.composer.plus",
                         copy: chatCopy,
-                        languageDisabled: fixtureMode,
                         screenShareDisabled: fixtureMode,
                         videoDisabled: fixtureMode,
                         attachDisabled: fixtureMode,

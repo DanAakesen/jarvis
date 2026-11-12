@@ -64,7 +64,7 @@ private struct LockScreenFactoryTaskActivity: View {
     let context: ActivityViewContext<FactoryTaskActivityAttributes>
 
     private var language: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: context.attributes.language) ?? .default
+        .default
     }
 
     var body: some View {

@@ -59,8 +59,8 @@ final class JarvisTodayModel: ObservableObject {
     // MARK: Derived
 
     func greeting(language: JarvisAppLanguage) -> JarvisTodayGreeting {
-        if let fixture = dependencies.fixture { return fixture.brief(language: language).greeting }
-        if let value = brief.value, value.language == language.rawValue,
+        if let fixture = dependencies.fixture { return fixture.brief().greeting }
+        if let value = brief.value,
            JarvisHealthLogic.day(value.generatedAt) == JarvisHealthPeriod.make(.today, now: now).startDate {
             if brief.failure != nil, value.state == "generated" {
                 return .brief(text: JarvisTodayLocalization.string(.briefStale, language: language) + value.text,
@@ -79,9 +79,9 @@ final class JarvisTodayModel: ObservableObject {
         return brief.value?.maxVisibleLines ?? 3
     }
 
-    func refreshBrief(language: JarvisAppLanguage, force: Bool = false) async {
+    func refreshBrief(force: Bool = false) async {
         if let fixture = dependencies.fixture {
-            brief = JarvisTodaySection(value: fixture.brief(language: language), isLoading: false)
+            brief = JarvisTodaySection(value: fixture.brief(), isLoading: false)
             return
         }
         guard let client = dependencies.briefClient else {
@@ -91,7 +91,7 @@ final class JarvisTodayModel: ObservableObject {
         briefGeneration += 1
         let generation = briefGeneration
         do {
-            let value = try await client.fetch(language: language, refresh: force)
+            let value = try await client.fetch(refresh: force)
             guard !Task.isCancelled, generation == briefGeneration else { return }
             brief = JarvisTodaySection(value: value, isLoading: false,
                 failure: value.state == "generated" ? nil : .unavailable)

@@ -29,7 +29,6 @@ function announcement(updates: readonly string[]): string {
 export function createVoiceStatusAnnouncer(options: {
   readonly taskEvents?: TaskEventHub;
   readonly nowEvents?: NowFeedEventHub;
-  readonly language?: 'da' | 'en';
   readonly canSpeak: () => boolean;
   readonly shouldQueueTaskStatus?: () => boolean;
   readonly speak: (text: string) => void;
@@ -38,7 +37,6 @@ export function createVoiceStatusAnnouncer(options: {
   const pending = new Set<string>();
   const announcedTaskStates = new Set<string>();
   const mergeWindowMs = options.mergeWindowMs ?? 500;
-  const language = options.language ?? 'en';
   let timer: NodeJS.Timeout | undefined;
   let closed = false;
 
@@ -68,7 +66,7 @@ export function createVoiceStatusAnnouncer(options: {
     const key = `${event.taskId}:${status.state}`;
     if (announcedTaskStates.has(key)) return;
     announcedTaskStates.add(key);
-    enqueue(language === 'da' ? taskStatusMessage(event.taskId, status.state, status.url, 'da') : update);
+    enqueue(update);
   });
   const unsubscribeNowEvents = options.nowEvents?.subscribe((event) => {
     if (event.type === 'status') enqueue(statusText[event.kind]);

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>da</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>Jarvis</string>
 	<key>CFBundleExecutable</key>

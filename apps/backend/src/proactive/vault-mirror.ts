@@ -40,6 +40,5 @@ export function vaultMirrorFinding(status: VaultMirrorStatusView, now: Date): Fi
     dueAt: null,
     evidence: [],
     runId: null,
-    language: 'en',
   };
 }

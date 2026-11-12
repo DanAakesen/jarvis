@@ -1018,7 +1018,6 @@ export function isWorkspaceCommand(value, options = {}) {
       return hasOnly('action') && ['show', 'hide'].includes(value.action);
     case 'session':
       return hasOnly('action', 'value') && (
-        value.action === 'language' && ['da', 'en'].includes(value.value) ||
         value.action === 'voice' && value.value === 'end' ||
         value.action === 'camera' && ['front', 'rear', 'off'].includes(value.value));
     case 'create':
@@ -1105,7 +1104,7 @@ const workspaceOperationShapes = Object.freeze({
 const workspaceActionValues = Object.freeze({
   conversation: ['show', 'hide'], session: ['language', 'voice', 'camera'], 'context-panel': ['open', 'close', 'toggle'],
 });
-const workspaceSessionValues = Object.freeze({ language: ['da', 'en'], voice: ['end'], camera: ['front', 'rear', 'off'] });
+const workspaceSessionValues = Object.freeze({ voice: ['end'], camera: ['front', 'rear', 'off'] });
 const generatedViewKeys = Object.freeze(['version', 'title', 'renderer', 'source', 'data', 'actions']);
 const generatedSourceKeys = Object.freeze(['id', 'status', 'updatedAt', 'reason', 'page']);
 const generatedViewExample =

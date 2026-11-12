@@ -51,7 +51,6 @@ export interface ConversationHistoryMessage extends ConversationMessage {
 export interface ConversationSteeringMessage {
   readonly id: string;
   readonly text: string;
-  readonly language: ConversationLanguage;
 }
 
 export interface ConversationHistoryPage {

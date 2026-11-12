@@ -54,8 +54,6 @@ struct JarvisSettingsEditorView: View {
         case .voice:
             return [
                 choice("voice.speechToTextModel", .speechToText, response?.options["speechToTextModels"]?.arrayValues ?? []),
-                choice("voice.englishModel", .englishModel, response?.options["englishModels"]?.arrayValues ?? []),
-                choice("voice.englishVoice", .englishVoice, response?.options["englishVoices"]?.arrayValues ?? []),
             ]
         case .research:
             return [
@@ -391,55 +389,11 @@ struct JarvisSettingsEditorView: View {
     }
 }
 
-struct JarvisSettingsLanguageView: View {
-    @Binding var language: String
-    let selectedLanguage: JarvisAppLanguage
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var draft: String
-
-    init(language: Binding<String>, selectedLanguage: JarvisAppLanguage) {
-        _language = language
-        self.selectedLanguage = selectedLanguage
-        _draft = State(initialValue: selectedLanguage.rawValue)
-    }
-
-    private func copy(_ key: JarvisSettingsLocalizationKey) -> String {
-        JarvisSettingsLocalization.string(key, language: selectedLanguage)
-    }
-
-    var body: some View {
-        JarvisForm {
-            Picker(copy(.language), selection: $draft) {
-                Text(copy(.danish)).tag(JarvisAppLanguage.da.rawValue)
-                Text(copy(.english)).tag(JarvisAppLanguage.en.rawValue)
-            }
-            .pickerStyle(.inline)
-        }
-        .navigationTitle(copy(.language))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                JarvisSheetConfirmButton(
-                    title: copy(.save),
-                    isDisabled: draft == selectedLanguage.rawValue
-                ) {
-                    language = draft
-                    dismiss()
-                }
-            }
-            .sharedBackgroundVisibility(.hidden)
-        }
-    }
-}
-
 func jarvisSettingsOptionTitle(_ value: String, language: JarvisAppLanguage) -> String {
     let key: JarvisSettingsLocalizationKey? = switch value {
     case "light": .light
     case "dark": .dark
     case "system": .system
-    case "da": .danish
-    case "en": .english
     case "british_butler": .personalityButler
     case "warm": .personalityWarm
     case "direct": .personalityDirect
