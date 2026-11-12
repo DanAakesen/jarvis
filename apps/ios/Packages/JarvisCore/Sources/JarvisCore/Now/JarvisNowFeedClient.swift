@@ -76,9 +76,7 @@ public final class JarvisNowFeedClient: Sendable {
         }
     }
 
-    public func registerTaskActivity(
-        taskID: String, activityID: String, pushToken: String, language: JarvisAppLanguage
-    ) async throws {
+    public func registerTaskActivity(taskID: String, activityID: String, pushToken: String) async throws {
         guard UUID(uuidString: taskID) != nil || Self.validID(taskID),
               activityID.range(of: #"^[A-Za-z0-9-]{1,128}$"#, options: .regularExpression) != nil,
               pushToken.range(of: #"^(?:[0-9a-f]{2}){32,256}$"#, options: .regularExpression) != nil else {
@@ -87,7 +85,7 @@ public final class JarvisNowFeedClient: Sendable {
         _ = try await client.performAuthenticatedRequest(
             method: .post, path: ["ios", "task-activities"],
             body: JSONEncoder().encode(TaskActivityRegistration(
-                taskID: taskID, activityID: activityID, pushToken: pushToken, language: language.rawValue
+                taskID: taskID, activityID: activityID, pushToken: pushToken
             )),
             idempotent: true
         )
@@ -105,7 +103,6 @@ public final class JarvisNowFeedClient: Sendable {
         let taskID: String
         let activityID: String
         let pushToken: String
-        let language: String
     }
 
     private static func valid(_ feed: JarvisNowFeed) -> Bool {

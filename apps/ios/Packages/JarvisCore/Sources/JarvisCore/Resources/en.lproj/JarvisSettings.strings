@@ -65,9 +65,6 @@
 "settings.signOutAllConfirm" = "Sign out on all devices?";
 "settings.signOutFailed" = "Could not sign out. Your session is still active.";
 "settings.ownerUnavailable" = "The account owner could not be loaded.";
-"settings.language" = "App language";
-"settings.danish" = "Danish";
-"settings.english" = "English";
 "settings.theme" = "Appearance";
 "settings.light" = "Light";
 "settings.dark" = "Dark";
@@ -78,8 +75,6 @@
 "settings.identityDescription" = "Description";
 "settings.showWork" = "Show work";
 "settings.speechToText" = "Speech-to-text model";
-"settings.englishVoice" = "English voice";
-"settings.englishModel" = "English speech model";
 "settings.researchDepth" = "Research depth";
 "settings.maximumSources" = "Maximum sources";
 "settings.proactiveSuggestions" = "Automatic proactive suggestions";

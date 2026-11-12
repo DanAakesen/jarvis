@@ -737,11 +737,8 @@ public enum JarvisSettingsLogic {
                 case ("codex", "reasoning"):
                     valid = validSettingsFieldValue(value, options: ["default"] + reasoning)
                 case ("jarvis", "model"), ("codex", "model"), ("copilot", "model"),
-                     ("voice", "speechToTextModel"), ("voice", "englishModel"),
-                     ("voice", "englishVoice"):
+                     ("voice", "speechToTextModel"):
                     valid = validSettingsFieldValue(value, maximumLength: 128, allowEmpty: false)
-                case ("voice", "defaultLanguage"):
-                    valid = validSettingsFieldValue(value, options: ["da", "en"])
                 case ("location", "city"):
                     valid = validSettingsFieldValue(value, maximumLength: 100) &&
                         stringValue(value).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) == $0 } == true

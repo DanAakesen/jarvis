@@ -71,7 +71,6 @@ export interface FindingInput {
   dueAt: string | null;
   evidence: Item['evidence'];
   runId: string | null;
-  language: 'da' | 'en';
   eventStartAt?: string | null;
   eventEndAt?: string | null;
 }
@@ -263,7 +262,6 @@ export function createMemoryProactiveStore(ownerObjectId: string = randomUUID())
           feedback: existing?.feedback ?? null,
           runId: input.runId,
           todoAdded: existing?.todoAdded ?? false,
-          language: input.language,
           createdAt: existing?.createdAt ?? new Date().toISOString(),
         };
         if (guard) {

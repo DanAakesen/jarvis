@@ -91,7 +91,7 @@ public struct JarvisLiftNameMemory: Equatable, Sendable {
             return JarvisGymSessionType(rawValue: known.session)
         }
         for lift in JarvisGymLiftType.allCases {
-            for language in [JarvisAppLanguage.da, .en] where Self.key(lift.title(language: language)) == target {
+            for language in [JarvisAppLanguage.en] where Self.key(lift.title(language: language)) == target {
                 return lift.session
             }
         }

@@ -7,27 +7,26 @@ import WidgetKit
 /// WidgetKit's Xcode previews/device checks still own host margins, tinting and Home Screen rendering.
 struct JarvisWidgetLayoutGallery: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var language: String
+    @State private var appearance: String
 
     init() {
-        let requested = ProcessInfo.processInfo.arguments.first { $0.hasPrefix("--widget-language=") }
-            .map { String($0.dropFirst("--widget-language=".count)) }
-        _language = State(initialValue: ["en", "da", "en-light"].contains(requested ?? "") ? requested! : "en")
+        let requested = ProcessInfo.processInfo.arguments.first { $0.hasPrefix("--widget-appearance=") }
+            .map { String($0.dropFirst("--widget-appearance=".count)) }
+        _appearance = State(initialValue: ["dark", "light"].contains(requested ?? "") ? requested! : "dark")
     }
 
-    private var appLanguage: JarvisAppLanguage { language == "da" ? .da : .en }
+    private var appLanguage: JarvisAppLanguage { .en }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 16) {
                 JarvisTabStrip(
-                    title: "Widget samples", identifierPrefix: "gallery.widgetLanguage",
+                    title: "Widget samples", identifierPrefix: "gallery.widgetAppearance",
                     items: [
-                        JarvisTabItem(tag: "en", title: "EN · Dark"),
-                        JarvisTabItem(tag: "da", title: "DA · Light"),
-                        JarvisTabItem(tag: "en-light", title: "EN · Light"),
+                        JarvisTabItem(tag: "dark", title: "Dark"),
+                        JarvisTabItem(tag: "light", title: "Light"),
                     ],
-                    selection: $language
+                    selection: $appearance
                 )
                 ScrollView {
                     VStack(spacing: 16) {
@@ -47,7 +46,7 @@ struct JarvisWidgetLayoutGallery: View {
                 }
             }
         }
-        .preferredColorScheme(language == "en" ? .dark : .light)
+        .preferredColorScheme(appearance == "dark" ? .dark : .light)
         .environment(\.dynamicTypeSize, .large)
         .presentationDetents([.large])
     }

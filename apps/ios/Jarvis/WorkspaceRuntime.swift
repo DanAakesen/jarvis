@@ -54,9 +54,7 @@ final class WorkspaceRuntime: ObservableObject {
     private var sessionGeneration = 0
 
     private var language: JarvisAppLanguage {
-        JarvisAppLanguage(
-            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-        ) ?? .default
+        .default
     }
 
     init(client: JarvisClient?, webAppURL: URL?) {

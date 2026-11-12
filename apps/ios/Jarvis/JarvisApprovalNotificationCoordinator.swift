@@ -90,7 +90,6 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
         }
         try? await approvalsClient.registerDeviceToken(
             deviceToken,
-            language: language,
             showActions: settings.showPreviewsSetting != .never,
             timeZone: TimeZone.current.identifier
         )
@@ -240,9 +239,7 @@ final class JarvisApprovalNotificationCoordinator: NSObject, UNUserNotificationC
     }
 
     private static var currentLanguage: JarvisAppLanguage {
-        JarvisAppLanguage(
-            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-        ) ?? .default
+        .default
     }
 
     private static func notificationsAllowed(_ status: UNAuthorizationStatus) -> Bool {

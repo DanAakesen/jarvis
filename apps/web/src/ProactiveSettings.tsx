@@ -30,8 +30,7 @@ function normalizedSettings(value: SettingsValue): SettingsValue {
     preferences: [...value.preferences],
     capabilities: {
       ...value.capabilities,
-      title: { ...value.capabilities.title },
-      examples: value.capabilities.examples.map((example) => ({ ...example })),
+      examples: [...value.capabilities.examples],
     },
   };
 }
@@ -240,9 +239,9 @@ export function ProactiveSettings({ backendUrl, getAccessToken, signIn }: {
         </div>
       </form>
       <details className="proactive-preference-help">
-        <summary>{saved.capabilities.title.da} / {saved.capabilities.title.en}</summary>
-        <ul>{saved.capabilities.examples.map((example) => <li key={example.en}>
-          <span>{example.en}</span> <span lang="da">({example.da})</span>
+        <summary>{saved.capabilities.title}</summary>
+        <ul>{saved.capabilities.examples.map((example) => <li key={example}>
+          {example}
         </li>)}</ul>
       </details>
       {conflict && <p role="alert" className="settings-validation-error">

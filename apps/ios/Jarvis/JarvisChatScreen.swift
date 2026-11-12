@@ -40,7 +40,6 @@ struct JarvisChatScreen: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @StateObject private var model: JarvisChatModel
     @State private var presentedSheet: ChatSheet?
     @State private var pendingActivityTaskID: String?
@@ -117,7 +116,7 @@ struct JarvisChatScreen: View {
     }
 
     private var appLanguage: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+        .default
     }
 
     private var displayedNeedsYouCount: Int {
@@ -234,7 +233,7 @@ struct JarvisChatScreen: View {
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
             case .runtimeTest:
-                JarvisRuntimeTestSheet(client: runtimeTestClient, language: model.chatLanguage, appLanguage: appLanguage, fixtureMode: model.fixtureMode)
+                JarvisRuntimeTestSheet(client: runtimeTestClient, appLanguage: appLanguage, fixtureMode: model.fixtureMode)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
                     .presentationCornerRadius(JarvisDesignTokens.chatSheetCornerRadius)
@@ -713,7 +712,7 @@ struct JarvisChatScreen: View {
             }
             do {
                 try dictation.start(
-                    locale: Locale(identifier: model.chatLanguage == .da ? "da-DK" : "en-GB"),
+                    locale: .current,
                     base: model.draft
                 ) { model.draft = $0 }
                 model.actionError = nil
@@ -800,10 +799,8 @@ struct JarvisChatScreen: View {
             identifier: "chat.plus",
             isDisabled: model.isSending || isPreparingCamera,
             copy: copy,
-            chatLanguage: model.chatLanguage,
             isScreenSharing: isScreenSharing,
             isVideoEnabled: isVideoEnabled,
-            languageDisabled: model.fixtureMode || model.isSending,
             screenShareDisabled: model.fixtureMode || screenShare.state == .starting,
             videoDisabled: model.fixtureMode,
             attachDisabled: model.fixtureMode || attachmentsFull,
@@ -814,11 +811,6 @@ struct JarvisChatScreen: View {
 
     private func performPlusAction(_ action: JarvisComposerPlusAction) {
         switch action {
-        case .chatLanguage(let language):
-            Task { @MainActor in
-                await Task.yield()
-                await model.setChatLanguage(language)
-            }
         case .testRuntime:
             deferred { presentedSheet = .runtimeTest }
         case .shareScreen:

@@ -21,9 +21,9 @@ struct JarvisVoiceActivity: Widget {
                 DynamicIslandExpandedRegion(.leading) {
                     VoiceActivityMark(
                         diameter: 30,
-                        language: context.attributes.appLanguage,
+                        language: .default,
                         status: voiceActivityStatusText(
-                            context.state.phase, language: context.attributes.appLanguage
+                            context.state.phase, language: .default
                         )
                     )
                 }
@@ -230,7 +230,7 @@ struct VoiceLockScreenView: View {
         }
         .padding(JarvisDesignTokens.liveActivityInset)
         .font(.subheadline)
-        .environment(\.locale, attributes.appLanguage.locale)
+        .environment(\.locale, JarvisAppLanguage.default.locale)
     }
 
     @ViewBuilder

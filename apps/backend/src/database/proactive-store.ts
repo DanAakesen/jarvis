@@ -34,7 +34,6 @@ interface ItemRow {
   feedback: Item['feedback'];
   run_id: string | null;
   todo_added: boolean;
-  language: Item['language'];
   created_at: Date | string;
 }
 
@@ -94,7 +93,6 @@ function mapItem(row: ItemRow): Item {
     feedback: row.feedback,
     runId: row.run_id?.toLowerCase() ?? null,
     todoAdded: row.todo_added,
-    language: row.language,
     createdAt: iso(row.created_at)!,
   };
 }
@@ -128,7 +126,7 @@ function parseCategories(value: string | null, defaults: ProactiveSettings['cate
 
 const itemColumns = [
   'id', 'kind', 'title', 'body', 'category', 'owner_requested', 'suggestion_scope', 'urgency', 'due_at', 'evidence_json', 'state',
-  'snoozed_until', 'feedback', 'run_id', 'todo_added', 'language', 'created_at',
+  'snoozed_until', 'feedback', 'run_id', 'todo_added', 'created_at',
 ];
 function itemSelect(prefix = ''): string {
   return itemColumns.map((column) => prefix ? `${prefix}.${column}` : column).join(', ');
@@ -455,15 +453,14 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
             .input('dueAt', sql.DateTime2, input.dueAt ? new Date(input.dueAt) : null)
             .input('evidence', sql.NVarChar(sql.MAX), JSON.stringify(evidence))
             .input('state', sql.NVarChar(16), state)
-            .input('runId', sql.UniqueIdentifier, input.runId)
-            .input('language', sql.NVarChar(2), input.language);
+            .input('runId', sql.UniqueIdentifier, input.runId);
           const saved = existing
             ? await query<ItemRow>(request, `UPDATE dbo.proactive_items SET
                 title = @title, body = @body, category = @category, suggestion_scope = @suggestionScope,
                   owner_requested = @ownerRequested,
                 urgency = @urgency,
                 due_at = @dueAt, evidence_json = @evidence, state = @state,
-                run_id = @runId, language = @language, dedupe_key = @key
+                run_id = @runId, language = N'en', dedupe_key = @key
               OUTPUT ${itemSelect('inserted')}
               WHERE id = @id AND owner_object_id = @owner;`)
             : await query<ItemRow>(request, `INSERT dbo.proactive_items
@@ -472,7 +469,7 @@ export function createProactiveStore(pool: sql.ConnectionPool, ownerObjectId: st
               OUTPUT inserted.${itemSelect().replaceAll(', ', ', inserted.').replaceAll('\n    ', '\n    inserted.')}
               VALUES (@id, @owner, N'finding', @title, @body, N'queued', @category, @suggestionScope, @urgency, @dueAt,
                 @ownerRequested,
-                @evidence, @state, @runId, @language, @key);`);
+                @evidence, @state, @runId, N'en', @key);`);
           const row = saved.recordset[0];
           if (!row) throw new Error('Finding could not be saved');
           check();

@@ -8,6 +8,16 @@ the transcript or viewport changes size. Manual scrolling and text selection
 continue to gate all automatic movement; active sending does not override them.
 No new controls or user-facing copy. Native iPhone acceptance remains unverified.
 
+## 12 November 2026 — English-only app language (P15-124 / #1799)
+
+Remove the app-language setting and all language pickers, language-specific copy,
+prompts, model/voice options and route parameters. App interface, prompts and
+realtime voice configuration use English; the realtime model follows Danish or
+English that the owner speaks or writes. Danish conversation and user-authored
+content remain data. Ignore legacy stored language settings and use English as
+the safe fallback. Set English as the Xcode development language. This supersedes
+the bilingual app-copy and language-setting requirements in earlier decisions.
+
 ## 12 November 2026 — Watch record-and-transcribe dictation (#1794)
 
 The WatchKit text-input controller opens the system-selected input method and cannot force dictation. Use bounded Watch microphone capture and the paired iPhone's authenticated backend connection for transcription only, with no assistant response or tools. Keep system text entry for offline drafts and explain connection failures. Paired-device audio, transcription and interruption behavior remain unverified.

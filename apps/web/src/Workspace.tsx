@@ -42,7 +42,7 @@ export interface WorkspaceController {
   hasVisibleViews: () => boolean;
   /** True when the view is open, not minimised and, on phones, the foreground view. */
   isViewVisible?: (viewId: string) => boolean;
-  /** Applies a current-session command (language, voice, camera) and resolves once the UI action has finished. */
+  /** Applies a current-session command (voice, camera) and resolves once the UI action has finished. */
   applySession?: (command: SessionCommand) => Promise<SessionCommandResult>;
   /** Confirms a pin change only after the owner's store accepts it. */
   applyPin?: (command: Extract<WorkspaceCommand, { operation: 'pin' | 'unpin' }>) => Promise<SessionCommandResult>;

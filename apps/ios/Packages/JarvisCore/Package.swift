@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "JarvisCore",
-    defaultLocalization: "da",
+    defaultLocalization: "en",
     platforms: [.iOS(.v26), .watchOS(.v26)],
     products: [
         .library(name: "JarvisCore", targets: ["JarvisCore"]),

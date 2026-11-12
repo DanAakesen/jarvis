@@ -418,8 +418,8 @@ public struct WatchDashboardReader: Sendable {
                                       fatGoalGrams: fatGoalGrams, proteinGoalGrams: proteinGoalGrams ?? protein)
     }
 
-    public func brief(language: JarvisAppLanguage) async throws -> WatchBriefSummary {
-        guard let summary = WatchBriefSummary(brief: try await JarvisHomeBriefClient(client: client).fetch(language: language)) else {
+    public func brief() async throws -> WatchBriefSummary {
+        guard let summary = WatchBriefSummary(brief: try await JarvisHomeBriefClient(client: client).fetch()) else {
             throw WatchFailure.failed
         }
         return summary

@@ -46,7 +46,6 @@ export interface ReflexContext {
 export interface ReflexClassifier {
   classify(
     text: string,
-    language: 'da' | 'en',
     targets: readonly ReflexTarget[],
     signal: AbortSignal,
     context?: ReflexContext,
@@ -221,7 +220,6 @@ export function createJevReflexClassifier(
   const decideWith = async (
     decision: DecisionTarget,
     text: string,
-    language: 'da' | 'en',
     targets: readonly ReflexTarget[],
     signal: AbortSignal,
     context?: ReflexContext,
@@ -282,7 +280,6 @@ export function createJevReflexClassifier(
         model,
         state: {
           text: text.trim(),
-          language,
           // Without this, Jev judged every voice turn as "not addressed" (L105).
           situation: 'Dan is speaking or typing directly to Jarvis in Jarvis\'s own chat or voice interface, so his requests are addressed to Jarvis unless he is clearly talking to someone else. Voice transcripts can contain background speech or noise fragments.',
           ...(context ? { already_executed: context.executed.slice(-8) } : {}),
@@ -400,7 +397,7 @@ export function createJevReflexClassifier(
   };
 
   return {
-    async classify(text, language, targets, signal, context) {
+    async classify(text, targets, signal, context) {
       if (typeof text !== 'string' || !text.trim() || text.length > 20_000 || signal.aborted) return null;
       let decision: DecisionTarget | undefined;
       try {
@@ -409,7 +406,7 @@ export function createJevReflexClassifier(
         return null;
       }
       if (!decision) return null;
-      const result = await decideWith(decision, text, language, targets, signal, context);
+      const result = await decideWith(decision, text, targets, signal, context);
       return result === null ? null : { ...result, provider: decision.provider };
     },
   };

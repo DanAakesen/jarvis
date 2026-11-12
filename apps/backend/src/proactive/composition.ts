@@ -8,7 +8,6 @@ import type { ModelCatalogueReader } from '../core/model-catalog.js';
 import type { UsageStore } from '../core/usage.js';
 import type { TaskStore } from '../factory/task-store.js';
 import type { BackgroundJobRegistry } from '../core/jobs.js';
-import type { ConversationStore } from '../core/conversation-store.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import type { PushStore } from '../database/push-store.js';
 import { ConfigurationError } from '../configuration-error.js';
@@ -51,7 +50,6 @@ export interface ProactiveCompositionOptions extends ContextDependencies {
   usageStore?: UsageStore;
   taskStore?: TaskStore;
   backgroundJobs?: BackgroundJobRegistry;
-  conversationStore?: Pick<ConversationStore, 'readRecentUserMessages'>;
   onFindingsStored?: NonNullable<ProactiveEngineOptions['onFindingsStored']>;
   registerVaultPushHandler?: (handler: () => void) => void;
   pushStore?: PushStore;
@@ -150,7 +148,6 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ...(alertLedger ? { ledger: alertLedger } : {}),
       ownerObjectId: options.ownerObjectId,
       send: options.systemPushSender,
-      ...(options.conversationStore ? { conversationStore: options.conversationStore } : {}),
       now,
       ...(options.logger ? { logger: options.logger } : {}),
     })

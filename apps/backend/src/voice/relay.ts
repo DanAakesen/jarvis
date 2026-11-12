@@ -357,8 +357,6 @@ function registerVoiceRoute(
   app: Parameters<BackendModule['registerRoutes']>[0],
   path: string,
   connect: VoiceConnectionFactory,
-  english: boolean,
-  language: 'da' | 'en',
   getToken: VoiceRelayOptions['getToken'],
   createPartialRecognizer?: PartialSpeechRecognizerFactory,
   visionWatch?: VoiceRelayOptions['visionWatch'],
@@ -370,7 +368,7 @@ function registerVoiceRoute(
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
     const controller = new AbortController();
-    const appLanguage = (request.query as Record<string, unknown> | undefined)?.appLanguage === 'da' ? 'da' : 'en';
+    const language = 'en' as const;
     const diagnostics = createVoiceDiagnostics(request.log, language, controller.signal, request.requestStartedAt);
     if (app.isStopping) {
       diagnostics.summary('shutdown', 1012);
@@ -394,7 +392,7 @@ function registerVoiceRoute(
       : () => {};
     let upstream: WebSocket | undefined;
     const limits = createSessionLimits();
-    const toolBudgetRungs = english && toolBudgetMemory ? createToolBudgetRungs(app.jarvisTools) : undefined;
+    const toolBudgetRungs = toolBudgetMemory ? createToolBudgetRungs(app.jarvisTools) : undefined;
     let activeRung: ToolBudgetRung | undefined = toolBudgetRungs?.[TOOL_BUDGET_COLD_START_RUNG];
     let rungIndex = toolBudgetRungs ? TOOL_BUDGET_COLD_START_RUNG : 0;
     let attemptCount = 0;
@@ -403,7 +401,6 @@ function registerVoiceRoute(
     let attemptFrame: ReturnType<typeof diagnostics.measure> | undefined;
     controller.signal.addEventListener('abort', () => clearTimeout(attemptTimer), { once: true });
     const activeTools = () => activeRung?.tools ?? app.jarvisTools;
-    // Without a rung (the hosted Danish fallback) the lazy core set still applies.
     const activeCapabilityMode = () => activeRung?.capabilityMode ?? 'lazy';
     const discoveredCapabilities = new Set<string>();
     let proactiveContext: string | undefined;
@@ -550,7 +547,6 @@ function registerVoiceRoute(
       'I could not see a usable image or real description this turn, for example because of frame pacing or the image budget. Say so plainly and offer to look again. Never invent visual details, claim direct image delivery without visualPath=image, or claim continuous video. Speak in the language Dan used in this conversation.';
     const supersededCameraItems = new Set<string>();
     let bufferedCameraContext: { itemId: string; context: SharedScreenContext | null } | undefined;
-    let previousTurnDetection: Record<string, unknown> | undefined;
     const finishSharedScreenContextWait = (
       context: SharedScreenContext | null,
       cancelled = false,
@@ -700,7 +696,6 @@ function registerVoiceRoute(
           ];
           const result = await app.reflexClassifier.classify(
             text,
-            language,
             targets,
             controller.signal,
             {
@@ -743,16 +738,6 @@ function registerVoiceRoute(
           ledger.push(entry);
           reflexLedger.set(itemId, ledger);
           firstActionLatencyMs ??= performance.now() - receivedAt;
-          if (!english) {
-            sendUpstream({
-              type: 'conversation.item.create',
-              item: {
-                type: 'message',
-                role: 'assistant',
-                content: [{ type: 'input_text', text: `Reflex already did: ${reflexSummary(target, action.outcome)}. ${action.note}` }],
-              },
-            });
-          }
         } finally {
           logReflexDecision(request, classification, 'voice-partial', startedAt, controller.signal, action, reason, failedProvider);
         }
@@ -993,7 +978,6 @@ function registerVoiceRoute(
           attempted = true;
           const result = await app.reflexClassifier.classify(
             text,
-            language,
             [
               ...await reflexTargets(request, text),
               ...createBrowserUrlTargets(request.server.jarvisTools.get('pc_open'), text),
@@ -1148,7 +1132,7 @@ function registerVoiceRoute(
                 : 'visualPath=caption: use only the text description; do not claim image delivery or mention the method unless Dan asks. ';
               if (visualContext.description) {
                 cameraInstructions += visualContextText(visualContext, {
-                  now: new Date(), currentTurn: true, language, question: text,
+                  now: new Date(), currentTurn: true, question: text,
                 });
               }
             } else {
@@ -1203,36 +1187,22 @@ function registerVoiceRoute(
           return;
         }
         const instructions = ledgerInstructions(ledger);
-        if (english || cameraTurn) {
-          sendResponseCreate({
-            type: 'response.create',
-            ...(instructions || finalAction || cameraInstructions ? {
-              response: {
-                instructions: [
-                  ...(cameraTurn ? [sessionUpdate().session.instructions] : []),
-                  instructions,
-                  finalAction?.note,
-                  cameraInstructions,
-                  ...(reflexCompleted ? ['Acknowledge the outcome briefly and do not repeat an action already completed.'] : []),
-                ].filter(Boolean).join(' '),
-              },
-            } : {}),
-          });
-        } else if (instructions || finalAction) {
-          sendUpstream({
-            type: 'conversation.item.create',
-            item: {
-              type: 'message',
-              role: 'assistant',
-              content: [{
-                type: 'input_text',
-                text: [instructions, finalAction?.note].filter(Boolean).join(' '),
-              }],
+        sendResponseCreate({
+          type: 'response.create',
+          ...(instructions || finalAction || cameraInstructions ? {
+            response: {
+              instructions: [
+                ...(cameraTurn ? [sessionUpdate().session.instructions] : []),
+                instructions,
+                finalAction?.note,
+                cameraInstructions,
+                ...(reflexCompleted ? ['Acknowledge the outcome briefly and do not repeat an action already completed.'] : []),
+              ].filter(Boolean).join(' '),
             },
-          });
-        }
+          } : {}),
+        });
       } catch {
-        if (!controller.signal.aborted && !endRequested && (english || cameraTurn) &&
+        if (!controller.signal.aborted && !endRequested &&
             (!cameraTurn || cameraItemId === providerItemId) && !sharedContextWait?.cancelled) {
           if (cameraTurn) {
             if (visualPersistenceFailed) {
@@ -1320,7 +1290,7 @@ function registerVoiceRoute(
             sessionId: sessionId!,
             role,
             text: text.trim(),
-            model: role === 'jarvis' && english ? voiceModel : null,
+            model: role === 'jarvis' ? voiceModel : null,
             ...(sourceItemId ? { sourceItemId } : {}),
             ...(role === 'dan' && pendingVisualContext ? { visualContext: pendingVisualContext } : {}),
           });
@@ -1505,7 +1475,7 @@ function registerVoiceRoute(
       const identity = { ownerObjectId: request.principal!.objectId, sessionId: sessionId!, turnId: itemId };
       if (!frameStore) return 'frame_unavailable';
       if (!frameStore.bind(frameId, { ...identity, messageId })) return 'frame_unavailable';
-      if (!english || !reserveImageBudget) return 'image_input_unverified';
+      if (!reserveImageBudget) return 'image_input_unverified';
       const budgetController = new AbortController();
       const abort = () => budgetController.abort();
       controller.signal.addEventListener('abort', abort, { once: true });
@@ -1664,9 +1634,7 @@ function registerVoiceRoute(
     };
 
     const updateCameraTurnDetection = () => {
-      const turnDetection = english
-        ? sessionUpdate().session.turn_detection
-        : previousTurnDetection ?? { type: 'server_vad', create_response: false };
+      const turnDetection = sessionUpdate().session.turn_detection;
       sendUpstream({
         type: 'session.update',
         session: { turn_detection: cameraOn ? { ...turnDetection, create_response: false } : turnDetection },
@@ -1762,8 +1730,7 @@ function registerVoiceRoute(
 
     statusAnnouncer = createVoiceStatusAnnouncer({
       taskEvents: app.eventHub,
-      ...(english ? { nowEvents: app.nowEventHub } : {}),
-      language,
+      nowEvents: app.nowEventHub,
       canSpeak: () => configured && !controller.signal.aborted && !endRequested && !awayMode && !userSpeaking &&
         !reflexPending && !assistantResponding && !toolCallsInResponse && pendingToolCalls === 0 &&
         browser.readyState === WebSocket.OPEN && upstream?.readyState === WebSocket.OPEN,
@@ -1782,7 +1749,7 @@ function registerVoiceRoute(
     });
     unsubscribeProactiveContext = app.proactiveConversationContext?.subscribe(async () => {
       await refreshProactiveContext();
-      if (english && configured && upstreamSessionReady) {
+      if (configured && upstreamSessionReady) {
         settingsUpdateQueued = true;
         applyQueuedSettingsUpdate();
       }
@@ -1813,7 +1780,7 @@ function registerVoiceRoute(
         if (app.settingsStore) {
           const settings = await readSettings(
             app.settingsStore,
-            english ? await app.modelCatalogue.read() : undefined,
+            await app.modelCatalogue.read(),
           );
           if (generation !== settingsRefreshGeneration) return;
           identitySettings = settings.identity;
@@ -2221,7 +2188,7 @@ function registerVoiceRoute(
             content: [{
               type: 'input_text',
               text: visualContextText(visualContext, {
-                now: new Date(), currentTurn: true, language,
+                now: new Date(), currentTurn: true,
                 ...(latestDanMessage ? { question: latestDanMessage.text } : {}),
               }),
             }],
@@ -2322,16 +2289,14 @@ function registerVoiceRoute(
             const settings = await diagnostics.bound('settings', 5_000, async () =>
               readSettings(
                 app.settingsStore!,
-                english ? await app.modelCatalogue.read() : undefined,
+                await app.modelCatalogue.read(),
               ));
             identitySettings = settings.identity;
             personality = settings.personality;
             memorySettings = settings.memory;
-            if (english) {
-              voiceTuning = settings.voice;
-              voiceModel = settings.roles.voice.model;
-              transcriptionModel = settings.roles.transcription.model;
-            }
+            voiceTuning = settings.voice;
+            voiceModel = settings.roles.voice.model;
+            transcriptionModel = settings.roles.transcription.model;
           } catch {
             request.log.warn('voice.identity_settings_unavailable');
           }
@@ -2458,11 +2423,7 @@ function registerVoiceRoute(
             diagnostics.stage('upstream_open');
             if (!toolBudgetRungs) diagnostics.watchdog('upstream_ready', startupFailed);
             if (toolBudgetRungs) sendUpstream(sessionUpdate(), undefined, true);
-            else if (english) sendUpstream(sessionUpdate(), flushQueued);
-            else {
-              if (cameraOn) updateCameraTurnDetection();
-              flushQueued();
-            }
+            else sendUpstream(sessionUpdate(), flushQueued);
           });
           socket.on('message', (data, binary) => {
             if (socket !== upstream) return;
@@ -2506,12 +2467,7 @@ function registerVoiceRoute(
               }
               if (typeof detail?.event_id === 'string' && imageEventIds.has(detail.event_id)) return;
             }
-            if (!english && event?.type === 'session.created') {
-              const session = event.session as { turn_detection?: Record<string, unknown> } | undefined;
-              previousTurnDetection ??= session?.turn_detection;
-              if (cameraOn) updateCameraTurnDetection();
-            }
-            if ((event?.type === 'session.updated' || language === 'da' && event?.type === 'session.created') &&
+            if (event?.type === 'session.updated' &&
                 !upstreamSessionReady &&
                 !controller.signal.aborted && !endRequested) {
               upstreamSessionReady = true;
@@ -2534,7 +2490,7 @@ function registerVoiceRoute(
                 sendResponseCreate({
                   type: 'response.create',
                   response: {
-                    instructions: `Greet Dan briefly in ${appLanguage === 'da' ? 'Danish' : 'English'} as the voice session opens, without waiting for him to speak.`,
+                    instructions: 'Greet Dan briefly in English as the voice session opens, without waiting for him to speak.',
                     tools: [],
                     tool_choice: 'none',
                   },
@@ -2696,7 +2652,7 @@ function registerVoiceRoute(
             }
             if (event?.type === 'response.audio.delta' ||
                 event?.type === 'response.output_audio.delta') publishActivity('speaking');
-            if (english && event?.type === 'response.function_call_arguments.done') {
+            if (event?.type === 'response.function_call_arguments.done') {
               runToolCall(event as unknown as RealtimeFunctionCall);
               return;
             }
@@ -2704,7 +2660,7 @@ function registerVoiceRoute(
               foodInvitationResponse = false;
               responseDone = true;
               resumeAfterTools();
-            } else if (english && (event?.type === 'response.done' || event?.type === 'response.cancelled') &&
+            } else if ((event?.type === 'response.done' || event?.type === 'response.cancelled') &&
                 toolCallsInResponse) {
               const response = event.response as { status?: unknown } | undefined;
               if (event.type === 'response.cancelled' || response?.status !== 'completed') {
@@ -2723,8 +2679,7 @@ function registerVoiceRoute(
               speakResearchAnnouncement();
             }
             const finalTurnItemId =
-              (english && event?.type === 'conversation.item.input_audio_transcription.completed' ||
-               !english && event?.type === 'user.message' && Array.isArray(event.content)) &&
+              event?.type === 'conversation.item.input_audio_transcription.completed' &&
               typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id)
                 ? resolveFinalItemId(event.item_id)
                 : undefined;
@@ -2733,7 +2688,7 @@ function registerVoiceRoute(
               turnTiming.transcriptCompletedMs = elapsedSinceSpeechStopped() ?? null;
             }
             if (event) persistTranscript(event, finalTurnItemId);
-            if (english && event?.type === 'conversation.item.input_audio_transcription.completed' &&
+            if (event?.type === 'conversation.item.input_audio_transcription.completed' &&
                 typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
                 typeof event.transcript === 'string' && event.transcript.trim() &&
                 event.transcript.length <= MAX_TRANSCRIPT_CHARACTERS) {
@@ -2743,19 +2698,7 @@ function registerVoiceRoute(
                 finishSharedScreenContextWait(null, true);
               }
               void handleVoiceEndOfTurn(finalTurnItemId ?? event.item_id, event.transcript.trim(), event.item_id);
-            } else if (!english && event?.type === 'user.message' &&
-                typeof event.item_id === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(event.item_id) &&
-                Array.isArray(event.content)) {
-              const text = event.content.flatMap((part) =>
-                part !== null && typeof part === 'object' && !Array.isArray(part) &&
-                (part as Record<string, unknown>).type === 'input_text' &&
-                typeof (part as Record<string, unknown>).text === 'string'
-                  ? [(part as Record<string, unknown>).text as string]
-                  : []).join('').trim();
-              if (text && text.length <= MAX_TRANSCRIPT_CHARACTERS) {
-                void handleVoiceEndOfTurn(finalTurnItemId ?? event.item_id, text, event.item_id);
-              }
-            } else if (english && event?.type === 'conversation.item.input_audio_transcription.failed') {
+            } else if (event?.type === 'conversation.item.input_audio_transcription.failed') {
               sendResponseCreate({ type: 'response.create' });
             }
             if (browser.readyState === WebSocket.OPEN) {
@@ -2841,8 +2784,6 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           app,
           '/voice',
           options.connect,
-          true,
-          'en',
           options.getToken,
           options.createPartialRecognizer,
           options.visionWatch,

@@ -38,7 +38,7 @@ jobs:
             abort "voice activity extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisVoiceActivity" && dependency["embed"] == true }
             abort "voice activity extension target is required" unless project.dig("targets", "JarvisVoiceActivity", "type") == "app-extension"
             abort "voice activity must share attributes and intents" unless project.dig("targets", "JarvisVoiceActivity", "sources").any? { |source| source["path"] == "Shared" }
-            abort "Danish must be the development language" unless project.dig("options", "developmentLanguage") == "da"
+            abort "English must be the development language" unless project.dig("options", "developmentLanguage") == "en"
             abort "widgets extension must be embedded in the app" unless dependencies.any? { |dependency| dependency["target"] == "JarvisWidgets" && dependency["embed"] == true }
             bridge_header = project.dig("targets", "JarvisBroadcast", "settings", "base", "SWIFT_OBJC_BRIDGING_HEADER")
             abort "ReplayKit stop bridge is missing" unless bridge_header && File.file?(File.join("apps/ios", bridge_header))
@@ -61,11 +61,11 @@ jobs:
           info = plistlib.loads(Path("apps/ios/Jarvis/Info.plist").read_bytes())
           assert info["ITSAppUsesNonExemptEncryption"] is False
           assert info["NSSupportsLiveActivities"] is True
-          assert info["CFBundleDevelopmentRegion"] == "da"
+          assert info["CFBundleDevelopmentRegion"] == "en"
           assert "audio" in info["UIBackgroundModes"]
           activity_info = plistlib.loads(Path("apps/ios/VoiceActivity/Info.plist").read_bytes())
           assert activity_info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
-          assert activity_info["CFBundleDevelopmentRegion"] == "da"
+          assert activity_info["CFBundleDevelopmentRegion"] == "en"
           widget_info = plistlib.loads(Path("apps/ios/Widgets/Info.plist").read_bytes())
           assert widget_info["CFBundlePackageType"] == "XPC!"
           assert widget_info["CFBundleIdentifier"] == "$(PRODUCT_BUNDLE_IDENTIFIER)"

@@ -1,4 +1,4 @@
-import type { ConversationLanguage, ConversationStore } from './conversation-store.js';
+import type { ConversationStore } from './conversation-store.js';
 
 export type ApprovalOutcome = 'completed' | 'cancelled' | 'unverified';
 
@@ -11,14 +11,9 @@ function oneLine(text: string): string {
 }
 
 /** The chat line that closes a decided approval: the outcome, plus a follow-up question when one helps. */
-export function approvalReplyText(outcome: ApprovalOutcome, summary: string, language: ConversationLanguage): string {
+export function approvalReplyText(outcome: ApprovalOutcome, summary: string): string {
   const line = oneLine(summary);
   const subject = /[.!?]$/u.test(line) ? line : `${line}.`;
-  if (language === 'da') {
-    if (outcome === 'completed') return `Det er gjort: ${subject} Skal jeg også gøre noget andet i den forbindelse?`;
-    if (outcome === 'cancelled') return `Okay, jeg har ikke lavet ændringen: ${subject} Skal jeg foreslå noget andet i stedet?`;
-    return `Jeg kan ikke bekræfte, at ændringen blev gennemført: ${subject} Tjek kalenderen, før jeg prøver igen. Skal jeg tjekke den for dig?`;
-  }
   if (outcome === 'completed') return `Done: ${subject} Do you want me to do anything else around it?`;
   if (outcome === 'cancelled') return `Okay, I did not make the change: ${subject} Would you like me to suggest something different?`;
   return `I cannot confirm the change went through: ${subject} Check the calendar before I try again. Should I check it for you?`;
@@ -37,9 +32,8 @@ export async function postApprovalReply(
     const message = await conversations.addMessage({
       sessionId: action.sessionId,
       role: 'jarvis',
-      text: approvalReplyText(outcome, action.summary, session.language),
+      text: approvalReplyText(outcome, action.summary),
       model: null,
-      language: session.language,
     });
     return message !== null;
   } catch {

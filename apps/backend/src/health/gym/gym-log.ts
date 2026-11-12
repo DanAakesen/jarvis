@@ -3,7 +3,6 @@ import { isVaultLineSafe } from '../../vault/index.js';
 import type { WorkoutSessionType } from './workouts.js';
 
 type VaultNotes = Pick<ReturnType<typeof createGitHubVaultClient>, 'read' | 'write'>;
-export type GymLogLanguage = 'da' | 'en';
 
 export interface GymLogWorkout {
   readonly id: string;
@@ -29,21 +28,12 @@ export type GymLogOperation =
   | { readonly type: 'upsert-lift'; readonly lift: GymLogLift }
   | { readonly type: 'remove-lift'; readonly id: string };
 
-const labels: Record<GymLogLanguage, { sessions: Record<WorkoutSessionType, string>; minutes: string; lifts: string; sets: string; log: string; withheld: string }> = {
-  da: {
-    sessions: {
-      chest_triceps_core: 'Bryst + Triceps + Core', back_biceps_core: 'Ryg + Biceps + Core',
-      arms_shoulders: 'Arme + Skuldre', legs_core: 'Ben + Core', cardio: 'Cardio', other: 'Andet',
-    },
-    minutes: 'min', lifts: 'Løft uden pas', sets: 'sæt', log: 'Træningslog', withheld: '[udeladt]',
+const labels = {
+  sessions: {
+    chest_triceps_core: 'Chest + Triceps + Core', back_biceps_core: 'Back + Biceps + Core',
+    arms_shoulders: 'Arms + Shoulders', legs_core: 'Legs + Core', cardio: 'Cardio', other: 'Other',
   },
-  en: {
-    sessions: {
-      chest_triceps_core: 'Chest + Triceps + Core', back_biceps_core: 'Back + Biceps + Core',
-      arms_shoulders: 'Arms + Shoulders', legs_core: 'Legs + Core', cardio: 'Cardio', other: 'Other',
-    },
-    minutes: 'min', lifts: 'Lifts without a session', sets: 'sets', log: 'Gym log', withheld: '[withheld]',
-  },
+  minutes: 'min', lifts: 'Lifts without a session', sets: 'sets', log: 'Gym log', withheld: '[withheld]',
 };
 
 const timeFormatter = new Intl.DateTimeFormat('en-GB', {
@@ -95,29 +85,29 @@ function serialize(note: Note): string {
   return `${lines.join('\n')}\n`;
 }
 
-function clean(value: string, language: GymLogLanguage): string {
+function clean(value: string): string {
   const text = Array.from(value.replace(/[<>]/gu, ''), char => {
     const code = char.charCodeAt(0);
     return code <= 0x1f || code === 0x7f ? ' ' : char;
   }).join('').trim();
-  return isVaultLineSafe(text) ? text : labels[language].withheld;
+  return isVaultLineSafe(text) ? text : labels.withheld;
 }
 
-function workoutHeading(workout: GymLogWorkout, language: GymLogLanguage): string {
+function workoutHeading(workout: GymLogWorkout): string {
   const name = workout.sessionType === 'other' && workout.title
-    ? clean(workout.title, language) : labels[language].sessions[workout.sessionType];
+    ? clean(workout.title) : labels.sessions[workout.sessionType];
   return `## ${name} <!-- jarvis:workout:${workout.id} -->`;
 }
 
-function detailsLine(workout: GymLogWorkout, language: GymLogLanguage): string {
+function detailsLine(workout: GymLogWorkout): string {
   const parts = [timeFormatter.format(new Date(workout.startedAt))];
-  if (workout.durationMinutes !== null) parts.push(`${workout.durationMinutes} ${labels[language].minutes}`);
-  if (workout.note) parts.push(clean(workout.note, language));
+  if (workout.durationMinutes !== null) parts.push(`${workout.durationMinutes} ${labels.minutes}`);
+  if (workout.note) parts.push(clean(workout.note));
   return `- ${parts.join(' · ')} <!-- jarvis:details:${workout.id} -->`;
 }
 
-function liftLine(lift: GymLogLift, language: GymLogLanguage): string {
-  return `- ${clean(lift.exerciseName, language)}: ${lift.weightKg} kg × ${lift.reps} × ${lift.sets} ${labels[language].sets} <!-- jarvis:lift:${lift.id} -->`;
+function liftLine(lift: GymLogLift): string {
+  return `- ${clean(lift.exerciseName)}: ${lift.weightKg} kg × ${lift.reps} × ${lift.sets} ${labels.sets} <!-- jarvis:lift:${lift.id} -->`;
 }
 
 function trimmedInsert(lines: string[], line: string) {
@@ -130,10 +120,10 @@ function trimBlankTail(lines: string[]) {
   while (lines.length > 0 && lines.at(-1)!.trim() === '') lines.pop();
 }
 
-function liftsSection(note: Note, language: GymLogLanguage, create: boolean): Section | undefined {
+function liftsSection(note: Note, create: boolean): Section | undefined {
   let section = note.sections.find(item => item.kind === 'lifts');
   if (!section && create) {
-    section = { heading: `## ${labels[language].lifts} <!-- jarvis:lifts -->`, kind: 'lifts', id: null, lines: [] };
+    section = { heading: `## ${labels.lifts} <!-- jarvis:lifts -->`, kind: 'lifts', id: null, lines: [] };
     note.sections.push(section);
   }
   return section;
@@ -156,20 +146,20 @@ function dropEmptyLiftsSection(note: Note) {
 }
 
 export function applyGymLogOperation(
-  content: string | null, day: string, operation: GymLogOperation, language: GymLogLanguage = 'da',
+  content: string | null, day: string, operation: GymLogOperation,
 ): string {
   if (!dayPattern.test(day)) throw new RangeError('Invalid gym log day');
-  const note = parse(content ?? `# ${labels[language].log} ${day}\n`);
+  const note = parse(content ?? `# ${labels.log} ${day}\n`);
   if (operation.type === 'upsert-workout') {
     const { workout } = operation;
     let section = note.sections.find(item => item.kind === 'workout' && item.id === workout.id);
-    const details = detailsLine(workout, language);
+    const details = detailsLine(workout);
     if (!section) {
-      section = { heading: workoutHeading(workout, language), kind: 'workout', id: workout.id, lines: [details] };
+      section = { heading: workoutHeading(workout), kind: 'workout', id: workout.id, lines: [details] };
       const before = note.sections.findIndex(item => item.kind === 'lifts');
       note.sections.splice(before === -1 ? note.sections.length : before, 0, section);
     } else {
-      section.heading = workoutHeading(workout, language);
+      section.heading = workoutHeading(workout);
       const index = section.lines.findIndex(line => marked(line)?.kind === 'details');
       if (index >= 0) section.lines[index] = details;
       else section.lines.unshift(details);
@@ -193,15 +183,15 @@ export function applyGymLogOperation(
       section.lines = kept;
     } else note.sections.splice(index, 1);
     if (moved.length > 0) {
-      const target = liftsSection(note, language, true)!;
+      const target = liftsSection(note, true)!;
       for (const line of moved) trimmedInsert(target.lines, line);
     }
   } else if (operation.type === 'upsert-lift') {
     const { lift } = operation;
-    const line = liftLine(lift, language);
+    const line = liftLine(lift);
     const target = (lift.workoutId
       ? note.sections.find(item => item.kind === 'workout' && item.id === lift.workoutId) : undefined)
-      ?? liftsSection(note, language, true)!;
+      ?? liftsSection(note, true)!;
     const existing = target.lines.findIndex(item => {
       const mark = marked(item);
       return mark?.kind === 'lift' && mark.id === lift.id;
@@ -221,7 +211,6 @@ export function applyGymLogOperation(
 
 export interface GymLogWriterOptions {
   readonly vault: VaultNotes;
-  readonly language?: GymLogLanguage;
   readonly attempts?: number;
 }
 
@@ -231,7 +220,6 @@ export function gymLogPath(day: string): string {
 }
 
 export function createGymLogWriter(options: GymLogWriterOptions) {
-  const language = options.language ?? 'da';
   const attempts = Math.min(Math.max(options.attempts ?? 3, 1), 5);
   return {
     /** Applies one idempotent change to the day's note. Repeating it writes nothing. */
@@ -241,7 +229,7 @@ export function createGymLogWriter(options: GymLogWriterOptions) {
         signal.throwIfAborted();
         const file = await options.vault.read(path, signal);
         if (file && file.path !== path) throw new Error('Gym log note could not be verified');
-        const next = applyGymLogOperation(file?.content ?? null, day, operation, language);
+        const next = applyGymLogOperation(file?.content ?? null, day, operation);
         if (file ? next === file.content : operation.type === 'remove-workout' || operation.type === 'remove-lift') {
           return 'unchanged';
         }

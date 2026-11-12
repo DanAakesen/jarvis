@@ -22,7 +22,6 @@ import { ConversationToast } from './ConversationToast';
 import { CameraObservationToast } from './CameraPreview';
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
-import { useSessionCommandRegistry } from './session-commands';
 import { WorkspaceCommandContext } from './workspace-command-state';
 import { conversationViewId, useConversationWindow } from './conversation-window-state';
 import { MarkdownContent } from './MarkdownContent';
@@ -77,7 +76,7 @@ type DictationWindow = Window & {
   webkitSpeechRecognition?: new () => DictationRecognition;
 };
 
-type QueuedMessage = { recovery?: RecoverableTurn; id: number; text: string; language: 'da' | 'en'; attachments?: ChatAttachment[] };
+type QueuedMessage = { recovery?: RecoverableTurn; id: number; text: string; attachments?: ChatAttachment[] };
 const followThreshold = 32;
 const draftKey = 'jarvis.chat.draft';
 
@@ -132,12 +131,12 @@ function relativeTime(at: string, now: number): string {
   return formatter.format(Math.round(seconds / 86400), 'day');
 }
 
-function asHistoryMessage(message: ChatMessage, language: 'da' | 'en', attachments?: ChatAttachment[]): ConversationHistoryMessage {
+function asHistoryMessage(message: ChatMessage, attachments?: ChatAttachment[]): ConversationHistoryMessage {
   return {
     ...message,
     ...(attachments?.length ? { attachments } : {}),
     channel: 'chat',
-    language,
+    language: 'en',
     interrupted: false,
     voiceMinutes: null,
     toolCalls: [],
@@ -229,9 +228,6 @@ export function ConversationHistory({
   const [historyErrorId, setHistoryErrorId] = useState(0);
   const [historyErrorSource, setHistoryErrorSource] = useState<'latest' | 'older'>('latest');
   const [reload, setReload] = useState(0);
-  const [language, setLanguage] = useState<'da' | 'en'>('en');
-  const sessionCommands = useSessionCommandRegistry();
-  useEffect(() => sessionCommands?.register({ setLanguage }), [sessionCommands]);
   const [session, setSession] = useState<ChatSession | null>(null);
   const [runtimeSelectorOpen, setRuntimeSelectorOpen] = useState(false);
   const [runtimeAvailability, setRuntimeAvailability] = useState<RuntimeTestAvailability>({});
@@ -255,13 +251,12 @@ export function ConversationHistory({
     }).finally(() => { if (!controller.signal.aborted) setRuntimeChecking(false); });
     return () => controller.abort();
   }, [config, runtimeSelectorOpen, runtimeCheck, tokenProvider]);
-  const sessionSetup = useRef<{ language: 'da' | 'en'; controller: AbortController; promise: Promise<ChatSession> } | null>(null);
-  const ensureChatSession = useCallback((requestedLanguage: 'da' | 'en'): Promise<ChatSession> => {
-    if (session?.language === requestedLanguage) return Promise.resolve(session);
-    if (sessionSetup.current?.language === requestedLanguage) return sessionSetup.current.promise;
-    sessionSetup.current?.controller.abort();
+  const sessionSetup = useRef<{ controller: AbortController; promise: Promise<ChatSession> } | null>(null);
+  const ensureChatSession = useCallback((): Promise<ChatSession> => {
+    if (session) return Promise.resolve(session);
+    if (sessionSetup.current) return sessionSetup.current.promise;
     const controller = new AbortController();
-    const promise = createChatSession(tokenProvider, config, requestedLanguage, controller.signal).then((created) => {
+    const promise = createChatSession(tokenProvider, config, controller.signal).then((created) => {
       controller.signal.throwIfAborted();
       setSession(created);
       return created;
@@ -269,7 +264,7 @@ export function ConversationHistory({
       if (sessionSetup.current?.controller === controller) sessionSetup.current = null;
       throw error;
     });
-    sessionSetup.current = { language: requestedLanguage, controller, promise };
+    sessionSetup.current = { controller, promise };
     return promise;
   }, [config, session, tokenProvider]);
   useEffect(() => () => { sessionSetup.current?.controller.abort(); sessionSetup.current = null; }, []);
@@ -326,11 +321,11 @@ export function ConversationHistory({
   useEffect(() => {
     if (!camera?.sharing || voiceActive || session) return;
     let cancelled = false;
-    void ensureChatSession(language).catch(() => {
+    void ensureChatSession().catch(() => {
       if (!cancelled) cameraStopped('Video could not connect. Enable video to retry.');
     });
     return () => { cancelled = true; };
-  }, [camera?.sharing, cameraStopped, ensureChatSession, language, session, voiceActive]);
+  }, [camera?.sharing, cameraStopped, ensureChatSession, session, voiceActive]);
   const [dictating, setDictating] = useState(false);
   const [dictationError, setDictationError] = useState('');
   const dictationRecognition = useRef<DictationRecognition | null>(null);
@@ -427,7 +422,7 @@ export function ConversationHistory({
     const startRecognition = () => {
       const recognition = new Recognition();
       dictationRecognition.current = recognition;
-      recognition.lang = language === 'da' ? 'da-DK' : 'en-US';
+      recognition.lang = navigator.language || 'en-US';
       recognition.continuous = true;
       recognition.interimResults = true;
       let base = draftValue.current;
@@ -794,14 +789,14 @@ export function ConversationHistory({
     followLatest.current = true;
     setAtLatest(true);
     revealHistory();
-    const queued: QueuedMessage = { id: ++nextQueueId.current, text, language, ...(files.length ? { attachments: files } : {}) };
+    const queued: QueuedMessage = { id: ++nextQueueId.current, text, ...(files.length ? { attachments: files } : {}) };
     const activeSession = turnSession.current;
     // Steering carries text only, so a message with files waits in the queue instead.
     const visualRequest = cameraRequest || screenRequest || (screenShare?.sharing && isSharedBrowserRequest(text));
     if (sending && !queueOnly && activeSession && files.length === 0 && !visualRequest) {
       setSteering(true);
-      void steerChatTurn(tokenProvider, config, activeSession, text, language).then((message) => {
-        setMessages((current) => mergeMessages(current, [asHistoryMessage(message, message.language)]));
+      void steerChatTurn(tokenProvider, config, activeSession, text).then((message) => {
+        setMessages((current) => mergeMessages(current, [asHistoryMessage(message)]));
       }).catch((reason: unknown) => {
         setSteering(false);
         const error = reason instanceof Error ? reason.message : 'Jarvis could not steer the active reply.';
@@ -818,7 +813,7 @@ export function ConversationHistory({
       return;
     }
     setQueue((current) => [...current, queued]);
-  }, [camera, config, language, readyFiles, revealHistory, screenShare?.sharing, sending, takeFiles, tokenProvider, uploadingFiles, voiceActive]);
+  }, [camera, config, readyFiles, revealHistory, screenShare?.sharing, sending, takeFiles, tokenProvider, uploadingFiles, voiceActive]);
 
   useEffect(() => {
     const intent = conversationIntents.pending[0];
@@ -837,7 +832,7 @@ export function ConversationHistory({
   }
 
   const runTurn = useCallback(async (queued: QueuedMessage) => {
-    const { text, language } = queued;
+    const { text } = queued;
     const queuedFiles = queued.attachments ?? [];
     const controller = new AbortController();
     turnController.current = controller;
@@ -865,9 +860,8 @@ export function ConversationHistory({
       if (cameraRequest && !camera?.sharing) {
         throw new Error('Enable video in More before asking Jarvis to inspect a frame.');
       }
-      const activeSession = queued.recovery ? { id: queued.recovery.sessionId, language } : session?.language === language
-        ? session
-        : await waitForChatSetup(() => ensureChatSession(language), controller.signal);
+      const activeSession = queued.recovery ? { id: queued.recovery.sessionId } : session
+        ?? await waitForChatSetup(() => ensureChatSession(), controller.signal);
       controller.signal.throwIfAborted();
       setSession(activeSession);
       turnSession.current = activeSession;
@@ -900,7 +894,7 @@ export function ConversationHistory({
           messageId = message.id;
           setActiveMessage(null);
           setMessages((current) => current.some(saved => saved.id === message.id) ? current
-            : mergeMessages(current, [asHistoryMessage(message, activeSession.language, queuedFiles)]));
+            : mergeMessages(current, [asHistoryMessage(message, queuedFiles)]));
         },
         (delta) => {
           partialReply += delta;
@@ -917,7 +911,7 @@ export function ConversationHistory({
           acknowledgment = '';
           setStreamedAcknowledgment('');
           setMessages((current) => mergeMessages(current, [{
-            ...asHistoryMessage(message, activeSession.language),
+            ...asHistoryMessage(message),
             interrupted: true,
           }]));
           setStreamedText('');
@@ -942,7 +936,7 @@ export function ConversationHistory({
         },
       );
       setMessages((current) => mergeMessages(current.map(message => message.id === messageId && assistant.visualResult
-        ? { ...message, visualResult: assistant.visualResult } : message), [asHistoryMessage(assistant, activeSession.language)]));
+        ? { ...message, visualResult: assistant.visualResult } : message), [asHistoryMessage(assistant)]));
       setStreamedText('');
       setStreamedAcknowledgment('');
       setReload((value) => value + 1);
@@ -994,7 +988,7 @@ export function ConversationHistory({
       void loadActiveChatTurns(tokenProvider, config).then(turns => {
         if (!active || turnInFlight.current || !turns[0]) return;
         const turn = turns[0];
-        void runTurn({ id: Date.now(), text: '', language: turn.language, recovery: turn });
+        void runTurn({ id: Date.now(), text: '', recovery: turn });
       }).catch(() => { /* History remains available; never resubmit a turn. */ });
     };
     recover();
@@ -1261,7 +1255,7 @@ export function ConversationHistory({
           <strong className="message-author visually-hidden">Dan</strong>
           <p>{activeMessage.text}</p>
           {activeMessage.attachments?.length ? <MessageAttachments getAccessToken={tokenProvider} config={config} attachments={activeMessage.attachments} /> : null}
-          <p className="queued-state">Sending · {activeMessage.language === 'da' ? 'Danish' : 'English'}</p>
+          <p className="queued-state">Sending</p>
         </div>}
         {sending && (
           // The live turn: Jarvis's bubble shows its working core while it thinks, each tool it uses as a line on a
@@ -1285,9 +1279,7 @@ export function ConversationHistory({
             {foodInvitation && (
               <div className="streaming-food-invitation" role="status" aria-live="polite" aria-label="Food estimate awaiting your reply">
                 <ReviewSummary text={foodInvitation.summary} />
-                <p>{language === 'da'
-                  ? 'Vil du logge dette estimat? Svar her, eller brug godkendelsen i Now. Intet er logget endnu.'
-                  : 'Would you like to log this estimate? Reply here, or use the approval in Now. Nothing has been logged yet.'}</p>
+                <p>Would you like to log this estimate? Reply here, or use the approval in Now. Nothing has been logged yet.</p>
               </div>
             )}
             {liveTools.length > 0 && (
@@ -1326,7 +1318,7 @@ export function ConversationHistory({
             <li className="conversation-message" data-speaker="dan" key={message.id}>
               <div className="message-heading queued-heading">
                 <strong className="message-author visually-hidden">Dan</strong>
-                <p className="queued-state">Queued · {message.language === 'da' ? 'Danish' : 'English'}</p>
+                <p className="queued-state">Queued</p>
                 <button className="queue-remove" type="button"
                   aria-label={`Remove queued message: ${message.text}`}
                   onClick={() => {
@@ -1354,7 +1346,7 @@ export function ConversationHistory({
         checking={runtimeChecking} onRefresh={refreshRuntimeAvailability}
         disabledReason={runtimeAvailabilityError || (sending || voiceActive ? 'Finish the current reply or voice conversation before opening a test.' : undefined)}
         onClose={() => setRuntimeSelectorOpen(false)} onStart={async runtime => {
-          const created = await createChatSession(tokenProvider, config, language, undefined, runtime);
+          const created = await createChatSession(tokenProvider, config, undefined, runtime);
           setTestSession({ ...created, runtimeTest: runtime });
         }} />}
       {testSession && <RuntimeTestConversation session={testSession} config={config} getAccessToken={tokenProvider}
@@ -1469,7 +1461,7 @@ export function ConversationHistory({
         />
         {/* The visible invitation; the native placeholder stays for assistive technology but is drawn transparent. */}
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
-        <ConversationMoreMenu topLayer className="composer-more" language={language} onLanguageChange={setLanguage}
+        <ConversationMoreMenu topLayer className="composer-more"
           actions={[...captureActions, ...primaryActions]} align="start" icon="plus"
           onTestRuntime={() => { refreshRuntimeAvailability(); setRuntimeSelectorOpen(true); }} />
         {screenShare?.sharing && <>

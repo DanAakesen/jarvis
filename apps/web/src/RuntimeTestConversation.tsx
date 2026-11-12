@@ -75,7 +75,7 @@ export function RuntimeTestConversation({ session, config, getAccessToken, onClo
     if (!turn?.messageId || stopping) return;
     setStopping(true);
     try {
-      await cancelChatTurn(getAccessToken, config, { sessionId: session.id, messageId: turn.messageId, language: session.language });
+      await cancelChatTurn(getAccessToken, config, { sessionId: session.id, messageId: turn.messageId });
       turn.controller.abort();
     } catch { setError('Could not confirm that the reply stopped. Wait for the reply and check action status.'); }
     finally { setStopping(false); }

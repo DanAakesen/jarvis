@@ -4,14 +4,14 @@ import JarvisCore
 enum JarvisFixtureScenario {
     static func makeClient(
         emptyActivity: Bool = false,
-        calendarChangeLanguage: JarvisAppLanguage? = nil
+        calendarChangeFixture: Bool = false
     ) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(
                 baseURL: URL(string: "https://fixture.invalid/api")!
             ),
             transport: JarvisChatFeedbackFixtureTransport(base: JarvisRuntimeTestFixtureTransport(base: WorkspaceFixtureTransport(base: FixtureTransport(scenario: try fixtureScenarioData(
-                emptyActivity: emptyActivity, calendarChangeLanguage: calendarChangeLanguage
+                emptyActivity: emptyActivity, calendarChangeFixture: calendarChangeFixture
             )), completedActivity: emptyActivity))),
             tokenStore: FixtureTokenStore(),
             accessTokenProvider: FixtureTokenProvider()
@@ -19,7 +19,7 @@ enum JarvisFixtureScenario {
     }
 
     private static func fixtureScenarioData(
-        emptyActivity: Bool, calendarChangeLanguage: JarvisAppLanguage?
+        emptyActivity: Bool, calendarChangeFixture: Bool
     ) throws -> Data {
         let data = Data(scenario.utf8)
         let voiceHistory: Bool
@@ -31,7 +31,7 @@ enum JarvisFixtureScenario {
         voiceHistory = false
         notificationTasks = false
 #endif
-        guard emptyActivity || calendarChangeLanguage != nil || voiceHistory || notificationTasks else { return data }
+        guard emptyActivity || calendarChangeFixture || voiceHistory || notificationTasks else { return data }
         guard var root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               var interactions = root["interactions"] as? [[String: Any]],
               let index = interactions.firstIndex(where: { $0["path"] as? String == "/api/now" }),
@@ -46,7 +46,7 @@ enum JarvisFixtureScenario {
             body["items"] = items
             response["body"] = body
         }
-        if emptyActivity || calendarChangeLanguage != nil {
+        if emptyActivity || calendarChangeFixture {
             response["body"] = [
                 "running": [],
                 "items": [],
@@ -56,10 +56,8 @@ enum JarvisFixtureScenario {
             ]
         }
 #if targetEnvironment(simulator)
-        if let calendarChangeLanguage {
-            let summary = calendarChangeLanguage == .da
-                ? "Syntetisk eksempel — ingen kalenderændringer.\nFlyt mødet:\n• Titel: Produktgennemgang\n• Fra: 2. november 2026, 09:00–09:30\n• Til: 2. november 2026, 10:00–10:30\n• Tidszone: Europe/Copenhagen"
-                : "Synthetic preview — no calendar writes.\nReschedule the meeting:\n• Title: Product review\n• From: 2 November 2026, 09:00–09:30\n• To: 2 November 2026, 10:00–10:30\n• Time zone: Europe/Copenhagen"
+        if calendarChangeFixture {
+            let summary = "Synthetic preview — no calendar writes.\nReschedule the meeting:\n• Title: Product review\n• From: 2 November 2026, 09:00–09:30\n• To: 2 November 2026, 10:00–10:30\n• Time zone: Europe/Copenhagen"
             response["body"] = [
                 "running": [], "items": [], "awayMode": false,
                 "updatedAt": "2026-11-01T09:34:00Z",
@@ -126,10 +124,7 @@ enum JarvisFixtureScenario {
               "identity": {"description": "Synthetic assistant identity"},
               "presentation": {"showWork": true},
               "voice": {
-                "defaultLanguage": "da",
-                "speechToTextModel": "azure-speech",
-                "englishModel": "gpt-realtime-2.1",
-                "englishVoice": "en-GB-Ryan:DragonHDLatestNeural"
+                "speechToTextModel": "azure-speech"
               },
               "research": {"depth": "standard", "maxSources": 5},
               "jarvis": {"model": "fixture-model", "reasoning": "medium"},
@@ -160,10 +155,7 @@ enum JarvisFixtureScenario {
               "themes": ["light", "dark", "system"],
               "personalityTones": ["british_butler", "warm", "direct", "playful"],
               "personalityResponseStyles": ["concise", "balanced", "detailed"],
-              "chatLanguages": ["da", "en"],
               "speechToTextModels": ["azure-speech"],
-              "englishModels": ["gpt-realtime-2.1"],
-              "englishVoices": ["en-GB-Ryan:DragonHDLatestNeural"],
               "researchDepths": ["quick", "standard", "deep"],
               "jarvisModels": ["fixture-model"],
               "reasoningEfforts": ["none", "low", "medium", "high"],
