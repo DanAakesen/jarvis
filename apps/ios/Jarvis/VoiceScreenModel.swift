@@ -80,7 +80,6 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     func startActivityScreenshot() async {
         guard sessionClient == nil else { return }
         let arguments = ProcessInfo.processInfo.arguments
-        let language = JarvisAppLanguage.en
         let phase = arguments.contains("--voice-activity-state=speaking") ? VoiceSessionState.speaking : .listening
         let sessionID = UUID()
         liveActivitySessionID = sessionID
@@ -94,7 +93,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             voiceState = phase
             isAudioReady = true
             try liveActivity.start(
-                sessionID: sessionID, language: language,
+                sessionID: sessionID,
                 startedAt: Date().addingTimeInterval(-724),
                 waveform: (0..<VoiceWaveform.sampleCount).map { Double(($0 * 7) % 13 + 1) / 14 }
             )
