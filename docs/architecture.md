@@ -1969,6 +1969,11 @@ through a weak, MainActor, session-scoped Core control boundary. Only the existi
 session can be muted/unmuted or ended; no Keychain access, cold-start session,
 APNs registration or backend route is involved. Muting gates local capture before
 the asynchronous socket write, and the Core client also suppresses muted frames.
+End retains a chat-navigation request until ContentView consumes it, including on
+foreground entry, and blocks automatic voice startup while it is pending. A UIKit
+background task protects cleanup after audio stops; the existing client sends
+`jarvis.session.end` and closes its socket before ActivityKit dismissal. In-app
+End uses the same Chat destination, including when voice was opened from Home.
 The app declares audio background mode for the existing play-and-record session;
 route/interruption recovery and real locked-device behavior remain unverified.
 The same extension renders the Lock Screen and Dynamic Island from the same

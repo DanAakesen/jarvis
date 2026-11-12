@@ -170,8 +170,10 @@ TestFlight keychain/Entra configuration require separate verification.
 
 The approved Voice screen presents one orb and one short live status, with mute,
 add, captions and end controls during a session. A downward swipe minimizes
-without ending the session. Ending voice, including from the minimized bar, returns
-to Chat with a cleared navigation stack and a usable sidebar.
+without ending the session. Ending voice, including from the minimized bar, Lock
+Screen Live Activity or Dynamic Island, stops the backend session and returns to
+Chat with a cleared navigation stack and a usable sidebar. Ending while backgrounded
+must leave Chat ready on return, not an ended/error screen or a restarted session.
 Captions appear as centered, unframed text with readable, Dynamic Type-scaled
 typography and no separate dismiss action; the CC control toggles them.
 Reopening Voice after End connects automatically with a fresh transport and audio

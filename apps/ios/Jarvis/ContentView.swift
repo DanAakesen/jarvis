@@ -228,9 +228,8 @@ struct ContentView: View {
                     guard !Task.isCancelled else { return }
                     await workspaceRuntime.run()
                 }
-                .onChange(of: voiceModel.voiceState) { _, state in
-                    guard appliedSessionEpoch == sessionEpoch else { return }
-                    navigation.voiceSessionStateChanged(state)
+                .onChange(of: voiceModel.returnToChatRequested, initial: true) { _, _ in
+                    returnToChatAfterVoiceIfNeeded()
                 }
                 .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
                     guard destination != nil,
@@ -278,7 +277,9 @@ struct ContentView: View {
                 }
             }
             .onChange(of: scenePhase) { _, phase in
-                if phase != .active {
+                if phase == .active {
+                    returnToChatAfterVoiceIfNeeded()
+                } else {
                     var transaction = Transaction()
                     transaction.disablesAnimations = true
                     withTransaction(transaction) { navigation.closeSidebar() }
@@ -301,7 +302,7 @@ struct ContentView: View {
                 language: voiceScreenshotLanguage ?? language,
                 fixtureMode: fixtureMode && !navigationFixtureMode,
                 onMinimize: { navigate(to: navigation.cameFromToday ? .today : .chat) },
-                onEnd: { navigate(to: navigation.cameFromToday ? .today : .chat) }
+                onEnd: { returnToChatAfterVoiceIfNeeded() }
             )
         } else if destination == .today {
             JarvisTodayScreen(
@@ -452,6 +453,12 @@ struct ContentView: View {
 
     private func navigate(to destination: JarvisDestination) {
         navigation.navigate(to: destination)
+    }
+
+    private func returnToChatAfterVoiceIfNeeded() {
+        guard appliedSessionEpoch == sessionEpoch,
+              voiceModel.consumeReturnToChatRequest() else { return }
+        navigate(to: .chat)
     }
 
     private func prepareNavigation(to destination: JarvisDestination, from previous: JarvisDestination) {
