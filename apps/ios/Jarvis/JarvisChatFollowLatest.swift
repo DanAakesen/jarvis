@@ -17,6 +17,7 @@ struct JarvisChatFollowLatest: ViewModifier {
     let proxy: ScrollViewProxy
     let bottomID: String
     let newestMessageID: String?
+    let hasIncomingContent: Bool
     let sendRevision: Int
     let jumpToLatestTitle: String
     var isEnabled = true
@@ -75,6 +76,11 @@ struct JarvisChatFollowLatest: ViewModifier {
             }
             .onChange(of: newestMessageID) { _, messageID in
                 guard messageID != nil else { return }
+                follow.messageArrived()
+                revision += 1
+            }
+            .onChange(of: hasIncomingContent) { _, hasContent in
+                guard hasContent else { return }
                 follow.messageArrived()
                 revision += 1
             }

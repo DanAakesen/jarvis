@@ -403,6 +403,9 @@ struct JarvisChatScreen: View {
                     proxy: proxy,
                     bottomID: "conversation-bottom",
                     newestMessageID: model.messages.last(where: { $0.role == .jarvis })?.id,
+                    hasIncomingContent: model.acknowledgment != nil
+                        || !model.progressUpdates.isEmpty
+                        || !model.streamingText.isEmpty,
                     sendRevision: sendRevision,
                     jumpToLatestTitle: JarvisChatLocalization.string(.jumpToLatest, language: appLanguage)
                 ))
