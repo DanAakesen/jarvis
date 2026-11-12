@@ -12586,3 +12586,10 @@ records remain unchanged.
 ## Watch voice startup and dictation (12 November 2026)
 
 Keep the existing phone-owned authentication and live voice transport. The Watch now waits briefly for WCSession activation/reachability before a single voice-start message; it does not replay a possibly delivered start or queue real-time audio. Dictation edits the Watch draft without a phone, while sending and task creation still require the companion. Queued transfers are opportunistic and cannot support interactive voice or provide immediate task results; blind mutation retries could duplicate writes. Standalone Watch authentication and backend transport are not implemented. Paired-device cold launch, locked-phone and network behavior remain unverified.
+## 12 November 2026 — Proactive completion limit
+
+Owner-reported production logs show six `completion_incomplete` events at the
+2,048-token cap over 10–12 November. Raise the cap to 8,192 and use `low`
+reasoning when supported instead of retrying: this keeps a single bounded call
+and its existing budget reservation and usage accounting. Limit iPhone failure
+visibility to seven days without removing job history. Live verification is pending.

@@ -3793,12 +3793,18 @@ guard check precedes commit dispatch, the write's transaction boundary.
 `proactive/model.ts` independently follows the existing Foundry chat-completions
 pattern, with the selected chat role, catalogue validation, no tools, untrusted
 fact data, a 48-KiB request/32-KiB response bound and a 45-second timeout.
+Proactive requests use at most 8,192 completion tokens and lower a higher chat
+reasoning effort to `low` when the selected deployment supports it. The budget
+reservation uses the same cap; incomplete responses are not retried.
 Validated evidence contains labels only. Real response token counts feed both
 estimated proactive spend and global chat-role usage, including rejected output.
 Stable 32-hex content keys exclude run-local refs and urgency. Ordered optional
 `onFindingsStored` hooks receive only this run's stored items and in-memory source
 facts before finish; one hook failure cannot prevent later hooks or change success.
 This slice adds no delivery or todo-writing hook and enables no flag.
+
+The iPhone notification presentation shows failed background jobs updated in the
+last seven days; unparseable timestamps remain visible, and stored history is unchanged.
 
 ## Proactive read-only sources (P13-07; default off)
 

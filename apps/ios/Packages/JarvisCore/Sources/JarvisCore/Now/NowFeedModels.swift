@@ -46,7 +46,15 @@ public struct BackgroundTaskPresentation: Equatable, Sendable {
 
     public init(tasks: [BackgroundTaskRecord]) {
         running = tasks.filter { $0.status == .running }
-        let failed = tasks.filter { $0.status == .failed }
+        let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+        let plain = ISO8601DateFormatter()
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions.insert(.withFractionalSeconds)
+        let failed = tasks.filter {
+            guard $0.status == .failed else { return false }
+            guard let updated = fractional.date(from: $0.updatedAt) ?? plain.date(from: $0.updatedAt) else { return true }
+            return updated >= cutoff
+        }
         actionable = failed.filter { $0.kind == "research" }
         quiet = failed.filter { $0.kind != "research" }
     }

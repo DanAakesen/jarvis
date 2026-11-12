@@ -4801,6 +4801,15 @@ It reads no secret values, prompts, image bytes or model text, performs no write
 and does not replay jobs. Historical proactive output validation did not retain
 the specific failing field; this inspection must not imply otherwise.
 
+## Proactive completion limit — 12 November 2026
+
+The owner reports six `completion_incomplete` events at 2,048 output tokens
+across 10–12 November, two daily, and no other proactive failures in the seven-day
+production log window. The completion cap is now 8,192 with supported low
+reasoning, and iPhone failure visibility is limited to seven days. The conservative
+reservation is about 0.13 DKK (USD 0.02) per run at the repository's known rates;
+actual pricing and a successful production run remain unverified. No retry was added.
+
 ## Image API repair and proactive diagnostics — 9 November 2026
 
 Owner requested replacement of failed subscription-backed image generation with
