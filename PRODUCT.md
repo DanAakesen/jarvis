@@ -2781,6 +2781,8 @@ Target the owner's Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as wa
 
 Watch Home and complications retain the last available data on the Watch when refresh or connectivity fails. Show its age when stale and allow display while locked after the Watch's first unlock. Explicit phone sign-out clears the Watch cache.
 
+Watch dictation can fill a draft without an iPhone connection; sending still needs the phone. Starting voice waits briefly for the companion connection rather than requiring a manual connect step, but live voice remains dependent on the iPhone.
+
 ## Intelligent proactive notifications — 9 November 2026
 
 The owner approves connecting cross-app context, computing facts from saved data/goals, and using the existing model to select and write useful notifications. Health/training, nutrition, notes, memory and ordinary task commitments join existing proactive sources. Notifications show actual useful details to the sole owner. No shadow mode, added delivery-policy stage or feedback-learning feature is required. Existing preferences, pause, quiet hours, budget, source evidence/schema checks and receipts remain. Normal model insights can notify through iPhone APNs or browser fallback, and Check now can exercise that path. New context is read-only and cannot create automatic tasks. This extends earlier deadline-only push scope for normal informational insights, without activating unrelated Daily coaching/writers. See [implementation/handoff](docs/research/intelligent-proactive-notifications.md).

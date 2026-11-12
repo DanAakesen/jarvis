@@ -64,6 +64,9 @@ struct WatchChatView: View {
     }
     private var composer: some View {
         VStack(spacing: 3) {
+            if model.waitingForVoiceConnection {
+                Text("Connecting to iPhone…").font(.caption2).foregroundStyle(.secondary)
+            }
             if model.voiceID != nil {
                 HStack {
                     Text(model.voiceState).font(.caption2)
@@ -92,9 +95,9 @@ struct WatchChatView: View {
                 }
                 Button(action: dictate) { Image(systemName: "mic.fill").frame(width: 32, height: 38) }
                     .foregroundStyle(WatchStyle.amber)
-                    .disabled(!connection.reachable || model.busy || model.voiceID != nil).accessibilityLabel("Dictate into draft")
+                    .disabled(model.busy || model.voiceID != nil).accessibilityLabel("Dictate into draft")
                 Button { Task { await model.startVoice() } } label: { WatchWave().frame(width: 22, height: 18).frame(width: 32, height: 38) }
-                    .disabled(!connection.reachable || model.busy || model.voiceID != nil).accessibilityLabel("Start voice session")
+                    .disabled(model.busy || model.voiceID != nil).accessibilityLabel("Start voice session")
             }.buttonStyle(.plain).padding(.horizontal, 8)
                 .background(WatchStyle.surface, in: Capsule())
                 .overlay { Capsule().stroke(.white.opacity(0.2), lineWidth: 0.5) }

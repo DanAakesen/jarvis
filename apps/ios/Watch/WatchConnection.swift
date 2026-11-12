@@ -87,6 +87,29 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         guard epoch == cacheGeneration else { throw WatchFailure.signInRequired }
         return reply
     }
+    func waitForVoiceConnection() async throws {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
+        #endif
+        guard WCSession.isSupported() else { throw WatchFailure.unavailable }
+        let session = WCSession.default
+        let deadline = Date().addingTimeInterval(8)
+        var delay = 250
+        while Date() < deadline {
+            try Task.checkCancellation()
+            if session.activationState == .notActivated { session.activate() }
+            if session.activationState == .activated {
+                guard session.isCompanionAppInstalled else { throw WatchFailure.unavailable }
+                if session.isReachable {
+                    if !reachable { updateReachability() }
+                    return
+                }
+            }
+            try await Task.sleep(for: .milliseconds(delay))
+            delay = min(delay * 2, 1_000)
+        }
+        throw WatchFailure.unavailable
+    }
     func load<T: Decodable>(_ action: WatchAction, id: String? = nil, as type: T.Type = T.self) async throws -> T {
         let reply = try await request(.init(action: action, itemID: id))
         guard let data = reply.data else { throw WatchFailure.failed }
