@@ -4880,7 +4880,7 @@ the Factory bot reported it Done on 10 November and #1709 was merged. Its curren
 production state and the reported failure reasons still need live verification.
 Historical jobs are not rewritten.
 
-## Live Activity voice end — 12 November 2026 (#1796)
+## Live Activity and Watch voice end — 12 November 2026 (#1796, #1798)
 
 Implemented a retained return-to-Chat request for Live Activity/Dynamic Island
 and in-app End, foreground reconciliation and an automatic-restart guard. Cleanup
@@ -4888,3 +4888,12 @@ uses a background task and closes the voice client before dismissing ActivityKit
 JarvisCore builds and all 11 existing tests pass; both changed Swift files pass
 syntax parsing. No new tests were added. Locked/background iPhone acceptance
 requires a device; this Linux runner has no Xcode or Simulator.
+
+The Watch follow-up releases the shared controller on every iPhone session-ID
+reset, checks the real companion client before reusing a Watch voice ID, and
+delivers terminal state through deferred WatchConnectivity context as well as
+live events. Watch reconciles on foreground/reconnection and verifies before
+Start. Backend End, idle/cap and disconnect finalization already share cleanup.
+Follow-up JarvisCore build and all 11 existing tests pass; the six changed Swift
+files pass syntax parsing. No new tests or strings were added. Paired-device
+WatchConnectivity and native iOS/watchOS compilation remain unverified on Linux.

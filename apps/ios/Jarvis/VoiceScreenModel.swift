@@ -29,7 +29,13 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private let screenshotConnectionLost: Bool
     private var audio = VoiceAudioEngine()
     private let liveActivity = VoiceLiveActivityController()
-    private(set) var liveActivitySessionID: UUID?
+    private(set) var liveActivitySessionID: UUID? {
+        didSet {
+            if liveActivitySessionID == nil, VoiceLiveActivityActions.session === self {
+                VoiceLiveActivityActions.session = nil
+            }
+        }
+    }
     private let screenShareBridge = VoiceScreenShareBridge()
     private var captureTask: Task<Void, Never>?
     private var captureReadinessTask: Task<Void, Never>?

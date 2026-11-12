@@ -16,6 +16,10 @@ Task cancellation and recovery, routine/memory deletion, workspace removal, depl
 
 Keep the approved Watch layout and controls. Startup and idle connectivity changes use the existing quiet connection status. History read failures stay inside the chat scroll area. The modal Jarvis alert is reserved for actual user-action/interruption feedback.
 
+Watch Voice remains tappable when a session ID is retained: verify it with the
+iPhone, keep a genuinely active session, or clear a confirmed stale ID and start.
+End cancels any in-flight verification; no new copy or layout is introduced.
+
 Voice startup shows the existing localized connection status while waiting. Dictation remains available without the phone and fills the draft; the connection notice distinguishes voice and sending from offline dictation.
 
 Watch Home uses smaller, underlined, background-free See more links and keeps the body-fat chart without the date and summary lines beneath it. The workout preview shows recent history separately from weekly goal counts.

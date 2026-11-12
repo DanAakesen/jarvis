@@ -85,11 +85,15 @@ final class WatchModel: ObservableObject {
         }
     }
     func startVoice() async {
-        guard voiceID == nil, !busy else { return }
+        guard !busy else { return }
         historyRequest = UUID(); historyError = nil
         busy = true; error = nil
-        let epoch = UUID(); voiceGeneration = epoch
         defer { busy = false; waitingForVoiceConnection = false }
+        do {
+            if try await hasActiveVoice() { return }
+        } catch is CancellationError { return }
+        catch { show(error); return }
+        let epoch = UUID(); voiceGeneration = epoch
         guard await VoiceAudioEngine.requestMicrophonePermission() else { error = "Allow microphone access in Settings."; return }
         guard epoch == voiceGeneration else { return }
         do {
@@ -115,7 +119,10 @@ final class WatchModel: ObservableObject {
                     guard batch.count >= 4_800 else { continue } // ~100 ms at 24 kHz PCM16.
                     let packet = batch; batch.removeAll(keepingCapacity: true)
                     do { _ = try await self.connection.request(.init(action: .audio, itemID: id.uuidString, data: packet)) }
-                    catch { await self.endVoice(); self.show(error); return }
+                    catch {
+                        guard self.voiceGeneration == epoch else { return }
+                        await self.endVoice(); self.show(error); return
+                    }
                 }
                 if !Task.isCancelled, let self, self.voiceID != nil {
                     await self.endVoice()
@@ -125,12 +132,33 @@ final class WatchModel: ObservableObject {
             heartbeat = Task { [weak self] in
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(5))
-                    guard let self, !Task.isCancelled, let id = self.voiceID else { return }
-                    do { _ = try await self.connection.request(.init(action: .voiceHeartbeat, itemID: id.uuidString)) }
-                    catch { await self.endVoice(); self.show(error); return }
+                    guard let self, !Task.isCancelled, self.voiceID != nil else { return }
+                    do {
+                        guard try await self.hasActiveVoice() else { return }
+                    } catch {
+                        guard self.voiceGeneration == epoch else { return }
+                        await self.endVoice(); self.show(error); return
+                    }
                 }
             }
         } catch { await endVoice(); show(error) }
+    }
+    private func hasActiveVoice() async throws -> Bool {
+        guard let id = voiceID else { return false }
+        let epoch = voiceGeneration
+        do {
+            _ = try await connection.request(.init(action: .voiceHeartbeat, itemID: id.uuidString))
+            guard epoch == voiceGeneration else { throw CancellationError() }
+            return true
+        } catch WatchFailure.invalidRequest {
+            guard epoch == voiceGeneration else { throw CancellationError() }
+            stopLocalVoice(state: "Ended")
+            return false
+        }
+    }
+    func reconcileVoice() async {
+        guard !busy else { return }
+        _ = try? await hasActiveVoice()
     }
     func setMuted() async {
         guard let id = voiceID else { return }

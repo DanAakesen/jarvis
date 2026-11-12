@@ -149,7 +149,13 @@ struct WatchRoot: View {
             if model.voiceID != nil { Task { await model.endVoice() } }
         }
         .task(id: scenePhase) {
-            if scenePhase == .active { await connection.maintainConnection() }
+            if scenePhase == .active {
+                await model.reconcileVoice()
+                await connection.maintainConnection()
+            }
+        }
+        .onChange(of: connection.reachable) { _, reachable in
+            if reachable { Task { await model.reconcileVoice() } }
         }
     }
     private var actionPage: some View {

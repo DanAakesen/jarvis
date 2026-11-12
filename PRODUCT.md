@@ -174,6 +174,10 @@ without ending the session. Ending voice, including from the minimized bar, Lock
 Screen Live Activity or Dynamic Island, stops the backend session and returns to
 Chat with a cleared navigation stack and a usable sidebar. Ending while backgrounded
 must leave Chat ready on return, not an ended/error screen or a restarted session.
+Ending or failing a session also releases the shared voice owner. Watch Start
+checks the iPhone's live client before trusting a retained Watch session ID;
+confirmed stale IDs are cleared and Start continues. Normal End, Live Activity
+End, the 10-minute idle close and the 30-minute cap all release voice ownership.
 Captions appear as centered, unframed text with readable, Dynamic Type-scaled
 typography and no separate dismiss action; the CC control toggles them.
 Reopening Voice after End connects automatically with a fresh transport and audio
