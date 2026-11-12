@@ -27,7 +27,7 @@ private struct JarvisNoteSwipeRow<Content: View>: View {
         ZStack(alignment: .trailing) {
             Image(systemName: actionImage)
                 .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(JarvisDesignTokens.primaryAccentForeground)
                 .frame(width: actionWidth)
                 .frame(maxHeight: .infinity)
                 .background(JarvisDesignTokens.primaryAccent)
