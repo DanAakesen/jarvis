@@ -25,7 +25,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     private var cachedBrief: WatchBriefSummary?
     private var cacheGeneration = UUID()
     private var disconnectTask: Task<Void, Never>?
-    private var credentialRevision: Double = 0
+    private var credentialRevision = WatchCredentialRevision()
     override init() {
         super.init()
         #if DEBUG
@@ -331,18 +331,17 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         Task { @MainActor in self.receiveCredentials(message) }
     }
-    private func receiveCredentials(_ context: [String: Any]) {
-        if context.isEmpty { WatchDirectDictation.clear(); return }
-        guard let revision = context["credentialRevision"] as? Double,
-              revision.isFinite, revision > credentialRevision else { return }
-        credentialRevision = revision
-        if context["clearCredentials"] as? Bool == true {
-            WatchDirectDictation.clear()
-            onSignOut?()
+    @discardableResult
+    private func receiveCredentials(_ context: [String: Any]) -> Bool {
+        guard credentialRevision.accept(context["credentialRevision"] as? Double, isEmpty: context.isEmpty) else { return false }
+        if context.isEmpty || context["clearCredentials"] as? Bool == true {
+            clearCachedData()
+            return true
         } else if let data = context["dictationCredential"] as? Data {
             do { try WatchDirectDictation.store(data); credentialStorageFailed = false }
             catch { credentialStorageFailed = true }
         }
+        return false
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data, replyHandler: @escaping (Data) -> Void) {
         guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData), event.version == 1 else { replyHandler(Data()); return }
@@ -352,9 +351,8 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         let data = applicationContext["health"] as? Data
         let dashboardData = applicationContext["dashboard"] as? Data
         let voiceData = applicationContext["voice"] as? Data
-        let cleared = applicationContext.isEmpty || applicationContext["clearCredentials"] as? Bool == true
         Task { @MainActor in
-            self.receiveCredentials(applicationContext)
+            if self.receiveCredentials(applicationContext) { return }
             if let data = voiceData, data.count <= WatchLimits.payloadBytes,
                let event = try? JSONDecoder().decode(WatchEvent.self, from: data),
                event.version == 1, event.kind == .voiceState, event.text == "Ended" {
@@ -362,7 +360,6 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             }
             if let data, data.count <= WatchLimits.payloadBytes,
                let value = try? JSONDecoder().decode(WatchHealthSnapshot.self, from: data) { self.save(value) }
-            else if cleared { self.clearCachedData(); return }
             if let dashboardData, dashboardData.count <= WatchLimits.payloadBytes,
                let value = try? JSONDecoder().decode(WatchDashboardSnapshot.self, from: dashboardData) {
                 self.saveDashboard(value)

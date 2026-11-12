@@ -28,6 +28,16 @@
   manifest checks passed. The added SQL integration regression did not execute:
   no isolated loopback SQL configuration is available. Do not equate mocked
   route tests with database or device acceptance.
+- Portable Swift validation before the English-only merge: unfiltered
+  `swift test -j 2` passed 32 tests; the final ordering fix passed 19 tests with
+  `swift test -j 2 --filter 'WatchDictationCredentialTests|JarvisClientTransportTests'`.
+  Core build, native Swift syntax parsing and Watch plist parsing passed.
+  Parsing is not Apple SDK typechecking or rendered inspection.
+- CodeQL JavaScript reports `js/missing-rate-limiting` on the shared auth hook.
+  The added Watch branch explicitly limits verification before SQL and issuance
+  before rotation; those limits are tested. Treat this as a static-analysis
+  limitation for the new path, not evidence of a global limiter. Swift CodeQL
+  database creation is blocked by the unavailable Apple build environment.
 
 ## Image builds — 12 November 2026
 

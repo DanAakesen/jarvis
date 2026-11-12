@@ -66,6 +66,26 @@ final class WatchDictationCredentialTests: XCTestCase {
                                                   now: now.addingTimeInterval(901)))
     }
 
+    func testStaleSignoutCannotClearNewlyProvisionedCredentials() {
+        var revision = WatchCredentialRevision()
+        XCTAssertTrue(revision.accept(101))
+        XCTAssertFalse(revision.accept(100))
+        XCTAssertFalse(revision.accept(nil, isEmpty: true))
+        XCTAssertFalse(revision.accept(101))
+        XCTAssertTrue(revision.accept(102))
+        XCTAssertFalse(revision.accept(101))
+    }
+
+    func testInvalidRevisionCannotAdvanceCredentialOrdering() {
+        var revision = WatchCredentialRevision()
+        XCTAssertFalse(revision.accept(.infinity))
+        XCTAssertFalse(revision.accept(.nan))
+        XCTAssertFalse(revision.accept(-1))
+        XCTAssertFalse(revision.accept(nil))
+        XCTAssertTrue(revision.accept(nil, isEmpty: true))
+        XCTAssertTrue(revision.accept(1))
+    }
+
     func testPassiveDisconnectDoesNotInterruptDraftOrReplayAcknowledgedSend() {
         var composer = WatchComposer()
         composer.draft = "Keep this draft"

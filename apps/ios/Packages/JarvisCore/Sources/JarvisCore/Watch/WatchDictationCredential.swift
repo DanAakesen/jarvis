@@ -1,5 +1,17 @@
 import Foundation
 
+public struct WatchCredentialRevision: Sendable {
+    private var latest: Double = 0
+    public init() {}
+
+    public mutating func accept(_ revision: Double?, isEmpty: Bool = false) -> Bool {
+        if isEmpty { return latest == 0 }
+        guard let revision, revision.isFinite, revision > latest else { return false }
+        latest = revision
+        return true
+    }
+}
+
 /// A transcription-only credential, delivered separately from cached Watch snapshots.
 public struct WatchDictationCredential: Codable, Sendable {
     public let token: String
