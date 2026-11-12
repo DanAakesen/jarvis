@@ -8,6 +8,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
     @Published var selection: ChatRuntimeTest?
     @Published var session: ChatSession?
     @Published var messages: [JarvisChatRow] = []
+    @Published var sendRevision = 0
     @Published var composerDraft = ComposerDraft()
     var draft: String {
         get { composerDraft.text }
@@ -111,6 +112,7 @@ private final class JarvisRuntimeTestModel: ObservableObject {
 
     func send() {
         guard canSend, let client, let session else { return }
+        sendRevision += 1
         let text = composerDraft.consume().trimmingCharacters(in: .whitespacesAndNewlines)
         sending = true
         error = nil
@@ -271,8 +273,17 @@ struct JarvisRuntimeTestSheet: View {
                 .safeAreaInset(edge: .bottom) {
                     if model.session != nil { composer }
                 }
-                .modifier(JarvisChatFollowLatest(proxy: proxy, bottomID: "runtimeTest.bottom",
-                                                isEnabled: model.session != nil))
+                .modifier(JarvisChatFollowLatest(
+                    proxy: proxy,
+                    bottomID: "runtimeTest.bottom",
+                    newestMessageID: model.messages.last(where: { $0.role == .jarvis })?.id,
+                    hasIncomingContent: !model.acknowledgment.isEmpty
+                        || !model.progressUpdates.isEmpty
+                        || !model.partial.isEmpty,
+                    sendRevision: model.sendRevision,
+                    jumpToLatestTitle: copy(.jumpToLatest),
+                    isEnabled: model.session != nil
+                ))
             }
             .navigationTitle(model.session?.runtimeTest.map { "\(label($0)) · \(copy(.runtimeTitle))" } ?? copy(.runtimeTest))
             .navigationBarTitleDisplayMode(.inline)
