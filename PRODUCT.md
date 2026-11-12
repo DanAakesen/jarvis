@@ -1395,7 +1395,10 @@ Creating and editing notes use the shared vault routes; editing saves only with
 the version returned by the note read. Tasks can be completed, and new tasks
 include title, scope, priority and optional date/time. Task rows on Home and
 Notes use the same accessible row and open one shared detail and edit flow;
-updates save against the task's returned version. All interface and accessibility copy
+task fields are editable immediately, and Save is enabled for valid changes.
+Updates save against the task's returned version. Notes open editable, with
+formatting controls available above the keyboard. Editing sheets dismiss on
+successful saves while retaining failures for recovery. All interface and accessibility copy
 is localized in Danish and English from the app-owned Settings preference,
 defaulting to Danish; it is independent of voice language and device locale.
 

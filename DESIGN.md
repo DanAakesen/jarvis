@@ -3119,8 +3119,10 @@ graph-position logic lives in `JarvisCore`. The New note sheet has a hierarchica
 folder picker: New folder adds a child inside the open directory, then saving the
 note persists it. The New folder sheet uses the same drill-down picker to select
 its parent and persists an empty folder. The New task sheet puts title, date/time,
-scope and priority in board order, with shared segments. All creation sheets use
-confirm-left/cancel-right actions. Note delete/rename/move and task delete remain
+scope and priority in board order, with shared segments. Editing sheets use a
+trailing confirm check and dismiss by gesture; saving retains the sheet until it
+succeeds. Notes expose editable blocks and keyboard formatting controls immediately.
+Note delete/rename/move and task delete remain
 unavailable. Recent opening history
 is stored in the account-bound app cache and clears on sign-out.
 Danish and English strings come from the JarvisCore localization

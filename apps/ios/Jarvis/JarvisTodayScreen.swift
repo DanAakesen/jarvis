@@ -260,10 +260,6 @@ struct JarvisTodayScreen: View {
                 .listRowInsets(agendaInsets)
             }
         } else {
-            let tasks = visibleRows.compactMap { row -> VaultTask? in
-                if case .task(let task) = row { return task }
-                return nil
-            }
             ForEach(Array(visibleRows.prefix(expansion.visible).enumerated()), id: \.element.id) { index, row in
                 let shape = UnevenRoundedRectangle(
                     topLeadingRadius: index == 0 ? JarvisDesignTokens.surfaceRadius : 0,
@@ -282,15 +278,14 @@ struct JarvisTodayScreen: View {
                             .listRowSeparator(.hidden)
                             .listRowInsets(agendaInsets)
                     case .task(let task):
-                        let taskIndex = tasks.firstIndex(where: { $0.id == task.id }) ?? 0
                         taskRow(
                             task,
-                            isFirst: taskIndex == 0,
-                            isLast: taskIndex == tasks.count - 1
+                            isFirst: index == 0,
+                            isLast: index == expansion.visible - 1
                         )
                         .listRowBackground(Color.clear)
                         .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 16))
+                        .listRowInsets(agendaInsets)
                     }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -444,11 +439,9 @@ struct JarvisTodayScreen: View {
             task: task,
             copy: JarvisNotesCopy(language: language),
             today: model.taskData.value?.today ?? "",
-            isWorking: pendingTaskIDs.contains(task.id),
             isFirst: isFirst,
             isLast: isLast,
             accessibilityPrefix: "today.task",
-            onComplete: { Task { await completeTask(task) } },
             onOpen: { sheet = .taskDetail(task) }
         )
     }

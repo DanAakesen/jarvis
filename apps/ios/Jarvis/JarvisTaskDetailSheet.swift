@@ -10,7 +10,6 @@ struct JarvisTaskDetailSheet: View {
     let onSaved: () -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var editing = false
     @State private var title: String
     @State private var dueDateEnabled: Bool
     @State private var dueTimeEnabled: Bool
@@ -48,57 +47,60 @@ struct JarvisTaskDetailSheet: View {
             && (!dueTimeEnabled || dueDateEnabled)
     }
 
+    private var editedTitle: String {
+        let originalTitle = JarvisTaskTitle.plain(task.text)
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title == originalTitle || trimmedTitle == originalTitle ? task.text : trimmedTitle
+    }
+
+    private var editedDueDate: String? {
+        dueDateEnabled ? Self.dateString(dueDate) : nil
+    }
+
+    private var editedDueTime: String? {
+        dueDateEnabled && dueTimeEnabled ? Self.timeString(dueTime) : nil
+    }
+
+    private var hasChanges: Bool {
+        editedTitle != task.text || editedDueDate != task.dueDate
+            || editedDueTime != task.dueTime || priority != task.priority
+    }
+
     var body: some View {
         NavigationStack {
             JarvisForm {
                 Section {
-                    if editing {
-                        TextField(copy.titleField, text: $title, axis: .vertical)
-                            .lineLimit(1...4)
-                            .accessibilityIdentifier("notes.task.edit.title")
-                    } else {
-                        Text(JarvisTaskTitle.formatted(task.text))
-                            .font(.headline)
-                    }
+                    TextField(copy.titleField, text: $title, axis: .vertical)
+                        .lineLimit(1...4)
+                        .accessibilityIdentifier("notes.task.edit.title")
                 }
+                .disabled(saving)
                 Section {
                     LabeledContent(copy.scope, value: task.scope == .work ? copy.work : copy.personal)
-                    if editing {
-                        Toggle(copy.dueDateEnabled, isOn: $dueDateEnabled)
-                        if dueDateEnabled {
-                            DatePicker(copy.dueDate, selection: $dueDate, displayedComponents: .date)
+                    Toggle(copy.dueDateEnabled, isOn: $dueDateEnabled)
+                        .onChange(of: dueDateEnabled) { _, enabled in
+                            if !enabled { dueTimeEnabled = false }
                         }
-                        Toggle(copy.dueTimeEnabled, isOn: $dueTimeEnabled)
-                            .disabled(!dueDateEnabled)
-                        if dueTimeEnabled && dueDateEnabled {
-                            DatePicker(copy.dueTime, selection: $dueTime, displayedComponents: .hourAndMinute)
-                        }
-                        JarvisSegmentedBar(
-                            title: copy.priority,
-                            identifierPrefix: "notes.task.edit.priority",
-                            items: [
-                                JarvisTabItem(tag: VaultTask.Priority.normal, title: copy.priorityNormal),
-                                JarvisTabItem(tag: VaultTask.Priority.medium, title: copy.priorityMedium),
-                                JarvisTabItem(tag: VaultTask.Priority.high, title: copy.priorityHigh),
-                            ],
-                            selection: $priority
-                        )
-                    } else {
-                        if let due = task.dueDate {
-                            LabeledContent(
-                                copy.dueDate,
-                                value: due == today ? copy.today : JarvisNotesLocalization.formattedDueDate(due, language: copy.language)
-                            )
-                        }
-                        if let time = task.dueTime {
-                            LabeledContent(
-                                copy.dueTime,
-                                value: JarvisNotesLocalization.formattedDueTime(time, language: copy.language)
-                            )
-                        }
-                        Text(priorityText(task.priority))
+                    if dueDateEnabled {
+                        DatePicker(copy.dueDate, selection: $dueDate, displayedComponents: .date)
                     }
+                    Toggle(copy.dueTimeEnabled, isOn: $dueTimeEnabled)
+                        .disabled(!dueDateEnabled)
+                    if dueTimeEnabled && dueDateEnabled {
+                        DatePicker(copy.dueTime, selection: $dueTime, displayedComponents: .hourAndMinute)
+                    }
+                    JarvisSegmentedBar(
+                        title: copy.priority,
+                        identifierPrefix: "notes.task.edit.priority",
+                        items: [
+                            JarvisTabItem(tag: VaultTask.Priority.normal, title: copy.priorityNormal),
+                            JarvisTabItem(tag: VaultTask.Priority.medium, title: copy.priorityMedium),
+                            JarvisTabItem(tag: VaultTask.Priority.high, title: copy.priorityHigh),
+                        ],
+                        selection: $priority
+                    )
                 }
+                .disabled(saving)
                 Section {
                     Text(task.path)
                         .font(.footnote)
@@ -117,72 +119,47 @@ struct JarvisTaskDetailSheet: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-                if !task.done && !editing {
+                if !task.done {
                     Section {
                         JarvisLabelledButton(title: copy.complete) {
                             dismiss()
                             onComplete()
                         }
+                        .disabled(saving)
                     }
                 }
             }
             .navigationTitle(copy.tasks)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if editing {
-                    JarvisSheetToolbar(
-                        confirmTitle: copy.save,
-                        closeTitle: copy.cancel,
+                ToolbarItem(placement: .topBarTrailing) {
+                    JarvisSheetConfirmButton(
+                        title: copy.save,
                         isWorking: saving,
-                        isConfirmDisabled: !canSave || saveBlocked,
-                        onConfirm: { Task { await save() } },
-                        onClose: cancelEditing
-                    )
-                } else {
-                    ToolbarItem(placement: .topBarLeading) {
-                        JarvisIconButton(
-                            title: copy.edit,
-                            systemImage: "pencil",
-                            identifier: "notes.task.edit",
-                            isDisabled: client == nil
-                        ) {
-                            editing = true
-                        }
+                        isDisabled: client == nil || saving || !canSave || !hasChanges || saveBlocked
+                    ) {
+                        Task { await save() }
                     }
-                    .sharedBackgroundVisibility(.hidden)
-                    ToolbarItem(placement: .topBarTrailing) {
-                        JarvisSheetCloseButton(title: copy.cancel) { dismiss() }
-                    }
-                    .sharedBackgroundVisibility(.hidden)
+                    .accessibilityHint(client == nil ? copy.unavailable : "")
                 }
+                .sharedBackgroundVisibility(.hidden)
             }
         }
+        .interactiveDismissDisabled(saving)
         .accessibilityIdentifier("notes.task.detail")
     }
 
-    private func cancelEditing() {
-        title = JarvisTaskTitle.plain(task.text)
-        dueDateEnabled = task.dueDate != nil
-        dueTimeEnabled = task.dueTime != nil
-        dueDate = Self.date(task.dueDate) ?? .now
-        dueTime = Self.time(task.dueTime) ?? .now
-        priority = task.priority
-        errorMessage = nil
-        editing = false
-    }
-
     private func save() async {
-        guard !saving, !saveBlocked, canSave, let client else { return }
+        guard !saving, !saveBlocked, canSave, hasChanges, let client else { return }
         saving = true
         errorMessage = nil
         defer { saving = false }
         do {
-            let editedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
             _ = try await client.editTask(
                 task,
-                text: editedTitle == JarvisTaskTitle.plain(task.text) ? task.text : editedTitle,
-                due: dueDateEnabled ? Self.dateString(dueDate) : nil,
-                time: dueTimeEnabled && dueDateEnabled ? Self.timeString(dueTime) : nil,
+                text: editedTitle,
+                due: editedDueDate,
+                time: editedDueTime,
                 priority: priority
             )
             await JarvisAppCache.invalidateAll(.tasks)
@@ -203,14 +180,6 @@ struct JarvisTaskDetailSheet: View {
             }
         } catch {
             errorMessage = copy.unavailable
-        }
-    }
-
-    private func priorityText(_ value: VaultTask.Priority) -> String {
-        switch value {
-        case .high: copy.priorityHigh
-        case .medium: copy.priorityMedium
-        case .normal: copy.priorityNormal
         }
     }
 

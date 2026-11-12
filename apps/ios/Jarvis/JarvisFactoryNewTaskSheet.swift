@@ -169,6 +169,7 @@ struct JarvisFactoryNewTaskSheet: View {
                 Task { await savePolicy(newValue) }
             }
         }
+        .interactiveDismissDisabled(creating || savingPolicy)
     }
 
     private var isValidDraft: Bool {

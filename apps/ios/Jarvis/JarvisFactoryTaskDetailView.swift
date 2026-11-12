@@ -682,6 +682,7 @@ private struct JarvisFactorySteerSheet: View {
             }
             .environment(\.locale, copy.language.locale)
         }
+        .interactiveDismissDisabled(sending)
     }
 
     private func send() async {
