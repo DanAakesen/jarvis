@@ -66,6 +66,7 @@ struct JarvisChatFollowLatest: ViewModifier {
                     if old != .animating {
                         follow.interactionEnded(distanceFromBottom: old == .tracking ? nil :
                             Metrics(context.geometry).distanceFromBottom)
+                        if hasIncomingContent { follow.messageArrived() }
                     }
                     revision += 1
                 default: break
