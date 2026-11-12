@@ -97,7 +97,7 @@ struct WatchChatView: View {
                     .foregroundStyle(WatchStyle.amber)
                     .disabled(model.busy || model.voiceID != nil).accessibilityLabel("Dictate into draft")
                 Button { Task { await model.startVoice() } } label: { WatchWave().frame(width: 22, height: 18).frame(width: 32, height: 38) }
-                    .disabled(model.busy || model.voiceID != nil).accessibilityLabel("Start voice session")
+                    .disabled(model.busy).accessibilityLabel("Start voice session")
             }.buttonStyle(.plain).padding(.horizontal, 8)
                 .background(WatchStyle.surface, in: Capsule())
                 .overlay { Capsule().stroke(.white.opacity(0.2), lineWidth: 0.5) }

@@ -12593,3 +12593,31 @@ Owner-reported production logs show six `completion_incomplete` events at the
 reasoning when supported instead of retrying: this keeps a single bounded call
 and its existing budget reservation and usage accounting. Limit iPhone failure
 visibility to seven days without removing job history. Live verification is pending.
+
+## 12 November 2026 — Live Activity voice end returns to Chat (#1796)
+
+Retain an explicit navigation request in the voice model instead of relying on
+a rendered `.ended` transition. Consume it at the app root or foreground entry,
+and prevent automatic startup until it is consumed. In-app End also returns to
+Chat rather than Home. Use a UIKit background task during teardown and close the
+existing backend voice socket before dismissing ActivityKit. Intent session
+validation and Danish/English copy remain unchanged. Apple documentation access
+was blocked; locked-device and wake-from-intent behavior still need iPhone
+verification.
+
+## 12 November 2026 — Verify Watch voice ownership before reusing it (#1798)
+
+The iPhone voice model outlives a session. Its End paths cleared the session ID
+but left `VoiceLiveActivityActions.session` registered; the Watch bridge treated
+that object's existence as busy, while iPhone Start did not use that guard.
+Clear the registration whenever the iPhone session ID is cleared, and check a
+current ID before rejecting Watch Start. Watch-owned terminal client states also
+run full teardown rather than merely updating a label.
+
+Use the existing session-scoped heartbeat to verify retained Watch IDs against
+the companion client. Clear only a confirmed missing/terminal session; an
+unreachable phone is not permission to start a second session. Retain End in the
+WatchConnectivity application context as well as sending a live event, and check
+again on foreground/reconnection. Backend records already finalize through the
+same path for explicit End, idle expiry, duration cap and socket disconnect; no
+backend or database change is needed. No new strings or tests were added.

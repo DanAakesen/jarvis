@@ -13,6 +13,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     @Published private(set) var isMuted = false
     @Published private(set) var isCaptionsEnabled = false
     @Published private(set) var isMinimized = false
+    @Published private(set) var returnToChatRequested = false
     @Published private(set) var isCameraEnabled = false
     private(set) var isPhotoSession = false
     @Published private(set) var cameraPermissionDenied = false
@@ -28,7 +29,13 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private let screenshotConnectionLost: Bool
     private var audio = VoiceAudioEngine()
     private let liveActivity = VoiceLiveActivityController()
-    private(set) var liveActivitySessionID: UUID?
+    private(set) var liveActivitySessionID: UUID? {
+        didSet {
+            if liveActivitySessionID == nil, VoiceLiveActivityActions.session === self {
+                VoiceLiveActivityActions.session = nil
+            }
+        }
+    }
     private let screenShareBridge = VoiceScreenShareBridge()
     private var captureTask: Task<Void, Never>?
     private var captureReadinessTask: Task<Void, Never>?
@@ -176,7 +183,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             isAudioReady = true
             return
         }
-        guard !isStarting, !isEnding, sessionClient == nil else { return }
+        guard !isStarting, !isEnding, !returnToChatRequested, sessionClient == nil else { return }
         sessionGeneration += 1
         let generation = sessionGeneration
         isStarting = true
@@ -352,17 +359,37 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         isMinimized = false
     }
 
+    func consumeReturnToChatRequest() -> Bool {
+        guard returnToChatRequested else { return false }
+        returnToChatRequested = false
+        return true
+    }
+
     func end(returnToChat: Bool = true) async {
         guard !isEnding else { return }
         isEnding = true
         defer { isEnding = false }
+        var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+        backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "End voice session") {
+            if backgroundTask != .invalid {
+                UIApplication.shared.endBackgroundTask(backgroundTask)
+                backgroundTask = .invalid
+            }
+        }
+        defer {
+            if backgroundTask != .invalid {
+                UIApplication.shared.endBackgroundTask(backgroundTask)
+            }
+        }
         sessionGeneration += 1
+        returnToChatRequested = returnToChat
         liveActivitySessionID = nil
         connectionPresentationState = connectionPresentationMachine.apply(.ended)
         isStarting = false
         let endingClient = sessionClient
         sessionClient = nil
         voiceState = returnToChat ? .ended : .idle
+        isMinimized = false
         screenShareBridge.requestStop()
         stopScreenShareMonitoring()
         stopAudio()
@@ -374,7 +401,6 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         photoForNextTurn = nil
         photoIsReady = false
         sentMedia = []
-        await liveActivity.end()
         httpClient = nil
         userCaption = ""
         assistantCaption = ""
@@ -385,12 +411,12 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 errorMessage = Self.message(for: error)
             }
         }
+        await liveActivity.end()
         sessionClient = nil
         voiceSessionID = nil
         responseID = nil
         voiceState = returnToChat ? .ended : .idle
         isMuted = false
-        isMinimized = false
     }
 
     func startCamera() async {
