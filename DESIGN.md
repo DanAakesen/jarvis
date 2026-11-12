@@ -3110,6 +3110,8 @@ Notes and Tasks use the shared phrase, hero, section headings and separated rows
 Notes browses direct child folders and notes with a breadcrumb and Back control;
 its count comes from the same collection as its visible note rows. Recent is a
 horizontal strip of last-opened note tiles with folder color and opening time.
+Shared task and note rows center their leading icons. Note rows reveal a localized
+pin or unpin action on left swipe and retain their surrounding list clipping.
 Search and plus stay fixed at the bottom. Graph uses a native Canvas with pan/zoom,
 folder-color legend, labels only for search/selection, and an Open action for the
 selected node. Every node retains its spoken title, folder and Open accessibility

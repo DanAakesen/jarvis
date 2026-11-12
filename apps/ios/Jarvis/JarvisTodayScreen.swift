@@ -368,7 +368,7 @@ struct JarvisTodayScreen: View {
 
     private func calendarRow(_ entry: JarvisTodayCalendarEntry) -> some View {
         let notes = model.correlatedNotes(for: entry)
-        return HStack(alignment: .top, spacing: JarvisPageHeaderMetrics.spacing) {
+        return HStack(alignment: .center, spacing: JarvisPageHeaderMetrics.spacing) {
             agendaIcon("calendar")
             VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
                 Text(entry.title).font(.body).fixedSize(horizontal: false, vertical: true)
