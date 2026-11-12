@@ -103,7 +103,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 liveActivity.update(state: voiceState, isMuted: false)
             }
         } catch {
-            errorMessage = VoiceLiveActivityCopy.updateFailed.text(language: language)
+            errorMessage = VoiceLiveActivityCopy.updateFailed.text(language: .en)
         }
     }
     #endif
