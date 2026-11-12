@@ -1,3 +1,16 @@
+## Image builds — 12 November 2026
+
+- **Images are built on the GitHub runner, not in ACR Tasks.** Deploy, Runner deploy, Factory
+  runtime and the vault-mirror step in `.github/scripts/deploy_bicep.sh` run `az acr login`
+  after the Azure login, then `docker build --platform linux/amd64` and `docker push` with the
+  same image names, tags and build arguments as before. The digest lookup with
+  `az acr manifest show-metadata` is unchanged. No layer cache is used (the cache would need an
+  extra action; runner minutes are free). Decision: `docs/decisions.md`, 2026-11-12.
+- **Builds per Deploy.** Backend and agent are each built only when the plan selects them
+  (unchanged inputs are reused); an infra change selects both. The vault-mirror image is built
+  only when the infra job runs with the mirror enabled. Runner deploy builds two images on
+  `runner/**` changes.
+
 ## Tool lookup for voice and chat — 12 November 2026
 
 - **No tool schemas are sent on each request.** The voice relay (`apps/backend/src/voice`) and
