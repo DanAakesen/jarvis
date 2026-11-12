@@ -18,7 +18,7 @@ struct JarvisNoteEditorView: View {
     @State private var rawMode = false
     @State private var undoHistory: [String] = []
     @FocusState private var editingBlock: UUID?
-
+    @FocusState private var editingTitle: Bool
 
     @State private var note: VaultNote
     @State private var draft: String
@@ -82,6 +82,7 @@ struct JarvisNoteEditorView: View {
                                 clearStatus()
                             }), axis: .vertical)
                             .font(.largeTitle.bold())
+                            .focused($editingTitle)
                             .accessibilityIdentifier("note.title")
                     } else {
                         Text(title).font(.largeTitle.bold()).fixedSize(horizontal: false, vertical: true)
@@ -131,6 +132,12 @@ struct JarvisNoteEditorView: View {
         }
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
         .padding(.top, JarvisDesignTokens.notesSectionSpacing)
+        .safeAreaInset(edge: .bottom) {
+            if !rawMode && editingBlock == nil && !editingTitle {
+                formattingToolbar
+                    .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
+            }
+        }
         .jarvisAmbientBackground()
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
@@ -150,19 +157,25 @@ struct JarvisNoteEditorView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisTextButton(title: rawMode ? copy.formatted : copy.raw, identifier: "note.raw") {
                     editingBlock = nil
+                    editingTitle = false
                     rawMode.toggle()
                 }
             }.sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .topBarTrailing) {
-                JarvisLabelledButton(title: copy.done, identifier: "note.done", isBusy: saving,
-                                     isDisabled: latestConflict != nil || needsReload || client == nil,
-                                     isEmphasised: true, isCompact: true) {
+                JarvisSheetConfirmButton(title: copy.save, isWorking: saving,
+                                         isDisabled: latestConflict != nil || needsReload || client == nil) {
                     editingBlock = nil
+                    editingTitle = false
                     if hasChanges {
                         Task { if await saveDraft(sha: note.sha) { onClose() } }
                     } else { onClose() }
                 }
             }.sharedBackgroundVisibility(.hidden)
+            if !rawMode {
+                ToolbarItemGroup(placement: .keyboard) {
+                    formattingToolbar
+                }
+            }
         }
         .alert(alertTitle, isPresented: Binding(
             get: { activeAlert != nil },
@@ -192,11 +205,7 @@ struct JarvisNoteEditorView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(document.blocks.enumerated()), id: \.element.id) { index, block in
                         if index != document.blocks.firstIndex(where: { $0.headingLevel == 1 }) {
-                            if block.text.isEmpty && editingBlock != block.id && block.prefix.isEmpty {
-                                Color.clear.frame(height: 8)
-                            } else {
-                                blockEditor(index, block: block).id(block.id)
-                            }
+                            blockEditor(index, block: block).id(block.id)
                         }
                     }
                 }
@@ -204,37 +213,37 @@ struct JarvisNoteEditorView: View {
                 .padding(.bottom, 24)
             }
             .accessibilityIdentifier("note.formattedEditor")
-            .safeAreaInset(edge: .bottom) {
-                HStack {
-                    JarvisMenuButton(title: copy.heading, systemImage: "textformat", identifier: "note.format") {
-                        Button(copy.heading) { appendBlock(prefix: "## ") }
-                        Button(copy.contentField) { appendBlock(prefix: "") }
-                    }
-                    Spacer()
-                    JarvisIconButton(title: copy.checklist, systemImage: "checkmark.square", identifier: "note.checklist") {
-                        appendBlock(prefix: "- [ ] ")
-                    }
-                    Spacer()
-                    JarvisIconButton(title: copy.addLink, systemImage: "link", identifier: "note.link") {
-                        appendBlock(prefix: "", text: "[](https://)")
-                    }
-                    Spacer()
-                    JarvisIconButton(title: copy.undo, systemImage: "arrow.uturn.backward", identifier: "note.undo",
-                                     isDisabled: undoHistory.isEmpty) {
-                        guard let previous = undoHistory.popLast() else { return }
-                        draft = previous
-                        document = JarvisNoteDocument(previous)
-                        editingBlock = nil
-                        clearStatus()
-                    }
-                }
-                .padding(8)
-                .jarvisGlassSurface(cornerRadius: 28)
-            }
             .onChange(of: editingBlock) { _, target in
                 if let target { proxy.scrollTo(target, anchor: .center) }
             }
         }
+    }
+
+    private var formattingToolbar: some View {
+        HStack {
+            JarvisMenuButton(title: copy.heading, systemImage: "textformat", identifier: "note.format") {
+                Button(copy.heading) { appendBlock(prefix: "## ") }
+                Button(copy.contentField) { appendBlock(prefix: "") }
+            }
+            Spacer()
+            JarvisIconButton(title: copy.checklist, systemImage: "checkmark.square", identifier: "note.checklist") {
+                appendBlock(prefix: "- [ ] ")
+            }
+            Spacer()
+            JarvisIconButton(title: copy.addLink, systemImage: "link", identifier: "note.link") {
+                appendBlock(prefix: "", text: "[](https://)")
+            }
+            Spacer()
+            JarvisIconButton(title: copy.undo, systemImage: "arrow.uturn.backward", identifier: "note.undo",
+                             isDisabled: undoHistory.isEmpty) {
+                guard let previous = undoHistory.popLast() else { return }
+                draft = previous
+                document = JarvisNoteDocument(previous)
+                editingBlock = nil
+                clearStatus()
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -252,30 +261,20 @@ struct JarvisNoteEditorView: View {
             } else if block.isBullet {
                 Text("•").accessibilityHidden(true)
             }
-            if editingBlock == block.id {
-                TextField(copy.contentField, text: Binding(
-                    get: { document.blocks[index].text },
-                    set: { value in
-                        remember(draft)
-                        document.blocks[index].text = value
-                        draft = document.markdown
-                        clearStatus()
-                    }), axis: .vertical)
-                    .font(blockFont(block))
-                    .focused($editingBlock, equals: block.id)
-                    .accessibilityIdentifier("note.block.\(index)")
-            } else {
-                JarvisRowButton(identifier: "note.block.\(index)", action: { editingBlock = block.id }) {
-                    Group {
-                        if block.isCode { Text(block.text.isEmpty ? " " : block.text) }
-                        else { Text((try? AttributedString(markdown: block.text.isEmpty ? " " : block.text)) ?? AttributedString(block.text)) }
-                    }
-                    .font(blockFont(block))
-                    .foregroundStyle(block.isChecked ? Color.secondary : Color.primary)
-                    .strikethrough(block.isChecked)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
+            TextField(document.blocks.count == 1 ? copy.contentField : "", text: Binding(
+                get: { document.blocks[index].text },
+                set: { value in
+                    remember(draft)
+                    document.blocks[index].text = value
+                    draft = document.markdown
+                    clearStatus()
+                }), axis: .vertical)
+                .font(blockFont(block))
+                .foregroundStyle(block.isChecked ? Color.secondary : Color.primary)
+                .strikethrough(block.isChecked)
+                .focused($editingBlock, equals: block.id)
+                .accessibilityLabel(copy.contentField)
+                .accessibilityIdentifier("note.block.\(index)")
         }
         .padding(.top, block.headingLevel > 0 ? 12 : 0)
     }

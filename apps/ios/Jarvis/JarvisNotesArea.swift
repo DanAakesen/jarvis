@@ -877,15 +877,14 @@ struct JarvisNotesArea: View {
             task: task,
             copy: copy,
             today: today,
-            isWorking: pendingTaskIDs.contains(task.id),
             isFirst: isFirst,
             isLast: isLast,
-            onComplete: { Task { await completeTask(task) } },
             onOpen: { openedTask = task }
         )
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 0, leading: 32, bottom: 0, trailing: 16))
+        .listRowInsets(EdgeInsets(top: 0, leading: JarvisDesignTokens.notesHorizontalInset,
+                                 bottom: 0, trailing: JarvisDesignTokens.notesHorizontalInset))
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !task.done {
                 Button {

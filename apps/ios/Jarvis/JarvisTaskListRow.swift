@@ -19,18 +19,17 @@ enum JarvisTaskTitle {
     }
 }
 
-/// Board task anatomy, inside a native List so swipe completion remains available.
+/// Shared task anatomy, inside a native List so swipe completion remains available.
 struct JarvisTaskListRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 20
     @ScaledMetric(relativeTo: .subheadline) private var maximumDueWidth: CGFloat = 120
     let task: VaultTask
     let copy: JarvisNotesCopy
     let today: String
-    let isWorking: Bool
     let isFirst: Bool
     let isLast: Bool
     var accessibilityPrefix = "notes.task"
-    let onComplete: () -> Void
     let onOpen: () -> Void
 
     private var priorityColor: Color {
@@ -76,61 +75,44 @@ struct JarvisTaskListRow: View {
 
     private var shape: UnevenRoundedRectangle {
         UnevenRoundedRectangle(
-            topLeadingRadius: isFirst ? JarvisNotesOverviewMetrics.listRadius : 0,
-            bottomLeadingRadius: isLast ? JarvisNotesOverviewMetrics.listRadius : 0,
-            bottomTrailingRadius: isLast ? JarvisNotesOverviewMetrics.listRadius : 0,
-            topTrailingRadius: isFirst ? JarvisNotesOverviewMetrics.listRadius : 0
+            topLeadingRadius: isFirst ? JarvisDesignTokens.surfaceRadius : 0,
+            bottomLeadingRadius: isLast ? JarvisDesignTokens.surfaceRadius : 0,
+            bottomTrailingRadius: isLast ? JarvisDesignTokens.surfaceRadius : 0,
+            topTrailingRadius: isFirst ? JarvisDesignTokens.surfaceRadius : 0
         )
     }
 
     var body: some View {
-        HStack(alignment: dynamicTypeSize.isAccessibilitySize ? .top : .center, spacing: 4) {
-            JarvisCheckButton(
-                title: task.done ? copy.completed : copy.complete,
-                identifier: "\(accessibilityPrefix).complete",
-                isWorking: isWorking,
-                isChecked: task.done,
-                tint: priorityColor,
-                action: onComplete
-            )
-            .accessibilityValue(JarvisTaskTitle.plain(task.text))
-            Button(action: onOpen) {
-                Group {
+        JarvisRowButton(identifier: "\(accessibilityPrefix).open", action: onOpen) {
+            HStack(alignment: .top, spacing: JarvisPageHeaderMetrics.spacing) {
+                Image(systemName: "checklist")
+                    .font(.system(size: iconSize, weight: .regular))
+                    .foregroundStyle(JarvisDesignTokens.primaryAccent)
+                    .frame(width: iconSize + JarvisPageHeaderMetrics.rowLineSpacing,
+                           height: iconSize + JarvisPageHeaderMetrics.rowLineSpacing)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                    title
                     if dynamicTypeSize.isAccessibilitySize {
-                        VStack(alignment: .leading, spacing: 4) {
-                            title
-                            metadata
-                            dueLabel
-                        }
+                        metadata
+                        dueLabel
                     } else {
-                        HStack(spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                title
-                                metadata
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            metadata
+                            Spacer(minLength: JarvisPageHeaderMetrics.actionSpacing)
                             dueLabel
                                 .frame(maxWidth: maximumDueWidth, alignment: .trailing)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(JarvisTaskTitle.plain(task.text))
-            .accessibilityValue([scope, priority, due].compactMap { $0 }.joined(separator: ", "))
-            .accessibilityIdentifier("\(accessibilityPrefix).open")
+            .frame(minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .leading)
+            .jarvisListRow(separator: !isLast)
         }
-        .padding(.leading, 8)
-        .padding(.trailing, 16)
-        .padding(.vertical, 8)
-        .frame(minHeight: 58)
+        .accessibilityLabel(JarvisTaskTitle.plain(task.text))
+        .accessibilityValue([scope, priority, due].compactMap { $0 }.joined(separator: ", "))
         .background(.regularMaterial, in: shape)
-        .overlay(alignment: .bottom) {
-            if !isLast { Divider().padding(.leading, 16) }
-        }
         .clipShape(shape)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("\(accessibilityPrefix).row.\(task.id)")
@@ -138,7 +120,7 @@ struct JarvisTaskListRow: View {
 
     private var title: some View {
         Text(JarvisTaskTitle.formatted(task.text))
-            .font(.body.weight(.semibold))
+            .font(.body)
             .foregroundStyle(.primary)
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
             .fixedSize(horizontal: false, vertical: true)

@@ -1038,7 +1038,7 @@ struct JarvisSheetCloseButton: View {
     }
 }
 
-/// Toolbar content every sheet shares: confirm on the left and close on the right, both icon-only.
+/// Toolbar content for sheet confirmation.
 struct JarvisSheetToolbar: ToolbarContent {
     let confirmTitle: String
     let closeTitle: String
@@ -1048,17 +1048,13 @@ struct JarvisSheetToolbar: ToolbarContent {
     let onClose: () -> Void
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .topBarLeading) {
+        ToolbarItem(placement: .topBarTrailing) {
             JarvisSheetConfirmButton(
                 title: confirmTitle,
                 isWorking: isWorking,
                 isDisabled: isConfirmDisabled,
                 action: onConfirm
             )
-        }
-        .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .topBarTrailing) {
-            JarvisSheetCloseButton(title: closeTitle, isDisabled: isWorking, action: onClose)
         }
         .sharedBackgroundVisibility(.hidden)
     }

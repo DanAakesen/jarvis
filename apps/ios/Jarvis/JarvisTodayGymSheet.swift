@@ -174,6 +174,7 @@ struct JarvisTodayGymSheet: View {
             }
         }
         .accessibilityIdentifier("\(prefix).sheet")
+        .interactiveDismissDisabled(status == .saving)
         .animation(reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.filterAnimationDuration), value: status)
         .sensoryFeedback(.success, trigger: status == .saved) { _, saved in saved }
     }
@@ -235,6 +236,7 @@ struct JarvisTodayGymSheet: View {
                 memory.record(name: trimmedName, session: liftSession)
                 memory.save()
             }
+            dismiss()
         } catch let error as JarvisGymLogError {
             switch error {
             case .unavailable: status = .failed(.saveUnavailable)

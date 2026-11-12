@@ -174,6 +174,7 @@ struct JarvisNewFolderSheet: View {
                     onConfirm: { Task { await create() } }, onClose: { dismiss() })
             }
         }
+        .interactiveDismissDisabled(saving)
     }
 
     private func create() async {
@@ -251,7 +252,7 @@ struct JarvisNewNoteSheet: View {
                 )
             }
         }
-
+        .interactiveDismissDisabled(saving)
     }
 
     private var canCreate: Bool {
@@ -370,6 +371,7 @@ struct JarvisNewTaskSheet: View {
                 )
             }
         }
+        .interactiveDismissDisabled(saving)
     }
 
     private var canCreate: Bool {

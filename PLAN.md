@@ -1,3 +1,10 @@
+## iPhone Notes and sheets — 12 November 2026 (#1786)
+
+The note and task editors, shared task row and sheet confirmation controls have
+been updated. Task and calendar-event deletion and calendar-event opening remain
+unimplemented: the current iPhone contracts do not expose those operations.
+Native keyboard, sheet and row behavior still needs iPhone or Simulator validation.
+
 ## iOS loading / Factory child integration — 10 November 2026 (#1715)
 
 Integrated #1704 head `a43a4af16c5654d5bf1541a4fe591aa6054f0cc9` into the
