@@ -1,3 +1,16 @@
+## Chat follow-latest on every update — 12 November 2026 (#1803)
+
+The shared native chat modifier now observes complete message and active-turn
+content values and anchors content/container size changes while following.
+Sending resumes immediately; manual scrolling and text selection still suspend
+automatic movement, with the existing jump-to-latest control for new content.
+Both normal Chat and the runtime-test sheet use the same event coverage.
+
+Verified: all 18 Core tests (including seven follow-state checks), Core build and
+syntax parsing of the three changed SwiftUI files. Security review is next.
+Native compilation and physical iPhone composer/keyboard acceptance remain
+unverified on this Linux runner.
+
 ## Watch record-and-transcribe dictation — 12 November 2026 (#1794)
 
 Direct Watch capture uses the authenticated companion and a transcription-only backend path; offline keyboard drafts remain available. Native Watch compilation and paired-device acceptance remain necessary.

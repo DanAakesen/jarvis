@@ -276,10 +276,17 @@ struct JarvisRuntimeTestSheet: View {
                 .modifier(JarvisChatFollowLatest(
                     proxy: proxy,
                     bottomID: "runtimeTest.bottom",
-                    newestMessageID: model.messages.last(where: { $0.role == .jarvis })?.id,
-                    hasIncomingContent: !model.acknowledgment.isEmpty
-                        || !model.progressUpdates.isEmpty
-                        || !model.partial.isEmpty,
+                    contentState: JarvisChatFollowContent(
+                        messages: model.messages,
+                        isSending: model.sending,
+                        acknowledgment: model.acknowledgment,
+                        progressUpdates: model.progressUpdates,
+                        streamingText: model.partial,
+                        tools: model.tools,
+                        isReconnecting: model.isReconnecting,
+                        confirmations: [],
+                        errors: [model.error.map { copy($0) }]
+                    ),
                     sendRevision: model.sendRevision,
                     jumpToLatestTitle: copy(.jumpToLatest),
                     isEnabled: model.session != nil

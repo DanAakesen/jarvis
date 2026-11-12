@@ -1,3 +1,13 @@
+## 12 November 2026 — Follow every chat update (#1803)
+
+The shared iOS follow-latest modifier observes message contents and active-turn
+state, including streaming text and tool outcomes, instead of only the final
+assistant message ID and an incoming-content Boolean. A conditional native
+`defaultScrollAnchor(.bottom, for: .sizeChanges)` keeps content above the composer as
+the transcript or viewport changes size. Manual scrolling and text selection
+continue to gate all automatic movement; active sending does not override them.
+No new controls or user-facing copy. Native iPhone acceptance remains unverified.
+
 ## 12 November 2026 — Watch record-and-transcribe dictation (#1794)
 
 The WatchKit text-input controller opens the system-selected input method and cannot force dictation. Use bounded Watch microphone capture and the paired iPhone's authenticated backend connection for transcription only, with no assistant response or tools. Keep system text entry for offline drafts and explain connection failures. Paired-device audio, transcription and interruption behavior remain unverified.

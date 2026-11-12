@@ -402,10 +402,17 @@ struct JarvisChatScreen: View {
                 .modifier(JarvisChatFollowLatest(
                     proxy: proxy,
                     bottomID: "conversation-bottom",
-                    newestMessageID: model.messages.last(where: { $0.role == .jarvis })?.id,
-                    hasIncomingContent: model.acknowledgment != nil
-                        || !model.progressUpdates.isEmpty
-                        || !model.streamingText.isEmpty,
+                    contentState: JarvisChatFollowContent(
+                        messages: model.messages,
+                        isSending: model.isSending,
+                        acknowledgment: model.acknowledgment ?? "",
+                        progressUpdates: model.progressUpdates,
+                        streamingText: model.streamingText,
+                        tools: model.liveTools,
+                        isReconnecting: model.isReconnecting,
+                        confirmations: model.nowFeed?.confirmations ?? [],
+                        errors: [model.historyError, model.actionError]
+                    ),
                     sendRevision: sendRevision,
                     jumpToLatestTitle: JarvisChatLocalization.string(.jumpToLatest, language: appLanguage)
                 ))
