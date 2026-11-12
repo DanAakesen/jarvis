@@ -168,6 +168,22 @@ public final class JarvisClient: Sendable {
         return result.text
     }
 
+    public func provisionWatchCredential() async throws -> WatchDictationCredential {
+        struct Credential: Decodable { let credential: String; let expiresAt: String }
+        let response = try await send(method: .post, path: ["voice", "watch", "credential"],
+                                      headers: ["Cache-Control": "no-store"],
+                                      authorization: .current, idempotent: false)
+        let credential: Credential = try decode(response.body)
+        let result = WatchDictationCredential(token: credential.credential, expiresAt: credential.expiresAt, origin: baseURL)
+        guard result.isUsable(trustedOrigin: baseURL) else { throw JarvisClientError.responseDecodingFailure }
+        return result
+    }
+
+    public func revokeWatchCredentials() async throws {
+        _ = try await send(method: .delete, path: ["voice", "watch", "credential"],
+                           authorization: .current, idempotent: false)
+    }
+
     public func runTool<Arguments: Encodable & Sendable, Result: Codable & Sendable>(
         _ name: String,
         arguments: Arguments,

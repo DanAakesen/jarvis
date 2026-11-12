@@ -15,6 +15,7 @@ import { auditOwnerSessionRefreshFailed, auditOwnerSessionRejected } from './ses
 import { ownerSessionPolicy } from './session/config.js';
 import { OwnerSessionThrottled, OwnerSessionUnavailable, type OwnerSessionContext, type OwnerSessionVerifier } from './session/service.js';
 import { ownerSessionTokenPrefix } from './session/token.js';
+import { watchCredentialPrefix, watchTranscriptionPath, WatchCredentialThrottled, WatchCredentialUnavailable, type WatchCredentials } from './watch-credential.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -63,7 +64,7 @@ function voiceWebsocketToken(request: FastifyRequest): string | undefined {
   return token && /^[\w-]+\.[\w-]+\.[\w-]+$/u.test(token) ? token : undefined;
 }
 
-export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth), exportDeviceVerifier?: NutritionExportCredentialVerifier, healthUploadEnabled = false, ownerSessions?: OwnerSessionVerifier) {
+export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth), exportDeviceVerifier?: NutritionExportCredentialVerifier, healthUploadEnabled = false, ownerSessions?: OwnerSessionVerifier, watchCredentials?: WatchCredentials) {
   app.decorateRequest('principal', null);
   app.decorateRequest('agentPrincipal', null);
   app.decorateRequest('runnerPrincipal', null);
@@ -122,10 +123,18 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         request.nutritionExportPrincipal = validateExportDevice(device,config.auth.ownerObjectId);
         return;
       }
-      const token = header === undefined && !duplicate ? voiceWebsocketToken(request) : match?.[1];
+      const watchToken = typeof header === 'string' && header.length <= 128 &&
+        header.slice(0, 7).toLowerCase() === ['bear', 'er '].join('') &&
+        /^jw\.[A-Za-z0-9_-]{43}$/u.test(header.slice(7)) ? header.slice(7) : undefined;
+      const token = header === undefined && !duplicate ? voiceWebsocketToken(request) : match?.[1] ?? watchToken;
       if (duplicate) reason = 'duplicate_authorization';
       else if (!token) reason = header === undefined ? 'missing_token' : 'malformed_authorization';
       if (duplicate || !token) throw new AuthenticationDenied(401);
+      if (token.startsWith(watchCredentialPrefix)) {
+        if (request.method !== 'POST' || request.routeOptions.url !== watchTranscriptionPath) throw new AuthenticationDenied(403);
+        if (!watchCredentials || !await watchCredentials.verify(token)) throw new AuthenticationDenied(401);
+        return;
+      }
       const principal = token.startsWith(ownerSessionTokenPrefix) ? await verifyOwnerSession(request, token) : await verify(token);
       reason = 'principal_not_allowed_on_route';
       if (isHealthConnectorPrincipal(principal)) {
@@ -162,12 +171,12 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         request.principal = principal;
       }
     } catch (error) {
-      const throttled = error instanceof OwnerSessionThrottled;
-      const unavailable = error instanceof OwnerSessionUnavailable;
+      const throttled = error instanceof OwnerSessionThrottled || error instanceof WatchCredentialThrottled;
+      const unavailable = error instanceof OwnerSessionUnavailable || error instanceof WatchCredentialUnavailable;
       const statusCode = throttled ? 429 : unavailable ? 503 : error instanceof AuthenticationDenied ? error.statusCode : 401;
       const path = (request.raw.url ?? '').split('?')[0]?.slice(0, 200);
-      if (throttled) auditOwnerSessionRejected(request, 'throttled', { statusCode });
-      else if (unavailable) auditOwnerSessionRejected(request, 'store_unavailable', { statusCode });
+      if (error instanceof OwnerSessionThrottled) auditOwnerSessionRejected(request, 'throttled', { statusCode });
+      else if (error instanceof OwnerSessionUnavailable) auditOwnerSessionRejected(request, 'store_unavailable', { statusCode });
       else request.log.warn({ statusCode, reason, method: request.method, route: path }, 'request.auth_denied');
       // Denials precede the CORS hook; let the approved browser read 401/403.
       if (origin === localWebOrigin || (config.staticWebAppOrigin !== undefined && origin === config.staticWebAppOrigin)) {
@@ -178,7 +187,7 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
           ? request.routeOptions.config.jarvisHealthMcpMetadataUrl : undefined;
         reply.header('WWW-Authenticate', metadata ? `Bearer resource_metadata="${metadata}"` : 'Bearer');
       }
-      if (error instanceof OwnerSessionThrottled) {
+      if (error instanceof OwnerSessionThrottled || error instanceof WatchCredentialThrottled) {
         // The token was not judged: this replica is shedding lookups of ids it does not know. Retry, never sign out.
         reply.header('Retry-After', String(error.retryAfterSeconds));
         return reply.code(429).send({ error: 'Too many requests' });

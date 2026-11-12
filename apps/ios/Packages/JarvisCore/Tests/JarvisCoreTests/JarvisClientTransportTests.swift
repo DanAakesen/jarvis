@@ -151,6 +151,51 @@ final class JarvisClientTransportTests: XCTestCase {
         }
     }
 
+    func testWatchCredentialsUseOwnerAuthenticationWithoutReplacingOwnerToken() async throws {
+        let expiry = ISO8601DateFormatter().string(from: Date().addingTimeInterval(900))
+        let transport = FakeHTTPTransport([
+            .response(jsonResponse(status: 200, body: ["credential": "watch.fixture.opaque", "expiresAt": expiry])),
+            .response(HTTPResponse(statusCode: 204)),
+        ])
+        let store = FakeTokenStore(token: "session.fixture.token")
+        let client = try makeClient(transport: transport, tokenStore: store,
+                                    baseURL: URL(string: "https://api.example.invalid")!)
+        let credential = try await client.provisionWatchCredential()
+        try await client.revokeWatchCredentials()
+        XCTAssertEqual(credential.token, "watch.fixture.opaque")
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.method), [.post, .delete])
+        XCTAssertEqual(requests.map(\.url.path), ["/voice/watch/credential", "/voice/watch/credential"])
+        XCTAssertTrue(requests.allSatisfy { $0.headers["Authorization"] == authorization("session.fixture.token") })
+        let stored = try await store.read()
+        XCTAssertEqual(stored, "session.fixture.token")
+    }
+
+    func testWatchCredentialProvisioningNeverResendsAfterNetworkFailure() async throws {
+        let transport = FakeHTTPTransport([.failure(.network)])
+        let client = try makeClient(transport: transport, tokenStore: FakeTokenStore(token: "session.fixture.token"))
+        do {
+            _ = try await client.provisionWatchCredential()
+            XCTFail("Expected failure")
+        } catch {
+            XCTAssertEqual(error as? JarvisClientError, .networkFailure)
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 1)
+    }
+
+    func testWatchRevocationFailureIsNotReportedAsSuccess() async throws {
+        let transport = FakeHTTPTransport([.response(HTTPResponse(statusCode: 503))])
+        let client = try makeClient(transport: transport, tokenStore: FakeTokenStore(token: "session.fixture.token"))
+        do {
+            try await client.revokeWatchCredentials()
+            XCTFail("Expected unconfirmed revocation")
+        } catch { XCTAssertEqual(error as? JarvisClientError, .serviceUnavailable) }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.method, .delete)
+    }
+
     private var sessionJSON: [String: String] {
         [
             "sessionId": "session-fixture",
@@ -164,11 +209,12 @@ final class JarvisClientTransportTests: XCTestCase {
         transport: FakeHTTPTransport,
         tokenStore: FakeTokenStore = FakeTokenStore(),
         provider: FakeAccessTokenProvider = FakeAccessTokenProvider(token: "entra.fixture.token"),
-        retryPolicy: RetryPolicy = RetryPolicy()
+        retryPolicy: RetryPolicy = RetryPolicy(),
+        baseURL: URL = URL(string: "https://api.example.invalid/api")!
     ) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(
-                baseURL: URL(string: "https://api.example.invalid/api")!,
+                baseURL: baseURL,
                 retryPolicy: retryPolicy
             ),
             transport: transport,

@@ -3823,6 +3823,18 @@ visual design is unchanged; repeat the real interaction checks.
 
 The six owner-approved [Watch references](docs/ios/design/watch/README.md) define Home, Chat and four complications. Home has compact Voice, Dictate and Factory rows with left icons, menu top right and Jarvis top left. Chat uses iOS-style amber user bubbles and plain assistant replies, small mic/voice controls inside the message input, and manual Send. WatchDesign.swift adapts shared controls to watchOS because iOS JarvisControls depends on UIKit. Native-size/accessibility and device acceptance are tracked in the implementation handoff.
 
+For #1807, keep this composition and the existing shared controls. Dictation
+records without requiring a reachable phone, attempts direct transcription,
+then companion transcription. If neither works, retain the draft and offer
+keyboard entry. English feedback distinguishes a phone connection failure,
+required iPhone sign-in and unavailable network; do not label every failure
+“iPhone unavailable” or imply that recording sends a message. Chat and voice
+continue to expose their phone dependency. Native rendering, keyboard recovery
+and locked-phone interaction require paired-device inspection.
+If offline sign-out cannot confirm backend Watch revocation, the existing
+iPhone sign-in message area explains the uncertainty, 24-hour expiry bound and
+online retry path. Local sign-out must not imply successful remote revocation.
+
 ## Notes regression correction (8 November 2026)
 
 The owner reports that the shared phrase and overview disappeared from Notes.

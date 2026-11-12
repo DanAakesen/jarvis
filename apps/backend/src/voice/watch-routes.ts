@@ -2,15 +2,39 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { FastifyInstance } from 'fastify';
 import type { Logger } from 'pino';
 import type { WatchTranscriber } from './watch-transcription.js';
+import { watchCredentialPath, watchTranscriptionPath, WatchCredentialThrottled, type WatchCredentials } from '../auth/watch-credential.js';
 
 const MAX_AUDIO_BYTES = 2_880_000;
 const MAX_BASE64_LENGTH = Math.ceil(MAX_AUDIO_BYTES / 3) * 4;
 const TRANSCRIPTION_TIMEOUT_MS = 90_000;
 const MAX_ACTIVE_REQUESTS = 2;
 
-export function registerWatchTranscriptionRoute(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, transcribe?: WatchTranscriber): void {
+export function registerWatchTranscriptionRoute(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, transcribe?: WatchTranscriber, credentials?: WatchCredentials): void {
+  for (const method of ['POST', 'DELETE'] as const) {
+    app.route({
+      method,
+      url: watchCredentialPath,
+      bodyLimit: 1024,
+      handler: async (request, reply) => {
+        reply.header('Cache-Control', 'no-store');
+        if (request.principal?.objectId !== app.ownerObjectId) return reply.code(403).send({ error: 'Forbidden' });
+        if (request.body !== undefined) return reply.code(400).send({ error: 'Invalid request' });
+        if (!credentials) return reply.code(503).send({ error: 'Service unavailable' });
+        try {
+          if (method === 'POST') return reply.send(await credentials.issue());
+          await credentials.revoke();
+          return reply.code(204).send();
+        } catch (error) {
+          if (error instanceof WatchCredentialThrottled) {
+            return reply.code(429).header('Retry-After', String(error.retryAfterSeconds)).send({ error: 'Too many requests' });
+          }
+          return reply.code(503).send({ error: 'Service unavailable' });
+        }
+      },
+    });
+  }
   let activeRequests = 0;
-  app.post('/watch/transcribe', {
+  for (const path of [watchTranscriptionPath, '/watch/transcribe']) app.post(path, {
     bodyLimit: MAX_BASE64_LENGTH + 4096,
     onRequest: async (request, reply) => {
       if (activeRequests >= MAX_ACTIVE_REQUESTS) {

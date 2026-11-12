@@ -1,6 +1,6 @@
-## Watch record-and-transcribe dictation — 12 November 2026 (#1794)
+## Watch direct dictation and connection recovery — 12 November 2026 (#1807)
 
-Direct Watch capture uses the authenticated companion and a transcription-only backend path; offline keyboard drafts remain available. Native Watch compilation and paired-device acceptance remain necessary.
+Implemented the direct transcription-only credential and Watch transport, preserving companion and offline keyboard fallbacks. Chat, tasks and live voice remain phone-owned. Focused backend authentication/API checks, migration manifest checks, backend build/lint and portable Swift checks pass. SQL integration is blocked by missing isolated SQL configuration; native Watch compilation, rendered UI inspection and paired-device acceptance remain pending. Next: qualify the exact head in CI and exercise locked-phone, direct Wi-Fi/cellular, expiry/revocation and keyboard recovery on device. Threat assumptions and separate chat/voice proposals are recorded in `docs/decisions.md`. This extends #1794; device acceptance is not marked complete.
 
 ## iPhone Notes and sheets — 12 November 2026 (#1786)
 

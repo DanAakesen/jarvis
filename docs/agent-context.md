@@ -1,3 +1,34 @@
+## Watch direct dictation — 12 November 2026 (#1807)
+
+- Only dictation has direct Watch backend access. Chat, tasks and live voice
+  still require the authenticated companion; cached data and keyboard drafts
+  remain available without live reachability.
+- Owner-authenticated `POST /voice/watch/credential` rotates a 24-hour
+  transcription-only credential; `DELETE` revokes it. Apply migration
+  `0079_watch_credentials.sql` before using issuance. Storage failure must deny
+  access, not fall back to an in-memory credential.
+- Each backend replica limits issuance to six/minute and credential verification
+  to 30 attempts/minute, returning 429 with Retry-After. These are not global
+  limits; revocation is not throttled. The existing two-request transcription
+  concurrency, PCM/body limits and 90-second deadline are unchanged.
+- The Watch stores the credential in Keychain and uploads only to the configured
+  HTTPS backend's `POST /voice/watch/transcribe`. Do not put credentials in
+  snapshots, UserDefaults, fixtures, logs or diagnostic UI. Do not copy the
+  owner's account token to Watch or widen this credential to chat/voice.
+- Direct failure falls back to companion transcription, then keyboard entry.
+  No draft is automatically sent and no uncertain chat/voice action is replayed.
+- Linux checks cannot establish WatchConnectivity wake/lock behavior or native
+  Keychain/audio behavior. Validate on a paired Watch: cold start, locked phone,
+  phone out of range with Watch Wi-Fi/cellular, no network, credential expiry,
+  rotation/revocation, sign-out, and keyboard recovery. See the #1807 decision
+  for threat assumptions and the separate chat/voice proposal.
+- Local backend validation: `npm test --workspace @jarvis/backend --
+  src/auth/watch-credential.test.ts src/auth/auth.test.ts src/app.test.ts
+  --reporter=dot` passed 88 tests; backend build/lint and the existing migration
+  manifest checks passed. The added SQL integration regression did not execute:
+  no isolated loopback SQL configuration is available. Do not equate mocked
+  route tests with database or device acceptance.
+
 ## Image builds — 12 November 2026
 
 - **Images are built on the GitHub runner, not in ACR Tasks.** Deploy, Runner deploy, Factory

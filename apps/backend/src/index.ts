@@ -121,6 +121,7 @@ import { createConfirmationStore } from './database/confirmation-store.js';
 import { createOwnerInteractionService } from './core/owner-interactions.js';
 import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
 import { createAzureWatchTranscriber } from './voice/watch-transcription.js';
+import { createWatchCredentialStore, WatchCredentials } from './auth/watch-credential.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
 import { createOpenAIImageGenerator } from './core/openai-images.js';
 import { createImageGenerationModule } from './core/image-generation.js';
@@ -1208,6 +1209,7 @@ try {
     },
   }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
   const app = buildApp(config, logger, {
+    ...(database ? { watchCredentials: new WatchCredentials(createWatchCredentialStore(database.pool), config.auth.ownerObjectId) } : {}),
     ...(credential && config.foundryEndpoints ? {
       watchTranscriber: createAzureWatchTranscriber(config.foundryEndpoints.runtime, async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });

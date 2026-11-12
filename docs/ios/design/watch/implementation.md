@@ -1,3 +1,20 @@
+## Direct dictation follow-up — 12 November 2026 (#1807)
+
+Build 98's reported physical-device failure has not been reproduced. Code
+inspection found that every transcription previously depended on live
+WCSession reachability: the Watch rejected unavailable requests and cancelled
+dictation on disconnect, while the phone immediately stopped dictation on
+reachability loss. An activated WCSession does not promise a running,
+authenticated companion, particularly during cold/background launch.
+
+Dictation now records locally, tries the bounded direct backend route with its
+provisioned Watch-only credential, then uses the existing companion pipeline.
+Transient reachability loss no longer discards that recording or immediately
+ends accepted transcription. Companion startup uses a short bounded readiness
+wait; uncertain chat/voice writes are not replayed. Keyboard entry remains the
+last recovery path. Physical cold-start, locked-phone, out-of-range,
+Wi-Fi/cellular, sign-out and expiry checks remain required.
+
 ## Startup alert follow-up — 9 November 2026
 
 The owner reproduced the modal "iPhone unavailable. Reconnect and check history before sending again." on ordinary Watch launch, including launches unrelated to notifications. The root cause is the unconditional WatchModel disconnect alert combined with initial WCSession activation reporting not reachable.
@@ -23,10 +40,10 @@ Branch: `feature/apple-watch-companion`. PR: https://github.com/DanAakesen/jarvi
 ## Implemented
 
 - XcodeGen Watch app and WidgetKit extension, targeting watchOS 26 with the existing iPhone SDK baseline. JarvisCore declares watchOS support. Watch app reuses the Jarvis app icon. Target device is the owner's Ultra 2; reported watchOS 27.2 needs readback.
-- Home: compact Voice, Dictate and Factory rows; Jarvis heading and menu. Chat: iOS-style user bubbles, assistant text, input with mic/voice controls, explicit Send for populated drafts, streamed replies and reconnect history. System dictation appends to an editable draft and never automatically submits. The compact input opens the native draft editor when tapped; mic and voice controls remain inside its bar, avoiding watchOS TextField chrome expanding the row.
+- Home: compact Voice, Dictate and Factory rows; Jarvis heading and menu. Chat: iOS-style user bubbles, assistant text, input with mic/voice controls, explicit Send for populated drafts, streamed replies and reconnect history. Recorded dictation appends to an editable draft and never automatically submits. The compact input opens the native draft editor when tapped; mic and voice controls remain inside its bar, avoiding watchOS TextField chrome expanding the row.
 - Menu: today's incomplete due tasks, last seven days of workouts, lift history/add/edit/delete. Lift creation retains a submission UUID for idempotent retry; deletion requires confirmation. Factory provides selected-project task lists/details only, no task execution, approval or release controls.
 - Four complications: rectangular daily steps/active energy and weekly gym/run/active energy; circular Tasks Today, Dictation and Voice launchers. Phone-local HealthKit statistics aggregate steps and active energy; background reads do not prompt. Missing or permission-hidden samples stay unavailable. Snapshots expire after 15 minutes or date rollover. Sensitive complication data uses privacySensitive.
-- WatchConnectivity allow-list with 40 KB payload/64 KB wire bounds, deterministic JSON without slash expansion, correlation, reply timeout and no offline queue. iPhone authenticates using existing JarvisClient; no account token, backend URL or arbitrary HTTP proxy crosses to Watch. Sign-out stops Watch voice and clears context. Snapshots refresh with existing phone widget refresh, Watch foreground refresh and budgeted Watch background/connectivity tasks; watchOS controls timing. Health boundaries follow iPhone Calendar.current; cumulative HealthKit statistics avoid manually adding duplicate sources.
+- WatchConnectivity allow-list with 40 KB payload/64 KB wire bounds, deterministic JSON without slash expansion, correlation, reply timeout and no offline queue. iPhone authenticates using existing JarvisClient. For #1807 dictation only, the phone provisions an expiring transcription-only credential and HTTPS backend origin to Watch Keychain; no owner account token or arbitrary HTTP proxy crosses to Watch. Sign-out stops Watch voice, clears context and invalidates direct dictation credentials. Snapshots refresh with existing phone widget refresh, Watch foreground refresh and budgeted Watch background/connectivity tasks; watchOS controls timing. Health boundaries follow iPhone Calendar.current; cumulative HealthKit statistics avoid manually adding duplicate sources.
 - Duplex voice: Watch captures/plays PCM16 using shared VoiceAudioEngine. Phone connects existing VoiceSessionClient and relays bounded chunks through ordered acknowledged messages. Watch exposes mute/end. Existing iPhone Voice Live Activity controls that same session and is the intended paired-Watch live tile. A phone watchdog ends abandoned sessions after 15 seconds without Watch audio/heartbeat. Disconnect stops local capture.
 - WatchDesign.swift supplies shared Watch-native controls because UIKit-backed iOS JarvisControls cannot link on watchOS. SwiftUI paths/system glyphs approximate the approved art; reference PNGs are not fake functioning UI.
 
@@ -52,7 +69,7 @@ Branch: `feature/apple-watch-companion`. PR: https://github.com/DanAakesen/jarvi
 - Signing/provisioning new Watch and widget bundle IDs with the existing App Group. No developer portal or production configuration changed here.
 - Full watchOS localization, Dynamic Type/VoiceOver, Always On/tint and owner visual acceptance. Initial Watch copy is English. Native spacing must be checked against references.
 - Health lists are bounded to 30 rows. Factory sends the latest 10 compact task excerpts; Chat loads the latest six compact messages. Long replies/history are Unicode-safe excerpts with a full-content-on-iPhone notice. Full data stays on iPhone. Other oversized responses fail visibly.
-- A cold-start phone must initialize signed-in composition before serving requests; otherwise Watch asks the owner to open/sign in on iPhone. Standalone/offline operations are unsupported.
+- A cold-start phone must initialize signed-in composition before serving companion requests; otherwise Watch asks the owner to open/sign in on iPhone. Direct dictation can use an already provisioned, unexpired credential without a reachable phone. Provisioning/renewal, chat, tasks and live voice still need the companion. Offline drafts remain available, not offline sends.
 
 ## Primary integration
 
