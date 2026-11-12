@@ -16,6 +16,9 @@ extension EnvironmentValues {
 struct JarvisChatFollowLatest: ViewModifier {
     let proxy: ScrollViewProxy
     let bottomID: String
+    let newestMessageID: String?
+    let sendRevision: Int
+    let jumpToLatestTitle: String
     var isEnabled = true
     @Environment(\.scenePhase) private var scenePhase
     @State private var follow = ChatFollowState()
@@ -70,10 +73,33 @@ struct JarvisChatFollowLatest: ViewModifier {
             .onChange(of: scenePhase) { _, _ in
                 revision += 1
             }
+            .onChange(of: newestMessageID) { _, messageID in
+                guard messageID != nil else { return }
+                follow.messageArrived()
+                revision += 1
+            }
+            .onChange(of: sendRevision) { _, _ in
+                follow.messageSent()
+                revision += 1
+            }
             .onChange(of: isEnabled) { _, enabled in
                 if enabled {
                     follow = ChatFollowState()
                     revision += 1
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if follow.shouldShowJumpToLatest {
+                    JarvisIconButton(
+                        title: jumpToLatestTitle,
+                        systemImage: "arrow.down",
+                        identifier: "chat.jumpToLatest"
+                    ) {
+                        follow.jumpedToLatest()
+                        revision += 1
+                    }
+                    .padding(.trailing, JarvisDesignTokens.chatHorizontalInset)
+                    .padding(.bottom, JarvisDesignTokens.chatVerticalInset)
                 }
             }
             .task(id: revision) {

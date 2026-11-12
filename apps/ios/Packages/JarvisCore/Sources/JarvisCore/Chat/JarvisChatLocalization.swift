@@ -42,6 +42,7 @@ public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case runtimeBlocked = "chat.runtime.runtimeBlocked"
     case runtimeStopFailed = "chat.runtime.runtimeStopFailed"
     case runtimeYou = "chat.runtime.runtimeYou"
+    case jumpToLatest = "chat.transcript.jumpToLatest"
     case plusMenuLabel = "chat.plus.menuLabel"
     case menuExpanded = "chat.plus.menuExpanded"
     case menuCollapsed = "chat.plus.menuCollapsed"
