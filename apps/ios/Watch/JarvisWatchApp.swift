@@ -146,10 +146,15 @@ struct WatchRoot: View {
             #endif
         }
         .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
-            if model.voiceID != nil { Task { await model.endVoice() } }
-            if notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt == AVAudioSession.InterruptionType.began.rawValue {
-                model.interruptDictation()
-            }
+            guard notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt == AVAudioSession.InterruptionType.began.rawValue else { return }
+            let reason = notification.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt
+            if model.voiceID != nil { model.handleVoiceAudioInterruption(reason: reason) }
+            if model.dictationState != .idle { model.interruptDictation() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) { notification in
+            let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+            guard reason != AVAudioSession.RouteChangeReason.categoryChange.rawValue else { return }
+            if model.voiceID != nil { model.handleVoiceAudioRouteChange(reason: reason) }
         }
         .task(id: scenePhase) {
             if scenePhase == .active {

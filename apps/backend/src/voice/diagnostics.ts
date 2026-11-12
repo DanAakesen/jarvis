@@ -1,14 +1,16 @@
 import type { FastifyBaseLogger } from 'fastify';
 
 export const voiceStages = new Set([
-  'request_started', 'session_created', 'credential_loaded', 'settings_loaded',
+  'request_started', 'session_created', 'proactive_context_loaded', 'proactive_context_unavailable',
+  'credential_loaded', 'credential_unavailable', 'settings_loaded',
   'away_mode_loaded', 'project_context_loaded', 'upstream_connecting', 'upstream_open',
   'session_update_sent', 'session_created_received', 'session_updated',
 ]);
-export type VoiceStage = 'session_creation' | 'settings' | 'away_mode' | 'project_context' |
+export type VoiceStage = 'session_creation' | 'proactive_context' | 'credential' | 'settings' | 'away_mode' | 'project_context' |
   'upstream_connecting' | 'upstream_ready';
 export const voiceTimeoutStages = new Set<VoiceStage>([
-  'session_creation', 'settings', 'away_mode', 'project_context', 'upstream_connecting', 'upstream_ready',
+  'session_creation', 'proactive_context', 'credential', 'settings', 'away_mode', 'project_context',
+  'upstream_connecting', 'upstream_ready',
 ]);
 export const voiceEventTypes = new Set([
   'error', 'session.created', 'session.updated', 'session.expired',

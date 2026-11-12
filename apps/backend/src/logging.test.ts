@@ -21,7 +21,8 @@ describe('structured log export', () => {
     logger.info({
       language: 'en', closedBy: 'relay', closeCode: 4010, durationMs: 15_000,
       toolCount: 2, totalBytes: 4096,
-      stages: [{ stage: 'upstream_open', elapsedMs: 10, instructions: 'private' },
+      stages: [{ stage: 'proactive_context_loaded', elapsedMs: 5, instructions: 'private' },
+        { stage: 'upstream_open', elapsedMs: 10, instructions: 'private' },
         { stage: 'private', elapsedMs: 20 }, { stage: 'session_updated', elapsedMs: -1 }],
       events: ['session.created', 'private', 'session.created', 'error'],
       largestTools: [{ name: 'list_projects', bytes: 300, parameters: 'private' },
@@ -31,7 +32,7 @@ describe('structured log export', () => {
     const expected = {
       language: 'en', closedBy: 'relay', closeCode: 4010, durationMs: 15_000,
       toolCount: 2, totalBytes: 4096,
-      stages: [{ stage: 'upstream_open', elapsedMs: 10 }],
+      stages: [{ stage: 'proactive_context_loaded', elapsedMs: 5 }, { stage: 'upstream_open', elapsedMs: 10 }],
       events: ['session.created', 'error'], largestTools: [{ name: 'list_projects', bytes: 300 }],
     };
     expect(JSON.parse(records[0]!)).toMatchObject({ msg: 'voice.session_summary', ...expected });
@@ -39,12 +40,12 @@ describe('structured log export', () => {
       message: 'voice.session_summary', properties: { service: 'jarvis-backend', ...expected },
     }));
     logger.warn({
-      language: 'da', stage: 'upstream_ready', lastStage: 'session_update_sent',
-      elapsedMs: 15_100, timeoutMs: 15_000, reason: 'private',
+      language: 'da', stage: 'proactive_context', lastStage: 'proactive_context_loaded',
+      elapsedMs: 1_600, timeoutMs: 1_500, reason: 'private',
     }, 'voice.stage_timeout');
     expect(JSON.parse(records[1]!)).toMatchObject({
-      msg: 'voice.stage_timeout', language: 'da', stage: 'upstream_ready',
-      lastStage: 'session_update_sent', elapsedMs: 15_100, timeoutMs: 15_000,
+      msg: 'voice.stage_timeout', language: 'da', stage: 'proactive_context',
+      lastStage: 'proactive_context_loaded', elapsedMs: 1_600, timeoutMs: 1_500,
     });
     logger.info({ stage: 'private', elapsedMs: NaN, language: 'private', closedBy: 'private' }, 'voice.session_stage');
     expect(JSON.parse(records[2]!)).toEqual({
@@ -1074,11 +1075,19 @@ describe('structured log export', () => {
     logger.warn({ failure: 'Chat agent unavailable (HTTP 400)', prompt: 'prompt-secret' }, 'conversation.reply_failed');
     logger.warn({ closeCode: 1008, failure: 'Policy violation', language: 'da', token: 'token-secret' }, 'voice.upstream_closed');
     logger.warn({ failure: 'bad\nsecret', httpStatus: 401, language: 'en' }, 'voice.upstream_error');
+    logger.warn({ failure: 'Database timeout', language: 'en', context: 'private' }, 'voice.proactive_context_unavailable');
+    logger.warn({ failure: 'Identity unavailable', token: 'token-secret' }, 'voice.credential_refresh_failed');
 
     expect(JSON.parse(records[0]!)).toMatchObject({ msg: 'conversation.reply_failed', failure: 'Chat agent unavailable (HTTP 400)' });
     expect(JSON.parse(records[1]!)).toMatchObject({ msg: 'voice.upstream_closed', closeCode: 1008, failure: 'Policy violation', language: 'da' });
     expect(JSON.parse(records[2]!)).toMatchObject({ msg: 'voice.upstream_error', httpStatus: 401, language: 'en' });
     expect(JSON.parse(records[2]!).failure).toBeUndefined();
+    expect(JSON.parse(records[3]!)).toMatchObject({
+      msg: 'voice.proactive_context_unavailable', failure: 'Database timeout', language: 'en',
+    });
+    expect(JSON.parse(records[4]!)).toMatchObject({
+      msg: 'voice.credential_refresh_failed', failure: 'Identity unavailable',
+    });
     expect(records.join('')).not.toContain('secret');
   });
   it('exports only bounded voice reflex metrics and never transcript content', () => {
