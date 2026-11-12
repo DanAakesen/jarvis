@@ -3742,6 +3742,14 @@ status inside the scrolling active assistant turn, after live tools and before a
 streamed reply text. It scrolls with the conversation and disappears on completion.
 The composer/Now dock must contain no active-turn progress copy.
 
+## Chat follow-latest behavior (P15-125; 12 November 2026)
+
+Keep the newest sent message and reply visible above the composer. Manual scrolling
+up pauses following until the owner sends another message. If a reply arrives while
+paused, show a small down-arrow utility above the composer; tapping it returns to
+the latest message and resumes following. Use the existing shared icon-button
+surface and a localized accessible label.
+
 
 ## Notification and Factory navigation (8 November 2026)
 

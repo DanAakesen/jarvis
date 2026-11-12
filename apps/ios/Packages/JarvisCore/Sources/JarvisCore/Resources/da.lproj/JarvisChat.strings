@@ -172,3 +172,4 @@
 "chat.photo.unavailable" = "Foto utilgængeligt";
 "chat.photo.retry" = "Prøv igen";
 "chat.photo.remove" = "Fjern";
+"chat.transcript.jumpToLatest" = "Gå til nyeste";

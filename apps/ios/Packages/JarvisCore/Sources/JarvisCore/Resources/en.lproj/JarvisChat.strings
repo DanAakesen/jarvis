@@ -172,3 +172,4 @@
 "chat.photo.unavailable" = "Photo unavailable";
 "chat.photo.retry" = "Retry";
 "chat.photo.remove" = "Remove";
+"chat.transcript.jumpToLatest" = "Jump to latest";

@@ -365,6 +365,11 @@ Active-turn progress belongs inside the scrolling chat with the acknowledgment,
 tools and streamed reply. Show one progress row; it must not be pinned to the
 Now bar or composer.
 
+Chat follows new content so sent messages and replies remain visible above the
+composer. A manual scroll up pauses following until the next message is sent.
+When a reply arrives while paused, show a small jump-to-latest arrow above the
+composer; tapping it returns to the newest message and resumes following.
+
 Jarvis replies render Markdown structure, including headings, emphasis, lists and
 event date/time lines. Persisted tool outcomes stay unboxed and start at the
 Jarvis reply's leading edge; only the user's message has a background. Generated
