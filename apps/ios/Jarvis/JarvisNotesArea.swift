@@ -10,6 +10,71 @@ enum JarvisNotesTab: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
 }
 
+private struct JarvisNoteSwipeRow<Content: View>: View {
+    let title: String
+    let actionTitle: String
+    let actionImage: String
+    let identifier: String
+    let isDisabled: Bool
+    let onOpen: () -> Void
+    let onAction: () -> Void
+    @ViewBuilder let content: () -> Content
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var offset: CGFloat = 0
+    private let actionWidth: CGFloat = 72
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Image(systemName: actionImage)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(JarvisDesignTokens.primaryAccentForeground)
+                .frame(width: actionWidth)
+                .frame(maxHeight: .infinity)
+                .background(JarvisDesignTokens.primaryAccent)
+                .accessibilityHidden(true)
+
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if isDisabled {
+                        return
+                    } else if offset == 0 {
+                        onOpen()
+                    } else {
+                        withAnimation(reduceMotion ? nil : .snappy) { offset = 0 }
+                    }
+                }
+                .offset(x: offset)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(title)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { if !isDisabled { onOpen() } }
+                .accessibilityAction(named: Text(actionTitle)) { if !isDisabled { onAction() } }
+                .accessibilityIdentifier(identifier)
+                .disabled(isDisabled)
+        }
+        .frame(maxWidth: .infinity)
+        .clipShape(Rectangle())
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24)
+                .onChanged { value in
+                    guard !isDisabled,
+                          value.translation.width < 0,
+                          abs(value.translation.width) > abs(value.translation.height) else { return }
+                    offset = max(-actionWidth, value.translation.width)
+                }
+                .onEnded { value in
+                    let shouldPerform = !isDisabled
+                        && value.translation.width <= -actionWidth
+                        && abs(value.translation.width) > abs(value.translation.height)
+                    withAnimation(reduceMotion ? nil : .snappy) { offset = 0 }
+                    if shouldPerform { onAction() }
+                }
+        )
+    }
+}
+
 private enum JarvisNotesSearchScope: String, CaseIterable, Identifiable, Sendable {
     case all
     case notes
@@ -781,15 +846,24 @@ struct JarvisNotesArea: View {
     }
 
     private func noteRow(_ note: VaultNoteSummary, inBrowser: Bool = false) -> some View {
-        Button {
-            if inBrowser {
-                pendingBrowserNote = note.path
-                browserPresented = false
-            } else {
-                Task { await openNote(path: note.path) }
-            }
-        } label: {
-            HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+        let isPinned = pinnedPaths.contains(note.path)
+        return JarvisNoteSwipeRow(
+            title: note.title,
+            actionTitle: isPinned ? copy.unpin : copy.pin,
+            actionImage: isPinned ? "pin.slash" : "pin",
+            identifier: "notes.note.\(note.path)",
+            isDisabled: openingNotePaths.contains(note.path),
+            onOpen: {
+                if inBrowser {
+                    pendingBrowserNote = note.path
+                    browserPresented = false
+                } else {
+                    Task { await openNote(path: note.path) }
+                }
+            },
+            onAction: { Task { await setPinned(note.path, pinned: !isPinned) } }
+        ) {
+            HStack(alignment: .center, spacing: JarvisDesignTokens.notesSectionSpacing) {
                 if openingNotePaths.contains(note.path) {
                     JarvisLoadingView()
                         .frame(width: JarvisDesignTokens.notesIconSize, height: JarvisDesignTokens.notesIconSize)
@@ -811,10 +885,6 @@ struct JarvisNotesArea: View {
             .jarvisListRow()
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .disabled(openingNotePaths.contains(note.path))
-        .accessibilityLabel(note.title)
-        .accessibilityIdentifier("notes.note.\(note.path)")
     }
 
     private func taskListView(_ list: VaultTaskList?) -> some View {
