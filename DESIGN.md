@@ -16,6 +16,10 @@ Task cancellation and recovery, routine/memory deletion, workspace removal, depl
 
 Keep the approved Watch layout and controls. Startup and idle connectivity changes use the existing quiet connection status. History read failures stay inside the chat scroll area. The modal Jarvis alert is reserved for actual user-action/interruption feedback.
 
+Watch Voice remains tappable when a session ID is retained: verify it with the
+iPhone, keep a genuinely active session, or clear a confirmed stale ID and start.
+End cancels any in-flight verification; no new copy or layout is introduced.
+
 Voice startup shows the existing localized connection status while waiting. Watch dictation shows connecting, listening and transcribing states with Stop or Cancel; failures explain the phone/network requirement and the keyboard fallback for offline drafts.
 
 Watch Home uses smaller, underlined, background-free See more links and keeps the body-fat chart without the date and summary lines beneath it. The workout preview shows recent history separately from weekly goal counts.
@@ -3110,6 +3114,8 @@ Notes and Tasks use the shared phrase, hero, section headings and separated rows
 Notes browses direct child folders and notes with a breadcrumb and Back control;
 its count comes from the same collection as its visible note rows. Recent is a
 horizontal strip of last-opened note tiles with folder color and opening time.
+Shared task and note rows center their leading icons. Note rows reveal a localized
+pin or unpin action on left swipe and retain their surrounding list clipping.
 Search and plus stay fixed at the bottom. Graph uses a native Canvas with pan/zoom,
 folder-color legend, labels only for search/selection, and an Open action for the
 selected node. Every node retains its spoken title, folder and Open accessibility

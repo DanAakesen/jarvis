@@ -4805,6 +4805,15 @@ It reads no secret values, prompts, image bytes or model text, performs no write
 and does not replay jobs. Historical proactive output validation did not retain
 the specific failing field; this inspection must not imply otherwise.
 
+## Proactive completion limit — 12 November 2026
+
+The owner reports six `completion_incomplete` events at 2,048 output tokens
+across 10–12 November, two daily, and no other proactive failures in the seven-day
+production log window. The completion cap is now 8,192 with supported low
+reasoning, and iPhone failure visibility is limited to seven days. The conservative
+reservation is about 0.13 DKK (USD 0.02) per run at the repository's known rates;
+actual pricing and a successful production run remain unverified. No retry was added.
+
 ## Image API repair and proactive diagnostics — 9 November 2026
 
 Owner requested replacement of failed subscription-backed image generation with
@@ -4883,3 +4892,21 @@ cancellations no longer become failed background jobs. Task 24 handled #1706;
 the Factory bot reported it Done on 10 November and #1709 was merged. Its current
 production state and the reported failure reasons still need live verification.
 Historical jobs are not rewritten.
+
+## Live Activity and Watch voice end — 12 November 2026 (#1796, #1798)
+
+Implemented a retained return-to-Chat request for Live Activity/Dynamic Island
+and in-app End, foreground reconciliation and an automatic-restart guard. Cleanup
+uses a background task and closes the voice client before dismissing ActivityKit.
+JarvisCore builds and all 11 existing tests pass; both changed Swift files pass
+syntax parsing. No new tests were added. Locked/background iPhone acceptance
+requires a device; this Linux runner has no Xcode or Simulator.
+
+The Watch follow-up releases the shared controller on every iPhone session-ID
+reset, checks the real companion client before reusing a Watch voice ID, and
+delivers terminal state through deferred WatchConnectivity context as well as
+live events. Watch reconciles on foreground/reconnection and verifies before
+Start. Backend End, idle/cap and disconnect finalization already share cleanup.
+Follow-up JarvisCore build and all 11 existing tests pass; the six changed Swift
+files pass syntax parsing. No new tests or strings were added. Paired-device
+WatchConnectivity and native iOS/watchOS compilation remain unverified on Linux.

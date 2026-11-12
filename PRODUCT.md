@@ -170,8 +170,14 @@ TestFlight keychain/Entra configuration require separate verification.
 
 The approved Voice screen presents one orb and one short live status, with mute,
 add, captions and end controls during a session. A downward swipe minimizes
-without ending the session. Ending voice, including from the minimized bar, returns
-to Chat with a cleared navigation stack and a usable sidebar.
+without ending the session. Ending voice, including from the minimized bar, Lock
+Screen Live Activity or Dynamic Island, stops the backend session and returns to
+Chat with a cleared navigation stack and a usable sidebar. Ending while backgrounded
+must leave Chat ready on return, not an ended/error screen or a restarted session.
+Ending or failing a session also releases the shared voice owner. Watch Start
+checks the iPhone's live client before trusting a retained Watch session ID;
+confirmed stale IDs are cleared and Start continues. Normal End, Live Activity
+End, the 10-minute idle close and the 30-minute cap all release voice ownership.
 Captions appear as centered, unframed text with readable, Dynamic Type-scaled
 typography and no separate dismiss action; the CC control toggles them.
 Reopening Voice after End connects automatically with a fresh transport and audio
@@ -1284,6 +1290,8 @@ backend access; when off, routes, navigation, settings and requests remain absen
 Production sets it since P13-14 (18 October 2026).
 The header links terminal proactive Background work entries to the page only
 when the web gate is on.
+The iPhone notifications list shows failed background jobs from the last seven
+days without deleting older job history; failures with unreadable dates remain visible.
 
 The persistent shell consumes the existing authenticated Now feed without a second stream or request. Its header shows a yellow, counted attention control only while non-dismissed attention, credential or alert items, or pending browser confirmations exist. Its popover retains linked activity, timestamps, dismissal and confirmation actions. Running tasks remain in the background-work counts; releases, deployments and away-mode changes do not count as attention. The background-work control is hidden only when there are no non-dismissed jobs and no attention items; it remains visible while its popover is open, and interrupted history uses a labelled neutral mark. Neither the Now nor Backend section is part of Settings. The backend `/operations/sleep` API is unchanged.
 Deployment failures represent deploy workflows or real release deployments, not

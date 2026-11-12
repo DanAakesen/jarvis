@@ -1625,7 +1625,8 @@ Transitions: Today, Chat and Voice swap with a continuity transition. `JarvisCar
 the environment; the composer and the orb use `matchedGeometryEffect`, driven by an animation that
 `JarvisDestinationHost` supplies only for swaps among those three pages (every other swap stays unanimated).
 With Reduce Motion the geometry match is off and the swap is a short cross-fade. Typing on Home hands the text to
-Chat; Chat then shows a Home button, and minimizing or ending Voice returns to the page it was opened from.
+Chat; Chat then shows a Home button. Minimizing Voice returns to the page it was
+opened from; ending Voice always returns to Chat.
 
 ### iOS navigation shell
 
@@ -1969,6 +1970,20 @@ through a weak, MainActor, session-scoped Core control boundary. Only the existi
 session can be muted/unmuted or ended; no Keychain access, cold-start session,
 APNs registration or backend route is involved. Muting gates local capture before
 the asynchronous socket write, and the Core client also suppresses muted frames.
+End retains a chat-navigation request until ContentView consumes it, including on
+foreground entry, and blocks automatic voice startup while it is pending. A UIKit
+background task protects cleanup after audio stops; the existing client sends
+`jarvis.session.end` and closes its socket before ActivityKit dismissal. In-app
+End uses the same Chat destination, including when voice was opened from Home.
+Every iPhone session-ID reset unregisters its shared controller. Watch Start checks
+the owner's current session ID, not controller existence. Watch-owned client
+terminal states run full bridge teardown; End is sent both immediately and as a
+session-scoped WatchConnectivity application-context event for deferred delivery.
+The existing heartbeat now checks the actual client state. Watch uses it before
+reusing a retained voice ID and on foreground/reconnection; only a confirmed
+missing/terminal session clears the local ID and permits a fresh start.
+Backend explicit End, 10-minute idle expiry, 30-minute cap and socket disconnect
+already share persisted session finalization; no backend ownership gate changed.
 The app declares audio background mode for the existing play-and-record session;
 route/interruption recovery and real locked-device behavior remain unverified.
 The same extension renders the Lock Screen and Dynamic Island from the same
@@ -3793,12 +3808,18 @@ guard check precedes commit dispatch, the write's transaction boundary.
 `proactive/model.ts` independently follows the existing Foundry chat-completions
 pattern, with the selected chat role, catalogue validation, no tools, untrusted
 fact data, a 48-KiB request/32-KiB response bound and a 45-second timeout.
+Proactive requests use at most 8,192 completion tokens and lower a higher chat
+reasoning effort to `low` when the selected deployment supports it. The budget
+reservation uses the same cap; incomplete responses are not retried.
 Validated evidence contains labels only. Real response token counts feed both
 estimated proactive spend and global chat-role usage, including rejected output.
 Stable 32-hex content keys exclude run-local refs and urgency. Ordered optional
 `onFindingsStored` hooks receive only this run's stored items and in-memory source
 facts before finish; one hook failure cannot prevent later hooks or change success.
 This slice adds no delivery or todo-writing hook and enables no flag.
+
+The iPhone notification presentation shows failed background jobs updated in the
+last seven days; unparseable timestamps remain visible, and stored history is unchanged.
 
 ## Proactive read-only sources (P13-07; default off)
 

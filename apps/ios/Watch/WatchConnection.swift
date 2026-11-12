@@ -309,10 +309,17 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         let data = applicationContext["health"] as? Data
         let dashboardData = applicationContext["dashboard"] as? Data
+        let voiceData = applicationContext["voice"] as? Data
+        let cleared = applicationContext.isEmpty
         Task { @MainActor in
+            if let data = voiceData, data.count <= WatchLimits.payloadBytes,
+               let event = try? JSONDecoder().decode(WatchEvent.self, from: data),
+               event.version == 1, event.kind == .voiceState, event.text == "Ended" {
+                self.onEvent?(event)
+            }
             if let data, data.count <= WatchLimits.payloadBytes,
                let value = try? JSONDecoder().decode(WatchHealthSnapshot.self, from: data) { self.save(value) }
-            else if data == nil, dashboardData == nil { self.clearCachedData(); return }
+            else if cleared { self.clearCachedData(); return }
             if let dashboardData, dashboardData.count <= WatchLimits.payloadBytes,
                let value = try? JSONDecoder().decode(WatchDashboardSnapshot.self, from: dashboardData) {
                 self.saveDashboard(value)

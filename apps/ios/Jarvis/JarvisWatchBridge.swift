@@ -12,6 +12,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var chatTask: Task<Void, Never>?
     private var startingChat = false
     private var startingVoice = false
+    private var stoppingVoice = false
     private var cancelledVoiceStarts = Set<UUID>()
     private var voice: VoiceSessionClient?
     private var voiceID: UUID?
@@ -334,13 +335,15 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             let task = try await factory.createTask(submission)
             return try encode(WatchFactoryTask(task))
         case .startVoice:
-            guard !startingVoice, dictation == nil else { throw WatchFailure.busy }
+            guard !startingVoice, !stoppingVoice, dictation == nil else { throw WatchFailure.busy }
             startingVoice = true; defer { startingVoice = false }
             let voiceEpoch = generation
-            if let voiceID { return try encode(voiceID) }
-            guard VoiceLiveActivityActions.session == nil else { throw WatchFailure.busy }
+            if let id = voiceID, await hasActiveVoice(id: id) { return try encode(id) }
+            guard voiceEpoch == generation else { throw WatchFailure.signInRequired }
             guard let token = try await KeychainTokenStore().read() else { throw WatchFailure.signInRequired }
             guard voiceEpoch == generation else { throw WatchFailure.signInRequired }
+            guard !stoppingVoice,
+                  VoiceLiveActivityActions.session?.liveActivitySessionID == nil else { throw WatchFailure.busy }
             guard cancelledVoiceStarts.remove(r.id) == nil else { throw WatchFailure.unavailable }
             let id = r.id; voiceID = id; lastVoiceContact = Date()
             voiceWatchdog = Task { [weak self] in
@@ -363,6 +366,10 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 onStateChange: { [weak self] state in
                     Task { @MainActor in
                         guard let self, self.voiceID == id else { return }
+                        if state == .ended || state == .failed {
+                            await self.stopVoice()
+                            return
+                        }
                         let label: String
                         switch state {
                         case .listening: label = "Listening"
@@ -391,7 +398,8 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             catch { await stopVoice(); throw error }
             return try encode(id)
         case .voiceHeartbeat:
-            guard r.itemID == voiceID?.uuidString else { throw WatchFailure.invalidRequest }
+            guard let id = r.itemID.flatMap(UUID.init(uuidString:)),
+                  await hasActiveVoice(id: id) else { throw WatchFailure.invalidRequest }
             lastVoiceContact = Date(); return nil
         case .audio:
             guard r.itemID == voiceID?.uuidString, let voice, let bytes = r.data, !bytes.isEmpty, bytes.count.isMultiple(of: 2) else { throw WatchFailure.invalidRequest }
@@ -495,17 +503,35 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var language: ChatLanguage {
         UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) == "en" ? .en : .da
     }
+    private func hasActiveVoice(id: UUID) async -> Bool {
+        guard voiceID == id else { return false }
+        if let voice {
+            let state = await voice.state()
+            guard voiceID == id else { return false }
+            if !state.canStartSession { return true }
+        }
+        await stopVoice()
+        return false
+    }
+
     private func stopVoice() async {
+        guard !stoppingVoice else { return }
+        stoppingVoice = true
+        defer { stoppingVoice = false }
         let previous = voice; let id = voiceID
         voiceWatchdog?.cancel(); voiceWatchdog = nil
         voice = nil; voiceID = nil; voiceResponseID = nil
+        if VoiceLiveActivityActions.session === self { VoiceLiveActivityActions.session = nil }
         if let id {
             eventQueue.removeAll { $0.requestID == id }
-            emit(.init(.voiceState, requestID: id, text: "Ended"))
+            let ended = WatchEvent(.voiceState, requestID: id, text: "Ended")
+            var context = WCSession.default.applicationContext
+            context["voice"] = try? encode(ended)
+            try? WCSession.default.updateApplicationContext(context)
+            emit(ended)
         }
         try? await previous?.end()
         await liveActivity.end()
-        if VoiceLiveActivityActions.session === self { VoiceLiveActivityActions.session = nil }
     }
     private func receiveVoice(_ message: VoiceServerMessage, id: UUID) {
         guard voiceID == id else { return }
@@ -522,7 +548,11 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         case .assistantTranscriptDelta(let text): emit(.init(.voiceTranscript, requestID: id, text: text, responseID: voiceResponseID))
         case .transcriptionCompleted(let text, let itemID): emit(.init(.voiceUserTranscript, requestID: id, text: text, responseID: itemID))
         case .responseDone: emit(.init(.voiceState, requestID: id, text: "Playback finished", responseID: voiceResponseID))
-        case .sessionEnded: Task { await stopVoice() }
+        case .sessionEnded:
+            Task {
+                guard voiceID == id else { return }
+                await stopVoice()
+            }
         default: break
         }
     }
