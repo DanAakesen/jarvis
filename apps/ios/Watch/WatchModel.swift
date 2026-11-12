@@ -46,12 +46,17 @@ final class WatchModel: ObservableObject {
         connection.onDisconnect = { [weak self] in
             guard let self else { return }
             if self.dictationState != .idle { self.failDictation() }
+            let hadVoiceSession = self.voiceID != nil
             guard self.composer.handleConnectionLoss(
-                    hasInFlightTurn: self.turn != nil, hasVoiceSession: self.voiceID != nil
+                    hasInFlightTurn: self.turn != nil, hasVoiceSession: hadVoiceSession
                   ) else { return }
             self.stopLocalVoice(state: "Disconnected", captureEndReason: "companion_disconnected")
             self.busy = false; self.turn = nil
-            self.error = "iPhone unavailable. Reconnect and check history before sending again."
+            if self.error == nil {
+                self.error = hadVoiceSession
+                    ? NSLocalizedString("Voice stopped because the iPhone companion disconnected. Reconnect and try again.", comment: "")
+                    : "iPhone unavailable. Reconnect and check history before sending again."
+            }
         }
     }
     private func configurePlaybackCompletion() {
