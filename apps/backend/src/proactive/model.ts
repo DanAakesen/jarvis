@@ -8,7 +8,7 @@ import type { Item, SourceFact } from './types.js';
 
 export const MAX_PROACTIVE_REQUEST_BYTES = 48 * 1024;
 export const MAX_PROACTIVE_RESPONSE_BYTES = 32 * 1024;
-export const MAX_PROACTIVE_COMPLETION_TOKENS = 2_048;
+export const MAX_PROACTIVE_COMPLETION_TOKENS = 8_192;
 const TIMEOUT_MS = 45_000;
 const categories = ['prep', 'news', 'weather', 'status', 'suggestion', 'todo', 'travel'] as const;
 
@@ -186,7 +186,10 @@ export function createFoundryProactiveModel(options: FoundryProactiveModelOption
           deployment.name === selected.model && deployment.capabilities.includes('chat'))) {
       throw new Error('Model unavailable');
     }
-    return selected;
+    const reasoningEffort = !['none', 'minimal', 'low'].includes(selected.reasoningEffort) &&
+      isRoleModelSupported(catalogue, 'chat', selected.model, 'low')
+      ? 'low' : selected.reasoningEffort;
+    return { ...selected, reasoningEffort };
   }
   return {
     async worstCaseDkk() {
