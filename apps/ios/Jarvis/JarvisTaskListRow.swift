@@ -84,7 +84,7 @@ struct JarvisTaskListRow: View {
 
     var body: some View {
         JarvisRowButton(identifier: "\(accessibilityPrefix).open", action: onOpen) {
-            HStack(alignment: .top, spacing: JarvisPageHeaderMetrics.spacing) {
+            HStack(alignment: .center, spacing: JarvisPageHeaderMetrics.spacing) {
                 Image(systemName: "checklist")
                     .font(.system(size: iconSize, weight: .regular))
                     .foregroundStyle(JarvisDesignTokens.primaryAccent)
