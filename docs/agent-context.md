@@ -33,11 +33,19 @@
   `swift test -j 2 --filter 'WatchDictationCredentialTests|JarvisClientTransportTests'`.
   Core build, native Swift syntax parsing and Watch plist parsing passed.
   Parsing is not Apple SDK typechecking or rendered inspection.
+- After merging English-only main (#1802), the merged head passed the same
+  88 backend tests, two migration manifest checks, backend build/lint, and
+  `swift test -j 2 --filter 'JarvisClientTransportTests|WatchDictationCredentialTests|WatchDictationRoutingTests'`
+  (27 tests), Core build, six native syntax parses and Watch plist validation.
+  No integration code fixes were needed.
 - CodeQL JavaScript reports `js/missing-rate-limiting` on the shared auth hook.
   The added Watch branch explicitly limits verification before SQL and issuance
   before rotation; those limits are tested. Treat this as a static-analysis
   limitation for the new path, not evidence of a global limiter. Swift CodeQL
   database creation is blocked by the unavailable Apple build environment.
+  The final post-merge CodeQL invocation timed out before all languages finished;
+  Actions completed without alerts, Swift database creation failed, and the final
+  JavaScript scan was incomplete. Do not report a clean full CodeQL run.
 
 ## Image builds — 12 November 2026
 
