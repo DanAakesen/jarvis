@@ -31,6 +31,8 @@ private struct JarvisNoteSwipeRow<Content: View>: View {
                 .frame(width: actionWidth)
                 .frame(maxHeight: .infinity)
                 .background(JarvisDesignTokens.primaryAccent)
+                .frame(width: max(0, -offset), alignment: .trailing)
+                .clipped()
                 .accessibilityHidden(true)
 
             content()
@@ -880,11 +882,17 @@ struct JarvisNotesArea: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
+                if isPinned {
+                    Image(systemName: "pin.fill")
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .jarvisListRow()
             .contentShape(Rectangle())
         }
+        .accessibilityValue(isPinned ? copy.pinned : "")
     }
 
     private func taskListView(_ list: VaultTaskList?) -> some View {
