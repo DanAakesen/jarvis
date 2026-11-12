@@ -160,7 +160,7 @@ extension JarvisTodayLocalization {
     /// A short duration for a large number: "45m", "2h 5m" in English, "2t 5m" in Danish.
     public static func durationText(minutes: Int, language: JarvisAppLanguage) -> String {
         let total = max(0, minutes)
-        let hourUnit = language == .da ? "t" : "h"
+        let hourUnit = "h"
         guard total >= 60 else { return "\(total)m" }
         let remainder = total % 60
         return remainder == 0 ? "\(total / 60)\(hourUnit)" : "\(total / 60)\(hourUnit) \(remainder)m"

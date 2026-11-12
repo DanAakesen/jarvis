@@ -4,7 +4,6 @@ import UIKit
 
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @AppStorage("jarvis.appTheme") private var storedTheme = "system"
     @EnvironmentObject private var navigation: JarvisNavigationModel
     @StateObject private var workspaceRuntime: WorkspaceRuntime
@@ -20,7 +19,6 @@ struct ContentView: View {
     private let fixtureMode: Bool
     private let navigationFixtureMode: Bool
     private let settingsClient: JarvisSettingsClient?
-    private let voiceScreenshotLanguage: JarvisAppLanguage?
     @State private var notesClient: JarvisNotesClient?
     @State private var notesSelectedTab: JarvisNotesTab = .notes
     @State private var healthClient: JarvisHealthClient?
@@ -31,14 +29,13 @@ struct ContentView: View {
     private let factoryScreenshot: JarvisFactoryScreenshotConfiguration?
     private let factoryFixtureMode: Bool
     private let healthScreenshotState: String?
-    private let healthScreenshotLanguage: JarvisAppLanguage?
     private let activityScreenshotState: String?
     private let sessionEpoch: Int
     @State private var appliedSessionEpoch: Int
 
     private var language: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
-        }
+        .default
+    }
 
     init(client: JarvisClient? = nil, webAppURL: URL? = nil, sessionEpoch: Int = 0) {
         self.sessionEpoch = sessionEpoch
@@ -46,29 +43,19 @@ struct ContentView: View {
         let arguments = ProcessInfo.processInfo.arguments
 #if targetEnvironment(simulator)
         let navigationFixtureMode = arguments.contains("--ui-test-navigation")
-        let calendarChangeLanguage: JarvisAppLanguage? = arguments.contains("--screenshot-calendar-change-fixture")
-            ? JarvisAppLanguage(rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? "")
-                ?? .default
-            : nil
+        let calendarChangeFixture = arguments.contains("--screenshot-calendar-change-fixture")
 #else
         let navigationFixtureMode = false
-        let calendarChangeLanguage: JarvisAppLanguage? = nil
+        let calendarChangeFixture = false
 #endif
         let settingsPreview = arguments.contains("--screenshot-settings-fixture")
         let voiceConnectionScreenshot = arguments.contains("--screenshot-voice-connection-lost")
-        let voiceScreenshotLanguage = arguments
-            .first(where: { $0.hasPrefix("--screenshot-voice-language=") })
-            .map { String($0.dropFirst("--screenshot-voice-language=".count)) }
-            .flatMap(JarvisAppLanguage.init(rawValue:))
         let factoryScreenshot = JarvisFactoryScreenshotConfiguration.parse(arguments: arguments)
         let factoryFixtureMode = navigationFixtureMode || arguments.contains("--screenshot-factory-fixture")
         let healthFixtureMode = navigationFixtureMode || arguments.contains("--screenshot-health-fixture")
         let healthState = healthFixtureMode ? arguments.first(where: {
             $0.hasPrefix("--screenshot-health-state=")
         })?.components(separatedBy: "=").last : nil
-        let healthLanguage = healthFixtureMode ? arguments.first(where: {
-            $0.hasPrefix("--screenshot-health-language=")
-        })?.components(separatedBy: "=").last.flatMap(JarvisAppLanguage.init(rawValue:)) : nil
         let activityScreenshotState = arguments
             .first(where: { $0.hasPrefix("--screenshot-activity-state=") })
             .map { String($0.dropFirst("--screenshot-activity-state=".count)) }
@@ -80,12 +67,10 @@ struct ContentView: View {
             || activityScreenshotState != nil
             || factoryFixtureMode
             || healthFixtureMode
-            || calendarChangeLanguage != nil
+            || calendarChangeFixture
         healthScreenshotState = healthState
-        healthScreenshotLanguage = healthLanguage
         self.fixtureMode = fixtureMode
         self.navigationFixtureMode = navigationFixtureMode
-        self.voiceScreenshotLanguage = voiceScreenshotLanguage
         self.factoryScreenshot = factoryScreenshot
         self.factoryFixtureMode = factoryFixtureMode
         _voiceModel = StateObject(
@@ -94,8 +79,8 @@ struct ContentView: View {
         let resolvedClient: JarvisClient?
         let resolvedStartupError: String?
         if fixtureMode {
-            if let calendarChangeLanguage {
-                resolvedClient = try? JarvisFixtureScenario.makeClient(calendarChangeLanguage: calendarChangeLanguage)
+            if calendarChangeFixture {
+                resolvedClient = try? JarvisFixtureScenario.makeClient(calendarChangeFixture: true)
             } else {
                 resolvedClient = try? JarvisFixtureScenario.makeClient(emptyActivity: activityScreenshotState == "empty")
             }
@@ -141,7 +126,7 @@ struct ContentView: View {
         ))
         _healthClient = State(initialValue: healthFixtureMode
             ? (healthState == nil ? JarvisHealthPreview.makeClient()
-                : try? JarvisHealthLiftFixture.makeClient(language: healthLanguage ?? .da, empty: healthState == "empty"))
+                : try? JarvisHealthLiftFixture.makeClient(empty: healthState == "empty"))
             : Self.makeHealthClient(fixtureMode: fixtureMode))
         let insightsClient = navigationFixtureMode ? JarvisInsightsFixture.makeClient() : Self.makeInsightsClient()
         _usageClient = State(initialValue: insightsClient.map { JarvisUsageClient(client: $0) })
@@ -271,11 +256,6 @@ struct ContentView: View {
             .coordinateSpace(name: "sidebar")
             .clipped()
             .environment(\.locale, language.locale)
-            .onAppear {
-                if JarvisAppLanguage(rawValue: storedLanguage) == nil {
-                    storedLanguage = JarvisAppLanguage.default.rawValue
-                }
-            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     returnToChatAfterVoiceIfNeeded()
@@ -299,7 +279,7 @@ struct ContentView: View {
         } else if destination == .voice {
             VoiceScreenView(
                 model: voiceModel,
-                language: voiceScreenshotLanguage ?? language,
+                language: language,
                 fixtureMode: fixtureMode && !navigationFixtureMode,
                 onMinimize: { navigate(to: navigation.cameFromToday ? .today : .chat) },
                 onEnd: { returnToChatAfterVoiceIfNeeded() }
@@ -333,7 +313,7 @@ struct ContentView: View {
         } else if destination == .health {
             JarvisHealthArea(
                 client: healthClient,
-                language: healthScreenshotLanguage ?? language,
+                language: language,
                 observeRefreshEvents: !fixtureMode,
                 onRetryConfiguration: { healthClient = Self.makeHealthClient(fixtureMode: fixtureMode) },
                 now: fixtureMode ? JarvisHealthPreview.now : Date(),
@@ -367,7 +347,7 @@ struct ContentView: View {
         } else if destination == .softwareFactory {
             JarvisFactoryArea(
                 client: factoryClient,
-                language: factoryScreenshot?.language ?? language,
+                language: language,
                 onRetryConfiguration: {
                     factoryClient = Self.makeFactoryClient(
                         previewState: factoryScreenshot?.state,
@@ -379,7 +359,6 @@ struct ContentView: View {
             )
         } else if destination == .settings {
             JarvisSettingsArea(
-                storedLanguage: $storedLanguage,
                 storedTheme: $storedTheme,
                 client: settingsClient,
                 onSignedOut: {
@@ -444,9 +423,7 @@ struct ContentView: View {
             } catch {
                 guard !Task.isCancelled, epoch == appliedSessionEpoch else { return }
                 navigate(to: .chat)
-                proactiveOpenError = language == .da
-                    ? "Chatten er åben, men Jarvis har ikke indlæst denne notifikations kontekst. Åbn notifikationen igen for at prøve igen."
-                    : "Chat is open, but Jarvis has not loaded this notification's context. Open the notification again to retry."
+                proactiveOpenError = "Chat is open, but Jarvis has not loaded this notification's context. Open the notification again to retry."
             }
         }
     }

@@ -85,7 +85,7 @@ export const getSettingsTool: JarvisTool = {
     const area = isObject(input) ? input.area : undefined;
     const optionKeys = {
       roles: ['roles', 'reasoningEfforts', 'jarvisModels', 'codexModels', 'codexReasoningEfforts', 'copilotModels', 'copilotReasoningEfforts'],
-      voice: ['speechToTextModels', 'englishModels', 'englishVoices', 'voiceTuning'],
+      voice: ['speechToTextModels', 'voiceTuning'],
       research: ['researchDepths', 'researchSettings'],
       memory: ['memorySettings'],
       timeouts: ['timeoutSettings'],

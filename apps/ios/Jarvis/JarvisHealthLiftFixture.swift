@@ -2,8 +2,8 @@ import Foundation
 import JarvisCore
 
 enum JarvisHealthLiftFixture {
-    static func makeClient(language: JarvisAppLanguage, empty: Bool) throws -> JarvisHealthClient {
-        let names = language == .da ? ["Squat", "Dødløft", "Bænkpres"] : ["Squat", "Deadlift", "Bench press"]
+    static func makeClient(empty: Bool) throws -> JarvisHealthClient {
+        let names = ["Squat", "Deadlift", "Bench press"]
         let lifts: [[String: Any]] = empty ? [] : names.enumerated().map { index, name in
             [
                 "id": "00000000-0000-4000-8000-00000000000\(index)",

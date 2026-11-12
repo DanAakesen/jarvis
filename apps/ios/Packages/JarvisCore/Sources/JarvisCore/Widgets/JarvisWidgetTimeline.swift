@@ -134,7 +134,7 @@ public enum JarvisWidgetTimeline {
             }
             return JarvisWidgetEntry(
                 date: date,
-                language: snapshot.appLanguage,
+                language: .default,
                 gym: JarvisWidgetPolicy.resolve(
                     snapshot.gym, topic: .gym, generatedAt: \.generatedAt, isEmpty: \.isEmpty, now: date
                 ),

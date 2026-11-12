@@ -44,8 +44,8 @@ public final class JarvisChatClient: Sendable {
         return availability
     }
 
-    public func createSession(language: ChatLanguage, runtimeTest: ChatRuntimeTest? = nil) async throws -> ChatSession {
-        let body = try encode(SessionRequest(channel: "chat", language: language, runtimeTest: runtimeTest))
+    public func createSession(runtimeTest: ChatRuntimeTest? = nil) async throws -> ChatSession {
+        let body = try encode(SessionRequest(channel: "chat", runtimeTest: runtimeTest))
         let response = try await client.performAuthenticatedRequest(
             method: .post,
             path: ["conversation", "sessions"],
@@ -55,7 +55,6 @@ public final class JarvisChatClient: Sendable {
         guard response.statusCode == 201,
               let session = try? JSONDecoder().decode(ChatSession.self, from: response.body),
               session.channel == .chat,
-              session.language == language,
               session.runtimeTest == runtimeTest,
               Self.validID(session.id) else {
             throw JarvisChatClientError.invalidResponse
@@ -146,14 +145,14 @@ public final class JarvisChatClient: Sendable {
     /// Adds a follow-up message to the turn that is still running, so the user can steer it mid-answer.
     /// Returns the persisted message so the optimistic row can be replaced by identity.
     /// A nil result means no turn is active any more; it does not resubmit the text.
-    public func steerTurn(sessionId: String, text: String, language: ChatLanguage) async throws -> ChatMessage? {
+    public func steerTurn(sessionId: String, text: String) async throws -> ChatMessage? {
         guard Self.validID(sessionId) else { throw JarvisChatClientError.invalidResponse }
         try validateTurn(text: text, attachmentIds: [], screenContext: nil)
         do {
             let response = try await client.performAuthenticatedRequest(
                 method: .post,
                 path: ["conversation", "sessions", sessionId, "steer"],
-                body: try encode(SteerTurnRequest(text: text, language: language)),
+                body: try encode(SteerTurnRequest(text: text)),
                 idempotent: false
             )
             guard response.statusCode == 202 else { throw JarvisChatClientError.invalidResponse }
@@ -555,7 +554,6 @@ public final class JarvisChatClient: Sendable {
 
 private struct SessionRequest: Encodable {
     let channel: String
-    let language: ChatLanguage
     let runtimeTest: ChatRuntimeTest?
 }
 
@@ -568,7 +566,6 @@ private struct SendTurnRequest: Encodable {
 
 private struct SteerTurnRequest: Encodable {
     let text: String
-    let language: ChatLanguage
 }
 
 private struct ActiveTurnsResponse: Decodable {

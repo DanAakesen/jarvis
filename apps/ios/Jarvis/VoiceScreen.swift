@@ -299,9 +299,7 @@ struct VoiceScreenView: View {
     }
 
     private var appLanguage: JarvisAppLanguage {
-        JarvisAppLanguage(
-            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-        ) ?? .default
+        .default
     }
 
     private func captionLine(label: String, text: String) -> some View {

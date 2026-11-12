@@ -115,8 +115,6 @@ final class JarvisChatModel: ObservableObject {
     @Published private(set) var backgroundTasks: [BackgroundTaskRecord] = []
     @Published var activityError: String?
     @Published var activityMessage: String?
-    @Published private(set) var chatLanguage: ChatLanguage = .da
-
     private let client: JarvisChatClient?
     private let nowClient: JarvisNowFeedClient?
     private let updatesClient: JarvisWorkspaceClient?
@@ -127,7 +125,6 @@ final class JarvisChatModel: ObservableObject {
     private var liveStreamTask: Task<Void, Never>?
     private var historyPaging = ChatHistoryPagingState()
     private var sessionID: String?
-    private var language: ChatLanguage
     private var activeMessageID: String?
     private var uploadedAttachmentIDs: [UUID: String] = [:]
     private var sentTurnAttachments: [ChatHistoryAttachment] = []
@@ -145,11 +142,7 @@ final class JarvisChatModel: ObservableObject {
         JarvisChatLocalization.string(key, language: appLanguage)
     }
 
-    private var appLanguage: JarvisAppLanguage {
-        JarvisAppLanguage(
-            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-        ) ?? .default
-    }
+    private var appLanguage: JarvisAppLanguage { .en }
 
     init(client: JarvisClient?, fixtureMode: Bool = false, startupError: String? = nil) {
         self.client = client.map { JarvisChatClient(client: $0) }
@@ -161,7 +154,6 @@ final class JarvisChatModel: ObservableObject {
         if let client { JarvisFactoryLiveActivityController.configure(client: client) }
         self.fixtureMode = fixtureMode
         self.startupError = startupError
-        language = .da
         if fixtureMode && JarvisChatPhotoFixture.isEnabled {
             pendingAttachments = JarvisChatPhotoFixture.pending
             draft = "Synthetic photo draft"
@@ -224,7 +216,6 @@ final class JarvisChatModel: ObservableObject {
             historyError = message(for: error)
         }
         isLoading = false
-        await loadChatLanguage()
         if !fixtureMode, let settingsClient { _ = await deviceLocation.sync(using: settingsClient) }
         await refreshActivity()
 
@@ -294,33 +285,13 @@ final class JarvisChatModel: ObservableObject {
         return try await photoLoader.data(from: url)
     }
 
-    func setChatLanguage(_ language: ChatLanguage) async {
-        guard !fixtureMode, !isSending, language != chatLanguage, let settingsClient else { return }
-        do {
-            _ = try await settingsClient.saveSettings(
-                JarvisSettingsPatch(
-                    area: "voice",
-                    key: "defaultLanguage",
-                    value: .string(language.rawValue)
-                )
-            )
-            chatLanguage = language
-            self.language = language
-            sessionID = nil
-            actionError = nil
-        } catch {
-            actionError = JarvisChatLocalization.string(.chatLanguageUpdateFailed, language: appLanguage)
-        }
-    }
-
     /// Creates the chat session on demand so a live stream can start before the first message.
     private func liveSessionID() async -> String? {
         if let sessionID { return sessionID }
         guard let client, !fixtureMode,
-              let session = try? await client.createSession(language: language) else { return nil }
+              let session = try? await client.createSession() else { return nil }
         if sessionID == nil {
             sessionID = session.id
-            language = session.language
         }
         return sessionID
     }
@@ -398,7 +369,7 @@ final class JarvisChatModel: ObservableObject {
         steeringMessageIDs.append(followUpID)
         Task {
             do {
-                if let saved = try await client.steerTurn(sessionId: sessionID, text: text, language: language) {
+                if let saved = try await client.steerTurn(sessionId: sessionID, text: text) {
                     turnMessageIDs.insert(saved.id)
                     messages.removeAll { $0.id == followUpID }
                     steeringMessageIDs.removeAll { $0 == followUpID }
@@ -647,9 +618,7 @@ final class JarvisChatModel: ObservableObject {
         }
         activityMessage = JarvisApprovalLocalization.string(
             key,
-            language: JarvisAppLanguage(
-                rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-            ) ?? .default
+            language: .default
         )
         UserDefaults.standard.removeObject(
             forKey: JarvisApprovalNotificationCoordinator.actionResultKey
@@ -688,9 +657,8 @@ final class JarvisChatModel: ObservableObject {
             }
             if sessionID == nil {
                 statusLine = thinkingPhrase
-                let session = try await client.createSession(language: language)
+                let session = try await client.createSession()
                 sessionID = session.id
-                language = session.language
             }
             statusLine = thinkingPhrase
             guard let sessionID else { throw JarvisClientError.invalidRequest }
@@ -745,31 +713,6 @@ final class JarvisChatModel: ObservableObject {
         messages.removeAll { $0.id == id }
     }
 
-    private func loadChatLanguage() async {
-        guard !fixtureMode, let settingsClient else { return }
-        do {
-            let settings = try await settingsClient.loadSettings()
-            let rawLanguage: String
-            if let value = settings.value(area: "voice", key: "defaultLanguage") {
-                guard let parsedLanguage = value.stringValue else {
-                    throw JarvisSettingsClientError.invalidResponse
-                }
-                rawLanguage = parsedLanguage
-            } else {
-                rawLanguage = ChatLanguage.da.rawValue
-            }
-            guard let language = ChatLanguage(rawValue: rawLanguage) else {
-                throw JarvisSettingsClientError.invalidResponse
-            }
-            chatLanguage = language
-            if sessionID == nil { self.language = language }
-        } catch {
-            chatLanguage = .da
-            if sessionID == nil { language = .da }
-            actionError = JarvisChatLocalization.string(.chatLanguageLoadFailed, language: appLanguage)
-        }
-    }
-
     private func reattach(_ turn: ActiveChatTurn) async {
         defer { sendTask = nil }
         guard let client else { return }
@@ -799,7 +742,6 @@ final class JarvisChatModel: ObservableObject {
                 return
             }
             sessionID = turn.sessionId
-            language = turn.language
             activeMessageID = turn.messageId
             turnMessageIDs.insert(turn.messageId)
             isSending = true
@@ -895,7 +837,6 @@ final class JarvisChatModel: ObservableObject {
         if let latest = messages.last(where: { $0.channel == .chat }) {
             let latestMessage = page.messages.first { $0.id == latest.id }
             sessionID = latestMessage?.sessionId ?? sessionID
-            language = latestMessage?.language ?? language
         }
     }
 

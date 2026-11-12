@@ -5,13 +5,12 @@ import SwiftUI
 struct GeneratedWorkspaceSheet: View {
     let presented: PresentedWorkspaceView
     let runtime: WorkspaceRuntime
-    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @State private var actionNotice: String?
 
     private var language: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+        .default
     }
 
     var body: some View {
@@ -899,10 +898,9 @@ private enum GeneratedWorkspacePreviewSamples {
 
 private struct GeneratedWorkspacePreviewGallery: View {
     @StateObject private var runtime = WorkspaceRuntime(client: nil, webAppURL: nil)
-    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
 
     private var language: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+        .default
     }
 
     var body: some View {

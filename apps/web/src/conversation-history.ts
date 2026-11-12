@@ -35,7 +35,6 @@ export interface ConversationHistoryPage {
 
 export interface ChatSession {
   id: string;
-  language: 'da' | 'en';
   runtimeTest?: TestRuntime;
 }
 
@@ -81,9 +80,7 @@ function isHistoryPage(value: unknown): value is ConversationHistoryPage {
   });
 }
 
-export interface SteeringMessage extends ChatMessage {
-  language: 'da' | 'en';
-}
+export type SteeringMessage = ChatMessage;
 
 export { awaitWithSignal as waitForChatSetup } from './backend-request';
 
@@ -285,13 +282,11 @@ async function chatResponse(
 export async function createChatSession(
   getAccessToken: () => Promise<string>,
   config: PublicConfig,
-  language: 'da' | 'en',
   signal?: AbortSignal,
   runtimeTest?: TestRuntime,
 ): Promise<ChatSession> {
   const response = await chatResponse(getAccessToken, config, '/conversation/sessions', {
     channel: 'chat',
-    language,
     ...(runtimeTest ? { runtimeTest } : {}),
   }, 'application/json', undefined, signal);
   let value: unknown;
@@ -299,11 +294,11 @@ export async function createChatSession(
     throw new Error('Jarvis returned an invalid chat session.');
   }
   if (!isRecord(value) || typeof value.id !== 'string' || !/^[1-9]\d{0,18}$/.test(value.id) ||
-      value.channel !== 'chat' || value.language !== language ||
+      value.channel !== 'chat' ||
       (value.runtimeTest !== runtimeTest)) {
     throw new Error('Jarvis returned an invalid chat session.');
   }
-  return { id: value.id, language, ...(runtimeTest ? { runtimeTest } : {}) };
+  return { id: value.id, ...(runtimeTest ? { runtimeTest } : {}) };
 }
 
 function parseEvent(frame: string): { event: string; data: string } | null {
@@ -338,7 +333,7 @@ export interface ChatFoodInvitation {
   expiresAt: string;
 }
 
-export interface RecoverableTurn { sessionId: string; messageId: string; language: 'da' | 'en' }
+export interface RecoverableTurn { sessionId: string; messageId: string }
 
 export async function loadActiveChatTurns(getAccessToken: () => Promise<string>, config: PublicConfig): Promise<RecoverableTurn[]> {
   const response = await backendFetch(`${config.backendUrl?.replace(/\/+$/, '')}/conversation/turns/active`, {
@@ -349,8 +344,7 @@ export async function loadActiveChatTurns(getAccessToken: () => Promise<string>,
   if (!isRecord(body) || !Array.isArray(body.turns)) throw new Error('Invalid running replies.');
   return body.turns.filter((turn): turn is RecoverableTurn => isRecord(turn) &&
     typeof turn.sessionId === 'string' && /^[1-9]\d{0,18}$/.test(turn.sessionId) &&
-    typeof turn.messageId === 'string' && /^[1-9]\d{0,18}$/.test(turn.messageId) &&
-    (turn.language === 'da' || turn.language === 'en'));
+    typeof turn.messageId === 'string' && /^[1-9]\d{0,18}$/.test(turn.messageId));
 }
 
 export async function cancelChatTurn(getAccessToken: () => Promise<string>, config: PublicConfig, turn: RecoverableTurn): Promise<void> {
@@ -542,14 +536,13 @@ export async function steerChatTurn(
   config: PublicConfig,
   session: ChatSession,
   text: string,
-  language: 'da' | 'en',
   signal?: AbortSignal,
 ): Promise<SteeringMessage> {
   const response = await chatResponse(
     getAccessToken,
     config,
     `/conversation/sessions/${session.id}/steer`,
-    { text, language },
+    { text },
     'application/json',
     undefined,
     signal,
@@ -558,11 +551,10 @@ export async function steerChatTurn(
   try { value = await response.json(); } catch {
     throw new Error('Jarvis returned an invalid steering message.');
   }
-  if (!isChatMessage(value, 'dan', session.id) || !isRecord(value) ||
-      (value.language !== 'da' && value.language !== 'en')) {
+  if (!isChatMessage(value, 'dan', session.id)) {
     throw new Error('Jarvis returned an invalid steering message.');
   }
-  return { ...value, language: value.language };
+  return value;
 }
 
 export async function loadConversationHistory(

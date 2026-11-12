@@ -1,23 +1,18 @@
 import Foundation
 
 public enum JarvisAppLanguage: String, CaseIterable, Identifiable, Sendable {
-    case da
     case en
 
-    public static let `default` = JarvisAppLanguage.da
-    public static let preferenceKey = "jarvis.appLanguage"
+    public static let `default` = JarvisAppLanguage.en
 
     public var id: String { rawValue }
 
     public var locale: Locale {
-        Locale(identifier: self == .da ? "da_DK" : "en_GB")
+        Locale(identifier: "en_GB")
     }
 }
 
 public enum JarvisNotesLocalizationKey: String, CaseIterable, Sendable {
-    case languageTitle = "language.title"
-    case languageDanish = "language.danish"
-    case languageEnglish = "language.english"
     case settingsTitle = "settings.title"
     case todayTitle = "navigation.today"
     case chatTitle = "navigation.chat"

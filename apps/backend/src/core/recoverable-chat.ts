@@ -9,7 +9,7 @@ export class RecoverableChat {
   private bytes = 0;
   private overflowed = false;
 
-  constructor(readonly sessionId: string, readonly messageId: string, readonly language: 'da' | 'en') {}
+  constructor(readonly sessionId: string, readonly messageId: string) {}
 
   get finished(): boolean { return this.ended; }
 

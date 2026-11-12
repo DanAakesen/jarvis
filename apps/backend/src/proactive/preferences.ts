@@ -11,13 +11,13 @@ export type ProactivePreferenceIntent =
   | { suggestionScope: SuggestionScopePreference };
 
 export const proactivePreferenceHelp = {
-  title: { en: 'What can I ask?', da: 'Hvad kan jeg bede om?' },
+  title: 'What can I ask?',
   examples: [
-    { en: 'Pause proactive suggestions.', da: 'Sæt proaktive forslag på pause.' },
-    { en: 'Resume proactive suggestions.', da: 'Genoptag proaktive forslag.' },
-    { en: 'Show only personal suggestions.', da: 'Vis kun personlige forslag.' },
-    { en: 'Stop travel suggestions.', da: 'Hold op med rejseforslag.' },
-    { en: 'What proactive preferences apply?', da: 'Hvilke præferencer gælder for proaktive forslag?' },
+    'Pause proactive suggestions.',
+    'Resume proactive suggestions.',
+    'Show only personal suggestions.',
+    'Stop travel suggestions.',
+    'What proactive preferences apply?',
   ],
 } as const;
 

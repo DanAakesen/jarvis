@@ -42,14 +42,10 @@ final class JarvisWidgetSnapshotPublisher {
         }
         var snapshot: JarvisWidgetSnapshot
         if case .snapshot(let previous) = store.load() { snapshot = previous } else { snapshot = JarvisWidgetSnapshot() }
-        let language = JarvisAppLanguage(
-            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-        ) ?? .default
         snapshot.version = JarvisWidgetSnapshot.currentVersion
-        snapshot.language = language.rawValue
         let now = Date()
         async let gym = loadGym(now: now)
-        async let factory = loadFactory(now: now, language: language)
+        async let factory = loadFactory(now: now, language: .default)
         async let notes = loadNotes(now: now)
         let (gymResult, factoryResult, notesResult) = await (gym, factory, notes)
         apply(gymResult, to: &snapshot.gym)

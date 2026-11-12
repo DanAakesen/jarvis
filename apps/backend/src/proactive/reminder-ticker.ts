@@ -1,9 +1,7 @@
 import { createHash } from 'node:crypto';
-import type { ConversationStore } from '../core/conversation-store.js';
 import type { PushStore } from '../database/push-store.js';
 import type { createGitHubVaultClient } from '../vault/github-client.js';
 import { readVaultTasks } from './todo-discovery.js';
-import { detectLanguage } from './language.js';
 import { reminderDedupeKey, reminderKey, reminderTitle } from './reminders.js';
 import type { AlertLedgerStore } from './alert-ledger.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
@@ -70,14 +68,13 @@ function ownerReminderFinding(
   schedule: OwnerReminderSchedule,
   task: Awaited<ReturnType<typeof readVaultTasks>>[number],
   now: Date,
-  language: 'da' | 'en',
 ): FindingInput {
   return {
     dedupeKey: createHash('sha256')
       .update(`owner_reminder|${schedule.id}|${schedule.fireAt.toISOString()}`)
       .digest('hex').slice(0, 32),
     title: reminderTitle(task.text),
-    body: language === 'da' ? 'Ejeranmodet påmindelse om en opgave.' : 'Owner-requested reminder for a task.',
+    body: 'Owner-requested reminder for a task.',
     category: 'todo',
     suggestionScope: task.path.startsWith('Personal/') ? 'personal'
       : task.path.startsWith('Work/') ? 'work' : 'unknown',
@@ -86,27 +83,26 @@ function ownerReminderFinding(
     dueAt: schedule.fireAt.toISOString(),
     evidence: [{ source: 'todos', label: 'Todo list', observedAt: now.toISOString() }],
     runId: null,
-    language,
   };
 }
 
-function itemBody(row: ReminderRow, now: Date, language: 'da' | 'en'): string {
+function itemBody(row: ReminderRow, now: Date): string {
   const due = row.dueAt;
   const time = localTimeLabel(due);
   if (dayKey(due) !== dayKey(now)) {
-    return language === 'da' ? `Forfaldt i går kl. ${time}` : `Was due yesterday at ${time}`;
+    return `Was due yesterday at ${time}`;
   }
   if (due.getTime() > now.getTime()) {
-    return language === 'da' ? `Forfalder kl. ${time}` : `Due at ${time}`;
+    return `Due at ${time}`;
   }
-  return language === 'da' ? `Forfaldt kl. ${time}` : `Was due at ${time}`;
+  return `Was due at ${time}`;
 }
 
-function findingFor(row: ReminderRow, now: Date, language: 'da' | 'en', suggestionScope: SuggestionScope, ownerRequested: boolean): FindingInput {
+function findingFor(row: ReminderRow, now: Date, suggestionScope: SuggestionScope, ownerRequested: boolean): FindingInput {
   return {
     dedupeKey: reminderDedupeKey(row.reminderKey),
     title: row.title,
-    body: itemBody(row, now, language),
+    body: itemBody(row, now),
     category: 'todo',
     suggestionScope,
     ...(ownerRequested ? { ownerRequested: true } : {}),
@@ -114,7 +110,6 @@ function findingFor(row: ReminderRow, now: Date, language: 'da' | 'en', suggesti
     dueAt: row.dueAt.toISOString(),
     evidence: [{ source: 'todos', label: 'Todo list', observedAt: now.toISOString() }],
     runId: null,
-    language,
   };
 }
 
@@ -128,7 +123,6 @@ export function createReminderTicker(options: {
   ledger?: Pick<AlertLedgerStore, 'get'>;
   ownerObjectId: string;
   send: (request: SystemPushRequest, signal: AbortSignal) => Promise<SystemPushOutcome>;
-  conversationStore?: Pick<ConversationStore, 'readRecentUserMessages'>;
   now: () => Date;
   logger?: ReminderTickerLogger;
 }) {
@@ -278,19 +272,13 @@ export function createReminderTicker(options: {
     const allowed = eligible.slice(0, allowance);
     if (allowed.length === 0 || signal.aborted) return;
 
-    let language: 'da' | 'en' = 'en';
-    try {
-      const messages = await options.conversationStore?.readRecentUserMessages(8);
-      if (messages?.length) language = detectLanguage(messages);
-    } catch { /* English is the safe default if recent-chat reading fails. */ }
-
     const items = [];
     for (const candidate of allowed) {
       if (signal.aborted) return;
       items.push({
         row: candidate,
         item: await options.store.items.upsertFinding(findingFor(
-          candidate, now, language, verifiedScopes.get(candidate.reminderKey) ?? 'unknown',
+          candidate, now, verifiedScopes.get(candidate.reminderKey) ?? 'unknown',
           verifiedKeys?.get(candidate.reminderKey)?.ownerRequested === true,
         )),
       });
@@ -326,7 +314,6 @@ export function createReminderTicker(options: {
         kind,
         ...(ownerRequested ? { ownerRequested: true } : {}),
         count: items.length,
-        language,
         itemId: items[0]!.item.id,
         origin: 'proactive_reminder',
         details: [...items].sort((left, right) => left.row.dueAt.getTime() - right.row.dueAt.getTime())
@@ -394,12 +381,6 @@ export function createReminderTicker(options: {
       return;
     }
 
-    let language: 'da' | 'en' = 'en';
-    try {
-      const messages = await options.conversationStore?.readRecentUserMessages(8);
-      if (messages?.length) language = detectLanguage(messages);
-    } catch { /* English is the safe default if recent-chat reading fails. */ }
-
     for (const schedule of active) {
       if (signal.aborted) return;
       const current = await schedules.get(schedule.id);
@@ -432,7 +413,7 @@ export function createReminderTicker(options: {
         continue;
       }
       const item = await options.store.items.upsertFinding(ownerReminderFinding(
-        schedule, task!, now, language,
+        schedule, task!, now,
       ));
       if (signal.aborted) return;
       const latestClaim = await schedules.get(schedule.id);
@@ -441,7 +422,6 @@ export function createReminderTicker(options: {
         kind: 'owner_reminder',
         ownerRequested: true,
         count: 1,
-        language,
         itemId: item.id,
         origin: 'proactive_reminder',
         details: [{ title: reminderTitle(task!.text), dueAt: null }],

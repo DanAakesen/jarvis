@@ -70,8 +70,8 @@ struct JarvisHealthLiftLog: View {
         if let editable = JarvisEditableLift(row: lift) {
             JarvisEditableSwipeRow(
                 identifier: "health.lift." + (date ? "history." : "exercise.") + editable.id,
-                editTitle: language == .da ? "Rediger" : "Edit",
-                deleteTitle: language == .da ? "Slet" : "Delete",
+                editTitle: "Edit",
+                deleteTitle: "Delete",
                 isBusy: deletingID == editable.id,
                 onEdit: { onEdit(editable) }, onDelete: { onDelete(editable) }
             ) { liftContent(lift, date: date) }

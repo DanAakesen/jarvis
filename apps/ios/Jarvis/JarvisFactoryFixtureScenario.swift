@@ -3,7 +3,6 @@ import JarvisCore
 
 struct JarvisFactoryScreenshotConfiguration {
     let state: JarvisFactoryPreviewState
-    let language: JarvisAppLanguage?
 
     static func parse(arguments: [String]) -> JarvisFactoryScreenshotConfiguration? {
         guard arguments.contains("--screenshot-factory-fixture"),
@@ -12,10 +11,7 @@ struct JarvisFactoryScreenshotConfiguration {
               let state = JarvisFactoryPreviewState(rawValue: String(value)) else {
             return nil
         }
-        let languageValue = arguments.first(where: { $0.hasPrefix("--screenshot-factory-language=") })?
-            .split(separator: "=", maxSplits: 1).last
-            .flatMap { JarvisAppLanguage(rawValue: String($0)) }
-        return JarvisFactoryScreenshotConfiguration(state: state, language: languageValue)
+        return JarvisFactoryScreenshotConfiguration(state: state)
     }
 }
 

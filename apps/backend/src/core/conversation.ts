@@ -8,7 +8,6 @@ import type { ConversationSearchPage } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import type {
   ConversationChannel,
-  ConversationLanguage,
   ConversationRole,
   ConversationSteeringMessage,
 } from './conversation-store.js';
@@ -198,9 +197,8 @@ const steeringMessagesSchema = {
         properties: {
           id: { type: 'string' },
           text: { type: 'string' },
-          language: { type: 'string', enum: ['da', 'en'] },
         },
-        required: ['id', 'text', 'language'],
+        required: ['id', 'text'],
         additionalProperties: false,
       },
     },
@@ -336,7 +334,6 @@ async function runChatReflex(
   request: FastifyRequest,
   classifier: ReflexClassifier,
   text: string,
-  language: ConversationLanguage,
   messageId: string,
   signal: AbortSignal,
 ): Promise<ReflexActionResult | null> {
@@ -365,7 +362,7 @@ async function runChatReflex(
     attempted = true;
     try {
       const result = await raceWithAbort(
-        classifier.classify(text, language, targets, classificationSignal),
+        classifier.classify(text, targets, classificationSignal),
         classificationSignal,
       );
       if (result === undefined) return null;
@@ -409,7 +406,7 @@ return {
     app.get('/conversation/turns/active', async () => ({
       turns: [...activeTurns.values()].filter(active => active.runtimeTest === undefined).flatMap(active => {
         const turn = recoverableTurns.get(active.rootMessageId);
-        return turn ? [{ sessionId: turn.sessionId, messageId: turn.messageId, language: turn.language }] : [];
+        return turn ? [{ sessionId: turn.sessionId, messageId: turn.messageId }] : [];
       }),
     }));
     app.get<{ Params: { sessionId: string; messageId: string } }>(
@@ -702,7 +699,7 @@ return {
           role: 'dan',
           text,
           model: null,
-          language: session.language,
+
           ...(sourceItemId === undefined ? {} : { sourceItemId }),
           ...(visualContext ? { visualContext: persistedVisualContext(visualContext) } : {}),
           ...(attachmentIds.length > 0 ? {
@@ -742,7 +739,7 @@ return {
         }
       }
 
-      const recovery = new RecoverableChat(sessionId, userMessage.id, session.language);
+      const recovery = new RecoverableChat(sessionId, userMessage.id);
       recoverableTurns.set(userMessage.id, recovery);
       const controller = recovery.controller;
       // The execution belongs to the turn, not a subscriber or an elapsed-time cap.
@@ -773,14 +770,12 @@ return {
               request,
               classifier,
               text,
-              session.language,
               userMessage.id,
               controller.signal,
             ).then(finishReflex, () => finishReflex(null));
           }
           let turnMessageId = userMessage.id;
           let turnText = text;
-          let turnLanguage = session.language;
           let isSteering = false;
           let firstTurnTokenLogged = false;
           while (!controller.signal.aborted) {
@@ -823,7 +818,6 @@ return {
                 messageId: turnMessageId,
                 agentSessionId,
                 text: turnText,
-                language: turnLanguage,
                 ...(proactiveContext ? { proactiveContext } : {}),
                 turnId: activeTurn.rootMessageId,
                 onAgentPhaseTimings: (timings) => {
@@ -911,7 +905,6 @@ return {
                   role: 'jarvis',
                   text: partial,
                   model: null,
-                  language: turnLanguage,
                   interrupted: true,
                 })
                 : null;
@@ -920,7 +913,6 @@ return {
               activeTurn.consumedThrough = latest.id;
               turnMessageId = latest.id;
               turnText = latest.text;
-              turnLanguage = latest.language;
               isSteering = true;
               activeTurn.roundController = null;
               continue;
@@ -951,11 +943,10 @@ return {
               role: 'jarvis',
               text: partial,
               model: null,
-              language: turnLanguage,
             });
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
-            app.notifyReply({ sessionId, messageId: assistantMessage.id, text: assistantMessage.text, language: turnLanguage,
+            app.notifyReply({ sessionId, messageId: assistantMessage.id, text: assistantMessage.text,
               turnStartedAt: turnStartedAtMs });
             logChatLatency(request, 'turn_complete', turnStartedAt);
             if (visualContext) {
@@ -1029,7 +1020,7 @@ return {
 
     app.post<{
       Params: { sessionId: string };
-      Body: { text: string; language: ConversationLanguage };
+      Body: { text: string };
     }>('/conversation/sessions/:sessionId/steer', {
       schema: {
         params: { type: 'object', properties: { sessionId: idSchema }, required: ['sessionId'], additionalProperties: false },
@@ -1037,9 +1028,8 @@ return {
           type: 'object',
           properties: {
             text: { type: 'string', minLength: 1, maxLength: 20_000 },
-            language: { type: 'string', enum: ['da', 'en'] },
           },
-          required: ['text', 'language'],
+          required: ['text'],
           additionalProperties: false,
         },
         response: { 202: { type: 'object', additionalProperties: true }, 400: errorResponse, 404: errorResponse, 409: errorResponse, 503: errorResponse },
@@ -1060,21 +1050,20 @@ return {
         role: 'dan',
         text,
         model: null,
-        language: request.body.language,
       });
       if (!message) return reply.code(404).send({ error: 'Active chat session not found' });
       const foodReplyHandled = await app.ownerInteractions?.resolveFoodEstimateReply?.(
         message, approvalDeciderFor(request), AbortSignal.timeout(10_000),
       );
       if (activeTurns.get(sessionId) !== activeTurn || BigInt(message.id) <= BigInt(activeTurn.consumedThrough)) {
-        return reply.code(202).send({ ...message, language: request.body.language });
+        return reply.code(202).send(message);
       }
       if (foodReplyHandled) {
         activeTurn.consumedThrough = message.id;
-        return reply.code(202).send({ ...message, language: request.body.language });
+        return reply.code(202).send(message);
       }
       if (activeTurn.phase === 'model') activeTurn.roundController?.abort();
-      return reply.code(202).send({ ...message, language: request.body.language });
+      return reply.code(202).send(message);
     });
 
     app.post<{
@@ -1154,16 +1143,15 @@ return {
       return runtimeTests();
     });
 
-    app.post<{ Body: { channel: ConversationChannel; language: ConversationLanguage; runtimeTest?: 'current' | 'copilot' } }>('/conversation/sessions', {
+    app.post<{ Body: { channel: ConversationChannel; runtimeTest?: 'current' | 'copilot' } }>('/conversation/sessions', {
       schema: {
         body: {
           type: 'object',
           properties: {
             channel: { type: 'string', enum: ['chat', 'voice'] },
-            language: { type: 'string', enum: ['da', 'en'] },
             runtimeTest: { type: 'string', enum: ['current', 'copilot'] },
           },
-          required: ['channel', 'language'],
+          required: ['channel'],
           additionalProperties: false,
         },
         response: { 201: sessionSchema, 503: errorResponse },
@@ -1180,6 +1168,7 @@ return {
       }
       const session = await app.conversationStore.createSession({
         ...request.body,
+        language: 'en',
         ...(runtimeTest ? { ownerObjectId: request.principal!.objectId } : {}),
       });
       if (runtimeTest && session.runtimeTest !== runtimeTest) {
