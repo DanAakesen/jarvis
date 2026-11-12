@@ -145,8 +145,11 @@ struct WatchRoot: View {
             WatchPreview.openedURL(url)
             #endif
         }
-        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) { notification in
             if model.voiceID != nil { Task { await model.endVoice() } }
+            if notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt == AVAudioSession.InterruptionType.began.rawValue {
+                model.interruptDictation()
+            }
         }
         .task(id: scenePhase) {
             if scenePhase == .active {
@@ -179,15 +182,6 @@ struct WatchRoot: View {
         }.watchCaptureReady("actions")
     }
     private func dictate() {
-        guard model.voiceID == nil else { model.error = "End voice before dictating a message."; return }
-        guard let controller = WKExtension.shared().visibleInterfaceController else {
-            model.error = "Tap the message field to enter or dictate text."; return
-        }
-        controller.presentTextInputController(withSuggestions: nil, allowedInputMode: .plain) { values in
-            Task { @MainActor in
-                guard let text = values?.first as? String, !text.isEmpty else { return }
-                model.draft = model.draft.isEmpty ? text : model.draft + " " + text
-            }
-        }
+        Task { await model.startDictation() }
     }
 }

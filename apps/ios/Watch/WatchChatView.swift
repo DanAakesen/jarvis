@@ -14,7 +14,7 @@ struct WatchChatView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 8) {
                         if !connection.reachable {
-                            Text("iPhone unavailable").foregroundStyle(.secondary)
+                            Text("iPhone unavailable. Voice and sending need a connection.").font(.caption).foregroundStyle(.secondary)
                         } else if let error = model.historyError {
                             Text(error).font(.caption).foregroundStyle(.secondary)
                                 .accessibilityIdentifier("watch.history.error")
@@ -54,7 +54,11 @@ struct WatchChatView: View {
             await model.history()
         }
         .onChange(of: pendingDictation) { _, pending in if pending { beginPendingDictation() } }
-        .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await model.history() } } }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await model.history() } }
+            else if phase == .background { model.interruptDictation() }
+        }
+        .onDisappear { model.interruptDictation() }
         .onChange(of: connection.reachable) { _, reachable in if reachable && !model.busy { Task { await model.history() } } }
     }
     private func beginPendingDictation() {
@@ -66,6 +70,23 @@ struct WatchChatView: View {
         VStack(spacing: 3) {
             if model.waitingForVoiceConnection {
                 Text("Connecting to iPhone…").font(.caption2).foregroundStyle(.secondary)
+            }
+            if model.dictationState != .idle {
+                HStack {
+                    if model.dictationState == .connecting {
+                        Text("Connecting to iPhone…")
+                    } else if model.dictationState == .listening {
+                        Text("Listening…")
+                    } else {
+                        Text("Transcribing…")
+                    }
+                    Spacer()
+                    if model.dictationState == .listening {
+                        Button("Stop") { Task { await model.stopDictation() } }
+                    } else {
+                        Button("Cancel") { model.cancelDictation() }
+                    }
+                }.font(.caption2).buttonStyle(.plain)
             }
             if model.voiceID != nil {
                 HStack {
@@ -85,19 +106,19 @@ struct WatchChatView: View {
                         .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
                         .contentShape(Rectangle())
                 }
-                .disabled(model.voiceID != nil || model.busy)
+                .disabled(model.voiceID != nil || model.busy || model.dictationState != .idle)
                 .accessibilityLabel("Message draft")
                 .accessibilityValue(model.draft.isEmpty ? "Empty" : model.draft)
                 if !model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button { Task { await model.send() } } label: { Image(systemName: "arrow.up.circle.fill") }
                         .foregroundStyle(WatchStyle.amber)
-                        .disabled(model.busy || !connection.reachable || model.voiceID != nil).accessibilityLabel("Send message")
+                        .disabled(model.busy || !connection.reachable || model.voiceID != nil || model.dictationState != .idle).accessibilityLabel("Send message")
                 }
                 Button(action: dictate) { Image(systemName: "mic.fill").frame(width: 32, height: 38) }
                     .foregroundStyle(WatchStyle.amber)
-                    .disabled(model.busy || model.voiceID != nil).accessibilityLabel("Dictate into draft")
+                    .disabled(model.busy || model.voiceID != nil || model.dictationState != .idle).accessibilityLabel("Dictate into draft")
                 Button { Task { await model.startVoice() } } label: { WatchWave().frame(width: 22, height: 18).frame(width: 32, height: 38) }
-                    .disabled(model.busy).accessibilityLabel("Start voice session")
+                    .disabled(model.busy || model.dictationState != .idle).accessibilityLabel("Start voice session")
             }.buttonStyle(.plain).padding(.horizontal, 8)
                 .background(WatchStyle.surface, in: Capsule())
                 .overlay { Capsule().stroke(.white.opacity(0.2), lineWidth: 0.5) }

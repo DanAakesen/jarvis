@@ -14,6 +14,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
     private let lock = NSLock()
     private var converter: AVAudioConverter?
     private var captureContinuation: AsyncStream<Data>.Continuation?
+    private var captureDropped = false
     private var playbackProgress: [String: PlaybackProgress] = [:]
     private var playbackFinished: (@Sendable (String, Bool) -> Void)?
     private var hasCaptureTap = false
@@ -44,6 +45,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
         self.converter = converter
         let stream = AsyncStream<Data>(bufferingPolicy: .bufferingOldest(16)) { continuation in
             lock.lock()
+            captureDropped = false
             captureContinuation = continuation
             lock.unlock()
         }
@@ -55,6 +57,9 @@ final class VoiceAudioEngine: @unchecked Sendable {
             #if os(watchOS)
             if let result = continuation?.yield(data), case .dropped = result {
                 // A companion link that cannot keep up must fail visibly instead of losing speech silently.
+                self.lock.lock()
+                self.captureDropped = true
+                self.lock.unlock()
                 continuation?.finish()
             }
             #else
@@ -75,6 +80,12 @@ final class VoiceAudioEngine: @unchecked Sendable {
             throw error
         }
         return stream
+    }
+
+    var didDropCapture: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return captureDropped
     }
 
     func setPlaybackFinishedHandler(_ handler: @escaping @Sendable (String, Bool) -> Void) {

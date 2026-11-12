@@ -184,6 +184,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             return
         }
         guard !isStarting, !isEnding, !returnToChatRequested, sessionClient == nil else { return }
+        JarvisWatchBridge.shared.stopDictation()
         sessionGeneration += 1
         let generation = sessionGeneration
         isStarting = true

@@ -2797,7 +2797,7 @@ Target the owner's Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as wa
 
 Watch Home and complications retain the last available data on the Watch when refresh or connectivity fails. Show its age when stale and allow display while locked after the Watch's first unlock. Explicit phone sign-out clears the Watch cache.
 
-Watch dictation can fill a draft without an iPhone connection; sending still needs the phone. Starting voice waits briefly for the companion connection rather than requiring a manual connect step, but live voice remains dependent on the iPhone.
+Watch dictation records a short message and transcribes it into the draft through the paired iPhone; it never sends the draft automatically. If the phone or network is unavailable, the system keyboard remains available for an offline draft. Sending still needs the phone. Starting voice waits briefly for the companion connection rather than requiring a manual connect step, but live voice remains dependent on the iPhone.
 
 ## Intelligent proactive notifications — 9 November 2026
 

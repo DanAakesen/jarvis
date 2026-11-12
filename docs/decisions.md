@@ -1,3 +1,7 @@
+## 12 November 2026 — Watch record-and-transcribe dictation (#1794)
+
+The WatchKit text-input controller opens the system-selected input method and cannot force dictation. Use bounded Watch microphone capture and the paired iPhone's authenticated backend connection for transcription only, with no assistant response or tools. Keep system text entry for offline drafts and explain connection failures. Paired-device audio, transcription and interruption behavior remain unverified.
+
 ## 12 November 2026 — Build images on the GitHub runner, not in ACR Tasks
 
 Images are built with `docker build` on the GitHub runner and pushed to ACR;

@@ -1,3 +1,7 @@
+## Watch record-and-transcribe dictation — 12 November 2026 (#1794)
+
+Direct Watch capture uses the authenticated companion and a transcription-only backend path; offline keyboard drafts remain available. Native Watch compilation and paired-device acceptance remain necessary.
+
 ## iPhone Notes and sheets — 12 November 2026 (#1786)
 
 The note and task editors, shared task row and sheet confirmation controls have

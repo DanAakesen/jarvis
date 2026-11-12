@@ -20,7 +20,7 @@ Watch Voice remains tappable when a session ID is retained: verify it with the
 iPhone, keep a genuinely active session, or clear a confirmed stale ID and start.
 End cancels any in-flight verification; no new copy or layout is introduced.
 
-Voice startup shows the existing localized connection status while waiting. Dictation remains available without the phone and fills the draft; the connection notice distinguishes voice and sending from offline dictation.
+Voice startup shows the existing localized connection status while waiting. Watch dictation shows connecting, listening and transcribing states with Stop or Cancel; failures explain the phone/network requirement and the keyboard fallback for offline drafts.
 
 Watch Home uses smaller, underlined, background-free See more links and keeps the body-fat chart without the date and summary lines beneath it. The workout preview shows recent history separately from weekly goal counts.
 
