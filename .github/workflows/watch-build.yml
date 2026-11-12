@@ -79,7 +79,7 @@ jobs:
           xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/PhoneBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/phone-build.log"
       - name: Upload build logs
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: watch-build-logs
           path: |
