@@ -62,9 +62,6 @@ export interface Settings {
   };
   voice: VoiceTuningSettings & {
     speechToTextModel: string;
-    englishModel: string;
-    englishVoice: string;
-    defaultLanguage: 'da' | 'en';
     minimizeWindowsOnVoiceStart: boolean;
   };
   research: ResearchSettings;
@@ -142,9 +139,6 @@ export const defaultSettings: Settings = {
   },
   voice: {
     speechToTextModel: 'azure-speech',
-    englishModel: 'gpt-realtime-2.1',
-    englishVoice: 'en-GB-Ryan:DragonHDLatestNeural',
-    defaultLanguage: 'da',
     minimizeWindowsOnVoiceStart: false,
     bargeInEnabled: true,
     maxSpokenReplyTokens: 4_096,
@@ -195,8 +189,6 @@ export const settingsOptions = {
   reasoningEfforts,
   personalityTones: ['british_butler', 'warm', 'direct', 'playful'],
   personalityResponseStyles: ['concise', 'balanced', 'detailed'],
-  englishVoices: ['en-GB-Ryan:DragonHDLatestNeural'],
-  chatLanguages: ['da', 'en'],
   voiceTuning: voiceTuningSettingsBounds,
   researchDepths,
   researchSettings: researchSettingsBounds,
@@ -236,9 +228,6 @@ const settingKeys = {
   },
   voice: {
     speechToTextModel: 'voice.stt.model',
-    englishModel: 'voice.en.model',
-    englishVoice: 'voice.en.voice',
-    defaultLanguage: 'voice.default_language',
     minimizeWindowsOnVoiceStart: 'voice.minimize_windows_on_voice_start',
     bargeInEnabled: 'voice.barge_in_enabled',
     maxSpokenReplyTokens: 'voice.max_spoken_reply_tokens',
@@ -351,9 +340,6 @@ function validSetting(
   }
   if (area === 'voice') {
     if (key === 'speechToTextModel') return typeof value === 'string' && modelsForRole(catalogue, 'transcription').includes(value);
-    if (key === 'englishModel') return typeof value === 'string' && modelsForRole(catalogue, 'voice').includes(value);
-    if (key === 'englishVoice') return isOption(value, settingsOptions.englishVoices);
-    if (key === 'defaultLanguage') return isOption(value, settingsOptions.chatLanguages);
     if (key === 'minimizeWindowsOnVoiceStart') return typeof value === 'boolean';
     if (key === 'maxSpokenReplyTokens') {
       const bounds = voiceTuningSettingsBounds[key];
@@ -538,9 +524,6 @@ const settingsPatchSchema = {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
             speechToTextModel: boundedModelSchema,
-            englishModel: boundedModelSchema,
-            englishVoice: selectSchema(settingsOptions.englishVoices),
-            defaultLanguage: selectSchema(settingsOptions.chatLanguages),
             minimizeWindowsOnVoiceStart: { type: 'boolean' },
             ...voiceTuningSettingsSchema.properties,
           },
@@ -622,7 +605,6 @@ const settingsFieldSchemas = settingsPatchSchema.properties.settings.properties 
 const modelFieldRoles: Record<string, ModelRole> = {
   'jarvis.model': 'chat',
   'jarvis.reasoning': 'chat',
-  'voice.englishModel': 'voice',
   'voice.speechToTextModel': 'transcription',
   'codex.model': 'codex',
   'codex.reasoning': 'codex',
@@ -639,7 +621,7 @@ export function settingsFieldsForCatalogue(catalogue: ModelCatalogue, current: S
         continue;
       }
       const role = path.startsWith('roles.') ? path.split('.')[1] as ModelRole : modelFieldRoles[path];
-      const modelField = key === 'model' || key === 'englishModel' || key === 'speechToTextModel';
+      const modelField = key === 'model' || key === 'speechToTextModel';
       const allowedValues = role
         ? modelField ? modelsForRole(catalogue, role)
           : [
@@ -820,7 +802,7 @@ function mergeSettings(stored: Partial<Settings>, catalogue: ModelCatalogue = fa
     const legacy = role === 'chat'
       ? { model: stored.jarvis?.model, reasoningEffort: stored.jarvis?.reasoning }
       : role === 'voice'
-        ? { model: stored.voice?.englishModel }
+        ? {}
         : role === 'transcription'
           ? { model: stored.voice?.speechToTextModel }
           : role === 'codex'
@@ -846,7 +828,6 @@ function mergeSettings(stored: Partial<Settings>, catalogue: ModelCatalogue = fa
     model: merged.roles.chat.model,
     reasoning: merged.roles.chat.reasoningEffort,
   };
-  merged.voice.englishModel = merged.roles.voice.model;
   merged.voice.speechToTextModel = merged.roles.transcription.model;
   merged.codex = {
     model: merged.roles.codex.model,
@@ -959,7 +940,6 @@ function withRoleSettings(settings: SettingsPatch): SettingsPatch {
     });
   }
   if (settings.voice) {
-    if (settings.voice.englishModel !== undefined) merge('voice', { model: settings.voice.englishModel });
     if (settings.voice.speechToTextModel !== undefined) {
       merge('transcription', { model: settings.voice.speechToTextModel });
     }
@@ -1003,7 +983,6 @@ export function settingsOptionsForCatalogue(catalogue: ModelCatalogue) {
     roles,
     jarvisModels: modelsForRole(catalogue, 'chat'),
     speechToTextModels: modelsForRole(catalogue, 'transcription'),
-    englishModels: modelsForRole(catalogue, 'voice'),
     codexModels: modelsForRole(catalogue, 'codex'),
     codexReasoningEfforts: ['default', ...reasoningForModel(catalogue, 'codex', defaultRoleModels.codex)],
     copilotModels: modelsForRole(catalogue, 'copilot'),

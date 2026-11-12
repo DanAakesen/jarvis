@@ -1,6 +1,4 @@
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import type { ChatLanguage } from './chat-language';
-import { chatLanguages } from './chat-language';
 import { returnFocusAfterOutsidePress } from './overlay-focus';
 import { useOverlayMotion } from './overlay-motion';
 
@@ -16,44 +14,34 @@ export type MoreMenuAction = {
   description?: string;
 };
 
-function MenuIcon({ name }: { name: 'more' | 'attach' | 'globe' | 'chevron' | 'check' | 'plus' }) {
+function MenuIcon({ name }: { name: 'more' | 'attach' | 'plus' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'more':
       return <svg {...common} fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="19" cy="12" r="1.9" /></svg>;
     case 'attach':
       return <svg {...common}><path d="m20 11.5-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" /></svg>;
-    case 'globe':
-      return <svg {...common}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3Z" /></svg>;
-    case 'chevron':
-      return <svg {...common}><path d="m9 6 6 6-6 6" /></svg>;
-    case 'check':
-      return <svg {...common}><path d="m5 12.5 4.5 4.5L19 7" /></svg>;
     case 'plus':
       return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
   }
 }
 
-function focusItem(container: HTMLElement | null, move: 'first' | 'last' | 'next' | 'previous' | 'checked') {
+function focusItem(container: HTMLElement | null, move: 'first' | 'last' | 'next' | 'previous') {
   if (!container) return;
   const items = Array.from(container.querySelectorAll<HTMLElement>(':scope > [role^="menuitem"], :scope > [role="none"] > [role^="menuitem"]'));
   if (items.length === 0) return;
   const current = items.indexOf(document.activeElement as HTMLElement);
   const index = move === 'first' ? 0
     : move === 'last' ? items.length - 1
-      : move === 'checked' ? Math.max(0, items.findIndex((item) => item.getAttribute('aria-checked') === 'true'))
-        : move === 'next' ? (current + 1) % items.length
-          : (current - 1 + items.length) % items.length;
+      : move === 'next' ? (current + 1) % items.length
+        : (current - 1 + items.length) % items.length;
   items[index]?.focus();
 }
 
 /**
- * Shared three-dot conversation menu. Leading actions precede the optional chat-language row;
- * remaining actions follow it. The row opens a Danish/English flyout bound to the caller's state.
+ * Shared three-dot conversation menu.
  */
 export function ConversationMoreMenu({
-  language,
-  onLanguageChange,
   leadingActions = [],
   actions = [],
   align = 'start',
@@ -63,8 +51,6 @@ export function ConversationMoreMenu({
   topLayer = false,
   onTestRuntime,
 }: {
-  language?: ChatLanguage;
-  onLanguageChange?: (language: ChatLanguage) => void;
   leadingActions?: MoreMenuAction[];
   actions?: MoreMenuAction[];
   align?: 'start' | 'end';
@@ -79,49 +65,33 @@ export function ConversationMoreMenu({
   const renderInTopLayer = topLayer && typeof HTMLElement.prototype.showPopover === 'function';
   const id = useId();
   const menuId = `${id}-menu`;
-  const languageMenuId = `${id}-language`;
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const menuRef = useOverlayMotion(menu, 'menu');
-  const languageItem = useRef<HTMLButtonElement>(null);
-  const languageMenu = useRef<HTMLDivElement>(null);
-  const languageMenuRef = useOverlayMotion(languageMenu, 'menu');
   const [open, setOpen] = useState(false);
-  const [languageOpen, setLanguageOpen] = useState(false);
-  const pendingFocus = useRef<'first' | 'last' | 'checked' | null>(null);
+  const pendingFocus = useRef<'first' | 'last' | null>(null);
 
   useLayoutEffect(() => {
     if (!open || !renderInTopLayer || !menu.current?.showPopover) return;
     const sheet = menu.current;
-    const flyout = languageMenu.current;
     // A nested backdrop-filter cannot sample chat outside the composer's backdrop root.
     // Manual popovers escape that root without moving the attachment input in the DOM.
     sheet.showPopover();
-    if (languageOpen) flyout?.showPopover();
     let frame = 0;
     const position = () => {
       const anchor = trigger.current?.getBoundingClientRect();
       if (!anchor) return;
       sheet.style.left = `${align === 'end' ? anchor.right - sheet.offsetWidth : anchor.left}px`;
       sheet.style.bottom = `${window.innerHeight - anchor.top + 10}px`;
-      if (languageOpen && flyout) {
-        const row = languageItem.current?.getBoundingClientRect();
-        if (row) {
-          const phone = window.innerWidth <= 700;
-          flyout.style.left = `${phone ? row.left - 6 : align === 'end' ? row.left - flyout.offsetWidth - 12 : row.right + 12}px`;
-          flyout.style.top = `${phone ? row.top - flyout.offsetHeight - 12 : row.top - 6}px`;
-        }
-      }
       frame = requestAnimationFrame(position);
     };
     position();
     return () => cancelAnimationFrame(frame);
-  }, [align, languageOpen, open, renderInTopLayer]);
+  }, [align, open, renderInTopLayer]);
 
   const close = useCallback((restoreFocus: boolean) => {
     setOpen(false);
-    setLanguageOpen(false);
     pendingFocus.current = null;
     if (restoreFocus) trigger.current?.focus();
   }, []);
@@ -142,28 +112,12 @@ export function ConversationMoreMenu({
     const move = pendingFocus.current;
     if (!move) return;
     pendingFocus.current = null;
-    if (languageOpen) focusItem(languageMenu.current, move);
-    else if (open) focusItem(menu.current, move);
-  }, [open, languageOpen]);
+    if (open) focusItem(menu.current, move);
+  }, [open]);
 
   const openMenu = (move: 'first' | 'last') => {
     pendingFocus.current = move;
-    setLanguageOpen(false);
     setOpen(true);
-  };
-
-  const openLanguage = () => {
-    if (languageOpen) {
-      focusItem(languageMenu.current, 'checked');
-      return;
-    }
-    pendingFocus.current = 'checked';
-    setLanguageOpen(true);
-  };
-
-  const closeLanguage = () => {
-    setLanguageOpen(false);
-    languageItem.current?.focus();
   };
 
   const onTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -177,9 +131,8 @@ export function ConversationMoreMenu({
     }
   };
 
-  const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>, submenu: boolean) => {
-    const container = submenu ? languageMenu.current : menu.current;
-    if (!submenu && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) setLanguageOpen(false);
+  const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const container = menu.current;
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
@@ -197,20 +150,9 @@ export function ConversationMoreMenu({
         event.preventDefault();
         focusItem(container, 'last');
         break;
-      case 'ArrowRight':
-        if (submenu || document.activeElement !== languageItem.current) return;
-        event.preventDefault();
-        openLanguage();
-        break;
-      case 'ArrowLeft':
-        if (!submenu) return;
-        event.preventDefault();
-        closeLanguage();
-        break;
       case 'Escape':
         event.preventDefault();
-        if (submenu) closeLanguage();
-        else close(true);
+        close(true);
         break;
       case 'Tab':
         close(false);
@@ -284,48 +226,8 @@ export function ConversationMoreMenu({
       </button>
       {open && (
         <div ref={menuRef} id={menuId} className="more-menu-list luminous-glass" popover={renderInTopLayer ? 'manual' : undefined} role="menu" aria-label={label}
-          onKeyDown={(event) => onMenuKeyDown(event, false)}>
+          onKeyDown={onMenuKeyDown}>
           {renderActions(leadingActions)}
-          {language !== undefined && onLanguageChange && <div role="none" className="more-menu-language">
-            <button
-              ref={languageItem}
-              className="more-menu-item"
-              type="button"
-              role="menuitem"
-              tabIndex={-1}
-              aria-haspopup="menu"
-              aria-expanded={languageOpen}
-              aria-controls={languageOpen ? languageMenuId : undefined}
-              onClick={() => (languageOpen ? closeLanguage() : openLanguage())}
-            >
-              <MenuIcon name="globe" />
-              <span className="more-menu-label">Chat language</span>
-              <MenuIcon name="chevron" />
-            </button>
-            {languageOpen && (
-              <div ref={languageMenuRef} id={languageMenuId} className="more-menu-flyout luminous-glass" popover={renderInTopLayer ? 'manual' : undefined} role="menu"
-                aria-label="Chat language"
-                onKeyDown={(event) => onMenuKeyDown(event, true)}>
-                {chatLanguages.map((option) => (
-                  <button
-                    key={option.value}
-                    className="more-menu-item"
-                    type="button"
-                    role="menuitemradio"
-                    tabIndex={-1}
-                    aria-checked={language === option.value}
-                    onClick={() => {
-                      onLanguageChange(option.value);
-                      close(true);
-                    }}
-                  >
-                    <span className="more-menu-label">{option.label}</span>
-                    <span className="more-menu-check"><MenuIcon name="check" /></span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>}
           {onTestRuntime && renderActions([{ id: 'test-runtime', label: 'Test agent runtime', icon: <MenuIcon name="plus" />, onSelect: onTestRuntime }])}
           {renderActions(actions)}
         </div>

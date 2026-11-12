@@ -3,7 +3,6 @@ import type { BackgroundJobHandle, BackgroundJobRegistry } from '../core/jobs.js
 import type { UsageStore } from '../core/usage.js';
 import { canRunWithinBudget, estimateCost } from './budget.js';
 import { detectFindings, normaliseFactText } from './detect.js';
-import { detectLanguage } from './language.js';
 import type { ProactiveModel } from './model.js';
 import { sourceLabels, type FindingInput, type ProactiveStore } from './store.js';
 import { isQuietHour, monthKey } from './time.js';
@@ -53,7 +52,6 @@ export interface FindingsStoredContext {
     dueAt: string | null;
     dueHasTime: boolean;
     highPriority: boolean;
-    language: 'da' | 'en';
     suggestedTodo?: string;
   }[];
   facts: Pick<ReadFact,
@@ -68,7 +66,6 @@ export interface ProactiveEngineOptions {
   model: ProactiveModel;
   backgroundJobs?: Pick<BackgroundJobRegistry, 'start'>;
   usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
-  conversationStore?: { readRecentUserMessages(limit?: number): Promise<string[]> };
   now: () => Date;
   logger?: { warn: (data: { runId: string; reason: string }, message: string) => void };
   onFindingsStored?: readonly ((context: FindingsStoredContext) => void | Promise<void>)[];
@@ -225,10 +222,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
         (settings.suggestionScope === 'all' ||
           classifySuggestionScope(fact.text, [fact]) === settings.suggestionScope) &&
         (settings.categories.travel || !hasTravelEvidence(fact.text, [fact])));
-      const messages = options.conversationStore
-        ? await abortable(options.conversationStore.readRecentUserMessages(8), controller.signal) : [];
-      const language = detectLanguage(messages);
-      const deterministic = detectFindings(facts, now(), language);
+      const deterministic = detectFindings(facts, now());
       const eligibleDeterministic = deterministic.flatMap((finding) => {
         const cited = finding.evidence.map((ref) => facts.find((candidate) => candidate.ref === ref)!);
         const suggestionScope = classifySuggestionScope(`${finding.title} ${finding.body}`, cited);
@@ -245,7 +239,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
           evidence: cited.map((fact) => ({
             source: fact.source, label: fact.label, observedAt: fact.observedAt,
           })),
-          language, runId: run.id,
+          runId: run.id,
         }));
       if (mirror && findingAllowed(settings, mirror.category, 'unknown')) {
         pending.push({ ...mirror, suggestionScope: 'unknown', runId: run.id, evidenceRefs: [] });
@@ -259,7 +253,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
           return;
         }
         const modelWork = Promise.resolve().then(() => options.model.summarize({
-            now: now(), language, guidance: settings.guidance, deterministic: eligibleDeterministic, facts,
+            now: now(), guidance: settings.guidance, deterministic: eligibleDeterministic, facts,
           }, controller.signal)).catch(() => ({
             findings: [], reason: 'model_unavailable' as const,
           }));
@@ -292,7 +286,7 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
             dedupeKey: modelDedupeKey(finding.category, cited),
             evidenceRefs: finding.evidence,
             evidence: cited.map((fact) => ({ source: fact.source, label: fact.label, observedAt: fact.observedAt })),
-            language, runId: run.id,
+            runId: run.id,
             ...(finding.suggestedTodo === undefined || cited.some(fact => fact.kind === 'commitment' || ['health', 'nutrition', 'notes', 'memory'].includes(fact.source))
               ? {} : { suggestedTodo: finding.suggestedTodo }),
           });
@@ -326,7 +320,6 @@ export function createProactiveEngine(options: ProactiveEngineOptions) {
             evidenceRefs.includes(fact.ref) && fact.dueAt === finding.dueAt && fact.dueHasTime === true),
           highPriority: facts.some((fact) =>
             evidenceRefs.includes(fact.ref) && fact.highPriority === true),
-          language,
           ...(suggestedTodo === undefined ? {} : { suggestedTodo }),
         });
       }

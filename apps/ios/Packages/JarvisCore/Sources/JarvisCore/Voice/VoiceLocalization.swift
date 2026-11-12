@@ -18,9 +18,7 @@ public enum JarvisVoiceLocalization {
         _ key: JarvisVoiceLocalizationKey,
         language: JarvisAppLanguage? = nil
     ) -> String {
-        let language = language ?? JarvisAppLanguage(
-            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-        ) ?? .default
+        let language = language ?? JarvisAppLanguage.default
         guard let url = Bundle.module.url(forResource: language.rawValue, withExtension: "lproj"),
               let bundle = Bundle(url: url) else {
             return "voice.\(key.rawValue)"

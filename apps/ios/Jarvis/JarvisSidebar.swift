@@ -142,7 +142,6 @@ struct JarvisSidebarReveal<Page: View>: View {
 
 struct JarvisSidebar: View {
     @EnvironmentObject private var navigation: JarvisNavigationModel
-    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var focusedDestination: JarvisDestination?
     @FocusState private var settingsFocused: Bool
@@ -153,7 +152,7 @@ struct JarvisSidebar: View {
     let onNavigate: (JarvisDestination) -> Void
 
     private var language: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+        .default
     }
 
     var body: some View {

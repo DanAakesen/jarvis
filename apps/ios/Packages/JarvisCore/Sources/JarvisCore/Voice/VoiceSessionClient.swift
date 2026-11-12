@@ -211,7 +211,6 @@ public protocol WebSocketTransport: Sendable {
 
 public actor VoiceSessionClient {
     private let baseURL: URL
-    private let appLanguage: JarvisAppLanguage?
     private let transport: any WebSocketTransport
     private let clock: any ChatClock
     private let reconnectPolicy: VoiceReconnectPolicy
@@ -231,7 +230,6 @@ public actor VoiceSessionClient {
     public init(
         baseURL: URL,
         transport: any WebSocketTransport,
-        appLanguage: JarvisAppLanguage? = nil,
         clock: any ChatClock = ContinuousChatClock(),
         reconnectPolicy: VoiceReconnectPolicy = VoiceReconnectPolicy(),
         onMessage: @escaping @Sendable (VoiceServerMessage) -> Void = { _ in },
@@ -240,7 +238,6 @@ public actor VoiceSessionClient {
     ) {
         self.baseURL = baseURL
         self.transport = transport
-        self.appLanguage = appLanguage
         self.clock = clock
         self.reconnectPolicy = reconnectPolicy
         self.onMessage = onMessage
@@ -255,7 +252,7 @@ public actor VoiceSessionClient {
     public func start(accessToken: String) async throws {
         guard machine.state == .idle else { throw VoiceProtocolError.invalidState }
         guard Self.isValidSubprotocolToken(accessToken) else { throw VoiceProtocolError.invalidToken }
-        let target = try VoiceEndpoint.url(baseURL: baseURL, appLanguage: appLanguage)
+        let target = try VoiceEndpoint.url(baseURL: baseURL)
         endpoint = target
         subprotocols = [VoiceEndpoint.subprotocol, "jarvis.auth.\(accessToken)"]
         apply(.start)

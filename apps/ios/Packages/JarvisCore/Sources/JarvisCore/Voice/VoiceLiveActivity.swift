@@ -42,9 +42,7 @@ public enum VoiceLiveActivityError: Error, LocalizedError {
     case unavailable
 
     public var errorDescription: String? {
-        let language = JarvisAppLanguage(
-            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-        ) ?? .default
+        let language = JarvisAppLanguage.default
         return VoiceLiveActivityCopy.unavailable.text(language: language)
     }
 }

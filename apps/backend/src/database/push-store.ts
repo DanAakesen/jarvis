@@ -39,13 +39,12 @@ interface ItemRow {
   feedback: Item['feedback'];
   run_id: string | null;
   todo_added: boolean;
-  language: Item['language'];
   created_at: Date | string;
 }
 
 const itemColumns = [
   'id', 'kind', 'title', 'body', 'category', 'suggestion_scope', 'urgency', 'due_at', 'evidence_json', 'state',
-  'snoozed_until', 'feedback', 'run_id', 'todo_added', 'language', 'created_at',
+  'snoozed_until', 'feedback', 'run_id', 'todo_added', 'created_at',
 ];
 
 function mapItem(row: ItemRow): ProactiveItem {
@@ -72,7 +71,6 @@ function mapItem(row: ItemRow): ProactiveItem {
     feedback: row.feedback,
     runId: row.run_id?.toLowerCase() ?? null,
     todoAdded: row.todo_added,
-    language: row.language,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString(),
   };
 }

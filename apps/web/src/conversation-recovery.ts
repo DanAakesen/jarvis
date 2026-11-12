@@ -1,6 +1,6 @@
 import type { ChatAttachment } from './chat-attachments';
 
-export type SavedQueuedMessage = { id: number; text: string; language: 'da' | 'en'; attachments?: ChatAttachment[] };
+export type SavedQueuedMessage = { id: number; text: string; attachments?: ChatAttachment[] };
 export type SavedFailedTurn = SavedQueuedMessage & { messageId?: string; error: string; partialReply: string; acknowledgment: string };
 export type ConversationRecovery = { queue: SavedQueuedMessage[]; failedTurns: SavedFailedTurn[] };
 const lifetimeMs = 24 * 60 * 60 * 1000;
@@ -19,7 +19,7 @@ function object(value: unknown): value is Record<string, unknown> {
 function text(value: unknown, max: number): value is string { return typeof value === 'string' && value.length <= max; }
 function queued(value: unknown): value is SavedQueuedMessage {
   return object(value) && Number.isSafeInteger(value.id) && Number(value.id) > 0 && text(value.text, 20_000) &&
-    (value.language === 'da' || value.language === 'en') &&
+    (value.language === undefined || value.language === 'da' || value.language === 'en') &&
     (value.attachments === undefined || Array.isArray(value.attachments) && value.attachments.length <= 5 && value.attachments.every(file =>
       object(file) && typeof file.id === 'string' && /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu.test(file.id) &&
       text(file.name, 255) && text(file.contentType, 128) && Number.isSafeInteger(file.size) && Number(file.size) > 0));
@@ -33,8 +33,8 @@ function failed(value: unknown): value is SavedFailedTurn {
 }
 
 function restore(value: Record<string, unknown>): ConversationRecovery {
-  const restoreQueued = ({ id, text, language, attachments }: SavedQueuedMessage): SavedQueuedMessage =>
-    ({ id, text, language, ...(attachments ? { attachments } : {}) });
+  const restoreQueued = ({ id, text, attachments }: SavedQueuedMessage): SavedQueuedMessage =>
+    ({ id, text, ...(attachments ? { attachments } : {}) });
   return {
     queue: Array.isArray(value.queue) ? value.queue.filter(queued).map(restoreQueued) : [],
     failedTurns: Array.isArray(value.failedTurns) ? value.failedTurns.filter(failed).map(entry => ({

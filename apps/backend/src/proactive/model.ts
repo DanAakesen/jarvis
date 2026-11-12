@@ -14,7 +14,6 @@ const categories = ['prep', 'news', 'weather', 'status', 'suggestion', 'todo', '
 
 export interface ProactiveModelInput {
   now: Date;
-  language: 'da' | 'en';
   guidance: string;
   deterministic: {
     title: string;

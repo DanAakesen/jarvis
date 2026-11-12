@@ -7,9 +7,9 @@ interface IdentityContract {
   version: number;
   revision?: number;
   precedence: string[];
-  fixedKernel: Record<'da' | 'en', string>;
-  productIdentity: Record<'da' | 'en', string>;
-  ownerIdentityLabel: Record<'da' | 'en', string>;
+  fixedKernel: string;
+  productIdentity: string;
+  ownerIdentityLabel: string;
 }
 
 export const identityContract = JSON.parse(readFileSync(
@@ -17,12 +17,12 @@ export const identityContract = JSON.parse(readFileSync(
   'utf8',
 )) as IdentityContract;
 
-export function composeIdentityInstructions(identity: Settings['identity'], language: 'da' | 'en'): string {
+export function composeIdentityInstructions(identity: Settings['identity']): string {
   return [
     `Identity composition contract v${identityContract.version}. Precedence: ${identityContract.precedence.join(' > ')}.`,
-    `Fixed truthfulness and security kernel:\n${identityContract.fixedKernel[language]}`,
-    `Shared Jarvis product identity:\n${identityContract.productIdentity[language]}`,
-    `${identityContract.ownerIdentityLabel[language]}\n${JSON.stringify(identity.description)}`,
+    `Fixed truthfulness and security kernel:\n${identityContract.fixedKernel}`,
+    `Shared Jarvis product identity:\n${identityContract.productIdentity}`,
+    `${identityContract.ownerIdentityLabel}\n${JSON.stringify(identity.description)}`,
   ].join('\n\n');
 }
 

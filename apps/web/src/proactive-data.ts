@@ -20,7 +20,6 @@ export interface ProactiveItem {
   feedback: 'useful' | 'wrong' | null;
   runId: string | null;
   todoAdded: boolean;
-  language: 'da' | 'en' | null;
   createdAt: string;
 }
 
@@ -67,10 +66,7 @@ export interface ProactiveSettings {
   guidance: string;
   revision: string;
   preferences: string[];
-  capabilities: {
-    title: { en: string; da: string };
-    examples: { en: string; da: string }[];
-  };
+  capabilities: { title: string; examples: string[] };
 }
 
 export const findingCategoryIds = [
@@ -142,8 +138,7 @@ export function isProactiveItem(value: unknown): value is ProactiveItem {
     (value.snoozedUntil === null || isDate(value.snoozedUntil)) &&
     (value.feedback === null || value.feedback === 'useful' || value.feedback === 'wrong') &&
     (value.runId === null || typeof value.runId === 'string') &&
-    typeof value.todoAdded === 'boolean' && (value.language === null || value.language === 'da' || value.language === 'en') &&
-    isDate(value.createdAt);
+    typeof value.todoAdded === 'boolean' && isDate(value.createdAt);
 }
 
 function isSourceStatus(value: unknown): value is SourceStatus {
@@ -183,11 +178,9 @@ export function isProactiveSettings(value: unknown): value is ProactiveSettings 
     typeof value.revision === 'string' && /^[a-f0-9]{64}$/u.test(value.revision) &&
     Array.isArray(value.preferences) && value.preferences.length <= 12 &&
     value.preferences.every((preference) => typeof preference === 'string' && preference.length <= 300) &&
-    isRecord(value.capabilities) && isRecord(value.capabilities.title) &&
-    typeof value.capabilities.title.en === 'string' && typeof value.capabilities.title.da === 'string' &&
+    isRecord(value.capabilities) && typeof value.capabilities.title === 'string' &&
     Array.isArray(value.capabilities.examples) && value.capabilities.examples.length <= 12 &&
-    value.capabilities.examples.every((example) => isRecord(example) &&
-      typeof example.en === 'string' && typeof example.da === 'string');
+    value.capabilities.examples.every((example) => typeof example === 'string');
 }
 
 export async function proactiveRequest(
@@ -263,9 +256,9 @@ export function runReason(code: string | null): string | null {
   return code && Object.hasOwn(runReasons, code) ? runReasons[code]! : null;
 }
 
-export function formatTime(value: string, language: 'da' | 'en' = 'en'): string {
+export function formatTime(value: string): string {
   return formatDateTime(value, {
-    locale: language === 'da' ? 'da-DK' : 'en-GB',
+    locale: 'en-GB',
     timeZone: 'Europe/Copenhagen',
   });
 }

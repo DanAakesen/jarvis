@@ -5,13 +5,12 @@ struct JarvisActivitySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expandedGroups = Set<String>()
-    @AppStorage(JarvisAppLanguage.preferenceKey) private var storedLanguage = JarvisAppLanguage.default.rawValue
     @ObservedObject var model: JarvisChatModel
     let kind: ActivitySheetKind
     let onOpenTask: (String) -> Void
 
     private var appLanguage: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: storedLanguage) ?? .default
+        .default
     }
 
     private func copy(_ key: JarvisChatLocalizationKey) -> String {

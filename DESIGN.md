@@ -1012,8 +1012,8 @@ Controlled actual-component Chromium checks are not physical Safari proof.
 ## Unified bilingual voice (12 November 2026)
 
 Voice has one authenticated route and uses the existing realtime model and shared
-prompt for English and Danish speech. Do not add a voice-language or route picker.
-The composer keeps its separate Danish/English chat-language choice.
+English prompt; the model follows English or Danish speech. Do not add a
+voice-language, route or chat-language picker.
 
 ## Remaining UI release (13 October 2026)
 
@@ -1916,7 +1916,7 @@ The implementation uses existing authenticated task, project, release, conversat
 
 The existing shared glass implementation remains the foundation. Dan selected [this Luminous Glass reference](docs/ui/chat-voice/README.md) for a more compact voice status bar, matching chat input and readable message window. Implement the exact header removals: no separator above chat messages and no small orb/Jarvis title at top-left; retain top-right window controls, drag region, input voice-start orb. The later Architectural Glass decision below additionally removes both message-avatar icons while preserving accessible author roles.
 
-Use a shared More menu with an icon plus Language row and Danish/English flyout, not a large DA/EN switch. Do not duplicate capture controls inside the voice bar. Extend canonical material/type tokens, with adequate frosted opacity over bright room motion, dark/light contrast and responsive touch targets. Preserve existing runtime/window/conversation contracts, including #371 steering and Ctrl+Enter queueing. [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399) were the initial allocations; #397 is now merged in PR #403, and #398 owns the remaining combined implementation. #399 is superseded. The subsequent Architectural Glass selection below supersedes the bottom-bar and message-avatar requirements; the other agreed shell slots and Jarvis-only room scope stand.
+The shared More menu has no language row or flyout. Do not duplicate capture controls inside the voice bar. Extend canonical material/type tokens, with adequate frosted opacity over bright room motion, dark/light contrast and responsive touch targets. Preserve existing runtime/window/conversation contracts, including #371 steering and Ctrl+Enter queueing. [P8-36 (#397)](https://github.com/DanAakesen/jarvis/issues/397); [P8-37 (#398)](https://github.com/DanAakesen/jarvis/issues/398); [P8-38 (#399)](https://github.com/DanAakesen/jarvis/issues/399) were the initial allocations; #397 is now merged in PR #403, and #398 owns the remaining combined implementation. #399 is superseded. The subsequent Architectural Glass selection below supersedes the bottom-bar and message-avatar requirements; the other agreed shell slots and Jarvis-only room scope stand.
 
 ## Selected Architectural Glass shell and avatar-free messages — 6 October 2026
 
@@ -3010,8 +3010,9 @@ system scrolling remain the default. The fixed-behind reveal is custom because
 the system navigation containers do not provide this interaction. Its geometry
 and motion values live in `apps/ios/Jarvis/JarvisSidebar.swift`; destination and
 stack state live in the pure-Swift `JarvisCore` package. Chat, Voice and Notes
-are native screens; the unbuilt areas use title-only placeholders, and Settings
-hosts the app-language preference. Reduced Motion removes settling animation.
+are native screens; the unbuilt areas use title-only placeholders. App copy is
+English-only and Settings has no app-language preference. Reduced Motion removes
+settling animation.
 
 ## Native iOS Voice screen (P15-11; 30 October 2026)
 
@@ -3133,9 +3134,9 @@ succeeds. Notes expose editable blocks and keyboard formatting controls immediat
 Note delete/rename/move and task delete remain
 unavailable. Recent opening history
 is stored in the account-bound app cache and clears on sign-out.
-Danish and English strings come from the JarvisCore localization
-catalog; the app-owned Settings preference defaults to Danish and controls date
-formatting as well as visible and accessibility copy.
+English strings come from the JarvisCore localization catalog; the app has no
+language preference, and date formatting and visible/accessibility copy are
+English-only.
 
 ## Native iOS Settings area (P15-20; 31 October 2026)
 
@@ -3197,8 +3198,7 @@ added.
 Orange is a small primary action/accent, with the approved dark/light foreground
 pair; In review uses the shared stone secondary token through the Factory token
 alias. Selection and task/check state always include text and an icon, not color
-alone. Danish/English copy and date formatting come from `JarvisCore`,
-with the app language defaulting to Danish. System type sizes, appearance,
+alone. English-only copy and date formatting come from `JarvisCore`. System type sizes, appearance,
 VoiceOver labels, and native scrolling remain intact.
 
 Board intentionally uses one selected project per request. There is
@@ -3278,8 +3278,8 @@ The approved reference is `docs/ios/design/workspaces.html`; its generated
 sample data is illustrative. The native screen pins search to the bottom, as in
 the reference, and has no create/plus action because neither the web Workspaces
 pane nor the shared backend contract has a create route. All Workspaces UI and
-accessibility copy follows the persisted app-language preference (Danish by
-default, with English). `html-app`, `knowledge-graph` and `code` remain
+accessibility copy is English-only, with no persisted app-language preference.
+`html-app`, `knowledge-graph` and `code` remain
 unsupported cards; their optional link opens only a validated configured HTTPS
 web-app root, not a guessed item deep link. Supplied HTML, JavaScript and CSS are
 never executed.

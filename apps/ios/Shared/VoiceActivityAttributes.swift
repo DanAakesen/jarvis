@@ -11,9 +11,6 @@ struct VoiceActivityAttributes: ActivityAttributes {
 
     let sessionID: UUID
     let startedAt: Date
-    let language: String
 
-    var appLanguage: JarvisAppLanguage {
-        JarvisAppLanguage(rawValue: language) ?? .default
-    }
+    var appLanguage: JarvisAppLanguage { .default }
 }

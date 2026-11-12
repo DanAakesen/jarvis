@@ -513,7 +513,7 @@ describe('structured log export', () => {
     const sink = { ...sdk, trackTrace: vi.fn() };
     const logger = createLogger({ logLevel: 'info' }, sink, output);
     for (const latencyMs of [-1, 600_001, Infinity, -Infinity, NaN, '42', null, undefined]) {
-      logger.info({ path: 'private', reason: 'arbitrary_code', channel: 'voice-da', latencyMs, captionMs: latencyMs }, 'visual.path');
+      logger.info({ path: 'private', reason: 'arbitrary_code', channel: 'voice-invalid', latencyMs, captionMs: latencyMs }, 'visual.path');
       expect(JSON.parse(records.at(-1)!)).toEqual({
         level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'visual.path',
       });

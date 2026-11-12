@@ -1,14 +1,12 @@
 import { createContext, useContext } from 'react';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import type { CameraController } from './screen-sharing';
-import type { ChatLanguage } from './chat-language';
 
 export type SessionCommand = Extract<WorkspaceCommand, { operation: 'session' }>;
 export type SessionCommandResult = { applied: true } | { applied: false; reason: string };
 
 /** What the mounted conversation can do for a current-session command. Each owner registers only its own part. */
 export interface SessionCommandHandlers {
-  setLanguage: (language: ChatLanguage) => void;
   /** Ends the running voice session and resolves once it has stopped; false when none is running. */
   endVoice: () => Promise<boolean>;
 }
@@ -88,12 +86,6 @@ export async function applySessionCommand(
   camera: CameraController | undefined,
 ): Promise<SessionCommandResult> {
   switch (command.action) {
-    case 'language': {
-      if (command.value !== 'da' && command.value !== 'en') return refuse('That language is not supported. Use Danish or English.');
-      if (!registry?.handlers.setLanguage) return refuse('The conversation is not open, so the language cannot be changed.');
-      registry.handlers.setLanguage(command.value);
-      return applied;
-    }
     case 'voice': {
       if (command.value !== 'end') return refuse('That voice option is not supported.');
       if (!registry?.handlers.endVoice) return refuse('There is no voice session to end.');

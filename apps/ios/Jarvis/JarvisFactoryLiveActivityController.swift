@@ -53,7 +53,7 @@ final class JarvisFactoryLiveActivityController: ObservableObject {
         for activity in activities {
             try Task.checkCancellation()
             let id = activity.attributes.taskID
-            let language = JarvisAppLanguage(rawValue: activity.attributes.language) ?? .default
+            let language = JarvisAppLanguage.default
             if let task = backgroundTasks.first(where: { $0.id == id }) {
                 await update(
                     taskID: id, title: task.title,
@@ -173,7 +173,6 @@ final class JarvisFactoryLiveActivityController: ObservableObject {
             taskID: taskID,
             title: title,
             startedAt: startedAt,
-            language: language.rawValue,
             factoryTitle: factoryTitle ?? JarvisFactoryLocalization.string(.title, language: language)
         )
         do {
@@ -208,12 +207,12 @@ final class JarvisFactoryLiveActivityController: ObservableObject {
         _ token: Data, activity: Activity<FactoryTaskActivityAttributes>, language: JarvisAppLanguage
     ) async {
         let hex = token.map { String(format: "%02x", $0) }.joined()
-        let key = "\(activity.id):\(hex):\(language.rawValue)"
+        let key = "\(activity.id):\(hex)"
         guard !shared.registeredTokens.contains(key), let client = shared.client else { return }
         do {
             try await client.registerTaskActivity(
                 taskID: activity.attributes.taskID, activityID: activity.id,
-                pushToken: hex, language: language
+                pushToken: hex
             )
             shared.registeredTokens.insert(key)
         } catch {

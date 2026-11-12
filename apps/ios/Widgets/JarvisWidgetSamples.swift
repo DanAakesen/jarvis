@@ -24,44 +24,42 @@ enum JarvisWidgetSamples {
         )
     }
 
-    static func factory(language: JarvisAppLanguage = .da) -> JarvisFactoryWidgetData {
-        let da = language == .da
+    static func factory(language: JarvisAppLanguage = .en) -> JarvisFactoryWidgetData {
         return JarvisFactoryWidgetData(
             generatedAt: now,
             lastDay: calendar.startOfDay(for: now),
             running: 2, awaiting: 1, review: 1, failed: 1,
             doneLast7Days: [2, 4, 1, 3, 5, 2, 3],
             tasks: [
-                .init(id: "c1", title: da ? "Flet release-PR" : "Merge release PR",
-                      detail: da ? "Udløber kl. 17:47" : "Expires at 17:47", status: .awaiting, action: .approve),
-                .init(id: "t1", title: da ? "Widgets til hjemmeskærmen" : "Home screen widgets",
-                      detail: "Copilot · " + (da ? "Skriver tests" : "Writing tests"), status: .running, action: .pause),
-                .init(id: "t2", title: da ? "Ret sync-fejl" : "Fix sync bug",
-                      detail: da ? "Fejlet · Sessionen sluttede uventet" : "Failed · Session ended unexpectedly",
+                .init(id: "c1", title: "Merge release PR",
+                      detail: "Expires at 17:47", status: .awaiting, action: .approve),
+                .init(id: "t1", title: "Home screen widgets",
+                      detail: "Copilot · Writing tests", status: .running, action: .pause),
+                .init(id: "t2", title: "Fix sync bug",
+                      detail: "Failed · Session ended unexpectedly",
                       status: .failed, action: .retry),
-                .init(id: "t3", title: da ? "Opdater afhængigheder" : "Update dependencies",
-                      detail: da ? "PR 134 · checks kører" : "PR 134 · checks running", status: .review),
-                .init(id: "t4", title: da ? "Ryd op i logs" : "Tidy logs",
-                      detail: "Codex · " + (da ? "Læser kode" : "Reading code"), status: .running, action: .pause),
+                .init(id: "t3", title: "Update dependencies",
+                      detail: "PR 134 · checks running", status: .review),
+                .init(id: "t4", title: "Tidy logs",
+                      detail: "Codex · Reading code", status: .running, action: .pause),
             ]
         )
     }
 
-    static func notes(language: JarvisAppLanguage = .da) -> JarvisNotesWidgetData {
-        let da = language == .da
+    static func notes(language: JarvisAppLanguage = .en) -> JarvisNotesWidgetData {
         let today = calendar.startOfDay(for: now)
         return JarvisNotesWidgetData(
             generatedAt: now,
             tasksToday: 3,
             tasks: [
-                .init(id: "k1", title: da ? "Ring til tandlægen" : "Call the dentist", time: "14:00", dueDate: today),
-                .init(id: "k2", title: da ? "Send faktura" : "Send invoice", dueDate: today),
-                .init(id: "k3", title: da ? "Planlæg ugen" : "Plan the week", time: "17:30", dueDate: today),
+                .init(id: "k1", title: "Call the dentist", time: "14:00", dueDate: today),
+                .init(id: "k2", title: "Send invoice", dueDate: today),
+                .init(id: "k3", title: "Plan the week", time: "17:30", dueDate: today),
             ],
             notes: [
-                .init(id: "n1", title: da ? "Idéer til widgets" : "Widget ideas", editedAt: now.addingTimeInterval(-1_800)),
-                .init(id: "n2", title: da ? "Mødenoter" : "Meeting notes", editedAt: now.addingTimeInterval(-90_000)),
-                .init(id: "n3", title: da ? "Indkøb" : "Shopping", editedAt: now.addingTimeInterval(-200_000)),
+                .init(id: "n1", title: "Widget ideas", editedAt: now.addingTimeInterval(-1_800)),
+                .init(id: "n2", title: "Meeting notes", editedAt: now.addingTimeInterval(-90_000)),
+                .init(id: "n3", title: "Shopping", editedAt: now.addingTimeInterval(-200_000)),
             ]
         )
     }
@@ -75,7 +73,7 @@ enum JarvisWidgetSamples {
         factory: JarvisWidgetViewState<JarvisFactoryWidgetData>? = nil,
         notes: JarvisWidgetViewState<JarvisNotesWidgetData>? = nil,
         home: JarvisWidgetViewState<JarvisHomeWidgetData>? = nil,
-        language: JarvisAppLanguage = .da
+        language: JarvisAppLanguage = .en
     ) -> JarvisWidgetEntry {
         JarvisWidgetEntry(
             date: now, language: language,

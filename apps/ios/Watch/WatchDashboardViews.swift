@@ -164,7 +164,7 @@ struct WatchDashboardView: View {
                     ForEach(Array(rows.prefix(2).enumerated()), id: \.offset) { _, row in
                         Text(JarvisHealthLocalization.workoutName(
                             row["workout_type"]?.stringValue,
-                            language: locale.identifier.lowercased().hasPrefix("da") ? .da : .en
+                            language: .en
                         )).font(.caption)
                     }
                 }

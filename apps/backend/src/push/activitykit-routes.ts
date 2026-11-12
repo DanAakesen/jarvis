@@ -14,11 +14,10 @@ export interface ActivityKitServices {
 export function validateActivityRegistration(body: unknown): ActivityRegistration | undefined {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return;
   const input = body as Record<string, unknown>;
-  if (Object.keys(input).some((key) => !['activityId', 'kind', 'resourceId', 'pushToken', 'language'].includes(key)) ||
+  if (Object.keys(input).some((key) => !['activityId', 'kind', 'resourceId', 'pushToken'].includes(key)) ||
       typeof input.activityId !== 'string' || !activityIdPattern.test(input.activityId) ||
       typeof input.resourceId !== 'string' || typeof input.pushToken !== 'string' ||
-      !/^(?:[0-9a-f]{2}){32,256}$/iu.test(input.pushToken) ||
-      (input.language !== undefined && input.language !== 'da' && input.language !== 'en')) return;
+      !/^(?:[0-9a-f]{2}){32,256}$/iu.test(input.pushToken)) return;
   if (input.kind !== 'background_job' && input.kind !== 'factory_task') return;
   if (input.kind === 'background_job' ? !uuid.test(input.resourceId) :
     !/^[1-9]\d{0,18}$/u.test(input.resourceId) || BigInt(input.resourceId) > 9223372036854775807n) return;
@@ -27,32 +26,27 @@ export function validateActivityRegistration(body: unknown): ActivityRegistratio
     kind: input.kind,
     resourceId: input.resourceId.toLowerCase(),
     pushToken: input.pushToken.toLowerCase(),
-    language: input.language ?? 'da',
   };
 }
 
 function validateTaskActivityRegistration(body: unknown): ActivityRegistration | undefined {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return;
   const input = body as Record<string, unknown>;
-  if (Object.keys(input).some((name) => !['taskID', 'activityID', 'pushToken', 'language'].includes(name)) ||
+  if (Object.keys(input).some((name) => !['taskID', 'activityID', 'pushToken'].includes(name)) ||
       typeof input.taskID !== 'string' || typeof input.pushToken !== 'string' ||
-      typeof input.activityID !== 'string' || (input.language !== 'da' && input.language !== 'en')) return;
+      typeof input.activityID !== 'string') return;
   return validateActivityRegistration({
     kind: uuid.test(input.taskID) ? 'background_job' : 'factory_task',
     resourceId: input.taskID,
     activityId: input.activityID,
     pushToken: input.pushToken,
-    language: input.language,
   });
 }
 
-export function activityContent(phase: ActivityPhase, language: 'da' | 'en'): ActivityContentState {
-  const states = {
-    da: { running: 'Arbejder', waiting: 'Venter', done: 'Færdig', failed: 'Mislykkedes', cancelled: 'Annulleret' },
-    en: { running: 'Working', waiting: 'Waiting', done: 'Done', failed: 'Failed', cancelled: 'Cancelled' },
-  };
+export function activityContent(phase: ActivityPhase): ActivityContentState {
   // Task descriptions and provider errors can contain private details; push only fixed status copy.
-  return { state: states[language][phase], activity: null, phase };
+  const states = { running: 'Working', waiting: 'Waiting', done: 'Done', failed: 'Failed', cancelled: 'Cancelled' };
+  return { state: states[phase], activity: null, phase };
 }
 
 export function registerActivityKitRoutes<Logger extends FastifyBaseLogger>(
@@ -128,7 +122,7 @@ export function registerActivityKitRoutes<Logger extends FastifyBaseLogger>(
               await services.store.remove(owner, registration.activityId, registration.pushToken);
               continue;
             }
-            const result = await services.sender.send(registration.pushToken, activityContent(phase, registration.language), controller.signal);
+            const result = await services.sender.send(registration.pushToken, activityContent(phase), controller.signal);
             if (result.invalidToken || result.accepted && isTerminal) {
               retiredTokens.set(registration.activityId, registration.pushToken);
               await services.store.remove(owner, registration.activityId, registration.pushToken);

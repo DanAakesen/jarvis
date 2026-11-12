@@ -60,7 +60,7 @@ struct WatchHealthList: View {
     }
     private func workoutName(_ row: [String: JSONValue]) -> String {
         JarvisHealthLocalization.workoutName(row["workout_type"]?.stringValue,
-                                             language: locale.identifier.lowercased().hasPrefix("da") ? .da : .en)
+                                             language: .en)
     }
     private func liftSummary(_ row: [String: JSONValue]) -> some View {
         VStack(alignment: .leading) {

@@ -80,7 +80,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     func startActivityScreenshot() async {
         guard sessionClient == nil else { return }
         let arguments = ProcessInfo.processInfo.arguments
-        let language = arguments.contains("--voice-activity-language=en") ? JarvisAppLanguage.en : .da
+        let language = JarvisAppLanguage.en
         let phase = arguments.contains("--voice-activity-state=speaking") ? VoiceSessionState.speaking : .listening
         let sessionID = UUID()
         liveActivitySessionID = sessionID
@@ -225,9 +225,6 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             let client = VoiceSessionClient(
                 baseURL: baseURL,
                 transport: URLSessionWebSocketTransport(),
-                appLanguage: JarvisAppLanguage(
-                    rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-                ) ?? .default,
                 onMessage: { [weak self] message in
                     Task { @MainActor in
                         guard let self, self.sessionGeneration == generation else { return }
@@ -650,7 +647,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             if let sessionID = liveActivitySessionID {
                 let language = appLanguage
                 do {
-                    try liveActivity.start(sessionID: sessionID, language: language)
+                    try liveActivity.start(sessionID: sessionID)
                     liveActivity.update(state: voiceState, isMuted: isMuted)
                 } catch {
                     errorMessage = VoiceLiveActivityCopy.updateFailed.text(language: language)
@@ -692,9 +689,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     }
 
     private var appLanguage: JarvisAppLanguage {
-        JarvisAppLanguage(
-            rawValue: UserDefaults.standard.string(forKey: JarvisAppLanguage.preferenceKey) ?? ""
-        ) ?? .default
+        .default
     }
 
     private func failAudioCapture() {
