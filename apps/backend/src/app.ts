@@ -9,6 +9,7 @@ import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } fr
 import { ConfigurationError, localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger, safeErrorFields } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
+import { installWatchRateLimits } from './auth/watch-rate-limit.js';
 import { installConditionalGet } from './conditional-get.js';
 import { registerOwnerSessionRoutes } from './auth/session/routes.js';
 import type { OwnerSessionService } from './auth/session/service.js';
@@ -77,9 +78,11 @@ import {
 import type { BrowserConfirmation } from './core/owner-interactions.js';
 import { registerWatchTranscriptionRoute } from './voice/watch-routes.js';
 import type { WatchTranscriber } from './voice/watch-transcription.js';
+import type { WatchCredentials } from './auth/watch-credential.js';
 
 export interface BuildAppOptions {
   readonly watchTranscriber?: WatchTranscriber;
+  readonly watchCredentials?: WatchCredentials;
   readonly proactiveConversationContext?: import('./proactive/conversation-context.js').ProactiveConversationContext;
   readonly activityKit?: ActivityKitServices;
   readonly approvalNotifications?: ApprovalNotificationServices;
@@ -272,7 +275,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('ownerSessionConnections', ownerSessions
     ? new OwnerSessionConnectionRegistry({ verifier: ownerSessions })
     : null);
-  installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions);
+  installWatchRateLimits(app, config.auth.ownerObjectId);
+  installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions, options.watchCredentials);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('notifyApproval', options.notifyApproval ?? (() => {}));
   app.decorate('notifyReply', options.notifyReply ?? (() => {}));
@@ -488,7 +492,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   }
   // With the switch off these routes are not registered at all, so the paths answer 404.
   if (ownerSessions) app.register(registerOwnerSessionRoutes, { service: ownerSessions });
-  registerWatchTranscriptionRoute(app, options.watchTranscriber);
+  registerWatchTranscriptionRoute(app, options.watchTranscriber, options.watchCredentials);
   registerModules(app, options.modules ?? [
     coreModule,
     conversationModule,

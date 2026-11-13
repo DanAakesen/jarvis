@@ -81,6 +81,7 @@ private final class JarvisGateModel: ObservableObject {
     @Published private(set) var presentation: JarvisGatePresentation = .loading
     @Published private(set) var contentEpoch = 0
     @Published private(set) var signOutGeneration = 0
+    @Published private(set) var watchRevocationNotice: String?
     @Published private var isPrivacyCoverVisible = true
 
     private let policy = JarvisGatePolicy()
@@ -187,6 +188,9 @@ private final class JarvisGateModel: ObservableObject {
             isPrivacyCoverVisible = true
             JarvisTaskActivityBackgroundRefresh.shared.schedule()
         case .active:
+            if !Self.isNavigationFixture {
+                Task { await JarvisWatchBridge.shared.refreshDictationCredential() }
+            }
             let requiresLock = policy.shouldLock(lastBackgroundedAt: backgroundedAt, now: Date())
             backgroundedAt = nil
             if requiresLock, presentation == .unlocked {
@@ -221,6 +225,8 @@ private final class JarvisGateModel: ObservableObject {
 
         do {
             _ = try await client.createOwnerSession()
+            watchRevocationNotice = nil
+            JarvisWatchBridge.shared.configure(client: client)
             await JarvisAppCache.clear()
             contentEpoch += 1
             presentation = .lock(.waiting)
@@ -240,7 +246,7 @@ private final class JarvisGateModel: ObservableObject {
         defer { isSigningOut = false }
         presentation = .loading
         refreshOverlay()
-        await JarvisWatchBridge.shared.disconnect()
+        let watchRevoked = await JarvisWatchBridge.shared.disconnect()
         if let sessionID = VoiceLiveActivityActions.session?.liveActivitySessionID {
             try? await VoiceLiveActivityActions.perform(sessionID: sessionID, command: .end)
         }
@@ -251,6 +257,8 @@ private final class JarvisGateModel: ObservableObject {
             await JarvisAppCache.clear()
             contentEpoch += 1
             signOutGeneration += 1
+            watchRevocationNotice = watchRevoked ? nil :
+                "Signed out on this iPhone. Watch revocation could not be confirmed; existing credentials expire within 24 hours. Sign in when online, then sign out again to retry."
             presentation = .signIn(.idle)
         } catch {
             presentation = .signIn(.denied)
@@ -300,6 +308,7 @@ private final class JarvisGateModel: ObservableObject {
         )
         if decision == .signIn {
             presentation = .lock(.signedOut)
+            Task { await JarvisWatchBridge.shared.disconnect() }
         }
     }
 
@@ -331,6 +340,7 @@ private final class JarvisGateModel: ObservableObject {
             }
             presentation = .unlocked
             isPrivacyCoverVisible = false
+            if let client { JarvisWatchBridge.shared.configure(client: client) }
             await prepareApprovalNotifications()
             await JarvisApprovalNotificationCoordinator.shared.refresh(language: .current)
         } catch let error as LAError where error.code == .biometryLockout || error.code == .userFallback {
@@ -419,6 +429,7 @@ private struct JarvisGateOverlayView: View {
                 JarvisGateSurface(
                     presentation: model.presentation,
                     language: language,
+                    watchRevocationNotice: model.watchRevocationNotice,
                     onPrimaryAction: model.performPrimaryAction
                 )
             } else {
@@ -434,6 +445,7 @@ private struct JarvisGateOverlayView: View {
 private struct JarvisGateSurface: View {
     let presentation: JarvisGatePresentation
     let language: JarvisAppLanguage
+    let watchRevocationNotice: String?
     let onPrimaryAction: () -> Void
 
     private var isSignIn: Bool {
@@ -448,13 +460,14 @@ private struct JarvisGateSurface: View {
     }
 
     private var message: String? {
+        if presentation == .signIn(.idle), let watchRevocationNotice { return watchRevocationNotice }
         switch presentation {
-        case .signIn(.failed): language.failed
-        case .signIn(.denied): language.denied
-        case .signIn(.offline): language.offline
-        case .lock(.failed): language.faceIDFailed
-        case .lock(.signedOut): language.signedOut
-        default: nil
+        case .signIn(.failed): return language.failed
+        case .signIn(.denied): return language.denied
+        case .signIn(.offline): return language.offline
+        case .lock(.failed): return language.faceIDFailed
+        case .lock(.signedOut): return language.signedOut
+        default: return nil
         }
     }
 

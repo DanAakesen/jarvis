@@ -410,6 +410,12 @@ receive the complete list. Validate with synthetic fractional nutrition fixtures
 
 ## Mobile chat scrolling (26 October 2026; local)
 
+On iPhone, Send immediately reveals the sent message above the composer. Follow
+every subsequent chat content or height change, including thinking, progress,
+tools, streaming text, approvals, errors and completion. A manual scroll away
+pauses following; sending again or tapping the existing jump-to-latest arrow
+resumes it. New content while paused reveals that arrow without moving the view.
+
 Scrolling the phone transcript while composing retains textarea focus and the
 unsent draft, allowing continued typing and one-tap Send. An intentional outside
 tap can still dismiss the keyboard. Physical iPhone acceptance remains unverified.
@@ -2793,11 +2799,11 @@ never recover an uncertain write by blind replay.
 
 ## Apple Watch companion (8 November 2026)
 
-Target the owner's Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as watchOS 27.2, unverified. Voice and dictation are primary. Dictation fills an editable input for manual sending. Home adds read-only Factory; menu provides tasks, workouts and lift management. The four approved complications expose daily/weekly health, Tasks Today, Dictation and Voice. Follow the paired iPhone with no standalone credentials or offline send queue. Voice should continue until ended, with an End Session live tile; background behavior and mirrored Activity actions remain unverified. Owner accepts testing on their Watch after primary installation. See docs/ios/design/watch/implementation.md for limits; visual approval is separate from device acceptance.
+Target the owner's Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as watchOS 27.2, unverified. Voice and dictation are primary. Dictation fills an editable input for manual sending. Home adds read-only Factory; menu provides tasks, workouts and lift management. The four approved complications expose daily/weekly health, Tasks Today, Dictation and Voice. Dictation has a direct backend path; chat, live voice and writes still use the paired iPhone, with no offline send queue. Voice should continue until ended, with an End Session live tile; background behavior and mirrored Activity actions remain unverified. Owner accepts testing on their Watch after primary installation. See docs/ios/design/watch/implementation.md for limits; visual approval is separate from device acceptance.
 
 Watch Home and complications retain the last available data on the Watch when refresh or connectivity fails. Show its age when stale and allow display while locked after the Watch's first unlock. Explicit phone sign-out clears the Watch cache.
 
-Watch dictation records a short message and transcribes it into the draft through the paired iPhone; it never sends the draft automatically. If the phone or network is unavailable, the system keyboard remains available for an offline draft. Sending still needs the phone. Starting voice waits briefly for the companion connection rather than requiring a manual connect step, but live voice remains dependent on the iPhone.
+Watch dictation records a short message and first uploads it directly over Wi-Fi or cellular using an expiring, revocable transcription-only credential provisioned by the signed-in iPhone and held in the Watch Keychain. It falls back to the paired iPhone, then offers keyboard entry when neither path works; it never sends the draft automatically. Credential provisioning or renewal still needs the signed-in iPhone. Errors distinguish phone reachability, sign-in and network failures without promising a connection the system cannot provide. Sending, tasks and live voice still need the phone. Connection startup waits briefly for activation/reachability without blindly replaying sends or voice starts. Locked-phone and physical-device acceptance remain pending.
 
 ## Intelligent proactive notifications — 9 November 2026
 

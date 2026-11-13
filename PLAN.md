@@ -2,9 +2,33 @@
 
 Backend voice startup loads optional proactive context and managed-identity credentials alongside conversation-session creation. Context refresh has a 1.5-second bound and falls back; credentials are prewarmed and refreshed ahead of expiry. Watch startup shows Connecting through a 15-second companion wait and reports/logs interruption, route, cancellation, buffer-overflow and capture failures. Backend regression tests pass. Native Watch syntax/build, paired-device audio, production latency and owner acceptance remain unverified.
 
-## Watch record-and-transcribe dictation — 12 November 2026 (#1794)
+## Chat follow-latest on every update — 12 November 2026 (#1803)
 
-Direct Watch capture uses the authenticated companion and a transcription-only backend path; offline keyboard drafts remain available. Native Watch compilation and paired-device acceptance remain necessary.
+The shared native chat modifier now observes complete message and active-turn
+content values and anchors content/container size changes while following.
+Sending resumes immediately; manual scrolling and text selection still suspend
+automatic movement, with the existing jump-to-latest control for new content.
+Both normal Chat and the runtime-test sheet use the same event coverage.
+
+Verified: all 18 Core tests (including seven follow-state checks), Core build and
+syntax parsing of the three changed SwiftUI files; diff review and secret scan
+are clear. Swift CodeQL could not create a database. Native compilation and
+physical iPhone composer/keyboard acceptance remain unverified on this Linux
+runner.
+
+## Watch direct dictation and connection recovery — 12 November 2026 (#1807)
+
+Review follow-up, 13 November: current main is merged, including #1806.
+Recognized route limits now run before authentication, with tested
+unknown-credential flood isolation and one-second shared-source recovery.
+All 92 targeted backend tests, backend build/lint and secret scanning pass.
+Post-commit JavaScript CodeQL reports no alerts; Swift analysis cannot build
+its database in this Linux environment.
+The sync helper was cancelled by shared workflow concurrency, not canonical
+title validation; the retry tool refuses cancelled runs. Voice latency and
+capture-stream changes remain in their separate issue/PR.
+
+Implemented the direct transcription-only credential and Watch transport, preserving companion and offline keyboard fallbacks. Chat, tasks and live voice remain phone-owned. Focused backend authentication/API checks, migration manifest checks, backend build/lint and portable Swift checks pass. SQL integration is blocked by missing isolated SQL configuration; native Watch compilation, rendered UI inspection and paired-device acceptance remain pending. Next: qualify the exact head in CI and exercise locked-phone, direct Wi-Fi/cellular, expiry/revocation and keyboard recovery on device. Threat assumptions and separate chat/voice proposals are recorded in `docs/decisions.md`. This extends #1794; device acceptance is not marked complete.
 
 ## iPhone Notes and sheets — 12 November 2026 (#1786)
 
