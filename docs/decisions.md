@@ -1,3 +1,19 @@
+## 13 November 2026 — Bound Watch dictation transcription (P15-131 / #1812)
+
+Treat end-of-stream as a successful terminal recognition event instead of
+waiting indefinitely for a separate stop event. A stop alone does not establish
+success because a provider error can arrive later. Keep continuous recognition
+for bounded recordings, but use English only. Configure the Speech
+SDK's 60-second unthrottled send window so its default two-times-real-time
+pacing does not itself exceed the server deadline for long clips. Bound server
+transcription to 20 seconds and the Watch's transcribing state to 25 seconds;
+limit direct attempts to 22 seconds to leave a short phone-fallback window.
+Allow cancellation and offer keyboard recovery if the remaining time is insufficient.
+Log sanitized stages and durations rather than audio, transcripts or credentials.
+The existing credential scope, rate limits, audio bounds and concurrency limit
+remain unchanged. Production recognition of long clips, diagnosis and
+paired-Watch acceptance remain open.
+
 ## 13 November 2026 — Chat agent no longer requires a language field (hotfix)
 
 The English-only change stopped the backend sending `language` to the hosted chat agent, but the agent still required it and answered HTTP 400 "Invalid request", so every chat turn failed while voice kept working. The agent now treats `language` as optional and defaults to English, still accepting it from older callers, including per-message history entries. Backend and agent are tested separately and the live acceptance run is manual-only, so no automated check covers this contract; a cheap backend-to-agent payload contract check is a recorded follow-up.

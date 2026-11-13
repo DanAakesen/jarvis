@@ -76,6 +76,65 @@ describe('Watch-only credential boundary', () => {
     expect(f.records.join('')).not.toContain(credential);
     expect(f.records.join('')).not.toContain(next);
     expect(f.records.join('')).not.toContain('private speech');
+    expect(f.records.join('')).toContain('"stage":"credential_verified"');
+  });
+
+  it('logs request acceptance before credential verification using request-relative timings', async () => {
+    const f = fixture();
+    const { credential } = (await f.issue()).json<{ credential: string }>();
+    let entered!: () => void;
+    let finish!: (valid: boolean) => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    vi.mocked(f.store.verify).mockImplementation(() => {
+      entered();
+      return new Promise<boolean>(resolve => { finish = resolve; });
+    });
+    const pending = Promise.resolve(f.app.inject({
+      method: 'POST', url: watchTranscriptionPath,
+      headers: { authorization: authorization(credential) }, payload: { audio: 'AAA=' },
+    }));
+    await started;
+    const stages = () => f.records.map(record => JSON.parse(record) as {
+      msg?: string; stage?: string; durationMs?: number; reqId?: string;
+    }).filter(record => record.msg === 'watch_transcription.stage');
+    expect(stages().map(record => record.stage)).toEqual(['request_accepted']);
+    finish(true);
+    expect((await pending).statusCode).toBe(200);
+    const [accepted, verified] = stages();
+    expect(verified?.stage).toBe('credential_verified');
+    expect(accepted?.reqId).toBeDefined();
+    expect(verified?.reqId).toBe(accepted?.reqId);
+    expect(accepted?.durationMs).toEqual(expect.any(Number));
+    expect(verified?.durationMs).toBeGreaterThanOrEqual(accepted!.durationMs!);
+    expect(f.records.join('')).not.toContain(credential);
+    expect(f.records.join('')).not.toContain('private speech');
+  });
+
+  it('enforces the request deadline while Watch credential verification is pending', async () => {
+    const f = fixture();
+    const { credential } = (await f.issue()).json<{ credential: string }>();
+    let entered!: () => void;
+    let finish!: (valid: boolean) => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    vi.mocked(f.store.verify).mockImplementation(() => {
+      entered();
+      return new Promise<boolean>(resolve => { finish = resolve; });
+    });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const pending = Promise.resolve(f.app.inject({
+      method: 'POST', url: watchTranscriptionPath,
+      headers: { authorization: authorization(credential) }, payload: { audio: 'AAA=' },
+    }));
+    await started;
+    await vi.advanceTimersByTimeAsync(20_000);
+    const response = await pending;
+    expect(response.statusCode).toBe(504);
+    expect(response.json()).toEqual({ error: 'Transcription timed out' });
+    finish(true);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    expect(f.records.join('')).toContain('"stage":"credential_verified"');
+    expect(f.transcribe).not.toHaveBeenCalled();
+    expect(f.records.join('')).not.toContain(credential);
   });
 
   it('denies credential escalation, all other methods/routes, malformed and duplicate authorization', async () => {
@@ -166,8 +225,8 @@ describe('Watch-only credential boundary', () => {
     f.transcribe.mockImplementation(async () => { entered(); return new Promise<string>(() => {}); });
     const timeout = Promise.resolve(call('AAA='));
     await running;
-    await vi.advanceTimersByTimeAsync(90_000);
-    expect((await timeout).statusCode).toBe(503);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect((await timeout).statusCode).toBe(504);
   });
 
   it('bounds owner issuance after auth, with a separate bounded revocation budget', async () => {
@@ -240,6 +299,7 @@ describe('Watch-only credential boundary', () => {
     }
     const blocked = await call(credential, '192.0.2.2');
     expect(blocked.statusCode).toBe(429);
+    expect(f.records.filter(record => record.includes('"stage":"credential_verified"'))).toHaveLength(31);
     expect(blocked.headers['retry-after']).toBe('60');
     expect(f.transcribe).toHaveBeenCalledTimes(30);
     vi.setSystemTime(Date.now() + 60_000);

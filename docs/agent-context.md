@@ -17,8 +17,10 @@
   cannot consume that minute budget. Revocation has its own short peer budget,
   independent of issuance. Shared-peer traffic can exhaust a one-second window;
   sustained attacks and distributed quotas remain outside this guarantee.
-  The existing two-request concurrency, PCM/body limits and 90-second deadline
-  are unchanged.
+  The existing two-request concurrency and PCM/body limits are unchanged.
+  Watch transcription has a 20-second server deadline and a 25-second,
+  cancellable Watch transcribing state. Direct attempts have a 22-second limit,
+  leaving at most three seconds for phone fallback; failures offer keyboard entry.
 - The Watch stores the credential in Keychain and uploads only to the configured
   HTTPS backend's `POST /voice/watch/transcribe`. Do not put credentials in
   snapshots, UserDefaults, fixtures, logs or diagnostic UI. Do not copy the

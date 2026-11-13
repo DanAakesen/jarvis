@@ -96,6 +96,74 @@ describe('Fastify backend', () => {
     }
     expect((await limited.app.inject({ method: 'POST', url: '/watch/transcribe', headers, payload: { audio: 'AAA=' } })).statusCode).toBe(200);
   });
+  it('times out a non-cooperative transcription at 20 seconds and releases capacity', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    let started!: () => void;
+    const ready = new Promise<void>((resolve) => { started = resolve; });
+    let signal: AbortSignal | undefined;
+    const transcribe = vi.fn<WatchTranscriber>(async (_audio, requestSignal, stage) => {
+      signal = requestSignal;
+      stage?.('token_acquired');
+      stage?.('recognizer_started');
+      stage?.('audio_written');
+      started();
+      return new Promise(() => {});
+    });
+    const { app, records } = fixture({ watchTranscriber: transcribe });
+    const headers = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
+    const call = () => Promise.resolve(app.inject({ method: 'POST', url: '/watch/transcribe', headers, payload: { audio: 'AAA=' } }));
+    const pending = call();
+    await ready;
+    await vi.advanceTimersByTimeAsync(19_999);
+    expect(signal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const response = await pending;
+    expect(response.statusCode).toBe(504);
+    expect(response.json()).toEqual({ error: 'Transcription timed out' });
+    expect(signal?.aborted).toBe(true);
+    const logs = records.map((record) => JSON.parse(record) as { msg?: string; stage?: string; durationMs?: number; status?: string; reason?: string });
+    for (const stage of ['request_accepted', 'owner_authenticated', 'token_acquired', 'recognizer_started',
+      'audio_written', 'deadline_exceeded', 'completed']) {
+      expect(logs.some((entry) => entry.msg === 'watch_transcription.stage' && entry.stage === stage &&
+        typeof entry.durationMs === 'number')).toBe(true);
+    }
+    expect(logs).toContainEqual(expect.objectContaining({
+      stage: 'completed', status: 'timeout', reason: 'deadline_exceeded',
+    }));
+    expect(records.join('')).not.toContain('AAA=');
+    expect(records.join('')).not.toContain('a.b.c');
+    transcribe.mockResolvedValueOnce('recovered');
+    expect((await call()).json()).toEqual({ text: 'recovered' });
+  });
+  it('records sanitized completion outcomes and recognition stop reasons', async () => {
+    const transcribe = vi.fn<WatchTranscriber>(async (_audio, _signal, stage) => {
+      stage?.('recognizer_cancelled', 'end_of_stream');
+      return 'private speech';
+    });
+    const { app, records } = fixture({ watchTranscriber: transcribe });
+    const headers = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
+    const call = () => app.inject({ method: 'POST', url: '/watch/transcribe', headers, payload: { audio: 'AAA=' } });
+    expect((await call()).statusCode).toBe(200);
+    transcribe.mockImplementationOnce(async (_audio, _signal, stage) => {
+      stage?.('recognizer_cancelled', 'provider_cancelled');
+      throw new Error('private provider error');
+    });
+    expect((await call()).statusCode).toBe(503);
+    transcribe.mockImplementationOnce(async (_audio, _signal, stage) => {
+      stage?.('recognizer_stopped', 'stop_awaiting_cancellation');
+      stage?.('recognizer_cancelled', 'end_of_stream');
+      return '';
+    });
+    expect((await call()).statusCode).toBe(200);
+    const logs = records.map(record => JSON.parse(record) as { stage?: string; status?: string; reason?: string });
+    expect(logs.filter(record => record.stage === 'completed')).toEqual([
+      expect.objectContaining({ status: 'success', reason: 'end_of_stream' }),
+      expect.objectContaining({ status: 'failure', reason: 'provider_cancelled' }),
+      expect.objectContaining({ status: 'success', reason: 'end_of_stream' }),
+    ]);
+    expect(records.join('')).not.toContain('private speech');
+    expect(records.join('')).not.toContain('private provider error');
+  });
   it('owns one attachment cleanup timer independently of post-listen re-embedding', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const { store, cleanupExpired } = attachmentStoreFixture();

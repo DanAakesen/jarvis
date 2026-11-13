@@ -36,6 +36,7 @@ final class WatchModel: ObservableObject {
     private var dictationID: UUID?
     private var dictationCapture: Task<Bool, Never>?
     private var dictationTimeout: Task<Void, Never>?
+    private let transcriptionDeadline = WatchDictationDeadline()
     private var dictationAudio = Data()
     private var dictationTranscription: Task<String, Error>?
     init() {
@@ -241,6 +242,11 @@ final class WatchModel: ObservableObject {
         let epoch = dictationGeneration
         dictationState = .finishing
         dictationTimeout?.cancel(); dictationTimeout = nil
+        transcriptionDeadline.start { [weak self] in
+            guard let self, self.dictationGeneration == epoch, self.dictationState == .finishing else { return }
+            self.cancelDictation()
+            self.error = WatchDictationError.timedOut.message
+        }
         audio.stop()
         guard await dictationCapture?.value == true, dictationGeneration == epoch else { return }
         do {
@@ -252,6 +258,7 @@ final class WatchModel: ObservableObject {
             guard dictationGeneration == epoch else { return }
             guard !text.isEmpty else { throw WatchFailure.failed }
             draft = draft.isEmpty ? text : draft + " " + text
+            transcriptionDeadline.cancel()
             dictationID = nil; dictationCapture = nil; dictationTranscription = nil; dictationState = .idle
         } catch {
             if dictationGeneration == epoch { failDictation(error) }
@@ -259,7 +266,7 @@ final class WatchModel: ObservableObject {
     }
     private func transcribeDictation(_ recording: Data, epoch: UUID) async throws -> String {
         guard !recording.isEmpty else { throw WatchFailure.failed }
-        let direct: (() async throws -> String)?
+        let direct: (@MainActor () async throws -> String)?
         do {
             if connection.credentialStorageFailed { throw WatchFailure.credentialStorage }
             if try WatchDirectDictation.credential() != nil {
@@ -268,13 +275,6 @@ final class WatchModel: ObservableObject {
         } catch { direct = { throw error } }
         return try await WatchDictationRouting.transcribe(direct: direct, phone: {
             try await self.transcribeViaPhone(recording, epoch: epoch)
-        }, onDirectFailure: { failure in
-            guard self.dictationGeneration == epoch else { throw CancellationError() }
-            if failure as? WatchFailure == .signInRequired {
-                self.error = "Sign in to Jarvis on your iPhone to refresh direct dictation."
-            } else if failure as? WatchFailure == .credentialStorage {
-                self.error = WatchFailure.credentialStorage.message
-            }
         })
     }
     private func transcribeViaPhone(_ recording: Data, epoch: UUID) async throws -> String {
@@ -302,6 +302,7 @@ final class WatchModel: ObservableObject {
         dictationGeneration = UUID()
         dictationState = .idle; dictationID = nil
         dictationTimeout?.cancel(); dictationTimeout = nil
+        transcriptionDeadline.cancel()
         dictationCapture?.cancel(); dictationCapture = nil
         dictationTranscription?.cancel(); dictationTranscription = nil
         dictationAudio.removeAll()
@@ -317,7 +318,8 @@ final class WatchModel: ObservableObject {
     }
     private func failDictation(_ failure: Error) {
         cancelDictation()
-        error = ((failure as? WatchFailure)?.message ?? "Dictation failed.") + " Tap Message to type."
+        if let failure = failure as? WatchDictationError { error = failure.message; return }
+        error = "Dictation failed. " + ((failure as? WatchFailure)?.message ?? "Try again.") + " Tap Message to type."
     }
     private func hasActiveVoice() async throws -> Bool {
         guard let id = voiceID else { return false }
