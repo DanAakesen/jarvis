@@ -1,3 +1,68 @@
+## Watch direct dictation — 12 November 2026 (#1807)
+
+- Only dictation has direct Watch backend access. Chat, tasks and live voice
+  still require the authenticated companion; cached data and keyboard drafts
+  remain available without live reachability.
+- Owner-authenticated `POST /voice/watch/credential` rotates a 24-hour
+  transcription-only credential; `DELETE` revokes it. Apply migration
+  `0079_watch_credentials.sql` before using issuance. Storage failure must deny
+  access, not fall back to an in-memory credential.
+- `@fastify/rate-limit` protects each canonical Watch route before authentication:
+  30 attempts/second per transport peer, with a bounded 512-peer cache,
+  non-extending windows and no trust in forwarded identity headers. The root
+  limiter is installed before the authentication hook; route `onRequest` alone
+  runs too late to protect its SQL lookup.
+- After authentication, issuance is limited to six/minute per owner and Watch
+  transcription to 30/minute per verified credential hash. Unknown credentials
+  cannot consume that minute budget. Revocation has its own short peer budget,
+  independent of issuance. Shared-peer traffic can exhaust a one-second window;
+  sustained attacks and distributed quotas remain outside this guarantee.
+  The existing two-request concurrency, PCM/body limits and 90-second deadline
+  are unchanged.
+- The Watch stores the credential in Keychain and uploads only to the configured
+  HTTPS backend's `POST /voice/watch/transcribe`. Do not put credentials in
+  snapshots, UserDefaults, fixtures, logs or diagnostic UI. Do not copy the
+  owner's account token to Watch or widen this credential to chat/voice.
+- Direct failure falls back to companion transcription, then keyboard entry.
+  No draft is automatically sent and no uncertain chat/voice action is replayed.
+- Linux checks cannot establish WatchConnectivity wake/lock behavior or native
+  Keychain/audio behavior. Validate on a paired Watch: cold start, locked phone,
+  phone out of range with Watch Wi-Fi/cellular, no network, credential expiry,
+  rotation/revocation, sign-out, and keyboard recovery. See the #1807 decision
+  for threat assumptions and the separate chat/voice proposal.
+- Local backend validation: `npm test --workspace @jarvis/backend --
+  src/auth/watch-credential.test.ts src/auth/auth.test.ts src/app.test.ts
+  --reporter=dot` passed 88 tests; backend build/lint and the existing migration
+  manifest checks passed. The added SQL integration regression did not execute:
+  no isolated loopback SQL configuration is available. Do not equate mocked
+  route tests with database or device acceptance.
+- Portable Swift validation before the English-only merge: unfiltered
+  `swift test -j 2` passed 32 tests; the final ordering fix passed 19 tests with
+  `swift test -j 2 --filter 'WatchDictationCredentialTests|JarvisClientTransportTests'`.
+  Core build, native Swift syntax parsing and Watch plist parsing passed.
+  Parsing is not Apple SDK typechecking or rendered inspection.
+- After merging English-only main (#1802), the merged head passed the same
+  88 backend tests, two migration manifest checks, backend build/lint, and
+  `swift test -j 2 --filter 'JarvisClientTransportTests|WatchDictationCredentialTests|WatchDictationRoutingTests'`
+  (27 tests), Core build, six native syntax parses and Watch plist validation.
+  No integration code fixes were needed.
+- The 13 November review replaces the original custom windows following the
+  CodeQL `js/missing-rate-limiting` alert. Do not rely on the earlier false-positive
+  assessment. Post-commit JavaScript CodeQL on the recognized limiter reports
+  no alerts. The 92 targeted credential/auth/app tests, backend build and full
+  lint passed, including a composed health-upload limiter compatibility test.
+  Local Swift database creation still requires the Apple build environment.
+- The PR's old `sync` check is the Project board workflow, not an auth/build or
+  canonical-title test. Its logs show cancellation during board synchronization;
+  that workflow deliberately has repository-wide `cancel-in-progress` concurrency.
+  The available workflow retry tool rejects cancelled runs (409), so do not claim
+  it was rerun or passed. The canonical PR title gate passed on the prior head.
+- Review regression coverage exercises 30 pre-SQL attempts followed by 429,
+  well-formed unknown tokens, forged forwarded headers, another peer's valid
+  Watch, exact one-second same-peer recovery, independent revocation, and
+  authenticated minute budgets. Route config alone is not evidence that
+  authentication SQL is protected: preserve the early root hook ordering.
+
 ## Image builds — 12 November 2026
 
 - **Images are built on the GitHub runner, not in ACR Tasks.** Deploy, Runner deploy, Factory

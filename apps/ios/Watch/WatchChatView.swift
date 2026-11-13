@@ -74,7 +74,7 @@ struct WatchChatView: View {
             if model.dictationState != .idle {
                 HStack {
                     if model.dictationState == .connecting {
-                        Text("Connecting to iPhone…")
+                        Text("Preparing microphone…")
                     } else if model.dictationState == .listening {
                         Text("Listening…")
                     } else {
@@ -112,7 +112,7 @@ struct WatchChatView: View {
                 if !model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button { Task { await model.send() } } label: { Image(systemName: "arrow.up.circle.fill") }
                         .foregroundStyle(WatchStyle.amber)
-                        .disabled(model.busy || !connection.reachable || model.voiceID != nil || model.dictationState != .idle).accessibilityLabel("Send message")
+                        .disabled(model.busy || model.voiceID != nil || model.dictationState != .idle).accessibilityLabel("Send message")
                 }
                 Button(action: dictate) { Image(systemName: "mic.fill").frame(width: 32, height: 38) }
                     .foregroundStyle(WatchStyle.amber)

@@ -12607,9 +12607,72 @@ Done on 10 November and #1709 was merged. Its current production state and the
 reported proactive failure reasons have not been verified here. Historical job
 records remain unchanged.
 
+## Watch direct dictation credential boundary (12 November 2026; #1807)
+
+Use the existing transcription handler, not a new general-purpose Watch API.
+The signed-in owner issues or revokes the paired Watch credential through
+`POST` / `DELETE /voice/watch/credential`. Issuance rotates the previous
+credential; one active paired-Watch credential per owner is supported, not a
+multi-device credential registry. A 256-bit opaque bearer credential expires
+after 24 hours; SQL stores
+only its SHA-256 hash and checks expiry on every request. It authorizes exactly
+`POST /voice/watch/transcribe`, not the legacy alias, credential management,
+chat, tasks, tools or voice. Existing audio-size, two-request concurrency and
+90-second transcription limits still apply. The 13 November review follow-up
+below replaces the initial shared credential verification window.
+
+The phone provisions the credential through paired WatchConnectivity. The Watch
+keeps it in Keychain and uses HTTPS for direct transcription, then falls back to
+the phone and keyboard. Only transcription can be retried this way: it produces
+draft text, not a send or tool execution. Existing chat and voice acknowledgement
+rules remain unchanged. No owner account bearer credential is copied to Watch.
+
+Threat-model assumptions:
+- The paired iPhone, Watch OS/Keychain, backend and configured HTTPS endpoint are
+  trusted; compromised devices and bearer-token extraction are outside this
+  change's protection. A stolen token can transcribe within the limits until
+  expiry or revocation, but cannot obtain owner privileges.
+- WatchConnectivity pairing is the provisioning trust boundary; neither a
+  client-supplied scope nor a general HTTP proxy grants access. Credentials must
+  never enter logs, snapshots or complication storage.
+- Revocation requires backend connectivity. Local sign-out must clear the Watch
+  credential, but an offline peer may not receive that immediately; expiry bounds
+  this exposure. The iPhone sign-in gate reports unconfirmed revocation instead
+  of false remote success and explains the online sign-in/sign-out retry.
+  Accepted in-flight transcription may finish after revocation.
+- Watch network access is independent of WCSession reachability. A short wait
+  handles activation races; it cannot force iOS to wake an authenticated app.
+  Build 98's specific physical-device failure has not been reproduced.
+
+Follow-up proposals, not implemented: direct chat is practical using the existing
+HTTP/streaming client, but needs distinct session/turn/read scopes, ownership
+checks and uncertain-send reconciliation before removing the phone relay.
+Direct voice can reuse the portable voice state machine and Watch audio engine,
+but needs a separate voice-only WebSocket credential, bounded session/budget
+authorization, token expiry during a session, and physical-device validation of
+network switching, audio routing, wrist-down runtime and battery cost.
+The dictation credential must not be widened to enable either feature.
+
+### 13 November 2026 — Recognized Watch route limits (#1808 review)
+
+Use the existing `@fastify/rate-limit` dependency rather than custom credential
+windows. Limit the canonical Watch transcription and credential-management
+routes before their authentication lookups. Budget transport peers, not
+unverified token strings or caller-provided forwarded headers; use short
+non-extending windows so an unknown-token flood does not reserve the real
+Watch's minute-long quota. Apply the longer issuance/transcription budgets only
+after owner/Watch authentication. Keep revocation independent of issuance.
+Each canonical route allows 30 attempts/second per transport peer with a bounded
+512-peer cache. Authenticated issuance permits six/minute per owner; Watch
+transcription permits 30/minute per verified credential hash. Return 429 and
+Retry-After when exhausted. A different peer retains its own short budget;
+a shared ingress peer can still be denied during a one-second window.
+These are bounded per-replica protections, not distributed quotas or a
+guarantee of availability under sustained denial-of-service traffic.
+
 ## Watch voice startup and dictation (12 November 2026)
 
-Keep the existing phone-owned authentication and live voice transport. The Watch now waits briefly for WCSession activation/reachability before a single voice-start message; it does not replay a possibly delivered start or queue real-time audio. Dictation edits the Watch draft without a phone, while sending and task creation still require the companion. Queued transfers are opportunistic and cannot support interactive voice or provide immediate task results; blind mutation retries could duplicate writes. Standalone Watch authentication and backend transport are not implemented. Paired-device cold launch, locked-phone and network behavior remain unverified.
+Keep the existing phone-owned authentication and live voice transport. The Watch now waits briefly for WCSession activation/reachability before a single voice-start message; it does not replay a possibly delivered start or queue real-time audio. Dictation edits the Watch draft without a phone, while sending and task creation still require the companion. Queued transfers are opportunistic and cannot support interactive voice or provide immediate task results; blind mutation retries could duplicate writes. The #1807 decision below supersedes the lack of standalone transport for dictation only. Paired-device cold launch, locked-phone and network behavior remain unverified.
 ## 12 November 2026 — Proactive completion limit
 
 Owner-reported production logs show six `completion_incomplete` events at the

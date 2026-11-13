@@ -12,9 +12,19 @@ are clear. Swift CodeQL could not create a database. Native compilation and
 physical iPhone composer/keyboard acceptance remain unverified on this Linux
 runner.
 
-## Watch record-and-transcribe dictation — 12 November 2026 (#1794)
+## Watch direct dictation and connection recovery — 12 November 2026 (#1807)
 
-Direct Watch capture uses the authenticated companion and a transcription-only backend path; offline keyboard drafts remain available. Native Watch compilation and paired-device acceptance remain necessary.
+Review follow-up, 13 November: current main is merged, including #1806.
+Recognized route limits now run before authentication, with tested
+unknown-credential flood isolation and one-second shared-source recovery.
+All 92 targeted backend tests, backend build/lint and secret scanning pass.
+Post-commit JavaScript CodeQL reports no alerts; Swift analysis cannot build
+its database in this Linux environment.
+The sync helper was cancelled by shared workflow concurrency, not canonical
+title validation; the retry tool refuses cancelled runs. Voice latency and
+capture-stream changes remain in their separate issue/PR.
+
+Implemented the direct transcription-only credential and Watch transport, preserving companion and offline keyboard fallbacks. Chat, tasks and live voice remain phone-owned. Focused backend authentication/API checks, migration manifest checks, backend build/lint and portable Swift checks pass. SQL integration is blocked by missing isolated SQL configuration; native Watch compilation, rendered UI inspection and paired-device acceptance remain pending. Next: qualify the exact head in CI and exercise locked-phone, direct Wi-Fi/cellular, expiry/revocation and keyboard recovery on device. Threat assumptions and separate chat/voice proposals are recorded in `docs/decisions.md`. This extends #1794; device acceptance is not marked complete.
 
 ## iPhone Notes and sheets — 12 November 2026 (#1786)
 

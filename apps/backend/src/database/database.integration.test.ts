@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import sql from 'mssql';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, type Migration } from './migrations.js';
+import { createWatchCredentialStore, WatchCredentials } from '../auth/watch-credential.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -43,6 +45,45 @@ describe('real SQL Server migration contract', () => {
       expect(rows.recordset).toEqual([{ id: 1, value: 'original' }]);
       expect((await pool.request().query('SELECT name FROM dbo.schema_migrations')).recordset).toEqual([{ name: first.name }]);
     } finally { await other.close(); }
+  });
+
+  describe('persistent Watch-only credentials', () => {
+    it('stores hashes only and preserves rotation, revocation and expiry across database clients', async () => {
+      const schema = await readFile(new URL('../../../../db/migrations/0079_watch_credentials.sql', import.meta.url), 'utf8');
+      const down = await readFile(new URL('../../../../db/migrations/down/0079_watch_credentials.sql', import.meta.url), 'utf8');
+      await pool.request().batch(schema);
+      const other = new sql.ConnectionPool({ ...configuration, database });
+      const owner = randomUUID();
+      const first = new WatchCredentials(createWatchCredentialStore(pool), owner);
+      try {
+        await other.connect();
+        const restarted = new WatchCredentials(createWatchCredentialStore(other), owner);
+        const issued = await first.issue();
+        expect(await restarted.verify(issued.credential)).toBe(true);
+        const stored = await pool.request().query<{ credential_hash: Buffer; created_at: Date; expires_at: Date }>(
+          'SELECT credential_hash, created_at, expires_at FROM dbo.watch_credentials');
+        expect(stored.recordset[0]?.credential_hash).toEqual(createHash('sha256').update(issued.credential).digest());
+        expect(stored.recordset[0]!.expires_at.getTime() - stored.recordset[0]!.created_at.getTime()).toBe(86_400_000);
+        expect(await new WatchCredentials(createWatchCredentialStore(other), randomUUID()).verify(issued.credential)).toBe(false);
+        const rotated = await restarted.issue();
+        expect(await first.verify(issued.credential)).toBe(false);
+        expect(await first.verify(rotated.credential)).toBe(true);
+        await first.revoke();
+        expect(await restarted.verify(rotated.credential)).toBe(false);
+        const concurrent = await Promise.all([first.issue(), restarted.issue()]);
+        const active = await Promise.all(concurrent.map(value => restarted.verify(value.credential)));
+        expect(active.filter(Boolean)).toHaveLength(1);
+        expect((await pool.request().query('SELECT * FROM dbo.watch_credentials')).recordset).toHaveLength(1);
+        await expect(pool.request().query('UPDATE dbo.watch_credentials SET expires_at = DATEADD(hour, 25, created_at)')).rejects.toThrow();
+        await pool.request().query(`DECLARE @now datetime2(7) = SYSUTCDATETIME();
+          UPDATE dbo.watch_credentials SET created_at = DATEADD(day, -2, @now), expires_at = DATEADD(day, -1, @now);`);
+        for (const value of concurrent) expect(await first.verify(value.credential)).toBe(false);
+      } finally {
+        await other.close();
+        await pool.request().batch(down);
+      }
+      expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.watch_credentials', N'U') AS id")).recordset).toEqual([{ id: null }]);
+    });
   });
   it('rolls back schema, data and ledger together on a failed migration', async () => {
     const broken = migration('0002_broken.sql', `CREATE TABLE dbo.rollback_fixture (id int);

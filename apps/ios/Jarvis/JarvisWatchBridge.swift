@@ -3,7 +3,7 @@ import HealthKit
 import JarvisCore
 import WatchConnectivity
 
-/// Only the paired Watch can call this allow-listed companion API. Authentication stays on iPhone.
+/// Owner authentication stays on iPhone; Watch receives only a scoped transcription credential.
 @MainActor
 final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityControlling {
     static let shared = JarvisWatchBridge()
@@ -51,23 +51,89 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var dashboardSnapshot: WatchDashboardSnapshot?
     private var dashboardBrief: WatchBriefSummary?
     private var publishingDashboard = false
+    private var credential: WatchDictationCredential?
+    private var credentialRefresh: Task<Void, Never>?
+    private var credentialRenewal: Task<Void, Never>?
+    private var connectivityGrace: Task<Void, Never>?
+
+    func refreshDictationCredential() async {
+        guard credentialRefresh == nil, let client,
+              WCSession.default.activationState == .activated,
+              WCSession.default.isPaired, WCSession.default.isWatchAppInstalled else { return }
+        let epoch = generation
+        credentialRefresh = Task { [weak self] in
+            guard let self else { return }
+            defer { if self.generation == epoch { self.credentialRefresh = nil } }
+            do {
+                if self.credential?.isUsable(at: Date().addingTimeInterval(300), trustedOrigin: client.baseURL) != true {
+                    let value = try await client.provisionWatchCredential()
+                    guard !Task.isCancelled, self.generation == epoch else { return }
+                    self.credential = value
+                }
+                guard let credential = self.credential, self.generation == epoch else { return }
+                let data = try JSONEncoder().encode(credential)
+                var context = WCSession.default.applicationContext
+                context.removeValue(forKey: "clearCredentials")
+                context["dictationCredential"] = data
+                let revision = Date().timeIntervalSince1970
+                context["credentialRevision"] = revision
+                try WCSession.default.updateApplicationContext(context)
+                if WCSession.default.isReachable {
+                    WCSession.default.sendMessage(["dictationCredential": data, "credentialRevision": revision],
+                                                  replyHandler: nil, errorHandler: { _ in })
+                }
+                self.credentialRenewal?.cancel()
+                let delay = max(1, (credential.expiration ?? Date()).timeIntervalSinceNow - 300)
+                self.credentialRenewal = Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(delay))
+                    guard !Task.isCancelled, let self, self.generation == epoch else { return }
+                    self.credentialRenewal = nil
+                    await self.refreshDictationCredential()
+                }
+            } catch {
+                // Leave phone transcription available; never log credential responses.
+            }
+        }
+        await credentialRefresh?.value
+    }
 
     func activate() {
         guard WCSession.isSupported() else { return }
         WCSession.default.delegate = self
         WCSession.default.activate()
     }
-    func configure(client: JarvisClient) { self.client = client; activate() }
-    func disconnect() async {
+    func configure(client: JarvisClient) {
+        self.client = client; activate()
+        Task { await refreshDictationCredential() }
+    }
+    @discardableResult
+    func disconnect() async -> Bool {
+        let authenticatedClient = client
         generation = UUID(); client = nil; chatSession = nil
+        let pendingCredentialRefresh = credentialRefresh
+        pendingCredentialRefresh?.cancel(); credentialRefresh = nil; credential = nil
+        credentialRenewal?.cancel(); credentialRenewal = nil
+        connectivityGrace?.cancel(); connectivityGrace = nil
+        let cleared: [String: Any] = ["clearCredentials": true, "credentialRevision": Date().timeIntervalSince1970]
+        try? WCSession.default.updateApplicationContext(cleared)
+        if WCSession.default.isReachable {
+            WCSession.default.sendMessage(cleared, replyHandler: nil, errorHandler: { _ in })
+        }
         stopDictation()
         dashboardSnapshot = nil; dashboardBrief = nil
         chatTask?.cancel(); chatTask = nil
         delivery?.cancel(); delivery = nil; eventQueue.removeAll()
         await stopVoice(); replies.removeAll(); running.removeAll()
-        try? WCSession.default.updateApplicationContext([:])
+        await pendingCredentialRefresh?.value
+        guard let authenticatedClient else { return false }
+        do {
+            try await authenticatedClient.revokeWatchCredentials()
+            return true
+        } catch { return false }
     }
-    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
+    nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
+        Task { @MainActor in await self.refreshDictationCredential() }
+    }
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
         Task { @MainActor in
             if WCSession.default.activationState != .activated { self.stopDictation() }
@@ -80,9 +146,18 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         }
     }
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
-        if !session.isReachable {
-            Task { @MainActor in
-                if !WCSession.default.isReachable { self.stopDictation(); await self.stopVoice() }
+        Task { @MainActor in
+            self.connectivityGrace?.cancel()
+            if WCSession.default.isReachable {
+                self.deliverEvents()
+                await self.refreshDictationCredential()
+            } else {
+                self.connectivityGrace = Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(3))
+                    guard !Task.isCancelled, let self, !WCSession.default.isReachable else { return }
+                    // Recorded dictation/HTTP transcription outlives transient WC reachability.
+                    await self.stopVoice()
+                }
             }
         }
     }
@@ -99,7 +174,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private func emit(_ original: WatchEvent) {
         var event = original
         if event.kind != .voiceAudio, let text = event.text { event.text = WatchLimits.displayText(text) }
-        guard WCSession.default.isReachable else { return }
+        guard WCSession.default.isReachable || [.chatDelta, .chatDone, .chatError].contains(event.kind) else { return }
         guard eventQueue.count < 128 else {
             eventQueue.removeAll()
             eventQueue.append(.init(.chatError, requestID: event.requestID, text: "Connection too slow. Reopen history on iPhone."))
@@ -107,11 +182,15 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             return
         }
         eventQueue.append(event)
-        guard delivery == nil else { return }
+        deliverEvents()
+    }
+    private func deliverEvents() {
+        guard delivery == nil, WCSession.default.isReachable else { return }
         let epoch = generation
         delivery = Task {
             defer { if self.generation == epoch { self.delivery = nil } }
             while !self.eventQueue.isEmpty, !Task.isCancelled, self.generation == epoch {
+                guard WCSession.default.isReachable else { return }
                 var next = self.eventQueue.removeFirst()
                 if next.kind == .voiceAudio, var pcm = Data(base64Encoded: next.text ?? "") {
                     while let following = self.eventQueue.first, following.kind == .voiceAudio,
@@ -128,7 +207,8 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                     }
                 } catch {
                     guard self.generation == epoch else { return }
-                    self.eventQueue.removeAll()
+                    if next.kind == .chatDone || next.kind == .chatError { self.eventQueue.insert(next, at: 0) }
+                    self.eventQueue.removeAll { $0.kind == .voiceAudio }
                     await self.stopVoice()
                     return
                 }
@@ -144,6 +224,14 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             return .init(id: request.id, failure: .invalidRequest)
         }
         guard let client else { return .init(id: request.id, failure: .signInRequired) }
+        // A phone fallback may follow an expired/revoked direct credential.
+        if request.action == .startDictation {
+            credential = nil
+            credentialRenewal?.cancel(); credentialRenewal = nil
+        }
+        if ![.audio, .dictationAudio, .voiceHeartbeat].contains(request.action) {
+            Task { await self.refreshDictationCredential() }
+        }
         if let previous = replies[request.id] { return previous.request == request ? previous.reply : .init(id: request.id, failure: .invalidRequest) }
         guard running.insert(request.id).inserted else { return .init(id: request.id, failure: .busy) }
         defer { running.remove(request.id) }
@@ -163,6 +251,8 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 let failure: WatchFailure
                 if let known = error as? WatchFailure { failure = known }
                 else if let known = error as? JarvisClientError, case .signInRequired = known { failure = .signInRequired }
+                else if let known = error as? JarvisClientError,
+                        [.networkFailure, .timedOut, .serviceUnavailable].contains(known) { failure = .network }
                 else if let known = error as? JarvisWatchTasksClientError, case .invalidRequest = known { failure = .invalidRequest }
                 else { failure = .failed }
                 reply = .init(id: request.id, failure: failure)
@@ -604,6 +694,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         return result
     }
     func publishSnapshotIfReachable() async {
+        await refreshDictationCredential()
         let epoch = generation
         guard let client, WCSession.default.activationState == .activated, WCSession.default.isPaired, WCSession.default.isWatchAppInstalled,
               let snapshot = try? await snapshot(client: client), let data = try? encode(snapshot), epoch == generation else { return }

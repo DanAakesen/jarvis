@@ -14,14 +14,18 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     var dashboardSnapshot: WatchDashboardSnapshot? { dashboard }
     @Published private(set) var dashboardError: String?
     @Published private(set) var briefError: String?
+    private(set) var credentialStorageFailed = false
     var onEvent: ((WatchEvent) -> Void)?
     var onDisconnect: (() -> Void)?
+    var onSignOut: (() -> Void)?
     private var pending: [UUID: CheckedContinuation<WatchReply, Error>] = [:]
     private var deadlines: [UUID: Task<Void, Never>] = [:]
     private var dashboardRefreshing = false
     private var briefRefreshing = false
     private var cachedBrief: WatchBriefSummary?
     private var cacheGeneration = UUID()
+    private var disconnectTask: Task<Void, Never>?
+    private var credentialRevision = WatchCredentialRevision()
     override init() {
         super.init()
         #if DEBUG
@@ -51,39 +55,50 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         guard WCSession.isSupported() else { return }
         WCSession.default.delegate = self; WCSession.default.activate()
     }
-    func request(_ request: WatchRequest) async throws -> WatchReply {
-        guard reachable else { throw WatchFailure.unavailable }
+    func request(_ request: WatchRequest, waitForReadiness: Bool = true) async throws -> WatchReply {
         guard request.isValid else { throw WatchFailure.invalidRequest }
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return try WatchPreview.reply(to: request) }
         #endif
+        if waitForReadiness {
+            try await waitForVoiceConnection()
+        } else {
+            guard WCSession.isSupported(), WCSession.default.activationState == .activated,
+                  WCSession.default.isReachable else { throw WatchFailure.unavailable }
+        }
         guard pending[request.id] == nil else { throw WatchFailure.busy }
         let epoch = cacheGeneration
         let data = try WatchCodec.encode(WatchWire.request(request))
-        let reply: WatchReply = try await withCheckedThrowingContinuation { continuation in
-            pending[request.id] = continuation
-            deadlines[request.id] = Task { [weak self] in
-                try? await Task.sleep(for: request.action == .finishDictation ? WatchLimits.dictationWatchTimeout : .seconds(25))
-                guard !Task.isCancelled else { return }
-                self?.complete(request.id, .failure(WatchFailure.unavailable))
-            }
-            WCSession.default.sendMessageData(data, replyHandler: { [weak self] data in
-                Task { @MainActor in
-                    guard data.count < WatchLimits.wireBytes,
-                          let reply = try? JSONDecoder().decode(WatchReply.self, from: data), reply.id == request.id, reply.version == 1,
-                          (reply.data?.count ?? 0) <= WatchLimits.payloadBytes else {
-                        self?.complete(request.id, .failure(WatchFailure.failed)); return
-                    }
-                    if let failure = reply.failure {
-                        self?.complete(request.id, .failure(failure))
-                    }
-                    else if let taskError = reply.taskError { self?.complete(request.id, .failure(taskError)) }
-                    else { self?.complete(request.id, .success(reply)) }
+        let reply: WatchReply = try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                pending[request.id] = continuation
+                deadlines[request.id] = Task { [weak self] in
+                    try? await Task.sleep(for: request.action == .finishDictation ? WatchLimits.dictationWatchTimeout : .seconds(25))
+                    guard !Task.isCancelled else { return }
+                    self?.complete(request.id, .failure(WatchFailure.unavailable))
                 }
-            }, errorHandler: { [weak self] _ in
-                Task { @MainActor in self?.complete(request.id, .failure(WatchFailure.unavailable)) }
-            })
+                WCSession.default.sendMessageData(data, replyHandler: { [weak self] data in
+                    Task { @MainActor in
+                        guard data.count < WatchLimits.wireBytes,
+                              let reply = try? JSONDecoder().decode(WatchReply.self, from: data), reply.id == request.id, reply.version == 1,
+                              (reply.data?.count ?? 0) <= WatchLimits.payloadBytes else {
+                            self?.complete(request.id, .failure(WatchFailure.failed)); return
+                        }
+                        if let failure = reply.failure {
+                            self?.complete(request.id, .failure(failure))
+                        }
+                        else if let taskError = reply.taskError { self?.complete(request.id, .failure(taskError)) }
+                        else { self?.complete(request.id, .success(reply)) }
+                    }
+                }, errorHandler: { [weak self] _ in
+                    Task { @MainActor in self?.complete(request.id, .failure(WatchFailure.unavailable)) }
+                })
+            }
+        } onCancel: {
+            Task { @MainActor in self.complete(request.id, .failure(CancellationError())) }
         }
+        try Task.checkCancellation()
         guard epoch == cacheGeneration else { throw WatchFailure.signInRequired }
         return reply
     }
@@ -93,9 +108,8 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         #endif
         guard WCSession.isSupported() else { throw WatchFailure.unavailable }
         let session = WCSession.default
-        let deadline = Date().addingTimeInterval(8)
-        var delay = 250
-        while Date() < deadline {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+        while ContinuousClock.now < deadline {
             try Task.checkCancellation()
             if session.activationState == .notActivated { session.activate() }
             if session.activationState == .activated {
@@ -105,8 +119,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
                     return
                 }
             }
-            try await Task.sleep(for: .milliseconds(delay))
-            delay = min(delay * 2, 1_000)
+            try await Task.sleep(for: .milliseconds(100))
         }
         throw WatchFailure.unavailable
     }
@@ -276,6 +289,8 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     }
     private func clearCachedData() {
         cacheGeneration = UUID()
+        WatchDirectDictation.clear()
+        onSignOut?()
         snapshot = nil; dashboard = nil; cachedBrief = nil
         for id in Array(pending.keys) { complete(id, .failure(WatchFailure.signInRequired)) }
         WatchSnapshotStore.appGroup()?.clear()
@@ -287,13 +302,24 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         if reachable { connecting = false }
         UserDefaults(suiteName: "group.com.danaakesen.jarvis")?.set(reachable, forKey: "watch.reachable")
         WidgetCenter.shared.reloadAllTimelines()
-        if !reachable {
-            for id in Array(pending.keys) { complete(id, .failure(WatchFailure.unavailable)) }
-            if wasReachable { onDisconnect?() }
+        if reachable {
+            disconnectTask?.cancel(); disconnectTask = nil
+        } else if wasReachable {
+            disconnectTask?.cancel()
+            disconnectTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled, let self, !self.reachable else { return }
+                // Requests retain their own reply/error/deadline; never resend an uncertain mutation.
+                self.onDisconnect?()
+            }
         }
     }
     nonisolated func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
-        Task { @MainActor in self.updateReachability(); await self.refresh() }
+        let context = session.receivedApplicationContext
+        Task { @MainActor in
+            self.receiveCredentials(context)
+            self.updateReachability(); await self.refresh()
+        }
     }
     nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor in self.updateReachability(); if self.reachable { await self.refresh() } }
@@ -301,6 +327,21 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
         guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData), event.version == 1 else { return }
         Task { @MainActor in self.onEvent?(event) }
+    }
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        Task { @MainActor in self.receiveCredentials(message) }
+    }
+    @discardableResult
+    private func receiveCredentials(_ context: [String: Any]) -> Bool {
+        guard credentialRevision.accept(context["credentialRevision"] as? Double, isEmpty: context.isEmpty) else { return false }
+        if context.isEmpty || context["clearCredentials"] as? Bool == true {
+            clearCachedData()
+            return true
+        } else if let data = context["dictationCredential"] as? Data {
+            do { try WatchDirectDictation.store(data); credentialStorageFailed = false }
+            catch { credentialStorageFailed = true }
+        }
+        return false
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data, replyHandler: @escaping (Data) -> Void) {
         guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData), event.version == 1 else { replyHandler(Data()); return }
@@ -310,8 +351,8 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         let data = applicationContext["health"] as? Data
         let dashboardData = applicationContext["dashboard"] as? Data
         let voiceData = applicationContext["voice"] as? Data
-        let cleared = applicationContext.isEmpty
         Task { @MainActor in
+            if self.receiveCredentials(applicationContext) { return }
             if let data = voiceData, data.count <= WatchLimits.payloadBytes,
                let event = try? JSONDecoder().decode(WatchEvent.self, from: data),
                event.version == 1, event.kind == .voiceState, event.text == "Ended" {
@@ -319,7 +360,6 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             }
             if let data, data.count <= WatchLimits.payloadBytes,
                let value = try? JSONDecoder().decode(WatchHealthSnapshot.self, from: data) { self.save(value) }
-            else if cleared { self.clearCachedData(); return }
             if let dashboardData, dashboardData.count <= WatchLimits.payloadBytes,
                let value = try? JSONDecoder().decode(WatchDashboardSnapshot.self, from: dashboardData) {
                 self.saveDashboard(value)

@@ -27,7 +27,7 @@ public enum WatchCodec {
     }
 }
 
-/// Paired-device protocol. No credentials, arbitrary URLs or backend paths cross this boundary.
+/// Allow-listed paired-device operations. Credentials use a separate Keychain-only channel.
 public enum WatchAction: String, Codable, Sendable {
     case snapshot, history, sendTurn, tasks, workouts, lifts, saveLift, deleteLift, captureLift
     case dashboard, brief, agenda, bodyFat, notes, note, nutrition
@@ -74,12 +74,15 @@ public struct WatchRequest: Codable, Equatable, Sendable {
 }
 
 public enum WatchFailure: String, Error, Codable, Sendable {
-    case unavailable, healthUnavailable, signInRequired, invalidRequest, failed, busy
+    case unavailable, healthUnavailable, signInRequired, network, credentialStorage, dictationSetup, invalidRequest, failed, busy
     public var message: String {
         switch self {
         case .unavailable: "Connect to your iPhone and open Jarvis."
         case .healthUnavailable: "Health history is unavailable. Try again on your iPhone."
         case .signInRequired: "Sign in to Jarvis on your iPhone."
+        case .network: "Network or service unavailable. Check your connection and try again."
+        case .credentialStorage: "Secure dictation credentials are unavailable. Restart Jarvis on your Watch."
+        case .dictationSetup: "iPhone unavailable. Open Jarvis on your iPhone to set up direct dictation."
         case .invalidRequest: "Check the entered values."
         case .failed: "The request failed. Check your iPhone before trying again."
         case .busy: "A request is already running."
