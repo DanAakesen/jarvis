@@ -27,8 +27,7 @@ private struct JarvisNoteSwipeRow<Content: View>: View {
     let onAction: () -> Void
     let onDeleted: (String) -> Void
     @ViewBuilder let content: () -> Content
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var offset: CGFloat = 0
+    @GestureState private var offset: CGFloat = 0
     @State private var busy = false
     @State private var alert: RowAlert?
     private let actionWidth = CGFloat(JarvisNotesLogic.pinSwipeDistance)
@@ -50,13 +49,7 @@ private struct JarvisNoteSwipeRow<Content: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if isDisabled {
-                        return
-                    } else if offset == 0 {
-                        onOpen()
-                    } else {
-                        withAnimation(reduceMotion ? nil : .snappy) { offset = 0 }
-                    }
+                    if !isDisabled && !busy && offset == 0 { onOpen() }
                 }
                 .offset(x: offset)
                 .accessibilityElement(children: .ignore)
@@ -75,15 +68,17 @@ private struct JarvisNoteSwipeRow<Content: View>: View {
         .clipShape(Rectangle())
         .simultaneousGesture(
             DragGesture(minimumDistance: 24)
-                .onChanged { value in
+                .updating($offset) { value, state, _ in
                     guard !isDisabled, !busy,
-                          abs(value.translation.width) > abs(value.translation.height) else { return }
-                    offset = min(0, max(-deleteWidth, value.translation.width))
+                          abs(value.translation.width) > abs(value.translation.height) else {
+                        state = 0
+                        return
+                    }
+                    state = min(0, max(-deleteWidth, value.translation.width))
                 }
                 .onEnded { value in
                     let horizontal = abs(value.translation.width) > abs(value.translation.height)
                     let distance = -value.translation.width
-                    withAnimation(reduceMotion ? nil : .snappy) { offset = 0 }
                     guard !isDisabled, !busy, horizontal else { return }
                     switch JarvisNotesLogic.swipeAction(distance: Double(distance)) {
                     case .delete: prepareDelete()
@@ -725,6 +720,7 @@ struct JarvisNotesArea: View {
 
     private func noteDeleted(_ path: String) async {
         await JarvisAppCache.invalidateAll(.notes)
+        await JarvisAppCache.invalidateAll(.tasks)
         await setPinned(path, pinned: false)
         for directory in Array(directoryNotes.keys) {
             directoryNotes[directory]?.removeAll { $0.path == path }

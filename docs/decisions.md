@@ -12712,3 +12712,11 @@ WatchConnectivity application context as well as sending a live event, and check
 again on foreground/reconnection. Backend records already finalize through the
 same path for explicit End, idle expiry, duration cap and socket disconnect; no
 backend or database change is needed. No new strings or tests were added.
+## Notes deletion and swipe thresholds — 13 November 2026
+
+The owner requested immediate pinning on a normal swipe and confirmation before
+deleting on a longer swipe or from the editor. Use 72 and 160 points respectively,
+with explicit Yes/No and the note's SHA. Reuse the vault's existing Git-backed
+delete rather than inventing a trash store: committed files remain in Git history,
+but unsaved drafts do not. Unknown outcomes require a refresh, not an automatic retry.
+Native gesture and visual acceptance is still pending.

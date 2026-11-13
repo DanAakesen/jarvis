@@ -9139,6 +9139,14 @@ The local account-bound cache stores pinned paths separately from note response
 cache invalidation. No vault schema changes or synthetic live content are added.
 JarvisScreenBackground loads EmberBackground for dark mode; all routes continue
 using the common transparent chrome and background renderer.
+
+Native note deletion reads an exact note version before row confirmation or uses
+the editor's loaded SHA. The owner-only `DELETE /notes/note` validates the safe
+Markdown path and SHA, checks the current vault file and commits a GitHub delete
+through the existing vault client. It invalidates the index and graph; the phone
+invalidates note and task caches and removes the local pin. Conflict, missing
+files and uncertain outcomes are surfaced rather than retried. Recovery is via
+vault Git history, not an in-app trash; unsaved editor changes are not recoverable.
 ## 128 GiB Factory worker
 
 Live provisioning and activation passed in run 42530882044 on 8 November 2026.
