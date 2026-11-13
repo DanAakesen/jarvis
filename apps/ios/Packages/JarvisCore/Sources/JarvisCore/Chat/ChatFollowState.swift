@@ -34,6 +34,16 @@ public struct ChatFollowState: Equatable, Sendable {
         if !shouldFollow { hasNewMessages = true }
     }
 
+    public mutating func contentChanged<Message: Equatable>(
+        from oldMessages: [Message], to newMessages: [Message], hasOtherChanges: Bool
+    ) {
+        let onlyOlderMessagesAdded = !oldMessages.isEmpty && newMessages.count > oldMessages.count
+            && newMessages.suffix(oldMessages.count).elementsEqual(oldMessages)
+        if hasOtherChanges || (oldMessages != newMessages && !onlyOlderMessagesAdded) {
+            messageArrived()
+        }
+    }
+
     public mutating func messageSent() {
         isFollowing = true
         isInteracting = false

@@ -1,3 +1,17 @@
+## Chat follow-latest on every update — 12 November 2026 (#1803)
+
+The shared native chat modifier now observes complete message and active-turn
+content values and anchors content/container size changes while following.
+Sending resumes immediately; manual scrolling and text selection still suspend
+automatic movement, with the existing jump-to-latest control for new content.
+Both normal Chat and the runtime-test sheet use the same event coverage.
+
+Verified: all 18 Core tests (including seven follow-state checks), Core build and
+syntax parsing of the three changed SwiftUI files; diff review and secret scan
+are clear. Swift CodeQL could not create a database. Native compilation and
+physical iPhone composer/keyboard acceptance remain unverified on this Linux
+runner.
+
 ## Watch direct dictation and connection recovery — 12 November 2026 (#1807)
 
 Review follow-up, 13 November: current main is merged, including #1806.

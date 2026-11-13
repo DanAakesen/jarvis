@@ -1,3 +1,13 @@
+## 12 November 2026 — Follow every chat update (#1803)
+
+The shared iOS follow-latest modifier observes message contents and active-turn
+state, including streaming text and tool outcomes, instead of only the final
+assistant message ID and an incoming-content Boolean. A conditional native
+`defaultScrollAnchor(.bottom, for: .sizeChanges)` keeps content above the composer as
+the transcript or viewport changes size. Manual scrolling and text selection
+continue to gate all automatic movement; active sending does not override them.
+No new controls or user-facing copy. Native iPhone acceptance remains unverified.
+
 ## 12 November 2026 — English-only app language (P15-124 / #1799)
 
 Remove the app-language setting and all language pickers, language-specific copy,

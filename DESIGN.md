@@ -3745,10 +3745,14 @@ The composer/Now dock must contain no active-turn progress copy.
 
 ## Chat follow-latest behavior (P15-125; 12 November 2026)
 
-Keep the newest sent message and reply visible above the composer. Manual scrolling
-up pauses following until the owner sends another message. If a reply arrives while
-paused, show a small down-arrow utility above the composer; tapping it returns to
-the latest message and resumes following. Use the existing shared icon-button
+Keep the newest sent message and reply visible above the composer, including
+immediately on Send and throughout thinking, progress, tool-status updates,
+streaming, approvals and errors. Observe content values, not just message IDs or
+the presence of an incoming reply, and keep the bottom anchored as content or the
+composer changes size. Manual scrolling up pauses following until the owner sends
+another message. If chat content changes while paused, show a small down-arrow
+utility above the composer; tapping it returns to the latest message and resumes
+following. Use the existing shared icon-button
 surface and a localized accessible label.
 
 
