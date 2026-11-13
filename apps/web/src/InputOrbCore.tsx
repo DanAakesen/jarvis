@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useJarvisActivity } from './activity-context';
+import { orbAppearance } from './jarvis-orb-appearance';
 
 interface Node { x: number; y: number; z: number }
 
@@ -66,12 +67,11 @@ export function InputOrbCore({ variant = 'orb', active = false }: { variant?: 'o
     let energy = 0;
     let onScreen = true;
     // Theme colours are read once and again only when the theme changes, not on every frame.
-    let cool = '#52dcfa';
-    let warm = '#ffb45c';
+    let cool: string = orbAppearance.cool;
+    const warm = orbAppearance.warm;
     const readColours = () => {
       const styles = getComputedStyle(element);
-      cool = styles.getPropertyValue('--stage-orb').trim() || '#52dcfa';
-      warm = styles.getPropertyValue('--glass-glow-warm').trim() || '#ffb45c';
+      cool = styles.getPropertyValue('--stage-orb').trim() || orbAppearance.cool;
     };
     readColours();
     // Hidden orbs (the parked chat bar, a closed menu, off-screen) draw nothing; they look again twice a second.
@@ -147,7 +147,7 @@ export function InputOrbCore({ variant = 'orb', active = false }: { variant?: 'o
         return { x: half + rx * scale, y: half + ry * scale };
       };
       const stir = still ? 0 : 0.04 + 0.05 * energy;
-      context.globalCompositeOperation = 'lighter';
+      context.globalCompositeOperation = 'source-over';
       context.lineWidth = 0.6;
       context.strokeStyle = warm;
       for (const [from, to] of core.links) {
@@ -169,13 +169,14 @@ export function InputOrbCore({ variant = 'orb', active = false }: { variant?: 'o
         context.arc(point.x, point.y, 0.35 + twinkle * 0.6, 0, Math.PI * 2);
         context.fill();
       }
-      const glow = context.createRadialGradient(half, half, 0, half, half, scale * 0.9);
+      const glowRadius = half * orbAppearance.glowRadius / 1.12;
+      const glow = context.createRadialGradient(half, half, 0, half, half, glowRadius);
       glow.addColorStop(0, warm);
       glow.addColorStop(1, 'transparent');
-      context.globalAlpha = 0.35 + 0.25 * energy + (still ? 0 : 0.08 * Math.sin(time / 600));
+      context.globalAlpha = orbAppearance.glowOpacity;
       context.fillStyle = glow;
       context.beginPath();
-      context.arc(half, half, scale * 0.9, 0, Math.PI * 2);
+      context.arc(half, half, glowRadius, 0, Math.PI * 2);
       context.fill();
       context.globalCompositeOperation = 'source-over';
       context.globalAlpha = 1;

@@ -661,6 +661,36 @@ Lock-screen approval previews use locale-aware system-formatted absolute
 hour/minute expiry with the existing Danish/English templates, matching real
 approval notifications. Do not embed a relative phrase in an absolute template.
 
+## Orb appearance (P15-139)
+
+The orb is a dark glass sphere with a cyan rim and an orange, filament-and-spark
+core, not a yellow light source. The web stage is the reference for the moving
+network; the iPhone canvas uses the same seeded geometry. Orb-specific values
+live in `apps/web/src/jarvis-orb-appearance.ts` and
+`apps/ios/Packages/JarvisCore/Sources/JarvisCore/Orb/JarvisOrbModel.swift`:
+cyan `#52dcfa`, orange `#ff8738`, and a radial orange glow from 12% opacity
+at the centre to transparent at 0.52 scene units (shell radius 1.12).
+Filament shading darkens orange to 80% green and 70% blue before the travelling
+signals lift it to the core colour. Core filaments and sparks use normal
+compositing rather than additive stacking; cyan rim and ribbons remain additive.
+The WebGL stage has no separate core halo; the miniature and native canvas
+use the radial glow. The widget uses a static simplified tangle because WidgetKit
+archives its shapes. Theme-specific web rim lighting remains adaptive.
+
+Idle breathes and stirs slowly; listening responds outward to input, thinking
+pulls the core inward, and speaking pushes it outward with playback. State
+weights and integrated phases make changes interruptible. Reduced Motion holds
+a still state; Live Activities and widgets use static artwork. The iPhone's
+current voice levels are synthetic, unlike the web's microphone/playback levels.
+The Watch uses a glyph rather than an orb. These are platform limitations, not
+claims of pixel-identical rendering.
+
+The [before](docs/ui/screenshots/p15-139/web-stage-before.png) and
+[after](docs/ui/screenshots/p15-139/web-stage-after.png) images are the actual
+web stage in a reduced-motion Chromium/SwiftShader fixture, not device or
+live-voice evidence. iPhone, Live Activity, Dynamic Island and widget renders
+still need before/after capture and physical-device review.
+
 ## Shared control geometry (16 October 2026; local candidate)
 
 Native iPhone destination headers (Notes, Health, Factory) use the shared
