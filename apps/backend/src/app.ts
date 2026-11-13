@@ -9,6 +9,7 @@ import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } fr
 import { ConfigurationError, localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger, safeErrorFields } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
+import { installWatchRateLimits } from './auth/watch-rate-limit.js';
 import { installConditionalGet } from './conditional-get.js';
 import { registerOwnerSessionRoutes } from './auth/session/routes.js';
 import type { OwnerSessionService } from './auth/session/service.js';
@@ -274,6 +275,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('ownerSessionConnections', ownerSessions
     ? new OwnerSessionConnectionRegistry({ verifier: ownerSessions })
     : null);
+  installWatchRateLimits(app, config.auth.ownerObjectId);
   installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions, options.watchCredentials);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('notifyApproval', options.notifyApproval ?? (() => {}));

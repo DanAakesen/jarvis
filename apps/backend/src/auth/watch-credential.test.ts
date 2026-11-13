@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
+import type { HealthBuffer, HealthCredentialVerifier } from '../health/health-upload/contracts.js';
 import { AuthenticationDenied } from './verify.js';
 import { WatchCredentials, type WatchCredentialStore, watchCredentialPath, watchTranscriptionPath } from './watch-credential.js';
 
@@ -110,7 +111,9 @@ describe('Watch-only credential boundary', () => {
     ]) {
       const f = fixture({ auth });
       expect((await f.issue()).statusCode).toBe(403);
+      expect((await f.app.inject({ method: 'DELETE', url: watchCredentialPath, headers: f.headers })).statusCode).toBe(403);
       expect(f.store.rotate).not.toHaveBeenCalled();
+      expect(f.store.revoke).not.toHaveBeenCalled();
     }
     const f = fixture();
     expect((await f.app.inject({
@@ -167,12 +170,13 @@ describe('Watch-only credential boundary', () => {
     expect((await timeout).statusCode).toBe(503);
   });
 
-  it('bounds issuance and credential lookups per replica before SQL, without preventing revocation', async () => {
+  it('bounds owner issuance after auth, with a separate bounded revocation budget', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const f = fixture();
     let credential = '';
     for (let count = 0; count < 6; count += 1) {
-      const response = await f.issue();
+      const response = await f.app.inject({ method: 'POST', url: watchCredentialPath,
+        headers: f.headers, remoteAddress: `192.0.2.${count + 1}` });
       expect(response.statusCode).toBe(200);
       credential = response.json<{ credential: string }>().credential;
     }
@@ -180,15 +184,132 @@ describe('Watch-only credential boundary', () => {
     expect(limitedIssue.statusCode).toBe(429);
     expect(Number(limitedIssue.headers['retry-after'])).toBeGreaterThan(0);
     expect(f.store.rotate).toHaveBeenCalledTimes(6);
-    for (let count = 0; count < 30; count += 1) expect(await f.credentials.verify(credential)).toBe(true);
-    const limitedRead = await f.app.inject({
-      method: 'POST', url: watchTranscriptionPath, headers: { authorization: authorization(credential) }, payload: { audio: 'AAA=' },
-    });
-    expect(limitedRead.statusCode).toBe(429);
-    expect(f.store.verify).toHaveBeenCalledTimes(30);
     expect((await f.app.inject({ method: 'DELETE', url: watchCredentialPath, headers: f.headers })).statusCode).toBe(204);
+    for (let count = 1; count < 30; count += 1) {
+      expect((await f.app.inject({ method: 'DELETE', url: watchCredentialPath, headers: f.headers })).statusCode).toBe(204);
+    }
+    const limitedRevoke = await f.app.inject({ method: 'DELETE', url: watchCredentialPath, headers: f.headers });
+    expect(limitedRevoke.statusCode).toBe(429);
+    expect(limitedRevoke.headers['retry-after']).toBe('1');
+    expect(f.store.revoke).toHaveBeenCalledTimes(30);
     vi.setSystemTime(Date.now() + 60_000);
     expect(await f.credentials.verify(credential)).toBe(false);
     expect((await f.issue()).statusCode).toBe(200);
+  });
+
+  it('stops well-formed unknown-token floods before SQL and bounds same-peer denial to one second', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const f = fixture();
+    const { credential } = (await f.issue()).json<{ credential: string }>();
+    const call = (token: string, remoteAddress = '192.0.2.1', forwarded = '203.0.113.1') => f.app.inject({
+      method: 'POST', url: watchTranscriptionPath, remoteAddress,
+      headers: { authorization: authorization(token), 'x-forwarded-for': forwarded, forwarded: `for=${forwarded}` },
+      payload: { audio: 'AAA=' },
+    });
+    for (let count = 0; count < 30; count += 1) {
+      const unknown = `jw.${Buffer.alloc(32, count).toString('base64url')}`;
+      expect((await call(unknown, '192.0.2.1', `203.0.113.${count + 1}`)).statusCode).toBe(401);
+    }
+    const blocked = await Promise.all(Array.from({ length: 10 }, (_, count) =>
+      call(`jw.${Buffer.alloc(32, count + 30).toString('base64url')}`, '192.0.2.1', `198.51.100.${count + 1}`)));
+    expect(blocked.map(response => response.statusCode)).toEqual(Array(10).fill(429));
+    expect(blocked.every(response => response.headers['retry-after'] === '1')).toBe(true);
+    expect(f.store.verify).toHaveBeenCalledTimes(30);
+    expect((await call(credential)).statusCode).toBe(429);
+    expect(f.store.verify).toHaveBeenCalledTimes(30);
+    expect((await call(credential, '192.0.2.2')).statusCode).toBe(200);
+    vi.setSystemTime(Date.now() + 999);
+    expect((await call(credential)).statusCode).toBe(429);
+    vi.setSystemTime(Date.now() + 1);
+    expect((await call(credential)).statusCode).toBe(200);
+    expect(f.store.verify).toHaveBeenCalledTimes(32);
+    expect(f.transcribe).toHaveBeenCalledTimes(2);
+  });
+
+  it('shares the authenticated hashed-credential budget across IPs without unknown-token consumption', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const f = fixture();
+    const { credential } = (await f.issue()).json<{ credential: string }>();
+    const call = (token: string, remoteAddress: string) => f.app.inject({
+      method: 'POST', url: watchTranscriptionPath, remoteAddress,
+      headers: { authorization: authorization(token) }, payload: { audio: 'AAA=' },
+    });
+    for (let count = 0; count < 30; count += 1) {
+      expect((await call(`jw.${Buffer.alloc(32, count).toString('base64url')}`, '192.0.2.1')).statusCode).toBe(401);
+      expect((await call(credential, `198.51.100.${count + 1}`)).statusCode).toBe(200);
+    }
+    const blocked = await call(credential, '192.0.2.2');
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.headers['retry-after']).toBe('60');
+    expect(f.transcribe).toHaveBeenCalledTimes(30);
+    vi.setSystemTime(Date.now() + 60_000);
+    expect((await call(credential, '192.0.2.2')).statusCode).toBe(200);
+    expect(f.records.join('')).not.toContain(credential);
+    expect(f.records.join('')).not.toContain(createHash('sha256').update(credential).digest('hex'));
+  });
+
+  it('limits management before owner verification, without broadening auth or limiting unrelated routes', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const f = fixture();
+    for (const method of ['POST', 'DELETE'] as const) {
+      f.auth.mockClear();
+      for (let count = 0; count < 30; count += 1) {
+        expect((await f.app.inject({ method, url: watchCredentialPath,
+          headers: { authorization: authorization('unknown.fixture.token'), 'x-forwarded-for': `192.0.2.${count + 1}` },
+        })).statusCode).toBe(401);
+      }
+      expect((await f.app.inject({ method, url: watchCredentialPath, headers: f.headers })).statusCode).toBe(429);
+      expect(f.auth).toHaveBeenCalledTimes(30);
+    }
+    expect(f.store.rotate).not.toHaveBeenCalled();
+    expect(f.store.revoke).not.toHaveBeenCalled();
+    expect((await f.app.inject({ method: 'POST', url: '/watch/transcribe', headers: f.headers,
+      payload: { audio: 'AAA=' } })).statusCode).toBe(200);
+    expect((await f.app.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200);
+    expect((await f.app.inject({ method: 'GET', url: watchCredentialPath })).statusCode).toBe(401);
+    expect((await f.app.inject({ method: 'POST', url: '/voice/watch/transcribe/other' })).statusCode).toBe(401);
+    vi.setSystemTime(Date.now() + 1000);
+    expect((await f.issue()).statusCode).toBe(200);
+    expect((await f.app.inject({ method: 'DELETE', url: watchCredentialPath, headers: f.headers })).statusCode).toBe(204);
+  });
+
+  it('preserves nested health-upload client and instance limits before verification without sharing Watch budgets', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const verifier = vi.fn<HealthCredentialVerifier>(async () => ({
+      version: 1, ownerObjectId: config.auth.ownerObjectId, deviceId: 'health-device',
+      permissions: ['health-heartbeat'], expiresAt: new Date(Date.now() + 60_000).toISOString(), revoked: false,
+    }));
+    const accept = vi.fn<HealthBuffer['accept']>(async () => ({
+      acceptanceId: 'fixture', acceptedAt: new Date().toISOString(), status: 'accepted',
+      queue: 'pending', processing: 'not-confirmed', duplicate: false,
+    }));
+    const f = fixture({ healthUpload: {
+      enabled: true, verifier, buffer: { owner: config.auth.ownerObjectId.toLowerCase(), accept },
+      ratePolicy: { perClient: 2, perInstance: 4, windowMs: 60_000 },
+    } });
+    const { credential } = (await f.issue()).json<{ credential: string }>();
+    const heartbeat = (remoteAddress: string) => f.app.inject({
+      method: 'POST', url: '/api/health/heartbeat', remoteAddress,
+      headers: { authorization: authorization('a'.repeat(43)) },
+    });
+    expect((await heartbeat('192.0.2.1')).statusCode).toBe(202);
+    expect((await heartbeat('192.0.2.1')).statusCode).toBe(202);
+    const clientLimited = await heartbeat('192.0.2.1');
+    expect(clientLimited.statusCode).toBe(429);
+    expect(clientLimited.headers['retry-after']).toBe('60');
+    expect(verifier).toHaveBeenCalledTimes(2);
+    expect((await heartbeat('192.0.2.2')).statusCode).toBe(202);
+    const instanceLimited = await heartbeat('192.0.2.3');
+    expect(instanceLimited.statusCode).toBe(429);
+    expect(instanceLimited.headers['retry-after']).toBe('60');
+    expect(verifier).toHaveBeenCalledTimes(3);
+    expect(accept).toHaveBeenCalledTimes(3);
+    expect(f.auth).toHaveBeenCalledTimes(1);
+    expect((await f.app.inject({ method: 'POST', url: watchTranscriptionPath, remoteAddress: '192.0.2.1',
+      headers: { authorization: authorization(credential) }, payload: { audio: 'AAA=' } })).statusCode).toBe(200);
+    expect(f.store.verify).toHaveBeenCalledTimes(1);
+    expect((await f.issue()).statusCode).toBe(200);
+    vi.setSystemTime(Date.now() + 60_000);
+    expect((await heartbeat('192.0.2.1')).statusCode).toBe(202);
   });
 });

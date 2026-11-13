@@ -12608,11 +12608,8 @@ after 24 hours; SQL stores
 only its SHA-256 hash and checks expiry on every request. It authorizes exactly
 `POST /voice/watch/transcribe`, not the legacy alias, credential management,
 chat, tasks, tools or voice. Existing audio-size, two-request concurrency and
-90-second transcription limits still apply. Add per-backend-replica limits of
-six issuances and 30 credential verification attempts per minute, with 429 and
-Retry-After responses; revocation is not throttled. These are not a distributed
-cost quota and an attacker exhausting verification capacity can temporarily
-deny direct access on that replica.
+90-second transcription limits still apply. The 13 November review follow-up
+below replaces the initial shared credential verification window.
 
 The phone provisions the credential through paired WatchConnectivity. The Watch
 keeps it in Keychain and uses HTTPS for direct transcription, then falls back to
@@ -12645,6 +12642,23 @@ but needs a separate voice-only WebSocket credential, bounded session/budget
 authorization, token expiry during a session, and physical-device validation of
 network switching, audio routing, wrist-down runtime and battery cost.
 The dictation credential must not be widened to enable either feature.
+
+### 13 November 2026 — Recognized Watch route limits (#1808 review)
+
+Use the existing `@fastify/rate-limit` dependency rather than custom credential
+windows. Limit the canonical Watch transcription and credential-management
+routes before their authentication lookups. Budget transport peers, not
+unverified token strings or caller-provided forwarded headers; use short
+non-extending windows so an unknown-token flood does not reserve the real
+Watch's minute-long quota. Apply the longer issuance/transcription budgets only
+after owner/Watch authentication. Keep revocation independent of issuance.
+Each canonical route allows 30 attempts/second per transport peer with a bounded
+512-peer cache. Authenticated issuance permits six/minute per owner; Watch
+transcription permits 30/minute per verified credential hash. Return 429 and
+Retry-After when exhausted. A different peer retains its own short budget;
+a shared ingress peer can still be denied during a one-second window.
+These are bounded per-replica protections, not distributed quotas or a
+guarantee of availability under sustained denial-of-service traffic.
 
 ## Watch voice startup and dictation (12 November 2026)
 

@@ -7,10 +7,18 @@
   transcription-only credential; `DELETE` revokes it. Apply migration
   `0079_watch_credentials.sql` before using issuance. Storage failure must deny
   access, not fall back to an in-memory credential.
-- Each backend replica limits issuance to six/minute and credential verification
-  to 30 attempts/minute, returning 429 with Retry-After. These are not global
-  limits; revocation is not throttled. The existing two-request transcription
-  concurrency, PCM/body limits and 90-second deadline are unchanged.
+- `@fastify/rate-limit` protects each canonical Watch route before authentication:
+  30 attempts/second per transport peer, with a bounded 512-peer cache,
+  non-extending windows and no trust in forwarded identity headers. The root
+  limiter is installed before the authentication hook; route `onRequest` alone
+  runs too late to protect its SQL lookup.
+- After authentication, issuance is limited to six/minute per owner and Watch
+  transcription to 30/minute per verified credential hash. Unknown credentials
+  cannot consume that minute budget. Revocation has its own short peer budget,
+  independent of issuance. Shared-peer traffic can exhaust a one-second window;
+  sustained attacks and distributed quotas remain outside this guarantee.
+  The existing two-request concurrency, PCM/body limits and 90-second deadline
+  are unchanged.
 - The Watch stores the credential in Keychain and uploads only to the configured
   HTTPS backend's `POST /voice/watch/transcribe`. Do not put credentials in
   snapshots, UserDefaults, fixtures, logs or diagnostic UI. Do not copy the
@@ -38,14 +46,21 @@
   `swift test -j 2 --filter 'JarvisClientTransportTests|WatchDictationCredentialTests|WatchDictationRoutingTests'`
   (27 tests), Core build, six native syntax parses and Watch plist validation.
   No integration code fixes were needed.
-- CodeQL JavaScript reports `js/missing-rate-limiting` on the shared auth hook.
-  The added Watch branch explicitly limits verification before SQL and issuance
-  before rotation; those limits are tested. Treat this as a static-analysis
-  limitation for the new path, not evidence of a global limiter. Swift CodeQL
-  database creation is blocked by the unavailable Apple build environment.
-  The final post-merge CodeQL invocation timed out before all languages finished;
-  Actions completed without alerts, Swift database creation failed, and the final
-  JavaScript scan was incomplete. Do not report a clean full CodeQL run.
+- The 13 November review replaces the original custom windows following the
+  CodeQL `js/missing-rate-limiting` alert. Do not rely on the earlier false-positive
+  assessment: inspect the recognized limiter's actual ordering before SQL and
+  its flood-isolation tests, then recheck security analysis on the revised head.
+  Local Swift database creation still requires the Apple build environment.
+- The PR's old `sync` check is the Project board workflow, not an auth/build or
+  canonical-title test. Its logs show cancellation during board synchronization;
+  that workflow deliberately has repository-wide `cancel-in-progress` concurrency.
+  The available workflow retry tool rejects cancelled runs (409), so do not claim
+  it was rerun or passed. The canonical PR title gate passed on the prior head.
+- Review regression coverage exercises 30 pre-SQL attempts followed by 429,
+  well-formed unknown tokens, forged forwarded headers, another peer's valid
+  Watch, exact one-second same-peer recovery, independent revocation, and
+  authenticated minute budgets. Route config alone is not evidence that
+  authentication SQL is protected: preserve the early root hook ordering.
 
 ## Image builds — 12 November 2026
 

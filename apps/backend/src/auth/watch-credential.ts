@@ -15,17 +15,10 @@ export class WatchCredentialUnavailable extends Error {
   constructor() { super('Watch credential unavailable'); }
 }
 
-export class WatchCredentialThrottled extends Error {
-  constructor(readonly retryAfterSeconds: number) { super('Too many requests'); }
-}
-
 export class WatchCredentials {
-  private issueWindow = { start: 0, count: 0 };
-  private verifyWindow = { start: 0, count: 0 };
   constructor(private readonly store: WatchCredentialStore, private readonly ownerObjectId: string) {}
 
   async issue(): Promise<{ credential: string; expiresAt: string }> {
-    this.consume(this.issueWindow, 6);
     const credential = `${watchCredentialPrefix}${randomBytes(32).toString('base64url')}`;
     try {
       const expiresAt = await this.store.rotate(this.ownerObjectId, this.hash(credential));
@@ -35,7 +28,6 @@ export class WatchCredentials {
 
   async verify(credential: string): Promise<boolean> {
     if (!/^jw\.[A-Za-z0-9_-]{43}$/u.test(credential)) return false;
-    this.consume(this.verifyWindow, 30);
     try { return await this.store.verify(this.ownerObjectId, this.hash(credential)); }
     catch { throw new WatchCredentialUnavailable(); }
   }
@@ -47,16 +39,6 @@ export class WatchCredentials {
 
   private hash(credential: string): Buffer {
     return createHash('sha256').update(credential).digest();
-  }
-
-  private consume(window: { start: number; count: number }, maximum: number): void {
-    const now = Date.now();
-    if (now - window.start >= 60_000 || now < window.start) {
-      window.start = now;
-      window.count = 0;
-    }
-    if (window.count >= maximum) throw new WatchCredentialThrottled(Math.max(1, Math.ceil((window.start + 60_000 - now) / 1000)));
-    window.count += 1;
   }
 }
 

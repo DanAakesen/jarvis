@@ -1,4 +1,5 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
+import { createHash } from 'node:crypto';
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
 import { localWebOrigin, type BackendConfig } from '../config.js';
 import { exportDevicePaths, validateExportDevice, verifyExportCredential, type NutritionExportCredentialVerifier } from '../health/nutrition-export/auth.js';
@@ -15,7 +16,7 @@ import { auditOwnerSessionRefreshFailed, auditOwnerSessionRejected } from './ses
 import { ownerSessionPolicy } from './session/config.js';
 import { OwnerSessionThrottled, OwnerSessionUnavailable, type OwnerSessionContext, type OwnerSessionVerifier } from './session/service.js';
 import { ownerSessionTokenPrefix } from './session/token.js';
-import { watchCredentialPrefix, watchTranscriptionPath, WatchCredentialThrottled, WatchCredentialUnavailable, type WatchCredentials } from './watch-credential.js';
+import { watchCredentialPrefix, watchTranscriptionPath, WatchCredentialUnavailable, type WatchCredentials } from './watch-credential.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -133,6 +134,7 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       if (token.startsWith(watchCredentialPrefix)) {
         if (request.method !== 'POST' || request.routeOptions.url !== watchTranscriptionPath) throw new AuthenticationDenied(403);
         if (!watchCredentials || !await watchCredentials.verify(token)) throw new AuthenticationDenied(401);
+        request.watchCredentialHash = createHash('sha256').update(token).digest('hex');
         return;
       }
       const principal = token.startsWith(ownerSessionTokenPrefix) ? await verifyOwnerSession(request, token) : await verify(token);
@@ -171,7 +173,7 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         request.principal = principal;
       }
     } catch (error) {
-      const throttled = error instanceof OwnerSessionThrottled || error instanceof WatchCredentialThrottled;
+      const throttled = error instanceof OwnerSessionThrottled;
       const unavailable = error instanceof OwnerSessionUnavailable || error instanceof WatchCredentialUnavailable;
       const statusCode = throttled ? 429 : unavailable ? 503 : error instanceof AuthenticationDenied ? error.statusCode : 401;
       const path = (request.raw.url ?? '').split('?')[0]?.slice(0, 200);
@@ -187,7 +189,7 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
           ? request.routeOptions.config.jarvisHealthMcpMetadataUrl : undefined;
         reply.header('WWW-Authenticate', metadata ? `Bearer resource_metadata="${metadata}"` : 'Bearer');
       }
-      if (error instanceof OwnerSessionThrottled || error instanceof WatchCredentialThrottled) {
+      if (error instanceof OwnerSessionThrottled) {
         // The token was not judged: this replica is shedding lookups of ids it does not know. Retry, never sign out.
         reply.header('Retry-After', String(error.retryAfterSeconds));
         return reply.code(429).send({ error: 'Too many requests' });

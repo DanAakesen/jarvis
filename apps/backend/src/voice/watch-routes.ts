@@ -2,7 +2,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { FastifyInstance } from 'fastify';
 import type { Logger } from 'pino';
 import type { WatchTranscriber } from './watch-transcription.js';
-import { watchCredentialPath, watchTranscriptionPath, WatchCredentialThrottled, type WatchCredentials } from '../auth/watch-credential.js';
+import { watchCredentialPath, watchTranscriptionPath, type WatchCredentials } from '../auth/watch-credential.js';
 
 const MAX_AUDIO_BYTES = 2_880_000;
 const MAX_BASE64_LENGTH = Math.ceil(MAX_AUDIO_BYTES / 3) * 4;
@@ -24,10 +24,7 @@ export function registerWatchTranscriptionRoute(app: FastifyInstance<Server, Inc
           if (method === 'POST') return reply.send(await credentials.issue());
           await credentials.revoke();
           return reply.code(204).send();
-        } catch (error) {
-          if (error instanceof WatchCredentialThrottled) {
-            return reply.code(429).header('Retry-After', String(error.retryAfterSeconds)).send({ error: 'Too many requests' });
-          }
+        } catch {
           return reply.code(503).send({ error: 'Service unavailable' });
         }
       },
