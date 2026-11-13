@@ -15,6 +15,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
     private var converter: AVAudioConverter?
     private var captureContinuation: AsyncStream<Data>.Continuation?
     private var captureDropped = false
+    private var captureDropCount = 0
     private var playbackProgress: [String: PlaybackProgress] = [:]
     private var playbackFinished: (@Sendable (String, Bool) -> Void)?
     private var hasCaptureTap = false
@@ -27,7 +28,7 @@ final class VoiceAudioEngine: @unchecked Sendable {
         }
     }
 
-    func startCapture() throws -> AsyncStream<Data> {
+    func startCapture(tolerateDrops: Bool = false) throws -> AsyncStream<Data> {
         // Activating playAndRecord can change the hardware route on first use.
         // Build the graph only after that, rather than against the previous session.
         try configureSession()
@@ -43,9 +44,10 @@ final class VoiceAudioEngine: @unchecked Sendable {
             throw VoiceAudioEngineError.captureUnavailable
         }
         self.converter = converter
-        let stream = AsyncStream<Data>(bufferingPolicy: .bufferingOldest(16)) { continuation in
+        let stream = AsyncStream<Data>(bufferingPolicy: tolerateDrops ? .bufferingNewest(16) : .bufferingOldest(16)) { continuation in
             lock.lock()
             captureDropped = false
+            captureDropCount = 0
             captureContinuation = continuation
             lock.unlock()
         }
@@ -56,11 +58,11 @@ final class VoiceAudioEngine: @unchecked Sendable {
             self.lock.unlock()
             #if os(watchOS)
             if let result = continuation?.yield(data), case .dropped = result {
-                // A companion link that cannot keep up must fail visibly instead of losing speech silently.
                 self.lock.lock()
                 self.captureDropped = true
+                self.captureDropCount += 1
                 self.lock.unlock()
-                continuation?.finish()
+                if !tolerateDrops { continuation?.finish() }
             }
             #else
             continuation?.yield(data)
@@ -86,6 +88,12 @@ final class VoiceAudioEngine: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return captureDropped
+    }
+
+    var droppedCaptureChunks: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return captureDropCount
     }
 
     func setPlaybackFinishedHandler(_ handler: @escaping @Sendable (String, Bool) -> Void) {

@@ -326,7 +326,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
         guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData), event.version == 1 else { return }
-        Task { @MainActor in self.onEvent?(event) }
+        DispatchQueue.main.async { self.onEvent?(event) }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         Task { @MainActor in self.receiveCredentials(message) }
@@ -345,7 +345,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data, replyHandler: @escaping (Data) -> Void) {
         guard case .event(let event) = try? JSONDecoder().decode(WatchWire.self, from: messageData), event.version == 1 else { replyHandler(Data()); return }
-        Task { @MainActor in self.onEvent?(event); replyHandler(Data([1])) }
+        DispatchQueue.main.async { self.onEvent?(event); replyHandler(Data([1])) }
     }
     nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
         let data = applicationContext["health"] as? Data
@@ -355,7 +355,8 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             if self.receiveCredentials(applicationContext) { return }
             if let data = voiceData, data.count <= WatchLimits.payloadBytes,
                let event = try? JSONDecoder().decode(WatchEvent.self, from: data),
-               event.version == 1, event.kind == .voiceState, event.text == "Ended" {
+               event.version == 1, event.kind == .voiceState,
+               ["Ended", "Audio connection unavailable"].contains(event.text ?? "") {
                 self.onEvent?(event)
             }
             if let data, data.count <= WatchLimits.payloadBytes,

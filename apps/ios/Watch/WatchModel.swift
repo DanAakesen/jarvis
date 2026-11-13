@@ -27,6 +27,10 @@ final class WatchModel: ObservableObject {
     private let voiceLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Jarvis", category: "WatchVoice")
     private var capture: Task<Void, Never>?
     private var captureTerminationLogged = false
+    private var audioSends: [UUID: Task<Void, Never>] = [:]
+    private var audioBackpressure = WatchVoiceBackpressure(now: Date())
+    private var lastAudioMetrics = Date()
+    private var audioSequence: UInt64 = 0
     private var heartbeat: Task<Void, Never>?
     private var historyRequest = UUID()
     private var turn: UUID?
@@ -134,7 +138,7 @@ final class WatchModel: ObservableObject {
             configurePlaybackCompletion()
             let stream: AsyncStream<Data>
             do {
-                stream = try audio.startCapture()
+                stream = try audio.startCapture(tolerateDrops: true)
             } catch {
                 voiceLogger.error("Voice capture could not start: \(String(describing: error), privacy: .public)")
                 self.error = NSLocalizedString("Microphone audio could not start. Try voice again.", comment: "")
@@ -142,6 +146,8 @@ final class WatchModel: ObservableObject {
                 return
             }
             captureTerminationLogged = false
+            audioBackpressure = WatchVoiceBackpressure(now: Date()); lastAudioMetrics = Date()
+            audioSequence = 0
             capture = Task { [weak self] in
                 var batch = Data()
                 for await bytes in stream {
@@ -151,15 +157,44 @@ final class WatchModel: ObservableObject {
                         self.recordCaptureEnd(self.voiceGeneration == epoch ? "cancelled" : "session_cancelled")
                         return
                     }
-                    if self.muted { batch.removeAll(keepingCapacity: true); continue }
+                    if self.muted {
+                        batch.removeAll(keepingCapacity: true)
+                        self.audioBackpressure.progressed(at: Date())
+                        continue
+                    }
                     batch.append(bytes)
-                    guard batch.count >= 4_800 else { continue } // ~100 ms at 24 kHz PCM16.
+                    guard batch.count >= 12_000 else { continue } // ~250 ms at 24 kHz PCM16.
                     let packet = batch; batch.removeAll(keepingCapacity: true)
-                    do { _ = try await self.connection.request(.init(action: .audio, itemID: id.uuidString, data: packet)) }
-                    catch {
-                        guard self.voiceGeneration == epoch else { return }
-                        self.recordCaptureEnd("audio_send_error")
-                        self.show(error); await self.endVoice(); return
+                    let sequence = self.audioSequence
+                    self.audioSequence += 1
+                    if self.audioSends.count < 4 {
+                        let request = WatchRequest(action: .audio, itemID: id.uuidString, data: packet, sequence: sequence)
+                        let started = Date()
+                        self.audioSends[request.id] = Task { [weak self] in
+                            guard let self else { return }
+                            do {
+                                _ = try await self.connection.request(request, waitForReadiness: false)
+                                guard self.voiceGeneration == epoch else { return }
+                                self.audioBackpressure.progressed(at: Date())
+                                let milliseconds = Int(Date().timeIntervalSince(started) * 1_000)
+                                if Date().timeIntervalSince(self.lastAudioMetrics) >= 5 {
+                                    self.voiceLogger.info("Voice link: rtt_ms=\(milliseconds) in_flight=\(self.audioSends.count) packet_drops=\(self.audioBackpressure.drops) capture_drops=\(self.audio.droppedCaptureChunks)")
+                                    self.lastAudioMetrics = Date()
+                                }
+                            } catch {
+                                guard self.voiceGeneration == epoch else { return }
+                                self.audioBackpressure.dropped()
+                            }
+                            self.audioSends.removeValue(forKey: request.id)
+                        }
+                    } else {
+                        self.audioBackpressure.dropped()
+                    }
+                    if self.audioBackpressure.stalled(at: Date()) {
+                        self.voiceLogger.error("Voice link stalled: in_flight=\(self.audioSends.count) packet_drops=\(self.audioBackpressure.drops) capture_drops=\(self.audio.droppedCaptureChunks)")
+                        self.error = "Voice stopped because the iPhone audio connection was unavailable. Try again."
+                        await self.endVoice(captureEndReason: "audio_link_stalled")
+                        return
                     }
                 }
                 guard let self else { return }
@@ -167,13 +202,8 @@ final class WatchModel: ObservableObject {
                     self.recordCaptureEnd(self.voiceGeneration == epoch ? "cancelled" : "session_cancelled")
                     return
                 }
-                let reason = self.audio.didDropCapture ? "capture_buffer_overflow" : "capture_stream_ended"
-                self.recordCaptureEnd(reason)
-                if reason == "capture_buffer_overflow" {
-                    self.error = NSLocalizedString("Audio capture fell behind. Try starting voice again.", comment: "")
-                } else {
-                    self.error = NSLocalizedString("Audio capture stopped unexpectedly. Tap the voice icon to try again.", comment: "")
-                }
+                self.recordCaptureEnd("capture_stream_ended")
+                self.error = NSLocalizedString("Audio capture stopped unexpectedly. Tap the voice icon to try again.", comment: "")
                 await self.endVoice()
             }
             heartbeat = Task { [weak self] in
@@ -184,7 +214,9 @@ final class WatchModel: ObservableObject {
                         guard try await self.hasActiveVoice() else { return }
                     } catch {
                         guard self.voiceGeneration == epoch else { return }
-                        await self.endVoice(); self.show(error); return
+                        if self.audioBackpressure.stalled(at: Date()) {
+                            await self.endVoice(); self.show(error); return
+                        }
                     }
                 }
             }
@@ -355,6 +387,8 @@ final class WatchModel: ObservableObject {
         voiceGeneration = UUID()
         if capture != nil { recordCaptureEnd(captureEndReason) }
         capture?.cancel(); capture = nil; heartbeat?.cancel(); heartbeat = nil
+        for task in audioSends.values { task.cancel() }
+        audioSends.removeAll()
         audio.stop(); voiceID = nil; voiceState = state; muted = false
     }
     func handleVoiceAudioInterruption(reason: UInt?) {
@@ -399,7 +433,10 @@ final class WatchModel: ObservableObject {
         switch event.kind {
         case .voiceState:
             if let muted = event.muted { self.muted = muted }
-            if event.text == "Ended" || event.text == "Disconnected" {
+            if event.text == "Audio connection unavailable" {
+                stopLocalVoice(state: "Ended", captureEndReason: "playback_link_stalled")
+                error = "Voice stopped because the iPhone audio connection was unavailable. Try again."
+            } else if event.text == "Ended" || event.text == "Disconnected" {
                 stopLocalVoice(state: event.text ?? "Ended", captureEndReason: event.text == "Disconnected" ? "phone_disconnected" : "phone_ended")
             }
             else if event.text == "Playback finished" { audio.finishPlayback(responseID: event.responseID) }

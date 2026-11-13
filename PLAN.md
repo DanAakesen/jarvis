@@ -1,6 +1,6 @@
 ## Watch voice startup and capture recovery — 12 November 2026 (#1810)
 
-Backend voice startup loads optional proactive context and managed-identity credentials alongside conversation-session creation. Context refresh has a 1.5-second bound and falls back; credentials are prewarmed and refreshed ahead of expiry. Watch startup shows Connecting through a 15-second companion wait and reports/logs interruption, route, cancellation, buffer-overflow and capture failures. Backend regression tests pass. Native Watch syntax/build, paired-device audio, production latency and owner acceptance remain unverified.
+Backend voice startup loads optional proactive context and managed-identity credentials alongside conversation-session creation. Context refresh has a 1.5-second bound and falls back; credentials are prewarmed and refreshed ahead of expiry. Watch startup shows Connecting through a 15-second companion wait and reports/logs interruption, route, cancellation, sustained link stalls and capture failures. Backend regression tests pass. Native Watch build, paired-device audio, production latency and owner acceptance remain unverified.
 
 ## Chat follow-latest on every update — 12 November 2026 (#1803)
 
@@ -4938,3 +4938,7 @@ Start. Backend End, idle/cap and disconnect finalization already share cleanup.
 Follow-up JarvisCore build and all 11 existing tests pass; the six changed Swift
 files pass syntax parsing. No new tests or strings were added. Paired-device
 WatchConnectivity and native iOS/watchOS compilation remain unverified on Linux.
+
+## Watch voice transport — 13 November 2026 (#1814)
+
+Pipeline bounded, sequenced microphone and playback traffic; tolerate transient capture loss and report sustained audio-link stalls. Portable transport tests and native syntax checks are available on Linux. Next: qualify the exact head with native Watch/iPhone builds and test complication launch, duplex audio, transient loss and sustained disconnect on paired devices. Direct Watch voice remains a separately scoped follow-up.
