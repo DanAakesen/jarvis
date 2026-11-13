@@ -14,6 +14,10 @@ The existing credential scope, rate limits, audio bounds and concurrency limit
 remain unchanged. Production recognition of long clips, diagnosis and
 paired-Watch acceptance remain open.
 
+## 13 November 2026 — Chat agent no longer requires a language field (hotfix)
+
+The English-only change stopped the backend sending `language` to the hosted chat agent, but the agent still required it and answered HTTP 400 "Invalid request", so every chat turn failed while voice kept working. The agent now treats `language` as optional and defaults to English, still accepting it from older callers, including per-message history entries. Backend and agent are tested separately and the live acceptance run is manual-only, so no automated check covers this contract; a cheap backend-to-agent payload contract check is a recorded follow-up.
+
 ## 12 November 2026 — Watch voice startup and capture recovery (P15-130 / #1810)
 
 Voice startup runs conversation-session creation, managed-identity token acquisition and optional proactive-context lookup concurrently. Prewarm the process-local Voice Live credential and refresh it before expiry; keep refresh errors visible and never log token values. Bound proactive context to 1.5 seconds and continue with fallback instructions if it fails or arrives late, because optional database context must not hold up the voice connection. The Watch shows Connecting during a 15-second companion wait and reports interruption, route change, cancellation or capture failure rather than attributing stream termination to network speed. Keep Watch dictation's separate capture state and timeout. Local regression checks do not replace paired-device and production latency acceptance.
