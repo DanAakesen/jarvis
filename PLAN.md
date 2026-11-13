@@ -3,7 +3,9 @@
 Review follow-up, 13 November: current main is merged, including #1806.
 Recognized route limits now run before authentication, with tested
 unknown-credential flood isolation and one-second shared-source recovery.
-Targeted backend checks pass; final security analysis remains required.
+All 92 targeted backend tests, backend build/lint and secret scanning pass.
+Post-commit JavaScript CodeQL reports no alerts; Swift analysis cannot build
+its database in this Linux environment.
 The sync helper was cancelled by shared workflow concurrency, not canonical
 title validation; the retry tool refuses cancelled runs. Voice latency and
 capture-stream changes remain in their separate issue/PR.

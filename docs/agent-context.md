@@ -48,8 +48,9 @@
   No integration code fixes were needed.
 - The 13 November review replaces the original custom windows following the
   CodeQL `js/missing-rate-limiting` alert. Do not rely on the earlier false-positive
-  assessment: inspect the recognized limiter's actual ordering before SQL and
-  its flood-isolation tests, then recheck security analysis on the revised head.
+  assessment. Post-commit JavaScript CodeQL on the recognized limiter reports
+  no alerts. The 92 targeted credential/auth/app tests, backend build and full
+  lint passed, including a composed health-upload limiter compatibility test.
   Local Swift database creation still requires the Apple build environment.
 - The PR's old `sync` check is the Project board workflow, not an auth/build or
   canonical-title test. Its logs show cancellation during board synchronization;
