@@ -963,7 +963,9 @@ def register_chat_invocation(
                                 or message.get("language", "en") not in {"da", "en"}
                             ):
                                 raise RuntimeError("Chat steering is invalid")
-                            parsed.append((message["id"], message["text"], message.get("language", "en")))
+                            parsed.append((
+                                message["id"], message["text"], message.get("language", "en"),
+                            ))
                         if parsed:
                             cursor = parsed[-1][0]
                         return parsed
