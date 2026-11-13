@@ -76,7 +76,7 @@ import {
   type ApprovalNotificationServices,
 } from './push/approval-notifications.js';
 import type { BrowserConfirmation } from './core/owner-interactions.js';
-import { registerWatchTranscriptionRoute } from './voice/watch-routes.js';
+import { installWatchTranscriptionDeadline, registerWatchTranscriptionRoute } from './voice/watch-routes.js';
 import type { WatchTranscriber } from './voice/watch-transcription.js';
 import type { WatchCredentials } from './auth/watch-credential.js';
 
@@ -266,6 +266,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
       return reply.code(403).send({ error: 'Origin not allowed' });
     }
   });
+  installWatchTranscriptionDeadline(app);
   // Authenticate before CORS can finish OPTIONS requests in its onRequest hook.
   if (options.healthUpload?.buffer && options.healthUpload.buffer.owner !== ownerId(config.auth.ownerObjectId)) throw new Error('Health upload owner mismatch');
   if (config.ownerSessionEnabled && !options.ownerSessions) {
