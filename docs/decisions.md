@@ -1,3 +1,11 @@
+## 13 November 2026 — Follow voice captions (#1823)
+
+Keep complete current-turn voice captions in memory and follow the newest text
+in the existing bounded phone caption area rather than truncating to two lines.
+Watch receives user transcription deltas as well as final text, and sends long
+voice text in bounded transport chunks rather than silently truncating it.
+Native rendering and paired-device behavior still need device verification.
+
 ## 12 November 2026 — Watch voice startup and capture recovery (P15-130 / #1810)
 
 Voice startup runs conversation-session creation, managed-identity token acquisition and optional proactive-context lookup concurrently. Prewarm the process-local Voice Live credential and refresh it before expiry; keep refresh errors visible and never log token values. Bound proactive context to 1.5 seconds and continue with fallback instructions if it fails or arrives late, because optional database context must not hold up the voice connection. The Watch shows Connecting during a 15-second companion wait and reports interruption, route change, cancellation or capture failure rather than attributing stream termination to network speed. Keep Watch dictation's separate capture state and timeout. Local regression checks do not replace paired-device and production latency acceptance.
@@ -12712,10 +12720,3 @@ WatchConnectivity application context as well as sending a live event, and check
 again on foreground/reconnection. Backend records already finalize through the
 same path for explicit End, idle expiry, duration cap and socket disconnect; no
 backend or database change is needed. No new strings or tests were added.
-## 13 November 2026 — Follow voice captions (#1823)
-
-Keep complete current-turn voice captions in memory and follow the newest text
-in the existing bounded phone caption area rather than truncating to two lines.
-Watch receives user transcription deltas as well as final text, and sends long
-voice text in bounded transport chunks rather than silently truncating it.
-Native rendering and paired-device behavior still need device verification.
