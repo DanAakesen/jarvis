@@ -410,6 +410,12 @@ receive the complete list. Validate with synthetic fractional nutrition fixtures
 
 ## Mobile chat scrolling (26 October 2026; local)
 
+On iPhone, Send immediately reveals the sent message above the composer. Follow
+every subsequent chat content or height change, including thinking, progress,
+tools, streaming text, approvals, errors and completion. A manual scroll away
+pauses following; sending again or tapping the existing jump-to-latest arrow
+resumes it. New content while paused reveals that arrow without moving the view.
+
 Scrolling the phone transcript while composing retains textarea focus and the
 unsent draft, allowing continued typing and one-tap Send. An intentional outside
 tap can still dismiss the keyboard. Physical iPhone acceptance remains unverified.

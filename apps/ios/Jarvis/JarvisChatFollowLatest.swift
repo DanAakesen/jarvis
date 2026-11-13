@@ -12,12 +12,23 @@ extension EnvironmentValues {
     }
 }
 
-/// Observe laid-out content, not message IDs: tools and the dock resize independently.
+struct JarvisChatFollowContent: Equatable {
+    var messages: [JarvisChatRow]
+    let isSending: Bool
+    let acknowledgment: String
+    let progressUpdates: [String]
+    let streamingText: String
+    let tools: [ChatToolActivity]
+    let isReconnecting: Bool
+    let confirmations: [PendingConfirmation]
+    let errors: [String?]
+}
+
+/// Observe content updates and layout: tools and the dock resize independently.
 struct JarvisChatFollowLatest: ViewModifier {
     let proxy: ScrollViewProxy
     let bottomID: String
-    let newestMessageID: String?
-    let hasIncomingContent: Bool
+    let contentState: JarvisChatFollowContent
     let sendRevision: Int
     let jumpToLatestTitle: String
     var isEnabled = true
@@ -54,6 +65,7 @@ struct JarvisChatFollowLatest: ViewModifier {
                 revision += 1
             }
             .defaultScrollAnchor(isEnabled ? .bottom : nil, for: .initialOffset)
+            .defaultScrollAnchor(isEnabled && follow.shouldFollow ? .bottom : nil, for: .sizeChanges)
             .onScrollGeometryChange(for: Metrics.self) { Metrics($0) } action: { old, new in
                 if !old.hasSameLayout(as: new), follow.shouldFollow { revision += 1 }
             }
@@ -66,7 +78,6 @@ struct JarvisChatFollowLatest: ViewModifier {
                     if old != .animating {
                         follow.interactionEnded(distanceFromBottom: old == .tracking ? nil :
                             Metrics(context.geometry).distanceFromBottom)
-                        if hasIncomingContent { follow.messageArrived() }
                     }
                     revision += 1
                 default: break
@@ -75,14 +86,13 @@ struct JarvisChatFollowLatest: ViewModifier {
             .onChange(of: scenePhase) { _, _ in
                 revision += 1
             }
-            .onChange(of: newestMessageID) { _, messageID in
-                guard messageID != nil else { return }
-                follow.messageArrived()
-                revision += 1
-            }
-            .onChange(of: hasIncomingContent) { _, hasContent in
-                guard hasContent else { return }
-                follow.messageArrived()
+            .onChange(of: contentState) { old, new in
+                // Compare active-turn changes separately from history pagination.
+                var previous = old
+                previous.messages = new.messages
+                follow.contentChanged(
+                    from: old.messages, to: new.messages, hasOtherChanges: previous != new
+                )
                 revision += 1
             }
             .onChange(of: sendRevision) { _, _ in
