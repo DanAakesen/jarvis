@@ -3,7 +3,7 @@ import { createAzureSpeechConfig, createAzureSpeechEndpoint, SPEECH_AUTH_SCOPE }
 
 export type WatchTranscriptionStage = 'token_acquired' | 'recognizer_started' | 'audio_written' |
   'first_recognized' | 'recognizer_stopped' | 'recognizer_cancelled' | 'cleanup_started' | 'cleanup_finished';
-export type WatchTranscriptionReason = 'end_of_stream' | 'provider_cancelled' | 'normal_stop' | 'early_stop';
+export type WatchTranscriptionReason = 'end_of_stream' | 'provider_cancelled' | 'stop_awaiting_cancellation' | 'early_stop';
 export type WatchTranscriber = (
   audio: Buffer, signal: AbortSignal, stage?: (stage: WatchTranscriptionStage, reason?: WatchTranscriptionReason) => void,
 ) => Promise<string>;
@@ -75,15 +75,15 @@ export function createAzureWatchTranscriber(
           stage('recognizer_cancelled', event.reason === SpeechSDK.CancellationReason.EndOfStream
             ? 'end_of_stream' : 'provider_cancelled');
           if (event.reason === SpeechSDK.CancellationReason.EndOfStream) {
-            finish();
+            finish(audioWritten ? undefined : new Error('Speech recognition ended early'));
           } else {
             finish(new Error('Speech recognition failed'));
           }
         };
         activeRecognizer.sessionStopped = () => {
           if (settled) return;
-          stage('recognizer_stopped', audioWritten ? 'normal_stop' : 'early_stop');
-          finish(audioWritten ? undefined : new Error('Speech recognition ended early'));
+          stage('recognizer_stopped', audioWritten ? 'stop_awaiting_cancellation' : 'early_stop');
+          if (!audioWritten) finish(new Error('Speech recognition ended early'));
         };
         if (signal.aborted) {
           abort();

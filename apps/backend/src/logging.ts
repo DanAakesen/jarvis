@@ -227,7 +227,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       fields.status = input.status;
     }
     if (typeof input.reason === 'string' && [
-      'end_of_stream', 'provider_cancelled', 'normal_stop', 'early_stop', 'client_disconnected',
+      'end_of_stream', 'provider_cancelled', 'stop_awaiting_cancellation', 'early_stop', 'client_disconnected',
       'deadline_exceeded', 'completed', 'request_failed',
     ].includes(input.reason)) fields.reason = input.reason;
     return fields;

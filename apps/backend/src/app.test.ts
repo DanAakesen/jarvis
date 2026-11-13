@@ -150,7 +150,8 @@ describe('Fastify backend', () => {
     });
     expect((await call()).statusCode).toBe(503);
     transcribe.mockImplementationOnce(async (_audio, _signal, stage) => {
-      stage?.('recognizer_stopped', 'normal_stop');
+      stage?.('recognizer_stopped', 'stop_awaiting_cancellation');
+      stage?.('recognizer_cancelled', 'end_of_stream');
       return '';
     });
     expect((await call()).statusCode).toBe(200);
@@ -158,7 +159,7 @@ describe('Fastify backend', () => {
     expect(logs.filter(record => record.stage === 'completed')).toEqual([
       expect.objectContaining({ status: 'success', reason: 'end_of_stream' }),
       expect.objectContaining({ status: 'failure', reason: 'provider_cancelled' }),
-      expect.objectContaining({ status: 'success', reason: 'normal_stop' }),
+      expect.objectContaining({ status: 'success', reason: 'end_of_stream' }),
     ]);
     expect(records.join('')).not.toContain('private speech');
     expect(records.join('')).not.toContain('private provider error');

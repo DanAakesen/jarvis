@@ -98,22 +98,46 @@ describe('Watch transcription', () => {
     expect(recognizer.close).toHaveBeenCalledOnce();
   });
 
-  it('completes on a stopped session after audio is written and rejects provider cancellation', async () => {
+  it('waits after sessionStopped for end of stream and preserves recognized segments', async () => {
     const stages: string[] = [];
     const transcribe = createAzureWatchTranscriber(endpoint, async () => 'token');
     const first = transcribe(Buffer.from([0, 0]), new AbortController().signal, (stage) => stages.push(stage));
+    let settled = false;
+    void first.then(() => { settled = true; }, () => { settled = true; });
     await vi.waitFor(() => expect(sdk.state.recognizer).toBeDefined());
     sdk.state.recognizer!.recognized?.(null, { result: { reason: 1, text: 'first segment' } });
     sdk.state.recognizer!.recognized?.(null, { result: { reason: 1, text: 'second segment' } });
     sdk.state.recognizer!.sessionStopped?.();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    sdk.state.recognizer!.canceled?.(null, { reason: 1 });
     await expect(first).resolves.toBe('first segment second segment');
     expect(stages).toContain('recognizer_stopped');
+  });
 
-    sdk.state.recognizer = undefined;
-    const second = transcribe(Buffer.from([0, 0]), new AbortController().signal);
+  it('fails rather than returning partial speech when provider cancellation follows sessionStopped', async () => {
+    const stages: Array<[string, string | undefined]> = [];
+    const promise = createAzureWatchTranscriber(endpoint, async () => 'token')(
+      Buffer.from([0, 0]), new AbortController().signal, (stage, reason) => stages.push([stage, reason]),
+    );
     await vi.waitFor(() => expect(sdk.state.recognizer).toBeDefined());
-    sdk.state.recognizer!.canceled?.(null, { reason: 2 });
-    await expect(second).rejects.toThrow('Speech recognition failed');
+    const recognizer = sdk.state.recognizer!;
+    recognizer.recognized?.(null, { result: { reason: 1, text: 'partial speech' } });
+    recognizer.sessionStopped?.();
+    await Promise.resolve();
+    recognizer.canceled?.(null, { reason: 2 });
+    await expect(promise).rejects.toThrow('Speech recognition failed');
+    expect(stages).toContainEqual(['recognizer_stopped', 'stop_awaiting_cancellation']);
+    expect(stages).toContainEqual(['recognizer_cancelled', 'provider_cancelled']);
+  });
+
+  it('aborts if sessionStopped is not followed by a cancellation', async () => {
+    const controller = new AbortController();
+    const promise = createAzureWatchTranscriber(endpoint, async () => 'token')(Buffer.from([0, 0]), controller.signal);
+    await vi.waitFor(() => expect(sdk.state.recognizer).toBeDefined());
+    sdk.state.recognizer!.sessionStopped?.();
+    controller.abort();
+    await expect(promise).rejects.toThrow('Speech recognition cancelled');
   });
 
   it('rejects a stopped session before audio is written', async () => {

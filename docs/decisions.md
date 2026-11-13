@@ -1,8 +1,9 @@
 ## 13 November 2026 — Bound Watch dictation transcription (P15-131 / #1812)
 
-Treat end-of-stream and a session stopped after audio is written as terminal
-recognition events instead of waiting indefinitely for both. Keep continuous
-recognition for bounded recordings, but use English only. Configure the Speech
+Treat end-of-stream as a successful terminal recognition event instead of
+waiting indefinitely for a separate stop event. A stop alone does not establish
+success because a provider error can arrive later. Keep continuous recognition
+for bounded recordings, but use English only. Configure the Speech
 SDK's 60-second unthrottled send window so its default two-times-real-time
 pacing does not itself exceed the server deadline for long clips. Bound server
 transcription to 20 seconds and the Watch's transcribing state to 25 seconds;
