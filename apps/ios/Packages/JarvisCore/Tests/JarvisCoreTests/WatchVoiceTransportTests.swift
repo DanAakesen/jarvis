@@ -13,6 +13,17 @@ final class WatchVoiceTransportTests: XCTestCase {
         XCTAssertTrue(sequence.accept(3))
     }
 
+    func testResumedStreamRejectsOldPacketsAndRestartsSequence() {
+        let old = UUID()
+        let current = UUID()
+        var sequence = WatchVoiceSequence(streamID: old)
+        XCTAssertTrue(sequence.accept(8, streamID: old.uuidString))
+        sequence = WatchVoiceSequence(streamID: current)
+        XCTAssertFalse(sequence.accept(9, streamID: old.uuidString))
+        XCTAssertFalse(sequence.accept(nil, streamID: current.uuidString))
+        XCTAssertTrue(sequence.accept(0, streamID: current.uuidString))
+    }
+
     func testLegacyAudioAndOptionalSequenceEncoding() throws {
         var sequence = WatchVoiceSequence()
         XCTAssertTrue(sequence.accept(nil))

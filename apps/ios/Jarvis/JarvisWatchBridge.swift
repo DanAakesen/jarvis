@@ -512,6 +512,8 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             startingVoice = true; defer { startingVoice = false }
             let voiceEpoch = generation
             if let id = voiceID, await hasActiveVoice(id: id) {
+                resetInboundAudio()
+                voiceAudioSequence = WatchVoiceSequence(streamID: r.flag == true ? r.id : nil)
                 voicePlaybackPipelined = r.flag == true
                 return try encode(id)
             }
@@ -523,7 +525,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             guard cancelledVoiceStarts.remove(r.id) == nil else { throw WatchFailure.unavailable }
             let id = r.id; voiceID = id; lastVoiceContact = Date()
             voicePlaybackPipelined = r.flag == true
-            voiceAudioSequence = WatchVoiceSequence()
+            voiceAudioSequence = WatchVoiceSequence(streamID: r.flag == true ? r.id : nil)
             voiceSequenceDrops = 0; voiceSequenceGaps = 0; voiceSequenceLog = Date()
             playbackFailureSince = nil; lastPlaybackFailure = nil; lastPlaybackLog = Date(); playbackDrops = 0
             voiceWatchdog = Task { [weak self] in
@@ -580,7 +582,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         case .audio:
             guard r.itemID == voiceID?.uuidString, let voice, let bytes = r.data, !bytes.isEmpty, bytes.count.isMultiple(of: 2) else { throw WatchFailure.invalidRequest }
             let lastSequence = voiceAudioSequence.last
-            guard voiceAudioSequence.accept(r.sequence) else {
+            guard voiceAudioSequence.accept(r.sequence, streamID: r.text) else {
                 voiceSequenceDrops += 1
                 logVoiceSequence()
                 return nil

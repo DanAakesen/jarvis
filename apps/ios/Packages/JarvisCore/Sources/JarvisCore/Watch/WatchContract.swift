@@ -76,8 +76,12 @@ public struct WatchRequest: Codable, Equatable, Sendable {
 
 public struct WatchVoiceSequence: Sendable {
     public private(set) var last: UInt64?
-    public init() {}
-    public mutating func accept(_ sequence: UInt64?) -> Bool {
+    private let streamID: UUID?
+    public init(streamID: UUID? = nil) { self.streamID = streamID }
+    public mutating func accept(_ sequence: UInt64?, streamID: String? = nil) -> Bool {
+        if let expected = self.streamID {
+            guard streamID == expected.uuidString, sequence != nil else { return false }
+        }
         guard let sequence else { return last == nil }
         guard last.map({ sequence > $0 }) ?? true else { return false }
         last = sequence

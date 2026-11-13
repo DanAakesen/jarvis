@@ -136,6 +136,7 @@ final class WatchModel: ObservableObject {
             guard let data = result.data else { throw WatchFailure.failed }
             voiceID = try JSONDecoder().decode(UUID.self, from: data)
             let pipeline = result.voicePipeline == true
+            let audioStreamID = request.id.uuidString
             configurePlaybackCompletion()
             let stream: AsyncStream<Data>
             do {
@@ -169,7 +170,7 @@ final class WatchModel: ObservableObject {
                     let sequence = self.audioSequence
                     self.audioSequence += 1
                     if self.audioSends.count < (pipeline ? 4 : 1) {
-                        let request = WatchRequest(action: .audio, itemID: id.uuidString, data: packet, sequence: pipeline ? sequence : nil)
+                        let request = WatchRequest(action: .audio, text: pipeline ? audioStreamID : nil, itemID: id.uuidString, data: packet, sequence: pipeline ? sequence : nil)
                         let started = Date()
                         self.audioSends.insert(request.id)
                         self.connection.sendVoiceAudio(request) { [weak self] result in
