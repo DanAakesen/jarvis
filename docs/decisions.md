@@ -1,3 +1,18 @@
+## 13 November 2026 — Bound Watch dictation transcription (P15-131 / #1812)
+
+Treat end-of-stream and a session stopped after audio is written as terminal
+recognition events instead of waiting indefinitely for both. Keep continuous
+recognition for bounded recordings, but use English only. Configure the Speech
+SDK's 60-second unthrottled send window so its default two-times-real-time
+pacing does not itself exceed the server deadline for long clips. Bound server
+transcription to 20 seconds and the Watch's transcribing state to 25 seconds;
+limit direct attempts to 22 seconds to leave a short phone-fallback window.
+Allow cancellation and offer keyboard recovery if the remaining time is insufficient.
+Log sanitized stages and durations rather than audio, transcripts or credentials.
+The existing credential scope, rate limits, audio bounds and concurrency limit
+remain unchanged. Production recognition of long clips, diagnosis and
+paired-Watch acceptance remain open.
+
 ## 12 November 2026 — Watch voice startup and capture recovery (P15-130 / #1810)
 
 Voice startup runs conversation-session creation, managed-identity token acquisition and optional proactive-context lookup concurrently. Prewarm the process-local Voice Live credential and refresh it before expiry; keep refresh errors visible and never log token values. Bound proactive context to 1.5 seconds and continue with fallback instructions if it fails or arrives late, because optional database context must not hold up the voice connection. The Watch shows Connecting during a 15-second companion wait and reports interruption, route change, cancellation or capture failure rather than attributing stream termination to network speed. Keep Watch dictation's separate capture state and timeout. Local regression checks do not replace paired-device and production latency acceptance.

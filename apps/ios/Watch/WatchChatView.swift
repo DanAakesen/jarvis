@@ -85,6 +85,8 @@ struct WatchChatView: View {
                         Button("Stop") { Task { await model.stopDictation() } }
                     } else {
                         Button("Cancel") { model.cancelDictation() }
+                            .frame(minHeight: 32)
+                            .accessibilityLabel("Cancel dictation")
                     }
                 }.font(.caption2).buttonStyle(.plain)
             }
