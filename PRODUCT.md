@@ -4,7 +4,7 @@ A clear, authenticated owner instruction authorizes the requested operation with
 
 ## Watch startup connection feedback — 9 November 2026
 
-Ordinary Watch startup, foreground connection warm-up and passive history refresh must not display an interrupted-send alert. Show connection/history status inline. Actual user-action failures and interrupted active chat/voice still report errors; preserve unsent drafts and never automatically resend an accepted request.
+Ordinary Watch startup, foreground connection warm-up and passive history refresh must not display an interrupted-send alert. Show connection/history status inline. Actual user-action failures and interrupted active chat/voice still report errors; preserve unsent drafts and never automatically resend an accepted request. Watch voice stays in Connecting for up to 15 seconds while its companion session starts; audio interruption, route changes, cancellation and capture failures report their actual cause, not a guessed network delay.
 
 Watch Home retries passive connection and dashboard reads while open. Its workout preview uses the same last-seven-days history as See more; weekly HealthKit goal counts remain separately labeled. Workout names are shared and localized on Watch and iPhone.
 

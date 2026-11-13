@@ -5,6 +5,7 @@ import {
   type ToolBudgetMemory, type ToolBudgetRung,
 } from './tool-budget.js';
 import { createVoiceDiagnostics, VOICE_STARTUP_CLOSE_CODE, VoiceStageTimeout } from './diagnostics.js';
+import { createVoiceCredentialCache } from './credential-cache.js';
 import { createSessionLimits, SESSION_LIMIT_CHECK_MS, type SessionEndReason } from './session-limits.js';
 import { workspaceContext } from '../core/workspace-context.js';
 import { runModelToolCall } from '../core/tool-origin.js';
@@ -404,8 +405,31 @@ function registerVoiceRoute(
     const activeCapabilityMode = () => activeRung?.capabilityMode ?? 'lazy';
     const discoveredCapabilities = new Set<string>();
     let proactiveContext: string | undefined;
+    let proactiveContextReadPending = false;
+    const readProactiveContext = async () => {
+      return await app.proactiveConversationContext?.read(request.principal!.objectId);
+    };
     const refreshProactiveContext = async () => {
-      proactiveContext = await app.proactiveConversationContext?.read(request.principal!.objectId);
+      if (!app.proactiveConversationContext || proactiveContextReadPending) return;
+      proactiveContextReadPending = true;
+      const read = readProactiveContext();
+      void read.then(
+        () => { proactiveContextReadPending = false; },
+        () => { proactiveContextReadPending = false; },
+      );
+      try {
+        proactiveContext = await diagnostics.bound('proactive_context', 1_500, () => read);
+        diagnostics.stage('proactive_context_loaded');
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        diagnostics.stage('proactive_context_unavailable');
+        request.log.warn({
+          failure: error instanceof Error
+            ? error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown'
+            : 'unknown',
+          language,
+        }, 'voice.proactive_context_unavailable');
+      }
     };
     const sessionUpdate = (rung: ToolBudgetRung | undefined = activeRung) => {
       const update = createRealtimeSessionUpdate(
@@ -1585,18 +1609,9 @@ function registerVoiceRoute(
       });
     };
 
-    // Preserve request order while loading SQL context; the existing response guard still
-    // coalesces pending requests during playback/settings changes.
-    let responseContextQueue = Promise.resolve();
     const sendResponseCreate = (message: Record<string, unknown>) => {
-      if (!app.proactiveConversationContext) {
-        sendPreparedResponseCreate(message);
-        return;
-      }
-      responseContextQueue = responseContextQueue.then(async () => {
-        await refreshProactiveContext();
-        if (!controller.signal.aborted) sendPreparedResponseCreate(message);
-      }).catch(() => close(1011, 'Notification context unavailable'));
+      if (app.proactiveConversationContext) void refreshProactiveContext();
+      sendPreparedResponseCreate(message);
     };
 
     const flushPendingResponseCreate = () => {
@@ -1748,11 +1763,12 @@ function registerVoiceRoute(
       },
     });
     unsubscribeProactiveContext = app.proactiveConversationContext?.subscribe(async () => {
-      await refreshProactiveContext();
-      if (configured && upstreamSessionReady) {
-        settingsUpdateQueued = true;
-        applyQueuedSettingsUpdate();
-      }
+      void refreshProactiveContext().then(() => {
+        if (configured && upstreamSessionReady) {
+          settingsUpdateQueued = true;
+          applyQueuedSettingsUpdate();
+        }
+      });
     });
     unsubscribeSettings = app.nowEventHub.subscribe((event) => {
       if (event.type === 'food_estimate_result') {
@@ -2279,10 +2295,19 @@ function registerVoiceRoute(
 
     void (async () => {
       try {
-        await sessionReady;
-        await refreshProactiveContext();
-        const token = await credential(getToken, controller.signal);
-        diagnostics.stage('credential_loaded');
+        if (app.proactiveConversationContext) {
+          void refreshProactiveContext();
+        }
+        const credentialReady = diagnostics.bound(
+          'credential', TOKEN_TIMEOUT_MS, () => credential(getToken, controller.signal),
+        ).then((token) => {
+          diagnostics.stage('credential_loaded');
+          return token;
+        }).catch((error: unknown) => {
+          diagnostics.stage('credential_unavailable');
+          throw error;
+        });
+        const [, token] = await Promise.all([sessionReady, credentialReady]);
         if (controller.signal.aborted || browser.readyState !== WebSocket.OPEN) return;
         if (app.settingsStore) {
           try {
@@ -2780,11 +2805,19 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
     tools: [],
     registerRoutes: async (app) => {
       if (options.connect) {
+        const credentialCache = createVoiceCredentialCache(options.getToken, VOICE_LIVE_SCOPE, (error) => {
+          app.log.warn({
+            failure: error instanceof Error
+              ? error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown'
+              : 'unknown',
+          }, 'voice.credential_refresh_failed');
+        });
+        credentialCache.warm();
         registerVoiceRoute(
           app,
           '/voice',
           options.connect,
-          options.getToken,
+          (_scope, signal) => credentialCache.get(signal),
           options.createPartialRecognizer,
           options.visionWatch,
           options.frameStore,

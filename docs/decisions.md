@@ -1,3 +1,7 @@
+## 12 November 2026 — Watch voice startup and capture recovery (P15-130 / #1810)
+
+Voice startup runs conversation-session creation, managed-identity token acquisition and optional proactive-context lookup concurrently. Prewarm the process-local Voice Live credential and refresh it before expiry; keep refresh errors visible and never log token values. Bound proactive context to 1.5 seconds and continue with fallback instructions if it fails or arrives late, because optional database context must not hold up the voice connection. The Watch shows Connecting during a 15-second companion wait and reports interruption, route change, cancellation or capture failure rather than attributing stream termination to network speed. Keep Watch dictation's separate capture state and timeout. Local regression checks do not replace paired-device and production latency acceptance.
+
 ## 12 November 2026 — Follow every chat update (#1803)
 
 The shared iOS follow-latest modifier observes message contents and active-turn

@@ -102,14 +102,14 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         guard epoch == cacheGeneration else { throw WatchFailure.signInRequired }
         return reply
     }
-    func waitForVoiceConnection() async throws {
+    func waitForVoiceConnection(timeout: TimeInterval = 3) async throws {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
         #endif
         guard WCSession.isSupported() else { throw WatchFailure.unavailable }
         let session = WCSession.default
-        let deadline = ContinuousClock.now.advanced(by: .seconds(3))
-        while ContinuousClock.now < deadline {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
             try Task.checkCancellation()
             if session.activationState == .notActivated { session.activate() }
             if session.activationState == .activated {

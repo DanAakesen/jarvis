@@ -1,3 +1,7 @@
+## Watch voice startup and capture recovery — 12 November 2026 (#1810)
+
+Backend voice startup loads optional proactive context and managed-identity credentials alongside conversation-session creation. Context refresh has a 1.5-second bound and falls back; credentials are prewarmed and refreshed ahead of expiry. Watch startup shows Connecting through a 15-second companion wait and reports/logs interruption, route, cancellation, buffer-overflow and capture failures. Backend regression tests pass. Native Watch syntax/build, paired-device audio, production latency and owner acceptance remain unverified.
+
 ## Chat follow-latest on every update — 12 November 2026 (#1803)
 
 The shared native chat modifier now observes complete message and active-turn

@@ -103,6 +103,7 @@ const events = new Set([
   'voice.partials_unavailable', 'chat.latency', 'chat.agent_session', 'memory.embedding', 'vault.index', 'vault.write',
   'pc_act.step',
   'reflex.decision',
+  'voice.proactive_context_unavailable', 'voice.credential_refresh_failed',
   'vision.watch', 'visual.path',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
@@ -674,7 +675,8 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   }
   if (input.msg === 'conversation.reply_failed' || input.msg === 'voice.upstream_error' ||
       input.msg === 'voice.upstream_event_error' || input.msg === 'voice.partials_unavailable' ||
-      input.msg === 'voice.upstream_closed' || input.msg === 'voice.connection_failed') {
+      input.msg === 'voice.upstream_closed' || input.msg === 'voice.connection_failed' ||
+      input.msg === 'voice.proactive_context_unavailable' || input.msg === 'voice.credential_refresh_failed') {
     if (input.msg === 'conversation.reply_failed') {
       const cause = sanitizeManagedProviderCause(input.providerCause);
       if (cause) fields.providerCause = cause;

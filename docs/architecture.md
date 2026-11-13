@@ -8,6 +8,12 @@ WatchConnection emits onDisconnect for a reachable-to-unreachable transition whi
 
 While foregrounded, Watch retries activation and unavailable passive dashboard reads; mutations are never replayed. Watch Home reads the same bounded seven-day workout history as its detail list, independently of weekly HealthKit goal counts. iPhone Home also merges retained synced workouts with local and manual entries, matching HealthKit identifiers before legacy session/time matching. Shared Health localization formats workout names for both devices.
 
+## Watch voice startup and capture recovery — 12 November 2026
+
+The `/voice` relay starts conversation-session creation, Voice Live credential acquisition and optional proactive-context loading concurrently. A process-local managed-identity token cache is prewarmed at route registration, shares in-flight requests and refreshes ahead of token expiry; failed refreshes are logged and retried. Proactive context has a 1.5-second diagnostic bound and falls back without gating session startup. `voice.session_stage` distinguishes context completion/fallback from credential completion, while timeout and refresh failures remain visible without logging tokens.
+
+Watch voice shows Connecting while waiting up to 15 seconds for its paired iPhone; the server request retains its existing 25-second transport deadline. Capture termination logs interruption, route change, cancellation, companion loss, buffered-audio overflow or unexpected stream completion, and user-facing errors describe the observed cause. Dictation retains its separate capture state and eight-second companion wait. Paired-device audio and production latency remain unverified.
+
 ## Home brief and daily activity implementation — 9 November 2026
 
 GET /home/brief is owner-scoped and reuses existing settings, context sources and bounded Foundry JSON completion transport. Context reads coalesce and cache for 60 seconds; evidence/instruction/day/language/model fingerprints cache generation for 15 minutes. Home preferences persist in existing settings and are exposed through get_settings/update_settings. HealthKit cumulative daily statistics carry daily_total provenance; normalized daily rows replace previous coverage and cannot be overwritten by legacy raw sums. Home and Health share JarvisDailyActivitySnapshot and Copenhagen calendar periods.

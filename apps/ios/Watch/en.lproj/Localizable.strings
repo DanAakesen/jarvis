@@ -21,6 +21,12 @@
 "Transcribing…" = "Transcribing…";
 "Stop" = "Stop";
 "Cancel" = "Cancel";
+"Audio capture fell behind. Try starting voice again." = "Audio capture fell behind. Try starting voice again.";
+"Audio capture stopped unexpectedly. Tap the voice icon to try again." = "Audio capture stopped unexpectedly. Tap the voice icon to try again.";
+"Microphone audio could not start. Try voice again." = "Microphone audio could not start. Try voice again.";
+"Voice stopped because audio was interrupted. Try again when audio is available." = "Voice stopped because audio was interrupted. Try again when audio is available.";
+"Voice stopped because the audio route changed. Tap the voice icon to try again." = "Voice stopped because the audio route changed. Tap the voice icon to try again.";
+"Voice stopped because the iPhone companion disconnected. Reconnect and try again." = "Voice stopped because the iPhone companion disconnected. Reconnect and try again.";
 "Dictation unavailable. Connect your iPhone and check the network, or tap Message to type." = "Dictation unavailable. Connect your iPhone and check the network, or tap Message to type.";
 "Allow microphone access in Settings, or tap Message to type." = "Allow microphone access in Settings, or tap Message to type.";
 "Dictation stopped. Try again, or tap Message to type." = "Dictation stopped. Try again, or tap Message to type.";
