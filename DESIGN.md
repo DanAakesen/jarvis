@@ -20,7 +20,7 @@ Watch Voice remains tappable when a session ID is retained: verify it with the
 iPhone, keep a genuinely active session, or clear a confirmed stale ID and start.
 End cancels any in-flight verification; no new copy or layout is introduced.
 
-Voice startup shows the existing connection status for up to 15 seconds while waiting. Capture errors identify interruption, route changes, cancellation or unexpected stream termination; sustained audio-link loss explains that the iPhone audio connection was unavailable. Watch dictation shows connecting, listening and transcribing states with Stop or Cancel; failures explain the phone/network requirement and the keyboard fallback for offline drafts.
+Voice startup shows the existing connection status for up to 15 seconds while waiting. Capture errors identify interruption, route changes, cancellation or unexpected stream termination; sustained audio-link loss explains that the iPhone audio connection was unavailable. Watch dictation shows connecting, listening and bounded transcribing states with Stop or Cancel; failures explain the phone/network requirement and the keyboard fallback for offline drafts.
 
 Watch Home uses smaller, underlined, background-free See more links and keeps the body-fat chart without the date and summary lines beneath it. The workout preview shows recent history separately from weekly goal counts.
 
