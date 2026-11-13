@@ -409,7 +409,9 @@ final class WatchModel: ObservableObject {
             catch { Task { await endVoice() }; show(error) }
         case .voiceTranscript:
             let id = event.responseID ?? event.requestID.uuidString
-            if messages.last?.id == id { messages[messages.count - 1].text += event.text ?? "" }
+            if let index = messages.lastIndex(where: { $0.id == id && !$0.user }) {
+                messages[index].text += event.text ?? ""
+            }
             else { messages.append(.init(id: id, user: false, text: event.text ?? "")) }
         case .voiceUserTranscriptDelta:
             let id = event.responseID ?? event.requestID.uuidString
