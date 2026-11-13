@@ -11,26 +11,37 @@ enum JarvisNotesTab: String, CaseIterable, Identifiable, Sendable {
 }
 
 private struct JarvisNoteSwipeRow<Content: View>: View {
+    private enum RowAlert {
+        case confirm(VaultNote)
+        case failure(String)
+    }
+
     let title: String
+    let path: String
+    let client: JarvisNotesClient?
     let actionTitle: String
     let actionImage: String
     let identifier: String
     let isDisabled: Bool
     let onOpen: () -> Void
     let onAction: () -> Void
+    let onDeleted: (String) -> Void
     @ViewBuilder let content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var offset: CGFloat = 0
-    private let actionWidth: CGFloat = 72
+    @State private var busy = false
+    @State private var alert: RowAlert?
+    private let actionWidth = CGFloat(JarvisNotesLogic.pinSwipeDistance)
+    private let deleteWidth = CGFloat(JarvisNotesLogic.deleteSwipeDistance)
 
     var body: some View {
         ZStack(alignment: .trailing) {
-            Image(systemName: actionImage)
+            Image(systemName: -offset >= deleteWidth ? "trash" : actionImage)
                 .font(.system(size: 20, weight: .medium))
                 .foregroundStyle(JarvisDesignTokens.primaryAccentForeground)
                 .frame(width: actionWidth)
                 .frame(maxHeight: .infinity)
-                .background(JarvisDesignTokens.primaryAccent)
+                .background(-offset >= deleteWidth ? Color.red : JarvisDesignTokens.primaryAccent)
                 .frame(width: max(0, -offset), alignment: .trailing)
                 .clipped()
                 .accessibilityHidden(true)
@@ -51,29 +62,89 @@ private struct JarvisNoteSwipeRow<Content: View>: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(title)
                 .accessibilityAddTraits(.isButton)
-                .accessibilityAction { if !isDisabled { onOpen() } }
-                .accessibilityAction(named: Text(actionTitle)) { if !isDisabled { onAction() } }
+                .accessibilityAction { if !isDisabled && !busy { onOpen() } }
+                .accessibilityAction(named: Text(actionTitle)) { if !isDisabled && !busy { onAction() } }
+                .accessibilityAction(named: Text("Delete note")) { if !isDisabled && !busy { prepareDelete() } }
                 .accessibilityIdentifier(identifier)
-                .disabled(isDisabled)
+                .disabled(isDisabled || busy)
+                .overlay(alignment: .trailing) {
+                    if busy { ProgressView().padding() }
+                }
         }
         .frame(maxWidth: .infinity)
         .clipShape(Rectangle())
         .simultaneousGesture(
             DragGesture(minimumDistance: 24)
                 .onChanged { value in
-                    guard !isDisabled,
-                          value.translation.width < 0,
+                    guard !isDisabled, !busy,
                           abs(value.translation.width) > abs(value.translation.height) else { return }
-                    offset = max(-actionWidth, value.translation.width)
+                    offset = min(0, max(-deleteWidth, value.translation.width))
                 }
                 .onEnded { value in
-                    let shouldPerform = !isDisabled
-                        && value.translation.width <= -actionWidth
-                        && abs(value.translation.width) > abs(value.translation.height)
+                    let horizontal = abs(value.translation.width) > abs(value.translation.height)
+                    let distance = -value.translation.width
                     withAnimation(reduceMotion ? nil : .snappy) { offset = 0 }
-                    if shouldPerform { onAction() }
+                    guard !isDisabled, !busy, horizontal else { return }
+                    switch JarvisNotesLogic.swipeAction(distance: Double(distance)) {
+                    case .delete: prepareDelete()
+                    case .pin: onAction()
+                    case .none: break
+                    }
                 }
         )
+        .alert(alertTitle, isPresented: Binding(
+            get: { alert != nil },
+            set: { if !$0 { alert = nil } }
+        )) {
+            if case let .confirm(note) = alert {
+                Button("No", role: .cancel) { alert = nil }
+                Button("Yes", role: .destructive) {
+                    alert = nil
+                    Task { await delete(note) }
+                }
+            } else {
+                Button("OK", role: .cancel) { alert = nil }
+            }
+        } message: {
+            switch alert {
+            case .confirm: Text("Delete this note? It can be recovered from vault Git history.")
+            case let .failure(message): Text(message)
+            case nil: EmptyView()
+            }
+        }
+    }
+
+    private var alertTitle: String {
+        if case .confirm = alert { return "Delete note?" }
+        return "Note deletion"
+    }
+
+    private func prepareDelete() {
+        guard let client, !busy else { return }
+        busy = true
+        Task {
+            defer { busy = false }
+            do {
+                let note = try await client.readNote(path: path)
+                alert = .confirm(note)
+            } catch {
+                alert = .failure("The note could not be loaded. Refresh and try again.")
+            }
+        }
+    }
+
+    private func delete(_ note: VaultNote) async {
+        guard let client, !busy else { return }
+        busy = true
+        defer { busy = false }
+        do {
+            try await client.deleteNote(path: note.path, sha: note.sha)
+            onDeleted(note.path)
+        } catch JarvisNotesClientError.noteConflict {
+            alert = .failure("The note changed. Refresh it before trying again.")
+        } catch {
+            alert = .failure("Deletion could not be confirmed. Refresh the note before trying again.")
+        }
     }
 }
 
@@ -388,6 +459,10 @@ struct JarvisNotesArea: View {
                     },
                     isPinned: pinnedPaths.contains(current.path),
                     onPin: { pinned in Task { await setPinned(current.path, pinned: pinned) } },
+                    onDeleted: { path in
+                        editorPresented = false
+                        Task { await noteDeleted(path) }
+                    },
                     onClose: { editorPresented = false }
                 )
                 .id(current.path)
@@ -648,6 +723,15 @@ struct JarvisNotesArea: View {
         pinnedPaths = await JarvisAppCache.shared.pinnedNotePaths()
     }
 
+    private func noteDeleted(_ path: String) async {
+        await JarvisAppCache.invalidateAll(.notes)
+        await setPinned(path, pinned: false)
+        for directory in Array(directoryNotes.keys) {
+            directoryNotes[directory]?.removeAll { $0.path == path }
+        }
+        refreshVersion += 1
+    }
+
     private var folderBrowser: some View {
         NavigationStack {
             ScrollView {
@@ -851,6 +935,8 @@ struct JarvisNotesArea: View {
         let isPinned = pinnedPaths.contains(note.path)
         return JarvisNoteSwipeRow(
             title: note.title,
+            path: note.path,
+            client: client,
             actionTitle: isPinned ? copy.unpin : copy.pin,
             actionImage: isPinned ? "pin.slash" : "pin",
             identifier: "notes.note.\(note.path)",
@@ -863,7 +949,8 @@ struct JarvisNotesArea: View {
                     Task { await openNote(path: note.path) }
                 }
             },
-            onAction: { Task { await setPinned(note.path, pinned: !isPinned) } }
+            onAction: { Task { await setPinned(note.path, pinned: !isPinned) } },
+            onDeleted: { path in Task { await noteDeleted(path) } }
         ) {
             HStack(alignment: .center, spacing: JarvisDesignTokens.notesSectionSpacing) {
                 if openingNotePaths.contains(note.path) {
