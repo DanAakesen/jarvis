@@ -258,34 +258,43 @@ struct VoiceScreenView: View {
     }
 
     private var captions: some View {
-        VStack(alignment: .center, spacing: JarvisDesignTokens.voiceCaptionLineSpacing) {
-            if !model.sentMedia.isEmpty {
-                sentMediaStrip
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .center, spacing: JarvisDesignTokens.voiceCaptionLineSpacing) {
+                    if !model.sentMedia.isEmpty {
+                        sentMediaStrip
+                    }
+                    if !model.userCaption.isEmpty {
+                        captionLine(
+                            label: JarvisNotesLocalization.string(.voiceCaptionYou, language: appLanguage),
+                            text: model.userCaption
+                        )
+                    }
+                    if !model.assistantCaption.isEmpty {
+                        captionLine(
+                            label: JarvisNotesLocalization.string(.voiceCaptionJarvis, language: appLanguage),
+                            text: model.assistantCaption
+                        )
+                    }
+                    Color.clear.frame(height: 1).id("caption.latest")
+                }
+                .padding(.vertical, JarvisDesignTokens.voiceStatusSpacing)
+                .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
+                .frame(maxWidth: .infinity)
             }
-            if !model.userCaption.isEmpty {
-                captionLine(
-                    label: JarvisNotesLocalization.string(.voiceCaptionYou, language: appLanguage),
-                    text: model.userCaption
-                )
+            .defaultScrollAnchor(.bottom)
+            .onChange(of: model.userCaption) { _, _ in
+                proxy.scrollTo("caption.latest", anchor: .bottom)
             }
-            if !model.assistantCaption.isEmpty {
-                captionLine(
-                    label: JarvisNotesLocalization.string(.voiceCaptionJarvis, language: appLanguage),
-                    text: model.assistantCaption
-                )
+            .onChange(of: model.assistantCaption) { _, _ in
+                proxy.scrollTo("caption.latest", anchor: .bottom)
             }
         }
-        .padding(.vertical, JarvisDesignTokens.voiceStatusSpacing)
-        .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
         .frame(maxWidth: .infinity)
         .frame(maxHeight: captionMaximumHeight)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(captionAccessibilityLabel)
         .accessibilityAddTraits(.updatesFrequently)
-        .animation(
-            reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration),
-            value: captionAccessibilityLabel
-        )
     }
 
     private var captionAccessibilityLabel: String {
@@ -311,10 +320,8 @@ struct VoiceScreenView: View {
                 .font(.body.weight(.medium))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
                 .lineSpacing(JarvisDesignTokens.voiceCaptionLineSpacing)
                 .fixedSize(horizontal: false, vertical: true)
-                .contentTransition(.opacity)
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .accessibilityElement(children: .combine)

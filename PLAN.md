@@ -4938,3 +4938,9 @@ Start. Backend End, idle/cap and disconnect finalization already share cleanup.
 Follow-up JarvisCore build and all 11 existing tests pass; the six changed Swift
 files pass syntax parsing. No new tests or strings were added. Paired-device
 WatchConnectivity and native iOS/watchOS compilation remain unverified on Linux.
+## Voice caption follow-up — 13 November 2026 (#1823)
+
+Phone captions follow accumulating user and assistant text in a bounded scroll
+area; Watch receives streamed user text and no longer caps assistant replies.
+Focused portable Swift tests and native syntax parsing pass. Native rendering,
+paired Watch delivery and live voice acceptance remain unverified.

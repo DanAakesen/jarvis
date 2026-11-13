@@ -180,6 +180,9 @@ confirmed stale IDs are cleared and Start continues. Normal End, Live Activity
 End, the 10-minute idle close and the 30-minute cap all release voice ownership.
 Captions appear as centered, unframed text with readable, Dynamic Type-scaled
 typography and no separate dismiss action; the CC control toggles them.
+User speech and Jarvis replies accumulate throughout each turn; the caption
+area follows the latest text and allows earlier text to be scrolled into view.
+Watch voice likewise follows streamed user and assistant transcripts.
 Reopening Voice after End connects automatically with a fresh transport and audio
 session. The red End control follows the approved board. The shared dark-glass,
 cyan-rimmed orb reserves its space; its orange/amber centre animates in place,

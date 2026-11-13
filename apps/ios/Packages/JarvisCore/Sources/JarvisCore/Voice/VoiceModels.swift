@@ -107,7 +107,7 @@ public enum VoiceServerMessage: Equatable, Sendable {
     case speechStarted
     case responseCreated(responseID: String?)
     case audioDelta(type: String, delta: String)
-    case transcriptionDelta(transcript: String, itemID: String?)
+    case transcriptionDelta(delta: String, itemID: String?)
     case assistantTranscriptDelta(String)
     case responseDone
     case responseCancelled
@@ -138,10 +138,10 @@ public enum VoiceServerMessage: Equatable, Sendable {
             }
             return .transcriptionCompleted(transcript: payload.transcript, itemID: payload.itemID)
         case "conversation.item.input_audio_transcription.delta":
-            guard let payload = try? JSONDecoder().decode(TranscriptionPayload.self, from: data) else {
+            guard let payload = try? JSONDecoder().decode(TranscriptionDeltaPayload.self, from: data) else {
                 return .unknown(type: type, raw: raw)
             }
-            return .transcriptionDelta(transcript: payload.transcript, itemID: payload.itemID)
+            return .transcriptionDelta(delta: payload.delta, itemID: payload.itemID)
         case "input_audio_buffer.speech_started", "speech_started":
             return .speechStarted
         case "response.created":
@@ -214,6 +214,16 @@ private struct TranscriptionPayload: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case transcript
+        case itemID = "item_id"
+    }
+}
+
+private struct TranscriptionDeltaPayload: Decodable {
+    let delta: String
+    let itemID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case delta
         case itemID = "item_id"
     }
 }

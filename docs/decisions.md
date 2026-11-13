@@ -12712,3 +12712,10 @@ WatchConnectivity application context as well as sending a live event, and check
 again on foreground/reconnection. Backend records already finalize through the
 same path for explicit End, idle expiry, duration cap and socket disconnect; no
 backend or database change is needed. No new strings or tests were added.
+## 13 November 2026 — Follow voice captions (#1823)
+
+Keep complete current-turn voice captions in memory and follow the newest text
+in the existing bounded phone caption area rather than truncating to two lines.
+Watch receives user transcription deltas as well as final text, and sends long
+voice text in bounded transport chunks rather than silently truncating it.
+Native rendering and paired-device behavior still need device verification.

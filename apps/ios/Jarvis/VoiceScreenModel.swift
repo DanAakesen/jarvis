@@ -18,8 +18,9 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
     private(set) var isPhotoSession = false
     @Published private(set) var cameraPermissionDenied = false
     @Published private(set) var isScreenSharing = false
-    @Published private(set) var userCaption = ""
-    @Published private(set) var assistantCaption = ""
+    @Published private(set) var captions = VoiceCaptions()
+    var userCaption: String { captions.user }
+    var assistantCaption: String { captions.assistant }
     @Published private(set) var errorMessage: String?
     @Published private(set) var camera: VoiceCameraCapture?
     @Published private(set) var photoIsReady = false
@@ -399,8 +400,7 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
         photoIsReady = false
         sentMedia = []
         httpClient = nil
-        userCaption = ""
-        assistantCaption = ""
+        captions = VoiceCaptions()
         if let endingClient {
             do {
                 try await endingClient.end()
@@ -583,6 +583,8 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
 
     private func receive(_ message: VoiceServerMessage) {
         switch message {
+        case .speechStarted, .transcriptionDelta, .assistantTranscriptDelta:
+            captions.receive(message)
         case .sessionReady(let sessionID):
             voiceSessionID = String(sessionID)
             updateLiveStream()
@@ -593,15 +595,13 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 guard sessionGeneration == generation else { return }
                 await end()
             }
-        case .transcriptionDelta(let transcript, _):
-            userCaption = Self.boundedCaption(transcript)
         case .transcriptionCompleted(let transcript, let itemID):
-            userCaption = Self.boundedCaption(transcript)
+            captions.receive(message)
             if (isCameraEnabled || photoForNextTurn != nil), let itemID { inspectCameraTurn(transcript, itemID: itemID) }
             else if isScreenSharing { inspectScreenTurn() }
         case .responseCreated(let id):
+            captions.receive(message)
             responseID = id
-            assistantCaption = ""
         case .audioDelta(_, let base64):
             do {
                 try audio.enqueuePlayback(base64, responseID: responseID)
@@ -611,8 +611,6 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             } catch {
                 errorMessage = JarvisVoiceLocalization.string(.playbackUnavailable)
             }
-        case .assistantTranscriptDelta(let text):
-            assistantCaption = Self.boundedCaption(assistantCaption + text)
         case .responseDone:
             audio.finishPlayback(responseID: responseID)
             responseID = nil
@@ -624,8 +622,6 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
             break
         case .screenContextUnavailable(_, let reason):
             if let reason, let message = Self.visualFailure(reason) { errorMessage = message }
-        case .speechStarted:
-            break
         case .unknown:
             break
         }
@@ -854,10 +850,6 @@ final class VoiceScreenModel: ObservableObject, VoiceLiveActivityControlling {
                 )
             }
         }
-    }
-
-    private static func boundedCaption(_ value: String) -> String {
-        String(value.suffix(5_000))
     }
 
     private static func message(for error: any Error) -> String {

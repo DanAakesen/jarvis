@@ -47,6 +47,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var running = Set<UUID>()
     private var generation = UUID()
     private var eventQueue: [WatchEvent] = []
+    private var voiceUserTranscriptID = UUID().uuidString
     private var delivery: Task<Void, Never>?
     private var dashboardSnapshot: WatchDashboardSnapshot?
     private var dashboardBrief: WatchBriefSummary?
@@ -619,6 +620,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         guard voiceID == id else { return }
         switch message {
         case .sessionReady: emit(.init(.voiceState, requestID: id, text: "Listening"))
+        case .speechStarted: voiceUserTranscriptID = UUID().uuidString
         case .responseCreated(let response): voiceResponseID = response
         case .audioDelta(_, let base64):
             // WCSession caps messages at 64 KB; retain PCM16 alignment across fragments.
@@ -627,8 +629,19 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 let part = data.subdata(in: start..<min(start + 24_000, data.count))
                 emit(.init(.voiceAudio, requestID: id, text: part.base64EncodedString(), responseID: voiceResponseID))
             }
-        case .assistantTranscriptDelta(let text): emit(.init(.voiceTranscript, requestID: id, text: text, responseID: voiceResponseID))
-        case .transcriptionCompleted(let text, let itemID): emit(.init(.voiceUserTranscript, requestID: id, text: text, responseID: itemID))
+        case .assistantTranscriptDelta(let text):
+            for chunk in WatchLimits.voiceTextChunks(text) {
+                emit(.init(.voiceTranscript, requestID: id, text: chunk, responseID: voiceResponseID))
+            }
+        case .transcriptionDelta(let text, let itemID):
+            for chunk in WatchLimits.voiceTextChunks(text) {
+                emit(.init(.voiceUserTranscriptDelta, requestID: id, text: chunk, responseID: itemID ?? voiceUserTranscriptID))
+            }
+        case .transcriptionCompleted(let text, let itemID):
+            for (index, chunk) in WatchLimits.voiceTextChunks(text).enumerated() {
+                emit(.init(index == 0 ? .voiceUserTranscript : .voiceUserTranscriptDelta,
+                           requestID: id, text: chunk, responseID: itemID ?? voiceUserTranscriptID))
+            }
         case .responseDone: emit(.init(.voiceState, requestID: id, text: "Playback finished", responseID: voiceResponseID))
         case .sessionEnded:
             Task {
