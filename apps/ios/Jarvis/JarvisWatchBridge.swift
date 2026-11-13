@@ -25,6 +25,10 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var voiceAudioSequence = WatchVoiceSequence()
     private var voiceAudioTail: Task<Void, Error>?
     private var voiceAudioPending = 0
+    private var inboundAudioTail: Task<Void, Never>?
+    private var inboundAudioPending = 0
+    private var inboundAudioEpoch = UUID()
+    private var voicePlaybackPipelined = false
     private let voiceLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Jarvis", category: "WatchVoice")
     private var voiceSequenceDrops = 0
     private var voiceSequenceGaps: UInt64 = 0
@@ -56,7 +60,8 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     private var generation = UUID()
     private var eventQueue: [WatchEvent] = []
     private var eventInFlight: [UUID: (event: WatchEvent, started: Date, timeout: Task<Void, Never>)] = [:]
-    private var lastEventProgress = Date()
+    private var playbackFailureSince: Date?
+    private var lastPlaybackFailure: Date?
     private var lastPlaybackLog = Date()
     private var playbackDrops = 0
     private var dashboardSnapshot: WatchDashboardSnapshot?
@@ -135,6 +140,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         chatTask?.cancel(); chatTask = nil
         for item in eventInFlight.values { item.timeout.cancel() }
         eventInFlight.removeAll(); eventQueue.removeAll()
+        resetInboundAudio()
         await stopVoice(); replies.removeAll(); running.removeAll()
         await pendingCredentialRefresh?.value
         guard let authenticatedClient else { return false }
@@ -174,13 +180,46 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         }
     }
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data, replyHandler: @escaping (Data) -> Void) {
-        Task { @MainActor in
-            guard messageData.count < WatchLimits.wireBytes, case .request(let request) = try? JSONDecoder().decode(WatchWire.self, from: messageData) else {
-                replyHandler(Data()); return
-            }
-            let reply = await self.handle(request)
-            replyHandler((try? WatchCodec.encode(reply)) ?? Data())
+        guard messageData.count < WatchLimits.wireBytes, case .request(let request) = try? JSONDecoder().decode(WatchWire.self, from: messageData) else {
+            replyHandler(Data()); return
         }
+        DispatchQueue.main.async {
+            if request.action == .audio {
+                self.enqueueAudioRequest(request, replyHandler: replyHandler)
+            } else {
+                Task {
+                    let reply = await self.handle(request)
+                    replyHandler((try? WatchCodec.encode(reply)) ?? Data())
+                }
+            }
+        }
+    }
+    private func enqueueAudioRequest(_ request: WatchRequest, replyHandler: @escaping (Data) -> Void) {
+        guard inboundAudioPending < 8 else {
+            replyHandler((try? WatchCodec.encode(WatchReply(id: request.id, failure: .busy))) ?? Data())
+            return
+        }
+        let previous = inboundAudioTail
+        let epoch = inboundAudioEpoch
+        inboundAudioPending += 1
+        inboundAudioTail = Task {
+            if let previous { await previous.value }
+            let reply: WatchReply
+            if self.inboundAudioEpoch == epoch, !Task.isCancelled {
+                reply = await self.handle(request)
+            } else {
+                reply = .init(id: request.id, failure: .signInRequired)
+            }
+            replyHandler((try? WatchCodec.encode(reply)) ?? Data())
+            if self.inboundAudioEpoch == epoch {
+                self.inboundAudioPending -= 1
+                if self.inboundAudioPending == 0 { self.inboundAudioTail = nil }
+            }
+        }
+    }
+    private func resetInboundAudio() {
+        inboundAudioEpoch = UUID()
+        inboundAudioTail?.cancel(); inboundAudioTail = nil; inboundAudioPending = 0
     }
     private func encode<T: Encodable>(_ value: T) throws -> Data { try WatchCodec.encode(value) }
     private func emit(_ original: WatchEvent) {
@@ -203,7 +242,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
     }
     private func deliverEvents() {
         guard WCSession.default.isReachable else { return }
-        while !eventQueue.isEmpty, eventInFlight.count < 4 {
+        while !eventQueue.isEmpty, eventInFlight.count < (voicePlaybackPipelined ? 4 : 1) {
             if eventInFlight.values.contains(where: { WatchEventScheduling.isBarrier($0.event) }) { return }
             if WatchEventScheduling.isBarrier(eventQueue[0]), !eventInFlight.isEmpty { return }
             var next = eventQueue.removeFirst()
@@ -234,7 +273,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         guard let item = eventInFlight.removeValue(forKey: token) else { return }
         item.timeout.cancel()
         if success {
-            lastEventProgress = Date()
+            if item.event.kind == .voiceAudio { playbackFailureSince = nil; lastPlaybackFailure = nil }
             if item.event.kind == .voiceAudio, Date().timeIntervalSince(lastPlaybackLog) >= 5 {
                 let milliseconds = Int(Date().timeIntervalSince(item.started) * 1_000)
                 voiceLogger.info("Voice playback: rtt_ms=\(milliseconds) in_flight=\(self.eventInFlight.count) drops=\(self.playbackDrops)")
@@ -245,7 +284,11 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             return
         } else if item.event.kind == .voiceAudio, item.event.requestID == voiceID {
             playbackDrops += 1
-            if Date().timeIntervalSince(lastEventProgress) >= 5 {
+            if playbackFailureSince == nil || Date().timeIntervalSince(lastPlaybackFailure ?? Date()) > 5 {
+                playbackFailureSince = item.started
+            }
+            lastPlaybackFailure = Date()
+            if let playbackFailureSince, Date().timeIntervalSince(playbackFailureSince) >= 5 {
                 voiceLogger.error("Voice playback link stalled: in_flight=\(self.eventInFlight.count) drops=\(self.playbackDrops)")
                 Task { await self.stopVoice(audioLinkStalled: true) }
                 return
@@ -282,7 +325,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             let data = try await perform(request, client: client)
             guard (data?.count ?? 0) <= WatchLimits.payloadBytes else { throw WatchFailure.failed }
             guard epoch == generation else { return .init(id: request.id, failure: .signInRequired) }
-            reply = .init(id: request.id, data: data)
+            reply = .init(id: request.id, data: data, voicePipeline: request.action == .startVoice && request.flag == true ? true : nil)
         } catch {
             if let known = error as? JarvisWatchTasksClientError, case .failure(let detail) = known {
                 reply = .init(id: request.id, taskError: detail)
@@ -468,7 +511,10 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             guard !startingVoice, !stoppingVoice, dictation == nil else { throw WatchFailure.busy }
             startingVoice = true; defer { startingVoice = false }
             let voiceEpoch = generation
-            if let id = voiceID, await hasActiveVoice(id: id) { return try encode(id) }
+            if let id = voiceID, await hasActiveVoice(id: id) {
+                voicePlaybackPipelined = r.flag == true
+                return try encode(id)
+            }
             guard voiceEpoch == generation else { throw WatchFailure.signInRequired }
             guard let token = try await KeychainTokenStore().read() else { throw WatchFailure.signInRequired }
             guard voiceEpoch == generation else { throw WatchFailure.signInRequired }
@@ -476,9 +522,10 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                   VoiceLiveActivityActions.session?.liveActivitySessionID == nil else { throw WatchFailure.busy }
             guard cancelledVoiceStarts.remove(r.id) == nil else { throw WatchFailure.unavailable }
             let id = r.id; voiceID = id; lastVoiceContact = Date()
+            voicePlaybackPipelined = r.flag == true
             voiceAudioSequence = WatchVoiceSequence()
             voiceSequenceDrops = 0; voiceSequenceGaps = 0; voiceSequenceLog = Date()
-            lastEventProgress = Date(); lastPlaybackLog = Date(); playbackDrops = 0
+            playbackFailureSince = nil; lastPlaybackFailure = nil; lastPlaybackLog = Date(); playbackDrops = 0
             voiceWatchdog = Task { [weak self] in
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(5))
@@ -683,6 +730,7 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
         defer { stoppingVoice = false }
         let previous = voice; let id = voiceID
         voiceWatchdog?.cancel(); voiceWatchdog = nil
+        resetInboundAudio()
         voiceAudioTail?.cancel(); voiceAudioTail = nil; voiceAudioPending = 0
         voice = nil; voiceID = nil; voiceResponseID = nil
         if VoiceLiveActivityActions.session === self { VoiceLiveActivityActions.session = nil }

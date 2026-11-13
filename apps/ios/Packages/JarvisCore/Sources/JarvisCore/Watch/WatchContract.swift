@@ -117,8 +117,9 @@ public struct WatchReply: Codable, Sendable {
     public var data: Data?
     public var failure: WatchFailure?
     public var taskError: WatchTaskMutationFailure?
-    public init(id: UUID, data: Data? = nil, failure: WatchFailure? = nil, taskError: WatchTaskMutationFailure? = nil) {
-        self.id = id; self.data = data; self.failure = failure; self.taskError = taskError
+    public var voicePipeline: Bool?
+    public init(id: UUID, data: Data? = nil, failure: WatchFailure? = nil, taskError: WatchTaskMutationFailure? = nil, voicePipeline: Bool? = nil) {
+        self.id = id; self.data = data; self.failure = failure; self.taskError = taskError; self.voicePipeline = voicePipeline
     }
 }
 

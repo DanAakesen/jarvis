@@ -102,6 +102,32 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         guard epoch == cacheGeneration else { throw WatchFailure.signInRequired }
         return reply
     }
+    func sendVoiceAudio(_ request: WatchRequest, completion: @escaping @MainActor (Result<Void, Error>) -> Void) {
+        guard request.action == .audio, request.isValid else { completion(.failure(WatchFailure.invalidRequest)); return }
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--watch-fixture") {
+            do { _ = try WatchPreview.reply(to: request); completion(.success(())) }
+            catch { completion(.failure(error)) }
+            return
+        }
+        #endif
+        guard WCSession.isSupported(), WCSession.default.activationState == .activated,
+              WCSession.default.isReachable else { completion(.failure(WatchFailure.unavailable)); return }
+        guard let data = try? WatchCodec.encode(WatchWire.request(request)) else { completion(.failure(WatchFailure.invalidRequest)); return }
+        let epoch = cacheGeneration
+        WCSession.default.sendMessageData(data, replyHandler: { [weak self] data in
+            Task { @MainActor in
+                guard let self, self.cacheGeneration == epoch else { completion(.failure(WatchFailure.signInRequired)); return }
+                guard data.count < WatchLimits.wireBytes,
+                      let reply = try? JSONDecoder().decode(WatchReply.self, from: data),
+                      reply.id == request.id, reply.version == 1 else { completion(.failure(WatchFailure.failed)); return }
+                if let failure = reply.failure { completion(.failure(failure)) }
+                else { completion(.success(())) }
+            }
+        }, errorHandler: { _ in
+            Task { @MainActor in completion(.failure(WatchFailure.unavailable)) }
+        })
+    }
     func waitForVoiceConnection(timeout: TimeInterval = 3) async throws {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }

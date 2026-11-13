@@ -27,7 +27,7 @@ final class WatchModel: ObservableObject {
     private let voiceLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Jarvis", category: "WatchVoice")
     private var capture: Task<Void, Never>?
     private var captureTerminationLogged = false
-    private var audioSends: [UUID: Task<Void, Never>] = [:]
+    private var audioSends = Set<UUID>()
     private var audioBackpressure = WatchVoiceBackpressure(now: Date())
     private var lastAudioMetrics = Date()
     private var audioSequence: UInt64 = 0
@@ -127,7 +127,7 @@ final class WatchModel: ObservableObject {
             try await connection.waitForVoiceConnection(timeout: 15)
             waitingForVoiceConnection = false
             guard epoch == voiceGeneration else { return }
-            let request = WatchRequest(action: .startVoice)
+            let request = WatchRequest(action: .startVoice, flag: true)
             // Accept early state events while the phone opens the socket.
             voiceID = request.id; voiceState = "Connecting"
             let result = try await connection.request(request)
@@ -135,6 +135,7 @@ final class WatchModel: ObservableObject {
             guard epoch == voiceGeneration else { return }
             guard let data = result.data else { throw WatchFailure.failed }
             voiceID = try JSONDecoder().decode(UUID.self, from: data)
+            let pipeline = result.voicePipeline == true
             configurePlaybackCompletion()
             let stream: AsyncStream<Data>
             do {
@@ -167,25 +168,24 @@ final class WatchModel: ObservableObject {
                     let packet = batch; batch.removeAll(keepingCapacity: true)
                     let sequence = self.audioSequence
                     self.audioSequence += 1
-                    if self.audioSends.count < 4 {
-                        let request = WatchRequest(action: .audio, itemID: id.uuidString, data: packet, sequence: sequence)
+                    if self.audioSends.count < (pipeline ? 4 : 1) {
+                        let request = WatchRequest(action: .audio, itemID: id.uuidString, data: packet, sequence: pipeline ? sequence : nil)
                         let started = Date()
-                        self.audioSends[request.id] = Task { [weak self] in
+                        self.audioSends.insert(request.id)
+                        self.connection.sendVoiceAudio(request) { [weak self] result in
                             guard let self else { return }
-                            do {
-                                _ = try await self.connection.request(request, waitForReadiness: false)
-                                guard self.voiceGeneration == epoch else { return }
+                            guard self.voiceGeneration == epoch, self.audioSends.remove(request.id) != nil else { return }
+                            switch result {
+                            case .success:
                                 self.audioBackpressure.progressed(at: Date())
                                 let milliseconds = Int(Date().timeIntervalSince(started) * 1_000)
                                 if Date().timeIntervalSince(self.lastAudioMetrics) >= 5 {
                                     self.voiceLogger.info("Voice link: rtt_ms=\(milliseconds) in_flight=\(self.audioSends.count) packet_drops=\(self.audioBackpressure.drops) capture_drops=\(self.audio.droppedCaptureChunks)")
                                     self.lastAudioMetrics = Date()
                                 }
-                            } catch {
-                                guard self.voiceGeneration == epoch else { return }
+                            case .failure:
                                 self.audioBackpressure.dropped()
                             }
-                            self.audioSends.removeValue(forKey: request.id)
                         }
                     } else {
                         self.audioBackpressure.dropped()
@@ -207,14 +207,21 @@ final class WatchModel: ObservableObject {
                 await self.endVoice()
             }
             heartbeat = Task { [weak self] in
+                var failureSince: Date?
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(5))
                     guard let self, !Task.isCancelled, self.voiceID != nil else { return }
+                    if !self.muted && !self.audioBackpressure.stalled(at: Date()) {
+                        failureSince = nil
+                        continue
+                    }
                     do {
                         guard try await self.hasActiveVoice() else { return }
+                        failureSince = nil
                     } catch {
                         guard self.voiceGeneration == epoch else { return }
-                        if self.audioBackpressure.stalled(at: Date()) {
+                        if failureSince == nil { failureSince = Date() }
+                        if let failureSince, Date().timeIntervalSince(failureSince) >= 5 {
                             await self.endVoice(); self.show(error); return
                         }
                     }
@@ -387,7 +394,6 @@ final class WatchModel: ObservableObject {
         voiceGeneration = UUID()
         if capture != nil { recordCaptureEnd(captureEndReason) }
         capture?.cancel(); capture = nil; heartbeat?.cancel(); heartbeat = nil
-        for task in audioSends.values { task.cancel() }
         audioSends.removeAll()
         audio.stop(); voiceID = nil; voiceState = state; muted = false
     }

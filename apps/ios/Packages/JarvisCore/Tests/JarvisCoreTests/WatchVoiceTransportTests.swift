@@ -23,6 +23,10 @@ final class WatchVoiceTransportTests: XCTestCase {
         let packet = WatchRequest(action: .audio, itemID: UUID().uuidString, data: Data([0, 0]), sequence: 7)
         XCTAssertEqual(try JSONDecoder().decode(WatchRequest.self, from: JSONEncoder().encode(packet)), packet)
         XCTAssertFalse(WatchRequest(action: .voiceHeartbeat, sequence: 1).isValid)
+        let reply = WatchReply(id: packet.id)
+        XCTAssertNil(try JSONDecoder().decode(WatchReply.self, from: JSONEncoder().encode(reply)).voicePipeline)
+        let capable = WatchReply(id: packet.id, voicePipeline: true)
+        XCTAssertEqual(try JSONDecoder().decode(WatchReply.self, from: JSONEncoder().encode(capable)).voicePipeline, true)
     }
 
     func testTransientDropsRecoverAndSustainedStallIsDetected() {
