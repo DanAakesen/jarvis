@@ -54,8 +54,8 @@ final class JarvisOrbClock {
 }
 
 private struct JarvisOrbTone {
-    static let cool = (r: 0x52 / 255.0, g: 0xdc / 255.0, b: 0xfa / 255.0)
-    static let warm = (r: 0xff / 255.0, g: 0xb4 / 255.0, b: 0x5c / 255.0)
+    static let cool = JarvisOrbAppearance.cool
+    static let warm = JarvisOrbAppearance.warm
 }
 
 private struct JarvisOrbPainter {
@@ -305,7 +305,7 @@ private struct JarvisOrbPainter {
         let tilt = (x: sin(flow * 0.55) * 0.2, y: flow * 0.32, z: cos(flow * 0.4) * 0.12)
         let warm = JarvisOrbTone.warm
         var layer = context
-        layer.blendMode = .plusLighter
+        layer.blendMode = .normal
 
         func place(_ p: JarvisOrbVector) -> JarvisOrbVector {
             JarvisOrbVector(p.x, p.y, p.z).rotated(x: tilt.x, y: tilt.y, z: tilt.z)
@@ -323,11 +323,11 @@ private struct JarvisOrbPainter {
         }
 
         // A soft amber glow keeps the tangle readable at small sizes.
-        let glowRadius = CGFloat(unit * 0.62)
+        let glowRadius = CGFloat(unit * JarvisOrbAppearance.glowRadius)
         layer.fill(
             Path(ellipseIn: CGRect(x: center.x - glowRadius, y: center.y - glowRadius, width: glowRadius * 2, height: glowRadius * 2)),
             with: .radialGradient(
-                Gradient(colors: [color(warm, 0.1 + 0.16 * clamp(energy)), color(warm, 0)]),
+                Gradient(colors: [color(warm, JarvisOrbAppearance.glowOpacity), color(warm, 0)]),
                 center: center, startRadius: 0, endRadius: glowRadius
             )
         )
@@ -363,7 +363,7 @@ private struct JarvisOrbPainter {
                     with: .color(color(
                         (warm.r, warm.g * (0.8 + 0.2 * lit), warm.b * (0.7 + 0.3 * lit)),
                         alpha * (isSmall ? 0.9 : 0.75),
-                        boost: 1.0 + lit * 0.25
+                        boost: 1.0
                     )),
                     style: StrokeStyle(lineWidth: width, lineCap: .round)
                 )
@@ -415,7 +415,7 @@ private struct JarvisOrbPainter {
             let point = screen(place(p))
             layer.fill(
                 Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)),
-                with: .color(color(warm, vEnergy * 0.9, boost: 1.1))
+                with: .color(color(warm, vEnergy * 0.9))
             )
         }
     }

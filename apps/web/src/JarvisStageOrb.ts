@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { OrbMotionFrame } from './jarvis-orb-motion';
+import { orbAppearance } from './jarvis-orb-appearance';
 
 export function createJarvisStageOrb() {
   const orb = new THREE.Group();
@@ -18,9 +19,8 @@ export function createJarvisStageOrb() {
     uTool: { value: 0 },
     uSpeak: { value: 0 },
     uInput: { value: 0 },
-    uColor: { value: new THREE.Color('#52dcfa') },
-    // The bright amber brain (Dan, 7 October): the same warm glow as the chat orb, read from --glass-glow-warm.
-    uWarm: { value: new THREE.Color('#ffb45c') },
+    uColor: { value: new THREE.Color(orbAppearance.cool) },
+    uWarm: { value: new THREE.Color(orbAppearance.warm) },
   };
   const stateUniforms = `uniform float uIgnite;uniform float uWave;uniform float uWaveStrength;uniform float uSurge;
     uniform float uListen;uniform float uThink;uniform float uTool;uniform float uSpeak;uniform float uInput;`;
@@ -205,7 +205,7 @@ export function createJarvisStageOrb() {
         float heart=pow(max(0.,sin(uTime*.72+sin(uTime*.13)*.58)),12.);
         float energy=mix(.5,.85,max(uAwake,uIgnite))*(.82+.3*heart+idle*(.18+.22*breath))+uSurge*.3+uSpeak*uAudioLevel*.75+uThink*.38+uTool*.3+uListen*uInput*.55;
         vec3 c=mix(uWarm*vec3(1.,.8,.7),uWarm,max(pulse,fire));
-        gl_FragColor=vec4(c*(1.25+pulse*.7+fire*1.1),min(1.,energy*(.66+pulse*.28+fire*.5)));}`,
+        gl_FragColor=vec4(c,min(1.,energy*(.66+pulse*.28+fire*.5)));}`,
   });
   const connections = new THREE.Mesh(mergeGeometries(curves), coreMaterial);
   curves.forEach((geometry) => geometry.dispose());
@@ -233,7 +233,7 @@ export function createJarvisStageOrb() {
   pointGeometry.setAttribute('aSeed', new THREE.Float32BufferAttribute(pointSeeds, 1));
   pointGeometry.setAttribute('aSize', new THREE.Float32BufferAttribute(pointSizes, 1));
   const sparks = new THREE.Points(pointGeometry, new THREE.ShaderMaterial({
-    uniforms: coreUniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: coreUniforms, transparent: true, depthWrite: false, blending: THREE.NormalBlending,
     vertexShader: `attribute float aSeed;attribute float aSize;uniform float uTime;uniform float uCoreFlow;uniform float uAwake;uniform float uAudioLevel;${stateUniforms}varying float vEnergy;
       void main(){vec3 p=position;
         p+=vec3(sin(uCoreFlow+aSeed*12.),cos(uCoreFlow*.8+aSeed*17.),sin(uCoreFlow*.7-aSeed*9.))*(.026+.03*uAwake+uListen*uInput*.04);
@@ -248,7 +248,7 @@ export function createJarvisStageOrb() {
         gl_PointSize=clamp(aSize*(60.+uAwake*70.+uSpeak*uAudioLevel*40.)*pointScale/max(1.,-v.z),.8,13.);}`,
     fragmentShader: `uniform vec3 uWarm;varying float vEnergy;void main(){float d=length(gl_PointCoord-.5)*2.;if(d>1.)discard;
       float glow=exp(-d*d*7.)*.8+pow(1.-d,4.)*.6;
-      gl_FragColor=vec4(uWarm*(1.25+pow(1.-d,5.)*1.2),glow*vEnergy);}`,
+      gl_FragColor=vec4(uWarm,glow*vEnergy);}`,
   }));
   sparks.renderOrder = 2;
   core.add(sparks);

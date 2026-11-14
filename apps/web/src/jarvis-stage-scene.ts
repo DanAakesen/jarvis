@@ -450,7 +450,6 @@ function createJarvisStageSceneWithRenderer(
   const orbLight = new THREE.PointLight(palette.orb, 100, 26, 2);
   scene.add(orbLight);
   const amberLight = new THREE.PointLight(palette.warm, 4, 10, 2);
-  orbVisual.uniforms.uWarm.value.set(palette.warm);
   scene.add(amberLight);
   const wallLight = new THREE.SpotLight(palette.orb, 100, 45, 0.83, 0.85, 2);
   scene.add(wallLight, wallLight.target);
@@ -502,7 +501,6 @@ function createJarvisStageSceneWithRenderer(
     warmLine.color.set(palette.warm);
     warmInlay.color.set(palette.warm);
     amberLight.color.set(palette.warm);
-    orbVisual.uniforms.uWarm.value.set(palette.warm);
     reflectionDirty = true;
   }
 
