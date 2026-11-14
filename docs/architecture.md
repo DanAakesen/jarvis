@@ -1932,6 +1932,12 @@ and AVCaptureSession camera capture; session protocol and state remain in
 removes orb and minimization animation; system text styles and VoiceOver labels
 remain available.
 
+Voice captions accumulate user transcription deltas and assistant transcript
+deltas in `JarvisCore`; completed user transcripts replace the partial text.
+The phone follows the bottom of its bounded-height caption area. Watch receives
+user and assistant text in wire-sized chunks and follows its existing chat view.
+These are session display state, not an additional persisted transcript.
+
 End invalidates the screen-model generation before detaching the client, stopping
 capture/playback and deactivating AVAudioSession. Startup, socket, playback and
 permission callbacks from older generations cannot update the next session.
