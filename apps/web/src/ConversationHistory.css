@@ -184,15 +184,12 @@
 .voice-controls[data-active="false"] .action-row { display: grid; justify-items: center; gap: var(--space-1); margin: 0; }
 .voice-start-label { display: none; }
 .input-orb { position: relative; display: grid; width: 40px; height: 40px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; transition: filter var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
-.input-orb span { position: relative; display: block; width: 36px; height: 36px; overflow: hidden; border-radius: 50%;
-  background:
-    radial-gradient(circle at 34% 28%, rgb(255 255 255 / 18%), transparent 42%),
-    radial-gradient(circle, var(--stage-background) 52%, color-mix(in srgb, var(--stage-orb) 55%, var(--stage-background)) 100%);
-  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--stage-orb) 85%, transparent), 0 0 16px color-mix(in srgb, var(--stage-orb) 45%, transparent), inset 0 0 10px color-mix(in srgb, var(--stage-orb) 35%, transparent); }
-/* Hovering the orb wakes it: the core quickens (InputOrbCore), the shell warms and a ripple breathes outwards. */
+.input-orb span { position: relative; display: block; width: 36px; height: 36px; border-radius: 50%;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--stage-orb) 28%, transparent); }
+/* Hovering the orb wakes it: the lattice quickens (InputOrbCore), the glass warms and a ripple breathes outwards. */
 .input-orb span { transition: box-shadow var(--motion-state) var(--ease-standard); }
 .input-orb:is(:hover, :focus-visible):not(:disabled) { filter: brightness(1.15); transform: scale(1.06); }
-.input-orb:is(:hover, :focus-visible):not(:disabled) span { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--glass-glow-warm) 80%, transparent), 0 0 20px color-mix(in srgb, var(--glass-glow-warm) 55%, transparent), inset 0 0 12px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent); }
+.input-orb:is(:hover, :focus-visible):not(:disabled) span { box-shadow: 0 0 20px color-mix(in srgb, var(--glass-glow-warm) 50%, transparent); }
 .input-orb::after { position: absolute; inset: 2px; border-radius: 50%; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--glass-glow-warm) 70%, transparent), 0 0 12px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent); content: ""; opacity: 0; pointer-events: none; }
 .input-orb:is(:hover, :focus-visible):not(:disabled)::after { animation: orb-wake 1.5s var(--ease-enter) infinite; }
 @keyframes orb-wake { 0% { opacity: .95; scale: .96; } 100% { opacity: 0; scale: 1.55; } }
@@ -392,7 +389,7 @@
 .app-shell[data-chat="rail"] .workspace-window-conversation { visibility: hidden; pointer-events: none; }
 /* The rail orb: the same living orb as the chat bar, parked at the foot of the rail. */
 .area-rail .rail-chat-orb { margin-top: auto; align-self: center; }
-.area-rail .rail-chat-orb[aria-expanded="true"] span { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--glass-glow-warm) 85%, transparent), 0 0 18px color-mix(in srgb, var(--glass-glow-warm) 55%, transparent); }
+.area-rail .rail-chat-orb[aria-expanded="true"] span { box-shadow: 0 0 18px color-mix(in srgb, var(--glass-glow-warm) 55%, transparent); }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .app-shell[data-home="false"]:not(.app-signed-out) .jarvis-page { right: 8px; bottom: 8px; left: calc(var(--rail-size) + 8px); }
   .app-shell[data-home="false"]:not(.app-signed-out) .workspace-shell-area { top: calc(var(--rail-size) + 40px); right: 8px; bottom: 62px; left: calc(var(--rail-size) + 8px); }

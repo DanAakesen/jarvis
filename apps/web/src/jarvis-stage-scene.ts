@@ -4,7 +4,8 @@ import { Reflector } from 'three/addons/objects/Reflector.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { ThemeMode } from './theme-preference-context';
 import { createJarvisStageOrb } from './JarvisStageOrb';
-import { createOrbMotion } from './jarvis-orb-motion';
+import { latticePulse } from './jarvis-lattice';
+import { createOrbAnimator } from './jarvis-orb-motion';
 import type { JarvisOrbState } from './voice-presentation';
 import type { VoiceSignals } from './voice-stage-context';
 import { resolveJarvisStageQuality } from './jarvis-stage-quality';
@@ -149,7 +150,7 @@ function createJarvisStageSceneWithRenderer(
   let reflectedAt = -Infinity;
   const viewport = { width: 0, height: 0, pixelRatio: 0, mobile: false };
   let signals: VoiceSignals | null = null;
-  const motion = createOrbMotion();
+  const animator = createOrbAnimator();
   const orbGeometry = { x: '', y: '', radius: '' };
 
   let palette = readStagePalette();
@@ -559,6 +560,8 @@ function createJarvisStageSceneWithRenderer(
       cameraRay.set(0, 1 - placement.screenY * 2, 0.5).unproject(camera).sub(camera.position).normalize();
       orbWorld.copy(camera.position).addScaledVector(cameraRay, -camera.position.z / cameraRay.z);
       orbRig.position.copy(orbWorld);
+      orbRig.quaternion.copy(camera.quaternion);
+      orbVisual.setResolution(placement.pixelRadius * viewport.pixelRatio, renderer.capabilities.maxTextureSize);
       const cameraDepth = cameraSpaceOrb.copy(orbWorld).applyMatrix4(camera.matrixWorldInverse).z;
       placement.scale = placement.pixelRadius * (-cameraDepth) * 2 *
         Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / height / 1.12;
@@ -574,27 +577,24 @@ function createJarvisStageSceneWithRenderer(
     const readLevel = (level = 0) => {
       return Number.isFinite(level) ? THREE.MathUtils.clamp(level, 0, 1) : 0;
     };
-    const live = motion.step(delta, {
+    const orbFrame = animator.step(delta, {
       awake: awakeTarget,
       state: current.orbState,
       playback: readLevel(signals?.playbackLevel()),
       input: readLevel(signals?.inputLevel()),
       reducedMotion: current.reducedMotion,
     });
+    const live = orbFrame.motion;
     const time = current.reducedMotion ? 0 : elapsed;
     const breathWave = Math.sin(time * 0.38 + Math.sin(time * 0.09) * 0.72) * 0.62 +
       Math.sin(time * 0.17 + 0.8) * 0.25 + Math.sin(time * 0.71 + 1.7) * 0.13;
     const breath = current.reducedMotion ? 0.5 : 0.5 + 0.5 * breathWave;
     const idle = current.orbState === 'idle' && !current.voiceActive;
-    const idlePulse = idle && !current.reducedMotion
-      ? Math.pow(Math.max(0, Math.sin(time * 0.72 + Math.sin(time * 0.13) * 0.58)), 12)
-      : 0;
+    // The room's amber light beats with the lattice's heart.
+    const idlePulse = idle && !current.reducedMotion ? latticePulse(orbFrame.time) : 0;
     const speechLight = live.speak * live.speech;
-    // The surge expands then settles; listening breathes and speech swells the shell slightly.
-    const pulse = 1 + (idle ? (breath - 0.5) * 0.05 : (1 - live.awake) * (breath - 0.5) * 0.012) +
-      idlePulse * 0.018 + live.surge * 0.085 + live.listen * (breath - 0.5) * 0.022 + speechLight * 0.04 -
-      live.think * 0.012;
-    orbRig.scale.setScalar(placement.scale * pulse);
+    // The glass keeps its size and position; only the network inside it moves.
+    orbRig.scale.setScalar(placement.scale);
     orbLight.position.copy(orbWorld);
     amberLight.position.copy(orbWorld);
     wallLight.position.copy(orbWorld);
@@ -606,7 +606,7 @@ function createJarvisStageSceneWithRenderer(
       live.tool * (0.06 + 0.08 * toolFlicker) + live.speak * 0.08 + speechLight * 0.55) * palette.glow;
     themeColors.current.copy(themeColors.orb);
     orbVisual.uniforms.uColor.value.lerp(themeColors.current, current.reducedMotion ? 1 : 0.16);
-    orbVisual.update(time, live);
+    orbVisual.update(orbFrame);
     orbLight.color.copy(orbVisual.uniforms.uColor.value);
     orbLight.intensity = 100 * power;
     amberLight.intensity = (idle ? 12 + breath * 8 + idlePulse * 16 : 5 + (1 - live.awake) * 1.5 * breath) +
@@ -772,6 +772,7 @@ function createJarvisStageSceneWithRenderer(
       }
     });
     for (const key of ['x', 'y', 'radius']) host.parentElement?.style.removeProperty(`--jarvis-orb-${key}`);
+    orbVisual.dispose();
     reflection.dispose();
     renderer.dispose();
     renderer.forceContextLoss();
