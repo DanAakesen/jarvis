@@ -2,7 +2,8 @@
 import JarvisCore
 import SwiftUI
 
-/// Debug-only gallery of the shared components: every button state, the orb at three sizes and the page scaffold.
+/// Debug-only gallery of the shared components: every button state, the orb in every state and at every size, and
+/// the page scaffold.
 /// It has no user-facing entry: it opens only in debug and UI-test builds, with `--component-gallery`, so reviewers
 /// can compare the screenshot against the design board. Release builds do not compile it.
 struct JarvisComponentGallery: View {
@@ -29,17 +30,7 @@ struct JarvisComponentGallery: View {
                     JarvisPageHeadline(phrase: JarvisPagePhrase(markup: "Dan, {3 components} share {one look}."))
                 },
                 hero: {
-                    JarvisPageHeroCard(title: "Orb") {
-                        HStack(alignment: .center, spacing: 24) {
-                            JarvisOrb(activity: .calm, size: 44)
-                            JarvisOrb(activity: .listening, size: 96)
-                            JarvisOrb(activity: .thinking, size: 160)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Orb at three sizes")
-                        .accessibilityIdentifier("gallery.orbs")
-                    }
+                    JarvisPageHeroCard(title: "Orb") { orbShowcase }
                 },
                 sections: { sections }
             )
@@ -54,6 +45,36 @@ struct JarvisComponentGallery: View {
                 .accessibilityElement()
                 .accessibilityIdentifier("screen.componentGallery")
         }
+    }
+
+    /// Every orb state animated at 96 pt, then the still pose at each detail level, as Live Activities, widgets and
+    /// the Watch draw it.
+    private var orbShowcase: some View {
+        let states: [(String, JarvisOrbActivity)] = [
+            ("Calm", .calm), ("Listening", .listening), ("Thinking", .thinking),
+            ("Speaking", .speaking), ("Muted", .muted), ("Offline", .offline),
+        ]
+        return VStack(spacing: 16) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 12) {
+                ForEach(states, id: \.0) { name, activity in
+                    VStack(spacing: 6) {
+                        JarvisOrb(activity: activity, size: 96)
+                        Text(name).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            HStack(alignment: .center, spacing: 18) {
+                JarvisOrb(activity: .calm, size: 18, isStatic: true)
+                JarvisOrb(activity: .calm, size: 30, isStatic: true)
+                JarvisOrb(activity: .calm, size: 46, isStatic: true)
+                JarvisOrb(activity: .calm, size: 72, isStatic: true)
+                JarvisOrb(activity: .calm, size: 128, isStatic: true)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Orb in every state and at five sizes")
+        .accessibilityIdentifier("gallery.orbs")
     }
 
     private var sections: some View {

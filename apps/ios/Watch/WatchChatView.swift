@@ -1,3 +1,4 @@
+import JarvisCore
 import SwiftUI
 
 struct WatchChatView: View {
@@ -92,6 +93,8 @@ struct WatchChatView: View {
             }
             if model.voiceID != nil {
                 HStack {
+                    WatchOrb(activity: JarvisOrbActivity(watchVoiceStatus: model.voiceState, isMuted: model.muted), isAnimated: true)
+                        .frame(width: 30, height: 30)
                     Text(model.voiceState).font(.caption2)
                     Spacer()
                     Button { Task { await model.setMuted() } } label: {
@@ -119,7 +122,7 @@ struct WatchChatView: View {
                 Button(action: dictate) { Image(systemName: "mic.fill").frame(width: 32, height: 38) }
                     .foregroundStyle(WatchStyle.amber)
                     .disabled(model.busy || model.voiceID != nil || model.dictationState != .idle).accessibilityLabel("Dictate into draft")
-                Button { Task { await model.startVoice() } } label: { WatchWave().frame(width: 22, height: 18).frame(width: 32, height: 38) }
+                Button { Task { await model.startVoice() } } label: { WatchOrb().frame(width: 26, height: 26).frame(width: 32, height: 38) }
                     .disabled(model.busy || model.dictationState != .idle).accessibilityLabel("Start voice session")
             }.buttonStyle(.plain).padding(.horizontal, 8)
                 .background(WatchStyle.surface, in: Capsule())

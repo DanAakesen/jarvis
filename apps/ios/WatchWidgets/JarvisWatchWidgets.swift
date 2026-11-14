@@ -62,7 +62,7 @@ struct JarvisWatchDictateWidget: Widget {
 struct JarvisWatchVoiceWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "jarvis.watch.voice", provider: WatchProvider()) { _ in
-            WatchGlyph(kind: .voice).padding(5).frame(maxWidth: .infinity, maxHeight: .infinity).modifier(WatchSurface(radius: 50)).clipShape(Circle())
+            WatchOrb().padding(3).frame(maxWidth: .infinity, maxHeight: .infinity)
                 .containerBackground(.black, for: .widget).widgetURL(WatchAppLink.voice.url)
                 .accessibilityLabel("Start or resume voice")
         }.configurationDisplayName("Voice Session").description("Start or resume a spoken conversation.").supportedFamilies([.accessoryCircular])

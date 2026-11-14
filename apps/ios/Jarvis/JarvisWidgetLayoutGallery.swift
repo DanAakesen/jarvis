@@ -3,7 +3,7 @@ import JarvisCore
 import SwiftUI
 import WidgetKit
 
-/// Actual extension views at a constrained medium-widget size. This checks native content layout;
+/// Actual extension views at constrained small, medium and large widget sizes. This checks native content layout;
 /// WidgetKit's Xcode previews/device checks still own host margins, tinting and Home Screen rendering.
 struct JarvisWidgetLayoutGallery: View {
     @Environment(\.dismiss) private var dismiss
@@ -30,6 +30,9 @@ struct JarvisWidgetLayoutGallery: View {
                 )
                 ScrollView {
                     VStack(spacing: 16) {
+                        widget("homeSmall", size: CGSize(width: 158, height: 158)) { JarvisHomeSmallWidgetView(entry: sample) }
+                        widget("homeMedium") { JarvisHomeMediumWidgetView(entry: sample) }
+                        widget("homeLarge", size: CGSize(width: 329, height: 345)) { JarvisHomeLargeWidgetView(entry: sample) }
                         widget("workouts") { JarvisGymMediumWidgetView(entry: sample) }
                         widget("factory") { JarvisFactoryMediumWidgetView(entry: sample) }
                         widget("notes") { JarvisNotesMediumWidgetView(entry: sample) }
@@ -53,10 +56,12 @@ struct JarvisWidgetLayoutGallery: View {
 
     private var sample: JarvisWidgetEntry { JarvisWidgetSamples.entry(language: appLanguage) }
 
-    private func widget<Content: View>(_ identifier: String, @ViewBuilder content: () -> Content) -> some View {
+    private func widget<Content: View>(
+        _ identifier: String, size: CGSize = CGSize(width: 329, height: 155), @ViewBuilder content: () -> Content
+    ) -> some View {
         content()
             .padding(16) // Identical to Jarvis*MediumWidget's existing configuration inset.
-            .frame(width: 329, height: 155)
+            .frame(width: size.width, height: size.height)
             .background(Color(uiColor: .systemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 22))
             // Preserve action geometry while preventing touch and accessibility fixture writes.

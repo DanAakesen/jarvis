@@ -17,7 +17,7 @@
     "rewrite": "/index.html",
     "exclude": [
       "/assets/*",
-      "/favicon.svg",
+      "/*.{png,ico}",
       "/manifest.webmanifest",
       "/sw.js",
       "/redirect.html"

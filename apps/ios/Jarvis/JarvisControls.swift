@@ -1060,16 +1060,19 @@ struct JarvisSheetToolbar: ToolbarContent {
     }
 }
 
-/// The one orb: the Chat mini core, always square (fixed aspect ratio and a circular clip) and scaled by size
-/// only, so it looks the same on Home, the Gate, Voice and in chat at every size. Never draw an orb elsewhere.
+/// The one orb: the cognitive lattice, always square (fixed aspect ratio and a circular clip) and scaled by size
+/// only, so it looks the same on Home, the Gate, Voice, the Watch and in a Live Activity at every size. The drawing
+/// lives in JarvisCore (`JarvisLatticeOrbView`) so every target shares it. Never draw an orb elsewhere.
+/// `isPaused` holds the current frame while the orb is covered.
 /// API: View.aspectRatio(_:contentMode:), View.clipShape(_:), Circle.
 struct JarvisOrb: View {
     let activity: JarvisOrbActivity
     var size: CGFloat = JarvisDesignTokens.gateOrbSize
     var isStatic = false
+    var isPaused = false
 
     var body: some View {
-        JarvisOrbCanvas(activity: activity, isStatic: isStatic)
+        JarvisLatticeOrbView(activity: activity, isStatic: isStatic, isPaused: isPaused)
             .aspectRatio(1, contentMode: .fit)
             .frame(width: size, height: size)
             .clipShape(Circle())

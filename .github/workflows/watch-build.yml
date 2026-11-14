@@ -77,6 +77,42 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/PhoneBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/phone-build.log"
+      - name: Capture iPhone orb states, opening screen and Home widgets
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
+          if [[ -z "$PHONE_ID" ]]; then
+            echo "::warning::No iPhone Pro simulator is available; iPhone screenshots were not captured."
+            exit 0
+          fi
+          APP="$RUNNER_TEMP/PhoneBuild/Build/Products/Debug-iphonesimulator/Jarvis.app"
+          OUT="$RUNNER_TEMP/iphone-screenshots"
+          mkdir -p "$OUT"
+          xcrun simctl boot "$PHONE_ID" || true
+          xcrun simctl bootstatus "$PHONE_ID" -b
+          xcrun simctl ui "$PHONE_ID" appearance dark
+          xcrun simctl install "$PHONE_ID" "$APP"
+          shot() { xcrun simctl io "$PHONE_ID" screenshot "$OUT/$1.png"; }
+          # Opening screen, held on screen by the debug preview flag: several instants show the network moving.
+          xcrun simctl launch --terminate-running-process "$PHONE_ID" com.danaakesen.jarvis --opening-preview
+          xcrun simctl io "$PHONE_ID" recordVideo --codec=h264 "$OUT/opening.mp4" & RECORDING=$!
+          sleep 2; shot opening-2s
+          sleep 1.2; shot opening-3s
+          sleep 1.6; shot opening-5s
+          sleep 1; kill -INT "$RECORDING"; wait "$RECORDING" || true
+          # The measured-progress variant of the same bar.
+          xcrun simctl launch --terminate-running-process "$PHONE_ID" com.danaakesen.jarvis --opening-preview --opening-progress=0.4
+          sleep 3; shot opening-measured
+          # Every orb state at five sizes, animated.
+          xcrun simctl launch --terminate-running-process "$PHONE_ID" com.danaakesen.jarvis --component-gallery
+          sleep 3; shot orb-gallery-3s
+          sleep 2.7; shot orb-gallery-5s
+          # Home widget layouts that use the shared orb (rendered as plain SwiftUI, not through WidgetKit).
+          xcrun simctl launch --terminate-running-process "$PHONE_ID" com.danaakesen.jarvis --widget-layout-gallery
+          sleep 3; shot widget-gallery
+          xcrun simctl terminate "$PHONE_ID" com.danaakesen.jarvis || true
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -87,3 +123,4 @@ jobs:
             ${{ runner.temp }}/watch-device-build.log
             ${{ runner.temp }}/phone-build.log
             ${{ runner.temp }}/watch-screenshots
+            ${{ runner.temp }}/iphone-screenshots
