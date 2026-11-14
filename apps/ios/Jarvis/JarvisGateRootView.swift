@@ -519,7 +519,7 @@ struct JarvisGateRootView: View {
             model.clientRequestedSignIn()
         }
         .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
-            Task { await model.signOut() }
+            Task { @MainActor in await model.signOut() }
         }
     }
 }
