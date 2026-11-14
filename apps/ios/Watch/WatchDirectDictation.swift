@@ -2,6 +2,7 @@ import Foundation
 import JarvisCore
 import Security
 
+@MainActor
 enum WatchDirectDictation {
     private static let key: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
@@ -55,23 +56,27 @@ enum WatchDirectDictation {
         var urlRequest = URLRequest(url: request.url)
         urlRequest.httpMethod = request.method.rawValue
         urlRequest.httpBody = request.body
-        urlRequest.timeoutInterval = 100
+        urlRequest.timeoutInterval = WatchDictationDeadline.directSeconds
         request.headers.forEach { urlRequest.setValue($1, forHTTPHeaderField: $0) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
         configuration.httpCookieStorage = nil
-        configuration.timeoutIntervalForResource = 105
+        configuration.timeoutIntervalForResource = WatchDictationDeadline.directSeconds
         let session = URLSession(configuration: configuration, delegate: NoRedirect(), delegateQueue: nil)
         defer { session.invalidateAndCancel() }
         do {
             let (bytes, response) = try await session.bytes(for: urlRequest)
+            try Task.checkCancellation()
             guard let response = response as? HTTPURLResponse else { throw WatchFailure.network }
             if response.statusCode == 401 || response.statusCode == 403 {
-                clear(); throw WatchFailure.signInRequired
+                if try Self.credential().map({ $0.token == credential.token }) == true { clear() }
+                throw WatchFailure.signInRequired
             }
+            if let failure = WatchDictationError.forHTTPStatus(response.statusCode) { throw failure }
             guard response.statusCode == 200 else { throw WatchFailure.network }
             var data = Data()
             for try await byte in bytes {
+                try Task.checkCancellation()
                 guard data.count < WatchLimits.payloadBytes else { throw WatchFailure.failed }
                 data.append(byte)
             }
@@ -80,15 +85,17 @@ enum WatchDirectDictation {
             guard !text.isEmpty, text.utf8.count <= 8_000 else { throw WatchFailure.failed }
             return text
         } catch is CancellationError { throw CancellationError() }
+        catch let failure as WatchDictationError { try Task.checkCancellation(); throw failure }
         catch let failure as WatchFailure { try Task.checkCancellation(); throw failure }
         catch {
             if Task.isCancelled || (error as? URLError)?.code == .cancelled { throw CancellationError() }
+            if (error as? URLError)?.code == .timedOut { throw WatchDictationError.timedOut }
             throw WatchFailure.network
         }
     }
 
     private final class NoRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-        func urlSession(_ session: URLSession, task: URLSessionTask,
+        nonisolated func urlSession(_ session: URLSession, task: URLSessionTask,
                         willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
                         completionHandler: @escaping (URLRequest?) -> Void) {
             completionHandler(nil)

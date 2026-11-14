@@ -180,6 +180,9 @@ confirmed stale IDs are cleared and Start continues. Normal End, Live Activity
 End, the 10-minute idle close and the 30-minute cap all release voice ownership.
 Captions appear as centered, unframed text with readable, Dynamic Type-scaled
 typography and no separate dismiss action; the CC control toggles them.
+User speech and Jarvis replies accumulate throughout each turn; the caption
+area follows the latest text and allows earlier text to be scrolled into view.
+Watch voice likewise follows streamed user and assistant transcripts.
 Reopening Voice after End connects automatically with a fresh transport and audio
 session. The red End control follows the approved board. The shared dark-glass,
 cyan-rimmed orb reserves its space; its orange/amber centre animates in place,
@@ -2803,7 +2806,7 @@ Target the owner's Ultra 2 (49 mm); reported “iOS 27.2” is interpreted as wa
 
 Watch Home and complications retain the last available data on the Watch when refresh or connectivity fails. Show its age when stale and allow display while locked after the Watch's first unlock. Explicit phone sign-out clears the Watch cache.
 
-Watch dictation records a short message and first uploads it directly over Wi-Fi or cellular using an expiring, revocable transcription-only credential provisioned by the signed-in iPhone and held in the Watch Keychain. It falls back to the paired iPhone, then offers keyboard entry when neither path works; it never sends the draft automatically. Credential provisioning or renewal still needs the signed-in iPhone. Errors distinguish phone reachability, sign-in and network failures without promising a connection the system cannot provide. Sending, tasks and live voice still need the phone. Connection startup waits briefly for activation/reachability without blindly replaying sends or voice starts. Locked-phone and physical-device acceptance remain pending.
+Watch dictation records a short message and first uploads it directly over Wi-Fi or cellular using an expiring, revocable transcription-only credential provisioned by the signed-in iPhone and held in the Watch Keychain. It falls back to the paired iPhone, then offers keyboard entry when neither path works; it never sends the draft automatically. Transcription is bounded and cancellable, with a clear failure and keyboard fallback if it cannot complete. Credential provisioning or renewal still needs the signed-in iPhone. Errors distinguish phone reachability, sign-in and network failures without promising a connection the system cannot provide. Sending, tasks and live voice still need the phone. Connection startup waits briefly for activation/reachability without blindly replaying sends or voice starts. Locked-phone and physical-device acceptance remain pending.
 
 ## Intelligent proactive notifications — 9 November 2026
 

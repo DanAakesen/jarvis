@@ -135,6 +135,9 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         if (request.method !== 'POST' || request.routeOptions.url !== watchTranscriptionPath) throw new AuthenticationDenied(403);
         if (!watchCredentials || !await watchCredentials.verify(token)) throw new AuthenticationDenied(401);
         request.watchCredentialHash = createHash('sha256').update(token).digest('hex');
+        request.log.info({
+          stage: 'credential_verified', durationMs: Math.round(performance.now() - request.requestStartedAt),
+        }, 'watch_transcription.stage');
         return;
       }
       const principal = token.startsWith(ownerSessionTokenPrefix) ? await verifyOwnerSession(request, token) : await verify(token);

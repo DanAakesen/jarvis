@@ -1,3 +1,31 @@
+## 13 November 2026 — Follow voice captions (#1823)
+
+Keep complete current-turn voice captions in memory and follow the newest text
+in the existing bounded phone caption area rather than truncating to two lines.
+Watch receives user transcription deltas as well as final text, and sends long
+voice text in bounded transport chunks rather than silently truncating it.
+Native rendering and paired-device behavior still need device verification.
+
+## 13 November 2026 — Bound Watch dictation transcription (P15-131 / #1812)
+
+Treat end-of-stream as a successful terminal recognition event instead of
+waiting indefinitely for a separate stop event. A stop alone does not establish
+success because a provider error can arrive later. Keep continuous recognition
+for bounded recordings, but use English only. Configure the Speech
+SDK's 60-second unthrottled send window so its default two-times-real-time
+pacing does not itself exceed the server deadline for long clips. Bound server
+transcription to 20 seconds and the Watch's transcribing state to 25 seconds;
+limit direct attempts to 22 seconds to leave a short phone-fallback window.
+Allow cancellation and offer keyboard recovery if the remaining time is insufficient.
+Log sanitized stages and durations rather than audio, transcripts or credentials.
+The existing credential scope, rate limits, audio bounds and concurrency limit
+remain unchanged. Production recognition of long clips, diagnosis and
+paired-Watch acceptance remain open.
+
+## 13 November 2026 — Chat agent no longer requires a language field (hotfix)
+
+The English-only change stopped the backend sending `language` to the hosted chat agent, but the agent still required it and answered HTTP 400 "Invalid request", so every chat turn failed while voice kept working. The agent now treats `language` as optional and defaults to English, still accepting it from older callers, including per-message history entries. Backend and agent are tested separately and the live acceptance run is manual-only, so no automated check covers this contract; a cheap backend-to-agent payload contract check is a recorded follow-up.
+
 ## 12 November 2026 — Watch voice startup and capture recovery (P15-130 / #1810)
 
 Voice startup runs conversation-session creation, managed-identity token acquisition and optional proactive-context lookup concurrently. Prewarm the process-local Voice Live credential and refresh it before expiry; keep refresh errors visible and never log token values. Bound proactive context to 1.5 seconds and continue with fallback instructions if it fails or arrives late, because optional database context must not hold up the voice connection. The Watch shows Connecting during a 15-second companion wait and reports interruption, route change, cancellation or capture failure rather than attributing stream termination to network speed. Keep Watch dictation's separate capture state and timeout. Local regression checks do not replace paired-device and production latency acceptance.
@@ -12712,3 +12740,9 @@ WatchConnectivity application context as well as sending a live event, and check
 again on foreground/reconnection. Backend records already finalize through the
 same path for explicit End, idle expiry, duration cap and socket disconnect; no
 backend or database change is needed. No new strings or tests were added.
+
+## 13 November 2026 — Pipeline Watch voice audio (P15-132 / #1814)
+
+Use bounded, sequenced 250 ms Watch microphone packets instead of stop-and-wait. Drop short gaps rather than ending voice on the first overflow; end with connection guidance after sustained lack of progress. Serialize accepted phone-side socket writes and ignore late or duplicate packets. Pipeline phone-to-Watch playback with bounded in-flight events and ordering barriers for completion and interruption; give playback priority over nonterminal voice updates. Negotiate the window and fall back to one message for older paired apps. Log aggregate latency, in-flight counts and drops, never audio. Preserve dictation's separate capture policy. Paired-device behavior remains unverified.
+
+Direct Watch voice is a practical follow-up using the portable voice client and audio engine, but requires a separate voice-scoped WebSocket credential, session and budget limits, expiry handling and device/network/power qualification. The existing dictation-only credential must not be widened.

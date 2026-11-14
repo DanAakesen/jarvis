@@ -27,6 +27,10 @@ final class WatchModel: ObservableObject {
     private let voiceLogger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Jarvis", category: "WatchVoice")
     private var capture: Task<Void, Never>?
     private var captureTerminationLogged = false
+    private var audioSends = Set<UUID>()
+    private var audioBackpressure = WatchVoiceBackpressure(now: Date())
+    private var lastAudioMetrics = Date()
+    private var audioSequence: UInt64 = 0
     private var heartbeat: Task<Void, Never>?
     private var historyRequest = UUID()
     private var turn: UUID?
@@ -36,6 +40,7 @@ final class WatchModel: ObservableObject {
     private var dictationID: UUID?
     private var dictationCapture: Task<Bool, Never>?
     private var dictationTimeout: Task<Void, Never>?
+    private let transcriptionDeadline = WatchDictationDeadline()
     private var dictationAudio = Data()
     private var dictationTranscription: Task<String, Error>?
     init() {
@@ -123,7 +128,7 @@ final class WatchModel: ObservableObject {
             try await connection.waitForVoiceConnection(timeout: 15)
             waitingForVoiceConnection = false
             guard epoch == voiceGeneration else { return }
-            let request = WatchRequest(action: .startVoice)
+            let request = WatchRequest(action: .startVoice, flag: true)
             // Accept early state events while the phone opens the socket.
             voiceID = request.id; voiceState = "Connecting"
             let result = try await connection.request(request)
@@ -131,10 +136,12 @@ final class WatchModel: ObservableObject {
             guard epoch == voiceGeneration else { return }
             guard let data = result.data else { throw WatchFailure.failed }
             voiceID = try JSONDecoder().decode(UUID.self, from: data)
+            let pipeline = result.voicePipeline == true
+            let audioStreamID = request.id.uuidString
             configurePlaybackCompletion()
             let stream: AsyncStream<Data>
             do {
-                stream = try audio.startCapture()
+                stream = try audio.startCapture(tolerateDrops: true)
             } catch {
                 voiceLogger.error("Voice capture could not start: \(String(describing: error), privacy: .public)")
                 self.error = NSLocalizedString("Microphone audio could not start. Try voice again.", comment: "")
@@ -142,6 +149,8 @@ final class WatchModel: ObservableObject {
                 return
             }
             captureTerminationLogged = false
+            audioBackpressure = WatchVoiceBackpressure(now: Date()); lastAudioMetrics = Date()
+            audioSequence = 0
             capture = Task { [weak self] in
                 var batch = Data()
                 for await bytes in stream {
@@ -151,15 +160,43 @@ final class WatchModel: ObservableObject {
                         self.recordCaptureEnd(self.voiceGeneration == epoch ? "cancelled" : "session_cancelled")
                         return
                     }
-                    if self.muted { batch.removeAll(keepingCapacity: true); continue }
+                    if self.muted {
+                        batch.removeAll(keepingCapacity: true)
+                        self.audioBackpressure.progressed(at: Date())
+                        continue
+                    }
                     batch.append(bytes)
-                    guard batch.count >= 4_800 else { continue } // ~100 ms at 24 kHz PCM16.
+                    guard batch.count >= 12_000 else { continue } // ~250 ms at 24 kHz PCM16.
                     let packet = batch; batch.removeAll(keepingCapacity: true)
-                    do { _ = try await self.connection.request(.init(action: .audio, itemID: id.uuidString, data: packet)) }
-                    catch {
-                        guard self.voiceGeneration == epoch else { return }
-                        self.recordCaptureEnd("audio_send_error")
-                        self.show(error); await self.endVoice(); return
+                    let sequence = self.audioSequence
+                    self.audioSequence += 1
+                    if self.audioSends.count < (pipeline ? 4 : 1) {
+                        let request = WatchRequest(action: .audio, text: pipeline ? audioStreamID : nil, itemID: id.uuidString, data: packet, sequence: pipeline ? sequence : nil)
+                        let started = Date()
+                        self.audioSends.insert(request.id)
+                        self.connection.sendVoiceAudio(request) { [weak self] result in
+                            guard let self else { return }
+                            guard self.voiceGeneration == epoch, self.audioSends.remove(request.id) != nil else { return }
+                            switch result {
+                            case .success:
+                                self.audioBackpressure.progressed(at: Date())
+                                let milliseconds = Int(Date().timeIntervalSince(started) * 1_000)
+                                if Date().timeIntervalSince(self.lastAudioMetrics) >= 5 {
+                                    self.voiceLogger.info("Voice link: rtt_ms=\(milliseconds) in_flight=\(self.audioSends.count) packet_drops=\(self.audioBackpressure.drops) capture_drops=\(self.audio.droppedCaptureChunks)")
+                                    self.lastAudioMetrics = Date()
+                                }
+                            case .failure:
+                                self.audioBackpressure.dropped()
+                            }
+                        }
+                    } else {
+                        self.audioBackpressure.dropped()
+                    }
+                    if self.audioBackpressure.stalled(at: Date()) {
+                        self.voiceLogger.error("Voice link stalled: in_flight=\(self.audioSends.count) packet_drops=\(self.audioBackpressure.drops) capture_drops=\(self.audio.droppedCaptureChunks)")
+                        self.error = "Voice stopped because the iPhone audio connection was unavailable. Try again."
+                        await self.endVoice(captureEndReason: "audio_link_stalled")
+                        return
                     }
                 }
                 guard let self else { return }
@@ -167,24 +204,28 @@ final class WatchModel: ObservableObject {
                     self.recordCaptureEnd(self.voiceGeneration == epoch ? "cancelled" : "session_cancelled")
                     return
                 }
-                let reason = self.audio.didDropCapture ? "capture_buffer_overflow" : "capture_stream_ended"
-                self.recordCaptureEnd(reason)
-                if reason == "capture_buffer_overflow" {
-                    self.error = NSLocalizedString("Audio capture fell behind. Try starting voice again.", comment: "")
-                } else {
-                    self.error = NSLocalizedString("Audio capture stopped unexpectedly. Tap the voice icon to try again.", comment: "")
-                }
+                self.recordCaptureEnd("capture_stream_ended")
+                self.error = NSLocalizedString("Audio capture stopped unexpectedly. Tap the voice icon to try again.", comment: "")
                 await self.endVoice()
             }
             heartbeat = Task { [weak self] in
+                var failureSince: Date?
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(5))
                     guard let self, !Task.isCancelled, self.voiceID != nil else { return }
+                    if !self.muted && !self.audioBackpressure.stalled(at: Date()) {
+                        failureSince = nil
+                        continue
+                    }
                     do {
                         guard try await self.hasActiveVoice() else { return }
+                        failureSince = nil
                     } catch {
                         guard self.voiceGeneration == epoch else { return }
-                        await self.endVoice(); self.show(error); return
+                        if failureSince == nil { failureSince = Date() }
+                        if let failureSince, Date().timeIntervalSince(failureSince) >= 5 {
+                            await self.endVoice(); self.show(error); return
+                        }
                     }
                 }
             }
@@ -241,6 +282,11 @@ final class WatchModel: ObservableObject {
         let epoch = dictationGeneration
         dictationState = .finishing
         dictationTimeout?.cancel(); dictationTimeout = nil
+        transcriptionDeadline.start { [weak self] in
+            guard let self, self.dictationGeneration == epoch, self.dictationState == .finishing else { return }
+            self.cancelDictation()
+            self.error = WatchDictationError.timedOut.message
+        }
         audio.stop()
         guard await dictationCapture?.value == true, dictationGeneration == epoch else { return }
         do {
@@ -252,6 +298,7 @@ final class WatchModel: ObservableObject {
             guard dictationGeneration == epoch else { return }
             guard !text.isEmpty else { throw WatchFailure.failed }
             draft = draft.isEmpty ? text : draft + " " + text
+            transcriptionDeadline.cancel()
             dictationID = nil; dictationCapture = nil; dictationTranscription = nil; dictationState = .idle
         } catch {
             if dictationGeneration == epoch { failDictation(error) }
@@ -259,7 +306,7 @@ final class WatchModel: ObservableObject {
     }
     private func transcribeDictation(_ recording: Data, epoch: UUID) async throws -> String {
         guard !recording.isEmpty else { throw WatchFailure.failed }
-        let direct: (() async throws -> String)?
+        let direct: (@MainActor () async throws -> String)?
         do {
             if connection.credentialStorageFailed { throw WatchFailure.credentialStorage }
             if try WatchDirectDictation.credential() != nil {
@@ -268,13 +315,6 @@ final class WatchModel: ObservableObject {
         } catch { direct = { throw error } }
         return try await WatchDictationRouting.transcribe(direct: direct, phone: {
             try await self.transcribeViaPhone(recording, epoch: epoch)
-        }, onDirectFailure: { failure in
-            guard self.dictationGeneration == epoch else { throw CancellationError() }
-            if failure as? WatchFailure == .signInRequired {
-                self.error = "Sign in to Jarvis on your iPhone to refresh direct dictation."
-            } else if failure as? WatchFailure == .credentialStorage {
-                self.error = WatchFailure.credentialStorage.message
-            }
         })
     }
     private func transcribeViaPhone(_ recording: Data, epoch: UUID) async throws -> String {
@@ -302,6 +342,7 @@ final class WatchModel: ObservableObject {
         dictationGeneration = UUID()
         dictationState = .idle; dictationID = nil
         dictationTimeout?.cancel(); dictationTimeout = nil
+        transcriptionDeadline.cancel()
         dictationCapture?.cancel(); dictationCapture = nil
         dictationTranscription?.cancel(); dictationTranscription = nil
         dictationAudio.removeAll()
@@ -317,7 +358,8 @@ final class WatchModel: ObservableObject {
     }
     private func failDictation(_ failure: Error) {
         cancelDictation()
-        error = ((failure as? WatchFailure)?.message ?? "Dictation failed.") + " Tap Message to type."
+        if let failure = failure as? WatchDictationError { error = failure.message; return }
+        error = "Dictation failed. " + ((failure as? WatchFailure)?.message ?? "Try again.") + " Tap Message to type."
     }
     private func hasActiveVoice() async throws -> Bool {
         guard let id = voiceID else { return false }
@@ -355,6 +397,7 @@ final class WatchModel: ObservableObject {
         voiceGeneration = UUID()
         if capture != nil { recordCaptureEnd(captureEndReason) }
         capture?.cancel(); capture = nil; heartbeat?.cancel(); heartbeat = nil
+        audioSends.removeAll()
         audio.stop(); voiceID = nil; voiceState = state; muted = false
     }
     func handleVoiceAudioInterruption(reason: UInt?) {
@@ -399,7 +442,10 @@ final class WatchModel: ObservableObject {
         switch event.kind {
         case .voiceState:
             if let muted = event.muted { self.muted = muted }
-            if event.text == "Ended" || event.text == "Disconnected" {
+            if event.text == "Audio connection unavailable" {
+                stopLocalVoice(state: "Ended", captureEndReason: "playback_link_stalled")
+                error = "Voice stopped because the iPhone audio connection was unavailable. Try again."
+            } else if event.text == "Ended" || event.text == "Disconnected" {
                 stopLocalVoice(state: event.text ?? "Ended", captureEndReason: event.text == "Disconnected" ? "phone_disconnected" : "phone_ended")
             }
             else if event.text == "Playback finished" { audio.finishPlayback(responseID: event.responseID) }
@@ -409,10 +455,24 @@ final class WatchModel: ObservableObject {
             catch { Task { await endVoice() }; show(error) }
         case .voiceTranscript:
             let id = event.responseID ?? event.requestID.uuidString
-            if messages.last?.id == id { messages[messages.count - 1].text = String((messages[messages.count - 1].text + (event.text ?? "")).prefix(8_000)) }
+            if let index = messages.lastIndex(where: { $0.id == id && !$0.user }) {
+                messages[index].text += event.text ?? ""
+            }
             else { messages.append(.init(id: id, user: false, text: event.text ?? "")) }
+        case .voiceUserTranscriptDelta:
+            let id = event.responseID ?? event.requestID.uuidString
+            if let index = messages.lastIndex(where: { $0.id == id && $0.user }) {
+                messages[index].text += event.text ?? ""
+            } else {
+                messages.append(.init(id: id, user: true, text: event.text ?? ""))
+            }
         case .voiceUserTranscript:
-            messages.append(.init(id: event.responseID ?? UUID().uuidString, user: true, text: event.text ?? ""))
+            let id = event.responseID ?? UUID().uuidString
+            if let index = messages.lastIndex(where: { $0.id == id && $0.user }) {
+                messages[index].text = event.text ?? ""
+            } else {
+                messages.append(.init(id: id, user: true, text: event.text ?? ""))
+            }
         case .interrupt: audio.stopPlayback()
         default: break
         }

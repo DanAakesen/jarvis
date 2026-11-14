@@ -19,6 +19,8 @@ struct VoiceScreenView: View {
     @State private var showsCameraViewfinder = false
     @State private var screenSharePickerToken = 0
     @State private var screenShareProblem: String?
+    @State private var captionFrame: CGRect = .zero
+    @State private var captionFollow = ChatFollowState()
 
     var body: some View {
         GeometryReader { geometry in
@@ -98,6 +100,8 @@ struct VoiceScreenView: View {
                     cameraTile(camera, in: geometry.size)
                 }
             }
+            .coordinateSpace(name: "voiceScreen")
+            .onPreferenceChange(VoiceCaptionFrameKey.self) { captionFrame = $0 }
             .contentShape(Rectangle())
             .simultaneousGesture(minimizeGesture(in: geometry.size))
         }
@@ -258,34 +262,64 @@ struct VoiceScreenView: View {
     }
 
     private var captions: some View {
-        VStack(alignment: .center, spacing: JarvisDesignTokens.voiceCaptionLineSpacing) {
-            if !model.sentMedia.isEmpty {
-                sentMediaStrip
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .center, spacing: JarvisDesignTokens.voiceCaptionLineSpacing) {
+                    if !model.sentMedia.isEmpty {
+                        sentMediaStrip
+                    }
+                    if !model.userCaption.isEmpty {
+                        captionLine(
+                            label: JarvisNotesLocalization.string(.voiceCaptionYou, language: appLanguage),
+                            text: model.userCaption
+                        )
+                    }
+                    if !model.assistantCaption.isEmpty {
+                        captionLine(
+                            label: JarvisNotesLocalization.string(.voiceCaptionJarvis, language: appLanguage),
+                            text: model.assistantCaption
+                        )
+                    }
+                    Color.clear.frame(height: 1).id("caption.latest")
+                }
+                .padding(.vertical, JarvisDesignTokens.voiceStatusSpacing)
+                .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
+                .frame(maxWidth: .infinity)
             }
-            if !model.userCaption.isEmpty {
-                captionLine(
-                    label: JarvisNotesLocalization.string(.voiceCaptionYou, language: appLanguage),
-                    text: model.userCaption
-                )
+            .defaultScrollAnchor(.bottom, for: .initialOffset)
+            .defaultScrollAnchor(captionFollow.shouldFollow ? .bottom : nil, for: .sizeChanges)
+            .onScrollPhaseChange { old, new, context in
+                switch new {
+                case .tracking, .interacting, .decelerating:
+                    captionFollow.interactionBegan()
+                case .idle:
+                    if old != .animating {
+                        let geometry = context.geometry
+                        let distance = geometry.contentSize.height + geometry.contentInsets.bottom
+                            - geometry.containerSize.height - geometry.contentOffset.y
+                        captionFollow.interactionEnded(distanceFromBottom: old == .tracking ? nil : Double(distance))
+                    }
+                default: break
+                }
             }
-            if !model.assistantCaption.isEmpty {
-                captionLine(
-                    label: JarvisNotesLocalization.string(.voiceCaptionJarvis, language: appLanguage),
-                    text: model.assistantCaption
-                )
+            .onChange(of: model.userCaption) { _, _ in
+                if captionFollow.shouldFollow { proxy.scrollTo("caption.latest", anchor: .bottom) }
+            }
+            .onChange(of: model.assistantCaption) { _, _ in
+                if captionFollow.shouldFollow { proxy.scrollTo("caption.latest", anchor: .bottom) }
             }
         }
-        .padding(.vertical, JarvisDesignTokens.voiceStatusSpacing)
-        .padding(.horizontal, JarvisDesignTokens.voiceStatusSpacing)
         .frame(maxWidth: .infinity)
         .frame(maxHeight: captionMaximumHeight)
+        .background {
+            GeometryReader { geometry in
+                Color.clear.preference(key: VoiceCaptionFrameKey.self, value: geometry.frame(in: .named("voiceScreen")))
+            }
+        }
+        .onAppear { captionFollow = ChatFollowState() }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(captionAccessibilityLabel)
         .accessibilityAddTraits(.updatesFrequently)
-        .animation(
-            reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration),
-            value: captionAccessibilityLabel
-        )
     }
 
     private var captionAccessibilityLabel: String {
@@ -311,10 +345,8 @@ struct VoiceScreenView: View {
                 .font(.body.weight(.medium))
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
-                .lineLimit(2)
                 .lineSpacing(JarvisDesignTokens.voiceCaptionLineSpacing)
                 .fixedSize(horizontal: false, vertical: true)
-                .contentTransition(.opacity)
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .accessibilityElement(children: .combine)
@@ -526,6 +558,7 @@ struct VoiceScreenView: View {
                     + JarvisDesignTokens.voiceControlBottomInset
                     + (model.isScreenSharing ? JarvisDesignTokens.voiceScreenShareBarHeight + JarvisDesignTokens.voiceContentSpacing : 0)
                 guard value.startLocation.y < size.height - bottomControlsHeight else { return }
+                if captionFrame.contains(value.startLocation) { return }
                 if model.isCameraEnabled && cameraFrame(in: size).contains(value.startLocation) { return }
                 minimizeVoice()
             }
@@ -562,6 +595,11 @@ struct VoiceScreenView: View {
         )
         return CGRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)
     }
+}
+
+private struct VoiceCaptionFrameKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }
 
 private struct VoiceMinimizeAction: ViewModifier {
