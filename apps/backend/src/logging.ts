@@ -107,7 +107,7 @@ const events = new Set([
   'vision.watch', 'visual.path',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
-  'voice.session_stage', 'voice.stage_timeout', 'voice.session_summary',
+  'voice.session_stage', 'voice.stage_timeout', 'voice.session_summary', 'watch_transcription.stage',
   'voice.tool_budget_attempt', 'voice.tool_budget_selected', 'voice.tool_budget_exhausted',
   'voice.tool_budget_probe',
   'credentials.codex_renewal', 'dispatcher.start_failed',
@@ -212,6 +212,26 @@ function safeBoardDuration(value: unknown): value is number {
 }
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.msg === 'watch_transcription.stage') {
+    const fields: Record<string, unknown> = {};
+    if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
+    if (typeof input.stage === 'string' && [
+      'request_accepted', 'credential_verified', 'owner_authenticated', 'token_acquired',
+      'recognizer_started', 'audio_written', 'first_recognized', 'recognizer_stopped',
+      'recognizer_cancelled', 'cleanup_started', 'cleanup_finished', 'deadline_exceeded', 'completed',
+    ].includes(input.stage)) fields.stage = input.stage;
+    if (typeof input.durationMs === 'number' && Number.isSafeInteger(input.durationMs) && input.durationMs >= 0) {
+      fields.durationMs = input.durationMs;
+    }
+    if (typeof input.status === 'string' && ['success', 'failure', 'timeout'].includes(input.status)) {
+      fields.status = input.status;
+    }
+    if (typeof input.reason === 'string' && [
+      'end_of_stream', 'provider_cancelled', 'stop_awaiting_cancellation', 'early_stop', 'client_disconnected',
+      'deadline_exceeded', 'completed', 'request_failed',
+    ].includes(input.reason)) fields.reason = input.reason;
+    return fields;
+  }
   if (input.msg === 'voice.session_stage' || input.msg === 'voice.stage_timeout' ||
       input.msg === 'voice.session_summary' || input.msg === 'voice.tool_budget_attempt' ||
       input.msg === 'voice.tool_budget_selected' || input.msg === 'voice.tool_budget_exhausted' ||

@@ -13,6 +13,22 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it('exports only allowlisted Watch transcription stages and timings', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.info({ stage: 'completed', durationMs: 42, status: 'failure', reason: 'provider_cancelled',
+      audio: 'private', token: 'private', text: 'private' }, 'watch_transcription.stage');
+    logger.info({ stage: 'private', durationMs: -1, status: 'private', reason: 'private' }, 'watch_transcription.stage');
+    expect(JSON.parse(records[0]!)).toMatchObject({ msg: 'watch_transcription.stage', stage: 'completed',
+      durationMs: 42, status: 'failure', reason: 'provider_cancelled' });
+    expect(JSON.parse(records[1]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'watch_transcription.stage',
+    });
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it('exports bounded voice startup diagnostics to stdout and telemetry without payload content', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

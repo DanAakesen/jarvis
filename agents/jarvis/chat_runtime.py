@@ -658,16 +658,19 @@ def register_chat_invocation(
         session_id = payload.get("sessionId") if isinstance(payload, dict) else None
         steering = payload.get("steering", False) if isinstance(payload, dict) else False
         text = payload.get("text") if isinstance(payload, dict) else None
-        language = payload.get("language") if isinstance(payload, dict) else None
+        language = payload.get("language", "en") if isinstance(payload, dict) else None
         screen_context = payload.get("screenContext") if isinstance(payload, dict) else None
         visual = visual_context(payload.get("visualContext")) if isinstance(payload, dict) else None
         attachments = payload.get("attachments") if isinstance(payload, dict) else None
         reflex_note = payload.get("reflexNote") if isinstance(payload, dict) else None
         proactive_context = payload.get("proactiveContext") if isinstance(payload, dict) else None
+        # The app is English only; legacy callers may still send language.
         expected_keys = (
-            {"messageId", "text", "language", "smoke"}
-            if smoke else {"messageId", "text", "language", "delegatedAuthorization"}
+            {"messageId", "text", "smoke"}
+            if smoke else {"messageId", "text", "delegatedAuthorization"}
         )
+        if isinstance(payload, dict) and "language" in payload:
+            expected_keys.add("language")
         if smoke and "smokeHistory" in payload:
             expected_keys.add("smokeHistory")
         if smoke and "smokeApproval" in payload:
@@ -957,10 +960,12 @@ def register_chat_invocation(
                                 or not isinstance(message.get("text"), str)
                                 or not message["text"].strip()
                                 or len(message["text"]) > 20_000
-                                or message.get("language") not in {"da", "en"}
+                                or message.get("language", "en") not in {"da", "en"}
                             ):
                                 raise RuntimeError("Chat steering is invalid")
-                            parsed.append((message["id"], message["text"], message["language"]))
+                            parsed.append((
+                                message["id"], message["text"], message.get("language", "en"),
+                            ))
                         if parsed:
                             cursor = parsed[-1][0]
                         return parsed
