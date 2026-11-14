@@ -15,6 +15,24 @@ public enum WatchLimits {
         while !bytes.isEmpty, String(bytes: bytes, encoding: .utf8) == nil { bytes.removeLast() }
         return (String(bytes: bytes, encoding: .utf8) ?? "") + notice
     }
+
+    public static func voiceTextChunks(_ text: String) -> [String] {
+        var chunks: [String] = []
+        var chunk = ""
+        var byteCount = 0
+        for scalar in text.unicodeScalars {
+            let size = scalar.utf8.count
+            if byteCount + size > 4_000 {
+                chunks.append(chunk)
+                chunk = ""
+                byteCount = 0
+            }
+            chunk.unicodeScalars.append(scalar)
+            byteCount += size
+        }
+        chunks.append(chunk)
+        return chunks
+    }
 }
 
 public enum WatchCodec {
@@ -129,7 +147,7 @@ public struct WatchReply: Codable, Sendable {
 
 public struct WatchEvent: Codable, Sendable {
     public var version = 1
-    public enum Kind: String, Codable, Sendable { case chatDelta, chatDone, chatError, voiceState, voiceAudio, voiceTranscript, voiceUserTranscript, interrupt }
+    public enum Kind: String, Codable, Sendable { case chatDelta, chatDone, chatError, voiceState, voiceAudio, voiceTranscript, voiceUserTranscript, voiceUserTranscriptDelta, interrupt }
     public var kind: Kind
     public var requestID: UUID
     public var text: String?

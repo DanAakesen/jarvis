@@ -1,3 +1,10 @@
+## Voice caption follow-up — 13 November 2026 (#1823)
+
+Phone captions follow accumulating user and assistant text in a bounded scroll
+area; Watch receives streamed user text and no longer caps assistant replies.
+All 41 portable Swift tests, the Core build and native syntax parsing pass.
+Native rendering, paired Watch delivery and live voice acceptance remain unverified.
+
 ## Watch voice startup and capture recovery — 12 November 2026 (#1810)
 
 Backend voice startup loads optional proactive context and managed-identity credentials alongside conversation-session creation. Context refresh has a 1.5-second bound and falls back; credentials are prewarmed and refreshed ahead of expiry. Watch startup shows Connecting through a 15-second companion wait and reports/logs interruption, route, cancellation, sustained link stalls and capture failures. Backend regression tests pass. Native Watch build, paired-device audio, production latency and owner acceptance remain unverified.

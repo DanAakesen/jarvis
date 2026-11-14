@@ -3028,8 +3028,12 @@ prompts, sheets and the ReplayKit picker. Voice reuses the shared Jarvis orb, wi
 state-driven motion and muted/offline treatments. Live captions are centered,
 unframed text with Dynamic Type-scaled typography, comfortable line spacing and
 reduced-motion-aware updates; the CC control toggles captions. Accessibility sizes
-reserve additional caption space. Orb and caption geometry and motion values come
-from the shared iOS token layer. The camera tile remains custom for its live preview.
+reserve additional caption space. A bottom-anchored scroll area follows the latest
+user or assistant text while retaining the current turn for review; a manual
+scroll pauses following until the reader returns to the bottom. Caption scrolling
+does not minimize Voice. Orb and
+caption geometry and motion values come from the shared iOS token layer. The
+camera tile remains custom for its live preview.
 The minimized bar preserves voice access outside the screen, and the share bar
 keeps Stop visible while broadcasting.
 Ending voice returns to Chat and closes the sidebar through the existing
