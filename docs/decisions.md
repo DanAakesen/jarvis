@@ -1,3 +1,12 @@
+## 14 November 2026 — Keep current priorities in p0.md (#1828)
+
+The repository root holds `p0.md`: current Jarvis priorities only, short and
+edit-friendly so the owner can refine it on the move. It is not a plan or
+history; `PLAN.md` and this log keep those. A separate cross-project `p0.md`
+lives in the private vault. Top priority recorded there: an inbox loop that
+turns the owner's loose ideas and asks into structured items with proactive
+follow-ups, plus proactive Jarvis within a 100 DKK per month budget.
+
 ## 13 November 2026 — Follow voice captions (#1823)
 
 Keep complete current-turn voice captions in memory and follow the newest text
