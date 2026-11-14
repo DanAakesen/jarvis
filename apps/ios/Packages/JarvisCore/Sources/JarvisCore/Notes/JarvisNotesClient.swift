@@ -184,6 +184,19 @@ public struct VaultTaskGroups: Equatable, Sendable {
 public enum JarvisNotesLogic {
     public static let maximumNoteBytes = 256 * 1024
 
+    public enum SwipeAction: Equatable, Sendable {
+        case none, pin, delete
+    }
+
+    public static let pinSwipeDistance = 72.0
+    public static let deleteSwipeDistance = 160.0
+
+    public static func swipeAction(distance: Double) -> SwipeAction {
+        if distance >= deleteSwipeDistance { return .delete }
+        if distance >= pinSwipeDistance { return .pin }
+        return .none
+    }
+
     public static func notePath(folder: String, title: String) -> String? {
         guard validFolder(folder), !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
         let decomposed = title.precomposedStringWithCanonicalMapping
@@ -387,6 +400,33 @@ public final class JarvisNotesClient: Sendable {
     public func saveNote(path: String, content: String, sha: String) async throws -> VaultNoteWrite {
         guard Self.validGitSHA(sha) else { throw JarvisNotesClientError.invalidRequest }
         return try await writeNote(path: path, content: content, sha: sha)
+    }
+
+    public func deleteNote(path: String, sha: String) async throws {
+        guard JarvisNotesLogic.validNotePath(path), Self.validGitSHA(sha) else {
+            throw JarvisNotesClientError.invalidRequest
+        }
+        do {
+            let response = try await request(
+                method: .delete, path: ["notes", "note"],
+                body: try JSONEncoder().encode(["path": path, "sha": sha]),
+                idempotent: false, additionalSuccessStatuses: [409]
+            )
+            if response.statusCode == 409 {
+                throw JarvisNotesClientError.noteConflict(currentSha: nil, content: nil)
+            }
+            guard response.statusCode == 204 else { throw JarvisNotesClientError.writeOutcomeUnknown }
+        } catch JarvisClientError.httpStatus(404) {
+            throw JarvisNotesClientError.noteNotFound
+        } catch JarvisClientError.serviceUnavailable {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.networkFailure {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.timedOut {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.responseDecodingFailure {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        }
     }
 
     public func deleteGymLift(path: String, sha: String) async throws {

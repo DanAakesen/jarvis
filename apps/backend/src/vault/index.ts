@@ -1394,17 +1394,21 @@ export function createVaultModule(options: {
 
   async function deleteNote(path: string, expectedSha: string, signal: AbortSignal): Promise<string> {
     const latest = await options.client.read(path, signal);
-    if (!latest) throw new ToolRefusal('The vault note no longer exists. Nothing was deleted.');
+    if (!latest || latest.path !== path) throw new ToolRefusal('The vault note no longer exists. Nothing was deleted.');
     if (latest.sha !== expectedSha) throw new VaultWriteConflictError();
-    const commit = await options.client.delete(
-      path,
-      latest.sha,
-      'jarvis: forget vault note\n\nCo-authored-by: Jarvis',
-      signal,
-    );
-    await options.indexStore.deleteFiles([path], signal);
-    graphCache = undefined;
-    indexAfterNoteWrite();
+    let commit: string;
+    try {
+      commit = await options.client.delete(
+        path,
+        latest.sha,
+        'jarvis: forget vault note\n\nCo-authored-by: Jarvis',
+        signal,
+      );
+      await options.indexStore.deleteFiles([path], signal);
+    } finally {
+      graphCache = undefined;
+      indexAfterNoteWrite();
+    }
     log('vault.write', { outcome: 'ok', folder: loggedFolder(path) });
     return commit;
   }
@@ -1974,6 +1978,15 @@ export function createVaultModule(options: {
         },
         required: ['path', 'content', 'sha'],
       };
+      const noteDeleteBodySchema = {
+        type: 'object',
+        properties: {
+          path: { type: 'string', minLength: 1, maxLength: maxPathLength },
+          sha: { type: 'string', pattern: '^[\\da-fA-F]{40}$' },
+        },
+        required: ['path', 'sha'],
+        additionalProperties: false,
+      };
       const noteWriteErrorSchema = {
         type: 'object',
         properties: { error: { type: 'string' } },
@@ -2272,6 +2285,43 @@ export function createVaultModule(options: {
         } catch (error) {
           if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
           return reply.code(503).send({ error: 'Vault notes are temporarily unavailable' });
+        }
+      });
+
+      app.delete<{ Body: { path: string; sha: string } }>('/notes/note', {
+        bodyLimit: 1024,
+        schema: {
+          body: noteDeleteBodySchema,
+          response: { 400: apiError, 403: apiError, 404: apiError, 409: apiError, 503: apiError },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        let path: string;
+        try {
+          path = validateWritePath(request.body.path);
+          if (path !== request.body.path || !isVaultNotePath(path)) {
+            throw new ToolRefusal('Use an exact, safe Markdown path in the vault.');
+          }
+        } catch (error) {
+          if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
+          throw error;
+        }
+        if (pendingVaultDeletions.has(path)) {
+          return reply.code(409).send({ error: 'This note is already being deleted. Refresh before retrying.' });
+        }
+        pendingVaultDeletions.add(path);
+        try {
+          await deleteNote(path, request.body.sha.toLowerCase(), AbortSignal.timeout(30_000));
+          return reply.code(204).send();
+        } catch (error) {
+          log('vault.write', { outcome: 'error', folder: loggedFolder(path) });
+          if (error instanceof ToolRefusal) return reply.code(404).send({ error: 'Vault note not found' });
+          if (error instanceof VaultWriteConflictError) {
+            return reply.code(409).send({ error: 'The note changed since it was loaded. Refresh before retrying.' });
+          }
+          return reply.code(503).send({ error: 'Note deletion could not be verified. Refresh before retrying.' });
+        } finally {
+          pendingVaultDeletions.delete(path);
         }
       });
 

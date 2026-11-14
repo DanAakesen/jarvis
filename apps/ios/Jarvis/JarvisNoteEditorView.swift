@@ -4,6 +4,7 @@ import SwiftUI
 
 private enum JarvisNoteEditorAlert: Equatable {
     case discard
+    case delete
     case info(String)
 }
 
@@ -12,6 +13,7 @@ struct JarvisNoteEditorView: View {
     let copy: JarvisNotesCopy
     let onSaved: (VaultNote) -> Void
     let onPin: (Bool) -> Void
+    let onDeleted: (String) -> Void
     let onClose: () -> Void
     @State private var isPinned: Bool
     @State private var document: JarvisNoteDocument
@@ -23,6 +25,7 @@ struct JarvisNoteEditorView: View {
     @State private var note: VaultNote
     @State private var draft: String
     @State private var saving = false
+    @State private var deleting = false
     @State private var status: String?
     @State private var latestConflict: VaultNote?
     @State private var needsReload = false
@@ -35,6 +38,7 @@ struct JarvisNoteEditorView: View {
         onSaved: @escaping (VaultNote) -> Void,
         isPinned: Bool = false,
         onPin: @escaping (Bool) -> Void = { _ in },
+        onDeleted: @escaping (String) -> Void,
         onClose: @escaping () -> Void
     ) {
         self.client = client
@@ -42,6 +46,7 @@ struct JarvisNoteEditorView: View {
         self.onSaved = onSaved
         self.onClose = onClose
         self.onPin = onPin
+        self.onDeleted = onDeleted
         _isPinned = State(initialValue: isPinned)
         _document = State(initialValue: JarvisNoteDocument(note.content))
         _note = State(initialValue: note)
@@ -57,6 +62,7 @@ struct JarvisNoteEditorView: View {
     private var hasChanges: Bool { draft != note.content }
 
     private var visibleStatus: String? {
+        if deleting { return "Deleting…" }
         if saving { return copy.saving }
         if latestConflict != nil { return copy.conflict }
         if let status { return status }
@@ -65,7 +71,11 @@ struct JarvisNoteEditorView: View {
     }
 
     private var alertTitle: String {
-        activeAlert == .discard ? copy.discardTitle : copy.title
+        switch activeAlert {
+        case .discard: copy.discardTitle
+        case .delete: "Delete note?"
+        default: copy.title
+        }
     }
 
     var body: some View {
@@ -96,6 +106,10 @@ struct JarvisNoteEditorView: View {
                                  identifier: "note.pin") {
                     isPinned.toggle()
                     onPin(isPinned)
+                }
+                JarvisIconButton(title: "Delete note", systemImage: "trash", identifier: "note.delete",
+                                 isDisabled: saving || latestConflict != nil || needsReload || client == nil) {
+                    activeAlert = .delete
                 }
             }
             Divider()
@@ -130,6 +144,7 @@ struct JarvisNoteEditorView: View {
             }
 
         }
+        .disabled(deleting)
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
         .padding(.top, JarvisDesignTokens.notesSectionSpacing)
         .safeAreaInset(edge: .bottom) {
@@ -148,7 +163,8 @@ struct JarvisNoteEditorView: View {
                 JarvisIconButton(
                     title: copy.back,
                     systemImage: "chevron.left",
-                    identifier: "note.back"
+                    identifier: "note.back",
+                    isDisabled: deleting
                 ) {
                     if hasChanges { activeAlert = .discard } else { onClose() }
                 }
@@ -160,6 +176,7 @@ struct JarvisNoteEditorView: View {
                     editingTitle = false
                     rawMode.toggle()
                 }
+                .disabled(deleting)
             }.sharedBackgroundVisibility(.hidden)
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisSheetConfirmButton(title: copy.save, isWorking: saving,
@@ -187,12 +204,22 @@ struct JarvisNoteEditorView: View {
                     activeAlert = nil
                     onClose()
                 }
+            } else if activeAlert == .delete {
+                Button("No", role: .cancel) { activeAlert = nil }
+                Button("Yes", role: .destructive) {
+                    activeAlert = nil
+                    Task { await deleteNote() }
+                }
             } else {
                 Button(copy.ok, role: .cancel) { activeAlert = nil }
             }
         } message: {
             if case let .info(message) = activeAlert {
                 Text(message)
+            } else if activeAlert == .delete {
+                Text(hasChanges
+                     ? "Delete this note and discard your unsaved changes? It can be recovered from vault Git history."
+                     : "Delete this note? It can be recovered from vault Git history.")
             } else {
                 Text(verbatim: "")
             }
@@ -220,30 +247,55 @@ struct JarvisNoteEditorView: View {
     }
 
     private var formattingToolbar: some View {
-        HStack {
-            JarvisMenuButton(title: copy.heading, systemImage: "textformat", identifier: "note.format") {
-                Button(copy.heading) { appendBlock(prefix: "## ") }
-                Button(copy.contentField) { appendBlock(prefix: "") }
-            }
-            Spacer()
-            JarvisIconButton(title: copy.checklist, systemImage: "checkmark.square", identifier: "note.checklist") {
-                appendBlock(prefix: "- [ ] ")
-            }
-            Spacer()
-            JarvisIconButton(title: copy.addLink, systemImage: "link", identifier: "note.link") {
-                appendBlock(prefix: "", text: "[](https://)")
-            }
-            Spacer()
-            JarvisIconButton(title: copy.undo, systemImage: "arrow.uturn.backward", identifier: "note.undo",
-                             isDisabled: undoHistory.isEmpty) {
-                guard let previous = undoHistory.popLast() else { return }
-                draft = previous
-                document = JarvisNoteDocument(previous)
-                editingBlock = nil
-                clearStatus()
+        ScrollView(.horizontal) {
+            HStack(spacing: 4) {
+                JarvisMenuButton(title: copy.heading, systemImage: "textformat", identifier: "note.format") {
+                    Button(copy.heading) { appendBlock(prefix: "## ") }
+                    Button(copy.contentField) { appendBlock(prefix: "") }
+                }
+                JarvisIconButton(title: copy.checklist, systemImage: "checkmark.square", identifier: "note.checklist") {
+                    appendBlock(prefix: "- [ ] ")
+                }
+                JarvisIconButton(title: "Bullet list", systemImage: "list.bullet", identifier: "note.bullet") {
+                    appendBlock(prefix: "- ")
+                }
+                JarvisIconButton(title: "Quote", systemImage: "text.quote", identifier: "note.quote") {
+                    appendBlock(prefix: "> ")
+                }
+                JarvisIconButton(title: copy.addLink, systemImage: "link", identifier: "note.link") {
+                    appendBlock(prefix: "", text: "[](https://)")
+                }
+                JarvisIconButton(title: copy.undo, systemImage: "arrow.uturn.backward", identifier: "note.undo",
+                                 isDisabled: undoHistory.isEmpty) {
+                    guard let previous = undoHistory.popLast() else { return }
+                    draft = previous
+                    document = JarvisNoteDocument(previous)
+                    editingBlock = nil
+                    clearStatus()
+                }
             }
         }
-        .frame(maxWidth: .infinity)
+        .scrollIndicators(.hidden)
+        .disabled(deleting)
+    }
+
+    private func deleteNote() async {
+        guard let client, !saving, latestConflict == nil, !needsReload else { return }
+        saving = true
+        deleting = true
+        defer { saving = false; deleting = false }
+        do {
+            try await client.deleteNote(path: note.path, sha: note.sha)
+            onDeleted(note.path)
+        } catch JarvisNotesClientError.noteConflict {
+            needsReload = true
+            status = copy.conflict
+            activeAlert = .info("The note changed. Reload it before trying again.")
+        } catch {
+            needsReload = true
+            status = copy.unknownWrite
+            activeAlert = .info("Deletion could not be confirmed. Refresh the note before trying again.")
+        }
     }
 
     @ViewBuilder

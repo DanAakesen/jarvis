@@ -4,6 +4,58 @@ import XCTest
 
 // Minimal guard set: session token storage, auth failure mapping, and the HTTP transport contract.
 final class JarvisClientTransportTests: XCTestCase {
+    func testNoteSwipeThresholds() {
+        XCTAssertEqual(JarvisNotesLogic.swipeAction(distance: 71), .none)
+        XCTAssertEqual(JarvisNotesLogic.swipeAction(distance: 72), .pin)
+        XCTAssertEqual(JarvisNotesLogic.swipeAction(distance: 159), .pin)
+        XCTAssertEqual(JarvisNotesLogic.swipeAction(distance: 160), .delete)
+    }
+
+    func testNoteDeletionUsesExactVersionAndDoesNotRetryUnknownOutcome() async throws {
+        let transport = FakeHTTPTransport([
+            .response(HTTPResponse(statusCode: 204)),
+            .failure(.network),
+        ])
+        let client = JarvisNotesClient(client: try makeClient(transport: transport))
+        let sha = String(repeating: "a", count: 40)
+        try await client.deleteNote(path: "Personal/example.md", sha: sha)
+        do {
+            try await client.deleteNote(path: "Personal/example.md", sha: sha)
+            XCTFail("Expected unknown outcome")
+        } catch {
+            XCTAssertEqual(error as? JarvisNotesClientError, .writeOutcomeUnknown)
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(requests[0].method, .delete)
+        XCTAssertEqual(requests[0].url.path, "/api/notes/note")
+        let body = try XCTUnwrap(requests[0].body)
+        XCTAssertEqual(try JSONSerialization.jsonObject(with: body) as? [String: String],
+                       ["path": "Personal/example.md", "sha": sha])
+    }
+
+    func testNoteDeletionRejectsUnsafePathAndReportsConflict() async throws {
+        let transport = FakeHTTPTransport([.response(jsonResponse(status: 409, body: ["error": "changed"]))])
+        let client = JarvisNotesClient(client: try makeClient(transport: transport))
+        let sha = String(repeating: "a", count: 40)
+        do {
+            try await client.deleteNote(path: ".hidden/example.md", sha: sha)
+            XCTFail("Expected invalid path")
+        } catch {
+            XCTAssertEqual(error as? JarvisNotesClientError, .invalidRequest)
+        }
+        do {
+            try await client.deleteNote(path: "example.md", sha: sha)
+            XCTFail("Expected conflict")
+        } catch {
+            guard case .noteConflict = error as? JarvisNotesClientError else {
+                return XCTFail("Expected note conflict, got \(error)")
+            }
+        }
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.count, 1)
+    }
+
     func testSessionLifecycleUsesBearerTokensAndPersistsSessionToken() async throws {
         let transport = FakeHTTPTransport([
             .response(jsonResponse(status: 201, body: sessionJSON)),

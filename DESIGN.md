@@ -3759,6 +3759,15 @@ fill by the shared screen renderer. Light mode keeps its existing palette. Nativ
 qualification 42417916004 passed and the actual captures were inspected. Build 82
 was uploaded in 42419435807; owner visual and Notes editing acceptance remains pending.
 
+### Notes swipe and editor controls (13 November 2026)
+
+Recent and folder note rows reveal the pin action during a short swipe and a
+trash icon during a longer swipe. Release at 72 points pins or unpins; release at
+160 points asks Yes or No before deletion. A cancelled gesture returns to rest.
+The editor uses the shared icon controls for delete and a compact horizontal
+formatting strip, also presented above the keyboard. Native visual and gesture
+acceptance remains pending.
+
 
 ## Chat reply grouping (8 November 2026)
 

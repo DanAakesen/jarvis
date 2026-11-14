@@ -4945,7 +4945,14 @@ Start. Backend End, idle/cap and disconnect finalization already share cleanup.
 Follow-up JarvisCore build and all 11 existing tests pass; the six changed Swift
 files pass syntax parsing. No new tests or strings were added. Paired-device
 WatchConnectivity and native iOS/watchOS compilation remain unverified on Linux.
-
 ## Watch voice transport — 13 November 2026 (#1814)
 
 Pipeline bounded, sequenced microphone and playback traffic; tolerate transient capture loss and report sustained audio-link stalls. Portable transport tests and native syntax checks are available on Linux. Next: qualify the exact head with native Watch/iPhone builds and test complication launch, duplex audio, transient loss and sustained disconnect on paired devices. Direct Watch voice remains a separately scoped follow-up.
+
+## Notes swipe and deletion — 13 November 2026 (#1819)
+
+Implemented version-checked owner deletion, shared row swipe thresholds, editor
+confirmation and a compact keyboard formatting strip. Targeted backend and
+portable Swift checks are recorded in the PR. Next: native iPhone or Simulator
+validation of gestures, confirmation, keyboard toolbar and recovery states; this
+Linux runner cannot establish device acceptance.

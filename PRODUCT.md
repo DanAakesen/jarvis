@@ -2731,6 +2731,13 @@ Formatted editing supports headings, paragraphs and checklists; Raw exposes the
 complete original Markdown including frontmatter. Saving retains optimistic SHA
 conflict checks and must never silently overwrite another edit. Done saves changed
 content before returning to the library. Dark pages share the approved Ember background.
+
+On iPhone, a 72-point note-row swipe pins or unpins; a 160-point swipe asks
+Yes or No before deleting. The editor offers the same confirmation, including a
+warning for unsaved changes. Delete uses the loaded version and reports conflicts
+or uncertain outcomes; deleted vault files can be recovered from Git history.
+The formatted editor offers a compact, scrollable keyboard toolbar with heading,
+checklist, bullet, quote, link and undo tools.
 ## Disk-backed Factory workspace
 
 Coding tasks need sufficient isolated workspace, with 128 GiB as the selected

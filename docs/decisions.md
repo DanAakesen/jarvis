@@ -12740,9 +12740,17 @@ WatchConnectivity application context as well as sending a live event, and check
 again on foreground/reconnection. Backend records already finalize through the
 same path for explicit End, idle expiry, duration cap and socket disconnect; no
 backend or database change is needed. No new strings or tests were added.
-
 ## 13 November 2026 — Pipeline Watch voice audio (P15-132 / #1814)
 
 Use bounded, sequenced 250 ms Watch microphone packets instead of stop-and-wait. Drop short gaps rather than ending voice on the first overflow; end with connection guidance after sustained lack of progress. Serialize accepted phone-side socket writes and ignore late or duplicate packets. Pipeline phone-to-Watch playback with bounded in-flight events and ordering barriers for completion and interruption; give playback priority over nonterminal voice updates. Negotiate the window and fall back to one message for older paired apps. Log aggregate latency, in-flight counts and drops, never audio. Preserve dictation's separate capture policy. Paired-device behavior remains unverified.
 
 Direct Watch voice is a practical follow-up using the portable voice client and audio engine, but requires a separate voice-scoped WebSocket credential, session and budget limits, expiry handling and device/network/power qualification. The existing dictation-only credential must not be widened.
+
+## Notes deletion and swipe thresholds — 13 November 2026
+
+The owner requested immediate pinning on a normal swipe and confirmation before
+deleting on a longer swipe or from the editor. Use 72 and 160 points respectively,
+with explicit Yes/No and the note's SHA. Reuse the vault's existing Git-backed
+delete rather than inventing a trash store: committed files remain in Git history,
+but unsaved drafts do not. Unknown outcomes require a refresh, not an automatic retry.
+Native gesture and visual acceptance is still pending.
