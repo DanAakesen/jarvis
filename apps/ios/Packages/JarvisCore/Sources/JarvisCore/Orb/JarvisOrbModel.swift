@@ -1,5 +1,13 @@
 import Foundation
 
+/// Orb colours and glow shared by the app, Live Activity and widgets.
+public enum JarvisOrbAppearance {
+    public static let cool = (r: 0x52 / 255.0, g: 0xdc / 255.0, b: 0xfa / 255.0)
+    public static let warm = (r: 1.0, g: 0x87 / 255.0, b: 0x38 / 255.0)
+    public static let glowRadius = 0.52
+    public static let glowOpacity = 0.12
+}
+
 /// What the orb is doing. The same states as the web orb's `JarvisOrbState`.
 public enum JarvisOrbState: Equatable, Sendable {
     case idle, listening, thinking, tool, speaking

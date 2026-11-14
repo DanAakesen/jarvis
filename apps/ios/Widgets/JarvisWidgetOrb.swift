@@ -1,3 +1,4 @@
+import JarvisCore
 import SwiftUI
 
 /// The Jarvis orb for the Home widgets, drawn once and without motion. The widget extension cannot compile the app's
@@ -7,8 +8,8 @@ import SwiftUI
 struct JarvisWidgetOrb: View {
     var size: CGFloat
 
-    private static let cyan = Color(red: 0x52 / 255.0, green: 0xdc / 255.0, blue: 0xfa / 255.0)
-    private static let amber = Color(red: 0xff / 255.0, green: 0xb4 / 255.0, blue: 0x5c / 255.0)
+    private static let cyan = Color(red: JarvisOrbAppearance.cool.r, green: JarvisOrbAppearance.cool.g, blue: JarvisOrbAppearance.cool.b)
+    private static let amber = Color(red: JarvisOrbAppearance.warm.r, green: JarvisOrbAppearance.warm.g, blue: JarvisOrbAppearance.warm.b)
 
     var body: some View {
         ZStack {
@@ -26,8 +27,8 @@ struct JarvisWidgetOrb: View {
             )
             Circle().fill(
                 RadialGradient(
-                    colors: [Self.amber.opacity(0.55), .clear],
-                    center: .center, startRadius: 0, endRadius: size * 0.3
+                    colors: [Self.amber.opacity(JarvisOrbAppearance.glowOpacity), .clear],
+                    center: .center, startRadius: 0, endRadius: size * JarvisOrbAppearance.glowRadius / 2.24
                 )
             )
             JarvisWidgetOrbTangle()
