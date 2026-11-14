@@ -1,3 +1,14 @@
+## 14 November 2026 — Cognitive lattice orb everywhere (#1832)
+
+The owner selected the cognitive lattice orb as the single Jarvis orb for every
+surface (iPhone, Watch, widgets, Live Activity, web, app icon), with a
+procedurally rendered, animated internal network rather than a flat image. A cold
+start always shows the new opening screen (orb, white "Jarvis", slim amber bar
+with no caption) while fresh data loads; a warm resume skips it. Real progress
+fills the bar only when measurable, otherwise a moving amber segment is used.
+References and the full brief are in `docs/ui/opening-final-2026-11-14/`.
+Supersedes the earlier warm orb retune.
+
 ## 14 November 2026 — Keep current priorities in p0.md (#1828)
 
 The repository root holds `p0.md`: current Jarvis priorities only, short and
