@@ -62,11 +62,12 @@ public struct WatchRequest: Codable, Equatable, Sendable {
     public var itemID: String?
     public var data: Data?
     public var flag: Bool?
-    public init(action: WatchAction, text: String? = nil, itemID: String? = nil, data: Data? = nil, flag: Bool? = nil, id: UUID = UUID()) {
-        self.id = id; self.action = action; self.text = text; self.itemID = itemID; self.data = data; self.flag = flag
+    public var sequence: UInt64?
+    public init(action: WatchAction, text: String? = nil, itemID: String? = nil, data: Data? = nil, flag: Bool? = nil, id: UUID = UUID(), sequence: UInt64? = nil) {
+        self.id = id; self.action = action; self.text = text; self.itemID = itemID; self.data = data; self.flag = flag; self.sequence = sequence
     }
     public var isValid: Bool {
-        version == 1 && (text?.utf8.count ?? 0) <= 8_000 && (itemID?.utf8.count ?? 0) <= 200 &&
+        version == 1 && (sequence == nil || action == .audio) && (text?.utf8.count ?? 0) <= 8_000 && (itemID?.utf8.count ?? 0) <= 200 &&
         (data?.count ?? 0) <= WatchLimits.payloadBytes && (action != .sendTurn || !(text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) &&
             (action != .createFactoryTask || factorySubmission != nil) &&
             (action != .createWatchTask || createWatchTaskRequest != nil) &&
@@ -89,6 +90,30 @@ public struct WatchRequest: Codable, Equatable, Sendable {
             return true
         }
     }
+}
+
+public struct WatchVoiceSequence: Sendable {
+    public private(set) var last: UInt64?
+    private let streamID: UUID?
+    public init(streamID: UUID? = nil) { self.streamID = streamID }
+    public mutating func accept(_ sequence: UInt64?, streamID: String? = nil) -> Bool {
+        if let expected = self.streamID {
+            guard streamID == expected.uuidString, sequence != nil else { return false }
+        }
+        guard let sequence else { return last == nil }
+        guard last.map({ sequence > $0 }) ?? true else { return false }
+        last = sequence
+        return true
+    }
+}
+
+public struct WatchVoiceBackpressure: Sendable {
+    public private(set) var drops = 0
+    private var lastProgress: Date
+    public init(now: Date) { lastProgress = now }
+    public mutating func progressed(at now: Date) { lastProgress = now }
+    public mutating func dropped() { drops += 1 }
+    public func stalled(at now: Date) -> Bool { now.timeIntervalSince(lastProgress) >= 5 }
 }
 
 public enum WatchFailure: String, Error, Codable, Sendable {
@@ -114,8 +139,9 @@ public struct WatchReply: Codable, Sendable {
     public var data: Data?
     public var failure: WatchFailure?
     public var taskError: WatchTaskMutationFailure?
-    public init(id: UUID, data: Data? = nil, failure: WatchFailure? = nil, taskError: WatchTaskMutationFailure? = nil) {
-        self.id = id; self.data = data; self.failure = failure; self.taskError = taskError
+    public var voicePipeline: Bool?
+    public init(id: UUID, data: Data? = nil, failure: WatchFailure? = nil, taskError: WatchTaskMutationFailure? = nil, voicePipeline: Bool? = nil) {
+        self.id = id; self.data = data; self.failure = failure; self.taskError = taskError; self.voicePipeline = voicePipeline
     }
 }
 
@@ -129,6 +155,26 @@ public struct WatchEvent: Codable, Sendable {
     public var muted: Bool?
     public init(_ kind: Kind, requestID: UUID, text: String? = nil, responseID: String? = nil, muted: Bool? = nil) {
         self.kind = kind; self.requestID = requestID; self.text = text; self.responseID = responseID; self.muted = muted
+    }
+}
+
+public enum WatchEventScheduling {
+    public static func isBarrier(_ event: WatchEvent) -> Bool {
+        [.chatDelta, .chatDone, .chatError, .interrupt].contains(event.kind) ||
+            (event.kind == .voiceState &&
+             ["Playback finished", "Ended", "Disconnected", "Audio connection unavailable"].contains(event.text ?? ""))
+    }
+
+    public static func insertionIndex(for event: WatchEvent, in queue: [WatchEvent]) -> Int {
+        guard event.kind == .voiceAudio else { return queue.count }
+        var index = queue.count
+        while index > 0 {
+            let previous = queue[index - 1]
+            guard previous.requestID == event.requestID, !isBarrier(previous),
+                  previous.kind != .voiceAudio else { break }
+            index -= 1
+        }
+        return index
     }
 }
 
