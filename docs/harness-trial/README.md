@@ -43,14 +43,14 @@ flowchart LR
 | --- | --- | --- | --- |
 | Infrastructure (measured) | 366 | 366 | 366 |
 | Voice (10 min a day) | 150 | 150 | 150 |
-| Hosted agent compute | 36 | 0 | 0 |
-| Managed sandbox (free until 1 Dec) | 0 | 73 | 73 |
+| Hosted agent compute (measured, scaled) | 10 | 0 | 0 |
+| Managed sandbox (free until 1 Dec) | 0 | 60 | 60 |
 | Azure MCP server | 0 | 5 | 5 |
 | Models on Foundry | 77 | 198 | 407 |
-| **Total, expected** | **629** | **792** | **1,001** |
-| Low to high | 531-829 | 571-2,385 | 633-3,607 |
+| **Total, expected** | **603** | **779** | **988** |
+| Low to high | 509-797 | 565-2,385 | 627-3,607 |
 
-No container of ours is always on. Model tokens bill on Azure, not as GitHub Copilot credits. The high band is context growth in long conversations; the gateway caps it. One open conflict: hosted-agent compute was reported at 188 DKK for 9-11 Nov, which does not fit the other numbers; see [the cost section](03-target-architecture.md#cost).
+No container of ours is always on. Model tokens bill on Azure, not as GitHub Copilot credits. The high band is context growth in long conversations; the gateway caps it. Today's hosted-agent compute is taken from the measured run-rate since 12 Nov (0.05-0.15 DKK a day), not from the Factory test period. Whether the managed sandbox is released when idle is unknown; see [what billing is documented](03-target-architecture.md#what-billing-is-documented-and-what-is-not).
 
 ## What is unknown
 
@@ -61,7 +61,7 @@ No container of ours is always on. Model tokens bill on Azure, not as GitHub Cop
 | Real tokens, cache hit rate and cost per turn | Spike 4 |
 | Streaming latency, mid-turn steering | Spike 5 |
 | Conversation limits and compaction | Spike 6 |
-| Sandbox size and idle billing | Spike plus the December bill |
+| Sandbox size and idle billing (hosted agents release compute on idle: documented; the managed sandbox: not) | Spike plus the December bill |
 
 ## Documents
 

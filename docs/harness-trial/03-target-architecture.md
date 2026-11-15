@@ -179,17 +179,29 @@ The spike decides which one works.
 
 ## Cost
 
-Managed harness billing (Foundry blog, Microsoft blog, Foundry pricing page):
+### What billing is documented, and what is not
 
-| Item | Rate |
-| --- | --- |
-| Harness runtime before 1 Dec 2026 | **Free** |
-| Sandbox compute from 1 Dec | $0.0994 per vCPU-hour (0.654 DKK) |
-| Sandbox memory from 1 Dec | $0.0118 per GiB-hour (0.078 DKK) |
-| Model tokens | Foundry Models, on the Azure bill. **Not** GitHub Copilot credits, so Dan's Copilot plan is not involved |
-| Our own always-on container | **None.** Earlier text about an "always-on host" was wrong |
+| Item | Documented | Source |
+| --- | --- | --- |
+| Managed harness runtime before 1 Dec 2026 | **Free** | Foundry blog, Microsoft blog |
+| Managed harness sandbox compute and memory from 1 Dec | **$0.0994 per vCPU-hour (0.654 DKK) and $0.0118 per GiB-hour (0.078 DKK)**, consumption-based | Same |
+| Model tokens | Foundry Models, on the Azure bill, as before. Separately billed tools and connected services keep their own charges. **Not** GitHub Copilot credits | Same |
+| Hosted agents (today's chat agent) | Billed on "underlying container compute consumed per hour" at the same unit rates | Foundry pricing page |
+| Hosted agent session | A stateful, isolated sandbox. Files persist across turns and idle periods for up to 30 days. Idle timeout 2-240 minutes (default 15). After the timeout the platform **releases the compute** and saves state | Learn: Manage hosted agent sessions |
+| Scale to zero | Reported in secondary coverage (Big Hat Group, April 2026); consistent with the measured bill below | Not an official statement here |
+| Managed harness sandbox: size, idle timeout, whether idle time is billed, session charge | **Unknown.** The harness pages read do not say. Assumed like hosted agents (1 vCPU, 2 GiB) | Spike plus the December bill |
 
-Today's hosted agent already bills the same unit rate. It is 1 vCPU and 2 GiB with a 120 s idle timeout (`.github/workflows/deploy.yml:312-320`), so 0.81 DKK per session-hour. The coordinating session reported about **188 DKK for hosted-agent vCPU and memory over 9-11 Nov**. At 0.81 DKK/h that is about 230 session-hours in a few days, which does not fit one chat or voice user and does not fit about 15 DKK/day of total spend either. The cause is **unresolved**: read the daily Foundry Agent Service meter before trusting any hosted-agent line. If sessions are being kept alive, the same behaviour could carry over to the managed sandbox.
+### Today's hosted-agent compute, measured
+
+Cost Management (Hosted vCPU Usage plus Hosted Memory Usage), DKK per day, supplied by the coordinating session:
+
+| Period | DKK per day | Use as baseline? |
+| --- | --- | --- |
+| 1-10 Nov | 2 to 197 (peaks 161, 190, 197, 148) | **No.** Factory auto-testing and many workers, not normal use |
+| 11 Nov | 0.57 | Tail of testing |
+| 12, 13, 14 Nov | 0.15, 0.07, 0.05 | **Yes.** Real run-rate of today's chat agent: about 2-4 DKK per month |
+
+Our agent is 1 vCPU, 2 GiB with a 120 s idle timeout (`.github/workflows/deploy.yml:312-320`), 0.81 DKK per session-hour. 0.05-0.15 DKK a day is therefore about 4-11 minutes of billed session time a day for about 6 turns a day, which matches release-on-idle. At Dan's profile (20 turns, 1 hour of chat, 10 minutes of voice) the line is about 7 / 10 / 29 DKK a month: the measured run-rate scaled by turns, and one unbroken hour of session as the high case.
 
 ### Total monthly bill: today versus target
 
@@ -199,20 +211,20 @@ Fixed by Dan: **GPT-6.1 Terra only**, **1 hour of chat a day**, **10 minutes of 
 | --- | --- | --- | --- |
 | Infrastructure (SQL, registry, container apps, storage, app service) | 366 | 366 | 366 |
 | Voice, 10 min a day at 0.35 / 0.5 / 0.7 per min | 150 | 150 | 150 |
-| Hosted agent compute (Jarvis chat container, 1 vCPU, 2 GiB) | 36 | 0 (kept only as fallback) | 0 |
-| Managed harness sandbox (assumed 1 vCPU, 2 GiB; free until 1 Dec) | 0 | 73 | 73 |
+| Hosted agent compute (measured run-rate, scaled to the profile) | 10 | 0 (kept only as fallback) | 0 |
+| Managed harness sandbox (assumed 1 vCPU, 2 GiB; free until 1 Dec) | 0 | 60 | 60 |
 | Azure MCP server (small container, scales to zero) | 0 | 5 | 5 |
 | Models on Foundry, Terra | 77 | 198 | 407 |
-| **Total, expected** | **629** | **792** | **1,001** |
-| Total, low | 531 | 571 | 633 |
-| Total, high | 829 | 2,385 | 3,607 |
-| Change from today, expected | 0 | +163 | +372 |
+| **Total, expected** | **603** | **779** | **988** |
+| Total, low | 509 | 565 | 627 |
+| Total, high | 797 | 2,385 | 3,607 |
+| Change from today, expected | 0 | +176 | +385 |
 
 ```text
 Expected total, 1 block = 50 DKK
-Today                 ████████████▌      629
-Target, same work     ███████████████▊   792
-Target, full workload ████████████████████ 1,001
+Today                 ████████████       603
+Target, same work     ███████████████▌   779
+Target, full workload ████████████████████ 988
 ```
 
 | Models line, DKK per month (low / expected / high) | Today | Target |
@@ -235,10 +247,10 @@ How to read it:
 
 | Point | Detail |
 | --- | --- |
-| Infrastructure plus voice is 516 of 629 DKK today | The model is a small part of the bill either way |
+| Infrastructure plus voice is 516 of 603 DKK today | The model is a small part of the bill either way |
 | Chat gets about 3 times more expensive in the expected case | A longer-lived, tool-rich context costs more than our lean find-then-call loop |
 | The high band is context growth in a long conversation | 2,385 to 3,607 DKK. This is the number that the budget cap and the spike must pin down |
-| The hosted agent line goes away, the sandbox line replaces it | Net effect is unknown until the 188 DKK figure is explained |
+| The hosted agent line (about 10) goes away, the sandbox line (about 60) replaces it | Low cost either way if the sandbox is released when idle. If it stays up all month it is about 590, the one number the spike must rule out |
 | Cheaper levers | Light proactive checks and the inbox on a lighter model than Terra (Luna is about 4.5 times cheaper); a new conversation when the context passes a threshold |
 
 Cost control, all in the gateway: a monthly model budget with a hard stop (today's proactive budget pattern, `proactive/budget.ts`), a daily turn cap, a context-size threshold that starts a new conversation, and a deployment token-per-minute quota on a dedicated Terra deployment.

@@ -16,9 +16,9 @@ Not bits and pieces: the value is the whole package together. One agent with ski
 | No container of ours to run: Foundry runs the loop and sandbox, billed per sandbox hour from 1 Dec and free before | [Cost](03-target-architecture.md#cost) |
 | Models improve under it without work from us | `docs/decisions.md`, 14 Nov |
 
-What it costs: about **+163 DKK a month** for the same work as today and **+372** for the full workload, expected case (629 today, 792 and 1,001). The high band is far higher if long conversations re-send large contexts, which the gateway caps. See the [comparison](03-target-architecture.md#total-monthly-bill-today-versus-target).
+What it costs: about **+176 DKK a month** for the same work as today and **+385** for the full workload, expected case (603 today, 779 and 988). The high band is far higher if long conversations re-send large contexts, which the gateway caps. See the [comparison](03-target-architecture.md#total-monthly-bill-today-versus-target).
 
-What could kill it, all unknown today: per-turn authority on MCP writes, whether Terra works, what a turn really costs, streaming latency, and whether the hosted-agent compute line (188 DKK over 9-11 Nov, unexplained) repeats in the managed sandbox.
+What could kill it, all unknown today: per-turn authority on MCP writes, whether Terra works, what a turn really costs, streaming latency, and whether the managed sandbox is released when idle, as hosted-agent sessions are (the measured run-rate of today's agent is only about 2-4 DKK a month).
 
 ## Gates
 
@@ -69,7 +69,7 @@ flowchart LR
 | Output | `docs/harness-trial/spike-results.md`: the seven answers, scorecard, cost per turn, go or stop for Gate 0 |
 | Exit | Delete the test agent, the deployment and the shim. Nothing else was created |
 
-The spike also reads the daily **Foundry Agent Service meter** to explain the 188 DKK hosted-agent line for 9-11 Nov, because the same behaviour would matter for the managed sandbox.
+The spike also checks the **sandbox meter** (Hosted or harness vCPU and memory usage) the day after, to learn the sandbox size and whether idle time is billed. Harness runtime is free before 1 Dec, so the answer must also be checked on the December bill.
 
 ## What this analysis deliberately does not do
 
