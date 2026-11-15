@@ -6,6 +6,8 @@ Spike for [#1851](https://github.com/DanAakesen/jarvis/issues/1851) (P15-158), p
 
 **The spike was not run. Gate 0 is undecided, not failed.** The session had no Azure access, so the test agent, the Terra deployment and the budget could not be created, and per the owner's instruction nothing was worked around. No model tokens were spent: **0 DKK of the 30 DKK**. Nothing was created in Azure or GitHub, so there is nothing to delete.
 
+Update 15 Nov 2026: later local runs measured latency, caching and cost on the managed harness; see [Latency rounds](#latency-rounds-on-the-managed-harness-15-nov-2026). They partly answer questions 1, 4 and 5 below; the table keeps the original status text.
+
 What was done instead: the parts that need no Azure access, ready to use.
 
 | Delivered | File |
@@ -24,6 +26,49 @@ What was done instead: the parts that need no Azure access, ready to use.
 | Somewhere to host the shim | A scale-to-zero container app in a throwaway resource group, or a dev tunnel from Dan's PC |
 
 Recommended path ([runbook](spike/runbook.md), option 1): Dan runs steps 1 to 6 (deployment with a 50k tokens-per-minute quota, budget, agent, skill, three MCP servers) from a PC with `az login`, then gives the session the agent name, endpoint and shim URL. The session then runs the 20 prompts, the timings and fills this file. About 45 minutes of Dan's time; the model spend stays within the plan below.
+
+## Latency rounds on the managed harness (15 Nov 2026)
+
+The Azure test agent of the runbook was not created by that session. The owner's dispatcher then measured the managed Copilot harness with a **local runner** (Terra in Sweden Central, `gpt-6.1-terra`, streaming). Round 1 about 0.8 DKK, round 2 about 1.7 DKK, **2.5 DKK in total** of the 30 DKK cap. Samples are 3 repeats per case, so they show direction, not percentiles. The runner calls the harness directly: gateway and phone network time are **not** included. The runner reports the harness as `github_copilot_preview`; earlier docs say `microsoft_copilot_preview` (to be reconciled in phase 0 of the [PI plan](../pi/plan.md)).
+
+### Round 1
+
+| Fact | Value |
+| --- | --- |
+| Terra works with and without reasoning effort | Yes. Effort must be set in the agent definition, not per request |
+| Fixed harness prompt | About 11k input tokens per call |
+| Cached tokens | Only inside multi-call turns, not across separate turns |
+| Cost of a plain turn | About 0.075 DKK |
+| First stream event | 2.3 to 3.3 s |
+| First text | About 5 s, text mostly arriving as one chunk |
+| Skills | Load through a function call |
+| Not yet tested | GitHub MCP, Azure MCP, approvals, long sessions, quality |
+
+### Round 2
+
+| # | Question | Result |
+| --- | --- | --- |
+| 1 | New conversation | First stream event 2.3 to 3.0 s, first text token 3.4 to 4.4 s (default effort 4.43 s) |
+| 1 | Turn 2 and later in the **same** conversation | First event 1.1 s, first text 1.9 s, 11k tokens cached, cheaper |
+| 1 | Three separate conversations | No cache (0 cached tokens) |
+| 2 | Reasoning effort none or low, set in the agent definition (per request is rejected with a 400) | Real token streaming (18 to 22 deltas) and about 0.7 s faster. Default effort buffers the whole answer as one delta |
+| 3 | Prompt size | No effect: cutting input from 11k to 4.6k tokens (all tools disabled) changed nothing. Of the 11k, our instructions are about 10 tokens, about 6.4k is tool definitions, the rest is the fixed harness prompt |
+| 4 | Smaller model (`gpt-6-luna`) | No faster |
+| 5 | Request options | `service_tier`, `prompt_cache_key` and `max_output_tokens` are rejected for prompt agents (400). A priority header and `stream_options` were accepted and changed nothing. Provisioned throughput untested |
+| 6 | Direct model call without the harness | About 1.4 s to first text. The harness adds about 1.2 s startup on a new conversation plus gateway time; model time itself is about 1.3 s |
+| 7 | Cost | About 0.075 DKK per plain turn; later turns in a conversation are cheaper through caching |
+
+```text
+First text, local runner (1 block = 0.5 s)
+new conversation, slowest case   |█████████  4.4 s
+new conversation, fastest case   |██████▉    3.4 s
+same conversation, turn 2+       |███▉        1.9 s
+direct model, no harness         |██▉         1.4 s
+```
+
+What follows: chat on the harness is feasible at about 2 s to first text if the conversation is kept warm and effort is none or low. Voice cannot wait for a harness first turn (3.4 to 4.4 s), so Voice Live answers conversationally and calls the agent for tools and long tasks. Use in the [PI plan, section 6](../pi/plan.md#6-latency-the-5-second-start).
+
+Open questions for Microsoft: the 1.2 s startup on a new conversation; a supported priority or low-latency option for harness agents (`service_tier` and `prompt_cache_key` are rejected, a priority header changed nothing); idle cache lifetime.
 
 ## The seven questions
 
