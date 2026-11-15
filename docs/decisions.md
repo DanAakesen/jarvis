@@ -1,3 +1,62 @@
+## 15 November 2026 — Inbox capture endpoint and write-only credential (#1855, step 5)
+
+`POST /inbox/capture` takes a unique `captureId` and up to 4000 characters of raw
+text. Callers are the owner (iPhone companion, web) or a **capture credential**
+(`ji.` plus 43 characters): hashed at rest, owner-bound, revocable, at most five,
+no expiry, and accepted only on this one route, so it can add items and read
+nothing. It follows the Watch credential pattern: a transport-peer budget (30 a
+second) runs in an early root hook before authentication can touch SQL, then 60
+captures a minute per credential. Migration 0082 holds the hashes. The owner issues
+and revokes credentials through `inbox_capture_credential` in chat (the secret is
+shown once, in the owner's own chat) or the owner-only `/inbox/credentials` routes.
+Raw text is structured by one low-effort call to the chat model (usage recorded under
+chat); a missing, busy, invalid or over-allowance model only costs structure, the
+raw text becomes the note and the owner's words are always kept verbatim. The daily
+allowance is 60 calls per replica, an approximation of the 1 DKK/day inbox ceiling
+until step 8 measures cost. Idempotency: the client's key derives each note's id, the
+store resolves a supplied id in the vault before writing, and a repeat answers
+"Already in the inbox". The Watch path in this step is the Shortcut, which runs on
+Apple Watch; a native Watch-app action is a follow-up because it cannot be compiled
+or tested here.
+Review follow-ups: one attempt per capture key at a time (in-process lock, and a fresh
+reservation row answers 409 "already being saved"; an older one is an unknown outcome and the
+vault is checked first), a capture that already landed is recovered from the vault before the
+model is asked again, triage has its own 12-second deadline inside the capture's 30 so a stalled
+model costs only structure, and the verbatim quote limit is 16 KB so the 4000-character contract
+holds in any language (the design said 4 KB).
+
+## 15 November 2026 — Inbox tools for chat and voice (#1855, step 4)
+
+Three tools over the one Inbox module: `inbox_capture`, `inbox_items`, `inbox_close`,
+registered only when `JARVIS_INBOX_ENABLED` is exactly `true` (default off). Capture
+and close verify Dan's current stored message like `vault_write`, so mail, web or note
+text can never create or close an item; reading needs only the owner or agent
+principal. The note quotes Dan's message verbatim: the model may select a passage, but
+it is used only when it really occurs in the message, otherwise the whole message is
+quoted. The capture id is derived from the owner message id and the title, so a
+retried tool call lands on the same note, and an unconfirmed earlier attempt is
+reread from the vault by id before anything is written again. If the index database
+is down, capture still saves to the vault. Routing guidance ("ideas and asks, not
+dated tasks or facts about Dan") lives in the capability index category label and the
+tool descriptions rather than as an extra positional flag through the voice and chat
+instruction builders. Like the task tools, all three are sensitive and refused on phone
+calls. Logs carry only the action, tool and outcome.
+
+## 15 November 2026 — Inbox index shape (#1855, step 3)
+
+Migration 0081 (0080 belongs to the proactive-events queue, #1862, which must merge first) adds one table, `dbo.inbox_items`: item id, path and sha (a cache so
+a sync rereads only changed notes), last nudged time, and the owner's last thumb
+(`up` or `down`). A row with no path is a capture reservation. The capture id
+becomes the note's hidden id (derived from the client's capture key), so the vault
+itself answers "did this capture land?" and a lost table cannot cause a duplicate:
+a retry of an unknown outcome rereads the vault by id before writing. Rebuild lists
+`Inbox/`, restores last-nudged times from proactive history where known and
+otherwise sets them to the rebuild time (no nudge storm); a note written by another
+tool is a new, never-nudged item. Closed notes drop out of the index. Reservations
+are pruned after seven days. The down migration drops the table: it is rebuildable
+and thumbs are also written to the note's trail. This replaces the design's
+`capture_key` column, which would not survive a rebuild.
+
 ## 15 November 2026 — Event-driven proactive path with GPT-6.1 Terra and three tiers (#1858)
 
 Owner: "for the model we should do gpt 6.1, that is very very cheap. so that should be very little. GO ahead and build this but without the calling to begin with." Tiers: low, medium and high; calls come later.

@@ -106,6 +106,13 @@ import { checkAgentContract } from './core/agent-contract.js';
 import { buildAgentSettingsPayload, readSettings } from './core/settings.js';
 import { createGitHubVaultClient, VAULT_REPOSITORY } from './vault/github-client.js';
 import { createVaultModule } from './vault/index.js';
+import { createInboxModule } from './inbox/module.js';
+import { createInboxRoutes } from './inbox/routes.js';
+import { createInboxCapture } from './inbox/capture.js';
+import { createInboxCaptureCredentialStore, InboxCaptureCredentials } from './auth/inbox-capture-credential.js';
+import { createInboxStore } from './inbox/store.js';
+import { createInboxIndex } from './inbox/item-index.js';
+import { createInboxIndexStore } from './database/inbox-index-store.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 import { createGoogleApiClient } from './google/api-client.js';
 import { createGoogleTokenProvider, type GoogleOAuthCredentials } from './google/oauth.js';
@@ -579,6 +586,49 @@ try {
       logEmbedding: (fields) => logger.info({ msg: 'memory.embedding', ...fields }, 'memory.embedding'),
     })
     : undefined;
+  const inboxStore = vaultClient ? createInboxStore({
+    vault: vaultClient,
+    log: (fields) => logger.info({ msg: 'inbox.write', ...fields }, 'inbox.write'),
+  }) : undefined;
+  const inboxIndex = inboxStore && database
+    ? createInboxIndex({ store: createInboxIndexStore(database.pool), inbox: inboxStore })
+    : undefined;
+  const inboxCredentials = config.inboxEnabled && database
+    ? new InboxCaptureCredentials(createInboxCaptureCredentialStore(database.pool), config.auth.ownerObjectId)
+    : undefined;
+  const inboxModule = config.inboxEnabled && inboxStore && memoryStore
+    ? createInboxModule({
+      store: inboxStore,
+      memoryStore,
+      index: inboxIndex,
+      credentials: inboxCredentials,
+      routes: createInboxRoutes({
+        ownerObjectId: config.auth.ownerObjectId,
+        credentials: inboxCredentials,
+        capture: createInboxCapture({
+          store: inboxStore,
+          index: inboxIndex,
+          ...(approvalEndpoint && credential && settingsStore && usageStore?.recordFoundryUsage ? {
+            model: createFoundryJsonCompletion({
+              endpoint: approvalEndpoint, scope: FOUNDRY_SCOPE, maxContentBytes: 16 * 1024,
+              getToken: async (scope, signal) => {
+                const token = await credential.getToken(scope, { abortSignal: signal });
+                if (!token) throw new Error('Inbox triage identity unavailable');
+                return token.token;
+              },
+              selectModel: async () => {
+                const catalogue = await modelCatalogue.read();
+                const selected = chooseApprovalModel(catalogue, (await readSettings(settingsStore, catalogue)).roles.chat.model);
+                return selected ? { ...selected, maxCompletionTokens: 2048 } : undefined;
+              },
+              recordUsage: usage => usageStore.recordFoundryUsage!(usage),
+            }),
+          } : {}),
+          log: (event, fields) => logger.info({ msg: event, ...fields }, event),
+        }),
+      }),
+    })
+    : undefined;
   const foundryClients = new Map<string, FoundryClient>();
   const trackedRepositories = new Set<string>();
   const taskEventArchive = database && archiveStorageAccount && credential
@@ -1020,6 +1070,7 @@ try {
     sleep: createSleepModule(containerAppScaler),
     recipes: createRecipeModule(recipeStore),
     vault: vaultModule,
+    inbox: inboxModule,
     webResearch: webResearchModule,
     htmlResearch: htmlResearchModule,
     google: googleModule,
@@ -1238,6 +1289,7 @@ try {
   watchSpeechToken?.warm();
   const app = buildApp(config, logger, {
     ...(database ? { watchCredentials: new WatchCredentials(createWatchCredentialStore(database.pool), config.auth.ownerObjectId) } : {}),
+    ...(inboxModule ? { inboxCapture: { ...(inboxCredentials ? { credentials: inboxCredentials } : {}) } } : {}),
     ...(watchSpeechToken && config.foundryEndpoints ? {
       watchTranscriber: createAzureWatchTranscriber(config.foundryEndpoints.runtime, (_scope, signal) => watchSpeechToken.get(signal)),
     } : {}),

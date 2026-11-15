@@ -1,3 +1,38 @@
+## Inbox capture — 15 November 2026 (#1855, step 5)
+
+`inbox/capture.ts` turns raw text into notes (`triage.ts`: tool-less model call,
+strictly validated JSON, raw-text fallback) and writes them last-first so the first
+note's index row marks a complete capture. `inbox/routes.ts` serves
+`POST /inbox/capture` and the owner-only `/inbox/credentials` routes.
+`auth/inbox-capture-credential.ts` (+ migration 0082) stores credential hashes;
+`auth/inbox-rate-limit.ts` mirrors the Watch limiter and is installed after it;
+`auth/hook.ts` accepts a `ji.` token only for `POST /inbox/capture`. Triage reuses the
+Foundry JSON completion transport and records usage through the usage store.
+
+## Inbox tools — 15 November 2026 (#1855, step 4)
+
+`inbox/module.ts` is a backend module (`id: inbox`) contributing `inbox_capture`,
+`inbox_items` and `inbox_close` to the shared tool registry, so chat, voice (via
+find_tools) and the hosted agent get them with no per-channel code. It is created in
+`index.ts` only when `JARVIS_INBOX_ENABLED=true` and the vault client and memory
+store exist; the Azure SQL index is attached when a database is configured and is
+best-effort (the vault is the source of truth). The capability index lists the
+inbox category when the tools are registered. Log events `inbox.write` and
+`inbox.tool` are allow-listed with action, tool and outcome only.
+
+## Inbox index — 15 November 2026 (#1855, step 3)
+
+`inbox/item-index.ts` keeps the small index in Azure SQL (`dbo.inbox_items`,
+migration 0081, store in `database/inbox-index-store.ts`). `sync` lists `Inbox/`
+with one tree call, rereads only notes whose sha changed, follows renames by hidden
+id, ignores a copy with a repeated id, and removes rows for closed or deleted
+notes; one sync runs at a time. On an empty table it rebuilds: nudge times come
+from an optional `restoreLastNudged` callback (proactive history, wired in the
+nudge step) or the rebuild time. `reserve`/`complete` give captures reserve-then-
+complete idempotency, and `markNudged`/`setFeedback` are the only writers of the
+scheduling facts. Nothing is wired into the running backend yet; the tools in step
+4 are its first caller.
+
 ## Event-driven proactive path — 15 November 2026 (#1858)
 
 The existing proactive ticker (30 seconds) also drains an event queue. Producers: the signed GitHub webhook (finished workflow runs, deployment results), activity alerts, a six-hour timer review with a cost-spike check, and a 15-minute poll of the read-only mail and calendar sources. Events are rows in `dbo.proactive_events` (Azure SQL, migration 0080) with a unique key per owner and a lease for safe claims. Cheap rules drop routine events without a model call; survivors go in batches of up to 10 to one GPT-6.1 Terra call (Foundry chat completions, low reasoning effort, no tools) with vault, memory, todo, calendar, factory and health context and the owner's recent thumbs. Each decision becomes a finding (Proactive page) and an outreach row (`dbo.proactive_outreach`: tier, reasoning, delivery, rating), then goes out through the channels registered for its tier: a Now feed card for low, a push for medium and high. Spend is written to the shared `proactive_spend` ledger and the monthly hard stop is checked before each call. The pipeline holds its next due time in memory, so SQL is read only when something is due. Diagram and details: `docs/proactive-events/design.md`. The path is off unless `JARVIS_PROACTIVE_EVENTS_ENABLED` is `true`; the 07:00 and 18:00 engine is unchanged.

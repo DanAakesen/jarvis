@@ -1,3 +1,22 @@
+## Inbox capture credential — 15 November 2026 (#1855)
+
+- Apply migration `0082_inbox_capture_credentials.sql` (and 0081) before enabling the inbox.
+- Shortcut setup: `docs/inbox-loop/shortcut.md` (unverified on a device).
+- Local SQL checks need a loopback SQL Server 2022 container with the CI fixture variables;
+  `npm run test:database --workspace @jarvis/backend` covers both inbox tables.
+
+
+## Loose Ends inbox — 15 November 2026 (#1855)
+
+- `JARVIS_INBOX_ENABLED` (exact `true`, default off, not yet set in `infra/main.bicep`; the
+  owner switch-on is step 8) gates the inbox tools. Apply migration `0081_inbox_items.sql`
+  before enabling; without a database the tools still work and skip the index.
+- Local checks: `npx vitest run src/inbox` in `apps/backend`; the SQL contract needs the
+  database suite (`npm run test:database --workspace @jarvis/backend`) against a loopback
+  SQL Server 2022 container with the CI fixture variables (see `database-ci.yml`).
+- The vault `AGENTS.md` convention is a separate pull request in `DanAakesen/vault` awaiting
+  Dan's approval; the backend does not depend on it.
+
 ## Event-driven proactive path — 15 November 2026 (#1858)
 
 - Flag: `JARVIS_PROACTIVE_EVENTS_ENABLED=true` (Bicep `proactiveEventsEnabled`, default false). It needs the proactive path, the Foundry endpoint and catalogue, and a deployed `gpt-6.1-terra` chat deployment; pushes also need `JARVIS_PUSH_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED`. Apply migration `0080_proactive_events.sql` first.

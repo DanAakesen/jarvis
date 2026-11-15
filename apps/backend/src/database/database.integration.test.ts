@@ -5,6 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, type Migration } from './migrations.js';
 import { createWatchCredentialStore, WatchCredentials } from '../auth/watch-credential.js';
+import { createInboxIndexStore } from './inbox-index-store.js';
+import { createInboxCaptureCredentialStore, InboxCaptureCredentialLimit, InboxCaptureCredentials } from '../auth/inbox-capture-credential.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -83,6 +85,84 @@ describe('real SQL Server migration contract', () => {
         await pool.request().batch(down);
       }
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.watch_credentials', N'U') AS id")).recordset).toEqual([{ id: null }]);
+    });
+  });
+  describe('inbox index', () => {
+    it('keeps reservations, nudges and thumbs per item, and enforces its constraints', async () => {
+      const schema = await readFile(new URL('../../../../db/migrations/0081_inbox_items.sql', import.meta.url), 'utf8');
+      const down = await readFile(new URL('../../../../db/migrations/down/0081_inbox_items.sql', import.meta.url), 'utf8');
+      await pool.request().batch(schema);
+      const signal = new AbortController().signal;
+      const store = createInboxIndexStore(pool);
+      const at = new Date('2026-11-15T10:00:00.000Z');
+      try {
+        const [first, second] = await Promise.all([store.reserve('aaaaaaaa', signal), store.reserve('aaaaaaaa', signal)]);
+        expect([first.inserted, second.inserted].sort()).toEqual([false, true]);
+        expect(await store.get('aaaaaaaa', signal)).toMatchObject({ itemId: 'aaaaaaaa', path: null, sha: null, lastNudgedAt: null });
+        await store.upsert({ itemId: 'aaaaaaaa', path: 'Inbox/2026-11-15 Idea.md', sha: 'a'.repeat(40), lastNudgedAt: at }, signal);
+        expect((await store.get('aaaaaaaa', signal))?.lastNudgedAt).toBeNull();
+        await store.upsert({ itemId: 'bbbbbbbb', path: 'Inbox/b.md', sha: 'b'.repeat(40), lastNudgedAt: at }, signal);
+        expect((await store.get('bbbbbbbb', signal))?.lastNudgedAt).toEqual(at);
+        expect(await store.markNudged('aaaaaaaa', at, signal)).toBe(true);
+        expect(await store.setFeedback('aaaaaaaa', 'down', at, signal)).toBe(true);
+        expect(await store.setFeedback('cccccccc', 'up', at, signal)).toBe(false);
+        await store.upsert({ itemId: 'aaaaaaaa', path: 'Inbox/renamed.md', sha: 'c'.repeat(40) }, signal);
+        expect(await store.get('aaaaaaaa', signal)).toMatchObject({
+          path: 'Inbox/renamed.md', sha: 'c'.repeat(40), lastNudgedAt: at, lastFeedback: 'down', lastFeedbackAt: at,
+        });
+        await expect(pool.request().query("INSERT dbo.inbox_items (item_id) VALUES ('NOT-HEX!!')")).rejects.toThrow();
+        await expect(pool.request().query("INSERT dbo.inbox_items (item_id, path) VALUES ('dddddddd', 'Inbox/x.md')")).rejects.toThrow();
+        await expect(pool.request().query("UPDATE dbo.inbox_items SET last_feedback='sideways', last_feedback_at=SYSUTCDATETIME()")).rejects.toThrow();
+        await store.upsertMany([
+          { itemId: 'bbbbbbbb', path: 'Inbox/b2.md', sha: 'd'.repeat(40), lastNudgedAt: null },
+          { itemId: 'eeeeeeee', path: 'Inbox/e.md', sha: 'e'.repeat(40), lastNudgedAt: at },
+        ], signal);
+        expect(await store.get('bbbbbbbb', signal)).toMatchObject({ path: 'Inbox/b2.md', lastNudgedAt: at });
+        expect(await store.get('eeeeeeee', signal)).toMatchObject({ path: 'Inbox/e.md', lastNudgedAt: at });
+        await expect(store.upsertMany([
+          { itemId: 'ffffffff', path: 'Inbox/f.md', sha: 'f'.repeat(40) },
+          { itemId: 'NOT-HEX!!', path: 'Inbox/g.md', sha: 'a'.repeat(40) },
+        ], signal)).rejects.toThrow();
+        expect(await store.get('ffffffff', signal)).toBeNull();
+        await store.remove(['eeeeeeee'], signal);
+        await store.remove(['aaaaaaaa', 'cccccccc'], signal);
+        expect((await store.all(signal)).map((row) => row.itemId)).toEqual(['bbbbbbbb']);
+      } finally {
+        await pool.request().batch(down);
+      }
+      expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.inbox_items', N'U') AS id")).recordset).toEqual([{ id: null }]);
+    });
+  });
+  describe('inbox capture credentials', () => {
+    it('stores hashes only, caps the count per owner, verifies per owner and revokes by id', async () => {
+      const schema = await readFile(new URL('../../../../db/migrations/0082_inbox_capture_credentials.sql', import.meta.url), 'utf8');
+      const down = await readFile(new URL('../../../../db/migrations/down/0082_inbox_capture_credentials.sql', import.meta.url), 'utf8');
+      await pool.request().batch(schema);
+      const store = createInboxCaptureCredentialStore(pool);
+      const owner = randomUUID();
+      const credentials = new InboxCaptureCredentials(store, owner);
+      try {
+        const shortcut = await credentials.issue('iPhone Shortcut');
+        expect(await credentials.verify(shortcut.credential)).toBe(true);
+        expect(await new InboxCaptureCredentials(store, randomUUID()).verify(shortcut.credential)).toBe(false);
+        expect(await credentials.verify(`ji.${'A'.repeat(43)}`)).toBe(false);
+        const stored = await pool.request().query<{ credential_hash: Buffer }>('SELECT credential_hash FROM dbo.inbox_capture_credentials');
+        expect(stored.recordset[0]?.credential_hash).toEqual(createHash('sha256').update(shortcut.credential).digest());
+        const [listed] = await credentials.list();
+        expect(listed).toMatchObject({ id: shortcut.id, label: 'iPhone Shortcut' });
+        expect(listed?.lastUsedAt).not.toBeNull();
+        const results = await Promise.allSettled(Array.from({ length: 8 }, (_value, index) => credentials.issue(`device ${index}`)));
+        expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(4);
+        expect(results.filter((result) => result.status === 'rejected' && result.reason instanceof InboxCaptureCredentialLimit)).toHaveLength(4);
+        expect(await credentials.list()).toHaveLength(5);
+        expect(await credentials.revoke(shortcut.id)).toBe(true);
+        expect(await credentials.revoke(shortcut.id)).toBe(false);
+        expect(await credentials.verify(shortcut.credential)).toBe(false);
+        expect(await credentials.list()).toHaveLength(4);
+      } finally {
+        await pool.request().batch(down);
+      }
+      expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.inbox_capture_credentials', N'U') AS id")).recordset).toEqual([{ id: null }]);
     });
   });
   it('rolls back schema, data and ledger together on a failed migration', async () => {
