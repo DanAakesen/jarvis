@@ -1,7 +1,7 @@
 ## 14 November 2026 — How the cognitive lattice orb is built and where it stops (P15-143 / #1834)
 
-- **One generator.** The orb is grown, not drawn from an image: `JarvisLatticeModel` (seed 1834, 97 nodes in a
-  shell, two middle shells and a seven-armed heart star, 236 connections) and `JarvisLatticeScene` (a pure per-frame pose) live in
+- **One generator.** The orb is grown, not drawn from an image: `JarvisLatticeModel` (seed 1834, 112 nodes in a
+  shell, two middle shells and a five-armed heart star, 262 connections) and `JarvisLatticeScene` (a pure per-frame pose) live in
   JarvisCore, so the app, Live Activity, widgets and Watch share them and Linux CI tests them. The web builds the
   same network from the same arithmetic; `apps/web/src/jarvis-lattice.golden.json` is the contract both test against
   (regenerate with `JARVIS_WRITE_LATTICE_GOLDEN=1 swift test --filter JarvisLatticeGoldenTests` only on purpose).

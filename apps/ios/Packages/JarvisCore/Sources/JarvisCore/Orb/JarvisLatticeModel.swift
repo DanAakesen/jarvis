@@ -76,11 +76,9 @@ public struct JarvisLatticeModel: Sendable {
 
     public static let unreachable: UInt8 = 255
     public static let seed: Int64 = 1834
-    public static let shellCount = 32
-    public static let midCount = 36
-    /// Arms of the heart star; the core holds the heart, an inner ring, the tips and a few free nodes.
-    public static let armCount = 7
-    public static let coreCount = 1 + 2 * armCount + 14
+    public static let shellCount = 38
+    public static let midCount = 44
+    public static let coreCount = 30
 
     /// The heart's warm pulse repeats every 1.6 seconds.
     public static let pulsePeriod = 1.6
@@ -129,25 +127,26 @@ public struct JarvisLatticeModel: Sendable {
             let jy = y + jitter.y * 0.18
             let jz = sin(angle) * ring + jitter.z * 0.18
             let length = max((jx * jx + jy * jy + jz * jz).squareRoot(), 1e-6)
-            let radius = (index % 2 == 0 ? 0.7 : 0.5) + random.next() * 0.1
+            let radius = (index % 2 == 0 ? 0.68 : 0.46) + random.next() * 0.1
             positions.append((JarvisOrbVector(jx / length * radius, jy / length * radius, jz / length * radius), .mid))
         }
-        // The core is a star: a heart node, an inner ring, long tips between its points, and a few free nodes in the gaps.
-        let armStep = Double.pi * 2 / Double(Self.armCount)
+        // The core is a five-armed star: a heart node, an inner ring, five long tips between its points, and a few
+        // free nodes in the gaps.
         for index in 0..<Self.coreCount {
             if index == 0 {
                 positions.append((JarvisOrbVector(0.03, -0.02, 0), .core))
-            } else if index <= Self.armCount {
-                let angle = Double(index - 1) * armStep + 0.35 + (random.next() - 0.5) * 0.2
-                let radius = 0.15 + random.next() * 0.05
+            } else if index <= 5 {
+                let angle = Double(index - 1) * Double.pi * 2 / 5 + 0.35 + (random.next() - 0.5) * 0.3
+                let radius = 0.2 + random.next() * 0.06
                 positions.append((JarvisOrbVector(cos(angle) * radius * 1.1, sin(angle) * radius * 0.94, (random.next() - 0.5) * 0.24), .core))
-            } else if index <= 2 * Self.armCount {
-                let angle = Double(index - Self.armCount - 1) * armStep + 0.35 + armStep / 2 + (random.next() - 0.5) * 0.2
-                let radius = 0.4 + random.next() * 0.14
+            } else if index <= 10 {
+                let angle = Double(index - 6) * Double.pi * 2 / 5 + 0.35 + Double.pi / 5 + (random.next() - 0.5) * 0.3
+                let radius = 0.5 + random.next() * 0.16
                 positions.append((JarvisOrbVector(cos(angle) * radius * 1.1, sin(angle) * radius * 0.94, (random.next() - 0.5) * 0.4), .core))
             } else {
                 let d = direction(&random)
-                let radius = 0.2 + 0.3 * random.next()
+                let lobes = 1 + 0.3 * cos(5 * atan2(d.y, d.x) + 0.6)
+                let radius = (0.26 + 0.34 * random.next()) * lobes
                 positions.append((JarvisOrbVector(d.x * radius * 1.1 + 0.03, d.y * radius * 0.94 - 0.02, d.z * radius * 0.85), .core))
             }
         }
@@ -182,7 +181,7 @@ public struct JarvisLatticeModel: Sendable {
         for index in 0..<count {
             let layer = positions[index].1
             let within = index - (layer == .shell ? 0 : layer == .mid ? Self.shellCount : Self.shellCount + Self.midCount)
-            if layer == .core ? within <= 2 * Self.armCount : within % 3 == 0 { hubs.insert(index) }
+            if layer == .core ? within <= 10 : within % 3 == 0 { hubs.insert(index) }
         }
         var nodes: [Node] = []
         for index in 0..<count {
@@ -195,9 +194,9 @@ public struct JarvisLatticeModel: Sendable {
                 if distance < best { best = distance; nearest = cluster }
             }
             let rank = hubs.contains(index) ? 0 : (index % 2 == 0 ? 1 : 2)
-            let warmth = JarvisLatticeModel.smoothstep(0.9, 0.42, radius)
-            let base = layer == .shell ? 0.0086 : layer == .mid ? 0.0072 : 0.008
-            let size = (base + random.next() * 0.0044) * (hubs.contains(index) ? 1.6 : 0.7)
+            let warmth = JarvisLatticeModel.smoothstep(0.9, 0.46, radius)
+            let base = layer == .shell ? 0.0064 : layer == .mid ? 0.0056 : 0.0062
+            let size = (base + random.next() * 0.0036) * (hubs.contains(index) ? 1.55 : 0.8)
             nodes.append(Node(
                 position: position, layer: layer, radius: radius, cluster: nearest,
                 warmth: warmth, size: size, rank: rank, phase: random.next()
@@ -222,7 +221,7 @@ public struct JarvisLatticeModel: Sendable {
             let rim = nodes[a].layer == .shell && nodes[b].layer == .shell
             let bow = rim
                 ? 0.02 + random.next() * 0.03
-                : 0.07 + 0.3 * length * (1 - 0.5 * min(1, mid.length)) + random.next() * 0.05 + curl
+                : 0.04 + 0.16 * length * (1 - 0.5 * min(1, mid.length)) + random.next() * 0.03 + curl
             edges.append(Edge(a: low, b: high, bow: bow, rank: min(2, nodes[a].rank + nodes[b].rank)))
         }
         func squared(_ a: Int, _ b: Int) -> Double {
@@ -244,19 +243,18 @@ public struct JarvisLatticeModel: Sendable {
                 }
             }
         }
-        // The star: the heart reaches every inner node and every tip, each tip joins the two inner nodes beside it, and
-        // neighbouring tips are linked by arcs that curve in toward the heart.
+        // The star: the heart joins the inner ring, each tip joins the two inner nodes beside it, and the tips are
+        // linked by arcs that curve in toward the heart.
         let heart = Self.shellCount + Self.midCount
-        for arm in 0..<Self.armCount {
+        for arm in 0..<5 {
             let inner = heart + 1 + arm
-            let next = heart + 1 + (arm + 1) % Self.armCount
-            let tip = heart + 1 + Self.armCount + arm
+            let next = heart + 1 + (arm + 1) % 5
+            let tip = heart + 6 + arm
             connect(heart, inner)
             connect(inner, next)
             connect(tip, inner)
             connect(tip, next)
-            connect(heart, tip, curl: 0.05)
-            connect(tip, heart + 1 + Self.armCount + (arm + 1) % Self.armCount, curl: 0.26)
+            connect(tip, heart + 6 + (arm + 1) % 5, curl: 0.26)
         }
         mesh((0..<count).filter { nodes[$0].layer == .shell }, longest: 1.1, relative: false)
         mesh((0..<count).filter { nodes[$0].layer != .shell }, longest: 0.8, relative: true)

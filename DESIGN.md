@@ -665,11 +665,10 @@ approval notifications. Do not embed a relative phrase in an absolute template.
 
 The Jarvis orb is the owner-approved **cognitive lattice** (`docs/ui/opening-final-2026-11-14/`): a dark glass
 sphere with a cyan limb on the left, a warm amber rim on the lower right and a soft inner highlight, around a
-procedurally drawn connected network. It is airy, not dense: 97 nodes in three layers (a cyan shell, two middle
-shells at different depths, a seven-armed amber star at the heart) joined by 236 long, softly curved connections that
-close into large triangular and star-shaped facets, so it reads as one connected brain. Connections come from a
-neighbourhood graph (two nodes join only when no third node sits between them), never from random links. Lines and nodes carry additive bloom, so overlapping filaments read as translucent facets,
-and the glass has a saturated cyan upper-left rim with a specular glint. It replaces every earlier orb: the
+procedurally drawn connected network. It is airy, not dense: 112 nodes in three layers (a cyan shell, two middle
+shells at different depths, a five-armed amber star at the heart) joined by 262 long, crisp connections that close
+into large triangular and star-shaped facets, so it reads as one connected brain. Connections come from a
+neighbourhood graph (two nodes join only when no third node sits between them), never from random links. It replaces every earlier orb: the
 iPhone, Live Activity and Dynamic Island, Home widgets, Apple Watch, the web stage and composer orbs, the app
 icon and the favicon. `docs/ui/cognitive-lattice-inventory.md` lists every surface.
 
@@ -690,8 +689,8 @@ icon and the favicon. `docs/ui/cognitive-lattice-inventory.md` lists every surfa
   level; thinking and tool use draw it in, brighten the heart and speed up signals; speaking stretches it
   sideways into flowing curves with the playback level; muted, reconnecting and offline lose colour. State
   weights ease in and out, so a change never snaps. The iPhone levels are still synthetic, the web's are real.
-- **Detail by size.** 120 pt and up draws every node and connection; 56 to 120 pt keeps 111 connections and 67
-  nodes; below that, 38 hub nodes and 59 connections, drawn a little heavier. Live Activities, widgets and Watch
+- **Detail by size.** 120 pt and up draws every node and connection; 56 to 120 pt keeps 103 connections and 74
+  nodes; below that, 39 hub nodes and 41 connections, drawn a little heavier. Live Activities, widgets and Watch
   complications draw one still pose; Reduce Motion draws the same still pose everywhere.
 - **Where it moves.** The iPhone Gate, Voice, composer and the Watch voice strip animate (paused while the
   app is inactive); a Live Activity shows the still pose for its phase (listening, speaking, thinking, muted).

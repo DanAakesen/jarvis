@@ -78,11 +78,9 @@ export const latticeSeed = 1834;
 /** The heart's warm pulse repeats every 1.6 seconds. */
 export const pulsePeriod = 1.6;
 
-const shellCount = 32;
-const midCount = 36;
-/** Arms of the heart star; the core holds the heart, an inner ring, the tips and a few free nodes. */
-const armCount = 7;
-const coreCount = 1 + 2 * armCount + 14;
+const shellCount = 38;
+const midCount = 44;
+const coreCount = 30;
 
 type Vector = { x: number; y: number; z: number };
 
@@ -136,25 +134,26 @@ function buildLatticeModel(): LatticeModel {
     const jy = y + jitter.y * 0.18;
     const jz = Math.sin(angle) * ring + jitter.z * 0.18;
     const length = Math.max(Math.sqrt(jx * jx + jy * jy + jz * jz), 1e-6);
-    const radius = (index % 2 === 0 ? 0.7 : 0.5) + random() * 0.1;
+    const radius = (index % 2 === 0 ? 0.68 : 0.46) + random() * 0.1;
     positions.push({ position: { x: jx / length * radius, y: jy / length * radius, z: jz / length * radius }, layer: midLayer });
   }
-  // The core is a star: a heart node, an inner ring, long tips between its points, and a few free nodes in the gaps.
-  const armStep = Math.PI * 2 / armCount;
+  // The core is a five-armed star: a heart node, an inner ring, five long tips between its points, and a few
+  // free nodes in the gaps.
   for (let index = 0; index < coreCount; index += 1) {
     if (index === 0) {
       positions.push({ position: { x: 0.03, y: -0.02, z: 0 }, layer: coreLayer });
-    } else if (index <= armCount) {
-      const angle = (index - 1) * armStep + 0.35 + (random() - 0.5) * 0.2;
-      const radius = 0.15 + random() * 0.05;
+    } else if (index <= 5) {
+      const angle = (index - 1) * Math.PI * 2 / 5 + 0.35 + (random() - 0.5) * 0.3;
+      const radius = 0.2 + random() * 0.06;
       positions.push({ position: { x: Math.cos(angle) * radius * 1.1, y: Math.sin(angle) * radius * 0.94, z: (random() - 0.5) * 0.24 }, layer: coreLayer });
-    } else if (index <= 2 * armCount) {
-      const angle = (index - armCount - 1) * armStep + 0.35 + armStep / 2 + (random() - 0.5) * 0.2;
-      const radius = 0.4 + random() * 0.14;
+    } else if (index <= 10) {
+      const angle = (index - 6) * Math.PI * 2 / 5 + 0.35 + Math.PI / 5 + (random() - 0.5) * 0.3;
+      const radius = 0.5 + random() * 0.16;
       positions.push({ position: { x: Math.cos(angle) * radius * 1.1, y: Math.sin(angle) * radius * 0.94, z: (random() - 0.5) * 0.4 }, layer: coreLayer });
     } else {
       const d = direction();
-      const radius = 0.2 + 0.3 * random();
+      const lobes = 1 + 0.3 * Math.cos(5 * Math.atan2(d.y, d.x) + 0.6);
+      const radius = (0.26 + 0.34 * random()) * lobes;
       positions.push({ position: { x: d.x * radius * 1.1 + 0.03, y: d.y * radius * 0.94 - 0.02, z: d.z * radius * 0.85 }, layer: coreLayer });
     }
   }
@@ -194,7 +193,7 @@ function buildLatticeModel(): LatticeModel {
   for (let index = 0; index < count; index += 1) {
     const { layer } = positions[index]!;
     const within = index - (layer === shellLayer ? 0 : layer === midLayer ? shellCount : shellCount + midCount);
-    if (layer === coreLayer ? within <= 2 * armCount : within % 3 === 0) hubs.add(index);
+    if (layer === coreLayer ? within <= 10 : within % 3 === 0) hubs.add(index);
   }
 
   const nodes: LatticeNode[] = [];
@@ -211,9 +210,9 @@ function buildLatticeModel(): LatticeModel {
       }
     });
     const rank = hubs.has(index) ? 0 : index % 2 === 0 ? 1 : 2;
-    const warmth = smoothstep(0.9, 0.42, radius);
-    const base = layer === shellLayer ? 0.0086 : layer === midLayer ? 0.0072 : 0.008;
-    const size = (base + random() * 0.0044) * (hubs.has(index) ? 1.6 : 0.7);
+    const warmth = smoothstep(0.9, 0.46, radius);
+    const base = layer === shellLayer ? 0.0064 : layer === midLayer ? 0.0056 : 0.0062;
+    const size = (base + random() * 0.0036) * (hubs.has(index) ? 1.55 : 0.8);
     nodes.push({
       x: position.x, y: position.y, z: position.z, layer, radius, cluster: nearest,
       warmth, size, rank, phase: random(),
@@ -236,7 +235,7 @@ function buildLatticeModel(): LatticeModel {
     const length = distanceBetween(na, nb);
     const mid = lengthOf({ x: (na.x + nb.x) / 2, y: (na.y + nb.y) / 2, z: (na.z + nb.z) / 2 });
     const rim = na.layer === shellLayer && nb.layer === shellLayer;
-    const bow = rim ? 0.02 + random() * 0.03 : 0.07 + 0.3 * length * (1 - 0.5 * Math.min(1, mid)) + random() * 0.05 + curl;
+    const bow = rim ? 0.02 + random() * 0.03 : 0.04 + 0.16 * length * (1 - 0.5 * Math.min(1, mid)) + random() * 0.03 + curl;
     edges.push({ a: low, b: high, bow, rank: Math.min(2, na.rank + nb.rank) });
   };
   const squared = (a: number, b: number) => {
@@ -267,19 +266,18 @@ function buildLatticeModel(): LatticeModel {
     for (let index = 0; index < count; index += 1) if ((nodes[index]!.layer === shellLayer) === inShell) list.push(index);
     return list;
   };
-  // The star: the heart reaches every inner node and every tip, each tip joins the two inner nodes beside it, and
-  // neighbouring tips are linked by arcs that curve in toward the heart.
+  // The star: the heart joins the inner ring, each tip joins the two inner nodes beside it, and the tips are
+  // linked by arcs that curve in toward the heart.
   const heart = shellCount + midCount;
-  for (let arm = 0; arm < armCount; arm += 1) {
+  for (let arm = 0; arm < 5; arm += 1) {
     const inner = heart + 1 + arm;
-    const next = heart + 1 + (arm + 1) % armCount;
-    const tip = heart + 1 + armCount + arm;
+    const next = heart + 1 + (arm + 1) % 5;
+    const tip = heart + 6 + arm;
     connect(heart, inner);
     connect(inner, next);
     connect(tip, inner);
     connect(tip, next);
-    connect(heart, tip, 0.05);
-    connect(tip, heart + 1 + armCount + (arm + 1) % armCount, 0.26);
+    connect(tip, heart + 6 + (arm + 1) % 5, 0.26);
   }
   mesh(members(true), 1.1, false);
   mesh(members(false), 0.8, true);
@@ -571,7 +569,7 @@ export function makeLatticeScene(
     const depth = 0.6 + 0.4 * ((az + bz) / 4 + 0.5);
     const light = Math.max(lit[edge.a]!, lit[edge.b]!) * 0.75;
     const length = Math.sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
-    const alpha = (0.28 + 0.42 * warmth) / (1 + length * (0.9 - 0.4 * warmth)) * gain * depth * alphasScale + light * 0.4;
+    const alpha = (0.36 + 0.34 * warmth) / (1 + length * (0.9 - 0.4 * warmth)) * gain * depth * alphasScale + light * 0.4;
     scene.edges.push({ ax, ay, cx, cy, bx, by, warmth, alpha: Math.min(1, alpha), light });
   });
 
@@ -597,7 +595,7 @@ export function makeLatticeScene(
       radius: node.size * (1 + 0.35 * lit[index]!) * (1 + 0.1 * z) * dotsScale * coreBeat,
       warmth: node.warmth,
       alpha,
-      halo: Math.min(1, lit[index]! * 0.8 + (node.rank === 0 ? 0.55 : 0.16)),
+      halo: Math.min(1, lit[index]! * 0.8 + (node.rank === 0 ? 0.4 : 0)),
     });
   });
   const coreTotal = Math.max(1, model.coreNodes.length);
@@ -646,7 +644,7 @@ export function makeLatticeScene(
     x: heartX,
     y: heartY,
     radius: 0.5 * (1 + 0.04 * pulse),
-    intensity: Math.min(1.9, coreGain * beat * 0.6),
+    intensity: Math.min(1.6, coreGain * beat * 0.5),
     heat: Math.min(1, 0.35 + 0.3 * pulse + kick + 0.25 * busy + 0.3 * heldSpeech),
   };
   return scene;

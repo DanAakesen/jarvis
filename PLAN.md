@@ -7,10 +7,9 @@ web favicon from the concept, and the web stage, composer and working orbs on th
 drawing, geometry, tokens and web shell/ribbons/motes were deleted. The written inventory is
 `docs/ui/cognitive-lattice-inventory.md` and the PR description.
 
-Visual iteration — 15 November 2026 (second round: bloom on lines and nodes, curved filament edges, seven-armed star
-core, fewer and larger nodes, stronger cyan specular rim): the first result read as a dense hairball against the approved reference, so the
-lattice was rebuilt. 97 nodes (was 340) on a cyan shell, two interior shells and a seven-armed amber star heart are
-joined by 236 long, softly curved connections (was about 1,250) from a neighbourhood graph (Gabriel on the shell, relative-neighbourhood
+Visual iteration — 15 November 2026: the first result read as a dense hairball against the approved reference, so the
+lattice was rebuilt. 112 nodes (was 340) on a cyan shell, two interior shells and a five-armed amber star heart are
+joined by 262 long connections (was about 1,250) from a neighbourhood graph (Gabriel on the shell, relative-neighbourhood
 inside, plus the explicit star), not random links. The core is amber to orange with a wide orange haze and only a tiny
 pale spark; the glass edge is cyan on the left, amber on the lower right with a soft inner highlight. Motion model, golden
 file contract and the listening, thinking and speaking states are unchanged. Observed in macOS CI run 43680759144:
