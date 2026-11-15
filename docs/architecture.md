@@ -1,3 +1,13 @@
+## Inbox nudge pass — 15 November 2026 (#1855, step 7)
+
+`inbox/review.ts` builds the digest, the system prompt and the strict parser;
+`inbox/nudge.ts` runs one pass (sync the index, read thumbs back, digest, one model
+call, validated rewrites, delivery, index and trail); `inbox/proactive-hook.ts` adapts it
+to `onFindingsStored` (budget gate, spend record, card plus insight candidate).
+`index.ts` passes the hook to `registerProactive` only when `JARVIS_INBOX_NUDGES_ENABLED`,
+`JARVIS_INBOX_ENABLED` and `JARVIS_PROACTIVE_ENABLED` are all exactly `true`. The hook
+runs before the alert hook, so a medium or high nudge is that run's first insight candidate.
+
 ## Inbox MCP server — 15 November 2026 (#1855, step 6)
 
 `inbox/mcp.ts` serves `POST|GET|DELETE /inbox/mcp` with `createMcpHandler` in the

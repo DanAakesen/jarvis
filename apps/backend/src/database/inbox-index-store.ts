@@ -7,12 +7,13 @@ interface Row {
   path: string | null;
   sha: string | null;
   last_nudged_at: Date | null;
+  last_nudge_item_id: string | null;
   last_feedback: InboxFeedback | null;
   last_feedback_at: Date | null;
   created_at: Date;
 }
 
-const projection = 'item_id, path, sha, last_nudged_at, last_feedback, last_feedback_at, created_at';
+const projection = 'item_id, path, sha, last_nudged_at, last_nudge_item_id, last_feedback, last_feedback_at, created_at';
 const maxRows = 5_000;
 
 function row(value: Row): InboxIndexRow {
@@ -21,6 +22,7 @@ function row(value: Row): InboxIndexRow {
     path: value.path,
     sha: value.sha,
     lastNudgedAt: value.last_nudged_at,
+    lastNudgeItemId: value.last_nudge_item_id?.toLowerCase() ?? null,
     lastFeedback: value.last_feedback,
     lastFeedbackAt: value.last_feedback_at,
     createdAt: value.created_at,
@@ -119,10 +121,11 @@ export function createInboxIndexStore(pool: sql.ConnectionPool): InboxIndexStore
       await query(pool.request().input('ids', sql.NVarChar(sql.MAX), JSON.stringify(itemIds)),
         `DELETE FROM dbo.inbox_items WHERE item_id IN (SELECT value FROM OPENJSON(@ids));`, signal);
     },
-    async markNudged(itemId, at, signal) {
+    async markNudged(itemId, at, signal, nudgeItemId) {
       const result = await query(pool.request()
-        .input('id', sql.VarChar(32), itemId).input('at', sql.DateTime2(7), at),
-      `UPDATE dbo.inbox_items SET last_nudged_at=@at, updated_at=SYSUTCDATETIME() WHERE item_id=@id;`, signal);
+        .input('id', sql.VarChar(32), itemId).input('at', sql.DateTime2(7), at)
+        .input('nudge', sql.UniqueIdentifier, nudgeItemId ?? null),
+      `UPDATE dbo.inbox_items SET last_nudged_at=@at, last_nudge_item_id=@nudge, updated_at=SYSUTCDATETIME() WHERE item_id=@id;`, signal);
       return result.rowsAffected[0] === 1;
     },
     async setFeedback(itemId, feedback, at, signal) {
