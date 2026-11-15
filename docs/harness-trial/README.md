@@ -71,3 +71,5 @@ No container of ours is always on. Model tokens bill on Azure, not as GitHub Cop
 | [02-quality-gains.md](02-quality-gains.md) | Quality gains of the Copilot harness, what is documented for the managed Foundry version, honest cons |
 | [03-target-architecture.md](03-target-architecture.md) | The single target: diagrams, limits, parity gaps, cost comparison, migration path, risks |
 | [04-recommendation.md](04-recommendation.md) | Recommendation, gates, the seven-question spike |
+| [spike-results.md](spike-results.md) | Spike outcome (#1851): not run for lack of Azure access, what is missing, Gate 0 hold |
+| [spike/](spike/runbook.md) | Skill, MCP shim design, 20-prompt set and the runbook for the owner |
