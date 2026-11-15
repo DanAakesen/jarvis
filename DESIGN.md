@@ -664,9 +664,11 @@ approval notifications. Do not embed a relative phrase in an absolute template.
 ## Cognitive lattice orb (P15-143; 14 November 2026)
 
 The Jarvis orb is the owner-approved **cognitive lattice** (`docs/ui/opening-final-2026-11-14/`): a dark glass
-sphere with a cyan limb and a warm lower-right edge, around a procedurally drawn connected network. About 340
-nodes sit in three layers (a bright cyan shell, a middle layer, a dense amber heart) and are joined by about
-1,250 fine, almost straight connections, so it reads as one connected brain. It replaces every earlier orb: the
+sphere with a cyan limb on the left, a warm amber rim on the lower right and a soft inner highlight, around a
+procedurally drawn connected network. It is airy, not dense: 112 nodes in three layers (a cyan shell, two middle
+shells at different depths, a five-armed amber star at the heart) joined by 262 long, crisp connections that close
+into large triangular and star-shaped facets, so it reads as one connected brain. Connections come from a
+neighbourhood graph (two nodes join only when no third node sits between them), never from random links. It replaces every earlier orb: the
 iPhone, Live Activity and Dynamic Island, Home widgets, Apple Watch, the web stage and composer orbs, the app
 icon and the favicon. `docs/ui/cognitive-lattice-inventory.md` lists every surface.
 
@@ -675,7 +677,9 @@ icon and the favicon. `docs/ui/cognitive-lattice-inventory.md` lists every surfa
   result. The web builds the same network from the same arithmetic and both are tested against
   `apps/web/src/jarvis-lattice.golden.json`.
 - **Colour.** Bright cyan `#52dcfa` nodes and signals at the glass, glass-body blue `#247af2`, amber `#ffa62e`
-  heart with a `#ffdc8e` hot centre; connections blend from cyan to amber with distance from the heart. Values
+  heart with a `#ffbd4a` hot centre; connections blend from cyan through teal to amber with distance from the heart,
+  and the heart's warmth spreads outward as an orange glow along them. White is only a tiny spark at the very
+  centre; the core is never white-hot. Values
   live in `JarvisOrbAppearance` (JarvisCore) and `jarvis-orb-appearance.ts`.
 - **Motion** (all inside the glass; the sphere, rim and position stay put and nothing spins):
   neighbouring nodes light in short sequences along real connections; faint cyan signals travel inward along
@@ -685,8 +689,8 @@ icon and the favicon. `docs/ui/cognitive-lattice-inventory.md` lists every surfa
   level; thinking and tool use draw it in, brighten the heart and speed up signals; speaking stretches it
   sideways into flowing curves with the playback level; muted, reconnecting and offline lose colour. State
   weights ease in and out, so a change never snaps. The iPhone levels are still synthetic, the web's are real.
-- **Detail by size.** 120 pt and up draws every node and connection; 56 to 120 pt keeps about 250 connections;
-  below that, hubs and the strongest 100, drawn a little heavier. Live Activities, widgets and Watch
+- **Detail by size.** 120 pt and up draws every node and connection; 56 to 120 pt keeps 103 connections and 74
+  nodes; below that, 39 hub nodes and 41 connections, drawn a little heavier. Live Activities, widgets and Watch
   complications draw one still pose; Reduce Motion draws the same still pose everywhere.
 - **Where it moves.** The iPhone Gate, Voice, composer and the Watch voice strip animate (paused while the
   app is inactive); a Live Activity shows the still pose for its phase (listening, speaking, thinking, muted).

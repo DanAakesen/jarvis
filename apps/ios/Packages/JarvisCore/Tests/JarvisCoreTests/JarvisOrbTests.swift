@@ -46,7 +46,10 @@ final class JarvisOrbTests: XCTestCase {
     func testLatticeIsOneConnectedNetwork() {
         let model = JarvisLatticeModel.shared
         XCTAssertEqual(model.nodes.count, JarvisLatticeModel.shellCount + JarvisLatticeModel.midCount + JarvisLatticeModel.coreCount)
-        XCTAssertGreaterThan(model.edges.count, 900)
+        // Airy on purpose: long, clean connections between a hundred or so nodes, not a dense tangle.
+        XCTAssertLessThan(model.nodes.count, 150)
+        XCTAssertGreaterThan(model.edges.count, 150)
+        XCTAssertLessThan(model.edges.count, 400)
         var degree = [Int](repeating: 0, count: model.nodes.count)
         var pairs = Set<[Int]>()
         for edge in model.edges {

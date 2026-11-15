@@ -6,6 +6,6 @@ export const orbAppearance = {
   deep: '#247af2',
   /** Amber of the connected core. */
   warm: '#ffa62e',
-  /** The hottest point of the core. */
-  hot: '#ffdc8e',
+  /** The hottest point of the core: still amber, never white. */
+  hot: '#ffbd4a',
 } as const;

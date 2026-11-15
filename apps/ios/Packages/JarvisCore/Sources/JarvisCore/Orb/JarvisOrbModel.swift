@@ -8,8 +8,8 @@ public enum JarvisOrbAppearance {
     public static let deep = (r: 0x24 / 255.0, g: 0x7a / 255.0, b: 0xf2 / 255.0)
     /// Amber of the connected core.
     public static let warm = (r: 1.0, g: 0xa6 / 255.0, b: 0x2e / 255.0)
-    /// The hottest point of the core.
-    public static let hot = (r: 1.0, g: 0xdc / 255.0, b: 0x8e / 255.0)
+    /// The hottest point of the core: still amber, never white.
+    public static let hot = (r: 1.0, g: 0xbd / 255.0, b: 0x4a / 255.0)
 }
 
 /// What the orb is doing. The same states as the web orb's `JarvisOrbState`.

@@ -35,7 +35,7 @@ struct JarvisOpeningView: View {
                 JarvisDesignTokens.openingBackground
                 JarvisOpeningNetworkView()
                 RadialGradient(
-                    colors: [JarvisDesignTokens.ambientBlue.opacity(0.22), .clear],
+                    colors: [JarvisDesignTokens.ambientBlue.opacity(0.1), .clear],
                     center: .center, startRadius: layout.orbDiameter * 0.45, endRadius: layout.orbDiameter * 0.85
                 )
                 .frame(width: layout.orbDiameter * 1.8, height: layout.orbDiameter * 1.8)

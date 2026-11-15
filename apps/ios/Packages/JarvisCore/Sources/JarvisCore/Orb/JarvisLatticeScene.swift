@@ -43,7 +43,7 @@ public struct JarvisLatticeScene: Sendable {
         /// Radius of the broad amber glow.
         public var radius: Double
         public var intensity: Double
-        /// 0–1 white-hot centre.
+        /// 0–1 strength of the amber centre and its tiny spark.
         public var heat: Double
     }
 
@@ -179,7 +179,7 @@ extension JarvisLatticeScene {
             let depth = 0.6 + 0.4 * ((a.z + b.z) / 4 + 0.5)
             let light = max(lit[edge.a], lit[edge.b]) * 0.75
             let length = ((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)).squareRoot()
-            let alpha = (0.19 + 0.26 * warmth) / (1 + length * (1.8 - 1.0 * warmth)) * gain * depth * detail.alphaScale + light * 0.4
+            let alpha = (0.36 + 0.34 * warmth) / (1 + length * (0.9 - 0.4 * warmth)) * gain * depth * detail.alphaScale + light * 0.4
             scene.edges.append(Edge(
                 ax: a.x, ay: a.y, cx: control.x, cy: control.y, bx: b.x, by: b.y,
                 warmth: warmth, alpha: min(1, alpha), light: light
@@ -205,7 +205,7 @@ extension JarvisLatticeScene {
                 x: p.x, y: p.y,
                 radius: node.size * (1 + 0.35 * lit[index]) * (1 + 0.1 * p.z) * detail.dotScale * coreBeat,
                 warmth: node.warmth, alpha: alpha,
-                halo: min(1, lit[index] * 0.8 + (node.rank == 0 ? 0.2 : 0))
+                halo: min(1, lit[index] * 0.8 + (node.rank == 0 ? 0.4 : 0))
             ))
         }
         let coreCount = Double(max(1, model.coreNodes.count))

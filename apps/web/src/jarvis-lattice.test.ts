@@ -77,6 +77,12 @@ describe('lattice topology', () => {
     });
   });
 
+  it('stays airy: a hundred or so nodes joined by a few hundred long connections', () => {
+    expect(model.nodes.length).toBeLessThan(150);
+    expect(model.edges.length).toBeGreaterThan(150);
+    expect(model.edges.length).toBeLessThan(400);
+  });
+
   it('is built once and shared', () => {
     expect(getLatticeModel()).toBe(model);
     expect(golden.seed).toBe(1834);
@@ -124,7 +130,7 @@ describe('lattice scene', () => {
     const full = makeLatticeScene(model, frame, detailFull);
     const reduced = makeLatticeScene(model, frame, detailReduced);
     const minimal = makeLatticeScene(model, frame, detailMinimal);
-    expect(minimal.dots.length).toBeGreaterThan(40);
+    expect(minimal.dots.length).toBeGreaterThan(30);
     expect(minimal.dots.length).toBeLessThan(reduced.dots.length);
     expect(reduced.dots.length).toBeLessThan(full.dots.length);
     expect(minimal.edges.length).toBeLessThan(full.edges.length);

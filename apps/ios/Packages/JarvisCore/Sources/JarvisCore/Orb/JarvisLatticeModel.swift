@@ -76,9 +76,9 @@ public struct JarvisLatticeModel: Sendable {
 
     public static let unreachable: UInt8 = 255
     public static let seed: Int64 = 1834
-    public static let shellCount = 72
-    public static let midCount = 150
-    public static let coreCount = 120
+    public static let shellCount = 38
+    public static let midCount = 44
+    public static let coreCount = 30
 
     /// The heart's warm pulse repeats every 1.6 seconds.
     public static let pulsePeriod = 1.6
@@ -104,29 +104,51 @@ public struct JarvisLatticeModel: Sendable {
             let ring = (1 - y * y).squareRoot()
             return JarvisOrbVector(cos(angle) * ring, y, sin(angle) * ring)
         }
+        // Glass shell: an even spread over the sphere, nudged so no ring of nodes shows.
         for index in 0..<Self.shellCount {
             let angle = Double(index) * 2.39996
             let y = 1 - 2 * (Double(index) + 0.5) / Double(Self.shellCount)
             let ring = (1 - y * y).squareRoot()
             let jitter = direction(&random)
-            let jx = cos(angle) * ring + jitter.x * 0.16
-            let jy = y + jitter.y * 0.16
-            let jz = sin(angle) * ring + jitter.z * 0.16
+            let jx = cos(angle) * ring + jitter.x * 0.12
+            let jy = y + jitter.y * 0.12
+            let jz = sin(angle) * ring + jitter.z * 0.12
             let length = max((jx * jx + jy * jy + jz * jz).squareRoot(), 1e-6)
-            let radius = 0.88 + random.next() * 0.07
+            let radius = 0.9 + random.next() * 0.05
             positions.append((JarvisOrbVector(jx / length * radius, jy / length * radius, jz / length * radius), .shell))
         }
-        for _ in 0..<Self.midCount {
-            let d = direction(&random)
-            let radius = 0.34 + 0.5 * pow(random.next(), 1.1)
-            positions.append((JarvisOrbVector(d.x * radius, d.y * radius, d.z * radius), .mid))
+        // Two interior shells, so the facets sit at several depths.
+        for index in 0..<Self.midCount {
+            let angle = Double(index) * 2.39996 + 1.3
+            let y = 1 - 2 * (Double(index) + 0.5) / Double(Self.midCount)
+            let ring = (1 - y * y).squareRoot()
+            let jitter = direction(&random)
+            let jx = cos(angle) * ring + jitter.x * 0.18
+            let jy = y + jitter.y * 0.18
+            let jz = sin(angle) * ring + jitter.z * 0.18
+            let length = max((jx * jx + jy * jy + jz * jz).squareRoot(), 1e-6)
+            let radius = (index % 2 == 0 ? 0.68 : 0.46) + random.next() * 0.1
+            positions.append((JarvisOrbVector(jx / length * radius, jy / length * radius, jz / length * radius), .mid))
         }
-        for _ in 0..<Self.coreCount {
-            let d = direction(&random)
-            // A five-lobed star keeps the heart from looking like a ball.
-            let lobes = 1 + 0.3 * cos(5 * atan2(d.y, d.x) + 0.6) + 0.1 * cos(3 * atan2(d.y, d.x) - 0.4)
-            let radius = 0.56 * pow(random.next(), 0.78) * lobes
-            positions.append((JarvisOrbVector(d.x * radius * 1.1 + 0.03, d.y * radius * 0.94 - 0.02, d.z * radius * 0.85), .core))
+        // The core is a five-armed star: a heart node, an inner ring, five long tips between its points, and a few
+        // free nodes in the gaps.
+        for index in 0..<Self.coreCount {
+            if index == 0 {
+                positions.append((JarvisOrbVector(0.03, -0.02, 0), .core))
+            } else if index <= 5 {
+                let angle = Double(index - 1) * Double.pi * 2 / 5 + 0.35 + (random.next() - 0.5) * 0.3
+                let radius = 0.2 + random.next() * 0.06
+                positions.append((JarvisOrbVector(cos(angle) * radius * 1.1, sin(angle) * radius * 0.94, (random.next() - 0.5) * 0.24), .core))
+            } else if index <= 10 {
+                let angle = Double(index - 6) * Double.pi * 2 / 5 + 0.35 + Double.pi / 5 + (random.next() - 0.5) * 0.3
+                let radius = 0.5 + random.next() * 0.16
+                positions.append((JarvisOrbVector(cos(angle) * radius * 1.1, sin(angle) * radius * 0.94, (random.next() - 0.5) * 0.4), .core))
+            } else {
+                let d = direction(&random)
+                let lobes = 1 + 0.3 * cos(5 * atan2(d.y, d.x) + 0.6)
+                let radius = (0.26 + 0.34 * random.next()) * lobes
+                positions.append((JarvisOrbVector(d.x * radius * 1.1 + 0.03, d.y * radius * 0.94 - 0.02, d.z * radius * 0.85), .core))
+            }
         }
         let count = positions.count
 
@@ -155,11 +177,12 @@ public struct JarvisLatticeModel: Sendable {
         }
 
         // Ranks: hubs always show, so the orb still reads as a network at 18 pt.
-        let coreByRadius = (0..<count).filter { positions[$0].1 == .core }
-            .sorted { positions[$0].0.length < positions[$1].0.length }
-        var hubs = Set(coreByRadius.prefix(20))
-        for index in 0..<count where positions[index].1 == .shell && index % 3 == 0 { hubs.insert(index) }
-        for index in 0..<count where positions[index].1 == .mid && index % 5 == 0 { hubs.insert(index) }
+        var hubs = Set<Int>()
+        for index in 0..<count {
+            let layer = positions[index].1
+            let within = index - (layer == .shell ? 0 : layer == .mid ? Self.shellCount : Self.shellCount + Self.midCount)
+            if layer == .core ? within <= 10 : within % 3 == 0 { hubs.insert(index) }
+        }
         var nodes: [Node] = []
         for index in 0..<count {
             let (position, layer) = positions[index]
@@ -171,45 +194,72 @@ public struct JarvisLatticeModel: Sendable {
                 if distance < best { best = distance; nearest = cluster }
             }
             let rank = hubs.contains(index) ? 0 : (index % 2 == 0 ? 1 : 2)
-            let warmth = JarvisLatticeModel.smoothstep(0.92, 0.2, radius)
-            let base = layer == .shell ? 0.0058 : layer == .mid ? 0.0042 : 0.0038
-            let size = (base + random.next() * 0.0034) * (hubs.contains(index) ? 1.7 : 1)
+            let warmth = JarvisLatticeModel.smoothstep(0.9, 0.46, radius)
+            let base = layer == .shell ? 0.0064 : layer == .mid ? 0.0056 : 0.0062
+            let size = (base + random.next() * 0.0036) * (hubs.contains(index) ? 1.55 : 0.8)
             nodes.append(Node(
                 position: position, layer: layer, radius: radius, cluster: nearest,
                 warmth: warmth, size: size, rank: rank, phase: random.next()
             ))
         }
 
-        // Connections: nearest neighbours, a longer skip for the interior, and one spoke from every shell node
-        // to the nearest interior node, so the glass is tied into the core.
+        // Connections: two nodes are joined only when no third node sits between them (a Gabriel graph on the shell,
+        // a relative-neighbourhood graph inside). That keeps the web to long, clean lines that close into triangular
+        // and star-shaped facets. The shell and the interior are meshed on their own, then each shell node is tied
+        // to its nearest interior node.
         var seen = Set<Int>()
         var edges: [Edge] = []
-        func connect(_ a: Int, _ b: Int) {
+        func connect(_ a: Int, _ b: Int, curl: Double = 0) {
             let low = min(a, b), high = max(a, b)
             guard low != high, seen.insert(low * 1000 + high).inserted else { return }
+            let length = nodes[a].position.distance(to: nodes[b].position)
             let mid = JarvisOrbVector(
                 (nodes[a].position.x + nodes[b].position.x) / 2,
                 (nodes[a].position.y + nodes[b].position.y) / 2,
                 (nodes[a].position.z + nodes[b].position.z) / 2
             )
-            let bow = 0.015 + 0.05 * (1 - min(1, mid.length)) + random.next() * 0.025
+            let rim = nodes[a].layer == .shell && nodes[b].layer == .shell
+            let bow = rim
+                ? 0.02 + random.next() * 0.03
+                : 0.04 + 0.16 * length * (1 - 0.5 * min(1, mid.length)) + random.next() * 0.03 + curl
             edges.append(Edge(a: low, b: high, bow: bow, rank: min(2, nodes[a].rank + nodes[b].rank)))
         }
-        for index in 0..<count {
-            let reach = nodes[index].layer == .core ? 6 : 4
-            for neighbour in neighbours[index].prefix(reach) { connect(index, neighbour) }
-            // Long chords across the interior give the web its star-shaped arcs.
-            if nodes[index].layer != .shell {
-                let far = (0..<count).filter {
-                    nodes[$0].layer != .shell && (0.3...0.62).contains(nodes[index].position.distance(to: nodes[$0].position))
-                }
-                if !far.isEmpty {
-                    if index % 4 != 0 { connect(index, far[Int(random.next() * Double(far.count)) % far.count]) }
+        func squared(_ a: Int, _ b: Int) -> Double {
+            let dx = nodes[a].position.x - nodes[b].position.x
+            let dy = nodes[a].position.y - nodes[b].position.y
+            let dz = nodes[a].position.z - nodes[b].position.z
+            return dx * dx + dy * dy + dz * dz
+        }
+        func mesh(_ members: [Int], longest: Double, relative: Bool) {
+            for a in members {
+                for b in members where b > a {
+                    let span = squared(a, b)
+                    if span > longest * longest { continue }
+                    let open = !members.contains { c in
+                        c != a && c != b
+                            && (relative ? max(squared(a, c), squared(b, c)) < span : squared(a, c) + squared(b, c) < span)
+                    }
+                    if open { connect(a, b) }
                 }
             }
-            if nodes[index].layer == .shell, let inward = neighbours[index].first(where: { nodes[$0].layer != .shell }) {
-                connect(index, inward)
-            }
+        }
+        // The star: the heart joins the inner ring, each tip joins the two inner nodes beside it, and the tips are
+        // linked by arcs that curve in toward the heart.
+        let heart = Self.shellCount + Self.midCount
+        for arm in 0..<5 {
+            let inner = heart + 1 + arm
+            let next = heart + 1 + (arm + 1) % 5
+            let tip = heart + 6 + arm
+            connect(heart, inner)
+            connect(inner, next)
+            connect(tip, inner)
+            connect(tip, next)
+            connect(tip, heart + 6 + (arm + 1) % 5, curl: 0.26)
+        }
+        mesh((0..<count).filter { nodes[$0].layer == .shell }, longest: 1.1, relative: false)
+        mesh((0..<count).filter { nodes[$0].layer != .shell }, longest: 0.8, relative: true)
+        for index in 0..<count where nodes[index].layer == .shell {
+            if let inward = neighbours[index].first(where: { nodes[$0].layer != .shell }) { connect(index, inward) }
         }
 
         var adjacency = [[(node: Int, edge: Int)]](repeating: [], count: count)

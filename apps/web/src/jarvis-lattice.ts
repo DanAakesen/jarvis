@@ -78,9 +78,9 @@ export const latticeSeed = 1834;
 /** The heart's warm pulse repeats every 1.6 seconds. */
 export const pulsePeriod = 1.6;
 
-const shellCount = 72;
-const midCount = 150;
-const coreCount = 120;
+const shellCount = 38;
+const midCount = 44;
+const coreCount = 30;
 
 type Vector = { x: number; y: number; z: number };
 
@@ -111,32 +111,51 @@ function buildLatticeModel(): LatticeModel {
   };
 
   const positions: { position: Vector; layer: LatticeLayer }[] = [];
+  // Glass shell: an even spread over the sphere, nudged so no ring of nodes shows.
   for (let index = 0; index < shellCount; index += 1) {
     const angle = index * 2.39996;
     const y = 1 - 2 * (index + 0.5) / shellCount;
     const ring = Math.sqrt(1 - y * y);
     const jitter = direction();
-    const jx = Math.cos(angle) * ring + jitter.x * 0.16;
-    const jy = y + jitter.y * 0.16;
-    const jz = Math.sin(angle) * ring + jitter.z * 0.16;
+    const jx = Math.cos(angle) * ring + jitter.x * 0.12;
+    const jy = y + jitter.y * 0.12;
+    const jz = Math.sin(angle) * ring + jitter.z * 0.12;
     const length = Math.max(Math.sqrt(jx * jx + jy * jy + jz * jz), 1e-6);
-    const radius = 0.88 + random() * 0.07;
+    const radius = 0.9 + random() * 0.05;
     positions.push({ position: { x: jx / length * radius, y: jy / length * radius, z: jz / length * radius }, layer: shellLayer });
   }
+  // Two interior shells, so the facets sit at several depths.
   for (let index = 0; index < midCount; index += 1) {
-    const d = direction();
-    const radius = 0.34 + 0.5 * Math.pow(random(), 1.1);
-    positions.push({ position: { x: d.x * radius, y: d.y * radius, z: d.z * radius }, layer: midLayer });
+    const angle = index * 2.39996 + 1.3;
+    const y = 1 - 2 * (index + 0.5) / midCount;
+    const ring = Math.sqrt(1 - y * y);
+    const jitter = direction();
+    const jx = Math.cos(angle) * ring + jitter.x * 0.18;
+    const jy = y + jitter.y * 0.18;
+    const jz = Math.sin(angle) * ring + jitter.z * 0.18;
+    const length = Math.max(Math.sqrt(jx * jx + jy * jy + jz * jz), 1e-6);
+    const radius = (index % 2 === 0 ? 0.68 : 0.46) + random() * 0.1;
+    positions.push({ position: { x: jx / length * radius, y: jy / length * radius, z: jz / length * radius }, layer: midLayer });
   }
+  // The core is a five-armed star: a heart node, an inner ring, five long tips between its points, and a few
+  // free nodes in the gaps.
   for (let index = 0; index < coreCount; index += 1) {
-    const d = direction();
-    // A five-lobed star keeps the heart from looking like a ball.
-    const lobes = 1 + 0.3 * Math.cos(5 * Math.atan2(d.y, d.x) + 0.6) + 0.1 * Math.cos(3 * Math.atan2(d.y, d.x) - 0.4);
-    const radius = 0.56 * Math.pow(random(), 0.78) * lobes;
-    positions.push({
-      position: { x: d.x * radius * 1.1 + 0.03, y: d.y * radius * 0.94 - 0.02, z: d.z * radius * 0.85 },
-      layer: coreLayer,
-    });
+    if (index === 0) {
+      positions.push({ position: { x: 0.03, y: -0.02, z: 0 }, layer: coreLayer });
+    } else if (index <= 5) {
+      const angle = (index - 1) * Math.PI * 2 / 5 + 0.35 + (random() - 0.5) * 0.3;
+      const radius = 0.2 + random() * 0.06;
+      positions.push({ position: { x: Math.cos(angle) * radius * 1.1, y: Math.sin(angle) * radius * 0.94, z: (random() - 0.5) * 0.24 }, layer: coreLayer });
+    } else if (index <= 10) {
+      const angle = (index - 6) * Math.PI * 2 / 5 + 0.35 + Math.PI / 5 + (random() - 0.5) * 0.3;
+      const radius = 0.5 + random() * 0.16;
+      positions.push({ position: { x: Math.cos(angle) * radius * 1.1, y: Math.sin(angle) * radius * 0.94, z: (random() - 0.5) * 0.4 }, layer: coreLayer });
+    } else {
+      const d = direction();
+      const lobes = 1 + 0.3 * Math.cos(5 * Math.atan2(d.y, d.x) + 0.6);
+      const radius = (0.26 + 0.34 * random()) * lobes;
+      positions.push({ position: { x: d.x * radius * 1.1 + 0.03, y: d.y * radius * 0.94 - 0.02, z: d.z * radius * 0.85 }, layer: coreLayer });
+    }
   }
   const count = positions.length;
 
@@ -170,12 +189,12 @@ function buildLatticeModel(): LatticeModel {
   }
 
   // Ranks: hubs always show, so the orb still reads as a network at 18 pt.
-  const coreByRadius: number[] = [];
-  for (let index = 0; index < count; index += 1) if (positions[index]!.layer === coreLayer) coreByRadius.push(index);
-  coreByRadius.sort((left, right) => lengthOf(positions[left]!.position) - lengthOf(positions[right]!.position));
-  const hubs = new Set(coreByRadius.slice(0, 20));
-  for (let index = 0; index < count; index += 1) if (positions[index]!.layer === shellLayer && index % 3 === 0) hubs.add(index);
-  for (let index = 0; index < count; index += 1) if (positions[index]!.layer === midLayer && index % 5 === 0) hubs.add(index);
+  const hubs = new Set<number>();
+  for (let index = 0; index < count; index += 1) {
+    const { layer } = positions[index]!;
+    const within = index - (layer === shellLayer ? 0 : layer === midLayer ? shellCount : shellCount + midCount);
+    if (layer === coreLayer ? within <= 10 : within % 3 === 0) hubs.add(index);
+  }
 
   const nodes: LatticeNode[] = [];
   for (let index = 0; index < count; index += 1) {
@@ -191,51 +210,81 @@ function buildLatticeModel(): LatticeModel {
       }
     });
     const rank = hubs.has(index) ? 0 : index % 2 === 0 ? 1 : 2;
-    const warmth = smoothstep(0.92, 0.2, radius);
-    const base = layer === shellLayer ? 0.0058 : layer === midLayer ? 0.0042 : 0.0038;
-    const size = (base + random() * 0.0034) * (hubs.has(index) ? 1.7 : 1);
+    const warmth = smoothstep(0.9, 0.46, radius);
+    const base = layer === shellLayer ? 0.0064 : layer === midLayer ? 0.0056 : 0.0062;
+    const size = (base + random() * 0.0036) * (hubs.has(index) ? 1.55 : 0.8);
     nodes.push({
       x: position.x, y: position.y, z: position.z, layer, radius, cluster: nearest,
       warmth, size, rank, phase: random(),
     });
   }
 
-  // Connections: nearest neighbours, a longer skip for the interior, and one spoke from every shell node to the
-  // nearest interior node, so the glass is tied into the core.
+  // Connections: two nodes are joined only when no third node sits between them (a Gabriel graph on the shell, a
+  // relative-neighbourhood graph inside). That keeps the web to long, clean lines that close into triangular and
+  // star-shaped facets. The shell and the interior are meshed on their own, then each shell node is tied to its
+  // nearest interior node.
   const seen = new Set<number>();
   const edges: LatticeEdge[] = [];
-  const connect = (a: number, b: number) => {
+  const connect = (a: number, b: number, curl = 0) => {
     const low = Math.min(a, b);
     const high = Math.max(a, b);
     if (low === high || seen.has(low * 1000 + high)) return;
     seen.add(low * 1000 + high);
     const na = nodes[a]!;
     const nb = nodes[b]!;
+    const length = distanceBetween(na, nb);
     const mid = lengthOf({ x: (na.x + nb.x) / 2, y: (na.y + nb.y) / 2, z: (na.z + nb.z) / 2 });
-    const bow = 0.015 + 0.05 * (1 - Math.min(1, mid)) + random() * 0.025;
+    const rim = na.layer === shellLayer && nb.layer === shellLayer;
+    const bow = rim ? 0.02 + random() * 0.03 : 0.04 + 0.16 * length * (1 - 0.5 * Math.min(1, mid)) + random() * 0.03 + curl;
     edges.push({ a: low, b: high, bow, rank: Math.min(2, na.rank + nb.rank) });
   };
+  const squared = (a: number, b: number) => {
+    const dx = nodes[a]!.x - nodes[b]!.x;
+    const dy = nodes[a]!.y - nodes[b]!.y;
+    const dz = nodes[a]!.z - nodes[b]!.z;
+    return dx * dx + dy * dy + dz * dz;
+  };
+  const mesh = (members: number[], longest: number, relative: boolean) => {
+    for (const a of members) {
+      for (const b of members) {
+        if (b <= a) continue;
+        const span = squared(a, b);
+        if (span > longest * longest) continue;
+        let open = true;
+        for (const c of members) {
+          if (c !== a && c !== b && (relative ? Math.max(squared(a, c), squared(b, c)) < span : squared(a, c) + squared(b, c) < span)) {
+            open = false;
+            break;
+          }
+        }
+        if (open) connect(a, b);
+      }
+    }
+  };
+  const members = (inShell: boolean) => {
+    const list: number[] = [];
+    for (let index = 0; index < count; index += 1) if ((nodes[index]!.layer === shellLayer) === inShell) list.push(index);
+    return list;
+  };
+  // The star: the heart joins the inner ring, each tip joins the two inner nodes beside it, and the tips are
+  // linked by arcs that curve in toward the heart.
+  const heart = shellCount + midCount;
+  for (let arm = 0; arm < 5; arm += 1) {
+    const inner = heart + 1 + arm;
+    const next = heart + 1 + (arm + 1) % 5;
+    const tip = heart + 6 + arm;
+    connect(heart, inner);
+    connect(inner, next);
+    connect(tip, inner);
+    connect(tip, next);
+    connect(tip, heart + 6 + (arm + 1) % 5, 0.26);
+  }
+  mesh(members(true), 1.1, false);
+  mesh(members(false), 0.8, true);
   for (let index = 0; index < count; index += 1) {
-    const node = nodes[index]!;
-    const reach = node.layer === coreLayer ? 6 : 4;
-    for (const neighbour of neighbours[index]!.slice(0, reach)) connect(index, neighbour);
-    // Long chords across the interior give the web its star-shaped arcs.
-    if (node.layer !== shellLayer) {
-      const far: number[] = [];
-      for (let other = 0; other < count; other += 1) {
-        const candidate = nodes[other]!;
-        if (candidate.layer === shellLayer) continue;
-        const distance = distanceBetween(node, candidate);
-        if (distance >= 0.3 && distance <= 0.62) far.push(other);
-      }
-      if (far.length > 0 && index % 4 !== 0) {
-        connect(index, far[Math.trunc(random() * far.length) % far.length]!);
-      }
-    }
-    if (node.layer === shellLayer) {
-      const inward = neighbours[index]!.find((other) => nodes[other]!.layer !== shellLayer);
-      if (inward !== undefined) connect(index, inward);
-    }
+    if (nodes[index]!.layer !== shellLayer) continue;
+    const inward = neighbours[index]!.find((other) => nodes[other]!.layer !== shellLayer);
+    if (inward !== undefined) connect(index, inward);
   }
 
   const adjacency: { node: number; edge: number }[][] = Array.from({ length: count }, () => []);
@@ -369,7 +418,7 @@ export type SceneHeart = {
   /** Radius of the broad amber glow. */
   radius: number;
   intensity: number;
-  /** 0–1 white-hot centre. */
+  /** 0–1 strength of the amber centre and its tiny spark. */
   heat: number;
 };
 
@@ -520,7 +569,7 @@ export function makeLatticeScene(
     const depth = 0.6 + 0.4 * ((az + bz) / 4 + 0.5);
     const light = Math.max(lit[edge.a]!, lit[edge.b]!) * 0.75;
     const length = Math.sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
-    const alpha = (0.19 + 0.26 * warmth) / (1 + length * (1.8 - 1.0 * warmth)) * gain * depth * alphasScale + light * 0.4;
+    const alpha = (0.36 + 0.34 * warmth) / (1 + length * (0.9 - 0.4 * warmth)) * gain * depth * alphasScale + light * 0.4;
     scene.edges.push({ ax, ay, cx, cy, bx, by, warmth, alpha: Math.min(1, alpha), light });
   });
 
@@ -546,7 +595,7 @@ export function makeLatticeScene(
       radius: node.size * (1 + 0.35 * lit[index]!) * (1 + 0.1 * z) * dotsScale * coreBeat,
       warmth: node.warmth,
       alpha,
-      halo: Math.min(1, lit[index]! * 0.8 + (node.rank === 0 ? 0.2 : 0)),
+      halo: Math.min(1, lit[index]! * 0.8 + (node.rank === 0 ? 0.4 : 0)),
     });
   });
   const coreTotal = Math.max(1, model.coreNodes.length);
