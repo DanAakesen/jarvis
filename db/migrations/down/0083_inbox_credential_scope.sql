@@ -1,0 +1,3 @@
+ALTER TABLE dbo.inbox_capture_credentials DROP CONSTRAINT CK_inbox_capture_credentials_scope;
+ALTER TABLE dbo.inbox_capture_credentials DROP CONSTRAINT DF_inbox_capture_credentials_scope;
+ALTER TABLE dbo.inbox_capture_credentials DROP COLUMN scope;
