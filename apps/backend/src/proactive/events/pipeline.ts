@@ -246,7 +246,8 @@ export function createEventPipeline(options: EventPipelineOptions) {
     wake: () => wake(now()),
     /** Reads the queue once at startup, so work left by a restart is picked up. */
     async start(): Promise<void> {
-      if (await queue.hasWork(now())) wake(now());
+      const due = await queue.nextDueAt();
+      if (due) wake(due);
     },
     /** One pass: filter, reason, deliver. Idle without a database read when nothing is due. */
     tick(signal: AbortSignal): Promise<TickResult> {

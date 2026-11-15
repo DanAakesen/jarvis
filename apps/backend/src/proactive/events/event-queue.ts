@@ -16,6 +16,8 @@ export interface EventSettlement {
 export interface EventQueueStore {
   enqueue(input: ProactiveEventInput, now: Date): Promise<{ id: string; inserted: boolean }>;
   hasWork(now: Date): Promise<boolean>;
+  /** When the earliest unprocessed event becomes due, or null when none is waiting. */
+  nextDueAt(): Promise<Date | null>;
   claim(now: Date, limit: number, leaseMs: number): Promise<QueuedEvent[]>;
   settle(settlements: readonly EventSettlement[], now: Date): Promise<void>;
   retryLater(ids: readonly string[], retryAt: Date): Promise<void>;
@@ -94,6 +96,11 @@ export function createMemoryEventQueueStore(): EventQueueStore {
       return { id, inserted: true };
     },
     async hasWork(now) { return [...rows.values()].some((row) => due(row, now)); },
+    async nextDueAt() {
+      const times = [...rows.values()].filter((row) => row.processedAt === null)
+        .map((row) => Math.max(row.retryAt?.getTime() ?? 0, row.claimedUntil?.getTime() ?? 0, row.receivedAt.getTime()));
+      return times.length ? new Date(Math.min(...times)) : null;
+    },
     async claim(now, limit, leaseMs) {
       const claimed = [...rows.values()].filter((row) => due(row, now))
         .sort((left, right) => left.receivedAt.getTime() - right.receivedAt.getTime()).slice(0, limit);
