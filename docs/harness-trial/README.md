@@ -1,48 +1,73 @@
 # Copilot-harness trial
 
-Analysis for [#1837](https://github.com/DanAakesen/jarvis/issues/1837) (P15-146). Analysis and recommendation only; no product code changed. Checked 14 Nov 2026.
+Analysis for [#1837](https://github.com/DanAakesen/jarvis/issues/1837) (P15-146). Analysis only; no product code changed. Updated 15 Nov 2026 after Dan's feedback: the first version proposed the SDK in our own containers and a stepwise A to D ladder. Both were wrong and are removed.
 
 ## Verdict
 
-| | |
-| --- | --- |
-| **Recommendation** | Keep the current harness and Voice Live. Add the Copilot harness as a second brain, in gated steps, starting with a local bench: 0 DKK cash, 600 credits at most |
-| **Why not replace it** | Most of the rigid feel lives in tools, guards and the proactive pipeline, which a new harness inherits. A full move costs about 560-1,010 DKK-equivalent per month at assumed use and exceeds Pro+ |
-| **What a harness really adds** | Loop, skills, sub-agents, resumable sessions, compaction, hooks, MCP: the parts the inbox loop and a proactive Jarvis need |
-| **Where "unrestricted" comes from** | Credentials and a shell, not the harness. Give a worker a read-only Azure role and GitHub access and the feeling follows |
-| **Next step** | [P15-158 (#1851)](https://github.com/DanAakesen/jarvis/issues/1851): local A/B bench |
+**Replace the brain of the Jarvis agent with one managed Copilot-harness agent in the same Foundry project. One agent serves chat, proactive runs and the inbox, with skills, subagents, MCP reach and a long-lived conversation. The backend becomes a gateway. Keep the current path as automatic fallback until the new one has earned the default.**
 
-## Where the feel comes from
+Smallest first step: a one-day spike on a new test agent in Foundry, capped at 30 DKK ([#1851](https://github.com/DanAakesen/jarvis/issues/1851), P15-158). Nothing in production changes.
+
+## Today and target
 
 ```mermaid
 flowchart LR
-    Feel["Feels rigid, restricted,<br/>reactive, hardcoded"]
-    Feel --> L1["Harness<br/>find_tools hop, 40-message window,<br/>no session, no files"]
-    Feel --> L2["Our design<br/>about 730 refusals, regex guards,<br/>fixed enums, one-shot proactive"]
-    Feel --> L3["Credentials<br/>4 Azure tools, typed GitHub wrappers"]
-    L1 -->|"a harness fixes this"| Fix1["Option A to D"]
-    L3 -->|"a read-only role plus a shell fixes this"| Fix1
-    L2 -->|"only a model-first rewrite fixes this"| Fix2["Not solved by switching"]
+    subgraph Today
+        direction TB
+        D1["Dan"] --> B1["Backend<br/>chat-agent.ts, 150 tools, approvals,<br/>reflex, proactive pipeline"]
+        B1 --> H1["Hosted agent<br/>our loop: chat_runtime.py<br/>find_tools then call_tool"]
+        H1 --> MD["Terra on Foundry"]
+        B1 -.-> PP["Proactive: one JSON call,<br/>12 fixed sources"]
+    end
+    subgraph Target
+        direction TB
+        D2["Dan, Voice Live, triggers"] --> GW["Gateway<br/>auth, stream, approvals,<br/>budget, push, guards"]
+        GW --> AG["ONE Jarvis agent<br/>managed Copilot harness<br/>skills, subagents, files,<br/>long-lived conversations"]
+        AG --> MC["MCP: Jarvis tools,<br/>GitHub, Azure"]
+    end
 ```
 
-## Options at a glance
+## Why the last attempt told us nothing
 
-| | A Hands lane | B Night shift | C Second brain | D Full move |
-| --- | --- | --- | --- | --- |
-| What moves | Azure and GitHub tasks on demand | Proactive brain | A + B + long-lived inbox session | All chat turns |
-| Cash DKK/month | about 9 | about 12 | about 27 | about 175-670 |
-| Credits/month (cap) | 990 (1,500) | 490 (600) | 3,350 (3,600) | 8,500-15,400 |
-| DKK-equivalent | 65 | 32 | 220 | 559-1,010 |
-| Touches production chat | no | no | no | yes |
-| Reversible in a day | yes | yes | yes | only if the old path stays |
+| | Parked 9 Nov | Target |
+| --- | --- | --- |
+| Engine | Same managed Copilot harness | Same |
+| Who ran the loop | **Our loop**, with the harness as a model endpoint | Foundry's |
+| Tools, skills, subagents, files | About 150 function tools; the rest switched off | MCP, skills, subagents on |
+| Conversation | New one every turn | Long-lived |
+| Result | A label change, no gain | Untested |
 
-Credits are free to Dan only inside his plan's allowance (Pro 1,500, Pro+ 7,000, Max 20,000). Set a $0 additional-usage budget so nothing can ever bill. All figures are estimates from assumed token profiles; the bench replaces them with measurements.
+## Cost: whole monthly bill, Terra, 1 h chat and 10 min voice a day
+
+| DKK per month | Today | Target, same work | Target, full workload |
+| --- | --- | --- | --- |
+| Infrastructure (measured) | 366 | 366 | 366 |
+| Voice (10 min a day) | 150 | 150 | 150 |
+| Hosted agent compute (measured, scaled) | 10 | 0 | 0 |
+| Managed sandbox (free until 1 Dec) | 0 | 60 | 60 |
+| Azure MCP server | 0 | 5 | 5 |
+| Models on Foundry | 77 | 198 | 407 |
+| **Total, expected** | **603** | **779** | **988** |
+| Low to high | 509-797 | 565-2,385 | 627-3,607 |
+
+No container of ours is always on. Model tokens bill on Azure, not as GitHub Copilot credits. The high band is context growth in long conversations; the gateway caps it. Today's hosted-agent compute is taken from the measured run-rate since 12 Nov (0.05-0.15 DKK a day), not from the Factory test period. Whether the managed sandbox is released when idle is unknown; see [what billing is documented](03-target-architecture.md#what-billing-is-documented-and-what-is-not).
+
+## What is unknown
+
+| Unknown | Decided by |
+| --- | --- |
+| Terra works in the harness (one request was rejected on 6 Nov) | Spike 1 |
+| Per-turn authority on MCP writes | Spike 2, 3 |
+| Real tokens, cache hit rate and cost per turn | Spike 4 |
+| Streaming latency, mid-turn steering | Spike 5 |
+| Conversation limits and compaction | Spike 6 |
+| Sandbox size and idle billing (hosted agents release compute on idle: documented; the managed sandbox: not) | Spike plus the December bill |
 
 ## Documents
 
 | File | Contents |
 | --- | --- |
-| [01-diagnosis.md](01-diagnosis.md) | What makes the harness feel rigid, restricted, reactive and hardcoded, with file and line evidence |
-| [02-quality-gains.md](02-quality-gains.md) | Quality-only gains, honest cons, unknowns, checked against current official docs |
-| [03-options.md](03-options.md) | Options A to D with architecture diagrams, DKK per month, assumptions, risks and exit plans |
-| [04-recommendation.md](04-recommendation.md) | Recommendation, gates, the smallest first experiment, open questions for Dan |
+| [01-diagnosis.md](01-diagnosis.md) | What makes the current harness feel rigid, restricted, reactive and hardcoded, with file and line evidence |
+| [02-quality-gains.md](02-quality-gains.md) | Quality gains of the Copilot harness, what is documented for the managed Foundry version, honest cons |
+| [03-target-architecture.md](03-target-architecture.md) | The single target: diagrams, limits, parity gaps, cost comparison, migration path, risks |
+| [04-recommendation.md](04-recommendation.md) | Recommendation, gates, the seven-question spike |
