@@ -97,8 +97,14 @@ describe('inbox MCP server', () => {
     const again = await call({ title: 'Padel night, reworded', note: 'x', captureId: 'chatgpt-20261114-0001' });
     expect(again.json?.result?.structuredContent).toMatchObject({ created: false });
     expect(files.size).toBe(1);
-    const secret = await call({ title: 'Keys', note: 'password: hunter2hunter2' });
+    const secret = await call({ title: 'Keys', note: 'password: hunter2hunter2', captureId: 'chatgpt-20261114-0002' });
     expect(secret.json?.result?.isError).toBe(true);
+    expect(files.size).toBe(1);
+    // The published contract is enforced: a capture key and some content are both required.
+    for (const args of [{ title: 'No key', note: 'x' }, { title: 'Title only', captureId: 'chatgpt-20261114-0003' }]) {
+      const rejected = (await call(args)).json;
+      expect(rejected?.error ?? rejected?.result?.isError, JSON.stringify(args)).toBeTruthy();
+    }
     expect(files.size).toBe(1);
   });
 

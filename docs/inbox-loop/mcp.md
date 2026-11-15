@@ -8,7 +8,7 @@ The inbox is an MCP server at `https://<your Jarvis backend host>/inbox/mcp` (St
 
 | Tool | Credential scope | Does |
 | --- | --- | --- |
-| `inbox_capture` | write, read_write | Save one idea, ask or loose thought: `title`, optional `note`, optional verbatim `quote`, optional `captureId` for retries |
+| `inbox_capture` | write, read_write | Save one idea, ask or loose thought: `title`, a `note` or a verbatim `quote` (or both), and a required `captureId` so a retry never saves twice |
 | `inbox_items` | read_write | List or search inbox items, or read one in full by `id` |
 | `inbox_close` | read_write | Close an item on Dan's word: moves it to `Inbox/Closed/` with a trail line; never deletes |
 

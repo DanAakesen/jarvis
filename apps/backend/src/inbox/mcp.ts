@@ -17,8 +17,8 @@ const captureSchema = z.object({
   title: text(MAX_INBOX_TITLE_LENGTH),
   note: text(MAX_INBOX_NOTE_BYTES).optional(),
   quote: text(MAX_INBOX_QUOTE_BYTES).optional(),
-  captureId: z.string().regex(/^[A-Za-z0-9._-]{16,64}$/u).optional(),
-}).strict();
+  captureId: z.string().regex(/^[A-Za-z0-9._-]{16,64}$/u),
+}).strict().refine((value) => value.note !== undefined || value.quote !== undefined, { message: 'Give a note, a quote, or both.' });
 const itemsSchema = z.object({
   query: text(200).optional(),
   includeClosed: z.boolean().optional(),
@@ -72,20 +72,20 @@ export function createInboxMcpRoutes(options: {
       title: 'Add to the inbox',
       description: [
         "Save one idea, ask or loose thought from Dan to his inbox, a free-text note in his private vault, so Jarvis follows it up until he moves on it or bins it.",
-        'One item per thought; call once per idea. title is a clear, specific headline. note is optional Markdown in Dan\'s language: what and why, what is unclear, a likely next step. No status, priority or date fields. quote is Dan\'s own words, kept verbatim: pass them exactly as he said them.',
-        'Pass a unique captureId (16-64 letters, digits, dots, hyphens or underscores) so a retry never saves twice. Never include passwords, keys or tokens; they are refused.',
+        'One item per thought; call once per idea. title is a clear, specific headline. Give a note, a quote or both: note is Markdown in Dan\'s language (what and why, what is unclear, a likely next step; no status, priority or date fields) and quote is Dan\'s own words, kept verbatim, passed exactly as he said them.',
+        'captureId is required: a unique key per thought (16-64 letters, digits, dots, hyphens or underscores). Retrying with the same captureId never saves twice, so retry after a lost response. Never include passwords, keys or tokens; they are refused.',
       ].join(' '),
       inputSchema: captureSchema,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     }, async (input, ctx) => safe(request, 'inbox_capture', async () => {
       const abort = AbortSignal.any([signal, ctx.mcpReq.signal]);
-      const id = input.captureId === undefined ? undefined : captureNoteId(input.captureId, 0);
+      const id = captureNoteId(input.captureId, 0);
       const { item, created } = await store.create({
         title: input.title,
         ...(input.note === undefined ? {} : { note: input.note }),
         ...(input.quote === undefined ? {} : { quote: input.quote }),
         source: access.label,
-        ...(id === undefined ? {} : { id }),
+        id,
       }, abort);
       if (index) await index.complete(item.id, item.path, item.sha, abort).catch(() => undefined);
       return result({
