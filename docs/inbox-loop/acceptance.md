@@ -1,6 +1,6 @@
 # Loose Ends: switch-on and acceptance
 
-Status: **everything is built and dark.** Nothing below has run against a live vault, a real model or a device. Switching on is the owner's decision and deployment; this page is the checklist.
+Status: **all eight steps are built, merged and dark.** Nothing below has run against a live vault, a real model or a device. Switching on is the owner's decision and deployment; this page is the checklist.
 
 ## What each switch turns on
 
@@ -11,11 +11,14 @@ Status: **everything is built and dark.** Nothing below has run against a live v
 
 Both default to `false`. The nudges also need `JARVIS_PROACTIVE_ENABLED=true` (already on in production) and the Notes source enabled in Proactive settings. The proactive pause switch stops them too.
 
-## Before switching on
+## What is left for the owner
 
-1. Merge the stack in order and let Deploy apply migrations `0081` to `0085` (they are additive; each has a tested down script). `0080` belongs to the proactive-events PR and must merge first.
-2. Merge the vault `AGENTS.md` pull request (DanAakesen/vault#1) if you want other agents to follow the convention.
-3. Confirm the GitHub App has Contents write on the private vault (it already does for notes and tasks).
+1. **Switch-on:** set `inboxEnabled` (then, after testing, `inboxNudgesEnabled`) to `true` in `infra/main.parameters.json` and deploy. Deploy applies migrations `0081` to `0085` (additive; each has a tested down script; `0080` is the proactive-events queue, already merged).
+2. **Vault convention:** review and merge DanAakesen/vault#1 (the `Inbox/` convention in the vault `AGENTS.md`, plus a corrected sync paragraph). The backend does not depend on it; it lets other agents capture without Jarvis.
+3. **ChatGPT and claude.ai connectors:** create an Entra app registration with `inbox.read` and `inbox.write` scopes, like the Health connector. Not done and not buildable without it; until then the MCP server works for clients that send a bearer header (Claude Code, Codex, Copilot CLI).
+4. **Device acceptance** of the checklist below: nothing has run against the live vault, a real model or a device.
+
+The GitHub App already has Contents write on the private vault (it writes notes and tasks today).
 
 ## Acceptance checklist (owner, on a real device)
 
@@ -39,9 +42,9 @@ Rails already in place: the monthly budget gate before every run, the audit and 
 
 ## Known gaps
 
-- Thumbs on the push notification itself (iOS and web notification actions) are not built; thumbs come from the card.
+- Thumbs on the push notification itself (iOS and web notification actions) are not built; thumbs come from the proactive card's useful and wrong buttons.
 - A native "Add to inbox" action in the Jarvis Watch app is not built; the Shortcut runs on the watch.
-- ChatGPT and claude.ai custom connectors need an Entra OAuth registration (owner action).
+- ChatGPT and claude.ai custom connectors need the Entra OAuth registration above (owner action).
 - The inbox spend is also visible only in `/inbox/status`, not yet on the Proactive page.
 - After an index rebuild, nudge clocks restart at the rebuild time.
 - None of this has been run on a device or against the live vault.
