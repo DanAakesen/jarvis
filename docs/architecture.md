@@ -1,3 +1,23 @@
+## Event-driven proactive path — 15 November 2026 (#1858)
+
+The existing proactive ticker (30 seconds) also drains an event queue. Producers: the signed GitHub webhook (finished workflow runs, deployment results), activity alerts, a six-hour timer review with a cost-spike check, and a 15-minute poll of the read-only mail and calendar sources. Events are rows in `dbo.proactive_events` (Azure SQL, migration 0080) with a unique key per owner and a lease for safe claims. Cheap rules drop routine events without a model call; survivors go in batches of up to 10 to one GPT-6.1 Terra call (Foundry chat completions, low reasoning effort, no tools) with vault, memory, todo, calendar, factory and health context and the owner's recent thumbs. Each decision becomes a finding (Proactive page) and an outreach row (`dbo.proactive_outreach`: tier, reasoning, delivery, rating), then goes out through the channels registered for its tier: a Now feed card for low, a push for medium and high. Spend is written to the shared `proactive_spend` ledger and the monthly hard stop is checked before each call. The pipeline holds its next due time in memory, so SQL is read only when something is due. Diagram and details: `docs/proactive-events/design.md`. The path is off unless `JARVIS_PROACTIVE_EVENTS_ENABLED` is `true`; the 07:00 and 18:00 engine is unchanged.
+
+New routes (owner only): `GET /proactive/outreach`, `POST /proactive/outreach/:id/feedback`. The call is an unbuilt `OutreachChannel`.
+
+## Inbox store — 15 November 2026 (#1855, step 1)
+
+`apps/backend/src/inbox/` is the only code that writes the vault's `Inbox/` folder.
+`note.ts` holds the pure format rules (path guard confined to `Inbox/*.md` and
+`Inbox/Closed/*.md`, title and file-name cleaning, redaction through the vault's
+`shouldRedact`, size limits, hidden id, trail lines). `store.ts` provides create
+(create-only, retries a taken name with a suffix, idempotent when the caller's id
+already exists), replace (`expectedSha`, hidden id kept), close (one commit moves
+the note to `Inbox/Closed/` with a trail line) and list. The vault client gained
+`move`, a single-commit rename through the Git Data API that refuses when the
+source changed or the target exists and updates the branch fast-forward only. Later
+steps add the index table, tools, HTTP route, MCP server and nudge pass as adapters
+over this store. Design: `docs/inbox-loop/design.md`.
+
 ## Cognitive lattice orb and opening screen — 14 November 2026 (P15-143 / #1834)
 
 - **Renderer boundary.** `apps/ios/Packages/JarvisCore/Sources/JarvisCore/Orb/` holds everything platform-neutral:

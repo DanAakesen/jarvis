@@ -1,3 +1,28 @@
+## Event-driven proactive Jarvis — 15 November 2026 (#1858, P15-161)
+
+**Status: built and tested locally; off by default; no live proof yet.** Design, diagram and numbers: `docs/proactive-events/design.md`.
+
+Done, in reviewable steps: (1) Terra priced correctly in the budget meter; (2) migration `0080`, queue, cheap rules, GPT-6.1 Terra reasoner, three tiers with a channel extension point, the pipeline; (3) SQL stores; (4) wiring into the existing ticker, the GitHub webhook, activity alerts, a timer review, mail and calendar polling, the thumbs endpoints and the Bicep switch.
+
+Checks that ran (15 November, Linux): backend lint and build clean; backend 320 tests pass (55 new); web 21 tests pass (3 new) with lint and typecheck clean; 15 database integration tests pass against SQL Server 2022 in Docker (migration 0080, concurrent enqueue and claim, leases, retry, purge, ratings, down script, and one run from queue to pushed outreach); Bicep 0.44.1 builds.
+
+Next, in order, each needing Dan: (a) set `proactiveEventsEnabled` to `true` and Deploy; (b) watch `GET /proactive/outreach` and `proactive.events` for a few days against the 07:00 and 18:00 checks; (c) only then decide on thumbs on the push itself (native work) and the call channel. The 07:00 and 18:00 checks are untouched.
+
+## Loose Ends (inbox loop) — 15 November 2026 (#1855, P15-159)
+
+Owner go-ahead: "go on loose ends". One issue, eight steps delivered in order, each as its own pull request and verified before the next. All ship dark behind default-off flags; spend stays inside the 100 DKK/month budget.
+
+| Step | Scope | State |
+| --- | --- | --- |
+| 1 | Vault note format and store (`apps/backend/src/inbox/`): create, replace, close (move to `Inbox/Closed/`), list | Built, in review |
+| 2 | Vault `AGENTS.md` convention | Not started |
+| 3 | Rebuildable index table (last nudged, thumbs) | Not started |
+| 4 | Chat and voice tools: capture, list, close | Not started |
+| 5 | Capture endpoint, write-only credential, Watch action, iPhone Shortcut | Not started |
+| 6 | MCP server (ChatGPT, Claude, Copilot) | Not started |
+| 7 | Nudge pass in the proactive run, thumbs on the push | Not started |
+| 8 | Missed-capture audit, weekly review, spend visibility, owner switch-on | Not started |
+
 ## Cognitive lattice orb, opening screen and icons — 14 November 2026 (P15-143 / #1834, PR #1853)
 
 Implemented: the procedural lattice in JarvisCore (model, scene, SwiftUI painter), `JarvisOrb` and every iPhone,

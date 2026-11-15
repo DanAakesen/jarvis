@@ -1,3 +1,7 @@
+## Event-driven proactive outreach — 15 November 2026 (#1858)
+
+No new screens. A low-tier outreach is one row in the existing Now feed list (alert group) with the model's title and body; it links to the finding on the existing Proactive page, which keeps its useful and wrong buttons as the thumbs. Medium and high use the existing insight push. Thumbs on the push itself, and any iOS rendering of the new card, are not designed or verified here.
+
 ## Watch complications and home exploration — 10 November 2026
 
 Existing Watch Home and complications retain stale values with a compact localized saved-age label instead of replacing them with an expiry message. Installed-device layout and locked display remain unverified.

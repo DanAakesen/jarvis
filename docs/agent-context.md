@@ -1,3 +1,10 @@
+## Event-driven proactive path — 15 November 2026 (#1858)
+
+- Flag: `JARVIS_PROACTIVE_EVENTS_ENABLED=true` (Bicep `proactiveEventsEnabled`, default false). It needs the proactive path, the Foundry endpoint and catalogue, and a deployed `gpt-6.1-terra` chat deployment; pushes also need `JARVIS_PUSH_ENABLED` and `JARVIS_PROACTIVE_ALERTS_ENABLED`. Apply migration `0080_proactive_events.sql` first.
+- Checks: `npm test --workspace @jarvis/backend -- src/proactive` (queue, rules, reasoner, pipeline, producers, routes, scheduler tick, budget). Database contract against a local SQL Server: start `mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04` as in `.github/workflows/database-ci.yml`, export the `SQL_*` variables and `NODE_ENV=test` from that file, then `npm run test:database --workspace @jarvis/backend`.
+- Operate: `GET /proactive/outreach` lists recent outreach with tier, delivery and rating; `proactive.events` log lines carry counts and reasons, never message text. Events in `proactive_events` show their free-text `outcome`.
+- Not verifiable on Linux: native push delivery, rendered Now feed card, a real Terra call and real cost.
+
 ## Cognitive lattice orb and opening screen — 14 November 2026 (P15-143 / #1834)
 
 - **Never draw an orb in a screen file.** Use `JarvisOrb` (app) or `JarvisLatticeOrbView` (JarvisCore; Watch, widgets).

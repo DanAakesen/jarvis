@@ -1,3 +1,34 @@
+## 15 November 2026 — Event-driven proactive path with GPT-6.1 Terra and three tiers (#1858)
+
+Owner: "for the model we should do gpt 6.1, that is very very cheap. so that should be very little. GO ahead and build this but without the calling to begin with." Tiers: low, medium and high; calls come later.
+
+- **Queue**: a table in the existing Azure SQL database (`proactive_events`, migration 0080), read by the existing 30-second proactive ticker. No new Azure service. Source, kind, summary and outcome are free text; state is derived from columns, not an enum.
+- **Cheap rules first, then the model**: exact checks with no model call (stale, routine success, source off, hourly cap, unchanged timer context), then one GPT-6.1 Terra call per batch of up to 10 events at low reasoning effort, with vault, memory, todo, calendar, factory and health context and recent thumbs. The model picks the tier and the words. At most 12 batches and 6 pushes a day; the monthly hard stop (default 100 DKK) applies before every call.
+- **Tiers**: low is a Now feed card that opens the finding; medium and high are a push. The call is not built: it is one more `OutreachChannel` for `high`. Quiet hours do not apply to this path (the owner's phone is on Do Not Disturb at night); the old 07:00 and 18:00 path and reminders keep theirs.
+- **Never send mail**: the path has no tool and no write access; it only writes words.
+- **Feedback**: thumbs up or down per outreach, stored in `proactive_outreach` and fed back as context. The Proactive page's useful and wrong buttons rate the same outreach.
+- **Mail and calendar**: polled every 15 minutes through the existing read-only sources. Gmail push needs Google Pub/Sub (a new service) and calendar watch needs a public receiver with renewal, so neither is used. Health reaches the model as context, not as events.
+- **GitHub**: only finished workflow runs and deployment results queue; pull request, push and check events do not (failed workflows cover builds; the timer review covers stalled repositories).
+- **Budget meter fix**: Terra was unlisted and priced at the highest listed rate (Luna), about five times too low. It is now priced at USD 1 input and USD 5 output per million tokens (Azure OpenAI list price, Global short context, checked 15 November 2026; cached-input discounts ignored). Unlisted models still fall back to the highest listed rate, which is now Terra's.
+- **Switch**: `JARVIS_PROACTIVE_EVENTS_ENABLED` (Bicep `proactiveEventsEnabled`, default false) so the existing checks keep running alone until the new path is proven.
+- Evidence: unit and SQL Server 2022 integration tests, listed in PLAN.md. Not observed: live traffic, push delivery, a real model call, real cost. Estimates in `docs/proactive-events/design.md` are computed, not measured.
+
+## 15 November 2026 — Loose Ends build: Inbox store (#1855, step 1)
+
+Owner go-ahead on the inbox loop ("go on loose ends"); build order follows #1855.
+Confirmed shape: one `Inbox` module in the existing backend serves chat and voice
+tools, HTTP and MCP, so safe path, redaction, size limit and idempotent create live
+in one place; the private vault repo is the source of truth; no new Azure services.
+Step 1 choices (reversible, within the approved design): live notes are
+`Inbox/<yyyy-mm-dd> <title>.md`, closed notes sit in `Inbox/Closed/` and closing is
+one atomic Git Data API commit (move plus trail line), never a delete. A note
+carries no status field; its only mechanical element is the hidden
+`<!-- jarvis-inbox:id -->` comment, which callers can never plant. The folder is
+outside the task scope, so checkboxes in an idea never become tasks. A note is
+capped at 8 KB and the verbatim quote at 4 KB. Interrupt tiers for nudges (step 7):
+low is a card in the Now feed; medium and high are push; no phone call for now.
+
+
 ## 15 November 2026 — Watch dictation and voice on the first press (P15-160 / #1856)
 
 Build 105 feedback: dictation hung and ended with "transcription timed out", voice
