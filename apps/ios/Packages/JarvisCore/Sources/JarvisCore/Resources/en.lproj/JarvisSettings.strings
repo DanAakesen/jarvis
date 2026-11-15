@@ -39,6 +39,8 @@
 "settings.loadMore" = "Load more";
 "settings.showMore" = "Show more";
 "settings.row.appearance" = "Appearance";
+"settings.openingScreen" = "Opening screen";
+"settings.openingScreen.hint" = "Show the animated opening when Jarvis starts from closed. Turning it off skips straight to the lock screen and Home.";
 "settings.row.personality" = "Personality";
 "settings.row.identity" = "Identity and role";
 "settings.row.voice" = "Voice";

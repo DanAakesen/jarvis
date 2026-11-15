@@ -23,6 +23,54 @@ Owner go-ahead: "go on loose ends". One issue, eight steps delivered in order, e
 | 7 | Nudge pass in the proactive run, feedback learning | Built as an `onFindingsStored` hook, dark behind `JARVIS_INBOX_NUDGES_ENABLED`. Thumbs on the push itself (iOS and web notification actions) not built (native work, same as #1862) |
 | 8 | Missed-capture audit, weekly review, spend visibility, owner switch-on | Not started |
 
+## Cognitive lattice orb, opening screen and icons — 14 November 2026 (P15-143 / #1834, PR #1853)
+
+Implemented: the procedural lattice in JarvisCore (model, scene, SwiftUI painter), `JarvisOrb` and every iPhone,
+Live Activity, Dynamic Island, Home widget and Watch orb on it, the cold-start opening screen (cold start only,
+fresh Today refresh, 0.3 s crossfade, Settings off switch, static launch colour), the iPhone and Watch icons and the
+web favicon from the concept, and the web stage, composer and working orbs on the same generator. The old orb
+drawing, geometry, tokens and web shell/ribbons/motes were deleted. The written inventory is
+`docs/ui/cognitive-lattice-inventory.md` and the PR description.
+
+Visual iteration — 15 November 2026: the first result read as a dense hairball against the approved reference, so the
+lattice was rebuilt. 112 nodes (was 340) on a cyan shell, two interior shells and a five-armed amber star heart are
+joined by 262 long connections (was about 1,250) from a neighbourhood graph (Gabriel on the shell, relative-neighbourhood
+inside, plus the explicit star), not random links. The core is amber to orange with a wide orange haze and only a tiny
+pale spark; the glass edge is cyan on the left, amber on the lower right with a soft inner highlight. Motion model, golden
+file contract and the listening, thinking and speaking states are unchanged. Observed in macOS CI run 43680759144:
+the iPhone simulator opening screen and orb gallery (every state, five sizes) and Home widget layouts render the new
+lattice (`docs/ui/opening-final-2026-11-14/iteration-2026-11-15/`). Still to judge by the owner: the look on a device.
+
+Round 3 — 15 November 2026: the owner approved the orb as of iteration 2 (the iteration 3 experiment with bloom and a
+seven-arm core was reverted at his request) and asked only for a sparser opening background. `JarvisOpeningNetwork` is now
+seven small nodes and fifteen long angular links at fixed positions modelled on `jarvis-opening-selected.png`, with
+anchors beyond the edges; two links pass behind the orb and the orb's disc is masked out of the background canvas. Only
+`JarvisOpeningView` draws the network; the gate and fade screens use the plain colour. The orb is unchanged. Observed in
+macOS CI run 43687222718: the simulator opening screen shows the sparse background with lines passing behind the orb
+(`iteration-2026-11-15/ios-opening-round3-3s.png`).
+
+Round 4 — 15 November 2026: owner asked for a tiny additive glow on the background lines and nodes, no isolated dots
+(every visible node has a link running toward the orb: three links added to a hidden anchor at the orb centre,
+`JarvisOpeningNetwork.orbAnchor`, which the screen maps to the real orb centre) and an opacity fade along links as they
+approach the orb (about 40% at the sphere's edge, still hidden behind it). The orb is untouched. Observed in the macOS CI simulator
+capture (`iteration-2026-11-15/ios-opening-round4-3s.png`, run 43699676086): the capture step later timed out on a degraded
+runner (CoreSimulator error 405, minutes per screenshot), so that run's gallery and widget frames are missing; the
+build and compile steps passed.
+
+Observed: `swift test` in JarvisCore passes 79 tests on Linux (including the golden file shared with the web, state
+continuity, containment, 1.6 s pulse and the opening layout, network and policy). Web `npm run lint`, `npm run build` and
+`npx vitest run` (33 tests) pass, and the real stage, composer and working orbs were inspected in headless Chrome
+(SwiftShader) in both themes, at desktop and phone widths, with motion on and off, in all four states. In macOS CI (run
+43660895519) the Watch app and complications built for simulator and physical-device release, the iPhone app built with every
+extension, and the simulator captures ran: the orb gallery shows every state and five sizes; the opening video shows the
+network and bar moving; the measured-bar variant and the Home widget layouts render the lattice. Screenshots taken
+at different times for the opening came out byte-identical while the video moved, so rely on the video.
+
+Not verified: any device (Face ID timing, interrupted transitions, background and resume, deep links, VoiceOver,
+Reduce Motion, small screens, battery and frame rate), WidgetKit and Live Activity rendering of the lattice
+(only simulator layout was seen), the Watch simulator orb screens, web on a real GPU, and Linux iOS CI for this
+exact head (the PR is a draft). Next: owner judges the look on TestFlight; the off switch is in Settings.
+
 ## Voice caption follow-up — 13 November 2026 (#1823)
 
 Phone captions follow accumulating user and assistant text in a bounded scroll

@@ -58,6 +58,7 @@ private final class JarvisGateOverlay {
         }
         if let window {
             window.isPrivacyCover = model.presentation == .unlocked
+            window.isUserInteractionEnabled = model.shouldCoverContent
             return
         }
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else {
@@ -67,6 +68,8 @@ private final class JarvisGateOverlay {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         let overlay = JarvisGateOverlayWindow(windowScene: scene)
         overlay.isPrivacyCover = model.presentation == .unlocked
+        // While the opening fades out over a ready Home, touches pass through to it.
+        overlay.isUserInteractionEnabled = model.shouldCoverContent
         overlay.windowLevel = .alert + 1
         let host = UIHostingController(rootView: JarvisGateOverlayView(model: model))
         host.view.backgroundColor = .clear
@@ -76,9 +79,18 @@ private final class JarvisGateOverlay {
     }
 }
 
+/// The cold-start opening screen's life: shown, fading out over Home, then gone for the rest of the process.
+private enum JarvisOpeningState: Equatable {
+    case visible, fading, finished
+}
+
 @MainActor
 private final class JarvisGateModel: ObservableObject {
-    @Published private(set) var presentation: JarvisGatePresentation = .loading
+    @Published private(set) var presentation: JarvisGatePresentation = .loading {
+        didSet { updateOpening() }
+    }
+    @Published private(set) var openingState: JarvisOpeningState
+    @Published private(set) var openingProgress: JarvisOpeningProgress = .indeterminate
     @Published private(set) var contentEpoch = 0
     @Published private(set) var signOutGeneration = 0
     @Published private(set) var watchRevocationNotice: String?
@@ -91,6 +103,9 @@ private final class JarvisGateModel: ObservableObject {
     private let overlay = JarvisGateOverlay()
     private var backgroundedAt: Date?
     private var isSigningOut = false
+    private var homeIsReady = false
+    private var unlockedAt: Date?
+    private var openingCap: Task<Void, Never>?
 
     private static var isNavigationFixture: Bool {
 #if targetEnvironment(simulator)
@@ -100,11 +115,45 @@ private final class JarvisGateModel: ObservableObject {
 #endif
     }
 
+    private static var launchesFixture: Bool {
+#if targetEnvironment(simulator)
+        ProcessInfo.processInfo.arguments.contains { $0.hasPrefix("--screenshot-") || $0.hasPrefix("--ui-test") }
+#else
+        false
+#endif
+    }
+
+    /// Debug simulator only: keeps the opening on screen so it can be inspected and captured.
+    private static var holdsOpeningForPreview: Bool {
+#if DEBUG && targetEnvironment(simulator)
+        ProcessInfo.processInfo.arguments.contains("--opening-preview")
+#else
+        false
+#endif
+    }
+
     var shouldCoverContent: Bool {
         presentation != .unlocked || isPrivacyCoverVisible
     }
 
+    /// The overlay window stays up while the opening fades, even once Home no longer needs covering.
+    var isOverlayVisible: Bool {
+        shouldCoverContent || openingState != .finished
+    }
+
+    /// True while the app is inactive or in the background: decorative motion holds still.
+    var isRenderingPaused: Bool {
+        isPrivacyCoverVisible
+    }
+
     init() {
+        // The opening shows on every cold start (this model lives for the whole process) unless it is switched off.
+        openingState = JarvisOpening.isEnabled && (!Self.launchesFixture || Self.holdsOpeningForPreview) ? .visible : .finished
+        if Self.holdsOpeningForPreview,
+           let value = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--opening-progress=") }),
+           let fraction = Double(value.dropFirst("--opening-progress=".count)) {
+            openingProgress = .measured(fraction)
+        }
         if Self.isNavigationFixture {
             tokenStore = nil
             provider = nil
@@ -212,7 +261,55 @@ private final class JarvisGateModel: ObservableObject {
     }
 
     func refreshOverlay() {
-        overlay.update(visible: shouldCoverContent, model: self)
+        overlay.update(visible: isOverlayVisible, model: self)
+    }
+
+    // MARK: Opening screen
+
+    /// Called once the first fresh Home data has loaded (or failed visibly); never by a timer.
+    func homeDataReady() {
+        homeIsReady = true
+        updateOpening()
+    }
+
+    private var openingStage: JarvisOpeningPolicy.Stage {
+        switch presentation {
+        case .loading: .resolving
+        case .lock(.waiting): .authenticating
+        case .unlocked: .unlocked
+        default: .needsAttention
+        }
+    }
+
+    private func updateOpening() {
+        guard openingState == .visible, !Self.holdsOpeningForPreview else { return }
+        if presentation == .unlocked, unlockedAt == nil {
+            unlockedAt = Date()
+            openingCap = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(JarvisOpeningPolicy.dataWait))
+                self?.updateOpening()
+            }
+        }
+        let stillVisible = JarvisOpeningPolicy.isVisible(
+            enabled: true, coldStart: true, stage: openingStage, dataReady: homeIsReady,
+            unlockedFor: unlockedAt.map { Date().timeIntervalSince($0) } ?? 0
+        )
+        if !stillVisible { finishOpening() }
+    }
+
+    /// Crossfades the opening into whatever is underneath (Home, or the gate's own screen), then removes it.
+    /// Reduce Motion shortens the fade. It only ever moves forward, so repeated lifecycle events cannot restart it.
+    private func finishOpening() {
+        openingCap?.cancel()
+        let duration = UIAccessibility.isReduceMotionEnabled
+            ? JarvisDesignTokens.openingReducedFadeDuration : JarvisDesignTokens.openingFadeDuration
+        withAnimation(.easeOut(duration: duration)) { openingState = .fading }
+        refreshOverlay()
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(duration + 0.05))
+            self?.openingState = .finished
+            self?.refreshOverlay()
+        }
     }
 
     func signIn() async {
@@ -263,6 +360,10 @@ private final class JarvisGateModel: ObservableObject {
         } catch {
             presentation = .signIn(.denied)
         }
+    }
+
+    func sessionRevoked() {
+        Task { await signOut() }
     }
 
     func retryUnlock() async {
@@ -358,6 +459,22 @@ private final class JarvisGateModel: ObservableObject {
 }
 
 struct JarvisGateRootView: View {
+    /// Plain opening colour over the first frames; see the overlay in `body`.
+    @ViewBuilder
+    private var openingColourCover: some View {
+        if model.openingState == .visible {
+            JarvisDesignTokens.openingBackground
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// Home reports its first fresh data through this, on a cold start only.
+    private var coldStartCallback: (@MainActor () -> Void)? {
+        guard model.openingState == .visible else { return nil }
+        return { [model] in model.homeDataReady() }
+    }
+
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("jarvis.appTheme") private var storedTheme = "system"
     @StateObject private var model = JarvisGateModel()
@@ -378,7 +495,10 @@ struct JarvisGateRootView: View {
                         language: .default
                     )
                 } else {
-                    ContentView(sessionEpoch: model.contentEpoch)
+                    ContentView(
+                        sessionEpoch: model.contentEpoch,
+                        onColdStartData: coldStartCallback
+                    )
                 }
             }
             // Only sign-out discards the shell; sign-in resets session content explicitly.
@@ -390,6 +510,8 @@ struct JarvisGateRootView: View {
             .accessibilityHidden(model.shouldCoverContent)
         }
         .environmentObject(navigation)
+        // The first frames after the static launch screen show the opening's own colour, never a flash of Home.
+        .overlay { openingColourCover }
         // The drawer sits outside ContentView, so the stored theme must be applied at the root as well.
         .preferredColorScheme(storedTheme == "light" ? .light : storedTheme == "dark" ? .dark : nil)
         .task {
@@ -411,7 +533,7 @@ struct JarvisGateRootView: View {
             model.clientRequestedSignIn()
         }
         .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
-            Task { await model.signOut() }
+            model.sessionRevoked()
         }
     }
 }
@@ -424,21 +546,42 @@ private struct JarvisGateOverlayView: View {
     }
 
     var body: some View {
-        Group {
-            if model.presentation != .unlocked {
-                JarvisGateSurface(
-                    presentation: model.presentation,
-                    language: language,
-                    watchRevocationNotice: model.watchRevocationNotice,
-                    onPrimaryAction: model.performPrimaryAction
+        ZStack {
+            base
+            if model.openingState != .finished {
+                JarvisOpeningView(
+                    progress: model.openingProgress,
+                    isPaused: model.isRenderingPaused,
+                    isFinishing: model.openingState == .fading
                 )
-            } else {
-                JarvisDesignTokens.pageBackground
-                    .ignoresSafeArea()
-                    .accessibilityHidden(true)
+                .opacity(model.openingState == .visible ? 1 : 0)
             }
         }
         .accessibilityAddTraits(.isModal)
+    }
+
+    /// What lies under the opening. While the opening is visible it is a plain colour, so only one orb is drawn;
+    /// as the opening fades it is the real screen: the gate's own state, or Home itself, uncovered.
+    @ViewBuilder
+    private var base: some View {
+        if model.openingState == .visible {
+            JarvisDesignTokens.openingBackground
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+        } else if model.presentation != .unlocked {
+            JarvisGateSurface(
+                presentation: model.presentation,
+                language: language,
+                watchRevocationNotice: model.watchRevocationNotice,
+                onPrimaryAction: model.performPrimaryAction
+            )
+        } else if model.shouldCoverContent {
+            JarvisDesignTokens.pageBackground
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+        } else {
+            Color.clear
+        }
     }
 }
 

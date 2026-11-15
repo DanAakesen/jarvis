@@ -40,7 +40,7 @@ function clamp01(value: number) {
   return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
 }
 
-function smoothstep(edge0: number, edge1: number, value: number) {
+export function smoothstep(edge0: number, edge1: number, value: number) {
   const t = clamp01((value - edge0) / (edge1 - edge0));
   return t * t * (3 - 2 * t);
 }
@@ -94,9 +94,8 @@ export function createOrbMotion() {
         speech = options.state === 'speaking'
           ? followEnvelope(speech, options.playback, dt, 28, 7)
           : followEnvelope(speech, 0, dt, 28, 16);
-        input = options.state === 'listening'
-          ? followEnvelope(input, options.input, dt, 22, 6)
-          : 0;
+        // The envelope releases after listening ends instead of snapping, so the network settles smoothly.
+        input = followEnvelope(input, options.state === 'listening' ? options.input : 0, dt, 22, 6);
       }
       return {
         awake: smoothstep(0.2, 1, timeline),
@@ -108,6 +107,44 @@ export function createOrbMotion() {
         speech,
         input,
       };
+    },
+  };
+}
+
+/** Everything one drawn frame needs: the motion model plus its clocks. */
+export type OrbFrame = {
+  motion: OrbMotionFrame;
+  /** Wall-clock seconds: core pulse, depth drift and the glass rim run on it at a steady pace. */
+  time: number;
+  /** Integrated network time: signals and node sequences run on it and speed up while Jarvis thinks or works. */
+  flow: number;
+};
+
+/** The pose a steady orb (reduced motion, static previews) is drawn in; kept in step with JarvisOrbAnimator. */
+export const stillTime = 2.6;
+export const stillFlow = 2.6;
+
+/**
+ * The motion model plus the integrated clocks every orb draws from. The flow clock accumulates, so a state that
+ * speeds the network up cannot make its signals jump.
+ */
+export function createOrbAnimator() {
+  const motion = createOrbMotion();
+  let time = 0;
+  let flow = 0;
+  return {
+    step(delta: number, options: OrbMotionInput): OrbFrame {
+      const dt = Math.max(0, Math.min(delta, 0.12));
+      const frame = motion.step(dt, options);
+      if (options.reducedMotion) {
+        time = stillTime;
+        flow = stillFlow;
+        return { motion: frame, time, flow };
+      }
+      time += dt;
+      flow += dt * (1 + frame.think * 1.1 + frame.tool * 1.7 + frame.speech * 0.55
+        + frame.listen * frame.input * 0.3 + frame.surge * 0.8);
+      return { motion: frame, time, flow };
     },
   };
 }

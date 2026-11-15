@@ -3,6 +3,7 @@ import type { AppearancePreferences, ThemeMode } from './theme-preference-contex
 import type { JarvisStageOptions, JarvisStageScene } from './jarvis-stage-scene';
 import { useJarvisActivity } from './activity-context';
 import type { JarvisOrbState } from './voice-presentation';
+import { InputOrbCore } from './InputOrbCore';
 import { VoiceStageContext, type VoiceSignals, type VoiceStageLink } from './voice-stage-context';
 import './JarvisStage.css';
 
@@ -136,6 +137,7 @@ export function JarvisStage({
   return (
     <VoiceStageContext.Provider value={voiceLink}>
       <div ref={host} className="jarvis-stage" data-ready="false" data-failed="false" aria-hidden="true" />
+      {failure && <div className="jarvis-stage-fallback-orb" aria-hidden="true"><InputOrbCore /></div>}
       {failure && <p className="jarvis-stage-fallback" role="status">{failure}</p>}
       {children}
     </VoiceStageContext.Provider>

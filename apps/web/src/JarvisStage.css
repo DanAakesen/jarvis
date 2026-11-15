@@ -23,34 +23,25 @@
   content: "";
 }
 
-.jarvis-stage[data-failed="true"]::after {
-  position: absolute;
-  top: 46%;
-  left: 50%;
-  width: clamp(150px, 28vw, 300px);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 52% 56%, color-mix(in srgb, var(--stage-amber) 55%, transparent), transparent 18%),
-    radial-gradient(circle at 50% 50%, transparent 39%, color-mix(in srgb, var(--stage-orb) 56%, transparent) 40% 41%, transparent 42%),
-    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--stage-orb) 20%, transparent), transparent 68%);
-  box-shadow: 0 0 50px color-mix(in srgb, var(--stage-orb) 17%, transparent);
-  content: "";
-  transform: translate(-50%, -50%);
-  animation: stage-fallback-breathe 11s ease-in-out infinite;
-}
-
-@keyframes stage-fallback-breathe {
-  0%, 100% { opacity: .82; scale: .96; }
-  46% { opacity: 1; scale: 1.04; }
-  72% { opacity: .9; scale: .99; }
-}
-
 .jarvis-stage canvas {
   display: block;
   width: 100%;
   height: 100%;
 }
+
+.jarvis-stage-fallback-orb {
+  position: fixed;
+  z-index: -1;
+  top: 46%;
+  left: 50%;
+  width: clamp(150px, 28vw, 300px);
+  aspect-ratio: 1;
+  pointer-events: none;
+  /* `translate`, not `transform`: the page-enter animation on the page's children would override a transform. */
+  translate: -50% -50%;
+}
+
+.jarvis-stage-fallback-orb canvas { display: block; width: 100%; height: 100%; }
 
 .jarvis-stage-fallback {
   position: relative;
@@ -68,20 +59,10 @@
   font-size: var(--type-small);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .jarvis-stage-fallback,
-  .jarvis-stage[data-failed="true"]::after {
-    transition: none;
-    animation: none;
-  }
-}
-
-:root[data-motion="reduced"] .jarvis-stage[data-failed="true"]::after { animation: none; }
-
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
-  .jarvis-stage[data-failed="true"]::after { width: clamp(140px, 36vw, 240px); }
-  .app-shell[data-phone="true"][data-voice-active="true"] .jarvis-stage[data-failed="true"]::after {
-    top: auto; bottom: var(--jarvis-orb-dock-bottom); width: calc(2 * var(--jarvis-orb-dock-radius)); transform: translateX(-50%);
+  .jarvis-stage-fallback-orb { width: clamp(140px, 36vw, 240px); }
+  .app-shell[data-phone="true"][data-voice-active="true"] .jarvis-stage-fallback-orb {
+    top: auto; bottom: var(--jarvis-orb-dock-bottom); width: calc(2 * var(--jarvis-orb-dock-radius)); translate: -50% 0;
   }
   .jarvis-stage-fallback { padding: var(--space-2) var(--space-3); }
 }

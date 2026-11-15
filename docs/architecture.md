@@ -71,6 +71,27 @@ source changed or the target exists and updates the branch fast-forward only. La
 steps add the index table, tools, HTTP route, MCP server and nudge pass as adapters
 over this store. Design: `docs/inbox-loop/design.md`.
 
+## Cognitive lattice orb and opening screen — 14 November 2026 (P15-143 / #1834)
+
+- **Renderer boundary.** `apps/ios/Packages/JarvisCore/Sources/JarvisCore/Orb/` holds everything platform-neutral:
+  `JarvisLatticeModel` (seeded topology), `JarvisLatticeScene` (pure per-frame pose in orb radii), the motion model
+  and animator (`JarvisOrbFrame {motion, time, flow}`). `JarvisLatticePainter.swift` (`#if canImport(SwiftUI)`) draws a
+  scene with `Canvas` and is the only orb drawing; `JarvisLatticeOrbView` is linked by the app, Live Activity, widget
+  and Watch targets. The app's `JarvisOrb` wraps it; `JarvisOrbCanvas` and `JarvisOrbGeometry` are gone.
+- **Web.** `apps/web/src/jarvis-lattice.ts` ports model and scene; `jarvis-lattice-painter.ts` draws it on Canvas 2D for
+  `InputOrbCore` and, through an offscreen canvas texture on a camera-facing plane, for the Three.js stage orb
+  (`JarvisStageOrb.ts`). The golden file `apps/web/src/jarvis-lattice.golden.json` is the cross-platform contract, checked
+  by `JarvisLatticeGoldenTests` (Swift, Linux CI) and `jarvis-lattice.test.ts`.
+- **Opening data flow.** `JarvisGateModel` (one per process) owns `JarvisOpeningState` (visible, fading, finished) and
+  decides visibility with the pure `JarvisOpeningPolicy`. `ContentView` receives `onColdStartData` only while the opening is
+  visible, runs one forced `JarvisTodayModel.refresh`, then reports readiness; failures settle visibly in Home. The
+  overlay window shows `JarvisOpeningView` above content, stays up through a 0.3 s crossfade with touches passing through,
+  and the root draws the opening colour for the first frames. `UILaunchScreen` uses the `LaunchBackground` colour.
+  Layout (`JarvisOpeningLayout`), the dim background network (`JarvisOpeningNetwork`: fixed positions, drawn with the orb's disc masked out) and progress semantics (`JarvisOpeningProgress`)
+  are pure and tested in JarvisCore.
+- **CI.** The macOS Apple build job also builds the iPhone app, which compiles every extension, and captures iPhone
+  simulator screenshots and a short opening video (artifact `watch-build-logs`).
+
 ## Direct owner requests — 10 November 2026
 
 Owner tool operations execute a resolved request under the existing authenticated route and resource authorization. Same-session owner messages may resolve a recent project for a follow-up; external content is never authority. Resource revisions, secret checks and duplicate/uncertain-write recovery remain separate from interactive approval. Legacy confirmation endpoints remain for compatibility but are not advertised to normal chat or voice.
