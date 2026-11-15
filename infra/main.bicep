@@ -863,7 +863,8 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'JARVIS_INBOX_NUDGES_ENABLED'
               value: inboxNudgesEnabled ? 'true' : 'false'
-
+            }
+            {
               name: 'JARVIS_PROACTIVE_EVENTS_ENABLED'
               value: string(proactiveEventsEnabled)
             }
