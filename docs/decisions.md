@@ -27,6 +27,17 @@
 - **Verification state.** See PLAN.md. Simulator rendering was captured in macOS CI; device behaviour (Face ID timing,
   Live Activity and WidgetKit rendering, VoiceOver, Reduce Motion, small screens) is not verified and needs the owner.
 
+## 14 November 2026 — Inbox loop is vault-backed and model-driven (#1835)
+
+The owner's loose ideas and asks are captured as one free-text note per item in a
+vault inbox folder; the Jarvis model decides how to structure, link, nudge or bin
+each one. No fixed status values or heavy schema. Jarvis keeps only a small,
+rebuildable index (last nudged, thumbs up/down) and feeds due nudges into the
+proactive queue. GitHub holds an item only when it becomes real work. General
+principle: design model-driven by default so quality improves as models do, and
+use deterministic logic only where exact results are required. Diagram in
+`docs/inbox-loop/inbox-loop.png`; the design is in progress (#1836).
+
 ## 14 November 2026 — Cognitive lattice orb everywhere (#1832)
 
 The owner selected the cognitive lattice orb as the single Jarvis orb for every
