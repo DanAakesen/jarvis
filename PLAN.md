@@ -4949,6 +4949,10 @@ WatchConnectivity and native iOS/watchOS compilation remain unverified on Linux.
 
 Pipeline bounded, sequenced microphone and playback traffic; tolerate transient capture loss and report sustained audio-link stalls. Portable transport tests and native syntax checks are available on Linux. Next: qualify the exact head with native Watch/iPhone builds and test complication launch, duplex audio, transient loss and sustained disconnect on paired devices. Direct Watch voice remains a separately scoped follow-up.
 
+## Watch dictation and voice first press — 15 November 2026 (P15-160 / #1856)
+
+Implemented the backend stage logging and speech-token cache, a 10 s direct window with phone fallback, voice start and reconnection recovery, and stale phone-state replacement. Decisions and findings are in docs/decisions.md. Next: native Watch and phone builds in CI, then a paired-Watch check of first-press voice, dictation latency from a cold backend, and a short phone-out-of-range gap during voice; read the new `watch_transcription.stage` events to confirm where direct dictation lost its result.
+
 ## Notes swipe and deletion — 13 November 2026 (#1819)
 
 Implemented version-checked owner deletion, shared row swipe thresholds, editor

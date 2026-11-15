@@ -1,12 +1,14 @@
 import Combine
 import Foundation
 import JarvisCore
+import OSLog
 import WatchConnectivity
 import WidgetKit
 
 @MainActor
 final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchConnection()
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Jarvis", category: "WatchConnection")
     @Published private(set) var reachable = false
     @Published private(set) var connecting = true
     @Published private(set) var snapshot: WatchHealthSnapshot?
@@ -147,6 +149,7 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
             }
             try await Task.sleep(for: .milliseconds(100))
         }
+        logger.error("iPhone not reachable after \(Int(timeout)) s: activation=\(session.activationState.rawValue) companionInstalled=\(session.isCompanionAppInstalled) reachable=\(session.isReachable)")
         throw WatchFailure.unavailable
     }
     func load<T: Decodable>(_ action: WatchAction, id: String? = nil, as type: T.Type = T.self) async throws -> T {
@@ -325,6 +328,9 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
     private func updateReachability() {
         let wasReachable = reachable
         reachable = WCSession.default.activationState == .activated && WCSession.default.isReachable
+        if reachable != wasReachable {
+            logger.info("Reachability changed: reachable=\(self.reachable) activation=\(WCSession.default.activationState.rawValue)")
+        }
         if reachable { connecting = false }
         UserDefaults(suiteName: "group.com.danaakesen.jarvis")?.set(reachable, forKey: "watch.reachable")
         WidgetCenter.shared.reloadAllTimelines()

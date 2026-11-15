@@ -119,8 +119,9 @@ import { createHtmlResearchModule } from './core/research.js';
 import { HtmlArtifactStore } from './database/html-artifact-store.js';
 import { createConfirmationStore } from './database/confirmation-store.js';
 import { createOwnerInteractionService } from './core/owner-interactions.js';
-import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
+import { createAzureSpeechPartialRecognizerFactory, SPEECH_AUTH_SCOPE } from './voice/speech-recognizer.js';
 import { createAzureWatchTranscriber } from './voice/watch-transcription.js';
+import { createVoiceCredentialCache } from './voice/credential-cache.js';
 import { createWatchCredentialStore, WatchCredentials } from './auth/watch-credential.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
 import { createOpenAIImageGenerator } from './core/openai-images.js';
@@ -1208,14 +1209,23 @@ try {
       };
     },
   }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
+  // A cold managed-identity token took about 7 s on the first Watch dictation; keep one warm and refreshed.
+  const watchSpeechToken = credential && config.foundryEndpoints ? createVoiceCredentialCache(async (scope, signal) => {
+    const token = await credential.getToken(scope, { abortSignal: signal });
+    if (!token) throw new Error('Speech identity unavailable');
+    return token.token;
+  }, SPEECH_AUTH_SCOPE, (error) => {
+    logger.warn({
+      failure: error instanceof Error
+        ? `Speech token: ${error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 100) || 'unknown'}`
+        : 'Speech token: unknown',
+    }, 'voice.credential_refresh_failed');
+  }) : undefined;
+  watchSpeechToken?.warm();
   const app = buildApp(config, logger, {
     ...(database ? { watchCredentials: new WatchCredentials(createWatchCredentialStore(database.pool), config.auth.ownerObjectId) } : {}),
-    ...(credential && config.foundryEndpoints ? {
-      watchTranscriber: createAzureWatchTranscriber(config.foundryEndpoints.runtime, async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Speech identity unavailable');
-        return token.token;
-      }),
+    ...(watchSpeechToken && config.foundryEndpoints ? {
+      watchTranscriber: createAzureWatchTranscriber(config.foundryEndpoints.runtime, (_scope, signal) => watchSpeechToken.get(signal)),
     } : {}),
     ...(managedRuntime && readManagedTarget ? {
       managedRuntime,

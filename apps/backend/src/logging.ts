@@ -215,11 +215,18 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (input.msg === 'watch_transcription.stage') {
     const fields: Record<string, unknown> = {};
     if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
-    if (typeof input.stage === 'string' && [
-      'request_accepted', 'credential_verified', 'owner_authenticated', 'token_acquired',
-      'recognizer_started', 'audio_written', 'first_recognized', 'recognizer_stopped',
+    const stages = [
+      'request_accepted', 'credential_verified', 'owner_authenticated', 'audio_received', 'token_requested',
+      'token_acquired', 'recognizer_started', 'audio_written', 'session_started', 'speech_start_detected',
+      'speech_end_detected', 'first_recognizing', 'first_recognized', 'recognizer_stopped',
       'recognizer_cancelled', 'cleanup_started', 'cleanup_finished', 'deadline_exceeded', 'completed',
-    ].includes(input.stage)) fields.stage = input.stage;
+    ];
+    if (typeof input.stage === 'string' && stages.includes(input.stage)) fields.stage = input.stage;
+    if (typeof input.lastStage === 'string' && stages.includes(input.lastStage)) fields.lastStage = input.lastStage;
+    for (const key of ['audioBytes', 'audioMs', 'errorCode'] as const) {
+      const value = input[key];
+      if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) fields[key] = value;
+    }
     if (typeof input.durationMs === 'number' && Number.isSafeInteger(input.durationMs) && input.durationMs >= 0) {
       fields.durationMs = input.durationMs;
     }
@@ -227,8 +234,8 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       fields.status = input.status;
     }
     if (typeof input.reason === 'string' && [
-      'end_of_stream', 'provider_cancelled', 'stop_awaiting_cancellation', 'early_stop', 'client_disconnected',
-      'deadline_exceeded', 'completed', 'request_failed',
+      'end_of_stream', 'provider_cancelled', 'stop_awaiting_cancellation', 'early_stop', 'stop_grace_elapsed',
+      'stop_without_result', 'client_disconnected', 'deadline_exceeded', 'completed', 'request_failed',
     ].includes(input.reason)) fields.reason = input.reason;
     return fields;
   }

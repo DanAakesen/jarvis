@@ -118,6 +118,28 @@ final class WatchDictationRoutingTests: XCTestCase {
         XCTAssertEqual(phoneCalls, 1)
     }
 
+    func testShortDirectWindowLeavesMostOfTheDeadlineToThePhone() async throws {
+        let direct = Gate<String>()
+        let timer = Gate<Void>()
+        var timerDuration: Duration?
+        let task = Task {
+            try await WatchDictationRouting.transcribe(direct: {
+                await direct.wait()
+            }, phone: { "Phone transcript" }, directWindow: WatchDictationDeadline.directWithPhoneFallbackDuration, sleep: { duration in
+                timerDuration = duration
+                await timer.wait()
+            })
+        }
+        let directWait = await direct.next()
+        let timerWait = await timer.next()
+        XCTAssertEqual(timerDuration, .seconds(10))
+        XCTAssertGreaterThanOrEqual(WatchDictationDeadline.seconds - WatchDictationDeadline.directWithPhoneFallbackSeconds, 15)
+        timerWait.resume()
+        let text = try await task.value
+        XCTAssertEqual(text, "Phone transcript")
+        directWait.resume(returning: "Stale transcript")
+    }
+
     func testCancellationDuringStalledDirectDoesNotStartPhoneFallback() async {
         let direct = Gate<String>()
         let timer = Gate<Void>()
