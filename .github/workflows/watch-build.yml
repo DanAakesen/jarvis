@@ -156,59 +156,6 @@ jobs:
             com.danaakesen.jarvis --widget-layout-gallery
           sleep 3; shot widget-gallery
           xcrun simctl terminate "$PHONE_ID" com.danaakesen.jarvis || true
-      - name: Capture living neural background
-        if: ${{ !cancelled() }}
-        timeout-minutes: 15
-        run: |
-          set -euo pipefail
-          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
-          if [[ -z "$PHONE_ID" ]]; then
-            echo "::warning::No iPhone Pro simulator; skipping neural background screenshots."
-            exit 0
-          fi
-          OUT="$RUNNER_TEMP/iphone-screenshots/neural"
-          mkdir -p "$OUT"
-          APP=com.danaakesen.jarvis
-          shot() { xcrun simctl io "$PHONE_ID" screenshot "$OUT/$1.png"; }
-          run() { xcrun simctl launch --terminate-running-process "$PHONE_ID" "$APP" "$@"; }
-          # Voice: the three states, each at three instants so the signals are seen moving out and back.
-          for state in listening thinking speaking; do
-            run --screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=$state
-            sleep 3; shot voice-$state-a; sleep 0.7; shot voice-$state-b; sleep 0.7; shot voice-$state-c
-          done
-          # Chat: idle, then the working states over the message window.
-          run --screenshot-chat-fixture
-          sleep 3; shot chat-idle
-          for state in thinking tool speaking listening; do
-            run --screenshot-chat-fixture --screenshot-chat-state=$state
-            sleep 3; shot chat-$state-a; sleep 0.7; shot chat-$state-b
-          done
-          # Calm screens (Settings, Health), dark and light, and a light chat.
-          run --screenshot-settings-fixture
-          sleep 3; shot calm-settings-dark
-          run --screenshot-health-fixture
-          sleep 3; shot calm-health-dark
-          xcrun simctl ui "$PHONE_ID" appearance light
-          run --screenshot-settings-fixture
-          sleep 3; shot calm-settings-light
-          run --screenshot-chat-fixture --screenshot-chat-state=thinking
-          sleep 3; shot chat-thinking-light
-          xcrun simctl ui "$PHONE_ID" appearance dark
-          # The gate: Face ID failed, waiting, and sign-in. The background must stay in all of them.
-          for gate in lock-failed lock-waiting sign-in; do
-            run --screenshot-gate=$gate
-            sleep 3; shot gate-$gate-a; sleep 0.7; shot gate-$gate-b
-          done
-          # The opening, held on screen, at three instants, with a short recording.
-          run --opening-preview
-          xcrun simctl io "$PHONE_ID" recordVideo --codec=h264 "$OUT/opening-neural.mp4" & RECORDING=$!
-          sleep 3; shot opening-a; sleep 0.7; shot opening-b; sleep 0.7; shot opening-c; sleep 4
-          kill -INT "$RECORDING"; wait "$RECORDING" || true
-          # Voice thinking in motion.
-          run --screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=thinking
-          xcrun simctl io "$PHONE_ID" recordVideo --codec=h264 "$OUT/voice-thinking.mp4" & RECORDING=$!
-          sleep 8; kill -INT "$RECORDING"; wait "$RECORDING" || true
-          xcrun simctl terminate "$PHONE_ID" "$APP" || true
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

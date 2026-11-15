@@ -704,7 +704,7 @@ icon and the favicon. `docs/ui/cognitive-lattice-inventory.md` lists every surfa
 
 Shown on every **cold start**, never on a warm resume, over a static launch screen of the same dark colour
 (`LaunchBackground`). Composition from `jarvis-opening-selected.png`: the lattice orb centred, the white
-**Jarvis** name beneath, a dim, static background of seven small cyan nodes joined by long angular lines that run off the screen edges, two of
+**Jarvis** name beneath, a dim background (now alive: see "One living neural background") of seven small cyan nodes joined by long angular lines that run off the screen edges, two of
 them passing behind the orb (the orb's disc is cut out, so nothing is drawn over the sphere; the background stays
 clearly quieter than the orb). Every node has a link running toward the orb, lines and nodes carry a faint additive
 glow, and each line fades to about 40% as it nears the sphere, and a slim bar near the
@@ -717,6 +717,33 @@ It ends when authentication and the first fresh Home data are ready (a forced To
 or 8 seconds after authentication, whichever is first, then crossfades to Home over 0.3 s (0.15 s with
 Reduce Motion) without shrinking the orb. Sign-in, Face ID failure and retry screens take over through the same
 crossfade. Quick off switch: Settings > General > Opening screen (or `--no-opening` in debug builds).
+
+## One living neural background (P15-179 / #1892; 15 November 2026)
+
+Owner direction, TestFlight build 108: the in-app background must match the opening screen's network, the chat orb must
+be alive with the states, and the lines and dots must not be static but fire "like a brain" when Jarvis works.
+
+- **One component, no copies.** The opening screen's sparse network (seven dim cyan nodes, long angular links running
+  behind the orb and off-screen) is the background of the whole app. `JarvisNeuralBackgroundView` (JarvisCore) draws it
+  and `JarvisNeuralBackground` (design system) is the only way a screen asks for it. It replaces the earlier Ember
+  image and the four colour glows; `JarvisScreenBackground` is now the still pose of the same background. The page
+  colour is the opening's near-black navy in dark mode and the page cream in light mode, with deeper teal lines.
+- **Neurons.** A signal leaves the orb along the links to a background node, lights it and comes back (cyan out, warmer
+  on the way back). Rate, brightness, direction and speed follow the orb's own state and level contracts: a slow trickle
+  at rest, quicker while thinking, quickest on tool work (warmer signals, branching pairs), following the playback level
+  while speaking, and running *into* the orb while listening (following the input level). Muted, reconnecting and
+  offline are quieter and lose colour like the orb. States ease in and out; a signal in flight is never dropped.
+- **Where.** Full effects on Voice, Chat and the opening/loading screen. Chat shows the live orb in the upper part of the
+  screen, a little quieter (orb at 55%, lines at 70%), with the message window and composer over it; it follows the
+  turn: thinking, tool (an unfinished tool call), speaking (reply streaming), listening only while dictating.
+  Every other screen gets the same network `.calm`: two faint, slow signals at most, no orb, the lines dissolving into a
+  faint ember where the orb would be. Sheets, the drawer and the privacy cover draw the still pose.
+- **Gate.** One background for sign-in and every lock state, so Face ID failing no longer loses it; the states crossfade
+  over 0.3 s. The lock states no longer show blurred Home behind them.
+- **Quality.** Real drawing in two Canvases (the network once per size and theme, the signals on a timeline at 60 fps
+  for full effects and 20 fps calm), clipped around the orb's disc. It pauses while the app is inactive or the gate
+  covers it, and Reduce Motion, the Settings switch (General > Background motion) and `.still` draw one fixed pose. No
+  microphone is implied: the opening drives the network with the working state, never listening.
 
 ## Shared control geometry (16 October 2026; local candidate)
 
@@ -2973,7 +3000,7 @@ Native screenshot acceptance is tracked in
 P15-38 / #1478 makes the approved Chat backdrop shared across native screens
 and app-owned sheets. The 1 November reconciliation reuses main's
 `JarvisScreenBackground` in `JarvisDesignSystem.swift`, which already supplies
-the gate's `JarvisGateAmbientBackground` wrapper, instead of the earlier competing
+the gate's ambient wrapper, instead of the earlier competing
 renderer and decorative orb. Keep main's glow rendering and foreground orbs.
 Shared forms/lists use glass rows, with the board's solid
 surface fallback for Reduce Transparency; the sidebar is glass over the
