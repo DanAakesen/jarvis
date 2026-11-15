@@ -11,7 +11,7 @@ Part of the [Copilot-harness trial](README.md) (#1837).
 | Most of the "hardcoded" feel sits in tools, guards and the proactive pipeline, which any harness would inherit | [Diagnosis](01-diagnosis.md): R3-R6, G6, H1-H3 |
 | What a harness *does* fix (loop, skills, sessions, compaction, investigating instead of summarising) matches the two top priorities in p0.md: the long-lived inbox and a proactive Jarvis that can look things up | [Gains](02-quality-gains.md) 4-7 |
 | "Unrestricted" is a credential decision. A hosted lane with a read-only Azure role and GitHub access delivers it far cheaper than moving chat | [Diagnosis](01-diagnosis.md#what-makes-the-copilot-app-feel-unrestricted) |
-| A full move costs the most, touches the path Dan uses all day, and would consume more credits than Pro+ includes at assumed usage | [Option D](03-options.md#option-d-full-move-all-chat-turns-on-the-copilot-harness) |
+| A full move touches the path Dan uses all day and needs an always-on host (about 175-670 DKK/month). Its token cost is modest in the expected band (chat about 57 DKK-equivalent against about 21 DKK measured today) but could reach about 350 in the high band if long sessions re-send a large context | [Option D](03-options.md#option-d-full-move-all-chat-turns-on-the-copilot-harness) |
 | The Copilot engine improves with every model release with no work from Jarvis, which is the quality-grows-with-models rule from `docs/decisions.md` (14 Nov 2026) | [Gains](02-quality-gains.md) 10 |
 
 To the doubt about the own harness: it is not the weakest link. Its loop, discovery and memory window are the parts a mature engine does better; its guards and receipts are the parts worth keeping.
@@ -38,7 +38,7 @@ flowchart TB
 | 0 | Blind A/B of 20 tasks scored by Dan; credits and wall time per task | Copilot wins at least 12 of 20 overall and at least 8 of the 12 Azure, GitHub and investigation tasks; median 25 credits or less per task; no guard breach |
 | 1 | Four weeks of the Hands lane | Monthly credits at or under the cap; $0 overage; Dan used it unprompted at least 10 times; no write or secret read slipped past the hooks |
 | 2 | Four weeks of the Night shift beside the old pipeline | Thumbs-up share at or above the old pipeline; at most the agreed pushes per day; proactive spend under 100 DKK/month including credit-equivalent |
-| 3 | Shadow chat turns on the same prompts | Better score in a blind comparison, first-token latency within 1.5x, credits within the plan |
+| 3 | Shadow chat turns on the same prompts | Better score in a blind comparison, first-token latency within 1.5x, measured cost per turn at most 5x today's measured cost for the same turns, credits within the plan |
 
 ## Smallest first experiment: step 0, local A/B bench (filed as P15-158)
 
@@ -61,11 +61,11 @@ flowchart LR
 | Where | Dan's PC. No Azure resource, no deployment, no change to product code. The shim and skills live outside the product tree (a scratch folder or a branch) |
 | Buckets (4 prompts each) | Azure (cost, logs, resources); GitHub (PRs, CI, issues, repo state); investigation (a proactive-style question across sources); inbox and follow-up (a multi-day thread with a resumed session); plain chat and memory |
 | Scoring | Dan scores answers 1-5 blind (A/B order shuffled), plus counts of refusals, tool calls, wall time and credits (`session.usage.getMetrics`) |
-| Cap | 600 credits in total (about 40 DKK-eq; 9% of Pro+), 40 per task via `sessionLimits.maxAiCredits`, 5 days |
+| Cap | 600 credits in total (about 40 DKK-eq; 9% of Pro+), 40 per task via `sessionLimits.maxAiCredits`, 5 days. At the expected band the 20 tasks use about 250 credits; the cap is for the high band |
 | Preconditions | Dan reads his plan and allowance; sets an additional-usage budget of $0 with "Stop usage when budget limit is reached"; confirms the terms for server-side use of his token before any later hosting |
 | Safety | Everything read-only. No mail send, no writes, no health or banking data in prompts. Prompts and results go to GitHub and its model providers |
 | Cash | 0 DKK |
-| Output | `docs/harness-trial/bench-results.md`: scorecard, credit table, latency table, go or stop for Gate 0 |
+| Output | `docs/harness-trial/bench-results.md`: scorecard, credit table, latency table, go or stop for Gate 0, and the three measured cost inputs that replace the bands in [03-options.md](03-options.md#cost-model-re-baselined-15-nov-2026): context tokens re-sent per call, tool-description size, cache hit rate (from `assistant.usage` and `session.usage.getMetrics`) |
 | Exit | Delete the scratch folder. Nothing else was created |
 
 ## What this analysis deliberately does not do
@@ -73,7 +73,7 @@ flowchart LR
 | Not done | Why |
 | --- | --- |
 | No product code, infra or settings changes | Requested scope |
-| No credit or latency measurements | None are possible without running the bench; every figure is an assumption listed in [options](03-options.md#assumptions-all-estimates-none-measured-on-jarvis) |
+| No Copilot credit or latency measurements | None are possible without running the bench. Today's side is anchored on one measured total; per-turn tokens still need the appendix queries ([options](03-options.md#appendix-queries-that-replace-the-derived-numbers)) |
 | No decision entry in `docs/decisions.md` | Nothing is confirmed by Dan yet. Record one after Gate 0 |
 
 ## Questions only Dan can answer

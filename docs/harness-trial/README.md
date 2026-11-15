@@ -7,7 +7,7 @@ Analysis for [#1837](https://github.com/DanAakesen/jarvis/issues/1837) (P15-146)
 | | |
 | --- | --- |
 | **Recommendation** | Keep the current harness and Voice Live. Add the Copilot harness as a second brain, in gated steps, starting with a local bench: 0 DKK cash, 600 credits at most |
-| **Why not replace it** | Most of the rigid feel lives in tools, guards and the proactive pipeline, which a new harness inherits. A full move costs about 560-1,010 DKK-equivalent per month at assumed use and exceeds Pro+ |
+| **Why not replace it** | Most of the rigid feel lives in tools, guards and the proactive pipeline, which a new harness inherits. A full move is no longer a token-cost problem (chat on Copilot is about 57 DKK-equivalent a month expected, against about 21 DKK measured today), but it needs an always-on host (about 175-670 DKK), touches the chat path Dan uses all day, and has a high band of about 540 DKK-equivalent if sessions grow long |
 | **What a harness really adds** | Loop, skills, sub-agents, resumable sessions, compaction, hooks, MCP: the parts the inbox loop and a proactive Jarvis need |
 | **Where "unrestricted" comes from** | Credentials and a shell, not the harness. Give a worker a read-only Azure role and GitHub access and the feeling follows |
 | **Next step** | [P15-158 (#1851)](https://github.com/DanAakesen/jarvis/issues/1851): local A/B bench |
@@ -31,12 +31,14 @@ flowchart LR
 | --- | --- | --- | --- | --- |
 | What moves | Azure and GitHub tasks on demand | Proactive brain | A + B + long-lived inbox session | All chat turns |
 | Cash DKK/month | about 9 | about 12 | about 27 | about 175-670 |
-| Credits/month (cap) | 990 (1,500) | 490 (600) | 3,350 (3,600) | 8,500-15,400 |
-| DKK-equivalent | 65 | 32 | 220 | 559-1,010 |
+| Credits/month, expected (cap or high) | 1,150 (1,500) | 510 (600) | 3,430 (3,600) | 2,790 (8,190) |
+| DKK-equivalent, expected | 76 | 34 | 226 | 184 (high 539) |
 | Touches production chat | no | no | no | yes |
 | Reversible in a day | yes | yes | yes | only if the old path stays |
 
-Credits are free to Dan only inside his plan's allowance (Pro 1,500, Pro+ 7,000, Max 20,000). Set a $0 additional-usage budget so nothing can ever bill. All figures are estimates from assumed token profiles; the bench replaces them with measurements.
+Credits are free to Dan only inside his plan's allowance (Pro 1,500, Pro+ 7,000, Max 20,000). Set a $0 additional-usage budget so nothing can ever bill.
+
+**Cost basis, re-baselined 15 Nov.** The only measured number is today's Foundry Models spend: about 2.9 DKK in 3 days for chat and proactive together on Terra (about 21 DKK/month for chat, an upper bound). The first draft's 0.34 DKK per turn was an assumption and was about ten times too high. Copilot-side costs are now shown as low, expected and high bands beside today's figure; the three inputs that decide them (context per call, tool-description size, cache hit rate) are unmeasured until the bench runs. See [03-options.md](03-options.md#cost-model-re-baselined-15-nov-2026).
 
 ## Documents
 
