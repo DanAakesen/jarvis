@@ -146,12 +146,14 @@ def backend_secret(app: str, group: str, subscription: str) -> str | None:
 
 
 def configure_backend(app: str, group: str, subscription: str, agent_name: str) -> str:
-    """Return the MCP secret, creating it once. The backend gets it as a Container App secret, never as plain text."""
+    """Return the MCP secret, creating it once. The backend gets it as a Container App secret, never as plain text.
+
+    The value is never printed: az output and errors are not echoed anywhere in this script.
+    """
     secret = backend_secret(app, group, subscription)
     created = secret is None
     if secret is None:
         secret = secrets.token_urlsafe(48)
-    print(f"::add-mask::{secret}")
     env = json.loads(shell("az", "containerapp", "show", "--name", app, "--resource-group", group, "--subscription", subscription,
                            "--query", "properties.template.containers[0].env", "--only-show-errors", "--output", "json"))
     current = {item["name"]: item.get("secretRef") or item.get("value") for item in env}

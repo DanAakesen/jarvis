@@ -67,7 +67,6 @@ def main(argv: list[str] | None = None) -> int:
     if not token:
         print("::error::The deployment identity returned no token for the PI smoke.", file=sys.stderr)
         return 1
-    print(f"::add-mask::{token}")
     request = urllib.request.Request(
         f"https://{args.backend_fqdn}/pi/smoke", data=b"{}", method="POST",
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
