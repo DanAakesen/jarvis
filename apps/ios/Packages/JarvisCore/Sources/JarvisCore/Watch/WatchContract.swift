@@ -189,6 +189,8 @@ public struct WatchHealthSnapshot: Codable, Equatable, Sendable {
     public var steps: Int?
     public var stepGoal: Int?
     public var hourlySteps: [Int]?
+    /// When the steps were measured, if later than `generatedAt` (a read on the Watch itself).
+    public var stepsAt: Date?
     public var gym: Int?
     public var gymGoal: Int?
     public var runs: Int?

@@ -259,9 +259,11 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         var value = incoming
         if let old = snapshot {
             guard incoming.generatedAt >= old.generatedAt else { return }
+            // The Watch reads steps itself, so an older iPhone count must not roll them back.
+            value = value.keepingHigherSteps(from: old)
             var retained = false
             if value.steps == nil, let steps = old.steps {
-                value.steps = steps; value.hourlySteps = old.hourlySteps; retained = true
+                value.steps = steps; value.hourlySteps = old.hourlySteps; value.stepsAt = old.stepsAt; retained = true
             }
             if value.stepGoal == nil, let v = old.stepGoal { value.stepGoal = v; retained = true }
             if value.gym == nil, let v = old.gym { value.gym = v; retained = true }
@@ -277,12 +279,27 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
                 value.weekStart = old.weekStart
             }
         }
+        persist(value)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+    private func persist(_ value: WatchHealthSnapshot) {
         snapshot = value
         do {
             guard let store = WatchSnapshotStore.appGroup() else { throw WatchFailure.failed }
             try store.save(JSONEncoder().encode(value), kind: .health)
         } catch { NSLog("Watch health snapshot could not be saved.") }
-        WidgetCenter.shared.reloadAllTimelines()
+    }
+    /// Steps measured on the Watch itself. Only the steps complication is reloaded, to stay within the reload budget.
+    func applyStepsReading(_ reading: WatchStepsReading) {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
+        #endif
+        var base = snapshot ?? WatchHealthSnapshot(now: reading.measuredAt)
+        if snapshot == nil { base.generatedAt = base.dayStart }
+        let updated = base.applying(reading)
+        guard updated != snapshot else { return }
+        persist(updated)
+        WidgetCenter.shared.reloadTimelines(ofKind: WatchComplicationKind.steps)
     }
     private func saveDashboard(_ incoming: WatchDashboardSnapshot) {
         guard incoming.version == 1 else { return }

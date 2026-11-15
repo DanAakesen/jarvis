@@ -77,6 +77,10 @@ jobs:
           for component in ["Watch", "WatchWidgets"]:
               watch_entitlements = plistlib.loads(Path(f"apps/ios/{component}/{component}.entitlements").read_bytes())
               assert watch_entitlements["com.apple.security.application-groups"] == app_group
+          watch_entitlements = plistlib.loads(Path("apps/ios/Watch/Watch.entitlements").read_bytes())
+          assert watch_entitlements["com.apple.developer.healthkit"] is True
+          assert watch_entitlements["com.apple.developer.healthkit.background-delivery"] is True
+          assert "NSHealthShareUsageDescription" in watch_info
           entitlements = plistlib.loads(Path("apps/ios/Jarvis/Jarvis.entitlements").read_bytes())
           assert entitlements["aps-environment"] == "$(APS_ENVIRONMENT)"
           assert entitlements["com.apple.developer.healthkit"] is True

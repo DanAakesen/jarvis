@@ -8,6 +8,12 @@ struct WatchEntry: TimelineEntry {
     var current: Bool
     var dashboard: WatchDashboardSnapshot? = nil
     var dashboardStale = false
+    /// Steps have their own age: the Watch reads them itself, independent of the iPhone push.
+    var stepsCurrent: Bool { health?.stepsAreCurrent(at: date) == true }
+}
+
+enum WatchComplicationKind {
+    static let steps = "jarvis.watch.health"
 }
 
 struct WatchSnapshotAge: View {
@@ -340,14 +346,14 @@ struct WatchHealthView: View {
                 values: health?.steps == nil ? [] : health?.cumulativeSteps ?? [],
                 goal: health?.stepGoal
             ).frame(maxWidth: .infinity, maxHeight: .infinity)
-            if !entry.current, let health { WatchSnapshotAge(date: health.generatedAt) }
+            if !entry.stepsCurrent, let health { WatchSnapshotAge(date: health.stepsAsOf) }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(health?.steps != nil
             ? "Daily steps \(number(health?.steps)), target \(number(health?.stepGoal))."
             : "Steps unavailable. Open Jarvis on iPhone.")
-        .accessibilityValue(!entry.current && health != nil
-                            ? Text("Saved") + Text(" ") + Text(health!.generatedAt, style: .relative)
+        .accessibilityValue(!entry.stepsCurrent && health != nil
+                            ? Text("Saved") + Text(" ") + Text(health!.stepsAsOf, style: .relative)
                             : Text(""))
     }
 }

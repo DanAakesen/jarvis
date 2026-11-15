@@ -157,6 +157,14 @@ struct WatchRoot: View {
             if model.voiceID != nil { model.handleVoiceAudioRouteChange(reason: reason) }
         }
         .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await WatchStepsMonitor.shared.requestAccessIfNeeded()
+            while !Task.isCancelled {
+                await WatchStepsMonitor.shared.refresh()
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            }
+        }
+        .task(id: scenePhase) {
             if scenePhase == .active {
                 await model.reconcileVoice()
                 await connection.maintainConnection()
