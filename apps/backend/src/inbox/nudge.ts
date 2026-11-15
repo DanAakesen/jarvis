@@ -2,7 +2,7 @@ import { VaultFileTooLargeError } from '../vault/github-client.js';
 import type { InboxIndex } from './item-index.js';
 import { InboxError, appendTrail, inboxDate, noteId } from './note.js';
 import {
-  buildDigest, parseReview, reviewSystemPrompt, reviewUserMessage,
+  buildDigest, parseReview, MAX_WEEKLY_FULL_NOTES, MAX_FULL_NOTES, type ReviewMode, reviewSystemPrompt, reviewUserMessage,
   type NudgeTier, type Reaction, type ReviewNudge,
 } from './review.js';
 import type { InboxStore } from './store.js';
@@ -37,6 +37,8 @@ export function createInboxNudgePass(options: {
   readonly reactions: ProactiveReactions;
   readonly guidance?: () => Promise<string>;
   readonly nudgeStyle?: () => Promise<string>;
+  /** Stores the weekly rewrite of the nudge style. */
+  readonly saveNudgeStyle?: (style: string, signal: AbortSignal) => Promise<void>;
   readonly now?: () => Date;
   readonly log?: (fields: { readonly outcome: string }) => void;
 }) {
@@ -87,7 +89,8 @@ export function createInboxNudgePass(options: {
   }
 
   return {
-    async run(signal: AbortSignal): Promise<NudgePassOutcome> {
+    /** allow.nudge false still tidies notes and learns the style, but delivers nothing: the run already spent its one nudge. */
+    async run(signal: AbortSignal, mode: ReviewMode = 'slot', allow: { readonly nudge?: boolean } = {}): Promise<NudgePassOutcome> {
       const at = now();
       try {
         await options.index.sync(signal);
@@ -104,7 +107,7 @@ export function createInboxNudgePass(options: {
           options.store.list({ limit: 200 }, signal),
           options.index.rows(signal),
         ]);
-        digest = buildDigest(listed.items, rows, at);
+        digest = buildDigest(listed.items, rows, at, mode === 'weekly' ? MAX_WEEKLY_FULL_NOTES : MAX_FULL_NOTES);
       } catch (error) {
         if (signal.aborted) throw error;
         log({ outcome: 'inbox_unavailable' });
@@ -120,6 +123,7 @@ export function createInboxNudgePass(options: {
           today: inboxDate(at),
           guidance: (await options.guidance?.().catch(() => '')) ?? '',
           nudgeStyle: (await options.nudgeStyle?.().catch(() => '')) ?? '',
+          mode,
         }),
         user: reviewUserMessage(digest, reactions),
       };
@@ -132,7 +136,7 @@ export function createInboxNudgePass(options: {
         log({ outcome: 'model_unavailable' });
         return { status: 'skipped', reason: 'model_unavailable' };
       }
-      const review = parseReview(raw, digest);
+      const review = parseReview(raw, digest, mode);
       if (!review) {
         log({ outcome: 'invalid_model_output' });
         return { status: 'skipped', reason: 'invalid_model_output' };
@@ -150,8 +154,12 @@ export function createInboxNudgePass(options: {
         }
       }
 
+      if (review.nudgeStyle && options.saveNudgeStyle) {
+        try { await options.saveNudgeStyle(review.nudgeStyle, signal); } catch (error) { if (signal.aborted) throw error; }
+      }
+
       let nudged: { itemId: string; tier: NudgeTier } | null = null;
-      if (review.nudge) {
+      if (review.nudge && allow.nudge !== false) {
         const item = digest.items.find((entry) => entry.id === review.nudge!.id)!;
         const itemId = await options.delivery.deliver({ ...review.nudge, itemTitle: item.title }, signal);
         if (itemId) {

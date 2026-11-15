@@ -1,3 +1,26 @@
+## 15 November 2026 — Loose Ends sweeps, spend ledger and switch-on (#1855, step 8)
+
+The daily missed-capture audit and the weekly deep review run inside the same
+proactive hook, after the slot review, and stop first when the month passes the 80%
+warning. The audit reads the owner's own messages of the last 24 hours (new reader
+`readDanMessagesSince`, runtime-test sessions excluded), drops messages a note
+already quotes and any with sensitive health or money wording, and saves what the
+model picks from his own message, verbatim, with the same id scheme as the chat tool
+so nothing is saved twice. The weekly review gets up to 15 notes in full, may merge
+duplicates by rewriting the note to keep and asks whether to bin the other (the model
+still cannot close anything), and rewrites the nudge-style text (one row, at most 600
+characters, readable, settable and resettable through `inbox_nudge_style`). Both run once a day or
+week, recorded in `dbo.inbox_state`. Spend per day and kind (review, audit, weekly,
+triage) is kept in `dbo.inbox_spend` (migration 0085) as well as in the shared
+proactive ledger, so the 1 DKK a day ceiling holds across replicas and `/inbox/status`
+shows cost, counts, thumbs and last sweep days. The switch-on is two default-off
+parameters in `infra/main.bicep` (`inboxEnabled`, `inboxNudgesEnabled`); turning them on is
+the owner's call. Cost figures in the design are still estimates: nothing has run.
+Review follow-ups: the weekly review does not deliver a second nudge when the slot review
+already nudged (one nudge per run), the audit and weekly markers advance only after a finished
+attempt (done, or genuinely nothing to look at; a model failure stays due), and `/inbox/status`
+reads the ledger with Copenhagen dates like its writers.
+
 ## 15 November 2026 — Inbox nudge pass runs inside the existing proactive slots (#1855, step 7)
 
 The review is an `onFindingsStored` hook, so it inherits the 07:00 and 18:00 slot

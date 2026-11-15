@@ -33,6 +33,12 @@ param factorySandboxConfiguration object = {}
 @description('Preserve native APNs delivery after the owner provisions the three protected APNs secrets and primary activates it.')
 param nativePushEnabled bool = false
 
+@description('Loose Ends inbox tools, capture endpoint and MCP server. Owner switch-on; apply migrations 0081 to 0085 first (docs/inbox-loop/acceptance.md).')
+param inboxEnabled bool = false
+
+@description('Loose Ends follow-up nudges, daily missed-capture audit and weekly review inside the proactive slots. Needs inboxEnabled and proactive checks.')
+param inboxNudgesEnabled bool = false
+
 @description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')
 param pcBridgeClientId string = ''
 @description('Dan’s IANA time zone used for Google Calendar day boundaries. Empty disables Google mail and calendar tools.')
@@ -849,6 +855,14 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'JARVIS_PROACTIVE_ALERTS_ENABLED'
               value: 'true'
+            }
+            {
+              name: 'JARVIS_INBOX_ENABLED'
+              value: inboxEnabled ? 'true' : 'false'
+            }
+            {
+              name: 'JARVIS_INBOX_NUDGES_ENABLED'
+              value: inboxNudgesEnabled ? 'true' : 'false'
             }
             {
               name: 'JARVIS_PROACTIVE_EVENTS_ENABLED'

@@ -9,6 +9,9 @@ export type NudgeTier = typeof nudgeTiers[number];
 export const MIN_HOURS_BETWEEN_NUDGES = 48;
 export const MAX_DIGEST_ITEMS = 100;
 export const MAX_FULL_NOTES = 5;
+export const MAX_WEEKLY_FULL_NOTES = 15;
+export const MAX_NUDGE_STYLE_CHARACTERS = 600;
+export type ReviewMode = 'slot' | 'weekly';
 export const MAX_REWRITES = 3;
 export const MAX_REACTIONS = 15;
 const maxExcerpt = 200;
@@ -53,6 +56,8 @@ export interface ReviewNudge {
 export interface ReviewResult {
   readonly nudge: ReviewNudge | null;
   readonly rewrites: ReadonlyArray<{ readonly id: string; readonly content: string }>;
+  /** Weekly review only: the short description of how Dan likes to be nudged, rewritten from his reactions. */
+  readonly nudgeStyle?: string;
 }
 
 const day = 24 * 60 * 60 * 1000;
@@ -69,6 +74,7 @@ export function buildDigest(
   items: readonly InboxItem[],
   rows: readonly InboxIndexRow[],
   now: Date,
+  maxFullNotes = MAX_FULL_NOTES,
 ): Digest {
   const byId = new Map(rows.map((row) => [row.itemId, row]));
   const live = items.filter((item) => !item.closed).map((item) => {
@@ -90,7 +96,7 @@ export function buildDigest(
   let bytes = 0;
   for (const entry of live) {
     if (digest.length >= MAX_DIGEST_ITEMS) break;
-    const full = fullNotes.size < MAX_FULL_NOTES && entry.canNudge;
+    const full = fullNotes.size < maxFullNotes && entry.canNudge;
     const note = full ? withoutIdComment(entry.item.content) : undefined;
     const describe = (withNote: string | undefined): DigestItem => ({
       id: entry.item.id,
@@ -119,7 +125,7 @@ export function buildDigest(
   return { items: digest, truncated: live.length > digest.length, fullNotes };
 }
 
-export function reviewSystemPrompt(input: { today: string; guidance: string; nudgeStyle: string }): string {
+export function reviewSystemPrompt(input: { today: string; guidance: string; nudgeStyle: string; mode?: ReviewMode }): string {
   return [
     "You review the owner's inbox: ideas, asks and loose thoughts he has thrown at his assistant, kept as notes. Your job is to decide whether ONE of them is worth a nudge right now, and to tidy notes where that clearly helps.",
     `Today is ${input.today} (Europe/Copenhagen). Silence is the default: return "nudge": null unless a nudge would genuinely help him move on an item or bin it. Never nag; never repeat yourself; prefer a short, specific, useful question or suggestion in his own language over a reminder that something exists.`,
@@ -127,9 +133,12 @@ export function reviewSystemPrompt(input: { today: string; guidance: string; nud
     'You may nudge only an item whose canNudge is true. A nudge proposes a next step ("do it", a first small step, a question that unblocks it) or asks if it should be binned. tier: low = a quiet card he sees when he next looks, medium = a push notification, high = a push that is time-sensitive. Use low unless waiting has a real cost.',
     'Learn from reactions: thumbs up means a nudge was worth it; thumbs down means back off on that item and in that style.',
     'You may also rewrite at most three of the notes shown in full (field "note") to merge duplicates, fix structure or add the likely next step. A rewrite must keep every line that starts with ">" (his original words) and every dated line under "## Trail" exactly as it is; never invent facts.',
+    input.mode === 'weekly'
+      ? `This is the weekly deep review. Look at the whole inbox, not just what is due: find duplicates and overlapping items (rewrite the one to keep so it covers both, and ask in the nudge whether the other can be binned; you cannot close anything), find items that have gone stale, and surface the one most worth acting on. Also rewrite the nudge style: at most ${MAX_NUDGE_STYLE_CHARACTERS} characters of plain text, in the owner's language, describing from the reactions how and when he likes to be nudged and what to avoid; keep what still holds from the current style and drop what the evidence contradicts. If there are no reactions yet, omit it.`
+      : '',
     input.nudgeStyle ? `Owner-visible nudge style (derived from his reactions): ${JSON.stringify(input.nudgeStyle)}` : '',
     input.guidance ? `Owner guidance (low priority): ${JSON.stringify(input.guidance)}` : '',
-    'Return JSON only: {"nudge": null | {"id": string, "tier": "low"|"medium"|"high", "title": string (at most 80 characters), "body": string (at most 400 characters, no links), "why": string (at most 200 characters)}, "rewrites": [{"id": string, "content": string}]}.',
+    `Return JSON only: {"nudge": null | {"id": string, "tier": "low"|"medium"|"high", "title": string (at most 80 characters), "body": string (at most 400 characters, no links), "why": string (at most 200 characters)}, "rewrites": [{"id": string, "content": string}]${input.mode === 'weekly' ? ', "nudgeStyle": string' : ''}}.`,
   ].filter(Boolean).join('\n');
 }
 
@@ -161,11 +170,11 @@ export function preservesProtectedLines(original: string, replacement: string): 
  * Strict validation against what was sent: an unknown id, an item still resting, an oversized or lossy rewrite, or
  * any unexpected shape rejects the whole answer. The review never gets a second try and nothing is invented.
  */
-export function parseReview(raw: string | undefined, digest: Digest): ReviewResult | undefined {
+export function parseReview(raw: string | undefined, digest: Digest, mode: ReviewMode = 'slot'): ReviewResult | undefined {
   if (!raw || Buffer.byteLength(raw, 'utf8') > 32 * 1024) return undefined;
   let parsed: unknown;
   try { parsed = JSON.parse(raw); } catch { return undefined; }
-  if (!record(parsed) || Object.keys(parsed).some((key) => key !== 'nudge' && key !== 'rewrites') || !('nudge' in parsed)) return undefined;
+  if (!record(parsed) || Object.keys(parsed).some((key) => key !== 'nudge' && key !== 'rewrites' && !(mode === 'weekly' && key === 'nudgeStyle')) || !('nudge' in parsed)) return undefined;
   const known = new Map(digest.items.map((item) => [item.id, item]));
   let nudge: ReviewNudge | null = null;
   if (parsed.nudge !== null) {
@@ -199,5 +208,14 @@ export function parseReview(raw: string | undefined, digest: Digest): ReviewResu
       rewrites.push({ id: entry.id, content });
     }
   }
-  return { nudge, rewrites };
+  let nudgeStyle: string | undefined;
+  if (parsed.nudgeStyle !== undefined) {
+    if (typeof parsed.nudgeStyle !== 'string') return undefined;
+    try {
+      const style = oneLine(cleanText(parsed.nudgeStyle, 'nudge style', 4_000));
+      if (Array.from(style).length > MAX_NUDGE_STYLE_CHARACTERS || /https?:\/\//iu.test(style)) return undefined;
+      if (style) nudgeStyle = style;
+    } catch { return undefined; }
+  }
+  return { nudge, rewrites, ...(nudgeStyle === undefined ? {} : { nudgeStyle }) };
 }

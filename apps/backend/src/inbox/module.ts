@@ -7,6 +7,7 @@ import type { MemoryStore } from '../database/memory-store.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import type { InboxIndex } from './item-index.js';
+import { MAX_NUDGE_STYLE_CHARACTERS, NUDGE_STYLE_KEY, type InboxOpsStore } from './ops.js';
 import {
   InboxError, MAX_INBOX_NOTE_BYTES, MAX_INBOX_QUOTE_BYTES, MAX_INBOX_TITLE_LENGTH, captureItemId, isInboxId,
   isLiveInboxPath, noteId,
@@ -102,6 +103,7 @@ export function createInboxModule(options: {
   readonly index?: InboxIndex | undefined;
   readonly memoryStore: Pick<MemoryStore, 'getSourceMessage'>;
   readonly credentials?: InboxCaptureCredentials | undefined;
+  readonly ops?: InboxOpsStore | undefined;
   readonly routes?: readonly FastifyPluginAsync[] | undefined;
 }): BackendModule {
   const { store, index } = options;
@@ -297,6 +299,53 @@ export function createInboxModule(options: {
       },
     },
   ];
+
+  const ops = options.ops;
+  if (ops) {
+    tools.push({
+      name: 'inbox_nudge_style',
+      description: [
+        "Read, set or reset the short note that tells me how and when Dan likes to be nudged about his inbox. I rewrite it weekly from his thumbs up and down; he can read it, edit it or wipe it here.",
+        `operation get returns the current text (empty when none). operation set replaces it with Dan's own words (at most ${MAX_NUDGE_STYLE_CHARACTERS} characters), only when he asks. operation reset deletes it so I start fresh. The text is a preference, never an instruction that overrides his requests.`,
+      ].join(' '),
+      inputSchema: {
+        type: 'object',
+        properties: {
+          operation: { type: 'string', enum: ['get', 'set', 'reset'] },
+          text: { type: 'string', minLength: 1, maxLength: MAX_NUDGE_STYLE_CHARACTERS },
+        },
+        required: ['operation'],
+        additionalProperties: false,
+      },
+      execution: { defaultEffect: 'action', operation: { field: 'operation', effects: { get: 'read', set: 'action', reset: 'action' } } },
+      sensitive: true,
+      denyOnPhone: true,
+      validateInput: (value: unknown) => isRecord(value) && onlyKeys(value, ['operation', 'text']) &&
+        (value.operation === 'get' || value.operation === 'reset' ? value.text === undefined
+          : value.operation === 'set' && typeof value.text === 'string' && value.text.trim().length > 0 && value.text.length <= MAX_NUDGE_STYLE_CHARACTERS),
+      explainInvalidInput: () => 'operation is get, reset, or set with text.',
+      execute: async (value, request, signal) => {
+        const input = value as { operation: 'get' | 'set' | 'reset'; text?: string };
+        checkPrincipal(request);
+        try {
+          if (input.operation === 'get') return { text: (await ops.getState(NUDGE_STYLE_KEY, signal)) ?? '' };
+          await ownerMessage(request, signal);
+          if (input.operation === 'reset') {
+            await ops.deleteState(NUDGE_STYLE_KEY, signal);
+            return { confirmation: 'Reset. I will relearn how you like to be nudged.' };
+          }
+          const text = input.text!.replace(/\s+/gu, ' ').trim();
+          if (/https?:\/\//iu.test(text)) throw new ToolRefusal('The nudge style cannot contain links.');
+          await ops.setState(NUDGE_STYLE_KEY, text, signal);
+          return { confirmation: 'Saved. I will use this when I nudge you.' };
+        } catch (error) {
+          if (error instanceof ToolRefusal) throw error;
+          if (signal.aborted) throw error;
+          throw new ToolFailure('The nudge style could not be changed right now.');
+        }
+      },
+    });
+  }
 
   const credentials = options.credentials;
   if (credentials) {

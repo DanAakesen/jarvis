@@ -347,6 +347,20 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
       return result.recordset[0]?.text ?? null;
     },
 
+    async readDanMessagesSince(since, limit) {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+        throw new RangeError('Message limit must be an integer from 1 to 100');
+      }
+      const result = await databaseReadRequest(pool)
+        .input('limit', sql.Int, limit)
+        .input('since', sql.DateTime2(7), since)
+        .query<{ id: string; text: string; at: Date }>(`SELECT TOP (@limit) CONVERT(varchar(20), m.id) AS id, m.text, m.at
+          FROM dbo.messages AS m
+          INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id
+          WHERE m.role = N'dan' AND m.at >= @since AND NOT EXISTS (SELECT 1 FROM dbo.session_runtime_tests r WHERE r.jarvis_session_id = s.id) ORDER BY m.id ASC;`);
+      return result.recordset.map((row) => ({ id: row.id, text: row.text, at: row.at }));
+    },
+
     async readRecentUserMessages(limit = 5) {
       if (!Number.isInteger(limit) || limit < 1 || limit > 20) {
         throw new RangeError('Recent user message limit must be an integer from 1 to 20');

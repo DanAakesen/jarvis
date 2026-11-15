@@ -1,6 +1,6 @@
 # Inbox loop: design (P15-145, #1836)
 
-Status: **approved by the owner; build in progress under #1855 (P15-159), steps 1 (vault store) and 3 (index) built; step 2 is a pull request in the vault repo.** Sections below keep the original wording; the build order of #1855 supersedes the phase table in section 11.
+Status: **approved by the owner; all eight build steps of #1855 (P15-159) are built and dark; step 2 is a pull request in the vault repo.** Switch-on and acceptance: [acceptance.md](acceptance.md). Build notes: [shortcut.md](shortcut.md), [mcp.md](mcp.md). Sections below keep the original wording; the build order of #1855 supersedes the phase table in section 11.
 The owner decisions in [decisions.md](../decisions.md)
 and [p0.md](../../p0.md) are fixed inputs; everything marked *proposal* awaits owner review.
 
@@ -303,6 +303,8 @@ flowchart LR
 - **Gap to build:** thumbs on the push. iOS needs notification actions on the proactive category; the web service worker needs push actions; both call the existing feedback route.
 
 ## 8. Cost per day
+
+> Build note: every call is now recorded per day and kind in `dbo.inbox_spend` and shown at `GET /inbox/status`. These figures are still estimates; replace them with measured values after a week of use.
 
 Rates (`core/usage-pricing.ts`): gpt-5.6-luna 1.3157 DKK per M input tokens, 7.8941 per M output (reasoning counts as output). **Token counts are estimates**, to be replaced by the measured values the spend ledger records once the first phases run.
 
