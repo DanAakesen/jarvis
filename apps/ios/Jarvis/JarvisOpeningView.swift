@@ -14,9 +14,10 @@ enum JarvisOpening {
     }
 }
 
-/// The cold-start opening screen: the cognitive lattice orb, the name and a slim bar on a dark network, with no
-/// caption. Specification: docs/ui/opening-final-2026-11-14/README.md. It draws only the orb's own motion (the
-/// background is static), never touches the microphone and never claims progress it cannot measure.
+/// The cold-start opening screen: the cognitive lattice orb, the name and a slim bar on the living neural
+/// background, with no caption. Specification: docs/ui/opening-final-2026-11-14/README.md. Neurons fire out from the
+/// orb and return while the app starts (full effects, the working state); it never touches the microphone and never
+/// claims progress it cannot measure.
 struct JarvisOpeningView: View {
     var progress: JarvisOpeningProgress = .indeterminate
     /// Holds the orb and the bar still while the app is inactive or the screen is covered.
@@ -32,8 +33,12 @@ struct JarvisOpeningView: View {
             )
             let center = geometry.size.width / 2
             ZStack {
-                JarvisDesignTokens.openingBackground
-                JarvisOpeningNetworkView(orbCenterY: layout.orbCenterY, orbRadius: layout.orbDiameter / 2)
+                // The orb stays calm, as approved; the network around it works (`.signingIn`), without implying listening.
+                JarvisNeuralBackground(
+                    activity: .signingIn, effects: .full,
+                    orb: .local(center: CGPoint(x: center, y: layout.orbCenterY), radius: layout.orbDiameter / 2),
+                    isPaused: isPaused
+                )
                 RadialGradient(
                     colors: [JarvisDesignTokens.ambientBlue.opacity(0.1), .clear],
                     center: .center, startRadius: layout.orbDiameter * 0.45, endRadius: layout.orbDiameter * 0.85
@@ -61,76 +66,6 @@ struct JarvisOpeningView: View {
         } ?? "")
         .accessibilityAddTraits(.updatesFrequently)
         .accessibilityIdentifier("opening.screen")
-    }
-}
-
-/// The dim network behind the orb. Fixed positions from `JarvisOpeningNetwork`; it never animates. Lines run behind
-/// the orb: the orb's disc is cut out of the network, so nothing is drawn over the sphere. A faint additive glow
-/// softens lines and nodes, and each line fades a little as it nears the orb.
-private struct JarvisOpeningNetworkView: View {
-    var orbCenterY: Double
-    var orbRadius: Double
-
-    /// How bright a line is at a distance from the orb centre: full far away, about 40% at the sphere's edge.
-    private func fade(_ distance: Double) -> Double {
-        let t = max(0, min(1, (distance - orbRadius) / (orbRadius * 1.6)))
-        return 0.4 + 0.6 * t * t * (3 - 2 * t)
-    }
-
-    var body: some View {
-        Canvas { context, size in
-            let orbCenter = CGPoint(x: size.width / 2, y: orbCenterY)
-            var visible = Path(CGRect(origin: .zero, size: size))
-            visible.addEllipse(in: CGRect(
-                x: orbCenter.x - orbRadius, y: orbCenter.y - orbRadius, width: orbRadius * 2, height: orbRadius * 2
-            ))
-            context.clip(to: visible, style: FillStyle(eoFill: true))
-            var glow = context
-            glow.blendMode = .plusLighter
-            let network = JarvisOpeningNetwork.shared
-            func point(_ index: Int) -> CGPoint {
-                if index == network.orbAnchor { return orbCenter }
-                let node = network.nodes[index]
-                return CGPoint(x: node.x * size.width, y: node.y * size.height)
-            }
-            let line = JarvisDesignTokens.openingLine
-            for link in network.links {
-                let start = point(link[0]), end = point(link[1])
-                var path = Path()
-                path.move(to: start)
-                path.addLine(to: end)
-                // Sample the fade along the link so it dims toward the orb on whichever side it approaches.
-                func shading(_ base: Double) -> GraphicsContext.Shading {
-                    let steps = 10
-                    let stops = (0...steps).map { step -> Gradient.Stop in
-                        let t = Double(step) / Double(steps)
-                        let x = start.x + (end.x - start.x) * t, y = start.y + (end.y - start.y) * t
-                        let distance = ((x - orbCenter.x) * (x - orbCenter.x) + (y - orbCenter.y) * (y - orbCenter.y)).squareRoot()
-                        return Gradient.Stop(color: line.opacity(base * fade(distance)), location: t)
-                    }
-                    return .linearGradient(Gradient(stops: stops), startPoint: start, endPoint: end)
-                }
-                glow.stroke(path, with: shading(0.05), style: StrokeStyle(lineWidth: 2.8, lineCap: .round))
-                context.stroke(path, with: shading(0.18), style: StrokeStyle(lineWidth: 0.7, lineCap: .round))
-            }
-            for index in network.nodes.indices where network.nodes[index].brightness > 0 {
-                let p = point(index)
-                let brightness = network.nodes[index].brightness
-                glow.fill(
-                    Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)),
-                    with: .radialGradient(
-                        Gradient(colors: [line.opacity(0.17 * brightness), line.opacity(0)]),
-                        center: p, startRadius: 0, endRadius: 7
-                    )
-                )
-                context.fill(
-                    Path(ellipseIn: CGRect(x: p.x - 1.4, y: p.y - 1.4, width: 2.8, height: 2.8)),
-                    with: .color(line.opacity(0.7 * brightness))
-                )
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 

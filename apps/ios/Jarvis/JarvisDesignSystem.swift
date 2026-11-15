@@ -35,6 +35,11 @@ enum JarvisDesignTokens {
         light: UIColor(red: 246.0 / 255, green: 240.0 / 255, blue: 230.0 / 255, alpha: 1),
         dark: UIColor(red: 7.0 / 255, green: 9.0 / 255, blue: 15.0 / 255, alpha: 1)
     )
+    /// The page colour under the neural network: the opening screen's near-black navy in dark mode.
+    static let neuralBackground = adaptiveColor(
+        light: UIColor(red: 246.0 / 255, green: 240.0 / 255, blue: 230.0 / 255, alpha: 1),
+        dark: UIColor(red: 2.0 / 255, green: 7.0 / 255, blue: 15.0 / 255, alpha: 1)
+    )
     static let ambientCool = adaptiveColor(
         light: UIColor(red: 20.0 / 255, green: 118.0 / 255, blue: 141.0 / 255, alpha: 1),
         dark: UIColor(red: 82.0 / 255, green: 220.0 / 255, blue: 250.0 / 255, alpha: 1)
@@ -295,7 +300,7 @@ enum JarvisDesignTokens {
     static let gateSignInBottomInset: CGFloat = 34
     static let gateControlSpacing: CGFloat = 24
     static let gateBackgroundBlurRadius: CGFloat = 36
-    static let gateBackgroundOpacity: Double = 0.66
+    static let gateStateFadeDuration: Double = 0.3
     static let gateActionAccent = primaryAccent
     static let gateActionForeground = primaryAccent
     static let gateFaceIDSymbolSize: CGFloat = 44
@@ -335,71 +340,109 @@ struct JarvisPressableRowButtonStyle: ButtonStyle {
     }
 }
 
-struct JarvisScreenBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
+/// Set by the gate while it covers the app (the opening, Face ID, the privacy cover): every neural background
+/// under it holds still instead of drawing frames nobody can see.
+private struct JarvisBackgroundPausedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var jarvisBackgroundPaused: Bool {
+        get { self[JarvisBackgroundPausedKey.self] }
+        set { self[JarvisBackgroundPausedKey.self] = newValue }
+    }
+}
+
+/// Where the orb is on a screen that shows one.
+enum JarvisNeuralOrbPlacement: Equatable {
+    /// No orb: the lines dissolve into a faint ember.
+    case hidden
+    /// The orb's centre and radius in the background's own coordinates.
+    case local(center: CGPoint, radius: CGFloat)
+    /// The orb's frame on screen (`.global`), measured where the orb is laid out; the background converts it.
+    case screen(CGRect)
+}
+
+/// The app's one background: the opening screen's sparse cyan network, with neurons that fire out from the orb and
+/// return (`JarvisNeuralBackgroundView`, JarvisCore). Voice, chat and the opening ask for `.full` effects with the
+/// orb's activity; every other screen gets the same network `.calm` (a few slow, faint signals) through
+/// `jarvisAmbientBackground`. Never draw a second background in a screen file.
+/// `orb` says where the orb is, so the network fans out from it and is cut out behind it; `intensity` dims the
+/// lines and signals behind text.
+struct JarvisNeuralBackground: View {
+    var activity: JarvisOrbActivity = .calm
+    var effects: JarvisNeuralEffects = .calm
+    var orb: JarvisNeuralOrbPlacement = .hidden
+    var isPaused = false
+    var intensity = 1.0
+
+    @Environment(\.jarvisBackgroundPaused) private var isCovered
 
     var body: some View {
-        GeometryReader { geometry in
-            let size = geometry.size
-            ZStack {
-                JarvisDesignTokens.pageBackground
-                if colorScheme == .dark {
-                    Image("EmberBackground")
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: size.width, height: size.height)
-                        .clipped()
-                } else {
-                    glow(
-                        JarvisDesignTokens.ambientCool,
-                        opacity: 0.24,
-                        size: size,
-                        x: 0.12,
-                        y: 0.10
-                    )
-                    glow(
-                        JarvisDesignTokens.ambientWarm,
-                        opacity: 0.30,
-                        size: size,
-                        x: 0.94,
-                        y: 0.20
-                    )
-                    glow(
-                        JarvisDesignTokens.ambientGreen,
-                        opacity: 0.18,
-                        size: size,
-                        x: 0.24,
-                        y: 0.98
-                    )
-                    glow(
-                        JarvisDesignTokens.ambientBlue,
-                        opacity: 0.16,
-                        size: size,
-                        x: 0.92,
-                        y: 0.80
-                    )
-                }
+        ZStack {
+            JarvisDesignTokens.neuralBackground
+            GeometryReader { proxy in
+                JarvisNeuralBackgroundView(
+                    activity: activity, effects: effects, orb: resolvedOrb(in: proxy),
+                    isPaused: isPaused || isCovered, intensity: intensity
+                )
             }
-            .frame(width: size.width, height: size.height)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
-    private func glow(_ color: Color, opacity: Double, size: CGSize, x: CGFloat, y: CGFloat) -> some View {
-        Ellipse()
-            .fill(
-                RadialGradient(
-                    colors: [color.opacity(opacity), color.opacity(opacity * 0.3), .clear],
-                    center: .center,
-                    startRadius: 0,
-                    endRadius: max(size.width * 0.6, size.height * 0.36)
-                )
+    private func resolvedOrb(in proxy: GeometryProxy) -> JarvisNeuralOrb {
+        switch orb {
+        case .hidden:
+            return .hidden
+        case .local(let center, let radius):
+            return .shown(center: center, radius: radius)
+        case .screen(let frame):
+            guard frame.width > 0 else { return .hidden }
+            let origin = proxy.frame(in: .global).origin
+            return .shown(
+                center: CGPoint(x: frame.midX - origin.x, y: frame.midY - origin.y), radius: frame.width / 2
             )
-            .frame(width: size.width * 1.2, height: size.height * 0.72)
-            .position(x: size.width * x, y: size.height * y)
-            .accessibilityHidden(true)
+        }
+    }
+}
+
+/// The living background with its orb placed in it, for a screen whose window and composer overlay the orb (chat):
+/// the same network and states as Voice, a little quieter so text stays legible on top.
+struct JarvisNeuralStage: View {
+    var activity: JarvisOrbActivity
+    var intensity = 0.7
+    var orbOpacity = 0.55
+
+    @Environment(\.jarvisBackgroundPaused) private var isCovered
+
+    var body: some View {
+        GeometryReader { proxy in
+            let diameter = min(proxy.size.width * 0.54, 240)
+            let center = CGPoint(x: proxy.size.width / 2, y: proxy.size.height * 0.3)
+            ZStack {
+                JarvisNeuralBackground(
+                    activity: activity, effects: .full, orb: .local(center: center, radius: diameter / 2),
+                    intensity: intensity
+                )
+                JarvisOrb(activity: activity, size: diameter, isPaused: isCovered)
+                    .opacity(orbOpacity)
+                    .position(center)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The still pose of the same background, for layers nobody watches move: under a page, behind a sheet, in the
+/// drawer, while a camera preview covers it.
+struct JarvisScreenBackground: View {
+    var body: some View {
+        JarvisNeuralBackground(effects: .still)
     }
 }
 
@@ -466,10 +509,20 @@ extension JarvisList where Head == EmptyView {
 }
 
 extension View {
-    func jarvisAmbientBackground(transparentNavigationBar: Bool = true) -> some View {
+    /// The page's background: the neural network, calm unless the screen passes a `stage` (chat's live orb).
+    func jarvisAmbientBackground(
+        transparentNavigationBar: Bool = true,
+        stage: JarvisNeuralStage? = nil
+    ) -> some View {
         frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollContentBackground(.hidden)
-            .background { JarvisScreenBackground() }
+            .background {
+                if let stage {
+                    stage
+                } else {
+                    JarvisNeuralBackground(effects: .calm)
+                }
+            }
             .toolbarBackground(transparentNavigationBar ? .hidden : .automatic, for: .navigationBar)
             .toolbarBackgroundVisibility(.hidden, for: .bottomBar)
             .presentationBackground { JarvisScreenBackground() }

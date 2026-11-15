@@ -64,6 +64,7 @@ struct JarvisSettingsArea: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Binding var storedTheme: String
     @AppStorage(JarvisOpening.enabledKey) private var openingEnabled = true
+    @AppStorage(JarvisNeuralEffects.motionEnabledKey) private var backgroundMotion = true
 
     let client: JarvisSettingsClient?
     let onSignedOut: () -> Void
@@ -243,6 +244,14 @@ struct JarvisSettingsArea: View {
                             .accessibilityIdentifier("settings.openingScreen")
                     } footer: {
                         Text(copy(.openingScreenHint))
+                    }
+                    .textCase(nil)
+                    Section {
+                        Toggle(copy(.backgroundMotion), isOn: $backgroundMotion)
+                            .tint(JarvisDesignTokens.primaryAccent)
+                            .accessibilityIdentifier("settings.backgroundMotion")
+                    } footer: {
+                        Text(copy(.backgroundMotionHint))
                     }
                     .textCase(nil)
                 }
