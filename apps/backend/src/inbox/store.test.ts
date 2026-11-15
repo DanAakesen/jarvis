@@ -184,6 +184,15 @@ describe('inbox store', () => {
     expect(files.get('Inbox/a.md')!.match(/jarvis-inbox/gu)).toHaveLength(1);
   });
 
+  it('keeps the path-derived identity when the first edit adds a marker to a note from another tool', async () => {
+    const { inbox, files, sha } = store({ 'Inbox/2026-11-01 From ChatGPT.md': '# From ChatGPT\n\nbody\n' });
+    const before = (await inbox.read('Inbox/2026-11-01 From ChatGPT.md', signal))!.id;
+    await inbox.replace('Inbox/2026-11-01 From ChatGPT.md', '# From ChatGPT\n\nbody, edited\n', sha('Inbox/2026-11-01 From ChatGPT.md'), signal);
+    expect(noteId(files.get('Inbox/2026-11-01 From ChatGPT.md')!)).toBe(before);
+    const closed = await inbox.close('Inbox/2026-11-01 From ChatGPT.md', 'done', signal);
+    expect(closed.id).toBe(before);
+  });
+
   it('never writes outside Inbox/', async () => {
     const { inbox, calls } = store();
     await inbox.create({ title: '../../Personal/Inbox', note: 'x' }, signal);

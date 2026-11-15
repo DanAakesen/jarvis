@@ -11,6 +11,8 @@ export interface InboxIndexRow {
   readonly path: string | null;
   readonly sha: string | null;
   readonly lastNudgedAt: Date | null;
+  /** The proactive item (card) the last nudge created, so its thumbs can be read back. */
+  readonly lastNudgeItemId: string | null;
   readonly lastFeedback: InboxFeedback | null;
   readonly lastFeedbackAt: Date | null;
   readonly createdAt: Date;
@@ -32,7 +34,7 @@ export interface InboxIndexStore {
     signal: AbortSignal,
   ): Promise<void>;
   remove(itemIds: readonly string[], signal: AbortSignal): Promise<void>;
-  markNudged(itemId: string, at: Date, signal: AbortSignal): Promise<boolean>;
+  markNudged(itemId: string, at: Date, signal: AbortSignal, nudgeItemId?: string): Promise<boolean>;
   setFeedback(itemId: string, feedback: InboxFeedback, at: Date, signal: AbortSignal): Promise<boolean>;
 }
 
@@ -165,7 +167,7 @@ export function createInboxIndex(options: {
     complete: (itemId: string, path: string, sha: string, signal: AbortSignal) =>
       store.upsert({ itemId, path, sha }, signal),
     /** Called by the nudge pass when a nudge for the item was sent. */
-    markNudged: (itemId: string, at: Date, signal: AbortSignal) => store.markNudged(itemId, at, signal),
+    markNudged: (itemId: string, at: Date, signal: AbortSignal, nudgeItemId?: string) => store.markNudged(itemId, at, signal, nudgeItemId),
     setFeedback: (itemId: string, feedback: InboxFeedback, at: Date, signal: AbortSignal) =>
       store.setFeedback(itemId, feedback, at, signal),
     /** Rows for live items, for building the digest. */

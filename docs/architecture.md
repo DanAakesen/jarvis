@@ -1,3 +1,21 @@
+## Inbox nudge pass — 15 November 2026 (#1855, step 7)
+
+`inbox/review.ts` builds the digest, the system prompt and the strict parser;
+`inbox/nudge.ts` runs one pass (sync the index, read thumbs back, digest, one model
+call, validated rewrites, delivery, index and trail); `inbox/proactive-hook.ts` adapts it
+to `onFindingsStored` (budget gate, spend record, card plus insight candidate).
+`index.ts` passes the hook to `registerProactive` only when `JARVIS_INBOX_NUDGES_ENABLED`,
+`JARVIS_INBOX_ENABLED` and `JARVIS_PROACTIVE_ENABLED` are all exactly `true`. The hook
+runs before the alert hook, so a medium or high nudge is that run's first insight candidate.
+
+## Inbox MCP server — 15 November 2026 (#1855, step 6)
+
+`inbox/mcp.ts` serves `POST|GET|DELETE /inbox/mcp` with `createMcpHandler` in the
+SDK's default stateless mode (2025 and 2026 protocol eras). `auth/hook.ts` accepts a
+`ji.` credential on this route and the capture route only, and attaches its scope and
+label to the request; the MCP tools are built per request from that scope. The early
+peer rate limit covers the route. Migration 0083 adds `scope` to the credential table.
+
 ## Inbox capture — 15 November 2026 (#1855, step 5)
 
 `inbox/capture.ts` turns raw text into notes (`triage.ts`: tool-less model call,

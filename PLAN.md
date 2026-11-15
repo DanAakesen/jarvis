@@ -19,8 +19,8 @@ Owner go-ahead: "go on loose ends". One issue, eight steps delivered in order, e
 | 3 | Rebuildable index table (last nudged, thumbs), migration 0081 (0080 is taken by the proactive-events PR #1862, which must merge first) | PR #1863; verified on local SQL Server 2022 |
 | 4 | Chat and voice tools: capture, list, close | Built (`inbox_capture`, `inbox_items`, `inbox_close`), dark behind `JARVIS_INBOX_ENABLED` |
 | 5 | Capture endpoint, write-only credential, iPhone Shortcut (runs on Apple Watch too) | Built, in review. Native Watch-app action not built (needs a Mac to compile and test) |
-| 6 | MCP server (ChatGPT, Claude, Copilot) | Not started |
-| 7 | Nudge pass in the proactive run, thumbs on the push | Not started |
+| 6 | MCP server (ChatGPT, Claude, Copilot) | Built with scoped bearer credentials (Claude Code, Codex, Copilot CLI); ChatGPT and claude.ai connectors need an Entra OAuth registration (owner action), not built |
+| 7 | Nudge pass in the proactive run, feedback learning | Built as an `onFindingsStored` hook, dark behind `JARVIS_INBOX_NUDGES_ENABLED`. Thumbs on the push itself (iOS and web notification actions) not built (native work, same as #1862) |
 | 8 | Missed-capture audit, weekly review, spend visibility, owner switch-on | Not started |
 
 ## Cognitive lattice orb, opening screen and icons — 14 November 2026 (P15-143 / #1834, PR #1853)

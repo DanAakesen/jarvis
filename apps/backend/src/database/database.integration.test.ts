@@ -91,7 +91,10 @@ describe('real SQL Server migration contract', () => {
     it('keeps reservations, nudges and thumbs per item, and enforces its constraints', async () => {
       const schema = await readFile(new URL('../../../../db/migrations/0081_inbox_items.sql', import.meta.url), 'utf8');
       const down = await readFile(new URL('../../../../db/migrations/down/0081_inbox_items.sql', import.meta.url), 'utf8');
+      const nudgeSchema = await readFile(new URL('../../../../db/migrations/0084_inbox_nudge_item.sql', import.meta.url), 'utf8');
+      const nudgeDown = await readFile(new URL('../../../../db/migrations/down/0084_inbox_nudge_item.sql', import.meta.url), 'utf8');
       await pool.request().batch(schema);
+      await pool.request().batch(nudgeSchema);
       const signal = new AbortController().signal;
       const store = createInboxIndexStore(pool);
       const at = new Date('2026-11-15T10:00:00.000Z');
@@ -103,7 +106,8 @@ describe('real SQL Server migration contract', () => {
         expect((await store.get('aaaaaaaa', signal))?.lastNudgedAt).toBeNull();
         await store.upsert({ itemId: 'bbbbbbbb', path: 'Inbox/b.md', sha: 'b'.repeat(40), lastNudgedAt: at }, signal);
         expect((await store.get('bbbbbbbb', signal))?.lastNudgedAt).toEqual(at);
-        expect(await store.markNudged('aaaaaaaa', at, signal)).toBe(true);
+        expect(await store.markNudged('aaaaaaaa', at, signal, 'ABCDEF01-0000-4000-8000-000000000001')).toBe(true);
+        expect((await store.get('aaaaaaaa', signal))?.lastNudgeItemId).toBe('abcdef01-0000-4000-8000-000000000001');
         expect(await store.setFeedback('aaaaaaaa', 'down', at, signal)).toBe(true);
         expect(await store.setFeedback('cccccccc', 'up', at, signal)).toBe(false);
         await store.upsert({ itemId: 'aaaaaaaa', path: 'Inbox/renamed.md', sha: 'c'.repeat(40) }, signal);
@@ -128,6 +132,7 @@ describe('real SQL Server migration contract', () => {
         await store.remove(['aaaaaaaa', 'cccccccc'], signal);
         expect((await store.all(signal)).map((row) => row.itemId)).toEqual(['bbbbbbbb']);
       } finally {
+        await pool.request().batch(nudgeDown);
         await pool.request().batch(down);
       }
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.inbox_items', N'U') AS id")).recordset).toEqual([{ id: null }]);
@@ -137,15 +142,18 @@ describe('real SQL Server migration contract', () => {
     it('stores hashes only, caps the count per owner, verifies per owner and revokes by id', async () => {
       const schema = await readFile(new URL('../../../../db/migrations/0082_inbox_capture_credentials.sql', import.meta.url), 'utf8');
       const down = await readFile(new URL('../../../../db/migrations/down/0082_inbox_capture_credentials.sql', import.meta.url), 'utf8');
+      const scopeSchema = await readFile(new URL('../../../../db/migrations/0083_inbox_credential_scope.sql', import.meta.url), 'utf8');
+      const scopeDown = await readFile(new URL('../../../../db/migrations/down/0083_inbox_credential_scope.sql', import.meta.url), 'utf8');
       await pool.request().batch(schema);
+      await pool.request().batch(scopeSchema);
       const store = createInboxCaptureCredentialStore(pool);
       const owner = randomUUID();
       const credentials = new InboxCaptureCredentials(store, owner);
       try {
         const shortcut = await credentials.issue('iPhone Shortcut');
-        expect(await credentials.verify(shortcut.credential)).toBe(true);
-        expect(await new InboxCaptureCredentials(store, randomUUID()).verify(shortcut.credential)).toBe(false);
-        expect(await credentials.verify(`ji.${'A'.repeat(43)}`)).toBe(false);
+        expect(await credentials.verify(shortcut.credential)).toEqual({ scope: 'write', label: 'iPhone Shortcut' });
+        expect(await new InboxCaptureCredentials(store, randomUUID()).verify(shortcut.credential)).toBeNull();
+        expect(await credentials.verify(`ji.${'A'.repeat(43)}`)).toBeNull();
         const stored = await pool.request().query<{ credential_hash: Buffer }>('SELECT credential_hash FROM dbo.inbox_capture_credentials');
         expect(stored.recordset[0]?.credential_hash).toEqual(createHash('sha256').update(shortcut.credential).digest());
         const [listed] = await credentials.list();
@@ -157,9 +165,14 @@ describe('real SQL Server migration contract', () => {
         expect(await credentials.list()).toHaveLength(5);
         expect(await credentials.revoke(shortcut.id)).toBe(true);
         expect(await credentials.revoke(shortcut.id)).toBe(false);
-        expect(await credentials.verify(shortcut.credential)).toBe(false);
+        expect(await credentials.verify(shortcut.credential)).toBeNull();
         expect(await credentials.list()).toHaveLength(4);
+        const assistant = await credentials.issue('Claude', 'read_write');
+        expect(await credentials.verify(assistant.credential)).toEqual({ scope: 'read_write', label: 'Claude' });
+        expect((await credentials.list()).map((row) => row.scope).sort()).toEqual(['read_write', 'write', 'write', 'write', 'write']);
+        await expect(pool.request().query("UPDATE dbo.inbox_capture_credentials SET scope = 'admin'")).rejects.toThrow();
       } finally {
+        await pool.request().batch(scopeDown);
         await pool.request().batch(down);
       }
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.inbox_capture_credentials', N'U') AS id")).recordset).toEqual([{ id: null }]);

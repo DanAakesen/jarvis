@@ -1,14 +1,19 @@
 import type { RateLimitOptions } from '@fastify/rate-limit';
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
-import { inboxCapturePath, inboxCredentialsPath } from './inbox-capture-credential.js';
+import { inboxCapturePath, inboxCredentialsPath, inboxMcpPath, type InboxCredentialAccess } from './inbox-capture-credential.js';
 
 declare module 'fastify' {
-  interface FastifyRequest { inboxCaptureCredentialHash: string | null }
+  interface FastifyRequest {
+    inboxCaptureCredentialHash: string | null;
+    /** Set only when a capture credential authenticated this request. */
+    inboxCredentialAccess: InboxCredentialAccess | null;
+  }
 }
 
 function inboxRoute(method: string, url: string | undefined): boolean {
   return url === inboxCapturePath && method === 'POST' ||
+    url === inboxMcpPath && (method === 'POST' || method === 'GET' || method === 'DELETE') ||
     url === inboxCredentialsPath && (method === 'POST' || method === 'GET') ||
     url === `${inboxCredentialsPath}/:id` && method === 'DELETE';
 }
@@ -22,6 +27,7 @@ export function installInboxCaptureLimits<Logger extends FastifyBaseLogger>(
   app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, ownerObjectId: string,
 ): void {
   app.decorateRequest('inboxCaptureCredentialHash', null);
+  app.decorateRequest('inboxCredentialAccess', null);
   const preAuthOptions: RateLimitOptions = {
     max: 30, timeWindow: 1000, cache: 512, continueExceeding: false, exponentialBackoff: false,
     keyGenerator: request => request.raw.socket.remoteAddress ?? 'unknown-peer',
@@ -58,7 +64,7 @@ export function installInboxCaptureLimits<Logger extends FastifyBaseLogger>(
   app.addHook('preValidation', async (request, reply) => {
     const url = request.routeOptions.url;
     if (!inboxRoute(request.method, url)) return;
-    if (url === inboxCapturePath) {
+    if (url === inboxCapturePath || url === inboxMcpPath) {
       if (request.inboxCaptureCredentialHash !== null || request.principal?.objectId === ownerObjectId) {
         return enforce(capture, request, reply);
       }

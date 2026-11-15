@@ -108,7 +108,11 @@ import { createGitHubVaultClient, VAULT_REPOSITORY } from './vault/github-client
 import { createVaultModule } from './vault/index.js';
 import { createInboxModule } from './inbox/module.js';
 import { createInboxRoutes } from './inbox/routes.js';
+import { createInboxMcpRoutes } from './inbox/mcp.js';
 import { createInboxCapture } from './inbox/capture.js';
+import type { FoundryModelUsage } from './core/usage.js';
+import { createInboxNudgePass } from './inbox/nudge.js';
+import { createInboxNudgeHook, createProactiveNudgeDelivery, createProactiveReactions } from './inbox/proactive-hook.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentials } from './auth/inbox-capture-credential.js';
 import { createInboxStore } from './inbox/store.js';
 import { createInboxIndex } from './inbox/item-index.js';
@@ -602,7 +606,7 @@ try {
       memoryStore,
       index: inboxIndex,
       credentials: inboxCredentials,
-      routes: createInboxRoutes({
+      routes: [createInboxRoutes({
         ownerObjectId: config.auth.ownerObjectId,
         credentials: inboxCredentials,
         capture: createInboxCapture({
@@ -626,7 +630,7 @@ try {
           } : {}),
           log: (event, fields) => logger.info({ msg: event, ...fields }, event),
         }),
-      }),
+      }), createInboxMcpRoutes({ store: inboxStore, index: inboxIndex })],
     })
     : undefined;
   const foundryClients = new Map<string, FoundryClient>();
@@ -1431,7 +1435,43 @@ try {
       logger,
     })
     : undefined;
+  const inboxUsage: FoundryModelUsage[] = [];
+  const inboxNudgeHook = config.inboxNudgesEnabled && config.proactiveEnabled && inboxStore && inboxIndex && proactiveStore &&
+      approvalEndpoint && credential && settingsStore && usageStore?.recordFoundryUsage
+    ? (() => {
+      const review = createFoundryJsonCompletion({
+        endpoint: approvalEndpoint, scope: FOUNDRY_SCOPE, maxContentBytes: 16 * 1024,
+        getToken: async (scope, signal) => {
+          const token = await credential.getToken(scope, { abortSignal: signal });
+          if (!token) throw new Error('Inbox review identity unavailable');
+          return token.token;
+        },
+        selectModel: async () => {
+          const catalogue = await modelCatalogue.read();
+          const selected = chooseApprovalModel(catalogue, (await readSettings(settingsStore, catalogue)).roles.chat.model);
+          return selected ? { ...selected, maxCompletionTokens: 4096 } : undefined;
+        },
+        recordUsage: async (usage) => { inboxUsage.push(usage); await usageStore.recordFoundryUsage!(usage); },
+      });
+      return createInboxNudgeHook({
+        store: proactiveStore,
+        takeUsage: () => inboxUsage.splice(0),
+        now: () => new Date(),
+        log: (fields) => logger.info({ msg: 'inbox.nudge', ...fields }, 'inbox.nudge'),
+        pass: (context) => createInboxNudgePass({
+          store: inboxStore,
+          index: inboxIndex,
+          model: review,
+          delivery: createProactiveNudgeDelivery(proactiveStore, context, () => new Date()),
+          reactions: createProactiveReactions(proactiveStore),
+          guidance: async () => (await proactiveStore.settings.read()).guidance,
+          log: (fields) => logger.info({ msg: 'inbox.nudge', ...fields }, 'inbox.nudge'),
+        }),
+      });
+    })()
+    : undefined;
   if (config.proactiveEnabled) registerProactive(app, {
+    ...(inboxNudgeHook ? { onFindingsStored: [inboxNudgeHook] } : {}),
     healthEnabled: config.healthEnabled === true,
     ...(nativeProactive ? { hasNativeRecipients: nativeProactive.hasRecipients } : {}),
     ...(memoryStore ? { memoryStore } : {}),

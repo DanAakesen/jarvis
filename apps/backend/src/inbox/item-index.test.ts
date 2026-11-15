@@ -29,9 +29,9 @@ function memoryStore(initial: InboxIndexRow[] = []): InboxIndexStore & { rows: M
     },
     async upsertMany(values, signal) { for (const value of values) await this.upsert(value, signal); },
     async remove(ids) { for (const id of ids) rows.delete(id); },
-    async markNudged(itemId, at) {
+    async markNudged(itemId, at, _signal, nudgeItemId) {
       const existing = rows.get(itemId);
-      if (existing) rows.set(itemId, { ...existing, lastNudgedAt: at });
+      if (existing) rows.set(itemId, { ...existing, lastNudgedAt: at, lastNudgeItemId: nudgeItemId ?? null });
       return Boolean(existing);
     },
     async setFeedback(itemId, feedback, at) {
@@ -44,7 +44,7 @@ function memoryStore(initial: InboxIndexRow[] = []): InboxIndexStore & { rows: M
 
 function row(value: Partial<InboxIndexRow> & { itemId: string }): InboxIndexRow {
   return {
-    path: null, sha: null, lastNudgedAt: null, lastFeedback: null, lastFeedbackAt: null, createdAt: earlier, ...value,
+    path: null, sha: null, lastNudgedAt: null, lastNudgeItemId: null, lastFeedback: null, lastFeedbackAt: null, createdAt: earlier, ...value,
   };
 }
 
