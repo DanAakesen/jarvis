@@ -10,6 +10,8 @@
   `--opening-preview` (holds the opening on screen), `--opening-preview --opening-progress=0.4` (measured bar),
   `--widget-layout-gallery` (Home widget layouts), `--no-opening` (skip the opening). The opening's off switch for users is
   Settings > General > Opening screen (`UserDefaults` key `jarvis.opening.enabled`, default on).
+- **Apple simulator evidence.** The Watch workflow captures opening, measured-progress, orb-gallery and widget-gallery
+  states in separate timeout-bounded steps, so one slow simulator capture does not prevent later gallery artifacts.
 - **Icons.** Regenerate from `docs/ui/opening-final-2026-11-14/cognitive-lattice-transparent.png`: iPhone and Watch
   `AppIcon.appiconset/JarvisAppIcon.png` (Watch orb larger for the round mask) and the web icons in `apps/web/public`.
 
