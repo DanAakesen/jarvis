@@ -55,7 +55,7 @@ export interface FoundryProactiveModelOptions {
   logger?: { warn(data: { reason: string; outputTokens?: number }, message: string): void };
 }
 
-class InvalidModelOutput extends Error {}
+export class InvalidModelOutput extends Error {}
 
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new InvalidModelOutput();
@@ -124,7 +124,7 @@ export function validateModelFindings(value: unknown, facts: SourceFact[]): Vali
   }
 }
 
-async function cancellable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
+export async function cancellable<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   let abort = () => {};
   try {
     return await Promise.race([work, new Promise<never>((_resolve, reject) => {
@@ -137,7 +137,7 @@ async function cancellable<T>(work: Promise<T>, signal: AbortSignal): Promise<T>
   }
 }
 
-async function boundedJson(response: Response, signal: AbortSignal): Promise<unknown> {
+export async function boundedJson(response: Response, signal: AbortSignal): Promise<unknown> {
   if (!response.body || Number(response.headers.get('content-length')) > MAX_PROACTIVE_RESPONSE_BYTES) {
     void response.body?.cancel().catch(() => undefined);
     throw new InvalidModelOutput();
@@ -168,13 +168,18 @@ async function boundedJson(response: Response, signal: AbortSignal): Promise<unk
   }
 }
 
-export function createFoundryProactiveModel(options: FoundryProactiveModelOptions): ProactiveModel {
-  let endpoint: URL | undefined;
+/** Invalid or missing configuration returns undefined, which leaves the model unavailable. */
+export function foundryChatEndpoint(foundryProjectEndpoint: string | undefined): URL | undefined {
   try {
-    endpoint = new URL('/models/chat/completions',
-      new URL(normalizeFoundryProjectEndpoint(options.foundryProjectEndpoint ?? '')).origin);
+    const endpoint = new URL('/models/chat/completions',
+      new URL(normalizeFoundryProjectEndpoint(foundryProjectEndpoint ?? '')).origin);
     endpoint.searchParams.set('api-version', '2024-05-01-preview');
-  } catch { /* Invalid or missing configuration leaves the model unavailable. */ }
+    return endpoint;
+  } catch { return undefined; }
+}
+
+export function createFoundryProactiveModel(options: FoundryProactiveModelOptions): ProactiveModel {
+  const endpoint = foundryChatEndpoint(options.foundryProjectEndpoint);
   const fetcher = options.fetcher ?? fetch;
   let running = false;
   async function selection() {

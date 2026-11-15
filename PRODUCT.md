@@ -1,3 +1,7 @@
+## Event-driven proactive Jarvis — 15 November 2026 (#1858)
+
+Jarvis reacts to events instead of only the 07:00 and 18:00 checks. Interrupt for reminders, stalled repos, prep or deadlines in mail and calendar, plan-versus-reality gaps, failed builds and deploys, and cost surprises; stay quiet about routine mail, unimportant calendar entries and routine successes. Three tiers: low is a card in the Now feed, medium is a push, high is a push (a call is added later). Every outreach has thumbs up or down, which Jarvis uses as context next time. Jarvis may draft or suggest in words and never sends mail. Budget: 100 DKK a month in total, with a hard stop. Off until the owner switches it on.
+
 ## Direct owner requests — 10 November 2026
 
 A clear, authenticated owner instruction authorizes the requested operation without a second yes. Ask only for details needed to identify the intended action or target. Keep device and all-device sign-out confirmations. Treat credentials as non-storable and distinguish requested sensitive saves from automatic capture.

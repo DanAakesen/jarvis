@@ -35,7 +35,7 @@ export interface ActivityItem {
   id: string;
   category: ActivityCategory;
   title: string;
-  /** `activity.link`, for example `task:42`, `release:7` or `project:3`. */
+  /** `activity.link`, for example `task:42`, `release:7`, `project:3` or `proactive:<finding id>`. */
   link: string | null;
   at: string;
 }
@@ -74,8 +74,12 @@ export const agentNames: Record<CodingAgent, string> = { codex: 'Codex', copilot
 const linkPattern = /^(task|release|project):([1-9]\d{0,15})$/;
 const linkRoutes = { task: '/factory/tasks/', release: '/factory/releases/', project: '/factory/projects/' } as const;
 
-/** Maps an activity link to its Software Factory page; anything unexpected gets no link. */
+const proactiveLinkPattern = /^proactive:([\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12})$/iu;
+
+/** Maps an activity link to its Software Factory or Proactive finding page; anything unexpected gets no link. */
 export function activityHref(link: string | null): string | null {
+  const finding = link ? proactiveLinkPattern.exec(link) : null;
+  if (finding) return `/proactive/${finding[1]}`;
   const match = link ? linkPattern.exec(link) : null;
   if (!match) return null;
   return `${linkRoutes[match[1] as keyof typeof linkRoutes]}${match[2]}`;

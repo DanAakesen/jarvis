@@ -36,6 +36,7 @@ export interface BackendConfig {
   proactiveEnabled: boolean;
   proactiveTodoWritesEnabled: boolean;
   proactiveAlertsEnabled: boolean;
+  proactiveEventsEnabled: boolean;
   healthUploadEnabled: boolean;
   /** Owner session tokens (JARVIS_OWNER_SESSION_ENABLED). False keeps the backend accepting Entra tokens only. */
   ownerSessionEnabled: boolean;
@@ -298,6 +299,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     proactiveEnabled: env.JARVIS_PROACTIVE_ENABLED === 'true',
     proactiveTodoWritesEnabled: env.JARVIS_PROACTIVE_TODO_WRITES_ENABLED === 'true',
     proactiveAlertsEnabled: env.JARVIS_PROACTIVE_ALERTS_ENABLED === 'true',
+    proactiveEventsEnabled: env.JARVIS_PROACTIVE_EVENTS_ENABLED === 'true',
     healthUploadEnabled: healthUploadSetting === 'true',
     ownerSessionEnabled: ownerSessionSetting === 'true',
     ...(phone ? { phone } : {}),
