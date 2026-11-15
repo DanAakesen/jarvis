@@ -11,6 +11,8 @@ export interface SystemPushRequest {
   count: number;
   itemId: string;
   origin: 'proactive_alert' | 'proactive_reminder';
+  /** The owner's phone handles night itself (Do Not Disturb), so event outreach is never held back. */
+  bypassQuietHours?: true;
   details?: readonly { title: string; body?: string; dueAt: string | null }[];
 }
 
@@ -207,7 +209,7 @@ export function createSystemPushSender(dependencies: {
     if (signal.aborted) return outcome('skipped', 'aborted');
     const explicitReminder = request.ownerRequested === true && request.kind === 'owner_reminder' &&
       request.origin === 'proactive_reminder' && request.count === 1;
-    if (isQuietHour(now()) && !explicitReminder) return outcome('skipped', 'quiet_hours');
+    if (isQuietHour(now()) && !explicitReminder && request.bypassQuietHours !== true) return outcome('skipped', 'quiet_hours');
     try {
       const native = await dependencies.nativeSend?.(request, signal);
       if (native) return outcome(native.status, native.reason, native.attempted, native.accepted, native.statusCode);
