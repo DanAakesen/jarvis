@@ -66,7 +66,7 @@ same conversation, turn 2+       |███▉        1.9 s
 direct model, no harness         |██▉         1.4 s
 ```
 
-What follows: chat on the harness is feasible at about 2 s to first text if the conversation is kept warm and effort is none or low. Voice cannot wait for a harness first turn (3.4 to 4.4 s), so Voice Live answers conversationally and calls the agent for tools and long tasks. Use in the [PI plan, section 6](../pi/plan.md#6-latency-the-5-second-start).
+What follows: chat on the harness is feasible at about 2 s to first text if the conversation is kept warm and effort is none or low. The owner accepts the 3.5 to 4.4 s first-turn wait when voice starts, so voice turns go through the agent with no separate fast path. Use in the [PI plan, section 6](../pi/plan.md#6-latency-the-5-second-start).
 
 Open questions for Microsoft: the 1.2 s startup on a new conversation; a supported priority or low-latency option for harness agents (`service_tier` and `prompt_cache_key` are rejected, a priority header changed nothing); idle cache lifetime.
 
