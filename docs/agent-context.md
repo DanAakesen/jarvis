@@ -1,3 +1,10 @@
+## Inbox nudges — 15 November 2026 (#1855)
+
+- `JARVIS_INBOX_NUDGES_ENABLED` (exact `true`, default off, not yet in `infra/main.bicep`) adds the
+  review to each proactive slot; apply migrations 0081 to 0084 first. Logs: `inbox.nudge` with outcome only.
+- Switch-on and acceptance are step 8. Until then nothing is sent.
+
+
 ## Inbox MCP — 15 November 2026 (#1855)
 
 - Apply migrations 0081 to 0083 before enabling the inbox. Connection guide:

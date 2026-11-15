@@ -1,3 +1,26 @@
+## 15 November 2026 — Inbox nudge pass runs inside the existing proactive slots (#1855, step 7)
+
+The review is an `onFindingsStored` hook, so it inherits the 07:00 and 18:00 slot
+lease, quiet hours, pause switch and the shared monthly budget gate, and it records
+its spend in the same ledger. It is additive and does not touch the event-driven
+pipeline in #1862, whose 07:00 and 18:00 checks stay as they are; once that lands,
+the same pass can feed its queue as one more source instead (the pass is separate
+from delivery). One tool-less model call sees a bounded digest (at most 100 items, five
+in full) and returns at most one nudge and three rewrites. The server rejects the
+whole answer for an unknown id, an item nudged within 48 hours, a bad tier, a link, an
+oversized note, or a rewrite that drops a quoted line of Dan's words or a trail line;
+rewrites use `expectedSha` and are dropped on a conflict. Tiers follow the proactive
+design: low is a card (a proactive item, no push), medium and high are a push through
+the existing insight path (at most one per run and the existing three a day); no phone
+call. There is no model call when every item rested within 48 hours. Thumbs come from
+the card's existing useful and wrong buttons, read back on the next pass into the
+index (`last_feedback`, migration 0084 stores the card id), the note trail and the
+prompt's recent reactions. Thumbs on the push notification itself need native work and are
+not built. A rebuilt index starts every nudge clock at the rebuild time (proactive
+history cannot be queried by item key), so a rebuild means no nudges for 48 hours. The
+weekly rewrite of the nudge-style text and the missed-capture audit belong to step 8.
+Daily ceiling 1 DKK is counted per replica from recorded usage.
+
 ## 15 November 2026 — Inbox MCP server uses scoped bearer credentials first (#1855, step 6)
 
 `/inbox/mcp` is a stateless MCP server over the same Inbox store (tools
