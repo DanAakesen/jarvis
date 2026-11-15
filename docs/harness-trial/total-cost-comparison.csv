@@ -1,0 +1,43 @@
+scenario,line,currency,low,expected,high,basis
+Today,Infrastructure (SQL registry container apps storage app service),DKK cash,366,366,366,measured
+Today,Voice (10 min/day at 0.35/0.5/0.7 DKK per min),DKK cash,105,150,210,measured rate
+Today,Chat on Foundry Terra (20 turns/day),DKK cash,27,69,171,derived
+Today,Proactive on Foundry Terra,DKK cash,4,8,21,derived
+Today,TOTAL cash,DKK cash,502,593,768,
+Today,TOTAL credit-equivalent,DKK-eq,0,0,0,
+Today,TOTAL cash plus credit-equivalent,DKK,502,593,768,
+A Hands lane,Infrastructure,DKK cash,366,366,366,measured
+A Hands lane,Voice,DKK cash,105,150,210,measured rate
+A Hands lane,Chat on Foundry Terra (unchanged),DKK cash,27,69,171,derived
+A Hands lane,Proactive on Foundry Terra (unchanged),DKK cash,4,8,21,derived
+A Hands lane,Worker time,DKK cash,5,9,15,assumed
+A Hands lane,Copilot credits (capped at 1500/month),DKK-eq,22,76,99,assumed
+A Hands lane,TOTAL cash,DKK cash,507,602,783,
+A Hands lane,TOTAL credit-equivalent,DKK-eq,22,76,99,
+A Hands lane,TOTAL cash plus credit-equivalent,DKK,529,678,882,
+B Night shift,Infrastructure,DKK cash,366,366,366,measured
+B Night shift,Voice,DKK cash,105,150,210,measured rate
+B Night shift,Chat on Foundry Terra (unchanged),DKK cash,27,69,171,derived
+B Night shift,Proactive on Foundry (replaced),DKK cash,0,0,0,
+B Night shift,Worker time,DKK cash,7,12,20,assumed
+B Night shift,Copilot credits (capped at 600/month),DKK-eq,10,34,39,assumed
+B Night shift,TOTAL cash,DKK cash,505,597,767,
+B Night shift,TOTAL credit-equivalent,DKK-eq,10,34,39,
+B Night shift,TOTAL cash plus credit-equivalent,DKK,515,631,806,
+C Second brain,Infrastructure,DKK cash,366,366,366,measured
+C Second brain,Voice,DKK cash,105,150,210,measured rate
+C Second brain,Chat on Foundry Terra (unchanged),DKK cash,27,69,171,derived
+C Second brain,Proactive on Foundry (replaced),DKK cash,0,0,0,
+C Second brain,Worker time,DKK cash,15,27,45,assumed
+C Second brain,Copilot credits (A+B+inbox; capped at 3600/month),DKK-eq,67,226,237,assumed
+C Second brain,TOTAL cash,DKK cash,513,612,792,
+C Second brain,TOTAL credit-equivalent,DKK-eq,67,226,237,
+C Second brain,TOTAL cash plus credit-equivalent,DKK,580,838,1029,
+D Full move,Infrastructure,DKK cash,366,366,366,measured
+D Full move,Voice,DKK cash,105,150,210,measured rate
+D Full move,Chat and proactive on Foundry (moved),DKK cash,0,0,0,
+D Full move,Always-on host plus workers,DKK cash,165,201,685,assumed
+D Full move,Copilot credits (chat 20 turns/day plus A and B),DKK-eq,98,331,1442,assumed
+D Full move,TOTAL cash,DKK cash,636,717,1261,
+D Full move,TOTAL credit-equivalent,DKK-eq,98,331,1442,
+D Full move,TOTAL cash plus credit-equivalent,DKK,734,1048,2703,

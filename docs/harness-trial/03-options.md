@@ -78,6 +78,63 @@ The ratio does not depend on the turn count, so apply it to today's measured cha
 
 So the absurd figure is gone for the expected case: chat on the Copilot harness costs a few times today's chat bill, in the tens of DKK per month. The high band is the risk to watch, and it comes from context growth in a long-lived session, not from the model price.
 
+### Total monthly bill: today versus each option
+
+Fixed by Dan: **GPT-6.1 Terra only**, **1 hour of chat a day**, **10 minutes of voice a day**. Low, expected and high bands are consistent (all low, or all high). Spreadsheet version: [total-cost-comparison.csv](total-cost-comparison.csv).
+
+| Assumption | Value | Status |
+| --- | --- | --- |
+| Chat turns per hour | **20** (one owner message about every 3 minutes of active chat), so 20 turns a day. Sensitivity: 10 and 30 below | Assumed. Turn length is not recorded; a query for it is in the [appendix](#appendix-queries-that-replace-the-derived-numbers) |
+| Voice | 10 min x 30 days = 300 min at **0.35 / 0.5 / 0.7 DKK per min** = 105 / 150 / 210 DKK | Rate measured, band per coordinator |
+| Infrastructure (SQL, container registry, container apps, storage, app service) | **366 DKK**, same in every column | Measured |
+| Chat and proactive on Foundry today | Derived per-turn cost from the table above; proactive 60 runs a month at 0.07 / 0.13 / 0.35 DKK | Derived |
+| Copilot credits | 1 credit = 0.0658 DKK. **Free only inside Dan's plan**; shown separately, never mixed into cash | Assumed bands |
+
+**Cash on the Azure bill, DKK per month (expected, with low-high):**
+
+| Line | Today | A Hands lane | B Night shift | C Second brain | D Full move |
+| --- | --- | --- | --- | --- | --- |
+| Infrastructure | 366 | 366 | 366 | 366 | 366 |
+| Voice (10 min/day) | 150 (105-210) | 150 | 150 | 150 | 150 |
+| Chat on Foundry | 69 (27-171) | 69 | 69 | 69 | moved |
+| Proactive on Foundry | 8 (4-21) | 8 | replaced | replaced | moved |
+| Worker time or host | none | 9 (5-15) | 12 (7-20) | 27 (15-45) | 201 (165-685) |
+| **Total cash** | **593** (502-768) | **602** (507-783) | **597** (505-767) | **612** (513-792) | **717** (636-1,261) |
+| Change from today | 0 | +9 | +4 | +19 | +124 |
+
+**Copilot credit-equivalent, DKK per month (credits in brackets, expected):**
+
+| Line | Today | A | B | C | D |
+| --- | --- | --- | --- | --- | --- |
+| Copilot credits | 0 | 76 (1,150) | 34 (510) | 226 (3,430) | 331 (5,030) |
+| Low to high | 0 | 22-99 | 10-39 | 67-237 | 98-1,442 |
+| Cap that holds | n/a | 1,500 credits | 600 | 3,600 | none set; D has no cap by design |
+
+**Everything together, if credits were billed (BYOK or overage), DKK per month:**
+
+| | Today | A | B | C | D |
+| --- | --- | --- | --- | --- | --- |
+| Expected | 593 | 678 | 631 | 838 | 1,048 |
+| Low to high | 502-768 | 529-882 | 515-806 | 580-1,029 | 734-2,703 |
+| Expected total, 1 block = 50 DKK | `████████████` | `██████████████` | `█████████████` | `█████████████████` | `█████████████████████` |
+
+How to read it:
+
+| Point | Detail |
+| --- | --- |
+| The bill is mostly not AI | Infrastructure plus voice is 516 of 593 DKK today (87%). Chat and proactive on Terra are about 77 |
+| A, B and C add little cash | +4 to +19 DKK a month. Their cost is credits, which are free inside a plan, and are capped |
+| D is the only option that moves the cash bill | +124 expected, from the always-on host. Its high band is the credit pool, not cash |
+| Chat today at this profile is higher than measured spend | 20 turns a day derives to about 69 DKK. Measured spend (about 21 DKK for chat) implies only about 6 turns a day, so the real bill is lower until usage rises |
+
+**Sensitivity of the chat line to turns per hour (expected band, Terra, DKK per month):**
+
+| Turns per hour (= per day) | Today on Foundry | Copilot (credit-equivalent) |
+| --- | --- | --- |
+| 10 | 35 | 96 |
+| 20 | 69 | 191 |
+| 30 | 104 | 287 |
+
 ### Other assumptions (unmeasured)
 
 | Item | Assumption |
@@ -122,6 +179,15 @@ GROUP BY CAST(u.at AS date), u.model ORDER BY day;
 SELECT CAST(at AS date) AS day, COUNT(*) AS owner_turns
 FROM dbo.messages WHERE role = N'dan' AND at >= '2026-11-12'
 GROUP BY CAST(at AS date) ORDER BY day;
+
+-- Typical turn length: gap in minutes between consecutive owner messages inside a session
+WITH m AS (
+  SELECT jarvis_session_id, at,
+    DATEDIFF(second, LAG(at) OVER (PARTITION BY jarvis_session_id ORDER BY at), at) AS gap_s
+  FROM dbo.messages WHERE role = N'dan' AND at >= '2026-11-12')
+SELECT DISTINCT COUNT(*) OVER () AS gaps, AVG(gap_s * 1.0) OVER () / 60.0 AS avg_gap_min,
+  PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY gap_s) OVER () / 60.0 AS median_gap_min
+FROM m WHERE gap_s IS NOT NULL AND gap_s < 1800;
 
 -- Proactive, measured
 SELECT month_key, COUNT(*) AS runs, SUM(input_tokens) AS input_tokens,

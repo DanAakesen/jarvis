@@ -33,6 +33,8 @@ flowchart LR
 | Cash DKK/month | about 9 | about 12 | about 27 | about 175-670 |
 | Credits/month, expected (cap or high) | 1,150 (1,500) | 510 (600) | 3,430 (3,600) | 2,790 (8,190) |
 | DKK-equivalent, expected | 76 | 34 | 226 | 184 (high 539) |
+| **Total monthly bill, expected** (cash plus credit-equivalent; Terra, 1 h chat and 10 min voice a day) | 678 | 631 | 838 | 1,048 |
+| Cash on the Azure bill, expected | 602 | 597 | 612 | 717 |
 | Touches production chat | no | no | no | yes |
 | Reversible in a day | yes | yes | yes | only if the old path stays |
 
@@ -46,5 +48,6 @@ Credits are free to Dan only inside his plan's allowance (Pro 1,500, Pro+ 7,000,
 | --- | --- |
 | [01-diagnosis.md](01-diagnosis.md) | What makes the harness feel rigid, restricted, reactive and hardcoded, with file and line evidence |
 | [02-quality-gains.md](02-quality-gains.md) | Quality-only gains, honest cons, unknowns, checked against current official docs |
+| [total-cost-comparison.csv](total-cost-comparison.csv) | Total monthly bill, today versus A to D, low/expected/high, for a spreadsheet. Today: 593 DKK cash |
 | [03-options.md](03-options.md) | Options A to D with architecture diagrams, DKK per month, assumptions, risks and exit plans |
 | [04-recommendation.md](04-recommendation.md) | Recommendation, gates, the smallest first experiment, open questions for Dan |
