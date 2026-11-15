@@ -167,9 +167,10 @@ final class WatchModel: ObservableObject {
             configurePlaybackCompletion()
             let stream: AsyncStream<Data>
             do {
-                stream = try await startAudioCapture(tolerateDrops: true)
-                guard epoch == voiceGeneration else { audio.stop(); return }
+                stream = try await startAudioCapture(tolerateDrops: true) { self.voiceGeneration == epoch }
             } catch {
+                // A cancelled start must not report an error or touch a newer attempt's audio.
+                guard epoch == voiceGeneration else { return }
                 voiceLogger.error("Voice capture could not start: \(String(describing: error), privacy: .public)")
                 self.error = NSLocalizedString("Microphone audio could not start. Try voice again.", comment: "")
                 await endVoice(captureEndReason: "capture_start_error")
@@ -258,6 +259,7 @@ final class WatchModel: ObservableObject {
                 }
             }
         } catch {
+            guard epoch == voiceGeneration else { return }
             show(error)
             await endVoice(captureEndReason: "startup_failed")
         }
@@ -278,8 +280,7 @@ final class WatchModel: ObservableObject {
         guard dictationGeneration == epoch else { return }
         do {
             dictationAudio.removeAll()
-            let stream = try await startAudioCapture(tolerateDrops: false)
-            guard dictationGeneration == epoch else { audio.stop(); return }
+            let stream = try await startAudioCapture(tolerateDrops: false) { self.dictationGeneration == epoch }
             dictationState = .listening
             dictationCapture = Task { [weak self] in
                 for await bytes in stream {
@@ -430,12 +431,15 @@ final class WatchModel: ObservableObject {
         voiceStartToken = nil; startingVoice = false; waitingForVoiceConnection = false
         await endVoice(captureEndReason: "start_cancelled")
     }
-    private func startAudioCapture(tolerateDrops: Bool) async throws -> AsyncStream<Data> {
+    private func startAudioCapture(tolerateDrops: Bool, isCurrent: () -> Bool) async throws -> AsyncStream<Data> {
         // The first activation of the audio session can fail while the route settles.
+        // Currency is checked before every start so a cancelled caller never touches the shared engine.
         var attempt = 1
         while true {
+            guard isCurrent() else { throw CancellationError() }
             do { return try audio.startCapture(tolerateDrops: tolerateDrops) }
             catch {
+                guard isCurrent() else { throw CancellationError() }
                 audio.stop()
                 guard attempt < 3 else { throw error }
                 voiceLogger.error("Audio capture start failed, attempt \(attempt): \(String(describing: error), privacy: .public)")
