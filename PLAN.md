@@ -1,3 +1,13 @@
+## Event-driven proactive Jarvis — 15 November 2026 (#1858, P15-161)
+
+**Status: built and tested locally; off by default; no live proof yet.** Design, diagram and numbers: `docs/proactive-events/design.md`.
+
+Done, in reviewable steps: (1) Terra priced correctly in the budget meter; (2) migration `0080`, queue, cheap rules, GPT-6.1 Terra reasoner, three tiers with a channel extension point, the pipeline; (3) SQL stores; (4) wiring into the existing ticker, the GitHub webhook, activity alerts, a timer review, mail and calendar polling, the thumbs endpoints and the Bicep switch.
+
+Checks that ran (15 November, Linux): backend lint and build clean; backend 320 tests pass (55 new); web 21 tests pass (3 new) with lint and typecheck clean; 15 database integration tests pass against SQL Server 2022 in Docker (migration 0080, concurrent enqueue and claim, leases, retry, purge, ratings, down script, and one run from queue to pushed outreach); Bicep 0.44.1 builds.
+
+Next, in order, each needing Dan: (a) set `proactiveEventsEnabled` to `true` and Deploy; (b) watch `GET /proactive/outreach` and `proactive.events` for a few days against the 07:00 and 18:00 checks; (c) only then decide on thumbs on the push itself (native work) and the call channel. The 07:00 and 18:00 checks are untouched.
+
 ## Voice caption follow-up — 13 November 2026 (#1823)
 
 Phone captions follow accumulating user and assistant text in a bounded scroll

@@ -231,7 +231,7 @@ export function createEventPipeline(options: EventPipelineOptions) {
       });
       itemId = item.id;
     } catch (error) {
-      if (error instanceof Error && error.message === 'finding_not_allowed') return { kind: 'quiet', reason: 'category_disabled_by_owner' };
+      if (error instanceof Error && error.message === 'finding_not_allowed') return { kind: 'quiet', reason: 'not_allowed_by_preferences' };
       throw error;
     }
     const record = await outreach.create({ decision: { ...decision, tier }, batchId, itemId }, at);
