@@ -101,7 +101,7 @@ const events = new Set([
   'telemetry.stdout_only', 'telemetry.export_failed',
   'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
   'voice.partials_unavailable', 'chat.latency', 'chat.agent_session', 'memory.embedding', 'vault.index', 'vault.write',
-  'inbox.write', 'inbox.tool', 'inbox.index_unavailable',
+  'inbox.write', 'inbox.tool', 'inbox.index_unavailable', 'inbox.triage',
   'pc_act.step',
   'reflex.decision',
   'voice.proactive_context_unavailable', 'voice.credential_refresh_failed',
@@ -614,6 +614,9 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (input.msg === 'inbox.write') {
     if (['create', 'replace', 'close'].includes(String(input.action))) fields.action = input.action;
     if (['ok', 'existing', 'conflict', 'error'].includes(String(input.outcome))) fields.outcome = input.outcome;
+  }
+  if (input.msg === 'inbox.triage') {
+    if (['model', 'raw'].includes(String(input.outcome))) fields.outcome = input.outcome;
   }
   if (input.msg === 'inbox.tool') {
     if (['inbox_capture', 'inbox_items', 'inbox_close'].includes(String(input.tool))) fields.tool = input.tool;

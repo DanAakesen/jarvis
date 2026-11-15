@@ -1,3 +1,11 @@
+## Inbox capture credential — 15 November 2026 (#1855)
+
+- Apply migration `0082_inbox_capture_credentials.sql` (and 0081) before enabling the inbox.
+- Shortcut setup: `docs/inbox-loop/shortcut.md` (unverified on a device).
+- Local SQL checks need a loopback SQL Server 2022 container with the CI fixture variables;
+  `npm run test:database --workspace @jarvis/backend` covers both inbox tables.
+
+
 ## Loose Ends inbox — 15 November 2026 (#1855)
 
 - `JARVIS_INBOX_ENABLED` (exact `true`, default off, not yet set in `infra/main.bicep`; the

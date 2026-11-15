@@ -79,10 +79,14 @@ import type { BrowserConfirmation } from './core/owner-interactions.js';
 import { installWatchTranscriptionDeadline, registerWatchTranscriptionRoute } from './voice/watch-routes.js';
 import type { WatchTranscriber } from './voice/watch-transcription.js';
 import type { WatchCredentials } from './auth/watch-credential.js';
+import { installInboxCaptureLimits } from './auth/inbox-rate-limit.js';
+import type { InboxCaptureCredentials } from './auth/inbox-capture-credential.js';
 
 export interface BuildAppOptions {
   readonly watchTranscriber?: WatchTranscriber;
   readonly watchCredentials?: WatchCredentials;
+  /** Present only when the inbox is enabled: installs the capture route's early rate limits and its write-only credential check. */
+  readonly inboxCapture?: { readonly credentials?: InboxCaptureCredentials };
   readonly proactiveConversationContext?: import('./proactive/conversation-context.js').ProactiveConversationContext;
   readonly activityKit?: ActivityKitServices;
   readonly approvalNotifications?: ApprovalNotificationServices;
@@ -277,7 +281,9 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     ? new OwnerSessionConnectionRegistry({ verifier: ownerSessions })
     : null);
   installWatchRateLimits(app, config.auth.ownerObjectId);
-  installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions, options.watchCredentials);
+  // After the Watch limiter, which registers the rate-limit plugin; before authentication, so unknown tokens cannot reach SQL.
+  if (options.inboxCapture) installInboxCaptureLimits(app, config.auth.ownerObjectId);
+  installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions, options.watchCredentials, options.inboxCapture?.credentials);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('notifyApproval', options.notifyApproval ?? (() => {}));
   app.decorate('notifyReply', options.notifyReply ?? (() => {}));

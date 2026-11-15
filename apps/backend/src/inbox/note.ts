@@ -4,7 +4,8 @@ import { shouldRedact } from '../vault/index.js';
 export const INBOX_DIR = 'Inbox';
 export const INBOX_CLOSED_DIR = 'Inbox/Closed';
 export const MAX_INBOX_NOTE_BYTES = 8 * 1024;
-export const MAX_INBOX_QUOTE_BYTES = 4 * 1024;
+/** Room for 4000 characters in any language (up to four bytes each), so the character limit of capture is the binding one. */
+export const MAX_INBOX_QUOTE_BYTES = 16 * 1024;
 export const MAX_INBOX_TITLE_LENGTH = 120;
 const maxFileNameTitleLength = 80;
 const timeZone = 'Europe/Copenhagen';
@@ -32,6 +33,11 @@ export function newInboxId(): string {
 /** Same capture, same id: the owner message and the item's title decide, so a retried tool call lands on the same note. */
 export function captureItemId(sourceMessageId: string, title: string): string {
   return createHash('sha256').update(`${sourceMessageId}\n${cleanTitle(title).toLowerCase()}`).digest('hex').slice(0, 12);
+}
+
+/** Id of the k-th note made from one raw capture; the client's capture id is the idempotency key. */
+export function captureNoteId(captureId: string, position: number): string {
+  return createHash('sha256').update(`capture:${captureId.toLowerCase()}:${position}`).digest('hex').slice(0, 12);
 }
 
 export function isInboxId(value: unknown): value is string {

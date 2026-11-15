@@ -1,4 +1,8 @@
-import type { FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import {
+  InboxCaptureCredentialLimit, InboxCaptureCredentialUnavailable, maxInboxCaptureCredentials,
+  type InboxCaptureCredentials,
+} from '../auth/inbox-capture-credential.js';
 import type { MemoryStore } from '../database/memory-store.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
@@ -97,6 +101,8 @@ export function createInboxModule(options: {
   readonly store: InboxStore;
   readonly index?: InboxIndex | undefined;
   readonly memoryStore: Pick<MemoryStore, 'getSourceMessage'>;
+  readonly credentials?: InboxCaptureCredentials | undefined;
+  readonly routes?: FastifyPluginAsync | undefined;
 }): BackendModule {
   const { store, index } = options;
 
@@ -292,9 +298,58 @@ export function createInboxModule(options: {
     },
   ];
 
+  const credentials = options.credentials;
+  if (credentials) {
+    tools.push({
+      name: 'inbox_capture_credential',
+      description: [
+        "Create, list or revoke the write-only inbox capture credential that Dan puts in an iPhone Shortcut or a script so it can add loose thoughts to his inbox. It can only add items: it cannot read the inbox or anything else, and revoking it stops it at once.",
+        `operation issue needs a short label such as "iPhone Shortcut" (at most ${maxInboxCaptureCredentials} credentials exist); the credential is returned once and can never be shown again, so give it to Dan in this reply and tell him to paste it into the Shortcut now. operation list shows labels, ids and when each was last used; operation revoke needs the id from list.`,
+        "Issue and revoke only when Dan asks for them in his current message. Never save the credential in the vault, memory, a note or an issue, and never repeat it after the first reply.",
+      ].join(' '),
+      inputSchema: {
+        type: 'object',
+        properties: {
+          operation: { type: 'string', enum: ['issue', 'list', 'revoke'] },
+          label: { type: 'string', minLength: 1, maxLength: 40 },
+          id: { type: 'string', pattern: '^[0-9a-f]{12}$' },
+        },
+        required: ['operation'],
+        additionalProperties: false,
+      },
+      execution: { defaultEffect: 'action', operation: { field: 'operation', effects: { issue: 'action', list: 'read', revoke: 'action' } } },
+      sensitive: true,
+      denyOnPhone: true,
+      validateInput: (value: unknown) => isRecord(value) && onlyKeys(value, ['operation', 'label', 'id']) &&
+        (value.operation === 'list' || (value.operation === 'issue' && typeof value.label === 'string' && value.id === undefined) ||
+          (value.operation === 'revoke' && typeof value.id === 'string' && /^[0-9a-f]{12}$/u.test(value.id) && value.label === undefined)),
+      explainInvalidInput: () => 'operation is issue (with label), list, or revoke (with id from list).',
+      execute: async (value, request, signal) => {
+        const input = value as { operation: 'issue' | 'list' | 'revoke'; label?: string; id?: string };
+        checkPrincipal(request);
+        try {
+          if (input.operation === 'list') return { credentials: await credentials.list() };
+          await ownerMessage(request, signal);
+          if (input.operation === 'issue') {
+            const issued = await credentials.issue(input.label!);
+            return { ...issued, confirmation: 'Created. This credential is shown once; it only adds inbox items.' };
+          }
+          const revoked = await credentials.revoke(input.id!);
+          if (!revoked) throw new ToolRefusal('No capture credential has that id.');
+          return { confirmation: 'Revoked. That Shortcut can no longer add items.' };
+        } catch (error) {
+          if (error instanceof ToolRefusal) throw error;
+          if (error instanceof InboxCaptureCredentialLimit || error instanceof RangeError) throw new ToolRefusal(error.message);
+          if (error instanceof InboxCaptureCredentialUnavailable) throw new ToolFailure('Capture credentials are unavailable right now.');
+          throw error;
+        }
+      },
+    });
+  }
+
   return {
     id: 'inbox',
-    registerRoutes: async () => {},
+    registerRoutes: options.routes ?? (async () => {}),
     tools,
   };
 }
