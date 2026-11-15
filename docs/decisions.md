@@ -1,3 +1,10 @@
+## 15 November 2026 — Watch Health purpose strings (#1870)
+
+App Store Connect rejected the first upload that included the Watch steps
+complication: a Watch app that uses HealthKit needs both
+`NSHealthShareUsageDescription` and `NSHealthUpdateUsageDescription`. The Watch
+Info.plist now has both; the update string says Jarvis does not write to Health.
+
 ## 15 November 2026 — PI direction: one harness agent, no runtime fallback, standing watches (#1872, P15-164)
 
 Owner decisions, recorded as given. The system is named PI (Proactive Intelligence). Routes 1 (PI brain) and 4 (chat and voice) on the managed Copilot harness are one plan: one agent, one long session, with Voice Live staying the realtime speech layer and calling the same agent. Decisions are LLM only to begin with; deterministic logic only where an exact result is required. Workers in the drawing are the coding sessions.

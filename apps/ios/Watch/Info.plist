@@ -37,6 +37,8 @@
 	<false/>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Jarvis reads your steps on this Watch to keep the steps complication current. Nothing is written to Health.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Jarvis does not write to Health. It only reads your steps on this Watch to keep the steps complication current.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Talk to Jarvis from your Apple Watch.</string>
 	<key>UIBackgroundModes</key>
