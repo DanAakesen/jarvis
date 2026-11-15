@@ -80,7 +80,7 @@ So the absurd figure is gone for the expected case: chat on the Copilot harness 
 
 ### Total monthly bill: today versus each option
 
-Fixed by Dan: **GPT-6.1 Terra only**, **1 hour of chat a day**, **10 minutes of voice a day**. Low, expected and high bands are consistent (all low, or all high). Spreadsheet version: [total-cost-comparison.csv](total-cost-comparison.csv).
+Fixed by Dan: **GPT-6.1 Terra only**, **1 hour of chat a day**, **10 minutes of voice a day**. Low, expected and high bands are consistent (all low, or all high).
 
 | Assumption | Value | Status |
 | --- | --- | --- |

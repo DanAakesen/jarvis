@@ -12,6 +12,31 @@ Analysis for [#1837](https://github.com/DanAakesen/jarvis/issues/1837) (P15-146)
 | **Where "unrestricted" comes from** | Credentials and a shell, not the harness. Give a worker a read-only Azure role and GitHub access and the feeling follows |
 | **Next step** | [P15-158 (#1851)](https://github.com/DanAakesen/jarvis/issues/1851): local A/B bench |
 
+## What A, B, C and D are, in plain words
+
+```mermaid
+flowchart LR
+    Dan["Dan"] --> BE["Backend<br/>Azure container app<br/>always on today"]
+    BE --> FA["Chat brain today<br/>Foundry hosted agent"]
+    BE -.->|"A, B, C: start only when needed"| W["Copilot helper<br/>starts, works, stops"]
+    BE ==>|"D only: every chat message"| H["Copilot host<br/>new container, always on"]
+```
+
+| Option | Idea | Who answers chat | Copilot runs | Always on? |
+| --- | --- | --- | --- | --- |
+| **A** | Jarvis hands one hard job (Azure or GitHub) to a Copilot helper | Today's brain | A helper that starts, does the job, stops | No |
+| **B** | Copilot does the background thinking (proactive) instead of today's one-shot call | Today's brain | A few short runs a day | No |
+| **C** | A + B, plus one long inbox conversation Copilot keeps going | Today's brain | Helper, resumed from saved files | No |
+| **D** | Copilot answers every chat message | Copilot | Must be ready instantly | **Yes** |
+
+**Harness or container?** The harness is only a program, and it is free. A container is the computer that runs it.
+
+| What | Is it always on today? | Changes with Copilot? |
+| --- | --- | --- |
+| Backend (Azure container app, 0.25 vCPU) | Yes, already paid for | No. Likely too small to also run the Copilot program (not tested) |
+| Chat brain (Foundry hosted agent) | Yes, managed by Foundry | Only D replaces it |
+| Copilot program | Does not exist yet | A, B, C: runs in a helper that sleeps between jobs, pennies. **D: needs a new always-on container, about 175-670 DKK/month** |
+
 ## Where the feel comes from
 
 ```mermaid
@@ -48,6 +73,5 @@ Credits are free to Dan only inside his plan's allowance (Pro 1,500, Pro+ 7,000,
 | --- | --- |
 | [01-diagnosis.md](01-diagnosis.md) | What makes the harness feel rigid, restricted, reactive and hardcoded, with file and line evidence |
 | [02-quality-gains.md](02-quality-gains.md) | Quality-only gains, honest cons, unknowns, checked against current official docs |
-| [total-cost-comparison.csv](total-cost-comparison.csv) | Total monthly bill, today versus A to D, low/expected/high, for a spreadsheet. Today: 593 DKK cash |
 | [03-options.md](03-options.md) | Options A to D with architecture diagrams, DKK per month, assumptions, risks and exit plans |
 | [04-recommendation.md](04-recommendation.md) | Recommendation, gates, the smallest first experiment, open questions for Dan |
