@@ -1,6 +1,7 @@
 ## PI chat engine: deploy and test (#1885, P15-174)
 
 - The Deploy workflow's `pi-agent` job runs on every Deploy after `smoke`: it creates the skills and the `jarvis-pi` agent version (only when `agents/pi/**`, the secret or the backend URL changed), pins the endpoint, creates the `pi-mcp-secret` Container App secret once and sets `JARVIS_PI_AGENT_NAME` and `JARVIS_PI_MCP_SECRET` on the backend. Nothing else waits on it. It needs the deploy identity's existing Foundry roles and Container Apps access; no new role or credential.
+- `pi-agent` also creates the Foundry project connection `jarvis-pi-mcp` (custom keys, holds the MCP secret) through ARM before the agent version; it needs the deploy identity to write project connections (`Microsoft.CognitiveServices/accounts/projects/connections/write`). The MCP tool refers to it by `project_connection_id`.
 - If `pi-agent` fails, its error line carries Foundry's sanitized `code`, `param` and `message` (never the request body or any credential). The agent is created with `POST /agents/jarvis-pi/versions` (versions first; no separate `POST /agents`).
 - Live proof: run Deploy by hand (`workflow_dispatch`) with `measure_pi` on a main commit. It calls `POST /pi/smoke` and writes first-text bars, tokens and DKK to the job summary. It spends about 0.5 DKK and never runs automatically.
 - Switch the engine in iOS Settings, General, Test switch. Roll back by turning the switch to Current, redeploying the previous release, or reverting the commit; the migration has a down script (`db/migrations/down/0086_pi_chat.sql`).
