@@ -1,3 +1,18 @@
+## Loose Ends (inbox loop) — 15 November 2026 (#1855, P15-159)
+
+Owner go-ahead: "go on loose ends". One issue, eight steps delivered in order, each as its own pull request and verified before the next. All ship dark behind default-off flags; spend stays inside the 100 DKK/month budget.
+
+| Step | Scope | State |
+| --- | --- | --- |
+| 1 | Vault note format and store (`apps/backend/src/inbox/`): create, replace, close (move to `Inbox/Closed/`), list | Built, in review |
+| 2 | Vault `AGENTS.md` convention | Not started |
+| 3 | Rebuildable index table (last nudged, thumbs) | Not started |
+| 4 | Chat and voice tools: capture, list, close | Not started |
+| 5 | Capture endpoint, write-only credential, Watch action, iPhone Shortcut | Not started |
+| 6 | MCP server (ChatGPT, Claude, Copilot) | Not started |
+| 7 | Nudge pass in the proactive run, thumbs on the push | Not started |
+| 8 | Missed-capture audit, weekly review, spend visibility, owner switch-on | Not started |
+
 ## Voice caption follow-up — 13 November 2026 (#1823)
 
 Phone captions follow accumulating user and assistant text in a bounded scroll
