@@ -17,7 +17,7 @@ import { ownerSessionPolicy } from './session/config.js';
 import { OwnerSessionThrottled, OwnerSessionUnavailable, type OwnerSessionContext, type OwnerSessionVerifier } from './session/service.js';
 import { ownerSessionTokenPrefix } from './session/token.js';
 import { watchCredentialPrefix, watchTranscriptionPath, WatchCredentialUnavailable, type WatchCredentials } from './watch-credential.js';
-import { inboxCapturePath, inboxCapturePrefix, InboxCaptureCredentialUnavailable, type InboxCaptureCredentials } from './inbox-capture-credential.js';
+import { inboxCapturePath, inboxCapturePrefix, inboxMcpPath, InboxCaptureCredentialUnavailable, type InboxCaptureCredentials } from './inbox-capture-credential.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -145,9 +145,13 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         return;
       }
       if (token.startsWith(inboxCapturePrefix)) {
-        // A capture credential is write-only: it opens this one route and nothing else.
-        if (request.method !== 'POST' || request.routeOptions.url !== inboxCapturePath) throw new AuthenticationDenied(403);
-        if (!inboxCredentials || !await inboxCredentials.verify(token)) throw new AuthenticationDenied(401);
+        // An inbox credential opens the capture route and the inbox MCP route, nothing else; its scope limits what it can do there.
+        const url = request.routeOptions.url;
+        if (!(request.method === 'POST' && url === inboxCapturePath) &&
+            !(url === inboxMcpPath && ['POST', 'GET', 'DELETE'].includes(request.method))) throw new AuthenticationDenied(403);
+        const access = inboxCredentials ? await inboxCredentials.verify(token) : null;
+        if (!access) throw new AuthenticationDenied(401);
+        request.inboxCredentialAccess = access;
         request.inboxCaptureCredentialHash = createHash('sha256').update(token).digest('hex');
         return;
       }

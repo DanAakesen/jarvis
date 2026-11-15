@@ -108,6 +108,7 @@ import { createGitHubVaultClient, VAULT_REPOSITORY } from './vault/github-client
 import { createVaultModule } from './vault/index.js';
 import { createInboxModule } from './inbox/module.js';
 import { createInboxRoutes } from './inbox/routes.js';
+import { createInboxMcpRoutes } from './inbox/mcp.js';
 import { createInboxCapture } from './inbox/capture.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentials } from './auth/inbox-capture-credential.js';
 import { createInboxStore } from './inbox/store.js';
@@ -602,7 +603,7 @@ try {
       memoryStore,
       index: inboxIndex,
       credentials: inboxCredentials,
-      routes: createInboxRoutes({
+      routes: [createInboxRoutes({
         ownerObjectId: config.auth.ownerObjectId,
         credentials: inboxCredentials,
         capture: createInboxCapture({
@@ -626,7 +627,7 @@ try {
           } : {}),
           log: (event, fields) => logger.info({ msg: event, ...fields }, event),
         }),
-      }),
+      }), createInboxMcpRoutes({ store: inboxStore, index: inboxIndex })],
     })
     : undefined;
   const foundryClients = new Map<string, FoundryClient>();
