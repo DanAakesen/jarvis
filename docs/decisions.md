@@ -1,3 +1,18 @@
+## 15 November 2026 — Inbox MCP server uses scoped bearer credentials first (#1855, step 6)
+
+`/inbox/mcp` is a stateless MCP server over the same Inbox store (tools
+`inbox_capture`, `inbox_items`, `inbox_close`). Authentication is the inbox
+credential from step 5, now with a scope (migration 0083): `write` sees only
+`inbox_capture`, `read_write` sees all three. The route accepts only that credential,
+never an owner or browser token, and nothing outside `Inbox/` is reachable. The design
+named Entra OAuth with `inbox.read` and `inbox.write` scopes; that needs an Entra app
+registration, which is an owner action outside this repository's authority, so it is
+proposed, not built. Consequence: clients that can send a fixed header (Claude Code,
+Codex, Copilot CLI) work; ChatGPT and claude.ai custom connectors, which need OAuth,
+do not yet. Trade-off accepted: `inbox_close` over MCP cannot verify Dan's current
+message the way Jarvis's own tool does, so `read_write` credentials go only to
+assistants the owner trusts, and the tool description says only Dan's word closes.
+
 ## 15 November 2026 — Inbox capture endpoint and write-only credential (#1855, step 5)
 
 `POST /inbox/capture` takes a unique `captureId` and up to 4000 characters of raw

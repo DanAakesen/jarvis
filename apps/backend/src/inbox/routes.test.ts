@@ -40,18 +40,18 @@ function memoryVault() {
 }
 
 function credentialStore() {
-  const rows = new Map<string, { label: string; createdAt: Date; lastUsedAt: Date | null }>();
+  const rows = new Map<string, { label: string; scope: 'write' | 'read_write'; createdAt: Date; lastUsedAt: Date | null }>();
   const verify = vi.fn();
   const store: InboxCaptureCredentialStore = {
-    async add(_owner, hash, label, maximum) {
+    async add(_owner, hash, label, scope, maximum) {
       if (rows.size >= maximum) return false;
-      rows.set(hash.toString('hex'), { label, createdAt: new Date('2026-11-15T10:00:00Z'), lastUsedAt: null });
+      rows.set(hash.toString('hex'), { label, scope, createdAt: new Date('2026-11-15T10:00:00Z'), lastUsedAt: null });
       return true;
     },
-    async verify(_owner, hash) { verify(); return rows.has(hash.toString('hex')); },
+    async verify(_owner, hash) { verify(); const row = rows.get(hash.toString('hex')); return row ? { scope: row.scope, label: row.label } : null; },
     async list() {
       return [...rows].map(([hash, row]) => ({
-        id: hash.slice(0, 12), label: row.label, createdAt: row.createdAt.toISOString(), lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
+        id: hash.slice(0, 12), label: row.label, scope: row.scope, createdAt: row.createdAt.toISOString(), lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
       }));
     },
     async revoke(_owner, id) {
@@ -77,7 +77,7 @@ function fixture(options: { model?: (prompt: { system: string; user: string }, s
     store,
     memoryStore: { getSourceMessage: async () => null },
     credentials: creds.credentials,
-    routes: createInboxRoutes({ capture, credentials: creds.credentials, ownerObjectId: config.auth.ownerObjectId }),
+    routes: [createInboxRoutes({ capture, credentials: creds.credentials, ownerObjectId: config.auth.ownerObjectId })],
   });
   const owner = options.owner === false
     ? { objectId: 'someone-else', tenantId: config.auth.tenantId, displayName: 'Other' }
@@ -270,7 +270,7 @@ describe('inbox capture endpoint', () => {
     expect(credential).toMatch(/^ji\.[A-Za-z0-9_-]{43}$/u);
     expect(JSON.stringify([...creds.rows.keys()])).not.toContain(credential);
     const listed = await app.inject({ method: 'GET', url: '/inbox/credentials', headers });
-    expect(listed.json()).toEqual({ credentials: [{ id, label: 'iPhone Shortcut', createdAt: '2026-11-15T10:00:00.000Z', lastUsedAt: null }] });
+    expect(listed.json()).toEqual({ credentials: [{ id, label: 'iPhone Shortcut', scope: 'write', createdAt: '2026-11-15T10:00:00.000Z', lastUsedAt: null }] });
     expect(listed.body).not.toContain(credential);
     expect((await app.inject({ method: 'DELETE', url: `/inbox/credentials/${id}`, headers })).statusCode).toBe(204);
     expect((await app.inject({ method: 'DELETE', url: `/inbox/credentials/${id}`, headers })).statusCode).toBe(404);

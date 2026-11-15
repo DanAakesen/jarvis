@@ -1,3 +1,10 @@
+## Inbox MCP — 15 November 2026 (#1855)
+
+- Apply migrations 0081 to 0083 before enabling the inbox. Connection guide:
+  `docs/inbox-loop/mcp.md` (client settings not run against a real assistant).
+- Credentials with scope: ask Jarvis for an inbox credential with read and write access.
+
+
 ## Inbox capture credential — 15 November 2026 (#1855)
 
 - Apply migration `0082_inbox_capture_credentials.sql` (and 0081) before enabling the inbox.

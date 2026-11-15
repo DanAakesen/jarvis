@@ -96,27 +96,30 @@ export function createInboxRoutes(options: {
     const credentialInfo = {
       type: 'object',
       properties: {
-        id: { type: 'string' }, label: { type: 'string' }, createdAt: { type: 'string' },
+        id: { type: 'string' }, label: { type: 'string' }, scope: { type: 'string' }, createdAt: { type: 'string' },
         lastUsedAt: { type: ['string', 'null'] },
       },
-      required: ['id', 'label', 'createdAt', 'lastUsedAt'],
+      required: ['id', 'label', 'scope', 'createdAt', 'lastUsedAt'],
       additionalProperties: false,
     };
 
-    app.post<{ Body: { label: string } }>(inboxCredentialsPath, {
+    app.post<{ Body: { label: string; scope?: 'write' | 'read_write' } }>(inboxCredentialsPath, {
       bodyLimit: 1024,
       schema: {
         body: {
           type: 'object',
-          properties: { label: { type: 'string', minLength: 1, maxLength: 40 } },
+          properties: {
+            label: { type: 'string', minLength: 1, maxLength: 40 },
+            scope: { type: 'string', enum: ['write', 'read_write'] },
+          },
           required: ['label'],
           additionalProperties: false,
         },
         response: {
           201: {
             type: 'object',
-            properties: { credential: { type: 'string' }, id: { type: 'string' }, label: { type: 'string' } },
-            required: ['credential', 'id', 'label'],
+            properties: { credential: { type: 'string' }, id: { type: 'string' }, label: { type: 'string' }, scope: { type: 'string' } },
+            required: ['credential', 'id', 'label', 'scope'],
             additionalProperties: false,
           },
           400: apiError, 403: apiError, 409: apiError, 429: apiError, 503: apiError,
@@ -127,7 +130,7 @@ export function createInboxRoutes(options: {
       try {
         // The only time the credential is shown; only its hash is stored.
         reply.header('Cache-Control', 'no-store');
-        return reply.code(201).send(await credentials.issue(request.body.label));
+        return reply.code(201).send(await credentials.issue(request.body.label, request.body.scope));
       } catch (error) { return credentialFailure(error, reply); }
     });
 

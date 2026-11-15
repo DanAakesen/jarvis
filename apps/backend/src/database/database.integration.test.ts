@@ -137,15 +137,18 @@ describe('real SQL Server migration contract', () => {
     it('stores hashes only, caps the count per owner, verifies per owner and revokes by id', async () => {
       const schema = await readFile(new URL('../../../../db/migrations/0082_inbox_capture_credentials.sql', import.meta.url), 'utf8');
       const down = await readFile(new URL('../../../../db/migrations/down/0082_inbox_capture_credentials.sql', import.meta.url), 'utf8');
+      const scopeSchema = await readFile(new URL('../../../../db/migrations/0083_inbox_credential_scope.sql', import.meta.url), 'utf8');
+      const scopeDown = await readFile(new URL('../../../../db/migrations/down/0083_inbox_credential_scope.sql', import.meta.url), 'utf8');
       await pool.request().batch(schema);
+      await pool.request().batch(scopeSchema);
       const store = createInboxCaptureCredentialStore(pool);
       const owner = randomUUID();
       const credentials = new InboxCaptureCredentials(store, owner);
       try {
         const shortcut = await credentials.issue('iPhone Shortcut');
-        expect(await credentials.verify(shortcut.credential)).toBe(true);
-        expect(await new InboxCaptureCredentials(store, randomUUID()).verify(shortcut.credential)).toBe(false);
-        expect(await credentials.verify(`ji.${'A'.repeat(43)}`)).toBe(false);
+        expect(await credentials.verify(shortcut.credential)).toEqual({ scope: 'write', label: 'iPhone Shortcut' });
+        expect(await new InboxCaptureCredentials(store, randomUUID()).verify(shortcut.credential)).toBeNull();
+        expect(await credentials.verify(`ji.${'A'.repeat(43)}`)).toBeNull();
         const stored = await pool.request().query<{ credential_hash: Buffer }>('SELECT credential_hash FROM dbo.inbox_capture_credentials');
         expect(stored.recordset[0]?.credential_hash).toEqual(createHash('sha256').update(shortcut.credential).digest());
         const [listed] = await credentials.list();
@@ -157,9 +160,14 @@ describe('real SQL Server migration contract', () => {
         expect(await credentials.list()).toHaveLength(5);
         expect(await credentials.revoke(shortcut.id)).toBe(true);
         expect(await credentials.revoke(shortcut.id)).toBe(false);
-        expect(await credentials.verify(shortcut.credential)).toBe(false);
+        expect(await credentials.verify(shortcut.credential)).toBeNull();
         expect(await credentials.list()).toHaveLength(4);
+        const assistant = await credentials.issue('Claude', 'read_write');
+        expect(await credentials.verify(assistant.credential)).toEqual({ scope: 'read_write', label: 'Claude' });
+        expect((await credentials.list()).map((row) => row.scope).sort()).toEqual(['read_write', 'write', 'write', 'write', 'write']);
+        await expect(pool.request().query("UPDATE dbo.inbox_capture_credentials SET scope = 'admin'")).rejects.toThrow();
       } finally {
+        await pool.request().batch(scopeDown);
         await pool.request().batch(down);
       }
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.inbox_capture_credentials', N'U') AS id")).recordset).toEqual([{ id: null }]);

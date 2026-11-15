@@ -84,7 +84,7 @@ function verbatim(source: string, requested: string | undefined): string {
   return `${clipped}…`;
 }
 
-function summary(item: InboxItem, row?: { lastNudgedAt: Date | null; lastFeedback: string | null }) {
+export function itemSummary(item: InboxItem, row?: { lastNudgedAt: Date | null; lastFeedback: string | null }) {
   return {
     id: item.id,
     title: item.title,
@@ -102,7 +102,7 @@ export function createInboxModule(options: {
   readonly index?: InboxIndex | undefined;
   readonly memoryStore: Pick<MemoryStore, 'getSourceMessage'>;
   readonly credentials?: InboxCaptureCredentials | undefined;
-  readonly routes?: FastifyPluginAsync | undefined;
+  readonly routes?: readonly FastifyPluginAsync[] | undefined;
 }): BackendModule {
   const { store, index } = options;
 
@@ -233,7 +233,7 @@ export function createInboxModule(options: {
           if (value.id !== undefined) {
             const item = await resolve({ id: value.id }, request, signal);
             if (!item) throw new ToolRefusal('No inbox item has that id.');
-            return { item: { ...summary(item, byId.get(item.id)), sha: item.sha, content: item.content }, count: 1 };
+            return { item: { ...itemSummary(item, byId.get(item.id)), sha: item.sha, content: item.content }, count: 1 };
           }
           const found = await store.list({
             ...(value.includeClosed === undefined ? {} : { includeClosed: value.includeClosed }),
@@ -241,7 +241,7 @@ export function createInboxModule(options: {
             limit: value.limit ?? maxToolItems,
           }, signal);
           return {
-            items: found.items.map((item) => summary(item, byId.get(item.id))),
+            items: found.items.map((item) => itemSummary(item, byId.get(item.id))),
             count: found.items.length,
             truncated: found.truncated,
             confirmation: found.items.length
@@ -303,8 +303,8 @@ export function createInboxModule(options: {
     tools.push({
       name: 'inbox_capture_credential',
       description: [
-        "Create, list or revoke the write-only inbox capture credential that Dan puts in an iPhone Shortcut or a script so it can add loose thoughts to his inbox. It can only add items: it cannot read the inbox or anything else, and revoking it stops it at once.",
-        `operation issue needs a short label such as "iPhone Shortcut" (at most ${maxInboxCaptureCredentials} credentials exist); the credential is returned once and can never be shown again, so give it to Dan in this reply and tell him to paste it into the Shortcut now. operation list shows labels, ids and when each was last used; operation revoke needs the id from list.`,
+        "Create, list or revoke an inbox credential that Dan puts in an iPhone Shortcut, a script or an AI assistant so it can reach his inbox and nothing else. It cannot read other vault notes or anything outside the inbox, and revoking it stops it at once.",
+        `operation issue needs a short label such as "iPhone Shortcut" (at most ${maxInboxCaptureCredentials} credentials exist); the credential is returned once and can never be shown again, so give it to Dan in this reply and tell him to paste it into the Shortcut now. scope write (the default, for a Shortcut or script) can only add items; scope read_write is for an AI assistant such as Claude, Copilot or Codex connected over MCP and can also list and close items. operation list shows labels, scopes, ids and when each was last used; operation revoke needs the id from list.`,
         "Issue and revoke only when Dan asks for them in his current message. Never save the credential in the vault, memory, a note or an issue, and never repeat it after the first reply.",
       ].join(' '),
       inputSchema: {
@@ -312,6 +312,7 @@ export function createInboxModule(options: {
         properties: {
           operation: { type: 'string', enum: ['issue', 'list', 'revoke'] },
           label: { type: 'string', minLength: 1, maxLength: 40 },
+          scope: { type: 'string', enum: ['write', 'read_write'] },
           id: { type: 'string', pattern: '^[0-9a-f]{12}$' },
         },
         required: ['operation'],
@@ -320,23 +321,24 @@ export function createInboxModule(options: {
       execution: { defaultEffect: 'action', operation: { field: 'operation', effects: { issue: 'action', list: 'read', revoke: 'action' } } },
       sensitive: true,
       denyOnPhone: true,
-      validateInput: (value: unknown) => isRecord(value) && onlyKeys(value, ['operation', 'label', 'id']) &&
-        (value.operation === 'list' || (value.operation === 'issue' && typeof value.label === 'string' && value.id === undefined) ||
+      validateInput: (value: unknown) => isRecord(value) && onlyKeys(value, ['operation', 'label', 'scope', 'id']) &&
+        (value.operation === 'list' || (value.operation === 'issue' && typeof value.label === 'string' && value.id === undefined &&
+            (value.scope === undefined || value.scope === 'write' || value.scope === 'read_write')) ||
           (value.operation === 'revoke' && typeof value.id === 'string' && /^[0-9a-f]{12}$/u.test(value.id) && value.label === undefined)),
       explainInvalidInput: () => 'operation is issue (with label), list, or revoke (with id from list).',
       execute: async (value, request, signal) => {
-        const input = value as { operation: 'issue' | 'list' | 'revoke'; label?: string; id?: string };
+        const input = value as { operation: 'issue' | 'list' | 'revoke'; label?: string; scope?: 'write' | 'read_write'; id?: string };
         checkPrincipal(request);
         try {
           if (input.operation === 'list') return { credentials: await credentials.list() };
           await ownerMessage(request, signal);
           if (input.operation === 'issue') {
-            const issued = await credentials.issue(input.label!);
-            return { ...issued, confirmation: 'Created. This credential is shown once; it only adds inbox items.' };
+            const issued = await credentials.issue(input.label!, input.scope);
+            return { ...issued, confirmation: 'Created. This credential is shown once; it only reaches the inbox.' };
           }
           const revoked = await credentials.revoke(input.id!);
           if (!revoked) throw new ToolRefusal('No capture credential has that id.');
-          return { confirmation: 'Revoked. That Shortcut can no longer add items.' };
+          return { confirmation: 'Revoked. It can no longer reach the inbox.' };
         } catch (error) {
           if (error instanceof ToolRefusal) throw error;
           if (error instanceof InboxCaptureCredentialLimit || error instanceof RangeError) throw new ToolRefusal(error.message);
@@ -349,7 +351,9 @@ export function createInboxModule(options: {
 
   return {
     id: 'inbox',
-    registerRoutes: options.routes ?? (async () => {}),
+    registerRoutes: async (app, pluginOptions) => {
+      for (const route of options.routes ?? []) await route(app, pluginOptions);
+    },
     tools,
   };
 }
