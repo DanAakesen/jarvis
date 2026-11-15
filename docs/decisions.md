@@ -19,6 +19,17 @@ Choices made while building (engineering decisions inside that scope; veto any):
 | Not built here: voice, Watch, live screen or camera frames in PI chat (refused with a clear message), standing watches, the brain loop, deleting the old path | Out of scope for this issue |
 
 
+## 15 November 2026 — PI: voice start wait accepted, no long-session test, phases 0 to 2 as one issue (#1872, P15-174)
+
+Owner decisions. **Voice:** "I know when I start voice I need to wait a few seconds, I do that for ChatGPT as well." The 3.5 to 4.4 s harness first-turn wait when voice starts is accepted. There is no separate fast direct path for voice: Voice Live stays the speech layer and every voice turn goes through the PI agent; the warm conversation keeps later turns fast. **Long sessions:** no long-session test and no gate or risk emphasis; one line in the plan. **Issues:** PI phases 0, 1 and 2 are one issue, P15-174 (#1885), replacing #1874 to #1876, so the owner can test chat on the PI agent in the iOS app behind a test selector. Routines and the reminder tool are evaluated in the watches phase. Plan: `docs/pi/plan.md`.
+
+## 15 November 2026 — Watch Health purpose strings (#1870)
+
+App Store Connect rejected the first upload that included the Watch steps
+complication: a Watch app that uses HealthKit needs both
+`NSHealthShareUsageDescription` and `NSHealthUpdateUsageDescription`. The Watch
+Info.plist now has both; the update string says Jarvis does not write to Health.
+
 ## 15 November 2026 — PI direction: one harness agent, no runtime fallback, standing watches (#1872, P15-164)
 
 Owner decisions, recorded as given. The system is named PI (Proactive Intelligence). Routes 1 (PI brain) and 4 (chat and voice) on the managed Copilot harness are one plan: one agent, one long session, with Voice Live staying the realtime speech layer and calling the same agent. Decisions are LLM only to begin with; deterministic logic only where an exact result is required. Workers in the drawing are the coding sessions.

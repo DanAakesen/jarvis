@@ -19,13 +19,11 @@ Next: merge, let Deploy define the agent, dispatch Deploy with `measure_pi`, the
 
 | Phase | Issue | State |
 | --- | --- | --- |
-| 0 Prove: untested spike items, routines, latency round, measurement harness | P15-165 (#1874) | Not started; needs Azure access |
-| 1 Jarvis MCP server and turn authority | P15-166 (#1875) | Not started |
-| 2 Chat on the harness and the 5 s start | P15-167 (#1876) | Not started |
+| 0 to 2 Prove, Jarvis MCP, chat in the iOS app behind a test selector | P15-174 (#1885), replaces P15-165 to P15-167 (#1874 to #1876) | Not started; needs Azure access |
 | 3 Reach: GitHub, Azure, Workers | P15-168 (#1877) | Not started |
 | 4 Brain, shadow then live | P15-169 (#1878) | Not started |
 | 5 Standing watches | P15-170 (#1879) | Not started |
-| 6 Voice on the same agent | P15-171 (#1880) | Not started |
+| 6 Voice on the same agent (every turn through the PI agent; start wait accepted) | P15-171 (#1880) | Not started |
 | 7 Cutover: PI is the default | P15-172 (#1881) | Not started |
 | 8 Delete the old path (gate and inventory in the plan) | P15-173 (#1882) | Not started |
 

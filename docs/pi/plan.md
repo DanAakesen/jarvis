@@ -38,9 +38,9 @@ flowchart LR
 | Exact logic | Only where an exact result is required: auth, approvals, receipts, caps, budget, the push guarantee, timestamps |
 | **No runtime fallback** (owner) | Build PI on the harness and test it. When the owner is happy, **delete** everything it replaces. No fallback or compatibility code stays. Rollback is redeploying the previous release or reverting a commit |
 | **Standing watches** (owner) | "Keep me updated on X": a free-text watch in the vault, loaded by the brain loop, the model decides what is worth saying |
-| Voice | Voice Live stays the realtime speech layer and calls the same agent |
+| Voice | Voice Live stays the realtime speech layer; every voice turn goes through the same PI agent. The 3.5 to 4.4 s wait when voice starts is accepted (owner); no separate fast voice path |
 | Workers | The coding sessions (Factory, subscription-backed). Brain and chat start them through tools |
-| The 5 s start | Measured and levers chosen in phase 0, built in phase 2 |
+| The 5 s start | Measured: about 2 s first text in a warm conversation, 3.4 to 4.4 s in a new one. Keep one long conversation per user, warm it when the app opens, set effort none or low in the agent definition |
 
 Evidence labels: **Measured** (spike), **Derived** (list price, code, docs), **Assumed**, **Placeholder** (not yet measured; do not guess).
 
@@ -152,7 +152,7 @@ Sources are Microsoft Learn pages read through search excerpts (the pages cannot
 | **Reminder tool** `reminder_preview`: [how to](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/reminder-tool) | A tool in a toolbox. The agent picks a delay (1 to 43,200 minutes, 30 days) and Foundry re-invokes the **same agent on the same conversation**. Documented for **hosted agents** | Exactly the "agent wakes itself" pattern, but documented for hosted agents, not for harness prompt agents. **Not available to PI as documented** |
 | **Long-running resilience**: [concept](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/long-running-agent-resilience), [deploy](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/deploy-resilient-agent) | Hosted agents keep working after the client disconnects and recover after a process stops: stored background responses (`store` and `background`), opt-in `resilient_background`, lease-based recovery, stream replay. Foreground responses are not recovered | Helps a long single task (a Worker), not a watch that lives for weeks. Hosted agents only as documented |
 | **Harness limits**: [quotas](https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/limits-quotas-regions) | The service manages sandbox allocation, idling and resumption without changing the conversation. Up to 100,000 messages per thread | A long session survives idle; nothing wakes it |
-| **Spike** | Nothing on triggers, routines, reminders or background runs | Open: phase 0 tests them |
+| **Spike** | Nothing on triggers, routines, reminders or background runs | Open: tested in phase 5 (watches) |
 
 **Conclusion: the managed harness has no documented way to wake itself.** Foundry's wake-up features (routines, reminder tool) are preview, event coverage is GitHub issues only, and the self-scheduling tool is for hosted agents. Watches therefore cannot depend on them.
 
@@ -192,7 +192,7 @@ sequenceDiagram
 | Reporting | A normal PI chat message through the comms channels, so the push guarantee applies. The look is logged to the vault whether or not Dan is told |
 | Control | "List, change or stop my watches" in chat or voice. Tools: `watch_list`, `watch_update`, `watch_stop`. A watch ends on Dan's word or on its own stop condition, which the model reports |
 | Source of truth | The vault note. Nothing about a watch lives only in Foundry |
-| Foundry routines | Evaluated in phase 0 as a possible replacement for the **timer part only**. Not a dependency, and the vault stays the truth |
+| Foundry routines | Evaluated in phase 5 as a possible replacement for the **timer part only**. Not a dependency, and the vault stays the truth |
 
 Why our own ticker and not Foundry routines: the ticker and queue already exist and carry mail, calendar, webhook, budget and Worker events; routines are preview, have a 5 minute minimum, cover GitHub issues only, and would put the schedule in a place Dan cannot list or stop from chat without extra code.
 
@@ -238,25 +238,30 @@ The **Session is the hub** because chat and voice are signals too: what Dan says
 | Question | Plan |
 | --- | --- |
 | One conversation or several | One logical long session. Dan's chat, voice and every outreach that reaches Dan are turns in it, so a reply to a push lands in context |
-| Silent brain runs (nothing surfaced) | Run in a short scratch conversation seeded from vault context. They would otherwise grow the session and cost, since the harness does not cache across turns. Only the decision log reaches the vault |
+| Silent brain runs (nothing surfaced) | Run in a short scratch conversation seeded from vault context, so they do not grow the session. Cost: a new conversation has no cache, so each silent run pays the full fixed prompt (about 0.075 DKK) and a 1.2 s startup; batching events matters. Phase 4 measures whether running them in the cached main session is cheaper. Only the decision log reaches the vault |
 | Truth | The vault is the record; the session is working memory |
-| Too long | Compaction is **unknown**. Phase 0 measures it. Plan: at a size threshold start a new session seeded from a vault summary |
+| Too long | One line, not a gate: compaction is unknown and the owner is not worried about it (no long-session test). If a session ever grows too large, start a new one seeded from a vault summary; a new session loses the cache and pays the new-conversation start |
 
 ### Voice
+
+Owner decision, 15 Nov 2026: "I know when I start voice I need to wait a few seconds, I do that for ChatGPT as well." The wait when voice starts (3.5 to 4.4 s for the first harness turn) is **accepted**. There is **no separate fast direct path** for voice. Voice Live stays the speech layer and every voice turn goes through the PI agent; the warm conversation makes later turns fast (about 2 s).
 
 ```mermaid
 sequenceDiagram
     participant D as Dan
     participant V as Voice Live
     participant G as Gateway
-    participant A as Jarvis agent
-    D->>V: speaks
-    V->>D: instant spoken acknowledgement (Voice Live itself)
-    V->>G: ask_jarvis(request, turn id)
+    participant A as PI agent
+    D->>V: starts voice and speaks
+    V->>G: ask_pi(request, turn id)
+    Note over V,A: first turn: 3.5 to 4.4 s accepted
     G->>A: owner turn, voice source, verified
     A-->>G: text
-    G-->>V: tool result
+    G-->>V: result
     V->>D: speaks the answer
+    D->>V: next turn
+    V->>G: ask_pi
+    G->>A: same warm conversation, about 2 s
     D->>V: interrupts
     V->>G: cancel
     G->>A: close stream
@@ -265,10 +270,11 @@ sequenceDiagram
 | Point | Plan |
 | --- | --- |
 | Speech | Voice Live stays: speech in and out, barge-in, turn detection (about 0.5 DKK per minute, unchanged; OpenAI Realtime was dropped in p0.md) |
-| Brain | Voice Live no longer picks among about 150 tools. It has one or two tools (`ask_jarvis` plus a trivial fast-answer set) and the same agent answers as in chat. Watches are managed by voice through the same agent |
-| Waiting | Voice never waits silently: an acknowledgement, then a status line if the agent takes long (`voice/status-updates.ts` exists) |
+| Brain | The PI agent answers every voice turn, as in chat. Voice Live no longer picks among about 150 tools; it has one, `ask_pi`. Watches are managed by voice through it |
+| Start wait | Accepted. Start the voice session's PI conversation as early as possible (the session is opened or warmed when voice or the app starts) so the wait overlaps the connection |
+| Waiting | A short spoken status line if a turn takes long (`voice/status-updates.ts` exists), the same idea as the chat acknowledgement. Not a second brain |
 | Memory | The voice turn is appended to the same Session |
-| Streaming | Text arrives mostly as one chunk, which suits speech at sentence level; true streaming is a latency lever (section 6) |
+| Streaming | With effort none or low the agent streams; the gateway hands the finished sentences to Voice Live |
 
 ## 5. No fallback: how failure and rollback work
 
@@ -296,58 +302,79 @@ flowchart TB
 
 ## 6. Latency: the 5 second start
 
+**Result: about 2 s to first text in a warm conversation, 3.4 to 4.4 s in a new one.** Keep one long conversation per user and warm it when the app opens. Chat on the harness is feasible, so route 4 holds. Voice accepts the first-turn wait (3.5 to 4.4 s when voice starts, the owner's decision); later turns use the warm conversation.
+
 ### What is measured
 
-| Fact | Value | Status |
-| --- | --- | --- |
-| First stream event | 2.3 to 3.3 s | **Measured** (spike) |
-| First text | about 5 s, text mostly arrives as one chunk | **Measured** |
-| Fixed harness prompt | about 11k input tokens per call | **Measured** |
-| Caching | none across separate turns; cached tokens appear only inside multi-call turns | **Measured** |
-| Reasoning effort | works with and without; must be set in the agent definition, not per request | **Measured** |
-| Skills | load through a function call (one extra round trip) | **Measured** |
-| Cost of a plain turn | about 0.075 DKK | **Measured** |
-| Second latency round (effort, model size, prompt size, caching, streaming) | **Placeholder: pending.** The owner's dispatcher adds it to [spike-results.md](../harness-trial/spike-results.md); this plan fills no number | Not yet available |
+Two rounds on the managed harness (Terra in Sweden Central, streaming, local runner, 3 repeats per case, about 2.5 DKK in total). Full numbers: [spike-results.md](../harness-trial/spike-results.md#latency-rounds-on-the-managed-harness-15-nov-2026). Small samples and a local runner: they exclude our gateway and the phone network, and phase 0 repeats them end to end.
 
-### Where the 5 s goes
+| Case | First stream event | First text | Cached tokens |
+| --- | --- | --- | --- |
+| New conversation | 2.3 to 3.0 s | 3.4 to 4.4 s (default effort 4.43 s) | 0 |
+| Turn 2 and later, **same** conversation | 1.1 s | **1.9 s** | about 11k |
+| Three separate conversations | as a new conversation | as a new conversation | 0 (no cache across conversations) |
+| Direct model call, no harness | | about 1.4 s | |
+
+| Question | Result | Status |
+| --- | --- | --- |
+| Reasoning effort | None or low, set **in the agent definition** (per request is rejected with a 400): real token streaming (18 to 22 deltas) and about 0.7 s faster. Default effort buffers the whole answer as one delta | **Measured** |
+| Prompt size | No effect: cutting input from 11k to 4.6k tokens (all tools disabled) changed nothing. Of the 11k, our instructions are about 10 tokens, about 6.4k is tool definitions, the rest is the fixed harness prompt | **Measured** |
+| Smaller model | `gpt-6-luna` was no faster | **Measured** |
+| Request options | `service_tier`, `prompt_cache_key` and `max_output_tokens` are rejected for prompt agents (400). A priority header and `stream_options` were accepted and changed nothing. Provisioned throughput is untested | **Measured** (provisioned: **untested**) |
+| Where the time goes | Model time is about 1.3 s; the harness adds about 1.2 s startup on a new conversation, plus gateway time | **Measured**, gateway time **Placeholder** until the gateway runs (P15-174) |
+| Skills | Load through a function call (one extra round trip) | **Measured** |
+| Cost of a plain turn | About 0.075 DKK; later turns in a conversation are cheaper through caching | **Measured** (cached-turn price not yet quantified) |
+
+### Where the time goes
 
 ```text
-Today on the harness, one plain turn (1 block = 0.5 s)
+First text, one plain turn (1 block = 0.5 s), local runner
 
-send                                   |
-setup, 11k prompt in, model start      |█████▏  2.3-3.3 s  first stream event
-generation, text lands as one chunk    |██████████  about 5 s  first text
+new conversation, slowest case         |█████████  4.4 s (default effort)
+new conversation, fastest case         |██████▉    3.4 s (effort none or low streams, about 0.7 s faster)
+same conversation, turn 2 and later    |███▉        1.9 s (11k tokens cached)
+direct model, no harness               |██▉         1.4 s
 
 Plan: Dan never waits on a blank screen
 
 send                                   |
 instant acknowledgement                |█  target under 1 s   [target, not measured]
-harness first text                     |after the levers below   [Placeholder]
+warm conversation, first text          |███▉  about 2 s plus gateway time   [gateway: Placeholder]
 ```
 
-The split between setup, model start and generation is **not yet measured**; phase 0 measures it per lever before anything is built.
+P15-174 repeats these end to end through the gateway and from the iOS app before the targets are fixed.
 
-### Levers to evaluate
+### Levers
 
-| # | Lever | Expected effect | Risk or cost | How decided |
-| --- | --- | --- | --- | --- |
-| 1 | Reasoning effort none or low (agent definition) | Less time to first token, fewer output tokens | Quality on hard tasks; a second agent definition for deep work | A/B on the prompt set |
-| 2 | Smaller or faster model | Lower time per token and cost | Quality; availability in the harness | A/B |
-| 3 | Trim harness and tool prompts (about 11k fixed input) | Less input per call | Part is Microsoft's and may not be editable. Our share: instructions, skill metadata, tool descriptions | Input tokens against first-event time |
-| 4 | Prompt caching | Cheaper and faster calls | None across turns today. Test a stable prefix, a longer-lived conversation, keep-warm | Cached tokens per call |
-| 5 | True token streaming | First text when generated, not at the end | Text came as one chunk. Test stream options, short first sentences, a skill rule to answer before tool use | Chunks and time to first delta |
-| 6 | Instant acknowledgement while the harness works | Dan sees a reply in under a second | Must be truthful: a short "on it", never a guess at the answer | Built in phase 2 |
-| 7 | Pre-warming | Removes cold start from the first turn | A dummy turn costs about 0.075 DKK; bound it to app open and voice start | Cold against warm |
-| 8 | Remove a hop: gateway calls the managed agent directly, not through today's hosted-agent container | One container hop and its start less | Rework of `chat-agent.ts` | End to end |
-| 9 | Fewer calls per turn: skill load, tool search | Each call pays the fixed prompt | Always-needed skill content goes into the instructions | Calls per turn |
-| 10 | Priority or provisioned throughput | Steadier latency under load | Likely to exceed the whole PI budget; price check first | Only if variance, not average, is the problem |
+| # | Lever | Result | Decision |
+| --- | --- | --- | --- |
+| 1 | Reasoning effort none or low in the agent definition | About 0.7 s faster and real streaming | **Adopt.** Quality at none or low is judged by the owner in the iOS test chat; a second agent definition for deep work if needed |
+| 2 | Smaller or faster model | `gpt-6-luna` no faster | **Drop** |
+| 3 | Trim harness and tool prompts | 11k to 4.6k tokens changed nothing; our share is about 10 tokens of instructions and 6.4k of tool definitions | **Drop for latency.** Tool definitions still matter for cost until cached |
+| 4 | Prompt caching | Works **inside one conversation** (turn 2: 1.1 s and 1.9 s, 11k cached), not across conversations. `prompt_cache_key` is rejected | **Adopt:** one long conversation per user. P15-174 measures how long the cache lives when idle |
+| 5 | True token streaming | Needs effort none or low; default effort sends one delta | **Adopt** with lever 1 |
+| 6 | Instant acknowledgement while the harness works | Still needed for a new conversation (3.4 to 4.4 s) and for tool turns | **Build** in P15-174; must be truthful: a short "on it", never a guess at the answer |
+| 7 | Pre-warming | Warm turn is about 1.9 s against 3.4 to 4.4 s | **Adopt:** open or warm the conversation when the app opens; a warm-up turn costs about 0.075 DKK, so bound it |
+| 8 | Remove a hop: gateway calls the managed agent directly | Not yet measured. The runner called the harness directly | P15-174 end to end |
+| 9 | Fewer calls per turn: skill load, tool search | Not yet measured | P15-174 counts calls per turn |
+| 10 | Priority or provisioned throughput | `service_tier` rejected; a priority header accepted and no effect; provisioned throughput untested | **Open question for Microsoft**; price check before any provisioned option |
 
-The acknowledgement has a home today: the acknowledgement chunk (`ConversationAgentAcknowledgment` in `core/chat-agent.ts`), the fast reflex classifier with a 1.2 s timeout (`core/reflex.ts`), and the spoken acknowledgement from `agents/jarvis/response_coordinator.py`. Phase 2 decides which carries it on the harness path; whatever does not is deleted in phase 8.
+### Open questions for Microsoft
+
+| Question | Why it matters |
+| --- | --- |
+| What causes the 1.2 s startup on a new conversation, and can it be removed or pre-paid? | It is the gap between 1.4 s direct and 3.4 to 4.4 s new-conversation first text |
+| Is there a supported priority or low-latency option for harness agents? `service_tier` and `prompt_cache_key` are rejected for prompt agents; a priority header changed nothing | Last lever left |
+| How long does the cache of a conversation live while idle, and does a deliberate warm-up keep it? | Decides keep-warm cost |
+| The runner reports the harness as `github_copilot_preview`; earlier docs say `microsoft_copilot_preview`. Same thing? | Agent definitions as code |
+
+The acknowledgement has a home today: the acknowledgement chunk (`ConversationAgentAcknowledgment` in `core/chat-agent.ts`), the fast reflex classifier with a 1.2 s timeout (`core/reflex.ts`), and the spoken acknowledgement from `agents/jarvis/response_coordinator.py`. Phase 0 to 2 (P15-174) decides which carries it on the harness path; whatever does not is deleted in phase 8.
 
 ### Measurement protocol
 
 | Item | Rule |
 | --- | --- |
+| Already measured (round 1 and 2) | The local-runner cases in section 6. Not repeated except end to end |
 | Prompt set | 30 prompts: 10 plain, 10 one-tool, 10 multi-tool (Azure, GitHub, vault, calendar). Reuse the [20 spike prompts](../harness-trial/spike/prompts.md) and add 10 |
 | Conditions | Cold (idle 30 min), warm (back to back), three times of day. 20 runs per cell |
 | One change at a time | Baseline, then each lever alone, then the best combination |
@@ -355,35 +382,33 @@ The acknowledgement has a home today: the acknowledgement chunk (`ConversationAg
 | Counts | Input, cached and output tokens per call; calls per turn; chunks per answer |
 | Compare | The same prompts on the current path on the same day |
 | Report | p50 and p95 per cell, cost per turn in DKK. Written as a new section of [spike-results.md](../harness-trial/spike-results.md), with raw rows |
-| Keep a lever | p50 first text improves at least 15 percent, no drop in the blind quality score, cost per turn up no more than 25 percent |
-| Target (proposal, confirmed by the numbers) | Acknowledgement under 1 s; first real text p50 under 3 s and p95 under 6 s for plain turns |
+| Keep a lever | p50 first text improves at least 15 percent, no drop in quality as judged by the owner in the iOS test chat, cost per turn up no more than 25 percent |
+| Target (proposal, confirmed by the end-to-end numbers) | Acknowledgement under 1 s; first real text p50 about 2.5 s and p95 under 4 s in a warm conversation; under 4.5 s in a new one |
 
 ## 7. Migration phases
 
 ```mermaid
 flowchart LR
-    P0["0 Prove"] --> G0{"Gate 0"}
-    G0 --> P1["1 Jarvis MCP<br/>and turn authority"] --> G1{"Gate 1"}
-    G1 --> P2["2 Chat on the harness<br/>and the 5 s start"] --> G2{"Gate 2"}
+    P012["0 to 2 together, one issue<br/>PI agent, Jarvis MCP, chat<br/>behind a test selector"] --> G2{"Gate A<br/>owner tests chat<br/>in the iOS app"}
     G2 --> P3["3 Reach<br/>GitHub, Azure, Workers"] --> G3{"Gate 3"}
     G3 --> P4["4 Brain<br/>shadow, then live"] --> G4{"Gate 4"}
     G4 --> P5["5 Standing watches"] --> G5{"Gate 5"}
     G5 --> P6["6 Voice<br/>same agent"] --> G6{"Gate 6"}
     G6 --> P7["7 Cutover<br/>PI is the default"] --> G7{"Deletion gate"}
     G7 --> P8["8 Delete the old"]
-    G0 -. "fails: stop, or route 2" .-> X["Stay on today's path"]
+    G2 -. "fails: stop, or route 2" .-> X["Stay on today's path"]
 ```
+
+Phases 0, 1 and 2 are **one issue** ([P15-174](https://github.com/DanAakesen/jarvis/issues/1885), replacing #1874 to #1876): bigger issues keep the worker's context, and the owner can test chat on the PI agent directly in the iOS app and give feedback.
 
 | Phase | Issue | Scope | Gate to leave the phase | Rollback |
 | --- | --- | --- | --- | --- |
-| 0 Prove | [P15-165](https://github.com/DanAakesen/jarvis/issues/1874) | Close what the spike did not test: GitHub and Azure MCP, approvals, per-turn identity, long session, compaction, quality (blind 20 prompts); **routines and reminder behaviour on a harness agent**; second latency round and the measurement harness | Authority route chosen; approval round trip works; 24 h session coherent or limit known; Copilot wins at least 12 of 20; a lever set reaches the latency target on plain turns; cost per turn measured; wake-up options known | Delete the test agent. Nothing in production |
-| 1 Jarvis MCP | [P15-166](https://github.com/DanAakesen/jarvis/issues/1875) | The tool registry as an MCP server with auth, guards, receipts and a per-turn authority path | Every tool callable through MCP with its refusals intact; a forged turn reference is refused; writes prove the current owner message | Revert the PR. Nothing points at it |
-| 2 Chat | [P15-167](https://github.com/DanAakesen/jarvis/issues/1876) | Gateway route to the managed agent, budget cap, usage log, streaming and interruption, approvals, instant acknowledgement, pre-warming. Behind the test-only selector | Blind A/B preferred by Dan; latency target met; no write replayed in fault tests; cost per turn within the cap | Revert the PR; selector off |
+| 0 to 2 Prove, Jarvis MCP, chat | [P15-174](https://github.com/DanAakesen/jarvis/issues/1885) (replaces P15-165 to P15-167, #1874 to #1876) | The PI agent on the managed harness, defined and deployed by the repository's pipeline (production Terra deployment, effort none or low in the definition, skills and instructions as code). The Jarvis tools as an MCP server behind the existing auth and guards with a trustworthy per-turn authority path; approvals and receipts keep working. A thin gateway that streams the agent's replies to the iOS chat, with a monthly model cap, per-turn tokens and DKK in the usage store, and honest errors. A **test-only chat engine selector** in the iOS app (Settings), current engine or PI. Warm conversation, instant acknowledgement, cancellation. Latency measured through the gateway and the iOS path | The owner tests chat on PI in the iOS app and is happy with quality and speed; per-turn authority proven (a forged turn reference is refused, writes prove the current owner message); approvals, streaming and cancellation work; first text through the gateway in a warm conversation near the target (about 2.5 s p50); no write replayed in fault tests; cost per turn inside the cap | Revert the PR; selector off. The old path is still the default |
 | 3 Reach | [P15-168](https://github.com/DanAakesen/jarvis/issues/1877) | GitHub MCP and Azure MCP (read first), Workers started and watched through tools, Worker results as signals | Reads work on real questions; writes only through Jarvis tools; a Worker round trip works | Revert the PR; detach the MCP servers |
 | 4 Brain | [P15-169](https://github.com/DanAakesen/jarvis/issues/1878) | Brain loop on skills, event batches, vault decision log, channel decision, push guarantee. A **shadow run** beside the current pipeline (no outreach), then live | Shadow: useful-outreach rate at least equal to the current pipeline by Dan's thumbs; spend inside the 100 DKK budget; no duplicates. Live: two weeks clean | Revert the PR; the old pipeline is still the default until phase 7 |
-| 5 Watches | [P15-170](https://github.com/DanAakesen/jarvis/issues/1879) | `PI/Watches/` notes, `watch_*` tools, ticker wake, open watches in Get context, guards, per-watch spend, list and stop in chat | A build watch, a topic watch and a price watch run for a week; Dan lists, changes and stops them in chat; spend per watch visible and inside budget; no report storm | Revert the PR; open watch notes stay in the vault as plain notes |
-| 6 Voice | [P15-171](https://github.com/DanAakesen/jarvis/issues/1880) | `ask_jarvis` on Voice Live, same Session, barge-in cancel, status lines, watches by voice | First audio within target; interruption works; voice and chat share context | Revert the PR |
-| 7 Cutover | [P15-172](https://github.com/DanAakesen/jarvis/issues/1881) | PI becomes the default for chat, voice and brain. The old path stays in the code, switched off by default and with no code that switches back to it | Gates 2 to 6 passed; two weeks of daily use with no revert; cost within plan | Revert the cutover commit and redeploy the previous release |
+| 5 Watches | [P15-170](https://github.com/DanAakesen/jarvis/issues/1879) | `PI/Watches/` notes, `watch_*` tools, ticker wake, open watches in Get context, guards, per-watch spend, list and stop in chat. **Evaluates Foundry routines and the reminder tool on a harness agent** (can they wake it; not a dependency) | A build watch, a topic watch and a price watch run for a week; Dan lists, changes and stops them in chat; spend per watch visible and inside budget; no report storm | Revert the PR; open watch notes stay in the vault as plain notes |
+| 6 Voice | [P15-171](https://github.com/DanAakesen/jarvis/issues/1880) | Voice Live stays the speech layer; **every voice turn goes through the PI agent** (`ask_pi`). The owner accepts the 3.5 to 4.4 s wait when voice starts; no separate fast direct path. The warm conversation makes later turns fast. Same Session, barge-in cancel, status lines, watches by voice | Voice turns reach the PI agent and answers are spoken; later turns about as fast as warm chat; interruption works; voice and chat share context | Revert the PR |
+| 7 Cutover | [P15-172](https://github.com/DanAakesen/jarvis/issues/1881) | PI becomes the default for chat, voice and brain. The old path stays in the code, switched off by default and with no code that switches back to it | Gates A and 3 to 6 passed; two weeks of daily use with no revert; cost within plan | Revert the cutover commit and redeploy the previous release |
 | 8 Delete | [P15-173](https://github.com/DanAakesen/jarvis/issues/1882) | Delete the old path and everything dead (inventory below), plus the test-only selector | **Deletion gate** below | `git revert` of the deletion and redeploy the tagged last release that still has the old path |
 
 Each phase ships dark behind its own flag and is verified before the next starts.
@@ -395,7 +420,7 @@ Each phase ships dark behind its own flag and is verified before the next starts
 | 1 | The owner says he is happy with PI in daily use (his word, recorded in `docs/decisions.md`) |
 | 2 | At least two weeks as default, with no revert and no unplanned outage |
 | 3 | Chat, voice, proactive, inbox and watches each verified live, not only in tests |
-| 4 | Latency, cost and quality at or better than the gate 0 targets on real use |
+| 4 | Latency, cost and quality at or better than the gate A targets on real use |
 | 5 | The owner has accepted the preview risk (section 5) in writing, or the harness is generally available |
 | 6 | The last release with the old path is tagged, and the rollback steps are written in `docs/agent-context.md` |
 | 7 | The deletion inventory is reviewed by a reference scan (nothing outside the list still calls it) |
@@ -455,9 +480,9 @@ PI high      ███████████████████▌  981
 | Tool turn | about 0.2 DKK (4 calls of about 13k input, 75 percent cached inside the turn) | **Derived** from Terra list price (USD 1.00 input, 0.05 cached, 5.00 output per million; 6.6 DKK per USD) |
 | Chat mix | Low all plain; expected 60 percent plain and 40 percent tool turns (about 0.125 average); high about 0.4 from a long uncached session | **Assumed** |
 | Brain runs | Low 120 runs at 0.1; expected about 210 at 0.25; high about 300 at 0.5 | **Assumed** |
-| Sandbox | 1 vCPU and 2 GiB, released when idle, December rates 0.654 DKK per vCPU-hour and 0.078 per GiB-hour | **Unknown**; phase 0 reads the meter, the December bill confirms |
+| Sandbox | 1 vCPU and 2 GiB, released when idle, December rates 0.654 DKK per vCPU-hour and 0.078 per GiB-hour | **Unknown**; P15-174 reads the meter, the December bill confirms |
 
-Why chat costs more than today: no caching across turns, so every turn pays the fixed 11k prompt plus the session so far. The session size threshold (section 4) is a cost control as well as a quality one.
+Why chat costs more than today: the fixed 11k prompt (about 6.4k of it tool definitions) is paid on every new conversation, and the session grows. Caching works **inside one conversation** (turn 2 and later: about 11k tokens cached, cheaper) but not across separate conversations, so one long conversation is the cheap shape and the table above is a conservative upper estimate until the cached-turn price is measured in phase 0. The session size threshold (section 4) is a cost control as well as a quality one.
 
 ### Standing watches: cost per watch per day
 
@@ -484,7 +509,7 @@ Rules that keep it cheap: the model picks the slowest cadence that serves the pu
 | --- | --- |
 | Proactive: 100 DKK per month | The brain **and** the watches go through the same ledger (`proactive/budget.ts`, `proactive_spend`) with the same hard stop and the 80 percent warning. 100 DKK buys at least about 1,300 minimal wakes, so batching matters more than the cap |
 | Chat and voice on the harness | A separate monthly model cap in the gateway (proposal 250 DKK). Reaching it ends turns with a clear message, never a silent switch to another path |
-| The cliff | If the managed sandbox is **not** released when idle, the sandbox line is about 590 instead of 60, about +530 a month. Phase 0 and the December bill must rule this out |
+| The cliff | If the managed sandbox is **not** released when idle, the sandbox line is about 590 instead of 60, about +530 a month. P15-174 and the December bill must rule this out |
 | Comparison with the trial | The trial assumed 0.29 DKK per expected turn and 779 for the same work; the measured 0.075 per plain turn is why this plan's expected total is lower |
 
 ## 9. Risks
@@ -492,17 +517,17 @@ Rules that keep it cheap: the model picks the slowest cadence that serves the pu
 | Risk | Severity | Mitigation |
 | --- | --- | --- |
 | **Preview with no SLA and no fallback code**: a Foundry outage is a PI outage | High | The owner's choice. Old code stays until the deletion gate; gate item 5 makes the preview risk an explicit owner decision; failures are visible, not hidden |
-| Per-turn identity on MCP writes (the managed agent may not pass the current message id) | High | Phase 0 decides: turn token as a tool argument, writes through function tools returned to the gateway, or `require_approval` |
+| Per-turn identity on MCP writes (the managed agent may not pass the current message id) | High | P15-174 decides: turn token as a tool argument, writes through function tools returned to the gateway, or `require_approval` |
 | Approvals: in preview the service manages the policy for built-in tools; `require_approval` covers customer MCP tools only | High | Writes only through Jarvis MCP; built-in shell, files and web treated as ungated; Reader identity; egress controls in audit mode |
 | Watches have no native wake-up on the managed harness | Medium | Our ticker and vault are the waker and the truth; Foundry routines only an optional later swap for the timer |
-| Preview routines and reminders may change or not support harness agents | Medium | Not a dependency; tested in phase 0 |
+| Preview routines and reminders may change or not support harness agents | Medium | Not a dependency; tested in phase 5 |
 | Watch cost runaway or report spam | Medium | Caps per watch, shared 100 DKK stop, push cap, per-watch spend visible, the model chooses the slowest sensible cadence |
 | Watched web content is untrusted (prompt injection through a page or feed) | High | Content is data; no write, send or Worker start from watched text; Jarvis tools and approvals guard writes |
 | Forgotten watches | Low | The model proposes stopping quiet ones; list shows age and last result |
 | Streaming and interruption parity (text arrives as one chunk; steering unknown) | Medium | Phases 0 and 2 test; closing the stream as the floor |
-| Long-session compaction and size | Medium | Phase 0 measures; size threshold starts a new session from a vault summary |
-| No cross-turn caching, so cost grows with the session | Medium | Threshold, scratch conversations for silent runs, caps |
-| Latency stays near 5 s | High for the experience | Levers in section 6; the acknowledgement hides the wait but does not shorten it; if no lever works, re-judge at gate 0 |
+| Long-session compaction and size | Low | The owner is not worried and wants no long-session test. If a session grows too large, start a new one from a vault summary |
+| Every new conversation loses the cache and pays the 1.2 s startup, so cost and latency grow with each new session or scratch run | Medium | One long conversation per user; threshold rare and warmed; batch silent runs; caps |
+| First text is 3.4 to 4.4 s in a new conversation | Medium for the experience | Warm the conversation when the app or voice starts; acknowledgement in chat; effort none or low. The owner accepts the 3.5 to 4.4 s wait when voice starts (no separate fast voice path). Open question to Microsoft on the 1.2 s startup |
 | Prompt injection from mail, web or repo text reaching a sandbox with Azure and GitHub reach | High | Read-only by default; Jarvis tools carry the guards; egress controls |
 | Duplicate or uncertain writes on retry | High | Retry only on the same path before any write started; idempotency keys; receipts |
 | Deletion removes something still needed | Medium | Reference scan first; the deletion gate; tagged last release; `git revert` |
@@ -524,7 +549,7 @@ Rules that keep it cheap: the model picks the slowest cadence that serves the pu
 | Watches | New `watch/` module on the pattern of `inbox/{store,note,item-index,mcp}.ts`; `proactive/scheduler.ts`; `core/web-research.ts`; a migration for the rebuildable watch index | `PI/Watches/` notes, `watch_*` tools, due-time wake, guards, per-watch spend | 5 |
 | Vault trail | `vault/index.ts`, `vault/github-client.ts` | A `PI/` area outside task scope for decisions and watches | 4, 5 |
 | Push | `push/*`, `proactive/push-delivery.ts`, `proactive/native-delivery.ts` | Push guarantee for chat messages from the brain | 4 |
-| Voice | `voice/relay.ts`, `voice/realtime.ts`, `voice/voice-tools.ts`, `voice/status-updates.ts` | `ask_jarvis`, same Session, cancel | 6 |
+| Voice | `voice/relay.ts`, `voice/realtime.ts`, `voice/voice-tools.ts`, `voice/status-updates.ts` | `ask_pi` for every voice turn, same Session, cancel | 6 |
 | Cutover and deletion | Everything in the deletion inventory, `docs/*`, `infra/main.bicep`, `.github/workflows/*` | Flip, then delete | 7, 8 |
 | Docs | `PLAN.md`, `docs/architecture.md`, `docs/decisions.md`, `docs/agent-context.md`, `p0.md` | Updated by each phase | all |
 
@@ -535,19 +560,19 @@ Rules that keep it cheap: the model picks the slowest cadence that serves the pu
 | 1 | One logical session; silent brain runs use a scratch conversation | Keeps the session useful and cost bounded |
 | 2 | Chat messages PI starts always push; replies inside a live turn do not. The 6 pushes a day cap and the low-tier card from #1858 stay as exact guards | The drawing says push always; the cap and card exist and protect attention |
 | 3 | Queue, dedupe, caps and budget stay as mechanics; routine judgement moves to the model after a shadow run | LLM-only decisions without losing cost control |
-| 4 | Gateway calls the managed agent directly (no hosted-agent hop) | Lever 8; proven in phase 0 |
+| 4 | Gateway calls the managed agent directly (no hosted-agent hop) | Lever 8; the local runner already called the harness directly, so end-to-end gateway time is measured in P15-174 |
 | 5 | The unlabelled box in the Brain loop is the outgoing message | Not stated in the drawing |
 | 6 | Chat and voice model cap of 250 DKK a month | Proposal; no cap exists yet |
 | 7 | Watches use our ticker and vault, not Foundry routines or the reminder tool | Section 3 |
 | 8 | Watch guards: 10 open, 8 checks a day each, 5 minutes apart | Bounds cost and noise; tune after phase 5 |
 | 9 | Deletion gate needs two weeks as default | Long enough to meet real weeks, short enough to finish |
-| 10 | Phase 0 may spend beyond the spike's 30 DKK cap only with the owner's word | The latency and quality rounds postdate the cap |
+| 10 | P15-174 may spend beyond the spike's 30 DKK cap only with the owner's word | The latency rounds and the test chat postdate the cap |
 
 ## 12. What happens next
 
 | Step | Owner action |
 | --- | --- |
 | Read this plan; veto section 11 | Yes |
-| Approve phase 0 (P15-165) | Yes: it needs the Azure access the spike also needed |
-| Latency round 2 numbers land in `docs/harness-trial/spike-results.md` | Owner's dispatcher; section 6 then gets its numbers |
-| Phases 1 to 8 | Start only after the previous gate passes |
+| Approve P15-174 (phases 0 to 2 in one issue) | Yes: it needs the Azure access the spike also needed; the owner then tests chat on PI in the iOS app |
+| Latency rounds 1 and 2 are in `docs/harness-trial/spike-results.md`; P15-174 repeats them end to end | Owner's dispatcher supplied the numbers; section 6 holds them |
+| Phases 3 to 8 | Start only after the previous gate passes |
