@@ -3,7 +3,8 @@ import JarvisCore
 
 /// Reads today's steps from this Watch's HealthKit and hands them to `WatchConnection`, which saves them for the
 /// complication and reloads it. HealthKit background delivery wakes the app when new steps arrive; the 15-minute
-/// background refresh and the foreground loop cover the gaps. Read-only: nothing is written to Health.
+/// background refresh and the foreground loop cover the gaps. Readings only extend a snapshot the paired iPhone has
+/// pushed, so they stop at sign-out. Read-only: nothing is written to Health.
 @MainActor
 final class WatchStepsMonitor {
     static let shared = WatchStepsMonitor()
@@ -52,9 +53,9 @@ final class WatchStepsMonitor {
 
     private func read() async {
         guard enabled, let type else { return }
-        // Zero before the user has been asked would be a made-up number, not a measurement.
-        if let status = try? await store.statusForAuthorizationRequest(toShare: [], read: [type]),
-           status == .shouldRequest { return }
+        let connection = WatchConnection.shared
+        guard connection.acceptsStepsReadings else { return }
+        let epoch = connection.cacheEpoch
         let now = Date()
         let start = Calendar.current.startOfDay(for: now)
         let descriptor = HKStatisticsCollectionQueryDescriptor(
@@ -62,10 +63,12 @@ final class WatchStepsMonitor {
             options: .cumulativeSum, anchorDate: start, intervalComponents: DateComponents(hour: 1))
         // A locked Watch or a transient database error keeps the last value; the complication shows its age.
         guard let collection = try? await descriptor.result(for: store) else { return }
-        var hourly: [Int] = []
+        var sums: [Double?] = []
         collection.enumerateStatistics(from: start, to: now) { statistics, _ in
-            hourly.append(Int((statistics.sumQuantity()?.doubleValue(for: .count()) ?? 0).rounded()))
+            sums.append(statistics.sumQuantity()?.doubleValue(for: .count()))
         }
-        WatchConnection.shared.applyStepsReading(.init(measuredAt: now, hourly: hourly))
+        // No quantities (access denied or no samples yet) stays unavailable; it is never published as zero steps.
+        guard let reading = WatchStepsReading(measuredAt: now, hourlySums: sums) else { return }
+        connection.applyStepsReading(reading, epoch: epoch)
     }
 }

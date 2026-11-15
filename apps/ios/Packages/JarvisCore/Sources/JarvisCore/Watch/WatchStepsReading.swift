@@ -9,6 +9,12 @@ public struct WatchStepsReading: Equatable, Sendable {
         self.measuredAt = measuredAt
         self.hourly = hourly.map { max(0, $0) }
     }
+    /// HealthKit returns no quantity for an hour without samples, and also when read access is denied. A day with
+    /// no quantity at all is therefore unavailable, not zero steps, so no reading is made.
+    public init?(measuredAt: Date, hourlySums: [Double?]) {
+        guard hourlySums.contains(where: { $0 != nil }) else { return nil }
+        self.init(measuredAt: measuredAt, hourly: hourlySums.map { Int(($0 ?? 0).rounded()) })
+    }
     public var steps: Int { hourly.reduce(0, +) }
 }
 
@@ -43,6 +49,13 @@ extension WatchHealthSnapshot {
         base.hourlySteps = reading.hourly
         base.stepsAt = reading.measuredAt
         return base
+    }
+
+    /// Watch readings only extend a snapshot the paired iPhone has pushed. With none (never signed in, or cleared by
+    /// a phone sign-out) there is nothing to extend, so a reading can never recreate signed-out data.
+    public static func applying(_ reading: WatchStepsReading, to snapshot: WatchHealthSnapshot?,
+                                calendar: Calendar = .current) -> WatchHealthSnapshot? {
+        snapshot?.applying(reading, calendar: calendar)
     }
 
     /// An iPhone push must not roll the steps back to an older, lower count the Watch already has.

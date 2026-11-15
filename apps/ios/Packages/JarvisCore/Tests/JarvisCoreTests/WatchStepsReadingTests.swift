@@ -26,6 +26,21 @@ final class WatchStepsReadingTests: XCTestCase {
         XCTAssertEqual(reading.hourly, [0, 120, 0, 300])
     }
 
+    func testNoHealthKitQuantitiesIsUnavailableNotZero() {
+        XCTAssertNil(WatchStepsReading(measuredAt: date(15, 8), hourlySums: [nil, nil, nil]))
+        XCTAssertNil(WatchStepsReading(measuredAt: date(15, 8), hourlySums: []))
+        let reading = WatchStepsReading(measuredAt: date(15, 8), hourlySums: [nil, 120.4, nil, 30])
+        XCTAssertEqual(reading?.hourly, [0, 120, 0, 30])
+        XCTAssertEqual(WatchStepsReading(measuredAt: date(15, 8), hourlySums: [0.0])?.steps, 0, "a real zero sum is a measurement")
+    }
+
+    func testReadingNeverCreatesASnapshotAfterSignOut() {
+        let reading = WatchStepsReading(measuredAt: date(15, 12), hourly: [4_000])
+        XCTAssertNil(WatchHealthSnapshot.applying(reading, to: nil, calendar: calendar))
+        let signedIn = phone(steps: 100, at: date(15, 11))
+        XCTAssertEqual(WatchHealthSnapshot.applying(reading, to: signedIn, calendar: calendar)?.steps, 4_000)
+    }
+
     func testWatchReadingNewerThanHoursOldPhoneSnapshotUpdatesStepsOnly() {
         let old = phone(steps: 1_000, at: date(15, 6))
         let updated = old.applying(.init(measuredAt: date(15, 18), hourly: [2_000, 3_000]), calendar: calendar)

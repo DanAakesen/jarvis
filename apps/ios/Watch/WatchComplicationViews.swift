@@ -335,7 +335,10 @@ struct WatchBodyFatComplicationView: View {
 
 struct WatchHealthView: View {
     let entry: WatchEntry
-    private var health: WatchHealthSnapshot? { entry.health }
+    /// Yesterday's count is not today's steps; before the first reading of the day the value is unavailable.
+    private var health: WatchHealthSnapshot? {
+        entry.health.flatMap { Calendar.current.isDate(entry.date, inSameDayAs: $0.dayStart) ? $0 : nil }
+    }
     private func number(_ value: Int?) -> String { value.map { $0.formatted() } ?? "—" }
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {

@@ -290,14 +290,16 @@ final class WatchConnection: NSObject, ObservableObject, WCSessionDelegate {
         } catch { NSLog("Watch health snapshot could not be saved.") }
     }
     /// Steps measured on the Watch itself. Only the steps complication is reloaded, to stay within the reload budget.
-    func applyStepsReading(_ reading: WatchStepsReading) {
+    /// Without a cached snapshot (signed out or never paired) readings are skipped, and so are readings that began
+    /// before a sign-out.
+    var cacheEpoch: UUID { cacheGeneration }
+    var acceptsStepsReadings: Bool { snapshot != nil }
+    func applyStepsReading(_ reading: WatchStepsReading, epoch: UUID) {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") { return }
         #endif
-        var base = snapshot ?? WatchHealthSnapshot(now: reading.measuredAt)
-        if snapshot == nil { base.generatedAt = base.dayStart }
-        let updated = base.applying(reading)
-        guard updated != snapshot else { return }
+        guard epoch == cacheGeneration,
+              let updated = WatchHealthSnapshot.applying(reading, to: snapshot), updated != snapshot else { return }
         persist(updated)
         WidgetCenter.shared.reloadTimelines(ofKind: WatchComplicationKind.steps)
     }
