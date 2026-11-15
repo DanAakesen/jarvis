@@ -7,6 +7,7 @@ import { applyMigrations, type Migration } from './migrations.js';
 import { createWatchCredentialStore, WatchCredentials } from '../auth/watch-credential.js';
 import { createInboxIndexStore } from './inbox-index-store.js';
 import { createInboxOpsStore } from './inbox-ops-store.js';
+import { createPiStore } from './pi-store.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentialLimit, InboxCaptureCredentials } from '../auth/inbox-capture-credential.js';
 
 const configuration = loadDatabaseConfig();
@@ -168,6 +169,43 @@ describe('real SQL Server migration contract', () => {
         await pool.request().batch(down);
       }
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.inbox_spend', N'U') AS id")).recordset).toEqual([{ id: null }]);
+    });
+  });
+  describe('PI conversation and turn ledger', () => {
+    it('binds one conversation per owner, re-binds on a new agent, and sums spend by month', async () => {
+      const schema = await readFile(new URL('../../../../db/migrations/0086_pi_chat.sql', import.meta.url), 'utf8');
+      const down = await readFile(new URL('../../../../db/migrations/down/0086_pi_chat.sql', import.meta.url), 'utf8');
+      await pool.request().batch(schema);
+      const signal = new AbortController().signal;
+      const store = createPiStore(pool);
+      const owner = randomUUID();
+      try {
+        expect(await store.getConversation(owner, signal)).toBeNull();
+        const first = await store.bindConversation(owner, 'jarvis-pi', 'conv_1', signal);
+        expect(first).toMatchObject({ agentName: 'jarvis-pi', conversationId: 'conv_1', warmedAt: null, contextHash: null });
+        expect((await store.bindConversation(owner, 'jarvis-pi', 'conv_2', signal)).conversationId).toBe('conv_1');
+        const at = new Date('2026-11-15T10:00:00Z');
+        await store.markWarm(owner, 'a'.repeat(64), at, signal);
+        expect(await store.getConversation(owner, signal)).toMatchObject({ warmedAt: at, contextHash: 'a'.repeat(64) });
+        const moved = await store.bindConversation(owner, 'jarvis-pi-2', 'conv_3', signal);
+        expect(moved).toMatchObject({ agentName: 'jarvis-pi-2', conversationId: 'conv_3', warmedAt: null });
+        await store.dropConversation(owner, signal);
+        expect(await store.getConversation(owner, signal)).toBeNull();
+
+        const turn = { messageId: '42', model: 'gpt-6.1-terra', inputTokens: 11000, cachedTokens: 9000, outputTokens: 20, costDkk: 0.0731, firstTextMs: 1900, totalMs: 2400, outcome: 'ok' as const };
+        await store.recordTurn({ ...turn, kind: 'chat' }, signal);
+        await store.recordTurn({ ...turn, kind: 'warm', messageId: null, firstTextMs: null }, signal);
+        await expect(store.recordTurn({ ...turn, kind: 'other' as never }, signal)).rejects.toThrow();
+        await expect(store.recordTurn({ ...turn, kind: 'chat', outcome: 'maybe' as never }, signal)).rejects.toThrow();
+        const spent = await store.spendSince(new Date(Date.now() - 60_000), signal);
+        expect(spent.turns).toBe(2);
+        expect(spent.costDkk).toBeCloseTo(0.1462, 6);
+        expect(await store.spendSince(new Date(Date.now() + 60_000), signal)).toEqual({ costDkk: 0, turns: 0 });
+        expect(await store.lastTurn(signal)).toMatchObject({ kind: 'warm', messageId: null, cachedTokens: 9000, outcome: 'ok' });
+      } finally {
+        await pool.request().batch(down);
+      }
+      expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_turn', N'U') AS id")).recordset).toEqual([{ id: null }]);
     });
   });
   describe('inbox capture credentials', () => {

@@ -373,6 +373,7 @@ struct ContentView: View {
             JarvisSettingsArea(
                 storedTheme: $storedTheme,
                 client: settingsClient,
+                piClient: fixtureMode ? nil : chatClient.map { JarvisChatClient(client: $0) },
                 onSignedOut: {
                     NotificationCenter.default.post(name: .jarvisSessionRevoked, object: nil)
                 }

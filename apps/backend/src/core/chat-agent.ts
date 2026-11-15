@@ -119,7 +119,7 @@ export function createFoundryAgentSessionId(ownerObjectId: string, conversationS
   return id;
 }
 
-function parseEvents(buffer: string): { events: { event: string; data: string }[]; pending: string } {
+export function parseEvents(buffer: string): { events: { event: string; data: string }[]; pending: string } {
   const frames = buffer.split(/\r?\n\r?\n/u);
   const pending = frames.pop() ?? '';
   const events: { event: string; data: string }[] = [];

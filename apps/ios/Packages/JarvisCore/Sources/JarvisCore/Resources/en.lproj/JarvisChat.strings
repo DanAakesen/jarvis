@@ -168,3 +168,33 @@
 "chat.photo.retry" = "Retry";
 "chat.photo.remove" = "Remove";
 "chat.transcript.jumpToLatest" = "Jump to latest";
+
+// TEST-ONLY chat engine switch (PI). Remove at cutover.
+"chat.engine.engineTitle" = "Chat engine test switch";
+"chat.engine.engineChoiceLabel" = "Chat engine";
+"chat.engine.engineCurrent" = "Current engine";
+"chat.engine.enginePi" = "PI engine";
+"chat.engine.engineExplanation" = "Temporary test switch, removed later. It affects chat only: voice and Watch always use the current engine. If PI fails, chat shows the error and never falls back to the current engine.";
+"chat.engine.engineIndicator" = "PI test";
+"chat.engine.engineIndicatorLabel" = "The PI test engine answers in this chat";
+"chat.engine.engineStatusLoading" = "Loading PI status";
+"chat.engine.engineStatusRefresh" = "Refresh PI status";
+"chat.engine.engineStatusFailed" = "PI status could not be loaded. Check the connection and refresh.";
+"chat.engine.engineStatusUnavailable" = "PI status is unavailable here.";
+"chat.engine.engineStatusLabel" = "Status";
+"chat.engine.engineStatusReady" = "Ready";
+"chat.engine.engineStatusNotConfigured" = "Not configured on the server";
+"chat.engine.engineStatusBudgetExhausted" = "Monthly budget used up";
+"chat.engine.engineStatusDisabled" = "Disabled";
+"chat.engine.engineAgentLabel" = "Agent";
+"chat.engine.engineMonthLabel" = "This month";
+"chat.engine.engineMonthFormat" = "%@ of %@ DKK, %@ turns";
+"chat.engine.engineWarmLabel" = "Conversation";
+"chat.engine.engineWarm" = "Warm";
+"chat.engine.engineCold" = "Cold, the next message may be slower";
+"chat.engine.engineLastTurnLabel" = "Last turn";
+"chat.engine.engineNoTurn" = "No PI turn yet";
+"chat.engine.engineFirstTextLabel" = "First text";
+"chat.engine.engineTokensLabel" = "Tokens";
+"chat.engine.engineTokensFormat" = "%@ in, %@ cached, %@ out";
+"chat.engine.engineCostLabel" = "Cost";

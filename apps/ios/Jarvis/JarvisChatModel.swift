@@ -222,6 +222,16 @@ final class JarvisChatModel: ObservableObject {
         await reattachActiveTurnIfNeeded()
     }
 
+    private static var piWarmThrottle = PiWarmThrottle()
+
+    /// TEST-ONLY. Primes the PI conversation when PI is selected, at most once per throttle interval per app run.
+    /// Fire and forget: a failure stays silent here and the next PI send reports the honest error.
+    func warmPiIfNeeded() {
+        guard !fixtureMode, let client, ChatEngineSelection.load() == .pi,
+              Self.piWarmThrottle.shouldWarm() else { return }
+        Task { _ = try? await client.piWarm() }
+    }
+
     func retryHistory() async {
         guard let client else { return }
         isLoading = true
@@ -672,7 +682,8 @@ final class JarvisChatModel: ObservableObject {
                 sessionId: sessionID,
                 text: text,
                 attachmentIds: attachmentIDs,
-                visualContext: visualContext
+                visualContext: visualContext,
+                engine: fixtureMode ? nil : ChatEngineSelection.load()
             )
             pendingAttachments = []
             uploadedAttachmentIDs = [:]
@@ -866,6 +877,17 @@ final class JarvisChatModel: ObservableObject {
     }
 
     private func message(for error: any Error) -> String {
+        // PI failures carry an honest server message; show it instead of the generic turn text.
+        if let error = error as? JarvisChatClientError,
+           case .serverEvent(let code, let text) = error,
+           let code, code.hasPrefix("pi_"),
+           let text, !text.isEmpty {
+            return text
+        }
+        return standardMessage(for: error)
+    }
+
+    private func standardMessage(for error: any Error) -> String {
         if let error = error as? JarvisClientError {
             switch error {
             case .signInRequired: chatCopy(.errSignIn)
