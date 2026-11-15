@@ -30,6 +30,7 @@ export interface AlertActivityStore {
 export function createAlertActivityStore(
   pool: sql.ConnectionPool,
   onCreated: () => void,
+  onRecorded: (alert: ActivityAlert) => void = () => {},
 ): AlertActivityStore {
   return {
     async record(alert) {
@@ -38,7 +39,10 @@ export function createAlertActivityStore(
       try {
         const inserted = await insertActivityAlert(transaction, alert);
         await transaction.commit();
-        if (inserted) onCreated();
+        if (inserted) {
+          onCreated();
+          try { onRecorded(alert); } catch { /* A listener cannot undo a recorded alert. */ }
+        }
         return inserted;
       } catch (error) {
         await transaction.rollback().catch(() => undefined);

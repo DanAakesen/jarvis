@@ -64,6 +64,9 @@ param vaultMirrorMaxDeletes int = 3
 @description('A ChatGPT-supported model for Codex hosted-runner tools.')
 param codexToolModel string = 'gpt-5.5'
 
+@description('Turns on the event-driven proactive path (#1858): queue, rules, GPT-6.1 Terra reasoning and three interrupt tiers. Off by default; the 07:00 and 18:00 checks run either way.')
+param proactiveEventsEnabled bool = false
+
 @description('Requested GlobalStandard throughput allocation for GPT-6.1 Terra main chat. Azure validates model/SKU limits and subscription quota during normal deployment; this is not a reserved PTU purchase.')
 @minValue(1)
 param terraChatCapacity int
@@ -846,6 +849,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
             {
               name: 'JARVIS_PROACTIVE_ALERTS_ENABLED'
               value: 'true'
+            }
+            {
+              name: 'JARVIS_PROACTIVE_EVENTS_ENABLED'
+              value: string(proactiveEventsEnabled)
             }
             {
               name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
