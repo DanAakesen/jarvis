@@ -1,9 +1,8 @@
 import { VaultWriteConflictError, MAX_VAULT_FILE_BYTES, type createGitHubVaultClient } from '../../vault/github-client.js';
 import { isVaultLineSafe } from '../../vault/index.js';
-import { gymLogNotePaths, resolveVaultPath, type DualPath } from '../../vault/layout.js';
 import type { WorkoutSessionType } from './workouts.js';
 
-type VaultNotes = Pick<ReturnType<typeof createGitHubVaultClient>, 'read' | 'write' | 'tree'>;
+type VaultNotes = Pick<ReturnType<typeof createGitHubVaultClient>, 'read' | 'write'>;
 
 export interface GymLogWorkout {
   readonly id: string;
@@ -215,9 +214,9 @@ export interface GymLogWriterOptions {
   readonly attempts?: number;
 }
 
-export function gymLogPaths(day: string): DualPath {
+export function gymLogPath(day: string): string {
   if (!dayPattern.test(day)) throw new RangeError('Invalid gym log day');
-  return gymLogNotePaths(`${day}.md`);
+  return `Personal/Health/Gym log/${day}.md`;
 }
 
 export function createGymLogWriter(options: GymLogWriterOptions) {
@@ -225,7 +224,7 @@ export function createGymLogWriter(options: GymLogWriterOptions) {
   return {
     /** Applies one idempotent change to the day's note. Repeating it writes nothing. */
     async apply(day: string, operation: GymLogOperation, signal: AbortSignal): Promise<'written' | 'unchanged'> {
-      const path = await resolveVaultPath(gymLogPaths(day), options.vault, signal);
+      const path = gymLogPath(day);
       for (let attempt = 1; ; attempt += 1) {
         signal.throwIfAborted();
         const file = await options.vault.read(path, signal);

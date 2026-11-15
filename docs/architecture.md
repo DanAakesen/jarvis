@@ -1747,8 +1747,8 @@ protocols) so Linux CI tests it; English-only copy is the `JarvisToday` strings 
 `com.apple.developer.healthkit` and a localized `NSHealthShareUsageDescription`).
 
 Data: tasks come from `GET /vault/tasks` and note correlation from `GET /notes` through the existing
-`JarvisNotesClient`; workouts come from Gym logs saved by `POST /notes` as `Personal/Gym log/<date>-<time>-<session>.md`
-and read back with `GET /notes?directory=Personal/Gym log`; steps come from HealthKit. No backend route exists
+`JarvisNotesClient`; workouts come from Gym logs saved by `POST /notes` as `Personal/Health/Gym log/<date>-<time>-<session>.md`
+and read back with `GET /notes?directory=Personal/Health/Gym log`; steps come from HealthKit. No backend route exists
 that lists calendar entries for the phone, so Next up shows "Calendar unavailable" through
 `JarvisUnavailableCalendarSource` instead of inventing entries. (P15-77 added it: `GET /calendar/events?from&to`, Dan-only,
 registered by the Google module, reads the primary calendar with the `calendar.events` scope and returns the
@@ -3996,7 +3996,7 @@ missing reads and other partial failures yield unavailable, never an empty or
 partial success. Unknown sizes reserve the per-file maximum against the budget.
 `todo-file.ts` provides the shared parser; fenced examples/query blocks are
 ignored. The proactive writer reads available inbox and root task notes for
-deduplication but writes only to existing `Personal/Inbox.md` or `Work/Inbox.md`.
+deduplication but writes only to existing `Personal/Task inbox.md` or `Work/Task inbox.md`.
 One sanitizer removes
 control characters, HTML and markdown link destinations and caps fact text at
 300 characters. `🔺`, `⏫`, bracketed or parenthesized `priority:: highest` and
@@ -4034,7 +4034,7 @@ Only model findings with a suggested todo and a non-`todo` category qualify.
 The writer excludes Factory evidence and project/software/engineering cues in
 the suggestion or its cited facts, regardless of source or category. It routes
 only a clearly personal or non-project work task, and writes only to the
-corresponding existing `Personal/Inbox.md` or `Work/Inbox.md`. Missing identity,
+corresponding existing `Personal/Task inbox.md` or `Work/Task inbox.md`. Missing identity,
 ambiguous scope, an unavailable destination or an unsafe file fails closed with
 a content-free reason; the finding remains stored as an observation.
 
@@ -5611,7 +5611,7 @@ strips control characters, comments and metadata emoji, caps text at 200 charact
 refuses secret-looking text, and appends `- [ ] text` (with `📅 date`, plus ` HH:MM` when
 timed, and `⏫`/`🔼` for optional high/medium priority; normal or omitted priority
 adds no marker) to
-`Personal/Inbox.md` or `Work/Inbox.md`, creating the note when missing and refusing
+`Personal/Task inbox.md` or `Work/Task inbox.md`, creating the note when missing and refusing
 an open code fence or an oversized file. Both commit as Jarvis (`jarvis: complete a
 task`, `reopen a task`, `edit a task` or `add a task`), refresh the notes index and log
 `vault.write`. Non-owners get 403. The web client (`tasks-data.ts`) maps 409 to
@@ -9033,7 +9033,7 @@ retain a usable row without attempting unavailable backend detail. Local dates
 and retained timestamp fallbacks use Copenhagen boundaries. A failed local read
 does not erase retained server data.
 
-`JarvisVaultGymLogStore.recentLifts` lists existing `Personal/Gym log` notes and
+`JarvisVaultGymLogStore.recentLifts` lists existing `Personal/Health/Gym log` notes and
 reads at most 30 recent note bodies, with cancellation and a 25-second budget
 checked between bounded requests. It parses the same validated format Home
 writes and exposes partial coverage. The Health view combines those lifts with
@@ -9392,7 +9392,7 @@ Health rows retain UUIDs for database lifts or original path/SHA/content for leg
 iOS Gym log notes. Edits use PATCH /health/lifts/:id or SHA-checked PUT /notes/note,
 changing only the legacy lift line. Deletion uses the existing health DELETE route
 or the new owner-only DELETE /notes/gym-lift with original SHA. The latter is
-restricted to legacy Personal/Gym log filenames and lift-note content; tool-level
+restricted to legacy lift-note filenames under Personal/Health/Gym log and lift-note content; tool-level
 vault deletion approvals are unchanged. Successful writes refresh summaries and
 invalidate Notes/Health caches. Failed writes are shown without optimistic removal.
 
@@ -9644,8 +9644,6 @@ the app observes the stream. Proactive runs cancelled for quiet hours or changed
 preferences finish their background jobs as cancelled; genuine failures remain
 failed. Existing historical jobs are not rewritten.
 
-## Dual vault layout — 15 November 2026 (P15-181)
+## Vault layout paths — 15 November 2026 (P15-181)
 
-Temporary, until the vault clean-up has merged. Task inboxes exist as `Personal/Inbox.md` and `Work/Inbox.md` (old) or `Personal/Task inbox.md` and `Work/Task inbox.md` (new). The gym log lives in `Health/Gym log/` (old backend path), `Personal/Gym log/` (old iOS path) or `Personal/Health/Gym log/` (new). The agent log folder is `_agent-log` or `_agent-activity`.
-
-`apps/backend/src/vault/layout.ts` holds the one rule for the backend: read the new path if the note exists, else the old one; a missing note is created at the new path only when the tree shows the new layout, else at the old path. `vault_task_create` and the watch task capture (`vault/task-writes.ts`), the proactive todo writer (existing inboxes only, never created) and the gym log writer (`health/gym/gym-log.ts`) use it. The lift delete route accepts both `Personal/Gym log/` and `Personal/Health/Gym log/` lift notes. `JarvisVaultGymLogStore` lists and parses both folders and writes to the folder that already holds logs, else the current one only when the folder tree or a renamed task inbox shows the new layout. `apps/vault-mirror/src/engine/policy.ts` excludes both agent log segments. The old paths and fallbacks are removed in a follow-up once the clean-up has merged.
+Jarvis uses one vault layout: task inboxes `Personal/Task inbox.md` and `Work/Task inbox.md`, gym log `Personal/Health/Gym log/` (backend writer, lift delete route, iOS `JarvisGymLogNote`; frontmatter type `gym-log` unchanged) and the agent log folder `_agent-activity`. There is no detection and no second location. The vault mirror (`apps/vault-mirror/src/engine/policy.ts`) excludes the `_agent-activity` segment and, until vault PR #5 has merged, the old `_agent-log` segment; remove the `_agent-log` rule then. The archived `General/Archive/Agent activity log/` is a normal tracked folder and is not excluded.

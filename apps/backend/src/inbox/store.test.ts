@@ -79,7 +79,7 @@ describe('inbox store', () => {
       'Inbox/2026-11-14 Newer.md': '# Newer\n\nabout tax\n\n<!-- jarvis-inbox:11111111 -->\n',
       'Inbox/Closed/2026-11-01 Done.md': '# Done\n\nabout padel\n',
       'Inbox/big.md': 'TOO LARGE',
-      'Personal/Inbox.md': '- [ ] a task\n',
+      'Personal/Task inbox.md': '- [ ] a task\n',
       'Inbox/notes.txt': 'x',
     });
     const live = await inbox.list({}, signal);
@@ -197,6 +197,6 @@ describe('inbox store', () => {
     const { inbox, calls } = store();
     await inbox.create({ title: '../../Personal/Inbox', note: 'x' }, signal);
     expect(calls.every((call) => /^write Inbox\/[^/]+\.md$/u.test(call))).toBe(true);
-    await expect(inbox.read('Personal/Inbox.md', signal)).rejects.toMatchObject({ code: 'invalid' });
+    await expect(inbox.read('Personal/Task inbox.md', signal)).rejects.toMatchObject({ code: 'invalid' });
   });
 });

@@ -56,9 +56,6 @@ export function validatePolicy(input: unknown): PolicyResult {
   }
 }
 
-/** Both agent log folder names stay excluded until the vault clean-up has merged and the old name is dropped. */
-const EXCLUDED_SEGMENTS: ReadonlySet<string> = new Set(['_agent-log', '_agent-activity']);
-
 export function isApprovedPath(policy: ValidatedPolicy, path: string): boolean {
   const normalized = normalizePath(path);
   if (!isSafePath(normalized)) return false;
@@ -66,7 +63,7 @@ export function isApprovedPath(policy: ValidatedPolicy, path: string): boolean {
   const segments = folded.split('/');
   const name = segments.at(-1)!;
   const extension = name.slice(name.lastIndexOf('.'));
-  return !segments.some(segment => segment.startsWith('.') || EXCLUDED_SEGMENTS.has(segment)) &&
+  return !segments.some(segment => segment.startsWith('.') || segment === '_agent-log' || segment === '_agent-activity') &&
     !policy.excludedPrefixes.some(prefix => folded.startsWith(prefix)) &&
     (segments.length === 1 || policy.allowedRoots.includes(segments[0]!)) &&
     name.includes('.') && policy.allowedExtensions.includes(extension) &&

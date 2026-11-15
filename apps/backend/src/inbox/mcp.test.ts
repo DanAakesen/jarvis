@@ -111,7 +111,7 @@ describe('inbox MCP server', () => {
   it('lists, reads and closes items for a read_write credential, and never lets a write credential read or close', async () => {
     const { credentials, rpc, files } = setup({
       'Inbox/2026-11-12 Older.md': '# Older\n\nabout padel\n\n<!-- jarvis-inbox:11111111 -->\n',
-      'Personal/Inbox.md': '- [ ] not an inbox note\n',
+      'Personal/Task inbox.md': '- [ ] not an inbox note\n',
     });
     const full = await credentials.issue('Claude', 'read_write');
     const write = await credentials.issue('Shortcut', 'write');
@@ -125,9 +125,9 @@ describe('inbox MCP server', () => {
     const closed = await call(full.credential, 'inbox_close', { id: '11111111', reason: 'binned' });
     expect(closed.json?.result?.structuredContent).toMatchObject({ confirmation: 'Closed in the inbox: Older.' });
     expect(files.has('Inbox/Closed/2026-11-12 Older.md')).toBe(true);
-    const outside = (await call(full.credential, 'inbox_close', { path: 'Personal/Inbox.md', reason: 'x' })).json;
+    const outside = (await call(full.credential, 'inbox_close', { path: 'Personal/Task inbox.md', reason: 'x' })).json;
     expect(outside?.error ?? outside?.result?.isError).toBeTruthy();
-    expect(files.get('Personal/Inbox.md')).toBe('- [ ] not an inbox note\n');
+    expect(files.get('Personal/Task inbox.md')).toBe('- [ ] not an inbox note\n');
   });
 
   it('refuses without a credential, with an unknown one, from a browser, and on other routes', async () => {

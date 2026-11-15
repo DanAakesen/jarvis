@@ -238,7 +238,7 @@ export type HealthFoodLookup = (input: readonly LookupComponent[], request: Fast
 
 /** Explicit inactive composition: no timer, automatic provider request, route or production registration. */
 export interface HealthGymVault {
-  readonly vault: Pick<ReturnType<typeof createGitHubVaultClient>, 'read' | 'write' | 'tree'>;
+  readonly vault: Pick<ReturnType<typeof createGitHubVaultClient>, 'read' | 'write'>;
   readonly logger?: GymSyncLogger;
 }
 

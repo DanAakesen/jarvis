@@ -53,7 +53,7 @@ describe('inbox note format', () => {
     expect(inboxPath('2026-11-14', '../../etc/passwd')).toBe('Inbox/2026-11-14 etc passwd.md');
     expect(inboxPath('2026-11-14', '.hidden')).toBe('Inbox/2026-11-14 hidden.md');
     expect(inboxPath('2026-11-14', 'é'.repeat(110)).length).toBeLessThanOrEqual(100);
-    for (const path of ['Inbox/../Personal/a.md', 'Inbox/Closed/a.md/x.md', 'Personal/Inbox.md', 'Inbox/.a.md', 'Inbox/a.txt', 'Inbox/a#b.md']) {
+    for (const path of ['Inbox/../Personal/a.md', 'Inbox/Closed/a.md/x.md', 'Personal/Task inbox.md', 'Inbox/.a.md', 'Inbox/a.txt', 'Inbox/a#b.md']) {
       expect(isLiveInboxPath(path)).toBe(false);
     }
     expect(isLiveInboxPath('Inbox/Closed/a.md')).toBe(false);
