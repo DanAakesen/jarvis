@@ -4,6 +4,7 @@ import type { ProactiveSource } from '../types.js';
 import { createNowCardChannel, createPushChannel } from './channels.js';
 import { createMemoryEventQueueStore, type EventQueueStore } from './event-queue.js';
 import { createMemoryOutreachStore } from './outreach-store.js';
+import { createEventPath } from './wiring.js';
 import { createEventPipeline, MAX_MODEL_BATCHES_PER_DAY, MAX_PUSHES_PER_DAY } from './pipeline.js';
 import type { EventReasoner, ReasonerResult } from './reasoner.js';
 import type { OutreachChannel, ProactiveEventInput } from './types.js';
@@ -162,6 +163,48 @@ describe('event pipeline', () => {
     expect(reason).toHaveBeenCalledTimes(1);
   });
 
+  it('does not remember a timer review that failed, so its retry still reaches the model', async () => {
+    const { pipeline, enqueue, reason, advance } = setup();
+    reason.mockResolvedValueOnce({ decisions: [], quiet: [], reason: 'model_unavailable' });
+    await enqueue(event({ source: 'timer', kind: 'review', dedupeKey: 't1', occurredAt: NOW }));
+    expect((await pipeline.tick(signal)).outcome).toBe('model_unavailable');
+    advance(6 * 60_000);
+    expect((await pipeline.tick(signal)).outcome).toBe('done');
+    expect(reason).toHaveBeenCalledTimes(2);
+    advance(60_000);
+    await enqueue(event({ source: 'timer', kind: 'review', dedupeKey: 't2', occurredAt: new Date(NOW.getTime() + 6 * 60_000) }));
+    expect((await pipeline.tick(signal)).outcome).toBe('filtered');
+  });
+
+  it('keeps a deferred retry when a newer event wakes the pipeline first', async () => {
+    const { pipeline, enqueue, reason, advance } = setup();
+    reason.mockResolvedValueOnce({ decisions: [], quiet: [], reason: 'invalid_model_output' });
+    await enqueue(event({ summary: 'first' }));
+    expect((await pipeline.tick(signal)).outcome).toBe('invalid_model_output');
+    advance(60_000);
+    await enqueue(event({ summary: 'second' }));
+    expect((await pipeline.tick(signal)).outcome).toBe('done');
+    expect(reason).toHaveBeenCalledTimes(2);
+    // Nothing else wakes the pipeline: the first event must come back on its own once its retry is due.
+    expect((await pipeline.tick(signal)).outcome).toBe('idle');
+    advance(6 * 60_000);
+    expect((await pipeline.tick(signal)).outcome).toBe('done');
+    expect(reason).toHaveBeenCalledTimes(3);
+  });
+
+  it('counts failed model calls toward the daily limit so a broken model cannot loop', async () => {
+    const { pipeline, enqueue, reason, advance } = setup();
+    reason.mockResolvedValue({ decisions: [], quiet: [], reason: 'invalid_model_output', usage: { model: 'gpt-6.1-terra', inputTokens: 1_000, outputTokens: 100 } });
+    for (let index = 0; index < MAX_MODEL_BATCHES_PER_DAY; index += 1) {
+      await enqueue(event());
+      advance(1_000);
+      expect((await pipeline.tick(signal)).outcome).toBe('invalid_model_output');
+    }
+    await enqueue(event());
+    expect((await pipeline.tick(signal)).outcome).toBe('daily_cap');
+    expect(reason).toHaveBeenCalledTimes(MAX_MODEL_BATCHES_PER_DAY);
+  });
+
   it('does nothing while the owner has paused proactive work', async () => {
     const { pipeline, enqueue, store, reason } = setup();
     await store.settings.patch({ paused: true });
@@ -197,5 +240,13 @@ describe('queue', () => {
     const queue = createMemoryEventQueueStore();
     await expect(queue.enqueue(event({ source: 'Bad Source' }), at)).rejects.toThrow('source');
     await expect(queue.enqueue(event({ summary: '  ' }), at)).rejects.toThrow('summary');
+  });
+});
+
+describe('switch', () => {
+  it('builds nothing unless the owner enabled the event path, and nothing without a model', () => {
+    const base = { ownerObjectId: OWNER, store: createMemoryProactiveStore(OWNER), sources: [], now: () => NOW };
+    expect(createEventPath({ ...base, enabled: false })).toBeUndefined();
+    expect(createEventPath({ ...base, enabled: true })).toBeUndefined();
   });
 });

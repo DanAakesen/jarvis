@@ -21,6 +21,8 @@ export interface EventQueueStore {
   claim(now: Date, limit: number, leaseMs: number): Promise<QueuedEvent[]>;
   settle(settlements: readonly EventSettlement[], now: Date): Promise<void>;
   retryLater(ids: readonly string[], retryAt: Date): Promise<void>;
+  /** Records a model call before it is made; every call counts toward the daily limit, whatever its outcome. */
+  startBatch(batchId: string, now: Date, eventCount: number): Promise<void>;
   modelBatchesSince(since: Date): Promise<number>;
   escalatedSince(source: string, since: Date): Promise<number>;
   hasSource(source: string): Promise<boolean>;
@@ -74,6 +76,7 @@ interface MemoryRow extends QueuedEvent {
 export function createMemoryEventQueueStore(): EventQueueStore {
   const rows = new Map<string, MemoryRow>();
   const byKey = new Map<string, string>();
+  const batches: Date[] = [];
   const view = (row: MemoryRow): QueuedEvent => ({
     id: row.id, source: row.source, kind: row.kind, dedupeKey: row.dedupeKey, summary: row.summary,
     detail: structuredClone(row.detail), occurredAt: row.occurredAt, receivedAt: row.receivedAt, attempts: row.attempts,
@@ -128,10 +131,8 @@ export function createMemoryEventQueueStore(): EventQueueStore {
         row.retryAt = retryAt;
       }
     },
-    async modelBatchesSince(since) {
-      return new Set([...rows.values()].filter((row) => row.batchId && row.processedAt && row.processedAt >= since)
-        .map((row) => row.batchId)).size;
-    },
+    async startBatch(_batchId, now) { batches.push(now); },
+    async modelBatchesSince(since) { return batches.filter((at) => at >= since).length; },
     async escalatedSince(source, since) {
       return [...rows.values()].filter((row) => row.source === source && row.batchId !== null &&
         row.processedAt !== null && row.processedAt >= since).length;

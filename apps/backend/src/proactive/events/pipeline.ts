@@ -134,6 +134,7 @@ export function createEventPipeline(options: EventPipelineOptions) {
     if (survivors.length === 0) return result('filtered', claimed.length, dropped);
 
     const facts = await readContext(settings, signal);
+    let reviewedFingerprint: string | undefined;
     if (survivors.every((event) => event.source === 'timer')) {
       const fingerprint = digest(JSON.stringify(facts
         .filter(({ source }) => !volatileSourceIds.includes(source)).map(({ source, text }) => [source, text]).sort()));
@@ -141,7 +142,8 @@ export function createEventPipeline(options: EventPipelineOptions) {
         await queue.settle(survivors.map(({ id }) => ({ id, outcome: 'rule: context_unchanged' })), now());
         return result('filtered', claimed.length, dropped + survivors.length);
       }
-      lastTimerFingerprint = fingerprint;
+      // Remembered only once the review has been handled; a failed attempt must be able to run again.
+      reviewedFingerprint = fingerprint;
     }
     // The month may have turned or another path may have spent budget while the context was read.
     if (!await withinBudget()) {
@@ -157,6 +159,8 @@ export function createEventPipeline(options: EventPipelineOptions) {
       hoursAgo: Math.max(0, Math.round((current.getTime() - Date.parse(entry.createdAt)) / HOUR_MS)),
     }));
     const batchId = randomUUID();
+    // Counted before the call, so a failing or crashing model call still uses up the daily allowance.
+    await queue.startBatch(batchId, now(), survivors.length);
     const response = await reasoner.reason({
       now: current, guidance: settings.guidance, events: survivors, facts, feedback,
     }, signal);
@@ -211,6 +215,7 @@ export function createEventPipeline(options: EventPipelineOptions) {
       await queue.retryLater(retry, retryAt);
       wake(retryAt);
     }
+    if (reviewedFingerprint !== undefined) lastTimerFingerprint = reviewedFingerprint;
     log('info', { reason: 'done', events: survivors.length, outreach: delivered, dropped });
     return result('done', claimed.length, dropped, delivered);
   }
@@ -257,7 +262,15 @@ export function createEventPipeline(options: EventPipelineOptions) {
       if (running) return running;
       if (nextWorkAt === null || nextWorkAt > now()) return Promise.resolve({ outcome: 'idle', claimed: 0, dropped: 0, outreach: 0 });
       nextWorkAt = null;
-      running = runTick(signal).catch((error: unknown) => {
+      running = runTick(signal).then(async (outcome) => {
+        // Another wake may have replaced a later deadline (a deferred retry); read the queue again so none is lost.
+        // Blocked outcomes keep the single deadline they set, or they would spin on work they may not do.
+        if (!['paused', 'budget_exhausted', 'daily_cap'].includes(outcome.outcome)) {
+          const due = await queue.nextDueAt().catch(() => null);
+          if (due) wake(due);
+        }
+        return outcome;
+      }, (error: unknown) => {
         // An interrupted pass leaves its claims leased; look again once the lease has lapsed.
         wake(new Date(now().getTime() + LEASE_MS + 1_000));
         throw error;

@@ -47,3 +47,13 @@ CREATE INDEX IX_proactive_outreach_owner_created
   ON dbo.proactive_outreach (owner_object_id, created_at DESC);
 CREATE INDEX IX_proactive_outreach_item
   ON dbo.proactive_outreach (item_id);
+
+CREATE TABLE dbo.proactive_event_batches (
+  id uniqueidentifier NOT NULL CONSTRAINT PK_proactive_event_batches PRIMARY KEY,
+  owner_object_id uniqueidentifier NOT NULL,
+  created_at datetime2(7) NOT NULL CONSTRAINT DF_proactive_event_batches_created_at DEFAULT SYSUTCDATETIME(),
+  event_count int NOT NULL,
+  CONSTRAINT CK_proactive_event_batches_count CHECK (event_count >= 0)
+);
+CREATE INDEX IX_proactive_event_batches_owner_created
+  ON dbo.proactive_event_batches (owner_object_id, created_at);

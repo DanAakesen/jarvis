@@ -92,7 +92,7 @@ Computed from the code and its tests, not from live traffic (there is none yet):
 | Terra price | 6.5785 DKK input and 32.8925 DKK output per million tokens (USD 1 and USD 5 at 6.5785 DKK per USD) |
 | Typical batch (6 000 in, 600 out) | about 0.06 DKK |
 | Worst-case batch (the gate before each call) | about 0.38 DKK |
-| Batches a day | at most 12; a timer review that changes nothing costs no model call |
+| Batches a day | at most 12, counting failed or invalid calls too (`proactive_event_batches`, written before each call); a timer review that changes nothing costs no model call |
 | Typical ceiling | 12 x 0.06 = 0.7 DKK a day, about 21 DKK a month |
 | Hard stop | The monthly limit in Proactive settings (default 100 DKK) is checked against the shared ledger before every call, by the old checks and the new path alike |
 

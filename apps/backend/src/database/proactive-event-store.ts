@@ -138,12 +138,22 @@ export function createProactiveEventStore(pool: sql.ConnectionPool, ownerObjectI
       }
     },
 
+    async startBatch(batchId, now, eventCount) {
+      await pool.request()
+        .input('id', sql.UniqueIdentifier, batchId)
+        .input('owner', sql.UniqueIdentifier, owner)
+        .input('now', sql.DateTime2, now)
+        .input('count', sql.Int, eventCount)
+        .query(`INSERT dbo.proactive_event_batches (id, owner_object_id, created_at, event_count)
+          VALUES (@id, @owner, @now, @count);`);
+    },
+
     async modelBatchesSince(since) {
       const { recordset } = await databaseReadRequest(pool)
         .input('owner', sql.UniqueIdentifier, owner)
         .input('since', sql.DateTime2, since)
-        .query<{ count: number }>(`SELECT COUNT(DISTINCT batch_id) AS count FROM dbo.proactive_events
-          WHERE owner_object_id = @owner AND batch_id IS NOT NULL AND processed_at >= @since;`);
+        .query<{ count: number }>(`SELECT COUNT(*) AS count FROM dbo.proactive_event_batches
+          WHERE owner_object_id = @owner AND created_at >= @since;`);
       return recordset[0]?.count ?? 0;
     },
 

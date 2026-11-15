@@ -4,4 +4,5 @@ BEGIN
 END;
 
 DROP TABLE dbo.proactive_outreach;
+DROP TABLE dbo.proactive_event_batches;
 DROP TABLE dbo.proactive_events;

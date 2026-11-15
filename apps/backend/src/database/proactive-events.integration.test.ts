@@ -79,10 +79,13 @@ describe('proactive event queue on SQL Server', () => {
     const b = await queue.enqueue({ ...event('settle-b'), source: 'mail', kind: 'message.new' }, now);
     const batch = randomUUID();
     await queue.claim(now, 10, 60_000);
+    await queue.startBatch(batch, now, 1);
+    await queue.startBatch(randomUUID(), now, 1);
     await queue.settle([{ id: a.id, outcome: 'outreach x (medium)', batchId: batch }, { id: b.id, outcome: 'rule: stale' }], now);
     expect(await queue.hasWork(new Date(now.getTime() + 3_600_000))).toBe(false);
     const since = new Date(now.getTime() - 60_000);
-    expect(await queue.modelBatchesSince(since)).toBe(1);
+    // A call that settled nothing still counts.
+    expect(await queue.modelBatchesSince(since)).toBe(2);
     expect(await queue.escalatedSince('github', since)).toBe(1);
     expect(await queue.escalatedSince('mail', since)).toBe(0);
     expect(await queue.hasSource('mail')).toBe(true);
