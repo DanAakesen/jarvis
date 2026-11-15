@@ -20,7 +20,9 @@ Round 3 — 15 November 2026: the owner approved the orb as of iteration 2 (the 
 seven-arm core was reverted at his request) and asked only for a sparser opening background. `JarvisOpeningNetwork` is now
 seven small nodes and fifteen long angular links at fixed positions modelled on `jarvis-opening-selected.png`, with
 anchors beyond the edges; two links pass behind the orb and the orb's disc is masked out of the background canvas. Only
-`JarvisOpeningView` draws the network; the gate and fade screens use the plain colour. The orb is unchanged.
+`JarvisOpeningView` draws the network; the gate and fade screens use the plain colour. The orb is unchanged. Observed in
+macOS CI run 43687222718: the simulator opening screen shows the sparse background with lines passing behind the orb
+(`iteration-2026-11-15/ios-opening-round3-3s.png`).
 
 Observed: `swift test` in JarvisCore passes 79 tests on Linux (including the golden file shared with the web, state
 continuity, containment, 1.6 s pulse and the opening layout, network and policy). Web `npm run lint`, `npm run build` and
