@@ -6,6 +6,8 @@ interface Measured {
   readonly totalMs: number;
   readonly deltas: number;
   readonly toolCalls: number;
+  /** What the tools run in this turn returned, from the MCP server's own record. */
+  readonly toolResults: readonly { readonly tool: string; readonly outcome: 'ok' | 'refused' | 'error' }[];
   readonly characters: number;
   readonly text: string;
   readonly usage: PiUsage;
@@ -20,6 +22,11 @@ export interface PiSmokeReport {
   readonly cancel: { readonly abortToCloseMs: number; readonly partialCharacters: number; readonly followUpOk: boolean };
   readonly totalCostDkk: number;
   readonly checks: Record<'streaming' | 'tools_over_mcp' | 'cancellation' | 'warm_faster_than_cold', boolean>;
+}
+
+/** True only when list_jobs ran through call_tool and its own result was `ok`. */
+export function toolRanOk(results: Measured['toolResults']): boolean {
+  return results.some(result => result.tool === 'list_jobs' && result.outcome === 'ok');
 }
 
 const noUsage: PiUsage = { inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
@@ -42,6 +49,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
     let lastTextMs: number | null = null;
     let deltas = 0;
     let toolCalls = 0;
+    const toolResults: Measured['toolResults'][number][] = [];
     let output = '';
     let usage = noUsage;
     let abortedAt: number | null = null;
@@ -60,6 +68,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
     } catch (error) {
       if (!(config.abortAfterFirstText && controller.signal.aborted)) throw error;
     } finally {
+      toolResults.push(...grant.results);
       kit.closeGrant(grant.turn);
     }
     const closedMs = abortedAt === null ? 0 : Math.round(performance.now() - abortedAt);
@@ -69,7 +78,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
       kind: 'smoke', messageId: null, model: 'gpt-6.1-terra', inputTokens: usage.inputTokens, cachedTokens: usage.cachedTokens,
       outputTokens: usage.outputTokens, costDkk, firstTextMs, totalMs, outcome: abortedAt === null ? 'ok' : 'cancelled',
     }, AbortSignal.timeout(10_000)).catch(() => undefined);
-    return { firstTextMs, lastTextMs, totalMs, deltas, toolCalls, characters: output.length, text: output.slice(0, 200), usage, costDkk,
+    return { firstTextMs, lastTextMs, totalMs, deltas, toolCalls, toolResults, characters: output.length, text: output.slice(0, 200), usage, costDkk,
       aborted: abortedAt !== null, abortToCloseMs: closedMs };
   }
 
@@ -79,7 +88,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
     warm.push(await measure(`Reply with one short sentence about the number ${index + 2}.`));
   }
   const tools = await measure(
-    'Use find_tools to look up "system health", then run get_system_health with call_tool, then say in one sentence whether the tool worked.',
+    'Use find_tools to look up "jobs", then run list_jobs with call_tool and empty arguments, then say in one sentence how many jobs are running.',
   );
   const cancelled = await measure('Write a very long, detailed story of at least 400 words about a butler.', { abortAfterFirstText: true });
   const followUp = await measure('Reply with exactly: still here').then(turn => turn.characters > 0, () => false);
@@ -98,7 +107,8 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
     checks: {
       // Real streaming: several deltas, with the last arriving well after the first.
       streaming: cold.deltas > 3 && (cold.lastTextMs ?? 0) - (cold.firstTextMs ?? 0) > 100,
-      tools_over_mcp: tools.toolCalls > 0 && tools.characters > 0,
+      // The tool must have run and succeeded as the server saw it: model text or an mcp_call item alone prove nothing.
+      tools_over_mcp: toolRanOk(tools.toolResults),
       cancellation: cancelled.aborted && cancelled.abortToCloseMs < 5_000 && followUp,
       warm_faster_than_cold: warmMedian < (cold.firstTextMs ?? 0),
     },

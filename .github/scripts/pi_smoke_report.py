@@ -15,7 +15,7 @@ from pathlib import Path
 
 CHECKS = {
     "streaming": "text streams in several pieces, not one chunk",
-    "tools_over_mcp": "a Jarvis tool ran through the MCP server",
+    "tools_over_mcp": "a Jarvis tool ran through the MCP server and its own result was ok",
     "cancellation": "a cancelled turn stopped quickly and the conversation still works",
     "warm_faster_than_cold": "a warm turn starts faster than the cold one",
 }
@@ -46,9 +46,11 @@ def render(report: dict) -> str:
         lines.append(f"| {label} | {first} | {turn['totalMs']} ms | {usage['inputTokens']} | {usage['cachedTokens']} | "
                      f"{usage['outputTokens']} | {turn['costDkk']:.4f} |")
     cancel = report["cancel"]
+    results = ", ".join(r["tool"] + "=" + r["outcome"] for r in report["tools"].get("toolResults", []))
     lines += ["", f"Cancellation: stream closed {cancel['abortToCloseMs']} ms after the abort, "
                   f"{cancel['partialCharacters']} characters had arrived, follow-up turn {'worked' if cancel['followUpOk'] else 'FAILED'}.",
-              f"Tool turn: {report['tools']['toolCalls']} MCP tool call(s), reply: {report['tools']['text']!r}",
+              f"Tool turn: {report['tools']['toolCalls']} MCP tool call(s), server-recorded results: "
+                  f"{results or 'none'}, reply: {report['tools']['text']!r}",
               f"Smoke cost: {report['totalCostDkk']:.4f} DKK (list price, cached discount ignored).", "",
               "| Check | Result |", "| --- | --- |"]
     lines += [f"| {CHECKS[key]} | {'pass' if report['checks'].get(key) else '**FAIL**'} |" for key in CHECKS]

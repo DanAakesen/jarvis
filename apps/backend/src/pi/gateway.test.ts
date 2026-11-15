@@ -153,6 +153,51 @@ describe('PI gateway', () => {
     expect(status).toMatchObject({ enabled: true, reason: null, warm: { state: 'warm' }, agent: { name: 'jarvis-pi', effort: 'low' } });
   });
 
+  it('never lets a warm-up and a chat turn overlap on the one conversation, whichever starts first', async () => {
+    const gate = () => { let open!: () => void; const wait = new Promise<void>(resolve => { open = resolve; }); return { wait, open }; };
+    // Warm-up first: it suspends on a store read while a chat turn arrives; the turn must wait, then run alone.
+    const warmGate = gate();
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const order: string[] = [];
+    const tracked = (label: string, body: string[]) => () => {
+      order.push(label);
+      inFlight += 1; maxInFlight = Math.max(maxInFlight, inFlight);
+      return new Response(new ReadableStream({
+        async start(controller) {
+          await new Promise(resolve => setTimeout(resolve, 20));
+          for (const text of body) controller.enqueue(new TextEncoder().encode(text));
+          inFlight -= 1; controller.close();
+        },
+      }), { headers: { 'content-type': 'text/event-stream' } });
+    };
+    const first = setup([tracked('warm', [delta('ready'), completed(11_000, 0, 2)]), tracked('chat', [delta('hi'), completed(11_100, 11_000, 3)])]);
+    const original = first.store.spendSince.bind(first.store);
+    let gated = true;
+    first.store.spendSince = async (from, signal) => { if (gated) { gated = false; await warmGate.wait; } return original(from, signal); };
+    const warming = first.gateway.warm(new AbortController().signal);
+    const turn = first.run('hello');
+    await new Promise(resolve => setTimeout(resolve, 30));
+    expect(first.calls.filter(call => call.url.includes('/responses'))).toHaveLength(0);
+    warmGate.open();
+    await Promise.all([warming, turn]);
+    expect(order).toEqual(['warm', 'chat']);
+    expect(maxInFlight).toBe(1);
+
+    // Chat turn first: it suspends before its request; a warm-up arriving then spends nothing and sends nothing.
+    const chatGate = gate();
+    const second = setup([tracked('chat', [delta('hi'), completed(1, 0, 1)])]);
+    const read = second.store.getConversation.bind(second.store);
+    second.store.getConversation = async (owner, signal) => { await chatGate.wait; return read(owner, signal); };
+    const chat = second.run('hello');
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(await second.gateway.warm(new AbortController().signal)).toMatchObject({ alreadyWarm: true, ms: 0 });
+    chatGate.open();
+    await chat;
+    expect(second.calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
+    expect(second.store.turns.map(turn => turn.kind)).toEqual(['chat']);
+  });
+
   it('does not spend on a warm-up once over the cap, and shows what is left', async () => {
     const { gateway, calls, store } = setup([]);
     expect((await gateway.status(new AbortController().signal)).month).toEqual({ spentDkk: 0, capDkk: 1, remainingDkk: 1, turns: 0 });

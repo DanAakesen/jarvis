@@ -70,13 +70,14 @@ class SmokeReportTest(unittest.TestCase):
 
     def test_render_shows_bars_tokens_cost_and_each_check(self):
         data = {"cold": self.turn(4000), "warm": [self.turn(1900, 10000), self.turn(1800, 10000)],
-                "tools": dict(self.turn(2500), toolCalls=2, text="worked"),
+                "tools": dict(self.turn(2500), toolCalls=2, text="worked", toolResults=[{"tool": "list_jobs", "outcome": "ok"}]),
                 "cancel": {"abortToCloseMs": 120, "partialCharacters": 31, "followUpOk": True}, "totalCostDkk": 0.4,
                 "checks": {"streaming": True, "tools_over_mcp": True, "cancellation": True, "warm_faster_than_cold": False}}
         text = report.render(data)
         self.assertIn("cold, new conversation", text)
         self.assertIn("4.0 s", text)
         self.assertIn("| warm turn 2 | 1900 ms |", text)
+        self.assertIn("list_jobs=ok", text)
         self.assertIn("**FAIL**", text)
         self.assertEqual(text.count("| pass |"), 3)
 

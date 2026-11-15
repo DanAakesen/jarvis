@@ -19,11 +19,13 @@ export interface PiTurnGrant {
   readonly smoke?: boolean;
   /** Tools find_tools returned in this turn; call_tool refuses anything else, as the current agent does. */
   readonly discovered: Set<string>;
+  /** What each tool this turn actually ran returned, recorded by the MCP server itself, never taken from model text. */
+  readonly results: { readonly tool: string; readonly outcome: 'ok' | 'refused' | 'error' }[];
   readonly signal: AbortSignal;
 }
 
 export interface PiTurnRegistry {
-  open(input: Omit<PiTurnGrant, 'turn' | 'discovered'>): PiTurnGrant;
+  open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results'>): PiTurnGrant;
   resolve(turn: unknown): PiTurnGrant | undefined;
   close(turn: string): void;
   readonly size: number;
@@ -39,7 +41,7 @@ export function createPiTurnRegistry(): PiTurnRegistry {
       // One owner, one live conversation: a runaway caller cannot pile up authority.
       if (grants.size >= maxOpenTurns) throw new Error('Too many open PI turns');
       const turn = `jt-${randomBytes(16).toString('base64url')}`;
-      const grant: PiTurnGrant = { ...input, turn, discovered: new Set() };
+      const grant: PiTurnGrant = { ...input, turn, discovered: new Set(), results: [] };
       grants.set(turn, grant);
       return grant;
     },

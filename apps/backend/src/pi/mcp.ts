@@ -92,18 +92,22 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
           signal: abort,
         });
         if (response.statusCode !== 200) {
+          grant.results.push({ tool: tool.name, outcome: 'error' });
           return text({ tool: tool.name, outcome: 'error', result: { error: 'The tool could not run. Nothing is confirmed as done.' } }, true);
         }
         const serialized = response.body;
+        const parsed = JSON.parse(serialized) as { outcome?: unknown };
+        const outcome = parsed.outcome === 'ok' || parsed.outcome === 'refused' ? parsed.outcome : 'error';
+        grant.results.push({ tool: tool.name, outcome });
         if (serialized.length > maxResultCharacters) {
           return text({
-            tool: tool.name, outcome: 'ok', truncated: true,
+            tool: tool.name, outcome, truncated: true,
             result: { preview: serialized.slice(0, maxResultCharacters), note: 'The result was too long; this is its start.' },
           });
         }
-        const parsed = JSON.parse(serialized) as { outcome?: unknown };
         return { ...(parsed.outcome === 'error' ? { isError: true } : {}), content: [{ type: 'text', text: serialized }] };
       } catch {
+        grant.results.push({ tool: tool.name, outcome: 'error' });
         return text({ tool: tool.name, outcome: 'error', result: { error: 'The tool could not run. Nothing is confirmed as done.' } }, true);
       }
     });

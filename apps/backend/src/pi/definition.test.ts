@@ -24,6 +24,16 @@ describe('PI definition', () => {
   });
 });
 
+describe('PI instructions', () => {
+  const instructions = readFileSync(new URL('../../../../agents/pi/instructions.md', import.meta.url), 'utf8');
+
+  it('send the capability overview through discovery, not the smoke-only operation', () => {
+    expect(instructions).not.toContain('list_capabilities');
+    expect(instructions).toContain('capability overview');
+    expect(instructions).toMatch(/capability overview[^\n]*`find_tools`/u);
+  });
+});
+
 describe('PI configuration', () => {
   it('stays off unless both the agent name and the MCP secret are set', () => {
     expect(loadConfig(base).pi).toBeUndefined();

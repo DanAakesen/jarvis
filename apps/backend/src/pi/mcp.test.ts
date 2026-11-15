@@ -96,10 +96,21 @@ describe('PI MCP server', () => {
     expect(called.isError).toBe(false);
     expect(called.body).toMatchObject({ tool: 'probe_echo', outcome: 'ok', result: { echoed: 'hej', messageId: '42', asAgent: true } });
     expect(recorded).toEqual([{ messageId: '42', tool: 'probe_echo' }]);
+    expect(grant.results).toEqual([{ tool: 'probe_echo', outcome: 'ok' }]);
     // Smuggling an identity through the arguments is refused by the tool's own schema, as for any caller.
     const smuggled = await tool('call_tool', { turn: grant.turn, name: 'probe_echo', arguments: { text: 'x', messageId: '99' } });
     expect(smuggled.body?.outcome).toBe('refused');
+    expect(grant.results.at(-1)).toEqual({ tool: 'probe_echo', outcome: 'refused' });
     expect(recorded).toHaveLength(1);
+  });
+
+  it('shows chat the system-health tool without its smoke-only operation selector', async () => {
+    const { registry, tool } = setup();
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'system health' });
+    const health = found.body?.result.tools.find((entry: { name: string }) => entry.name === 'get_system_health');
+    expect(health).toBeDefined();
+    expect(Object.keys(health.parameters.properties ?? {})).not.toContain('operation');
   });
 
   it('refuses a tool that was not looked up in this turn, and a forged, closed or foreign turn reference', async () => {

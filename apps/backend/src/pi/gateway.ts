@@ -115,9 +115,18 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   const connectTimeoutMs = options.connectTimeoutMs ?? 60_000;
   const warmFreshMs = options.warmFreshMs ?? 4 * 60_000;
   const base = `${options.projectEndpoint.replace(/\/+$/u, '')}/agents/${options.agentName}/endpoint/protocols/openai`;
-  let warming: Promise<unknown> | null = null;
   let ensuring: Promise<string> | null = null;
-  let chatActive = false;
+  // Single-flight lock for the one conversation: a warm-up and a chat turn can never both have a request in flight.
+  // It is claimed synchronously (no await between the check and the claim), so two callers cannot both pass it.
+  let busy: { readonly kind: 'chat' | 'warm'; readonly done: Promise<void> } | null = null;
+  function claim(kind: 'chat' | 'warm'): (() => void) | null {
+    if (busy) return null;
+    let release!: () => void;
+    const done = new Promise<void>(resolve => { release = resolve; });
+    const mine = { kind, done };
+    busy = mine;
+    return () => { if (busy === mine) busy = null; release(); };
+  }
 
   async function call(method: 'GET' | 'POST', path: string, body: unknown, signal: AbortSignal, stream = false): Promise<Response> {
     const token = await options.getToken(FOUNDRY_AGENT_SCOPE, signal).catch((error: unknown) => {
@@ -272,7 +281,15 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
   async function warm(signal: AbortSignal): Promise<PiWarmResult> {
     const started = performance.now();
-    if (chatActive) return { state: 'warm', alreadyWarm: true, ms: 0 };
+    const release = claim('warm');
+    // A turn or another warm-up already owns the conversation; it will leave it warm, so there is nothing to spend.
+    if (!release) return { state: 'warm', alreadyWarm: true, ms: 0 };
+    try {
+      return await warmOnce(started, signal);
+    } finally { release(); }
+  }
+
+  async function warmOnce(started: number, signal: AbortSignal): Promise<PiWarmResult> {
     const spent = await options.store.spendSince(monthStart(now()), signal);
     if (spent.costDkk >= options.monthlyCapDkk) return { state: 'cold', alreadyWarm: false, ms: 0, skipped: 'budget_exhausted' };
     const paused = await warmPause(signal);
@@ -282,8 +299,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     const fresh = stored?.agentName === options.agentName && stored.warmedAt !== null && stored.contextHash === contextHash(context) &&
       now().getTime() - stored.warmedAt.getTime() < warmFreshMs;
     if (fresh) return { state: 'warm', alreadyWarm: true, ms: Math.round(performance.now() - started) };
-    if (warming) { await warming.catch(() => {}); return { state: 'warm', alreadyWarm: true, ms: Math.round(performance.now() - started) }; }
-    const work = (async () => {
+    {
       await assertBudget(signal);
       const conversationId = await ensureConversation(signal);
       const deadline = AbortSignal.any([signal, AbortSignal.timeout(turnTimeoutMs)]);
@@ -309,9 +325,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           totalMs: Math.round(performance.now() - started), outcome,
         }, billed, `pi:warm:${now().getTime()}`);
       }
-    })();
-    warming = work;
-    try { await work; } finally { warming = null; }
+    }
     return { state: 'warm', alreadyWarm: false, ms: Math.round(performance.now() - started) };
   }
 
@@ -333,10 +347,12 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
     await assertBudget(signal);
     // A warm-up in flight primes the cache this turn will use; waiting for it is cheaper than racing it.
-    if (warming) await Promise.race([warming.catch(() => {}), new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }))]);
-    signal.throwIfAborted();
-    if (chatActive) throw new PiGatewayError('pi_failed', 'PI is already answering. Wait for that reply first.');
-    chatActive = true;
+    while (busy?.kind === 'warm') {
+      await Promise.race([busy.done, new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }))]);
+      signal.throwIfAborted();
+    }
+    const releaseTurn = claim('chat');
+    if (!releaseTurn) throw new PiGatewayError('pi_failed', 'PI is already answering. Wait for that reply first.');
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(turnTimeoutMs)]);
     let grant: PiTurnGrant | undefined;
     let usage: PiUsage | undefined;
@@ -386,7 +402,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       }
       throw error;
     } finally {
-      chatActive = false;
+      releaseTurn();
       if (grant) options.registry.close(grant.turn);
       const totalMs = Math.round(performance.now() - started);
       // A turn that ended before the provider reported usage still spent money once the model had started. Charge a
