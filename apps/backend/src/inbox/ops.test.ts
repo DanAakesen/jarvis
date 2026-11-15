@@ -115,7 +115,7 @@ describe('missed-capture audit', () => {
       'Inbox/2026-11-14 Passage.md': note('Passage', '22222222', 'a newsletter for the team about the release'),
       'Inbox/2026-11-14 Weather.md': note('Weather', '33333333', 'what is the weather tomorrow'),
     });
-    expect(await quoted.audit.run(signal)).toEqual({ status: 'skipped', captured: 0 });
+    expect(await quoted.audit.run(signal)).toEqual({ status: 'done', captured: 0 });
     expect(quoted.prompts).toHaveLength(0);
   });
 
@@ -202,7 +202,9 @@ describe('inbox work in the proactive run', () => {
     return { store, recorded, context };
   }
 
-  function harness(options: { spent?: number; at?: Date } = {}) {
+  type PassOutcome = { status: 'done'; nudged: { itemId: string; tier: string } | null; rewrites: number } | { status: 'skipped'; reason: string };
+
+  function harness(options: { spent?: number; at?: Date; slot?: PassOutcome; weekly?: PassOutcome; audit?: { status: 'done' | 'skipped'; captured: number } } = {}) {
     const { store, recorded, context } = proactive(options.spent);
     const { ops, state, spend } = memoryOps();
     const usage: FoundryModelUsage[] = [];
@@ -211,8 +213,11 @@ describe('inbox work in the proactive run', () => {
     const used = () => usage.push({ role: 'chat', model: 'gpt-5.6-luna', inputTokens: 10_000, outputTokens: 1_000, eventId: 'e' });
     const hook = createInboxNudgeHook({
       store: store as never, ops, takeUsage: take, now: () => options.at ?? sundayEvening,
-      pass: () => ({ run: async (_signal: AbortSignal, mode: string) => { calls.push(`pass:${mode}`); used(); } }) as never,
-      audit: { run: async () => { calls.push('audit'); used(); return { status: 'done', captured: 0 }; } } as never,
+      pass: () => ({ run: async (_signal: AbortSignal, mode: string, allow?: { nudge?: boolean }) => {
+        calls.push(`pass:${mode}${allow?.nudge === false ? ':no-nudge' : ''}`); used();
+        return mode === 'weekly' ? options.weekly ?? { status: 'done', nudged: null, rewrites: 0 } : options.slot ?? { status: 'done', nudged: null, rewrites: 0 };
+      } }) as never,
+      audit: { run: async () => { calls.push('audit'); used(); return options.audit ?? { status: 'done', captured: 0 }; } } as never,
     });
     return { hook, context, calls, state, spend, recorded };
   }
@@ -228,6 +233,25 @@ describe('inbox work in the proactive run', () => {
     calls.length = 0;
     await hook(context);
     expect(calls).toEqual(['pass:slot']);
+  });
+
+  it('lets the weekly review tidy and learn but not nudge when the slot review already nudged', async () => {
+    const { hook, context, calls } = harness({ slot: { status: 'done', nudged: { itemId: '11111111', tier: 'medium' }, rewrites: 0 } });
+    await hook(context);
+    expect(calls).toEqual(['pass:slot', 'audit', 'pass:weekly:no-nudge']);
+  });
+
+  it('keeps a failed audit or weekly review due, and counts an empty one as finished', async () => {
+    const failing = harness({ audit: { status: 'skipped', captured: 0 }, weekly: { status: 'skipped', reason: 'model_unavailable' } });
+    await failing.hook(failing.context);
+    expect(failing.state.has(AUDIT_DAY_KEY)).toBe(false);
+    expect(failing.state.has(WEEKLY_WEEK_KEY)).toBe(false);
+    failing.calls.length = 0;
+    await failing.hook(failing.context);
+    expect(failing.calls).toEqual(['pass:slot', 'audit', 'pass:weekly']);
+    const empty = harness({ weekly: { status: 'skipped', reason: 'nothing_to_review' } });
+    await empty.hook(empty.context);
+    expect(empty.state.get(WEEKLY_WEEK_KEY)).toBe('2026-11-15');
   });
 
   it('runs only the review at the morning run on a weekday', async () => {
@@ -286,6 +310,25 @@ describe('inbox status and nudge-style tool', () => {
       await app.close();
       await other.close();
     }
+  });
+
+  it('reads the ledger with Copenhagen dates, like the writers', async () => {
+    const { ops, spend } = memoryOps();
+    spend.push({ day: '2026-11-16', kind: 'review', calls: 1, inputTokens: 1, outputTokens: 1, estimatedDkk: 0.03 },
+      { day: '2026-11-15', kind: 'review', calls: 1, inputTokens: 1, outputTokens: 1, estimatedDkk: 0.2 });
+    const memory = memoryVault();
+    const app = buildApp(config, undefined, {
+      modules: [{ id: 'inbox-status', tools: [], registerRoutes: createInboxStatusRoute({
+        ownerObjectId: owner, ops, nudgesEnabled: false, now: () => new Date('2026-11-15T23:30:00Z'),
+      }) }],
+      auth: async () => ({ objectId: owner, tenantId: config.auth.tenantId, displayName: 'x' }),
+    });
+    try {
+      const response = await app.inject({ method: 'GET', url: '/inbox/status', headers: { authorization: `${['Bear', 'er'].join('')} a.b.c` } });
+      // 23:30 UTC on the 15th is already the 16th in Copenhagen.
+      expect(response.json().spend).toMatchObject({ today: 0.03, last30Days: 0.23 });
+    } finally { await app.close(); }
+    expect(memory.files.size).toBe(0);
   });
 
   it('reads, sets and resets the nudge style only on Dan\'s stored word', async () => {

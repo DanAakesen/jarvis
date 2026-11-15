@@ -16,6 +16,10 @@ proactive ledger, so the 1 DKK a day ceiling holds across replicas and `/inbox/s
 shows cost, counts, thumbs and last sweep days. The switch-on is two default-off
 parameters in `infra/main.bicep` (`inboxEnabled`, `inboxNudgesEnabled`); turning them on is
 the owner's call. Cost figures in the design are still estimates: nothing has run.
+Review follow-ups: the weekly review does not deliver a second nudge when the slot review
+already nudged (one nudge per run), the audit and weekly markers advance only after a finished
+attempt (done, or genuinely nothing to look at; a model failure stays due), and `/inbox/status`
+reads the ledger with Copenhagen dates like its writers.
 
 ## 15 November 2026 — Inbox nudge pass runs inside the existing proactive slots (#1855, step 7)
 

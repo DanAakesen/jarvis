@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { InboxIndex } from './item-index.js';
 import { AUDIT_DAY_KEY, NUDGE_STYLE_KEY, WEEKLY_WEEK_KEY, type InboxOpsStore } from './ops.js';
+import { dayKey } from '../proactive/time.js';
 import { INBOX_DAILY_CEILING_DKK } from './proactive-hook.js';
 
 const day = 24 * 60 * 60 * 1000;
@@ -24,8 +25,9 @@ export function createInboxStatusRoute(options: {
       }
       const signal = AbortSignal.timeout(15_000);
       const at = now();
-      const today = at.toISOString().slice(0, 10);
-      const from = new Date(at.getTime() - 29 * day).toISOString().slice(0, 10);
+      // The ledger is written with Copenhagen dates, so it is read with them.
+      const today = dayKey(at);
+      const from = dayKey(new Date(at.getTime() - 29 * day));
       try {
         const [rows, spend, style, audit, weekly] = await Promise.all([
           options.index?.rows(signal) ?? Promise.resolve([]),

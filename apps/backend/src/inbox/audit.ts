@@ -87,7 +87,8 @@ export function createMissedCaptureAudit(options: {
         if (bytes > maxAuditBytes || sent.length >= maxAuditMessages) break;
         sent.push({ id: message.id, text });
       }
-      if (sent.length === 0) { log({ outcome: 'nothing_to_review' }); return { status: 'skipped', captured: 0 }; }
+      // Nothing to look at is a finished audit; only a failed attempt is reported as skipped, so it can be retried.
+      if (sent.length === 0) { log({ outcome: 'nothing_to_review' }); return { status: 'done', captured: 0 }; }
       let raw: string | undefined;
       try {
         raw = await options.model({

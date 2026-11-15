@@ -89,7 +89,8 @@ export function createInboxNudgePass(options: {
   }
 
   return {
-    async run(signal: AbortSignal, mode: ReviewMode = 'slot'): Promise<NudgePassOutcome> {
+    /** allow.nudge false still tidies notes and learns the style, but delivers nothing: the run already spent its one nudge. */
+    async run(signal: AbortSignal, mode: ReviewMode = 'slot', allow: { readonly nudge?: boolean } = {}): Promise<NudgePassOutcome> {
       const at = now();
       try {
         await options.index.sync(signal);
@@ -158,7 +159,7 @@ export function createInboxNudgePass(options: {
       }
 
       let nudged: { itemId: string; tier: NudgeTier } | null = null;
-      if (review.nudge) {
+      if (review.nudge && allow.nudge !== false) {
         const item = digest.items.find((entry) => entry.id === review.nudge!.id)!;
         const itemId = await options.delivery.deliver({ ...review.nudge, itemTitle: item.title }, signal);
         if (itemId) {

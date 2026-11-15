@@ -113,16 +113,17 @@ export function createInboxNudgeHook(options: {
     const worstCaseDkk = worstCase.inputDkk + worstCase.outputDkk;
     let spentMonth = await options.store.spend.monthTotal(month);
 
-    // Returns false when the budget or the daily ceiling says stop.
-    const stage = async (kind: InboxSpendKind, work: () => Promise<unknown>): Promise<boolean> => {
-      if (spentToday >= INBOX_DAILY_CEILING_DKK) { log({ outcome: 'daily_ceiling' }); return false; }
+    // ok is false when the budget or the daily ceiling says stop; otherwise value is what the work returned.
+    const stage = async <T>(kind: InboxSpendKind, work: () => Promise<T>): Promise<{ ok: boolean; value?: T }> => {
+      if (spentToday >= INBOX_DAILY_CEILING_DKK) { log({ outcome: 'daily_ceiling' }); return { ok: false }; }
       if (settings.monthlyBudgetDkk === 0 || !canRunWithinBudget(settings.monthlyBudgetDkk, spentMonth, worstCaseDkk)) {
         log({ outcome: 'budget_exhausted' });
-        return false;
+        return { ok: false };
       }
       options.takeUsage();
+      let value: T | undefined;
       try {
-        await work();
+        value = await work();
       } finally {
         const used = options.takeUsage();
         let dkk = 0;
@@ -145,21 +146,29 @@ export function createInboxNudgeHook(options: {
             .catch(() => log({ outcome: 'spend_not_recorded' }));
         }
       }
-      return true;
+      return { ok: true, value: value as T };
     };
+    // Finished means done, or genuinely nothing to look at. A failed attempt (model down, invalid answer) stays due.
+    const finished = (outcome: { status: string; reason?: string } | undefined) =>
+      outcome?.status === 'done' || outcome?.reason === 'nothing_to_review';
 
-    if (!await stage('review', () => options.pass(context).run(signal, 'slot'))) return;
+    const slot = await stage('review', () => options.pass(context).run(signal, 'slot'));
+    if (!slot.ok) return;
+    const nudgedThisRun = slot.value?.status === 'done' && slot.value.nudged !== null;
     if (budgetState(settings.monthlyBudgetDkk, spentMonth) !== 'ok' || !options.ops) return;
 
     const { hour, sunday } = copenhagenHourAndWeekday(at);
     if (options.audit && hour >= 18 && await options.ops.getState(AUDIT_DAY_KEY, signal).catch(() => today) !== today) {
-      if (!await stage('audit', () => options.audit!.run(signal))) return;
-      await options.ops.setState(AUDIT_DAY_KEY, today, signal).catch(() => undefined);
+      const audit = await stage('audit', () => options.audit!.run(signal));
+      if (!audit.ok) return;
+      if (finished(audit.value)) await options.ops.setState(AUDIT_DAY_KEY, today, signal).catch(() => undefined);
     }
     if (budgetState(settings.monthlyBudgetDkk, spentMonth) !== 'ok') return;
     if (sunday && await options.ops.getState(WEEKLY_WEEK_KEY, signal).catch(() => today) !== today) {
-      if (!await stage('weekly', () => options.pass(context).run(signal, 'weekly'))) return;
-      await options.ops.setState(WEEKLY_WEEK_KEY, today, signal).catch(() => undefined);
+      // One nudge per run: if the slot review already reached Dan, the weekly review only tidies and learns.
+      const weekly = await stage('weekly', () => options.pass(context).run(signal, 'weekly', { nudge: !nudgedThisRun }));
+      if (!weekly.ok) return;
+      if (finished(weekly.value)) await options.ops.setState(WEEKLY_WEEK_KEY, today, signal).catch(() => undefined);
     }
   };
 }
