@@ -115,6 +115,26 @@ describe('inbox tools', () => {
     expect(files.size).toBe(2);
   });
 
+  it('resolves the capture id in the vault when there is no index: another title spelling or the next day makes no second note', async () => {
+    const memory = memoryVault();
+    let clock = at;
+    const store = createInboxStore({ vault: memory.vault, now: () => clock });
+    const module = createInboxModule({
+      store,
+      memoryStore: { getSourceMessage: async (id) => ({ messageId: id, text: 'we should do a padel night' }) },
+    });
+    const capture = module.tools.find((entry) => entry.name === 'inbox_capture')!;
+    const request = ({
+      principal: { objectId: owner }, server: { ownerObjectId: owner },
+      headers: { 'x-jarvis-message-id': '42' }, log: { warn: vi.fn() },
+    }) as unknown as FastifyRequest;
+    const first = await capture.execute({ title: 'Padel night', note: 'one' }, request, signal) as { created: boolean };
+    clock = new Date('2026-11-14T23:30:00Z');
+    const second = await capture.execute({ title: 'Padel Night', note: 'two' }, request, signal) as { created: boolean };
+    expect([first.created, second.created]).toEqual([true, false]);
+    expect(memory.files.size).toBe(1);
+  });
+
   it('rereads the vault when an earlier attempt reserved a capture but never confirmed it', async () => {
     const { tool, request, files, indexStore, store } = fixture();
     const first = await store.create({ title: 'Padel night', note: 'written before the crash', id: 'aaaaaaaa' }, signal);
