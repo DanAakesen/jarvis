@@ -7,6 +7,15 @@ web favicon from the concept, and the web stage, composer and working orbs on th
 drawing, geometry, tokens and web shell/ribbons/motes were deleted. The written inventory is
 `docs/ui/cognitive-lattice-inventory.md` and the PR description.
 
+Visual iteration — 15 November 2026: the first result read as a dense hairball against the approved reference, so the
+lattice was rebuilt. 112 nodes (was 340) on a cyan shell, two interior shells and a five-armed amber star heart are
+joined by 262 long connections (was about 1,250) from a neighbourhood graph (Gabriel on the shell, relative-neighbourhood
+inside, plus the explicit star), not random links. The core is amber to orange with a wide orange haze and only a tiny
+pale spark; the glass edge is cyan on the left, amber on the lower right with a soft inner highlight. Motion model, golden
+file contract and the listening, thinking and speaking states are unchanged. Observed in macOS CI run 43680759144:
+the iPhone simulator opening screen and orb gallery (every state, five sizes) and Home widget layouts render the new
+lattice (`docs/ui/opening-final-2026-11-14/iteration-2026-11-15/`). Still to judge by the owner: the look on a device.
+
 Observed: `swift test` in JarvisCore passes 79 tests on Linux (including the golden file shared with the web, state
 continuity, containment, 1.6 s pulse and the opening layout, network and policy). Web `npm run lint`, `npm run build` and
 `npx vitest run` (33 tests) pass, and the real stage, composer and working orbs were inspected in headless Chrome
