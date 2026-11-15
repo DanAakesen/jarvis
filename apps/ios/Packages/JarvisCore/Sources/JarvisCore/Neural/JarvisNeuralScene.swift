@@ -59,7 +59,7 @@ public struct JarvisNeuralScene: Sendable {
     public var flares: [Flare] = []
 
     static let trailSteps = 5
-    static let trailLength = 0.2
+    static let trailLength = 0.28
     static let nodeFlash = 0.45
     static let linkFlash = 0.8
     static let flareFlash = 0.45

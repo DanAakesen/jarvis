@@ -1,3 +1,18 @@
+## One living neural background — 15 November 2026 (#1892, P15-179; absorbs #1891; PR #1893)
+
+**Status: built; Linux tests pass; simulator captures below; device judgement still the owner's.** One shared background
+(the opening's sparse network) replaces the Ember image and colour glows on every screen. Neurons fire out from the orb
+along the links and return, driven by the orb's own state and levels: full effects on Voice, Chat (live orb under the
+window and composer, new `tool` activity) and the opening; `.calm` elsewhere; still for sheets, the drawer, the privacy cover,
+Reduce Motion and the new Settings > General > Background motion switch. The gate has one background for every state, so
+Face ID failing keeps it (#1891). Opening off switch unchanged. Design, decision and architecture: `DESIGN.md`,
+`docs/decisions.md`, `docs/architecture.md`.
+
+Done: JarvisCore `Neural/` (network and routes, animator, scene, SwiftUI painter), `JarvisNeuralBackground` and
+`JarvisNeuralStage` in the design system, Voice, Chat, gate and opening wired, 11 new Linux tests (107 pass in total),
+capture workflow `neural-background-capture.yml`. Needs a device: 60 fps on an iPhone 16 Pro Max class, battery, the look
+in daylight, and VoiceOver and Reduce Motion by hand. Next: owner review of the captures and a TestFlight build.
+
 ## PI (Proactive Intelligence) on the managed Copilot harness: plan — 15 November 2026 (#1872, P15-164)
 
 **Status: plan written, nothing built.** Plan, diagrams, latency levers, costs and risks: `docs/pi/plan.md`; architecture drawing `docs/pi/pi-architecture-drawing.png`. Owner decisions: routes 1 and 4 combined (one agent, one long session; Voice Live calls it), LLM-only decisions, **no runtime fallback** (build, test, then delete the old path), standing watches.

@@ -54,7 +54,14 @@ jobs:
           # Every simctl call is bounded, so one stuck simulator call cannot use up the whole job.
           bounded() { perl -e 'alarm shift; exec @ARGV' 90 "$@"; }
           shot() { bounded xcrun simctl io "$PHONE_ID" screenshot "$OUT/$1.png" || echo "::warning::screenshot $1 failed"; }
-          run() { bounded xcrun simctl launch --terminate-running-process "$PHONE_ID" "$APP" "$@" || echo "::warning::launch $* failed"; }
+          run() {
+            bounded xcrun simctl launch --terminate-running-process "$PHONE_ID" "$APP" "$@" \
+              || bounded xcrun simctl launch --terminate-running-process "$PHONE_ID" "$APP" "$@" \
+              || echo "::warning::launch $* failed"
+          }
+          # The first launch after an install is slow on these runners: warm it up before any capture.
+          run --screenshot-chat-fixture
+          sleep 20
           # Voice: the three states, each at three instants so signals are seen moving out and back.
           for state in listening thinking speaking; do
             run --screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=$state
@@ -88,8 +95,8 @@ jobs:
           sleep 3; shot opening-a; sleep 0.7; shot opening-b; sleep 0.7; shot opening-c
           # Voice thinking in motion.
           run --screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=thinking
-          bounded xcrun simctl io "$PHONE_ID" recordVideo --codec=h264 "$OUT/voice-thinking.mp4" & RECORDING=$!
-          sleep 8; kill -INT "$RECORDING" 2>/dev/null; wait "$RECORDING" 2>/dev/null
+          xcrun simctl io "$PHONE_ID" recordVideo --codec=h264 "$OUT/voice-thinking.mp4" & RECORDING=$!
+          sleep 8; kill -INT "$RECORDING" 2>/dev/null; wait "$RECORDING" 2>/dev/null || true
           xcrun simctl terminate "$PHONE_ID" "$APP" || true
           ls -l "$OUT"
       - name: Upload captures

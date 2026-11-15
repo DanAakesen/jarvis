@@ -572,6 +572,9 @@ private struct JarvisGateOverlayView: View {
             }
         }
         .accessibilityAddTraits(.isModal)
+        // This window is hosted outside the app's scene, so SwiftUI never reports the scene's phase to it and the
+        // orb and background would never run. Report the gate's own view of it instead.
+        .environment(\.scenePhase, model.isRenderingPaused ? .inactive : .active)
     }
 
     /// What lies under the opening. While the opening is visible it is a plain colour, so only one orb is drawn;

@@ -414,9 +414,11 @@ struct JarvisNeuralBackground: View {
 struct JarvisNeuralStage: View {
     var activity: JarvisOrbActivity
     var intensity = 0.7
-    var orbOpacity = 0.55
+    /// The dark glass orb turns muddy on the light page when it is thin, so light mode keeps it denser.
+    var orbOpacity: (dark: Double, light: Double) = (0.42, 0.62)
 
     @Environment(\.jarvisBackgroundPaused) private var isCovered
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         GeometryReader { proxy in
@@ -428,7 +430,7 @@ struct JarvisNeuralStage: View {
                     intensity: intensity
                 )
                 JarvisOrb(activity: activity, size: diameter, isPaused: isCovered)
-                    .opacity(orbOpacity)
+                    .opacity(colorScheme == .dark ? orbOpacity.dark : orbOpacity.light)
                     .position(center)
             }
         }

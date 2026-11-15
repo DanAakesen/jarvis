@@ -300,19 +300,19 @@ enum JarvisNeuralPainter {
                 path.move(to: CGPoint(x: a.x, y: a.y))
                 path.addLine(to: CGPoint(x: b.x, y: b.y))
                 let ramp = Double(step + 1) / Double(steps)
-                glow.stroke(path, with: .color(tone.opacity(0.2 * level * ramp * ramp)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                context.stroke(path, with: .color(tone.opacity(0.9 * level * ramp * ramp)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                glow.stroke(path, with: .color(tone.opacity(0.3 * level * ramp * ramp)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                context.stroke(path, with: .color(tone.opacity(min(1, 1.2 * level * ramp * ramp))), style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
             }
             let center = CGPoint(x: head.x, y: head.y)
             glow.fill(
                 Path(ellipseIn: CGRect(x: head.x - 11, y: head.y - 11, width: 22, height: 22)),
                 with: .radialGradient(
-                    Gradient(colors: [tone.opacity(0.4 * level), tone.opacity(0)]),
+                    Gradient(colors: [tone.opacity(0.55 * level), tone.opacity(0)]),
                     center: center, startRadius: 0, endRadius: 11
                 )
             )
             context.fill(
-                Path(ellipseIn: CGRect(x: head.x - 2, y: head.y - 2, width: 4, height: 4)),
+                Path(ellipseIn: CGRect(x: head.x - 2.4, y: head.y - 2.4, width: 4.8, height: 4.8)),
                 with: .color(tone.opacity(min(1, 1.1 * level)))
             )
         }
