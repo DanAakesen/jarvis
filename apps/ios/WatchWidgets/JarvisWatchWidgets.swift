@@ -7,7 +7,7 @@ struct WatchProvider: TimelineProvider {
     func getSnapshot(in context: Context, completion: @escaping (WatchEntry) -> Void) { completion(entry()) }
     func getTimeline(in context: Context, completion: @escaping (Timeline<WatchEntry>) -> Void) {
         let value = entry()
-        let expiries = [value.health?.expiresAt(), value.dashboard?.expiresAt(),
+        let expiries = [value.health?.expiresAt(), value.health?.stepsExpireAt(), value.dashboard?.expiresAt(),
                         value.dashboard?.brief?.generatedAt.addingTimeInterval(900)]
             .compactMap { $0 }.filter { $0 > value.date }.sorted()
         let entries = [value] + Array(Set(expiries)).sorted().map { entry(at: $0) }
@@ -26,9 +26,9 @@ struct WatchProvider: TimelineProvider {
 
 struct JarvisWatchHealthWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "jarvis.watch.health", provider: WatchProvider()) { entry in
+        StaticConfiguration(kind: WatchComplicationKind.steps, provider: WatchProvider()) { entry in
             WatchHealthView(entry: entry).containerBackground(.black, for: .widget).widgetURL(WatchAppLink.health.url)
-        }.configurationDisplayName("Daily steps").description("Daily steps and progress toward your goal from iPhone.")
+        }.configurationDisplayName("Daily steps").description("Daily steps and progress toward your goal, read on your Watch.")
             .supportedFamilies([.accessoryRectangular]).contentMarginsDisabled()
     }
 }

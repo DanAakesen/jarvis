@@ -214,6 +214,10 @@ result on the direct path is not proven; the new stage logs are meant to show it
 - **Verification state.** See PLAN.md. Simulator rendering was captured in macOS CI; device behaviour (Face ID timing,
   Live Activity and WidgetKit rendering, VoiceOver, Reduce Motion, small screens) is not verified and needs the owner.
 
+## 15 November 2026 — Watch steps are read on the Watch (#1859)
+
+The owner reported the steps complication was "more than a half day behind". Cause: steps reached the complication only as an iPhone-built snapshot, requested over WatchConnectivity while the Watch app was running or on a 15-minute background refresh that needs the phone in reach, so with the phone away or asleep nothing refreshed. Decision: the Watch reads steps from its own HealthKit (`WatchStepsMonitor`: observer query, hourly background delivery, the existing 15-minute background refresh and a 60-second foreground loop), saves them into the existing shared health snapshot and reloads only the steps complication. Steps only grow within a day, so a lower Watch or iPhone count never replaces a higher one. Steps carry their own age (`stepsAt`, 20-minute freshness); a stale value stays visible with "Saved … ago", never presented as current. The widget extension does not read HealthKit itself, so only the Watch app needs the HealthKit and background-delivery entitlements. The timeline keeps its 15-minute `.after` policy. A statistics result with no quantities (access denied or no samples yet) is unavailable, never zero steps, and yesterday's count is not shown as today's. Readings only extend a snapshot the iPhone has pushed and are ignored after a phone sign-out (including queries already in flight), so they cannot repopulate the cleared cache. Paired-device behaviour (permission prompt, background delivery cadence, signing with the new capability) is unverified.
+
 ## 14 November 2026 — Inbox loop design and build plan recorded (#1836)
 
 The design (capture, note format, tools and prompts, nudge scheduling, feedback,
