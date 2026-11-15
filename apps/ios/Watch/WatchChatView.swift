@@ -68,8 +68,15 @@ struct WatchChatView: View {
     }
     private var composer: some View {
         VStack(spacing: 3) {
-            if model.waitingForVoiceConnection {
-                Text("Connecting to iPhone…").font(.caption2).foregroundStyle(.secondary)
+            if model.startingVoice {
+                HStack {
+                    Text(model.waitingForVoiceConnection ? "Connecting to iPhone…" : "Starting voice…")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Cancel") { Task { await model.cancelVoiceStart() } }
+                        .frame(minHeight: 32)
+                        .accessibilityLabel("Cancel voice start")
+                }.font(.caption2).buttonStyle(.plain)
             }
             if model.dictationState != .idle {
                 HStack {
@@ -108,19 +115,19 @@ struct WatchChatView: View {
                         .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
                         .contentShape(Rectangle())
                 }
-                .disabled(model.voiceID != nil || model.busy || model.dictationState != .idle)
+                .disabled(model.voiceID != nil || model.busy || model.startingVoice || model.dictationState != .idle)
                 .accessibilityLabel("Message draft")
                 .accessibilityValue(model.draft.isEmpty ? "Empty" : model.draft)
                 if !model.draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Button { Task { await model.send() } } label: { Image(systemName: "arrow.up.circle.fill") }
                         .foregroundStyle(WatchStyle.amber)
-                        .disabled(model.busy || model.voiceID != nil || model.dictationState != .idle).accessibilityLabel("Send message")
+                        .disabled(model.busy || model.startingVoice || model.voiceID != nil || model.dictationState != .idle).accessibilityLabel("Send message")
                 }
                 Button(action: dictate) { Image(systemName: "mic.fill").frame(width: 32, height: 38) }
                     .foregroundStyle(WatchStyle.amber)
-                    .disabled(model.busy || model.voiceID != nil || model.dictationState != .idle).accessibilityLabel("Dictate into draft")
+                    .disabled(model.busy || model.startingVoice || model.voiceID != nil || model.dictationState != .idle).accessibilityLabel("Dictate into draft")
                 Button { Task { await model.startVoice() } } label: { WatchWave().frame(width: 22, height: 18).frame(width: 32, height: 38) }
-                    .disabled(model.busy || model.dictationState != .idle).accessibilityLabel("Start voice session")
+                    .disabled(model.busy || model.startingVoice || model.dictationState != .idle).accessibilityLabel("Start voice session")
             }.buttonStyle(.plain).padding(.horizontal, 8)
                 .background(WatchStyle.surface, in: Capsule())
                 .overlay { Capsule().stroke(.white.opacity(0.2), lineWidth: 0.5) }

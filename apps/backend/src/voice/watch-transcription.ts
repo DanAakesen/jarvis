@@ -1,12 +1,20 @@
 import * as SpeechSDK from 'microsoft-cognitiveservices-speech-sdk';
 import { createAzureSpeechConfig, createAzureSpeechEndpoint, SPEECH_AUTH_SCOPE } from './speech-recognizer.js';
 
-export type WatchTranscriptionStage = 'token_acquired' | 'recognizer_started' | 'audio_written' |
+export type WatchTranscriptionStage = 'token_requested' | 'token_acquired' | 'recognizer_started' | 'audio_written' |
+  'session_started' | 'speech_start_detected' | 'speech_end_detected' | 'first_recognizing' |
   'first_recognized' | 'recognizer_stopped' | 'recognizer_cancelled' | 'cleanup_started' | 'cleanup_finished';
-export type WatchTranscriptionReason = 'end_of_stream' | 'provider_cancelled' | 'stop_awaiting_cancellation' | 'early_stop';
-export type WatchTranscriber = (
-  audio: Buffer, signal: AbortSignal, stage?: (stage: WatchTranscriptionStage, reason?: WatchTranscriptionReason) => void,
-) => Promise<string>;
+export type WatchTranscriptionReason = 'end_of_stream' | 'provider_cancelled' | 'stop_awaiting_cancellation' |
+  'early_stop' | 'stop_grace_elapsed' | 'stop_without_result';
+// Numeric SDK codes only; never provider text, which can echo request details.
+export interface WatchTranscriptionDetail { readonly errorCode?: number }
+export type WatchTranscriptionStageListener = (
+  stage: WatchTranscriptionStage, reason?: WatchTranscriptionReason, detail?: WatchTranscriptionDetail,
+) => void;
+export type WatchTranscriber = (audio: Buffer, signal: AbortSignal, stage?: WatchTranscriptionStageListener) => Promise<string>;
+
+// The SDK normally follows a stopped session with an end-of-stream cancellation within milliseconds.
+const STOP_GRACE_MS = 2_000;
 
 export function createAzureWatchTranscriber(
   runtimeEndpoint: string,
@@ -14,6 +22,7 @@ export function createAzureWatchTranscriber(
 ): WatchTranscriber {
   return async (audio, signal, stage = () => {}) => {
     signal.throwIfAborted();
+    stage('token_requested');
     const tokenSignal = AbortSignal.any([signal, AbortSignal.timeout(10_000)]);
     const token = await new Promise<string>((resolve, reject) => {
       const finish = (error?: unknown, value?: string) => {
@@ -54,15 +63,26 @@ export function createAzureWatchTranscriber(
         const segments: string[] = [];
         let settled = false;
         let audioWritten = false;
+        let firstRecognizing = false;
+        let stopGrace: ReturnType<typeof setTimeout> | undefined;
         const finish = (error?: Error) => {
           if (settled) return;
           settled = true;
+          clearTimeout(stopGrace);
           signal.removeEventListener('abort', abort);
           if (error) reject(error);
           else resolve(segments.join(' '));
         };
         const abort = () => finish(new Error('Speech recognition cancelled'));
         signal.addEventListener('abort', abort, { once: true });
+        activeRecognizer.sessionStarted = () => { if (!settled) stage('session_started'); };
+        activeRecognizer.speechStartDetected = () => { if (!settled) stage('speech_start_detected'); };
+        activeRecognizer.speechEndDetected = () => { if (!settled) stage('speech_end_detected'); };
+        activeRecognizer.recognizing = () => {
+          if (settled || firstRecognizing) return;
+          firstRecognizing = true;
+          stage('first_recognizing');
+        };
         activeRecognizer.recognized = (_sender, event) => {
           if (settled) return;
           if (event.result.reason === SpeechSDK.ResultReason.RecognizedSpeech && event.result.text.trim()) {
@@ -73,7 +93,8 @@ export function createAzureWatchTranscriber(
         activeRecognizer.canceled = (_sender, event) => {
           if (settled) return;
           stage('recognizer_cancelled', event.reason === SpeechSDK.CancellationReason.EndOfStream
-            ? 'end_of_stream' : 'provider_cancelled');
+            ? 'end_of_stream' : 'provider_cancelled',
+          typeof event.errorCode === 'number' ? { errorCode: event.errorCode } : undefined);
           if (event.reason === SpeechSDK.CancellationReason.EndOfStream) {
             finish(audioWritten ? undefined : new Error('Speech recognition ended early'));
           } else {
@@ -83,7 +104,21 @@ export function createAzureWatchTranscriber(
         activeRecognizer.sessionStopped = () => {
           if (settled) return;
           stage('recognizer_stopped', audioWritten ? 'stop_awaiting_cancellation' : 'early_stop');
-          if (!audioWritten) finish(new Error('Speech recognition ended early'));
+          if (!audioWritten) {
+            finish(new Error('Speech recognition ended early'));
+            return;
+          }
+          // A stop without the usual end-of-stream event would otherwise hold the request until the deadline.
+          stopGrace ??= setTimeout(() => {
+            if (settled) return;
+            if (segments.length > 0) {
+              stage('recognizer_stopped', 'stop_grace_elapsed');
+              finish();
+            } else {
+              stage('recognizer_stopped', 'stop_without_result');
+              finish(new Error('Speech recognition ended without a result'));
+            }
+          }, STOP_GRACE_MS);
         };
         if (signal.aborted) {
           abort();
