@@ -30,6 +30,11 @@ area; Watch receives streamed user text and no longer caps assistant replies.
 All 41 portable Swift tests, the Core build and native syntax parsing pass.
 Native rendering, paired Watch delivery and live voice acceptance remain unverified.
 
+
+## Watch steps complication freshness — 15 November 2026 (#1859)
+
+The complication now gets steps from the Watch's own HealthKit (observer plus hourly background delivery, the 15-minute refresh and a foreground loop), with per-steps age and a "Saved … ago" label when older than 20 minutes. Portable tests for merging, rollover and age cover the logic. Next: the unsigned Watch CI build, then physical-Watch checks: HealthKit prompt on the Watch, complication age after walking with the phone away, background delivery cadence and signing with the new capability.
+
 ## Watch voice startup and capture recovery — 12 November 2026 (#1810)
 
 Backend voice startup loads optional proactive context and managed-identity credentials alongside conversation-session creation. Context refresh has a 1.5-second bound and falls back; credentials are prewarmed and refreshed ahead of expiry. Watch startup shows Connecting through a 15-second companion wait and reports/logs interruption, route, cancellation, sustained link stalls and capture failures. Backend regression tests pass. Native Watch build, paired-device audio, production latency and owner acceptance remain unverified.
