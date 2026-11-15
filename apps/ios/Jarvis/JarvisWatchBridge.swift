@@ -172,10 +172,15 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
                 self.deliverEvents()
                 await self.refreshDictationCredential()
             } else {
+                if self.voiceID != nil {
+                    self.voiceLogger.info("Watch unreachable during voice: activation=\(WCSession.default.activationState.rawValue) installed=\(WCSession.default.isWatchAppInstalled)")
+                }
                 self.connectivityGrace = Task { [weak self] in
-                    try? await Task.sleep(for: .seconds(3))
+                    // Longer than the Watch's own wait, so a brief WatchConnectivity gap does not end the session.
+                    try? await Task.sleep(for: .seconds(WatchVoiceRecovery.phoneGraceSeconds))
                     guard !Task.isCancelled, let self, !WCSession.default.isReachable else { return }
                     // Recorded dictation/HTTP transcription outlives transient WC reachability.
+                    if self.voiceID != nil { self.voiceLogger.error("Watch stayed unreachable; ending voice") }
                     await self.stopVoice()
                 }
             }
@@ -510,7 +515,10 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             let task = try await factory.createTask(submission)
             return try encode(WatchFactoryTask(task))
         case .startVoice:
-            guard !startingVoice, !stoppingVoice, dictation == nil else { throw WatchFailure.busy }
+            guard !startingVoice, !stoppingVoice else { throw WatchFailure.busy }
+            // The Watch never runs voice and dictation together, so a leftover dictation (for example after a
+            // timed-out phone fallback) is stale and must not block an explicit voice start.
+            if dictation != nil { stopDictation() }
             startingVoice = true; defer { startingVoice = false }
             let voiceEpoch = generation
             if let id = voiceID, await hasActiveVoice(id: id) {
@@ -633,10 +641,13 @@ final class JarvisWatchBridge: NSObject, WCSessionDelegate, VoiceLiveActivityCon
             pruneInvalidatedDictations()
             guard invalidatedDictations[r.id] == nil else { throw WatchFailure.unavailable }
             if let current = dictation {
-                guard current.id == r.id, !current.finishing, ContinuousClock.now < current.deadline else {
-                    throw WatchFailure.busy
+                if current.id == r.id {
+                    guard !current.finishing, ContinuousClock.now < current.deadline else { throw WatchFailure.busy }
+                    return try encode(current.id)
                 }
-                return try encode(current.id)
+                // One Watch dictates at a time; a different ID means the earlier attempt was abandoned
+                // (for example its cancel never arrived), so replace it instead of refusing for up to a minute.
+                stopDictation()
             }
             let token = UUID()
             dictation = Dictation(id: r.id, token: token, deadline: ContinuousClock.now.advanced(by: WatchLimits.dictationDuration))

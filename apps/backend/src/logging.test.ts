@@ -21,6 +21,13 @@ describe('structured log export', () => {
     logger.info({ stage: 'completed', durationMs: 42, status: 'failure', reason: 'provider_cancelled',
       audio: 'private', token: 'private', text: 'private' }, 'watch_transcription.stage');
     logger.info({ stage: 'private', durationMs: -1, status: 'private', reason: 'private' }, 'watch_transcription.stage');
+    logger.info({ stage: 'deadline_exceeded', lastStage: 'recognizer_started', audioBytes: 96_000, audioMs: 2_000,
+      errorCode: 4, durationMs: 20_000, transcript: 'private' }, 'watch_transcription.stage');
+    logger.info({ stage: 'audio_received', lastStage: 'private', audioBytes: -1, audioMs: 1.5 }, 'watch_transcription.stage');
+    expect(JSON.parse(records[2]!)).toMatchObject({ stage: 'deadline_exceeded', lastStage: 'recognizer_started',
+      audioBytes: 96_000, audioMs: 2_000, errorCode: 4, durationMs: 20_000 });
+    expect(JSON.parse(records[3]!)).not.toHaveProperty('audioBytes');
+    expect(JSON.parse(records[3]!)).not.toHaveProperty('lastStage');
     expect(JSON.parse(records[0]!)).toMatchObject({ msg: 'watch_transcription.stage', stage: 'completed',
       durationMs: 42, status: 'failure', reason: 'provider_cancelled' });
     expect(JSON.parse(records[1]!)).toEqual({

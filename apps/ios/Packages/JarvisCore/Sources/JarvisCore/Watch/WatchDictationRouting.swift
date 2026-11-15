@@ -21,13 +21,14 @@ public enum WatchDictationRouting {
         direct: (@MainActor () async throws -> String)?,
         phone: () async throws -> String,
         onDirectFailure: (Error) throws -> Void = { _ in },
+        directWindow: Duration = WatchDictationDeadline.directDuration,
         sleep: @escaping @MainActor (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) async throws -> String {
         try Task.checkCancellation()
         var directFailure: Error?
         if let direct {
             do {
-                let text = try await boundedDirect(direct, sleep: sleep)
+                let text = try await boundedDirect(direct, window: directWindow, sleep: sleep)
                 try Task.checkCancellation()
                 return text
             }
@@ -61,13 +62,14 @@ public enum WatchDictationRouting {
 
     private static func boundedDirect(
         _ direct: @escaping @MainActor () async throws -> String,
+        window: Duration,
         sleep: @escaping @MainActor (Duration) async throws -> Void
     ) async throws -> String {
         let race = DirectRace()
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()
             return try await withCheckedThrowingContinuation { continuation in
-                race.start(continuation: continuation, direct: direct, sleep: sleep)
+                race.start(continuation: continuation, direct: direct, window: window, sleep: sleep)
             }
         } onCancel: {
             Task { @MainActor in race.finish(.failure(CancellationError())) }
@@ -93,6 +95,7 @@ final class DirectRace {
     func start(
         continuation: CheckedContinuation<String, Error>,
         direct: @escaping @MainActor () async throws -> String,
+        window: Duration = WatchDictationDeadline.directDuration,
         sleep: @escaping @MainActor (Duration) async throws -> Void
     ) {
         if let earlyResult {
@@ -114,7 +117,7 @@ final class DirectRace {
             catch { self?.finish(.failure(error)) }
         }
         timer = Task { [weak self] in
-            do { try await sleep(WatchDictationDeadline.directDuration) }
+            do { try await sleep(window) }
             catch { return }
             guard !Task.isCancelled else { return }
             self?.finish(.failure(WatchDictationError.timedOut))
