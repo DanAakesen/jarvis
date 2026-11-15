@@ -2,7 +2,7 @@
   "agentName": "jarvis-pi",
   "model": "gpt-6.1-terra",
   "reasoningEffort": "low",
-  "mcp": { "serverLabel": "jarvis", "path": "/pi/mcp", "requireApproval": "never" },
+  "mcp": { "serverLabel": "jarvis", "path": "/pi/mcp", "requireApproval": "never", "connection": "jarvis-pi-mcp" },
   "builtinTools": "disabled",
   "skills": ["jarvis-inbox-triage"]
 }

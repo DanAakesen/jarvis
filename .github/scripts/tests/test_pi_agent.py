@@ -16,8 +16,8 @@ class DefinitionTest(unittest.TestCase):
         for skill in self.skills:
             skill["version"] = "1"
 
-    def definition(self, secret="S" * 43):
-        return pi.build_definition(self.spec, self.instructions, "https://backend.example/pi/mcp", secret, self.skills)
+    def definition(self):
+        return pi.build_definition(self.spec, self.instructions, "https://backend.example/pi/mcp", self.skills)
 
     def test_reasoning_effort_is_in_the_definition_and_builtins_are_off(self):
         definition = self.definition()
@@ -31,7 +31,9 @@ class DefinitionTest(unittest.TestCase):
         self.assertEqual(len(mcp), 1)
         self.assertEqual(mcp[0]["require_approval"], "never")
         self.assertEqual(mcp[0]["server_url"], "https://backend.example/pi/mcp")
-        self.assertEqual(mcp[0]["headers"], {"Authorization": "Bearer jp." + "S" * 43})
+        # Foundry refuses credentials in an MCP tool's headers: the secret lives in a project connection.
+        self.assertNotIn("headers", mcp[0])
+        self.assertEqual(mcp[0]["project_connection_id"], "jarvis-pi-mcp")
         self.assertFalse([tool for tool in self.definition()["tools"] if tool["type"] == "function"])
 
     def test_persona_carries_the_identity_contract_and_leaves_no_placeholder(self):
@@ -44,47 +46,46 @@ class DefinitionTest(unittest.TestCase):
         self.assertEqual([skill["name"] for skill in self.skills], ["jarvis-inbox-triage"])
         self.assertEqual(self.definition()["skills"], [{"type": "skill_reference", "name": "jarvis-inbox-triage", "version": "1"}])
 
-    def test_fingerprint_changes_with_instructions_secret_and_skill_content_only(self):
-        base = pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", "a" * 43, self.skills)
-        self.assertEqual(base, pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", "a" * 43, self.skills))
-        self.assertNotEqual(base, pi.fingerprint(self.spec, self.instructions + "x", "https://b/pi/mcp", "a" * 43, self.skills))
-        self.assertNotEqual(base, pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", "b" * 43, self.skills))
+    def test_fingerprint_changes_with_instructions_url_and_skill_content_only(self):
+        base = pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", self.skills)
+        self.assertEqual(base, pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", self.skills))
+        self.assertNotEqual(base, pi.fingerprint(self.spec, self.instructions + "x", "https://b/pi/mcp", self.skills))
+        self.assertNotEqual(base, pi.fingerprint(self.spec, self.instructions, "https://c/pi/mcp", self.skills))
         changed = [dict(self.skills[0], sha256="0" * 64)]
-        self.assertNotEqual(base, pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", "a" * 43, changed))
+        self.assertNotEqual(base, pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", changed))
 
-    def test_secret_is_recovered_from_the_agent_definition_after_an_infrastructure_deploy(self):
-        self.assertEqual(pi.recover_secret(self.definition("R" * 43)), "R" * 43)
-        self.assertIsNone(pi.recover_secret({"tools": [{"type": "mcp", "headers": {"Authorization": "Bearer ***"}}]}))
-        self.assertIsNone(pi.recover_secret({}))
-
-    def test_agent_is_created_versions_first_with_no_separate_agent_post(self):
+    def test_connection_is_created_with_the_secret_in_an_injected_header_and_never_returned_in_output(self):
         calls = []
+        project = "/subscriptions/s/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/a/projects/p"
+        stored = {}
 
-        class Fake(pi.Az):
-            def __init__(self):
-                super().__init__("https://p.example/api/projects/x")
+        def fake(method, path, body=None):
+            calls.append((method, path))
+            if method == "GET":
+                if not stored:
+                    raise pi.Blocked("arm_get_failed:jarvis-pi-mcp:not_found [code=ResourceNotFound]")
+                return stored
+            stored.update(body)
+            return {}
 
-            def rest(self, method, path, body=None, *, content_type="application/json"):
-                calls.append((method, path))
-                if method == "GET" and path == "/agents/jarvis-pi":
-                    raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found [code=NotFound]")
-                if method == "POST" and path.startswith("/skills/"):
-                    return {"version": 1}
-                if method == "POST":
-                    return {"version": 3}
-                if method == "GET":
-                    return {"status": "active", "definition": pi.build_definition(
-                        spec, instructions, "https://b/pi/mcp", "S" * 43, [dict(s, version="1") for s in skills])}
-                return {}
+        with mock.patch.object(pi, "arm_request", fake):
+            self.assertTrue(pi.ensure_connection(project, self.spec, "https://b/pi/mcp", "S" * 43))
+            put = stored["properties"]
+            self.assertEqual(put["credentials"], {"keys": {"Authorization": "Bearer jp." + "S" * 43}})
+            self.assertEqual(put["target"], "https://b/pi/mcp")
+            self.assertNotIn("S" * 43, json.dumps(put["metadata"]))
+            # Unchanged secret and target: nothing is written again.
+            self.assertFalse(pi.ensure_connection(project, self.spec, "https://b/pi/mcp", "S" * 43))
+            # A rotated secret (for example after an infrastructure deploy) updates the same connection.
+            self.assertTrue(pi.ensure_connection(project, self.spec, "https://b/pi/mcp", "T" * 43))
+        self.assertEqual([m for m, _ in calls], ["GET", "PUT", "GET", "GET", "PUT"])
+        self.assertTrue(all(path == project + "/connections/jarvis-pi-mcp" for _, path in calls))
 
-        spec, instructions, skills = self.spec, self.instructions, self.skills
-        azure = Fake()
-        self.assertIsNone(pi.current_state(azure, "jarvis-pi"))
-        pi.ensure_skills(azure, skills, False, {})
-        self.assertEqual(skills[0]["version"], "1")
-        self.assertEqual(pi.as_version(3), "3")
-        self.assertEqual(pi.as_version("4"), "4")
-        self.assertNotIn(("POST", "/agents"), calls)
+    def test_a_real_arm_failure_other_than_not_found_is_not_swallowed(self):
+        def fake(method, path, body=None):
+            raise pi.Blocked("arm_get_failed:jarvis-pi-mcp:forbidden [code=AuthorizationFailed]")
+        with mock.patch.object(pi, "arm_request", fake), self.assertRaises(pi.Blocked):
+            pi.ensure_connection("/p", self.spec, "https://b/pi/mcp", "S" * 43)
 
     def test_provision_first_run_posts_only_versions_then_pins(self):
         calls = []
@@ -106,9 +107,23 @@ class DefinitionTest(unittest.TestCase):
                 return {}
 
         args = argparse.Namespace(project_endpoint="https://p.example/api/projects/x", backend_fqdn="b.example",
+                                  foundry_account="acct", foundry_project="proj",
                                   backend_app="app", resource_group="rg", subscription="sub")
-        with mock.patch.object(pi, "Az", Fake), mock.patch.object(pi, "configure_backend", return_value="S" * 43):
+        arm = []
+
+        def fake_arm(method, path, body=None):
+            arm.append((method, path))
+            if method == "GET":
+                raise pi.Blocked("arm_get_failed:jarvis-pi-mcp:not_found")
+            return {}
+
+        with mock.patch.object(pi, "Az", Fake), mock.patch.object(pi, "configure_backend", return_value="S" * 43), \
+                mock.patch.object(pi, "arm_request", fake_arm):
             result = pi.provision(args)
+        self.assertEqual([m for m, _ in arm], ["GET", "PUT"])
+        self.assertTrue(arm[1][1].endswith("/accounts/acct/projects/proj/connections/jarvis-pi-mcp"))
+        self.assertTrue(result["connectionWritten"])
+        self.assertEqual(result["connection"], "jarvis-pi-mcp")
         self.assertEqual(result["version"], "1")
         self.assertTrue(result["created"])
         self.assertNotIn(("POST", "/agents"), calls)
@@ -122,6 +137,10 @@ class DefinitionTest(unittest.TestCase):
     def test_verify_rejects_a_readback_with_builtins_enabled(self):
         readback = {"definition": self.definition()}
         pi.verify(readback, self.spec, self.instructions)
+        with_headers = json.loads(json.dumps(readback))
+        with_headers["definition"]["tools"][1]["headers"] = {"Authorization": "x"}
+        with self.assertRaises(pi.Blocked):
+            pi.verify(with_headers, self.spec, self.instructions)
         readback["definition"]["tools"][0]["default_config"]["enabled"] = True
         with self.assertRaises(pi.Blocked):
             pi.verify(readback, self.spec, self.instructions)

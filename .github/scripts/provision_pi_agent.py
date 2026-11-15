@@ -1,8 +1,9 @@
 """Provision the PI agent (managed Microsoft Copilot harness) from the files in agents/pi.
 
-Runs in the Deploy workflow with the deployment identity. It creates the Jarvis skills, then one prompt agent version
-that carries the instructions, the Jarvis MCP server and the skill references, pins the endpoint to that version, and
-gives the backend the agent name and the MCP secret. It is idempotent: when nothing changed it creates nothing.
+Runs in the Deploy workflow with the deployment identity. It creates the Jarvis skills, a Foundry project connection
+that holds the MCP secret (Foundry refuses credentials in an MCP tool's own headers), then one prompt agent version
+that carries the instructions, the Jarvis MCP server (by connection) and the skill references, pins the endpoint to
+that version, and gives the backend the agent name and the MCP secret. It is idempotent: when nothing changed it creates nothing.
 It invokes no model and prints no definition, because the definition carries the MCP credential.
 """
 from __future__ import annotations
@@ -26,6 +27,8 @@ SKILL_FEATURES = "Skills=V1Preview"
 # Values that must never reach a log, even when Foundry echoes part of the request back in its error message.
 REDACT: list[str] = []
 SECRET_NAME = "pi-mcp-secret"
+ARM = "https://management.azure.com"
+CONNECTIONS_API = "2025-04-01-preview"
 FINGERPRINT_KEY = "jarvis_pi_fingerprint"
 
 
@@ -76,7 +79,7 @@ def parse_skill(name: str) -> dict:
             "sha256": sha256(raw)}
 
 
-def build_definition(spec: dict, instructions: str, server_url: str, secret: str, skills: list[dict]) -> dict:
+def build_definition(spec: dict, instructions: str, server_url: str, skills: list[dict]) -> dict:
     return {
         "kind": "prompt", "harness": {"type": "microsoft_copilot_preview"},
         "model": spec["model"], "reasoning": {"effort": spec["reasoningEffort"]},
@@ -85,16 +88,18 @@ def build_definition(spec: dict, instructions: str, server_url: str, secret: str
             # Built-in shell, files and web stay off: everything goes through Jarvis tools and its guards.
             {"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": False}},
             {"type": "mcp", "server_label": spec["mcp"]["serverLabel"], "server_url": server_url,
-             "require_approval": spec["mcp"]["requireApproval"], "headers": {"Authorization": f"Bearer jp.{secret}"}},
+             "require_approval": spec["mcp"]["requireApproval"],
+             # The secret lives in this project connection and is injected as a header; the tool carries no headers.
+             "project_connection_id": spec["mcp"]["connection"]},
         ],
         "skills": [{"type": "skill_reference", "name": skill["name"], "version": skill["version"]} for skill in skills],
     }
 
 
-def fingerprint(spec: dict, instructions: str, server_url: str, secret: str, skills: list[dict]) -> str:
+def fingerprint(spec: dict, instructions: str, server_url: str, skills: list[dict]) -> str:
     """Everything that makes a new agent version necessary, hashed; skill versions are not part of it, their content is."""
     return sha256(canonical({
-        "spec": spec, "instructions": instructions, "server_url": server_url, "secret": sha256(secret),
+        "spec": spec, "instructions": instructions, "server_url": server_url,
         "skills": [[skill["name"], skill["sha256"]] for skill in skills],
     }))
 
@@ -124,8 +129,26 @@ class Az:
         return json.loads(result.stdout) if result.stdout.strip() else {}
 
 
+def arm_request(method: str, path: str, body: dict | None = None) -> dict:
+    """An Azure Resource Manager call as the deployment identity (project connections live there)."""
+    url = f"{ARM}{path}?api-version={CONNECTIONS_API}"
+    command = ["az", "rest", "--method", method, "--url", url, "--resource", ARM, "--only-show-errors", "--output", "json"]
+    with tempfile.TemporaryDirectory(prefix="jarvis-pi-") as directory:
+        if body is not None:
+            file = Path(directory) / "body.json"
+            file.write_text(canonical(body), encoding="utf-8")
+            file.chmod(0o600)
+            command += ["--headers", "Content-Type=application/json", "--body", "@" + str(file)]
+        result = subprocess.run(command, capture_output=True, check=False, timeout=60)
+    if result.returncode != 0:
+        raise Blocked(f"arm_{method.lower()}_failed:{path.rsplit('/', 1)[-1]}:{classify(result.stderr)}" + describe_error(result.stderr))
+    return json.loads(result.stdout) if result.stdout.strip() else {}
+
+
 def classify(stderr: bytes) -> str:
     text = stderr[:4096].decode("utf-8", "replace")
+    if "ResourceNotFound" in text or "NotFound" in text:
+        return "not_found"
     for label in ("Bad Request", "Unauthorized", "Forbidden", "Not Found", "Conflict", "Too Many Requests"):
         if label in text:
             return label.lower().replace(" ", "_")
@@ -189,7 +212,7 @@ def backend_secret(app: str, group: str, subscription: str) -> str | None:
     return None
 
 
-def configure_backend(app: str, group: str, subscription: str, agent_name: str, recovered: str | None = None) -> str:
+def configure_backend(app: str, group: str, subscription: str, agent_name: str) -> str:
     """Return the MCP secret, creating it once. The backend gets it as a Container App secret, never as plain text.
 
     The value is never printed: az output and errors are not echoed anywhere in this script.
@@ -197,9 +220,9 @@ def configure_backend(app: str, group: str, subscription: str, agent_name: str, 
     secret = backend_secret(app, group, subscription)
     created = secret is None
     if secret is None:
-        # An infrastructure deployment drops the Container App secret; the agent definition still holds the same value,
-        # so reuse it and the agent version stays unchanged. A fresh secret is generated only when neither exists.
-        secret = recovered or secrets.token_urlsafe(48)
+        # An infrastructure deployment drops the Container App secret. A fresh one is generated and the project connection
+        # below is updated to match; the agent version does not change because it only names the connection.
+        secret = secrets.token_urlsafe(48)
     env = json.loads(shell("az", "containerapp", "show", "--name", app, "--resource-group", group, "--subscription", subscription,
                            "--query", "properties.template.containers[0].env", "--only-show-errors", "--output", "json"))
     current = {item["name"]: item.get("secretRef") or item.get("value") for item in env}
@@ -258,18 +281,7 @@ def current_state(azure: Az, name: str) -> dict | None:
     version = azure.rest("GET", f"/agents/{name}/versions/{pinned}")
     skills = {item["name"]: item["version"] for item in (version.get("definition") or {}).get("skills") or []
               if isinstance(item, dict) and "name" in item and "version" in item}
-    return {"pinned": pinned, "metadata": version.get("metadata") or {}, "skills": skills, "status": version.get("status"),
-            "secret": recover_secret(version.get("definition") or {})}
-
-
-def recover_secret(definition: dict) -> str | None:
-    for tool in definition.get("tools") or []:
-        if isinstance(tool, dict) and tool.get("type") == "mcp":
-            header = (tool.get("headers") or {}).get("Authorization")
-            match = re.fullmatch(r"Bearer jp\.([A-Za-z0-9_-]{43,128})", header) if isinstance(header, str) else None
-            if match:
-                return match[1]
-    return None
+    return {"pinned": pinned, "metadata": version.get("metadata") or {}, "skills": skills, "status": version.get("status")}
 
 
 def pin(azure: Az, name: str, version: str) -> None:
@@ -287,6 +299,25 @@ def wait_active(azure: Az, name: str, version: str) -> dict:
     raise Blocked("agent_activation_timeout")
 
 
+def ensure_connection(project_id: str, spec: dict, server_url: str, secret: str) -> bool:
+    """Create or update the project connection that injects the MCP secret. True when it was written."""
+    name = spec["mcp"]["connection"]
+    path = f"{project_id}/connections/{name}"
+    marker = {"jarvis_secret_sha256": sha256(secret), "jarvis_purpose": "pi-mcp"}
+    try:
+        current = arm_request("GET", path).get("properties") or {}
+        if current.get("target") == server_url and all((current.get("metadata") or {}).get(k) == v for k, v in marker.items()):
+            return False
+    except Blocked as error:
+        if ":not_found" not in str(error):
+            raise
+    arm_request("PUT", path, {"properties": {
+        "category": "CustomKeys", "authType": "CustomKeys", "target": server_url, "isSharedToAll": False,
+        "credentials": {"keys": {"Authorization": f"Bearer jp.{secret}"}}, "metadata": marker,
+    }})
+    return True
+
+
 def verify(readback: dict, spec: dict, expected: str) -> None:
     definition = readback.get("definition") or {}
     require(definition.get("harness") == {"type": "microsoft_copilot_preview"}, "readback_harness_mismatch")
@@ -298,6 +329,7 @@ def verify(readback: dict, spec: dict, expected: str) -> None:
     require(len(toolset) == 1 and (toolset[0].get("default_config") or {}).get("enabled") is False, "readback_builtins_enabled")
     mcp = [tool for tool in tools if tool.get("type") == "mcp"]
     require(len(mcp) == 1 and mcp[0].get("require_approval") == "never", "readback_mcp_mismatch")
+    require(mcp[0].get("project_connection_id") == spec["mcp"]["connection"] and not mcp[0].get("headers"), "readback_mcp_connection_mismatch")
 
 
 def provision(args: argparse.Namespace) -> dict:
@@ -307,28 +339,34 @@ def provision(args: argparse.Namespace) -> dict:
     skills = [parse_skill(skill) for skill in spec["skills"]]
     azure = Az(args.project_endpoint)
     state = current_state(azure, name)
-    secret = configure_backend(args.backend_app, args.resource_group, args.subscription, name,
-                               state.get("secret") if state else None)
+    secret = configure_backend(args.backend_app, args.resource_group, args.subscription, name)
     REDACT.append(secret)
     server_url = f"https://{args.backend_fqdn}{spec['mcp']['path']}"
-    wanted = fingerprint(spec, instructions, server_url, secret, skills)
+    project_id = (f"/subscriptions/{args.subscription}/resourceGroups/{args.resource_group}/providers/"
+                  f"Microsoft.CognitiveServices/accounts/{args.foundry_account}/projects/{args.foundry_project}")
+    connection_written = ensure_connection(project_id, spec, server_url, secret)
+    wanted = fingerprint(spec, instructions, server_url, skills)
     unchanged = bool(state and state["pinned"] and state["metadata"].get(FINGERPRINT_KEY) == wanted and state.get("status") == "active")
     ensure_skills(azure, skills, unchanged, state["skills"] if state else {})
     if unchanged:
-        return {"agent": name, "version": state["pinned"], "created": False, "skills": {s["name"]: s["version"] for s in skills}}
-    definition = build_definition(spec, instructions, server_url, secret, skills)
+        return {"agent": name, "version": state["pinned"], "created": False, "connection": spec["mcp"]["connection"],
+                "connectionWritten": connection_written, "skills": {s["name"]: s["version"] for s in skills}}
+    definition = build_definition(spec, instructions, server_url, skills)
     metadata = {FINGERPRINT_KEY: wanted}
     # Versions-first: this creates the agent when it does not exist yet, so there is no separate POST /agents.
     version = as_version(azure.rest("POST", f"/agents/{name}/versions", {"metadata": metadata, "definition": definition}).get("version"))
     require(isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None, "agent_version_unknown")
     verify(wait_active(azure, name, version), spec, instructions)
     pin(azure, name, version)
-    return {"agent": name, "version": version, "created": True, "skills": {s["name"]: s["version"] for s in skills}}
+    return {"agent": name, "version": version, "created": True, "connection": spec["mcp"]["connection"],
+            "connectionWritten": connection_written, "skills": {s["name"]: s["version"] for s in skills}}
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-endpoint", required=True)
+    parser.add_argument("--foundry-account", required=True)
+    parser.add_argument("--foundry-project", required=True)
     parser.add_argument("--backend-fqdn", required=True)
     parser.add_argument("--backend-app", required=True)
     parser.add_argument("--resource-group", required=True)

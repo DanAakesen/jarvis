@@ -576,17 +576,21 @@ jobs:
             echo "FOUNDRY_ADMIN=$(jq -er .foundryAdminEndpoint.value "$RUNNER_TEMP/infra-outputs.json")"
             echo "BACKEND_APP=$(jq -er .backendAppName.value "$RUNNER_TEMP/infra-outputs.json")"
             echo "BACKEND_FQDN=$(jq -er .backendFqdn.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "FOUNDRY_ACCOUNT=$(jq -er .foundryAccountName.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "FOUNDRY_PROJECT=$(jq -er .foundryProjectName.value "$RUNNER_TEMP/infra-outputs.json")"
           } >>"$GITHUB_ENV"
-      - name: Define the PI agent and skills, and give the backend its name and MCP secret
+      - name: Define the PI agent, skills and MCP connection, and give the backend its name and MCP secret
         id: provision
         run: |
           python .github/scripts/provision_pi_agent.py --project-endpoint "$FOUNDRY_ADMIN" --backend-fqdn "$BACKEND_FQDN" \
+            --foundry-account "$FOUNDRY_ACCOUNT" --foundry-project "$FOUNDRY_PROJECT" \
             --backend-app "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
             --output "$RUNNER_TEMP/pi-agent.json"
           {
             echo "### PI agent"
             echo
             echo "- Agent: \`$(jq -r .agent "$RUNNER_TEMP/pi-agent.json")\` version \`$(jq -r .version "$RUNNER_TEMP/pi-agent.json")\` (new version created: $(jq -r .created "$RUNNER_TEMP/pi-agent.json"))"
+            echo "- MCP connection: \`$(jq -r .connection "$RUNNER_TEMP/pi-agent.json")\` (written this run: $(jq -r .connectionWritten "$RUNNER_TEMP/pi-agent.json"))"
             echo "- Skills: $(jq -r '.skills | to_entries | map("\(.key) v\(.value)") | join(", ")' "$RUNNER_TEMP/pi-agent.json")"
             echo "- Selected only when the iOS test switch is set to PI; the default chat path is unchanged."
           } >>"$GITHUB_STEP_SUMMARY"
