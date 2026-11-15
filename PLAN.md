@@ -1,6 +1,6 @@
 ## One living neural background — 15 November 2026 (#1892, P15-179; absorbs #1891; PR #1893)
 
-**Status: built; Linux tests pass; simulator captures below; device judgement still the owner's.** One shared background
+**Status: built; Linux tests pass; observed in the macOS simulator; device judgement still the owner's.** One shared background
 (the opening's sparse network) replaces the Ember image and colour glows on every screen. Neurons fire out from the orb
 along the links and return, driven by the orb's own state and levels: full effects on Voice, Chat (live orb under the
 window and composer, new `tool` activity) and the opening; `.calm` elsewhere; still for sheets, the drawer, the privacy cover,
@@ -10,8 +10,23 @@ Face ID failing keeps it (#1891). Opening off switch unchanged. Design, decision
 
 Done: JarvisCore `Neural/` (network and routes, animator, scene, SwiftUI painter), `JarvisNeuralBackground` and
 `JarvisNeuralStage` in the design system, Voice, Chat, gate and opening wired, 11 new Linux tests (107 pass in total),
-capture workflow `neural-background-capture.yml`. Needs a device: 60 fps on an iPhone 16 Pro Max class, battery, the look
-in daylight, and VoiceOver and Reduce Motion by hand. Next: owner review of the captures and a TestFlight build.
+capture workflow `neural-background-capture.yml`.
+
+Observed (macOS CI, iPhone Pro simulator, run 43759749766, images in `docs/ui/neural-background-2026-11-15/`): the compile
+and all captures pass. Voice (listening, thinking, speaking), chat (thinking, tool, speaking, listening), the opening, the
+gate (Face ID failed, waiting, sign-in) and Settings and Health, dark and light, all show the network. Signals visibly leave the
+orb and travel the links (cyan out, amber for tool work); pairs of frames 0.7 s apart differ on every animated screen
+(hundreds of thousands of changed pixels on Voice, 150 to 220 thousand on chat, about 200 thousand on the gate and
+opening). **Face ID failed keeps the background.** The first run (43756890893) showed the opening and gate frozen apart from
+the bar: their overlay window never received a scene phase. Fixed by reporting the gate's pause state as the scene phase;
+the second run shows them moving. Chat text stays readable over the orb in dark mode; light mode is denser and reads less
+cleanly under long text, which the owner should judge. The gate's sign-in title overlaps the lower orb by design tokens
+(`gateOrbCenterTop` 296, `gateSignInTitleTop` 368), unchanged here. Not observed: frame rate (the simulator cannot say),
+battery, thermal behaviour, VoiceOver, Reduce Motion by hand (covered by unit tests of the still pose), the Settings
+switch by hand, and a pause behind sheets (calm signals keep running behind a presented sheet; they are two faint
+20 fps signals at most). Needs a device: 60 fps on an iPhone 16 Pro Max class, battery, daylight look.
+
+Next: owner review of the captures and a TestFlight build.
 
 ## PI (Proactive Intelligence) on the managed Copilot harness: plan — 15 November 2026 (#1872, P15-164)
 

@@ -734,7 +734,7 @@ be alive with the states, and the lines and dots must not be static but fire "li
   while speaking, and running *into* the orb while listening (following the input level). Muted, reconnecting and
   offline are quieter and lose colour like the orb. States ease in and out; a signal in flight is never dropped.
 - **Where.** Full effects on Voice, Chat and the opening/loading screen. Chat shows the live orb in the upper part of the
-  screen, a little quieter (orb at 55%, lines at 70%), with the message window and composer over it; it follows the
+  screen, a little quieter (orb at 42% in dark and 62% in light mode, lines at 70%), with the message window and composer over it; it follows the
   turn: thinking, tool (an unfinished tool call), speaking (reply streaming), listening only while dictating.
   Every other screen gets the same network `.calm`: two faint, slow signals at most, no orb, the lines dissolving into a
   faint ember where the orb would be. Sheets, the drawer and the privacy cover draw the still pose.
@@ -744,6 +744,9 @@ be alive with the states, and the lines and dots must not be static but fire "li
   for full effects and 20 fps calm), clipped around the orb's disc. It pauses while the app is inactive or the gate
   covers it, and Reduce Motion, the Settings switch (General > Background motion) and `.still` draw one fixed pose. No
   microphone is implied: the opening drives the network with the working state, never listening.
+- **Overlay window.** The gate and opening live in their own window, outside the app's scene, so SwiftUI never reported a
+  scene phase there and the orb and background stood still. The overlay now reports the gate's own pause state as its
+  scene phase, so both run, and still pause when the app is inactive.
 
 ## Shared control geometry (16 October 2026; local candidate)
 
