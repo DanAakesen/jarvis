@@ -10,6 +10,7 @@ import { createPiTurnRegistry } from './turns.js';
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const secret = 'A'.repeat(43);
 const ownerToken = 'owner.token.fixture';
+const deployToken = 'deploy.token.fixture';
 const bearer = (value: string) => `${['Bear', 'er'].join('')} ${value}`;
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
@@ -33,6 +34,7 @@ function setup() {
     modules: [coreModule, { id: 'probe', tools: [probe], registerRoutes: async () => {} },
       { id: 'pi', tools: [], registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250 }) }],
     auth: async (token) => {
+      if (token === deployToken) return { kind: 'jarvis-deploy', objectId: config.auth.deployObjectId, tenantId: config.auth.tenantId };
       if (token !== ownerToken) throw new Error('rejected');
       return { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Owner' };
     },
@@ -130,5 +132,16 @@ describe('PI MCP server', () => {
     const response = await app.inject({ method: 'POST', url: '/tools/probe_echo', payload: { text: 'x' },
       headers: { authorization: bearer('aaaaaaaaaaaaaaaaaa.aaaaaaaaaaaaaaaaaa.' + 'a'.repeat(43)), 'x-jarvis-message-id': '42' } });
     expect(response.statusCode).toBe(401);
+  });
+
+  it('lets only the deployment identity start the live smoke, and only on its own route', async () => {
+    const { app } = setup();
+    const call = (token: string, method: 'GET' | 'POST', url: string) => app.inject({
+      method, url, payload: method === 'POST' ? {} : undefined, headers: { authorization: bearer(token) },
+    });
+    expect((await call(ownerToken, 'POST', '/pi/smoke')).statusCode).toBe(403);
+    expect((await call(deployToken, 'POST', '/pi/smoke')).statusCode).not.toBe(403);
+    expect((await call(deployToken, 'GET', '/pi/status')).statusCode).toBe(403);
+    expect((await call(deployToken, 'POST', '/pi/warm')).statusCode).toBe(403);
   });
 });

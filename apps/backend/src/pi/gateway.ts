@@ -65,6 +65,8 @@ export interface PiGateway extends ConversationAgent {
   };
 }
 
+/** Measured fixed prompt of the managed harness (about 11k input tokens per call), used only to price a turn that never reported usage. */
+const estimatedPromptTokens = 12_000;
 const monthStart = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 const count = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100_000_000 ? value : 0;
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -311,6 +313,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     let firstTextMs: number | null = null;
     let outcome: PiTurnRecord['outcome'] = 'failed';
     let sawText = false;
+    let sawTool = false;
+    let streamedCharacters = 0;
     try {
       const conversationId = await ensureConversation(signal);
       const context = await options.context(signal);
@@ -326,9 +330,11 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(performance.now() - started);
           sawText = true;
+          streamedCharacters += event.text.length;
           segment += event.text;
           yield event.text;
         } else if (event.kind === 'tool') {
+          sawTool = true;
           // Text before a tool call is a progress note, as with the current engine; very long text stays in the answer.
           if (segment.trim() && Array.from(segment).length <= 500) {
             yield { type: boundaries === 0 ? 'acknowledgment' : 'commentary', text: segment };
@@ -353,12 +359,16 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       chatActive = false;
       if (grant) options.registry.close(grant.turn);
       const totalMs = Math.round(performance.now() - started);
+      // A turn that ended before the provider reported usage still spent money once the model had started. Charge a
+      // conservative estimate (the measured fixed prompt plus what streamed) so the monthly stop cannot be dodged.
+      const billed = usage ?? (sawText || sawTool
+        ? { inputTokens: estimatedPromptTokens, cachedTokens: 0, outputTokens: Math.ceil(streamedCharacters / 3) } : undefined);
       await record({
         kind: 'chat', messageId: /^[1-9]\d{0,18}$/u.test(input.messageId) ? input.messageId : null, model: PI_MODEL,
-        inputTokens: usage?.inputTokens ?? 0, cachedTokens: usage?.cachedTokens ?? 0, outputTokens: usage?.outputTokens ?? 0,
-        costDkk: usage ? costOf(usage) : 0, firstTextMs, totalMs, outcome,
-      }, usage, `pi:${input.messageId}:${now().getTime()}`);
-      log('pi.turn', { outcome, firstTextMs, totalMs, ...(usage ?? {}), costDkk: usage ? costOf(usage) : 0 });
+        inputTokens: billed?.inputTokens ?? 0, cachedTokens: billed?.cachedTokens ?? 0, outputTokens: billed?.outputTokens ?? 0,
+        costDkk: billed ? costOf(billed) : 0, firstTextMs, totalMs, outcome,
+      }, billed, `pi:${input.messageId}:${now().getTime()}`);
+      log('pi.turn', { outcome, firstTextMs, totalMs, ...(billed ?? {}), estimated: usage === undefined && billed !== undefined, costDkk: billed ? costOf(billed) : 0 });
     }
   }
 

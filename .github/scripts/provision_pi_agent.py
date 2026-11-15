@@ -145,7 +145,7 @@ def backend_secret(app: str, group: str, subscription: str) -> str | None:
     return None
 
 
-def configure_backend(app: str, group: str, subscription: str, agent_name: str) -> str:
+def configure_backend(app: str, group: str, subscription: str, agent_name: str, recovered: str | None = None) -> str:
     """Return the MCP secret, creating it once. The backend gets it as a Container App secret, never as plain text.
 
     The value is never printed: az output and errors are not echoed anywhere in this script.
@@ -153,7 +153,9 @@ def configure_backend(app: str, group: str, subscription: str, agent_name: str) 
     secret = backend_secret(app, group, subscription)
     created = secret is None
     if secret is None:
-        secret = secrets.token_urlsafe(48)
+        # An infrastructure deployment drops the Container App secret; the agent definition still holds the same value,
+        # so reuse it and the agent version stays unchanged. A fresh secret is generated only when neither exists.
+        secret = recovered or secrets.token_urlsafe(48)
     env = json.loads(shell("az", "containerapp", "show", "--name", app, "--resource-group", group, "--subscription", subscription,
                            "--query", "properties.template.containers[0].env", "--only-show-errors", "--output", "json"))
     current = {item["name"]: item.get("secretRef") or item.get("value") for item in env}
@@ -207,7 +209,18 @@ def current_state(azure: Az, name: str) -> dict | None:
     version = azure.rest("GET", f"/agents/{name}/versions/{pinned}")
     skills = {item["name"]: item["version"] for item in (version.get("definition") or {}).get("skills") or []
               if isinstance(item, dict) and "name" in item and "version" in item}
-    return {"pinned": pinned, "metadata": version.get("metadata") or {}, "skills": skills, "status": version.get("status")}
+    return {"pinned": pinned, "metadata": version.get("metadata") or {}, "skills": skills, "status": version.get("status"),
+            "secret": recover_secret(version.get("definition") or {})}
+
+
+def recover_secret(definition: dict) -> str | None:
+    for tool in definition.get("tools") or []:
+        if isinstance(tool, dict) and tool.get("type") == "mcp":
+            header = (tool.get("headers") or {}).get("Authorization")
+            match = re.fullmatch(r"Bearer jp\.([A-Za-z0-9_-]{43,128})", header) if isinstance(header, str) else None
+            if match:
+                return match[1]
+    return None
 
 
 def pin(azure: Az, name: str, version: str) -> None:
@@ -243,11 +256,12 @@ def provision(args: argparse.Namespace) -> dict:
     name = spec["agentName"]
     instructions = instructions_text()
     skills = [parse_skill(skill) for skill in spec["skills"]]
-    secret = configure_backend(args.backend_app, args.resource_group, args.subscription, name)
-    server_url = f"https://{args.backend_fqdn}{spec['mcp']['path']}"
     azure = Az(args.project_endpoint)
-    wanted = fingerprint(spec, instructions, server_url, secret, skills)
     state = current_state(azure, name)
+    secret = configure_backend(args.backend_app, args.resource_group, args.subscription, name,
+                               state.get("secret") if state else None)
+    server_url = f"https://{args.backend_fqdn}{spec['mcp']['path']}"
+    wanted = fingerprint(spec, instructions, server_url, secret, skills)
     unchanged = bool(state and state["pinned"] and state["metadata"].get(FINGERPRINT_KEY) == wanted and state.get("status") == "active")
     ensure_skills(azure, skills, unchanged, state["skills"] if state else {})
     if unchanged:

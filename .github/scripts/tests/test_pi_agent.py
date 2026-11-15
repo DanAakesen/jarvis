@@ -50,6 +50,11 @@ class DefinitionTest(unittest.TestCase):
         changed = [dict(self.skills[0], sha256="0" * 64)]
         self.assertNotEqual(base, pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", "a" * 43, changed))
 
+    def test_secret_is_recovered_from_the_agent_definition_after_an_infrastructure_deploy(self):
+        self.assertEqual(pi.recover_secret(self.definition("R" * 43)), "R" * 43)
+        self.assertIsNone(pi.recover_secret({"tools": [{"type": "mcp", "headers": {"Authorization": "Bearer ***"}}]}))
+        self.assertIsNone(pi.recover_secret({}))
+
     def test_verify_rejects_a_readback_with_builtins_enabled(self):
         readback = {"definition": self.definition()}
         pi.verify(readback, self.spec, self.instructions)

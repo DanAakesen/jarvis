@@ -97,7 +97,12 @@ describe('PI gateway', () => {
     await expect(limited.run('hi')).rejects.toMatchObject({ code: 'pi_unavailable', userMessage: expect.stringContaining('12 s') });
     const failed = setup([() => sse(delta('half'), frame({ type: 'response.failed', response: {} }))]);
     await expect(failed.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
-    expect(failed.store.turns[0]).toMatchObject({ outcome: 'failed' });
+    // The model had started, so the turn is charged at an estimate and counts toward the cap.
+    expect(failed.store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 12_000, outputTokens: 2 });
+    expect(failed.store.turns[0]!.costDkk).toBeGreaterThan(0.07);
+    const refused = setup([() => new Response('{}', { status: 429 })]);
+    await expect(refused.run('hi')).rejects.toMatchObject({ code: 'pi_unavailable' });
+    expect(refused.store.turns[0]).toMatchObject({ outcome: 'failed', costDkk: 0 });
     const unfinished = setup([() => sse(delta('half'))]);
     await expect(unfinished.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
     const approval = setup([() => sse(frame({ type: 'response.output_item.added', item: { type: 'mcp_approval_request' } }))]);

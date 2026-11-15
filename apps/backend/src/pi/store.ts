@@ -28,7 +28,7 @@ export interface PiStore {
   dropConversation(owner: string, signal: AbortSignal): Promise<void>;
   markWarm(owner: string, contextHash: string, at: Date, signal: AbortSignal): Promise<void>;
   recordTurn(turn: PiTurnRecord, signal: AbortSignal): Promise<void>;
-  /** Spend of turns at or after `from` (UTC month start); failed and cancelled turns count because the model ran. */
+  /** Spend of turns at or after `from` (UTC month start); failed and cancelled turns count at an estimate when the model had started. */
   spendSince(from: Date, signal: AbortSignal): Promise<{ readonly costDkk: number; readonly turns: number }>;
   lastTurn(signal: AbortSignal): Promise<PiStoredTurn | null>;
 }
