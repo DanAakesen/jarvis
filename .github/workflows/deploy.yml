@@ -41,6 +41,12 @@ on:
         default: false
         required: false
 
+      measure_pi:
+        description: Run the PI live smoke (about 0.5 DKK of model spend) and show first-text times, tokens and cost
+        type: boolean
+        default: false
+        required: false
+
       live_acceptance:
         description: Run the paid live conversation acceptance (8 live chat checks); never runs automatically
         type: boolean
@@ -541,6 +547,64 @@ jobs:
           PROVISION_MANAGED_CHAT: ${{ inputs.provision_managed_chat }}
           REFRESH_MANAGED_CHAT_DEFINITION: ${{ inputs.refresh_managed_chat_definition }}
         run: bash .github/scripts/provision_managed_chat_handoff.sh
+
+  pi-agent:
+    name: PI agent (Copilot harness in Foundry)
+    needs: [plan, infra, backend, agent, smoke]
+    # Inert until the owner's test switch asks for PI: this only defines the agent, its skills and the backend settings.
+    # Nothing waits on it, so a failure is visible here without blocking the release record.
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.superseded != 'true' && needs.smoke.result == 'success' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.agent.result == 'success' || needs.agent.result == 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version-file: .python-version
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Load infrastructure outputs
+        run: |
+          az deployment group show --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --query properties.outputs --output json --only-show-errors >"$RUNNER_TEMP/infra-outputs.json"
+          {
+            echo "FOUNDRY_ADMIN=$(jq -er .foundryAdminEndpoint.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "BACKEND_APP=$(jq -er .backendAppName.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "BACKEND_FQDN=$(jq -er .backendFqdn.value "$RUNNER_TEMP/infra-outputs.json")"
+          } >>"$GITHUB_ENV"
+      - name: Define the PI agent and skills, and give the backend its name and MCP secret
+        id: provision
+        run: |
+          python .github/scripts/provision_pi_agent.py --project-endpoint "$FOUNDRY_ADMIN" --backend-fqdn "$BACKEND_FQDN" \
+            --backend-app "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
+            --output "$RUNNER_TEMP/pi-agent.json"
+          {
+            echo "### PI agent"
+            echo
+            echo "- Agent: \`$(jq -r .agent "$RUNNER_TEMP/pi-agent.json")\` version \`$(jq -r .version "$RUNNER_TEMP/pi-agent.json")\` (new version created: $(jq -r .created "$RUNNER_TEMP/pi-agent.json"))"
+            echo "- Skills: $(jq -r '.skills | to_entries | map("\(.key) v\(.value)") | join(", ")' "$RUNNER_TEMP/pi-agent.json")"
+            echo "- Selected only when the iOS test switch is set to PI; the default chat path is unchanged."
+          } >>"$GITHUB_STEP_SUMMARY"
+      - name: Wait for the backend with the PI settings
+        if: ${{ inputs.measure_pi == true }}
+        run: |
+          for _ in $(seq 1 20); do
+            if curl --fail --silent --show-error --max-time 20 "https://$BACKEND_FQDN/health" >/dev/null; then exit 0; fi
+            sleep 15
+          done
+          echo "::error::Backend /health did not return 200."
+          exit 1
+      - name: PI live smoke (manual only; spends model tokens)
+        if: ${{ inputs.measure_pi == true }}
+        run: |
+          python .github/scripts/pi_smoke_report.py --backend-fqdn "$BACKEND_FQDN" --summary "$RUNNER_TEMP/pi-smoke.md" || status=$?
+          cat "$RUNNER_TEMP/pi-smoke.md" >>"$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          exit "${status:-0}"
 
   acceptance:
     name: Live conversation acceptance

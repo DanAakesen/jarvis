@@ -66,6 +66,8 @@ struct JarvisSettingsArea: View {
     @AppStorage(JarvisOpening.enabledKey) private var openingEnabled = true
 
     let client: JarvisSettingsClient?
+    /// TEST-ONLY: reads PI engine status for the chat engine test switch. Nil in fixture previews.
+    var piClient: JarvisChatClient?
     let onSignedOut: () -> Void
 
     @State private var search = ""
@@ -245,6 +247,7 @@ struct JarvisSettingsArea: View {
                         Text(copy(.openingScreenHint))
                     }
                     .textCase(nil)
+                    JarvisChatEngineTestSection(client: piClient)
                 }
                 if section == .account && !visibleAccountActions.isEmpty {
                     Section { accountActions }

@@ -44,6 +44,39 @@ public final class JarvisChatClient: Sendable {
         return availability
     }
 
+    /// TEST-ONLY: live PI engine status for the settings test switch.
+    public func piStatus() async throws -> PiStatus {
+        let response = try await client.performAuthenticatedRequest(
+            method: .get, path: ["pi", "status"], idempotent: true
+        )
+        guard response.statusCode == 200,
+              let status = try? JSONDecoder().decode(PiStatus.self, from: response.body) else {
+            throw JarvisChatClientError.invalidResponse
+        }
+        return status
+    }
+
+    /// TEST-ONLY: primes the PI conversation. It costs money when it actually warms, so it is never retried.
+    /// A 503 with a body throws `serverEvent` carrying the server's code and message.
+    public func piWarm() async throws -> PiWarmResult {
+        let response = try await client.performAuthenticatedRequest(
+            method: .post,
+            path: ["pi", "warm"],
+            body: Data("{}".utf8),
+            idempotent: false,
+            additionalSuccessStatuses: [503]
+        )
+        if response.statusCode == 503 {
+            let failure = try? JSONDecoder().decode(PiFailureBody.self, from: response.body)
+            throw JarvisChatClientError.serverEvent(code: failure?.code, message: failure?.error)
+        }
+        guard response.statusCode == 200,
+              let result = try? JSONDecoder().decode(PiWarmResult.self, from: response.body) else {
+            throw JarvisChatClientError.invalidResponse
+        }
+        return result
+    }
+
     public func createSession(runtimeTest: ChatRuntimeTest? = nil) async throws -> ChatSession {
         let body = try encode(SessionRequest(channel: "chat", runtimeTest: runtimeTest))
         let response = try await client.performAuthenticatedRequest(
@@ -67,7 +100,8 @@ public final class JarvisChatClient: Sendable {
         text: String,
         attachmentIds: [String] = [],
         screenContext: String? = nil,
-        visualContext: ChatVisualContext? = nil
+        visualContext: ChatVisualContext? = nil,
+        engine: ChatEngine? = nil
     ) async throws -> AsyncThrowingStream<ChatEvent, any Error> {
         try validateTurn(text: text, attachmentIds: attachmentIds, screenContext: screenContext)
         guard screenContext == nil || visualContext == nil else { throw JarvisChatClientError.invalidScreenContext }
@@ -76,7 +110,8 @@ public final class JarvisChatClient: Sendable {
             text: text,
             attachmentIds: attachmentIds.isEmpty ? nil : attachmentIds,
             screenContext: screenContext,
-            visualContext: visualContext
+            visualContext: visualContext,
+            engine: engine == .pi ? .pi : nil
         ))
         let response = try await client.performChatStream(
             method: .post,
@@ -562,6 +597,12 @@ private struct SendTurnRequest: Encodable {
     let attachmentIds: [String]?
     let screenContext: String?
     let visualContext: ChatVisualContext?
+    let engine: ChatEngine?
+}
+
+private struct PiFailureBody: Decodable {
+    let error: String?
+    let code: String?
 }
 
 private struct SteerTurnRequest: Encodable {

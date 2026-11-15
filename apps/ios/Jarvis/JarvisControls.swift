@@ -869,6 +869,28 @@ struct JarvisTextButton: View {
     }
 }
 
+/// A small non-interactive status pill: an icon and text on glass, for state the owner must always see, such as
+/// the test chat engine in the Chat header. Meaning comes from the icon and the text, never from colour alone.
+struct JarvisStatusPill: View {
+    let title: String
+    let systemImage: String
+    var accessibilityTitle: String?
+    var identifier = ""
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(JarvisDesignTokens.secondaryAccent)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .frame(minHeight: 28)
+            .jarvisGlassSurface()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityTitle ?? title)
+            .accessibilityIdentifier(identifier)
+    }
+}
+
 /// A labelled button that opens a menu (the period picker): the same glass, text and chevron.
 struct JarvisLabelledMenu<Content: View>: View {
     let title: String

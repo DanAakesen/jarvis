@@ -40,6 +40,7 @@ struct JarvisChatScreen: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(ChatEngineSelection.key) private var chatEngine: ChatEngine = .current
     @StateObject private var model: JarvisChatModel
     @State private var presentedSheet: ChatSheet?
     @State private var pendingActivityTaskID: String?
@@ -159,6 +160,17 @@ struct JarvisChatScreen: View {
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
+            if chatEngine == .pi {
+                ToolbarItem(placement: .principal) {
+                    JarvisStatusPill(
+                        title: copy(.engineIndicator),
+                        systemImage: "testtube.2",
+                        accessibilityTitle: copy(.engineIndicatorLabel),
+                        identifier: "chat.engineIndicator"
+                    )
+                }
+                .sharedBackgroundVisibility(.hidden)
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 JarvisIconButton(
                     title: displayedNeedsYouCount > 0 ? "Needs you, \(displayedNeedsYouCount)" : "Needs you",
@@ -258,6 +270,7 @@ struct JarvisChatScreen: View {
         .onChange(of: scenePhase) { _, phase in
             guard phase != .active else {
                 refreshScreenSharing()
+                model.warmPiIfNeeded()
                 Task { await model.resume() }
                 return
             }
@@ -269,7 +282,10 @@ struct JarvisChatScreen: View {
     var body: some View {
         attachmentPickers
         .jarvisAmbientBackground(transparentNavigationBar: true)
-        .onAppear(perform: refreshScreenSharing)
+        .onAppear {
+            refreshScreenSharing()
+            model.warmPiIfNeeded()
+        }
         .onChange(of: liveSource) { _, _ in updateLiveStream() }
         .task {
             // Keep observing for the whole time the screen is shown: a share that restarts, or a heartbeat that

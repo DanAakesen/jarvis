@@ -26,6 +26,8 @@ export interface BackendConfig {
   foundryChatAgentName?: string;
   foundryCopilot?: { agentName: string; version: string; fingerprint: string };
   foundryCopilotPolicyCompatibility?: string;
+  /** PI chat engine (managed Copilot-harness agent). Present only when its agent name and MCP secret are both set; test-selector only. */
+  pi?: { agentName: string; mcpSecret: string; monthlyCapDkk: number };
   foundryProjectEndpoint?: string;
   foundryMemoryEmbeddingDeploymentName?: string;
   codexToolModel: string;
@@ -169,6 +171,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   const foundryCopilot = copilotConfigured
     ? { agentName: copilotAgentName!, version: copilotVersion!, fingerprint: copilotFingerprint! }
     : undefined;
+  const piAgentName = env.JARVIS_PI_AGENT_NAME || undefined;
+  const piMcpSecret = env.JARVIS_PI_MCP_SECRET || undefined;
+  const piCapSetting = env.JARVIS_PI_MONTHLY_CAP_DKK;
+  const piMonthlyCapDkk = piCapSetting === undefined || piCapSetting === '' ? 100 : Number(piCapSetting);
+  if (piAgentName !== undefined && (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(piAgentName) ||
+      piAgentName === (foundryChatAgentName ?? 'jarvis') || piAgentName === copilotAgentName)) {
+    throw new ConfigurationError('JARVIS_PI_AGENT_NAME must be a valid agent name separate from the other agents');
+  }
+  if (piMcpSecret !== undefined && !/^[A-Za-z0-9_-]{43,128}$/u.test(piMcpSecret)) {
+    throw new ConfigurationError('JARVIS_PI_MCP_SECRET must be a 43 to 128 character URL-safe secret');
+  }
+  if (!Number.isFinite(piMonthlyCapDkk) || piMonthlyCapDkk <= 0 || piMonthlyCapDkk > 100_000) {
+    throw new ConfigurationError('JARVIS_PI_MONTHLY_CAP_DKK must be a positive number of at most 100000');
+  }
+  if (piAgentName !== undefined && foundryProjectEndpoint === undefined) {
+    throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when JARVIS_PI_AGENT_NAME is configured');
+  }
+  const pi = piAgentName !== undefined && piMcpSecret !== undefined
+    ? { agentName: piAgentName, mcpSecret: piMcpSecret, monthlyCapDkk: piMonthlyCapDkk } : undefined;
   const foundryMemoryEmbeddingDeploymentName = env.JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME;
   if (foundryMemoryEmbeddingDeploymentName !== undefined &&
       !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(foundryMemoryEmbeddingDeploymentName)) {
@@ -291,6 +312,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryCopilot === undefined ? {} : { foundryCopilot }),
     ...(foundryCopilotPolicyCompatibility === undefined ? {} : { foundryCopilotPolicyCompatibility }),
+    ...(pi === undefined ? {} : { pi }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),
     ...(foundryMemoryEmbeddingDeploymentName === undefined ? {} : { foundryMemoryEmbeddingDeploymentName }),
     codexToolModel,

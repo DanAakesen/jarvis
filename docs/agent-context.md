@@ -1,3 +1,11 @@
+## PI chat engine: deploy and test (#1885, P15-174)
+
+- The Deploy workflow's `pi-agent` job runs on every Deploy after `smoke`: it creates the skills and the `jarvis-pi` agent version (only when `agents/pi/**`, the secret or the backend URL changed), pins the endpoint, creates the `pi-mcp-secret` Container App secret once and sets `JARVIS_PI_AGENT_NAME` and `JARVIS_PI_MCP_SECRET` on the backend. Nothing else waits on it. It needs the deploy identity's existing Foundry roles and Container Apps access; no new role or credential.
+- Live proof: run Deploy by hand (`workflow_dispatch`) with `measure_pi` on a main commit. It calls `POST /pi/smoke` and writes first-text bars, tokens and DKK to the job summary. It spends about 0.5 DKK and never runs automatically.
+- Switch the engine in iOS Settings, General, Test switch. Roll back by turning the switch to Current, redeploying the previous release, or reverting the commit; the migration has a down script (`db/migrations/down/0086_pi_chat.sql`).
+- Local checks: `cd apps/backend && npx vitest run src/pi`, `npx eslint src`, `npx tsc --noEmit -p tsconfig.json`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; SQL Server integration (`npm run test:database`, needs the loopback SQL Server container from `database-ci.yml`).
+
+
 ## Inbox switch-on — 15 November 2026 (#1855)
 
 - Bicep parameters `inboxEnabled` and `inboxNudgesEnabled` (default false) set `JARVIS_INBOX_ENABLED` and
