@@ -99,6 +99,10 @@ export function createInboxStore(options: {
   const vault = options.vault;
   const now = options.now ?? (() => new Date());
   const log = options.log ?? (() => {});
+  // A git blob sha never changes content, so the id found in a note can be remembered by sha; a rescan then only
+  // rereads notes that are new or edited.
+  const idBySha = new Map<string, string | null>();
+  const maxCachedShas = 5_000;
 
   async function readNote(path: string, signal: AbortSignal): Promise<InboxItem | null> {
     if (!isInboxPath(path)) throw new InboxError('invalid', 'That is not an inbox note.');
@@ -133,10 +137,31 @@ export function createInboxStore(options: {
     return { items, truncated: wanted.length > limit };
   }
 
+  /** Finds a note by id across every live and closed note, wherever it sits or whatever it is called. */
   async function find(id: string, signal: AbortSignal): Promise<InboxItem | null> {
     if (!/^[0-9a-f]{8,32}$/u.test(id)) throw new InboxError('invalid', 'The inbox id is invalid.');
-    const found = await list({ includeClosed: true, limit: maxListLimit }, signal);
-    return found.items.find((item) => item.id === id) ?? null;
+    const all = entries(await vault.tree(signal));
+    const identity = async (entry: InboxEntry): Promise<string | null> => {
+      const cached = idBySha.get(entry.sha);
+      if (cached !== undefined) return cached;
+      signal.throwIfAborted();
+      let found: string | null = null;
+      try {
+        const file = await vault.read(entry.path, signal);
+        found = file ? noteId(file.content) ?? pathItemId(file.path) : null;
+      } catch (error) {
+        if (!(error instanceof VaultFileTooLargeError)) throw error;
+      }
+      if (idBySha.size >= maxCachedShas) idBySha.clear();
+      idBySha.set(entry.sha, found);
+      return found;
+    };
+    const candidates = all.filter((entry) => idBySha.get(entry.sha) === undefined || idBySha.get(entry.sha) === id);
+    const ids = await mapLimited(candidates, readConcurrency, async (entry) => [entry, await identity(entry)] as const);
+    const match = ids.filter(([, found]) => found === id).map(([entry]) => entry).sort((left, right) => left.path.localeCompare(right.path))[0];
+    if (!match) return null;
+    const file = await vault.read(match.path, signal);
+    return file ? toItem(file) : null;
   }
 
   async function create(
@@ -148,6 +173,15 @@ export function createInboxStore(options: {
     const at = draft.at ?? now();
     const content = composeNote(draft, id, at);
     const date = inboxDate(at);
+    // The id is the idempotency key: resolve it in the vault before any create-only write, because a retry may land
+    // on another day, with another title spelling, or after the note was renamed or closed.
+    if (draft.id !== undefined) {
+      const existing = await find(id, signal);
+      if (existing) {
+        log({ action: 'create', outcome: 'existing' });
+        return { item: existing, created: false };
+      }
+    }
     for (let copy = 1; copy <= maxCreateAttempts; copy += 1) {
       signal.throwIfAborted();
       const path = inboxPath(date, draft.title, copy);
@@ -186,7 +220,8 @@ export function createInboxStore(options: {
       log({ action: 'replace', outcome: 'conflict' });
       throw new InboxError('conflict', 'The note changed since it was read. Read it again.');
     }
-    const next = withId(content, noteId(current.content) ?? noteId(content) ?? newInboxId());
+    // The identity is the stored one; a marker in the caller's text is never adopted (withId strips it).
+    const next = withId(content, noteId(current.content) ?? newInboxId());
     assertSavable(next);
     try {
       await vault.write(path, next, 'jarvis: update an inbox item\n\nCo-authored-by: Jarvis', current.sha, signal);

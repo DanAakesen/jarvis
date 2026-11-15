@@ -146,6 +146,44 @@ describe('inbox store', () => {
     expect(files.get('Inbox/a.md')).toContain('new, with no id');
   });
 
+  it('finds an item by id however many notes there are, live or closed', async () => {
+    const files: Record<string, string> = {};
+    for (let index = 0; index < 205; index += 1) {
+      const id = index.toString(16).padStart(8, '0');
+      files[`Inbox/2026-11-01 Note ${String(index).padStart(3, '0')}.md`] = `# Note ${index}\n\n<!-- jarvis-inbox:${id} -->\n`;
+    }
+    files['Inbox/Closed/2026-10-01 Old.md'] = '# Old\n\n<!-- jarvis-inbox:ffffffff -->\n';
+    const { inbox } = store(files);
+    expect((await inbox.find('000000cc', signal))?.title).toBe('Note 204');
+    expect((await inbox.find('ffffffff', signal))?.closed).toBe(true);
+    expect(await inbox.find('eeeeeeee', signal)).toBeNull();
+  });
+
+  it('resolves a supplied id in the vault first: no duplicate across midnight, a new title spelling, a rename or a close', async () => {
+    const memory = memoryVault();
+    let clock = new Date('2026-11-14T21:41:00Z');
+    const inbox = createInboxStore({ vault: memory.vault, now: () => clock });
+    const first = await inbox.create({ title: 'Padel night', note: 'one', id: 'aaaaaaaa' }, signal);
+    clock = new Date('2026-11-14T23:30:00Z');
+    expect((await inbox.create({ title: 'Padel Night', note: 'again', id: 'aaaaaaaa' }, signal)).created).toBe(false);
+    const closed = await inbox.close(first.item.path, 'binned', signal);
+    const retry = await inbox.create({ title: 'Something else', note: 'again', id: 'aaaaaaaa' }, signal);
+    expect(retry).toMatchObject({ created: false, item: { path: closed.path, closed: true } });
+    expect(memory.files.size).toBe(1);
+  });
+
+  it('never adopts an identity marker from replacement text', async () => {
+    const { inbox, files, sha } = store({
+      'Inbox/a.md': '# A\n\nfrom another tool\n',
+      'Inbox/b.md': '# B\n\n<!-- jarvis-inbox:bbbbbbbb -->\n',
+    });
+    await inbox.replace('Inbox/a.md', '# A\n\ncopied <!-- jarvis-inbox:bbbbbbbb -->\n', sha('Inbox/a.md'), signal);
+    const id = noteId(files.get('Inbox/a.md')!);
+    expect(id).toMatch(/^[0-9a-f]{8}$/u);
+    expect(id).not.toBe('bbbbbbbb');
+    expect(files.get('Inbox/a.md')!.match(/jarvis-inbox/gu)).toHaveLength(1);
+  });
+
   it('never writes outside Inbox/', async () => {
     const { inbox, calls } = store();
     await inbox.create({ title: '../../Personal/Inbox', note: 'x' }, signal);
