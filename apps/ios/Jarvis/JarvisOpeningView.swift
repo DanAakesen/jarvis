@@ -110,7 +110,7 @@ private struct JarvisOpeningNetworkView: View {
                     }
                     return .linearGradient(Gradient(stops: stops), startPoint: start, endPoint: end)
                 }
-                glow.stroke(path, with: shading(0.07), style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
+                glow.stroke(path, with: shading(0.05), style: StrokeStyle(lineWidth: 2.8, lineCap: .round))
                 context.stroke(path, with: shading(0.18), style: StrokeStyle(lineWidth: 0.7, lineCap: .round))
             }
             for index in network.nodes.indices where network.nodes[index].brightness > 0 {
@@ -119,7 +119,7 @@ private struct JarvisOpeningNetworkView: View {
                 glow.fill(
                     Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)),
                     with: .radialGradient(
-                        Gradient(colors: [line.opacity(0.22 * brightness), line.opacity(0)]),
+                        Gradient(colors: [line.opacity(0.17 * brightness), line.opacity(0)]),
                         center: p, startRadius: 0, endRadius: 7
                     )
                 )
