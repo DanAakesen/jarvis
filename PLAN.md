@@ -27,7 +27,10 @@ macOS CI run 43687222718: the simulator opening screen shows the sparse backgrou
 Round 4 — 15 November 2026: owner asked for a tiny additive glow on the background lines and nodes, no isolated dots
 (every visible node has a link running toward the orb: three links added to a hidden anchor at the orb centre,
 `JarvisOpeningNetwork.orbAnchor`, which the screen maps to the real orb centre) and an opacity fade along links as they
-approach the orb (about 40% at the sphere's edge, still hidden behind it). The orb is untouched.
+approach the orb (about 40% at the sphere's edge, still hidden behind it). The orb is untouched. Observed in the macOS CI simulator
+capture (`iteration-2026-11-15/ios-opening-round4-3s.png`, run 43699676086): the capture step later timed out on a degraded
+runner (CoreSimulator error 405, minutes per screenshot), so that run's gallery and widget frames are missing; the
+build and compile steps passed.
 
 Observed: `swift test` in JarvisCore passes 79 tests on Linux (including the golden file shared with the web, state
 continuity, containment, 1.6 s pulse and the opening layout, network and policy). Web `npm run lint`, `npm run build` and
