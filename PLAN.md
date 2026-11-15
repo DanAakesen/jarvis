@@ -16,7 +16,7 @@ Owner go-ahead: "go on loose ends". One issue, eight steps delivered in order, e
 | --- | --- | --- |
 | 1 | Vault note format and store (`apps/backend/src/inbox/`): create, replace, close (move to `Inbox/Closed/`), list | PR #1860, CI green |
 | 2 | Vault `AGENTS.md` convention | Vault PR DanAakesen/vault#1 open, awaiting Dan's approval |
-| 3 | Rebuildable index table (last nudged, thumbs), migration 0080 | Built, in review; verified on local SQL Server 2022 |
+| 3 | Rebuildable index table (last nudged, thumbs), migration 0081 (0080 is taken by the proactive-events PR #1862) | Built, in review; verified on local SQL Server 2022 |
 | 4 | Chat and voice tools: capture, list, close | Not started |
 | 5 | Capture endpoint, write-only credential, Watch action, iPhone Shortcut | Not started |
 | 6 | MCP server (ChatGPT, Claude, Copilot) | Not started |

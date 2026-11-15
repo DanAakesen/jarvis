@@ -35,7 +35,7 @@ async function query<T>(request: sql.Request, statement: string, signal: AbortSi
   finally { signal.removeEventListener('abort', cancel); }
 }
 
-/** Azure SQL implementation of the rebuildable inbox index (migration 0080). */
+/** Azure SQL implementation of the rebuildable inbox index (migration 0081). */
 export function createInboxIndexStore(pool: sql.ConnectionPool): InboxIndexStore {
   return {
     async all(signal) {

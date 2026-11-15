@@ -162,7 +162,7 @@ flowchart LR
 | Service | New backend module `apps/backend/src/inbox/` (TypeScript, Fastify); the only code that writes `Inbox/` | new |
 | Adapters | Jarvis tool registry; Fastify route; MCP via `@modelcontextprotocol/server` stateless handler (same library and pattern as `health/mcp/routes.ts`) | tools existing, others new |
 | Auth | Entra ID OAuth with a new connector app registration and `inbox.read` and `inbox.write` scopes (same pattern as `healthConnectorClientId`); hashed, revocable, write-only capture tokens for Shortcut and headless clients | pattern existing |
-| Index | Azure SQL (`mssql`), migration 0080, one table | new |
+| Index | Azure SQL (`mssql`), migration 0081, one table | new |
 | Model | Foundry gpt-5.6-luna through the existing proactive transport and spend ledger | existing |
 | Scheduler and push | Existing in-process proactive scheduler, insight push, push-to-chat | existing |
 
@@ -222,7 +222,7 @@ Related: [[Team]]
 | Size | One note ≤ 8 KB. Over that, the model must condense (the verbatim quote is capped at 4 KB). |
 | Secrets | Existing `shouldRedact` refusal applies to every write. |
 
-**Index** (proposal; migration `0080_inbox_items.sql`, one table, rebuildable):
+**Index** (proposal; migration `0081_inbox_items.sql`, one table, rebuildable):
 
 | Column | Why |
 | --- | --- |

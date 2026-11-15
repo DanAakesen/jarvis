@@ -88,8 +88,8 @@ describe('real SQL Server migration contract', () => {
   });
   describe('inbox index', () => {
     it('keeps reservations, nudges and thumbs per item, and enforces its constraints', async () => {
-      const schema = await readFile(new URL('../../../../db/migrations/0080_inbox_items.sql', import.meta.url), 'utf8');
-      const down = await readFile(new URL('../../../../db/migrations/down/0080_inbox_items.sql', import.meta.url), 'utf8');
+      const schema = await readFile(new URL('../../../../db/migrations/0081_inbox_items.sql', import.meta.url), 'utf8');
+      const down = await readFile(new URL('../../../../db/migrations/down/0081_inbox_items.sql', import.meta.url), 'utf8');
       await pool.request().batch(schema);
       const signal = new AbortController().signal;
       const store = createInboxIndexStore(pool);

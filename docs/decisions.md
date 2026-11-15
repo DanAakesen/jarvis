@@ -1,6 +1,6 @@
 ## 15 November 2026 — Inbox index shape (#1855, step 3)
 
-Migration 0080 adds one table, `dbo.inbox_items`: item id, path and sha (a cache so
+Migration 0081 (0080 belongs to the proactive-events queue, #1862, which must merge first) adds one table, `dbo.inbox_items`: item id, path and sha (a cache so
 a sync rereads only changed notes), last nudged time, and the owner's last thumb
 (`up` or `down`). A row with no path is a capture reservation. The capture id
 becomes the note's hidden id (derived from the client's capture key), so the vault

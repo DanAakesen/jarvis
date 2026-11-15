@@ -1,7 +1,7 @@
 ## Inbox index — 15 November 2026 (#1855, step 3)
 
 `inbox/item-index.ts` keeps the small index in Azure SQL (`dbo.inbox_items`,
-migration 0080, store in `database/inbox-index-store.ts`). `sync` lists `Inbox/`
+migration 0081, store in `database/inbox-index-store.ts`). `sync` lists `Inbox/`
 with one tree call, rereads only notes whose sha changed, follows renames by hidden
 id, ignores a copy with a repeated id, and removes rows for closed or deleted
 notes; one sync runs at a time. On an empty table it rebuilds: nudge times come
