@@ -91,7 +91,10 @@ describe('real SQL Server migration contract', () => {
     it('keeps reservations, nudges and thumbs per item, and enforces its constraints', async () => {
       const schema = await readFile(new URL('../../../../db/migrations/0081_inbox_items.sql', import.meta.url), 'utf8');
       const down = await readFile(new URL('../../../../db/migrations/down/0081_inbox_items.sql', import.meta.url), 'utf8');
+      const nudgeSchema = await readFile(new URL('../../../../db/migrations/0084_inbox_nudge_item.sql', import.meta.url), 'utf8');
+      const nudgeDown = await readFile(new URL('../../../../db/migrations/down/0084_inbox_nudge_item.sql', import.meta.url), 'utf8');
       await pool.request().batch(schema);
+      await pool.request().batch(nudgeSchema);
       const signal = new AbortController().signal;
       const store = createInboxIndexStore(pool);
       const at = new Date('2026-11-15T10:00:00.000Z');
@@ -103,7 +106,8 @@ describe('real SQL Server migration contract', () => {
         expect((await store.get('aaaaaaaa', signal))?.lastNudgedAt).toBeNull();
         await store.upsert({ itemId: 'bbbbbbbb', path: 'Inbox/b.md', sha: 'b'.repeat(40), lastNudgedAt: at }, signal);
         expect((await store.get('bbbbbbbb', signal))?.lastNudgedAt).toEqual(at);
-        expect(await store.markNudged('aaaaaaaa', at, signal)).toBe(true);
+        expect(await store.markNudged('aaaaaaaa', at, signal, 'ABCDEF01-0000-4000-8000-000000000001')).toBe(true);
+        expect((await store.get('aaaaaaaa', signal))?.lastNudgeItemId).toBe('abcdef01-0000-4000-8000-000000000001');
         expect(await store.setFeedback('aaaaaaaa', 'down', at, signal)).toBe(true);
         expect(await store.setFeedback('cccccccc', 'up', at, signal)).toBe(false);
         await store.upsert({ itemId: 'aaaaaaaa', path: 'Inbox/renamed.md', sha: 'c'.repeat(40) }, signal);
@@ -128,6 +132,7 @@ describe('real SQL Server migration contract', () => {
         await store.remove(['aaaaaaaa', 'cccccccc'], signal);
         expect((await store.all(signal)).map((row) => row.itemId)).toEqual(['bbbbbbbb']);
       } finally {
+        await pool.request().batch(nudgeDown);
         await pool.request().batch(down);
       }
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.inbox_items', N'U') AS id")).recordset).toEqual([{ id: null }]);

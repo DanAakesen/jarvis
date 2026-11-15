@@ -39,7 +39,7 @@ function memoryVault(initial: Record<string, string> = {}) {
 
 function memoryIndexStore(): InboxIndexStore & { rows: Map<string, InboxIndexRow> } {
   const rows = new Map<string, InboxIndexRow>();
-  const base = { path: null, sha: null, lastNudgedAt: null, lastFeedback: null, lastFeedbackAt: null, createdAt: at };
+  const base = { path: null, sha: null, lastNudgedAt: null, lastNudgeItemId: null, lastFeedback: null, lastFeedbackAt: null, createdAt: at };
   return {
     rows,
     async all() { return [...rows.values()]; },
@@ -191,7 +191,7 @@ describe('inbox tools', () => {
     });
     indexStore.rows.set('11111111', {
       itemId: '11111111', path: 'Inbox/2026-11-12 Older.md', sha: blobSha(files.get('Inbox/2026-11-12 Older.md')!),
-      lastNudgedAt: new Date('2026-11-13T07:00:00Z'), lastFeedback: 'down', lastFeedbackAt: at, createdAt: at,
+      lastNudgedAt: new Date('2026-11-13T07:00:00Z'), lastNudgeItemId: null, lastFeedback: 'down', lastFeedbackAt: at, createdAt: at,
     });
     const items = tool('inbox_items');
     const live = await items.execute({}, request({}, null), signal) as { items: Array<Record<string, unknown>>; truncated: boolean };
@@ -214,7 +214,7 @@ describe('inbox tools', () => {
         'Inbox/2026-11-13 Tax.md': '# Tax\n\nbody\n\n<!-- jarvis-inbox:22222222 -->\n',
       },
     });
-    indexStore.rows.set('11111111', { itemId: '11111111', path: 'Inbox/2026-11-12 Older.md', sha: 'a'.repeat(40), lastNudgedAt: null, lastFeedback: null, lastFeedbackAt: null, createdAt: at });
+    indexStore.rows.set('11111111', { itemId: '11111111', path: 'Inbox/2026-11-12 Older.md', sha: 'a'.repeat(40), lastNudgedAt: null, lastNudgeItemId: null, lastFeedback: null, lastFeedbackAt: null, createdAt: at });
     const close = tool('inbox_close');
     await expect(close.execute({ id: '11111111', reason: 'binned' }, request({}, null), signal)).rejects.toThrow(/no stored Dan message/u);
     expect(files.has('Inbox/2026-11-12 Older.md')).toBe(true);

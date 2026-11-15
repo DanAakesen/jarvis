@@ -40,6 +40,8 @@ export interface BackendConfig {
   healthUploadEnabled: boolean;
   /** Loose Ends inbox tools and nudges; only the exact string "true" in JARVIS_INBOX_ENABLED turns them on. */
   inboxEnabled: boolean;
+  /** Inbox follow-up nudges inside the proactive slots; needs JARVIS_INBOX_ENABLED and JARVIS_PROACTIVE_ENABLED. Exact "true" only. */
+  inboxNudgesEnabled: boolean;
   /** Owner session tokens (JARVIS_OWNER_SESSION_ENABLED). False keeps the backend accepting Entra tokens only. */
   ownerSessionEnabled: boolean;
   phone?: {
@@ -304,6 +306,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     proactiveEventsEnabled: env.JARVIS_PROACTIVE_EVENTS_ENABLED === 'true',
     healthUploadEnabled: healthUploadSetting === 'true',
     inboxEnabled: env.JARVIS_INBOX_ENABLED === 'true',
+    inboxNudgesEnabled: env.JARVIS_INBOX_NUDGES_ENABLED === 'true',
     ownerSessionEnabled: ownerSessionSetting === 'true',
     ...(phone ? { phone } : {}),
     ...(healthSetting === 'true' ? { healthEnabled: true as const } : {}),

@@ -236,8 +236,9 @@ export function createInboxStore(options: {
       log({ action: 'replace', outcome: 'conflict' });
       throw new InboxError('conflict', 'The note changed since it was read. Read it again.');
     }
-    // The identity is the stored one; a marker in the caller's text is never adopted (withId strips it).
-    const next = withId(content, noteId(current.content) ?? newInboxId());
+    // The identity is the stored one, or for a note from another tool the path-derived one the index already uses, so
+    // adding the marker keeps its nudge clock and thumbs. A marker in the caller's text is never adopted (withId strips it).
+    const next = withId(content, noteId(current.content) ?? pathItemId(path));
     assertSavable(next);
     try {
       await vault.write(path, next, 'jarvis: update an inbox item\n\nCo-authored-by: Jarvis', current.sha, signal);
@@ -262,7 +263,7 @@ export function createInboxStore(options: {
       throw new InboxError('conflict', 'The note changed since it was read. Read it again.');
     }
     const at = now();
-    const id = noteId(current.content) ?? newInboxId();
+    const id = noteId(current.content) ?? pathItemId(path);
     const closed = appendTrail(current.content, `closed: ${reason}`, at, id);
     for (let copy = 1; copy <= maxCreateAttempts; copy += 1) {
       signal.throwIfAborted();
