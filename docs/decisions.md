@@ -1,3 +1,12 @@
+## 14 November 2026 — Inbox loop design and build plan recorded (#1836)
+
+The design (capture, note format, tools and prompts, nudge scheduling, feedback,
+cost, failure modes, privacy) is in `docs/inbox-loop/design.md`. It is a
+**proposal awaiting owner review**; the 14 November decision above stands. Build
+issues P15-147 to P15-157 (#1839 to #1847, #1849, #1850) are phased, each dark behind a default-off
+flag. Capture is tool-agnostic: the vault is the contract, with one Inbox service behind Jarvis tools, an HTTP route and an MCP server (design section 3.1). Open owner questions are listed at the end of the design. Cost figures are
+estimates until measured.
+
 ## 14 November 2026 — Inbox loop is vault-backed and model-driven (#1835)
 
 The owner's loose ideas and asks are captured as one free-text note per item in a
