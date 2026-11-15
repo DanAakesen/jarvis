@@ -37,6 +37,8 @@ jobs:
           set -o pipefail
           xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS' -configuration Release -derivedDataPath "$RUNNER_TEMP/WatchDeviceBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/watch-device-build.log"
       - name: Capture isolated Watch previews
+        # Screenshots are evidence, not a gate: a flaky simulator launch must not turn the build red.
+        continue-on-error: true
         timeout-minutes: 5
         run: |
           set -euo pipefail
