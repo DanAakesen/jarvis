@@ -145,7 +145,7 @@ export function createGitHubVaultClient(options: {
     signal: AbortSignal,
     body?: unknown,
     limit = maxContentsResponseBytes,
-    method?: 'GET' | 'PUT' | 'DELETE',
+    method?: 'GET' | 'PUT' | 'DELETE' | 'POST' | 'PATCH',
   ): Promise<{ readonly response: Response; readonly value?: unknown }> {
     const accessToken = await getToken();
     const response = await fetcher(`${apiOrigin}${path}`, {
@@ -162,6 +162,22 @@ export function createGitHubVaultClient(options: {
     });
     if (!response.ok) return { response };
     return { response, value: await responseBody(response, limit) };
+  }
+
+  async function read(path: string, signal: AbortSignal, ref = VAULT_BRANCH): Promise<VaultFile | null> {
+    const { response, value } = await request(
+      `/repos/${VAULT_REPOSITORY}/contents/${encodedPath(path)}?ref=${encodeURIComponent(ref)}`,
+      signal,
+    );
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error('Could not read the vault note');
+    const file = object(value);
+    if (file?.type !== 'file' || typeof file.path !== 'string' ||
+        typeof file.sha !== 'string' || !/^[\da-f]{40}$/iu.test(file.sha) ||
+        file.encoding !== 'base64') {
+      throw new Error('GitHub file response is invalid');
+    }
+    return { path: file.path, sha: file.sha.toLowerCase(), content: decodeContent(file.content) };
   }
 
   return {
@@ -190,21 +206,7 @@ export function createGitHubVaultClient(options: {
       });
     },
 
-    async read(path: string, signal: AbortSignal, ref = VAULT_BRANCH): Promise<VaultFile | null> {
-      const { response, value } = await request(
-        `/repos/${VAULT_REPOSITORY}/contents/${encodedPath(path)}?ref=${encodeURIComponent(ref)}`,
-        signal,
-      );
-      if (response.status === 404) return null;
-      if (!response.ok) throw new Error('Could not read the vault note');
-      const file = object(value);
-      if (file?.type !== 'file' || typeof file.path !== 'string' ||
-          typeof file.sha !== 'string' || !/^[\da-f]{40}$/iu.test(file.sha) ||
-          file.encoding !== 'base64') {
-        throw new Error('GitHub file response is invalid');
-      }
-      return { path: file.path, sha: file.sha.toLowerCase(), content: decodeContent(file.content) };
-    },
+    read,
 
     async history(path: string, limit: number, signal: AbortSignal): Promise<VaultCommit[]> {
       const query = new URLSearchParams({ path, sha: VAULT_BRANCH, per_page: String(limit) });
@@ -254,6 +256,50 @@ export function createGitHubVaultClient(options: {
         throw new Error('GitHub commit response is invalid');
       }
       return commitSha.toLowerCase();
+    },
+
+    /** Renames one note as a single commit through the Git Data API; the source must still match expectedSha and the target must not exist. */
+    async move(
+      from: string,
+      to: string,
+      content: string,
+      expectedSha: string,
+      message: string,
+      signal: AbortSignal,
+    ): Promise<string> {
+      if (!/^[\da-f]{40}$/iu.test(expectedSha)) throw new TypeError('Invalid vault note version');
+      const repository = `/repos/${VAULT_REPOSITORY}/git`;
+      const sha = (value: unknown): string => {
+        const found = object(value)?.sha;
+        if (typeof found !== 'string' || !/^[\da-f]{40}$/iu.test(found)) throw new Error('GitHub Git data response is invalid');
+        return found.toLowerCase();
+      };
+      const ref = await request(`${repository}/ref/heads/${VAULT_BRANCH}`, signal);
+      if (!ref.response.ok) throw new Error('Could not read the vault branch');
+      const head = sha(object(ref.value)?.object);
+      const parent = await request(`${repository}/commits/${head}`, signal);
+      if (!parent.response.ok) throw new Error('Could not read the vault commit');
+      const baseTree = sha(object(parent.value)?.tree);
+      const [source, target] = await Promise.all([read(from, signal, head), read(to, signal, head)]);
+      if (source?.sha !== expectedSha.toLowerCase() || target !== null) throw new VaultWriteConflictError();
+      const tree = await request(`${repository}/trees`, signal, {
+        base_tree: baseTree,
+        tree: [
+          { path: to, mode: '100644', type: 'blob', content },
+          { path: from, mode: '100644', type: 'blob', sha: null },
+        ],
+      }, maxContentsResponseBytes, 'POST');
+      if (!tree.response.ok) throw new Error('Could not prepare the vault move');
+      const commit = await request(`${repository}/commits`, signal, {
+        message, tree: sha(tree.value), parents: [head],
+      }, maxContentsResponseBytes, 'POST');
+      if (!commit.response.ok) throw new Error('Could not prepare the vault move');
+      const commitSha = sha(commit.value);
+      const update = await request(`${repository}/refs/heads/${VAULT_BRANCH}`, signal,
+        { sha: commitSha, force: false }, maxContentsResponseBytes, 'PATCH');
+      if (update.response.status === 409 || update.response.status === 422) throw new VaultWriteConflictError();
+      if (!update.response.ok) throw new Error('Could not commit the vault move');
+      return commitSha;
     },
 
     async delete(path: string, sha: string, message: string, signal: AbortSignal): Promise<string> {
