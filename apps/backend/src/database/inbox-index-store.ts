@@ -90,6 +90,30 @@ export function createInboxIndexStore(pool: sql.ConnectionPool): InboxIndexStore
           THROW;
         END CATCH;`, signal);
     },
+    async upsertMany(values, signal) {
+      if (values.length === 0) return;
+      const rows = JSON.stringify(values.map((value) => ({
+        item_id: value.itemId, path: value.path, sha: value.sha, last_nudged_at: value.lastNudgedAt?.toISOString() ?? null,
+      })));
+      await query(pool.request().input('rows', sql.NVarChar(sql.MAX), rows), `
+        SET XACT_ABORT ON;
+        BEGIN TRY
+          BEGIN TRANSACTION;
+          UPDATE target SET path = incoming.path, sha = incoming.sha, updated_at = SYSUTCDATETIME()
+            FROM dbo.inbox_items AS target WITH (UPDLOCK, HOLDLOCK)
+            JOIN OPENJSON(@rows) WITH (item_id varchar(32), path nvarchar(260), sha char(40)) AS incoming
+              ON incoming.item_id = target.item_id;
+          INSERT dbo.inbox_items (item_id, path, sha, last_nudged_at)
+            SELECT incoming.item_id, incoming.path, incoming.sha, incoming.last_nudged_at
+            FROM OPENJSON(@rows) WITH (item_id varchar(32), path nvarchar(260), sha char(40), last_nudged_at datetime2(7)) AS incoming
+            WHERE NOT EXISTS (SELECT 1 FROM dbo.inbox_items WITH (UPDLOCK, HOLDLOCK) WHERE item_id = incoming.item_id);
+          COMMIT TRANSACTION;
+        END TRY
+        BEGIN CATCH
+          IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+          THROW;
+        END CATCH;`, signal);
+    },
     async remove(itemIds, signal) {
       if (itemIds.length === 0) return;
       await query(pool.request().input('ids', sql.NVarChar(sql.MAX), JSON.stringify(itemIds)),

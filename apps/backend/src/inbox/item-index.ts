@@ -26,6 +26,11 @@ export interface InboxIndexStore {
     value: { readonly itemId: string; readonly path: string; readonly sha: string; readonly lastNudgedAt?: Date | null },
     signal: AbortSignal,
   ): Promise<void>;
+  /** All rows in one transaction, with the same rules as upsert. A rebuild is all or nothing, so a retry starts over. */
+  upsertMany(
+    values: ReadonlyArray<{ readonly itemId: string; readonly path: string; readonly sha: string; readonly lastNudgedAt?: Date | null }>,
+    signal: AbortSignal,
+  ): Promise<void>;
   remove(itemIds: readonly string[], signal: AbortSignal): Promise<void>;
   markNudged(itemId: string, at: Date, signal: AbortSignal): Promise<boolean>;
   setFeedback(itemId: string, feedback: InboxFeedback, at: Date, signal: AbortSignal): Promise<boolean>;
@@ -73,6 +78,7 @@ export function createInboxIndex(options: {
     const rebuilt = rows.length === 0 && live.length > 0;
 
     let unreadable = 0;
+    const failedPaths = new Set<string>();
     const known = new Map<string, { readonly itemId: string; readonly sha: string; readonly changed: boolean }>();
     const stale = live.filter((entry) => byPath.get(entry.path)?.sha !== entry.sha);
     for (const entry of live) {
@@ -91,6 +97,7 @@ export function createInboxIndex(options: {
         } catch (error) {
           if (!(error instanceof VaultFileTooLargeError)) throw error;
           unreadable += 1;
+          failedPaths.add(entry.path);
         }
       }
     }));
@@ -116,21 +123,20 @@ export function createInboxIndex(options: {
       ? await options.restoreLastNudged(fresh, signal)
       : new Map<string, Date>();
     let added = 0;
-    for (const value of writes) {
+    for (const value of writes) if (!existing.has(value.itemId)) added += 1;
+    if (writes.length > 0) {
       signal.throwIfAborted();
-      const isNew = !existing.has(value.itemId);
-      if (isNew) added += 1;
-      await store.upsert({
+      await store.upsertMany(writes.map((value) => ({
         itemId: value.itemId,
         path: value.path,
         sha: value.sha,
-        ...(isNew && rebuilt ? { lastNudgedAt: restored.get(value.itemId) ?? at } : {}),
-      }, signal);
+        ...(!existing.has(value.itemId) && rebuilt ? { lastNudgedAt: restored.get(value.itemId) ?? at } : {}),
+      })), signal);
     }
 
     const removable = rows.filter((row) => row.path === null
       ? !owners.has(row.itemId) && at.getTime() - row.createdAt.getTime() > reservationLifetimeMs
-      : !owners.has(row.itemId) && !unreadableRow(row, files));
+      : !owners.has(row.itemId) && !failedPaths.has(row.path));
     if (removable.length > 0) await store.remove(removable.map((row) => row.itemId), signal);
 
     return {
@@ -142,11 +148,6 @@ export function createInboxIndex(options: {
       unreadable,
       rebuilt,
     };
-  }
-
-  /** A row whose note exists but could not be read stays; it is not a deletion. */
-  function unreadableRow(row: InboxIndexRow, files: readonly { readonly path: string; readonly closed: boolean }[]): boolean {
-    return row.path !== null && files.some((entry) => !entry.closed && entry.path === row.path);
   }
 
   return {

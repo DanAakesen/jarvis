@@ -27,6 +27,7 @@ function memoryStore(initial: InboxIndexRow[] = []): InboxIndexStore & { rows: M
         ? { ...existing, path: value.path, sha: value.sha }
         : row({ itemId: value.itemId, path: value.path, sha: value.sha, lastNudgedAt: value.lastNudgedAt ?? null }));
     },
+    async upsertMany(values, signal) { for (const value of values) await this.upsert(value, signal); },
     async remove(ids) { for (const id of ids) rows.delete(id); },
     async markNudged(itemId, at) {
       const existing = rows.get(itemId);
@@ -111,6 +112,34 @@ describe('inbox index', () => {
     const result = await createInboxIndex({ store, inbox, now: () => now }).sync(signal);
     expect(result).toMatchObject({ live: 0, removed: 2, unreadable: 1 });
     expect([...store.rows.keys()]).toEqual(['cccccccc']);
+  });
+
+  it('drops the old identity when a note gains a hidden id at the same path', async () => {
+    const store = memoryStore([row({ itemId: 'abcdef01', path: 'Inbox/a.md', sha: sha('a'), lastNudgedAt: earlier })]);
+    const { inbox } = vault({ 'Inbox/a.md': { id: 'aaaaaaaa', sha: sha('b') } });
+    await createInboxIndex({ store, inbox, now: () => now }).sync(signal);
+    expect([...store.rows.values()].map((value) => [value.itemId, value.path])).toEqual([['aaaaaaaa', 'Inbox/a.md']]);
+  });
+
+  it('retries a failed rebuild as a rebuild, because the rebuild writes are all or nothing', async () => {
+    const store = memoryStore();
+    const upsertMany = store.upsertMany.bind(store);
+    let attempts = 0;
+    store.upsertMany = async (values, abort) => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('database down');
+      return upsertMany(values, abort);
+    };
+    const { inbox } = vault({
+      'Inbox/a.md': { id: 'aaaaaaaa', sha: sha('a') },
+      'Inbox/b.md': { id: 'bbbbbbbb', sha: sha('b') },
+    });
+    const index = createInboxIndex({ store, inbox, now: () => now, restoreLastNudged: async () => new Map([['aaaaaaaa', earlier]]) });
+    await expect(index.sync(signal)).rejects.toThrow('database down');
+    expect(store.rows.size).toBe(0);
+    expect(await index.sync(signal)).toMatchObject({ rebuilt: true, added: 2 });
+    expect(store.rows.get('aaaaaaaa')?.lastNudgedAt).toEqual(earlier);
+    expect(store.rows.get('bbbbbbbb')?.lastNudgedAt).toEqual(now);
   });
 
   it('leaves a copy with a repeated hidden id out instead of failing', async () => {

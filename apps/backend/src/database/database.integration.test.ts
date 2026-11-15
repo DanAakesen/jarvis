@@ -112,6 +112,18 @@ describe('real SQL Server migration contract', () => {
         await expect(pool.request().query("INSERT dbo.inbox_items (item_id) VALUES ('NOT-HEX!!')")).rejects.toThrow();
         await expect(pool.request().query("INSERT dbo.inbox_items (item_id, path) VALUES ('dddddddd', 'Inbox/x.md')")).rejects.toThrow();
         await expect(pool.request().query("UPDATE dbo.inbox_items SET last_feedback='sideways', last_feedback_at=SYSUTCDATETIME()")).rejects.toThrow();
+        await store.upsertMany([
+          { itemId: 'bbbbbbbb', path: 'Inbox/b2.md', sha: 'd'.repeat(40), lastNudgedAt: null },
+          { itemId: 'eeeeeeee', path: 'Inbox/e.md', sha: 'e'.repeat(40), lastNudgedAt: at },
+        ], signal);
+        expect(await store.get('bbbbbbbb', signal)).toMatchObject({ path: 'Inbox/b2.md', lastNudgedAt: at });
+        expect(await store.get('eeeeeeee', signal)).toMatchObject({ path: 'Inbox/e.md', lastNudgedAt: at });
+        await expect(store.upsertMany([
+          { itemId: 'ffffffff', path: 'Inbox/f.md', sha: 'f'.repeat(40) },
+          { itemId: 'NOT-HEX!!', path: 'Inbox/g.md', sha: 'a'.repeat(40) },
+        ], signal)).rejects.toThrow();
+        expect(await store.get('ffffffff', signal)).toBeNull();
+        await store.remove(['eeeeeeee'], signal);
         await store.remove(['aaaaaaaa', 'cccccccc'], signal);
         expect((await store.all(signal)).map((row) => row.itemId)).toEqual(['bbbbbbbb']);
       } finally {
