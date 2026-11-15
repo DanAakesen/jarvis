@@ -824,6 +824,17 @@ describe('structured log export', () => {
     expect(records.join('')).not.toContain('note-secret');
     expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('note-secret');
   });
+  it('exports inbox outcomes without titles, paths or note content', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, { ...sdk, trackTrace: vi.fn() }, output);
+    logger.info({ action: 'close', outcome: 'ok', path: 'Inbox/2026-11-15 Private idea.md', content: 'note-secret' }, 'inbox.write');
+    logger.warn({ tool: 'inbox_capture', outcome: 'error', title: 'Private idea' }, 'inbox.tool');
+    expect(JSON.parse(records[0]!)).toMatchObject({ action: 'close', outcome: 'ok', msg: 'inbox.write' });
+    expect(JSON.parse(records[1]!)).toMatchObject({ tool: 'inbox_capture', outcome: 'error', msg: 'inbox.tool' });
+    expect(records.join('')).not.toContain('Private idea');
+    expect(records.join('')).not.toContain('note-secret');
+  });
   it('uses an isolated manual SDK client, disables disk persistence and initializes it', async () => {
     const client = await createTelemetry('offline-test-string');
     expect(client).toBe(sdk);
