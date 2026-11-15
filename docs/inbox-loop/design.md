@@ -1,6 +1,6 @@
 # Inbox loop: design (P15-145, #1836)
 
-Status: **approved by the owner; build in progress under #1855 (P15-159), step 1 (vault store) built.** Sections below keep the original wording; the build order of #1855 supersedes the phase table in section 11.
+Status: **approved by the owner; build in progress under #1855 (P15-159), steps 1 (vault store) and 3 (index) built; step 2 is a pull request in the vault repo.** Sections below keep the original wording; the build order of #1855 supersedes the phase table in section 11.
 The owner decisions in [decisions.md](../decisions.md)
 and [p0.md](../../p0.md) are fixed inputs; everything marked *proposal* awaits owner review.
 
@@ -228,7 +228,7 @@ Related: [[Team]]
 | --- | --- |
 | `item_id` (PK, from the hidden comment; path-derived until the comment exists) | stable identity across renames |
 | `path`, `sha` | cache so a tick does not reread every note |
-| `capture_key` (unique) | idempotent capture |
+| (no `capture_key`) | Build decision: the capture id is the note's hidden id, so the vault answers idempotency and a rebuild cannot lose it; a row without a path is a reservation |
 | `last_nudged_at` | the one scheduling fact |
 | `last_feedback` (`up`/`down`/null), `last_feedback_at` | owner's two-value signal |
 

@@ -1,3 +1,16 @@
+## Inbox index — 15 November 2026 (#1855, step 3)
+
+`inbox/item-index.ts` keeps the small index in Azure SQL (`dbo.inbox_items`,
+migration 0080, store in `database/inbox-index-store.ts`). `sync` lists `Inbox/`
+with one tree call, rereads only notes whose sha changed, follows renames by hidden
+id, ignores a copy with a repeated id, and removes rows for closed or deleted
+notes; one sync runs at a time. On an empty table it rebuilds: nudge times come
+from an optional `restoreLastNudged` callback (proactive history, wired in the
+nudge step) or the rebuild time. `reserve`/`complete` give captures reserve-then-
+complete idempotency, and `markNudged`/`setFeedback` are the only writers of the
+scheduling facts. Nothing is wired into the running backend yet; the tools in step
+4 are its first caller.
+
 ## Event-driven proactive path — 15 November 2026 (#1858)
 
 The existing proactive ticker (30 seconds) also drains an event queue. Producers: the signed GitHub webhook (finished workflow runs, deployment results), activity alerts, a six-hour timer review with a cost-spike check, and a 15-minute poll of the read-only mail and calendar sources. Events are rows in `dbo.proactive_events` (Azure SQL, migration 0080) with a unique key per owner and a lease for safe claims. Cheap rules drop routine events without a model call; survivors go in batches of up to 10 to one GPT-6.1 Terra call (Foundry chat completions, low reasoning effort, no tools) with vault, memory, todo, calendar, factory and health context and the owner's recent thumbs. Each decision becomes a finding (Proactive page) and an outreach row (`dbo.proactive_outreach`: tier, reasoning, delivery, rating), then goes out through the channels registered for its tier: a Now feed card for low, a push for medium and high. Spend is written to the shared `proactive_spend` ledger and the monthly hard stop is checked before each call. The pipeline holds its next due time in memory, so SQL is read only when something is due. Diagram and details: `docs/proactive-events/design.md`. The path is off unless `JARVIS_PROACTIVE_EVENTS_ENABLED` is `true`; the 07:00 and 18:00 engine is unchanged.

@@ -1,3 +1,18 @@
+## 15 November 2026 — Inbox index shape (#1855, step 3)
+
+Migration 0080 adds one table, `dbo.inbox_items`: item id, path and sha (a cache so
+a sync rereads only changed notes), last nudged time, and the owner's last thumb
+(`up` or `down`). A row with no path is a capture reservation. The capture id
+becomes the note's hidden id (derived from the client's capture key), so the vault
+itself answers "did this capture land?" and a lost table cannot cause a duplicate:
+a retry of an unknown outcome rereads the vault by id before writing. Rebuild lists
+`Inbox/`, restores last-nudged times from proactive history where known and
+otherwise sets them to the rebuild time (no nudge storm); a note written by another
+tool is a new, never-nudged item. Closed notes drop out of the index. Reservations
+are pruned after seven days. The down migration drops the table: it is rebuildable
+and thumbs are also written to the note's trail. This replaces the design's
+`capture_key` column, which would not survive a rebuild.
+
 ## 15 November 2026 — Event-driven proactive path with GPT-6.1 Terra and three tiers (#1858)
 
 Owner: "for the model we should do gpt 6.1, that is very very cheap. so that should be very little. GO ahead and build this but without the calling to begin with." Tiers: low, medium and high; calls come later.

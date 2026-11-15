@@ -14,9 +14,9 @@ Owner go-ahead: "go on loose ends". One issue, eight steps delivered in order, e
 
 | Step | Scope | State |
 | --- | --- | --- |
-| 1 | Vault note format and store (`apps/backend/src/inbox/`): create, replace, close (move to `Inbox/Closed/`), list | Built, in review |
-| 2 | Vault `AGENTS.md` convention | Not started |
-| 3 | Rebuildable index table (last nudged, thumbs) | Not started |
+| 1 | Vault note format and store (`apps/backend/src/inbox/`): create, replace, close (move to `Inbox/Closed/`), list | PR #1860, CI green |
+| 2 | Vault `AGENTS.md` convention | Vault PR DanAakesen/vault#1 open, awaiting Dan's approval |
+| 3 | Rebuildable index table (last nudged, thumbs), migration 0080 | Built, in review; verified on local SQL Server 2022 |
 | 4 | Chat and voice tools: capture, list, close | Not started |
 | 5 | Capture endpoint, write-only credential, Watch action, iPhone Shortcut | Not started |
 | 6 | MCP server (ChatGPT, Claude, Copilot) | Not started |
