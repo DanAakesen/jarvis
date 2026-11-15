@@ -1,3 +1,16 @@
+## Notes, Tasks and Graph pages — 15 November 2026 (#1894, P15-180)
+
+- iOS: `JarvisNotesArea` (state and loading, plus `+Pages` and `+Chrome` extensions) hosts the three pages, header menu and dock;
+  `JarvisNoteReaderView`, `JarvisNoteEditorSheet`, `JarvisTaskSheets`, `JarvisNotesSheets` and shared controls in `JarvisNotesControls`.
+  Home's New note/New task/task detail reuse the same sheets. Pure logic (editor parts, link resolution, line diff, save recovery,
+  pin order, folder picker rows, task sections) is in JarvisCore (`JarvisNoteEditing`, `JarvisNotesOrganising`) with Linux tests.
+- Data flow: reads use the existing cached repositories (`notes/tree`, `notes`, `knowledge/graph`, `vault/tasks`); writes use
+  `PUT/POST/DELETE /notes/note`, `/vault/tasks` (PATCH complete, PUT edit, POST create, **DELETE new**). Pins and pin order are
+  device-local cache entries (`pinnedNotePaths`, `pinnedTaskIDs`), never vault data.
+- Backend: `DELETE /vault/tasks` (owner only) takes `{path,line,text,version}`, refuses a changed line with 409, removes only that
+  line, and reports an unconfirmed write as 503; covered by `src/vault/task-delete.test.ts`.
+- CI: the macOS `watch` job compiles the iPhone app and captures the Notes states (continue-on-error, bounded).
+
 ## PI chat engine (test switch) — 15 November 2026 (#1885, P15-174)
 
 PI is a managed Microsoft Copilot-harness prompt agent (`jarvis-pi`, Terra deployment `gpt-6.1-terra`, reasoning effort `low`, built-ins off) in the existing Foundry project. A chat turn reaches it only when the app sends `engine: "pi"` (the iOS Settings test switch). The default path is unchanged.

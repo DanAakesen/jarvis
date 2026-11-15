@@ -1,3 +1,8 @@
+## iOS UI guidance — 15 November 2026 (#1894)
+
+- Consult the apple-hig skill (justinwetch/HIGAgentSkills, MIT) for iOS UI sizes, padding, Dynamic Type and accessibility. Clone it into a scratch directory outside the repository each time and never commit it.
+- Notes redesign checks: `cd apps/ios/Packages/JarvisCore && swift test` (Linux, `swift:6.2` image works locally); `cd apps/backend && npx vitest run src/vault`. The SwiftUI screens compile only in the macOS `watch` job (`watch-build.yml`), which also captures the Notes states as screenshots (`notes-*.png` in the `watch-build-logs` artifact; continue-on-error, 14-minute bound). Launch with `--ui-test-navigation --screenshot-screen=notes --ui-test-task-list-board --screenshot-notes-state=<state>` (simulator only; states are listed in `JarvisNotesArea+Chrome.swift`).
+
 ## PI chat engine: deploy and test (#1885, P15-174)
 
 - The Deploy workflow's `pi-agent` job runs on every Deploy after `smoke`: it creates the skills and the `jarvis-pi` agent version (only when `agents/pi/**`, the secret or the backend URL changed), pins the endpoint, creates the `pi-mcp-secret` Container App secret once and sets `JARVIS_PI_AGENT_NAME` and `JARVIS_PI_MCP_SECRET` on the backend. Nothing else waits on it. It needs the deploy identity's existing Foundry roles and Container Apps access; no new role or credential.

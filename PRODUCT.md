@@ -1,3 +1,12 @@
+## Notes, Tasks and Graph redesign — 15 November 2026 (#1894, P15-180)
+
+The Notes area opens on a quiet page with pinned notes, folders and notes, a bottom Notes/Tasks/Graph switch, a fixed Search
+field and a separate + (New note, New task, New folder). Notes open in a reader with Close and Edit; one editor creates and edits
+notes with explicit Save and Cancel, never loses a draft and never overwrites a newer version without a confirmed choice. Tasks
+show one orange completion circle, the source note, date, priority and scope; they can be completed, edited, rescheduled, pinned
+and deleted (only that task line). Short left swipe pins, long left swipe deletes, and every swipe has a menu or accessibility alternative.
+Rename, Move to folder, bulk selection and Undo are not offered because the vault cannot do them safely yet.
+
 ## Event-driven proactive Jarvis — 15 November 2026 (#1858)
 
 Jarvis reacts to events instead of only the 07:00 and 18:00 checks. Interrupt for reminders, stalled repos, prep or deadlines in mail and calendar, plan-versus-reality gaps, failed builds and deploys, and cost surprises; stay quiet about routine mail, unimportant calendar entries and routine successes. Three tiers: low is a card in the Now feed, medium is a push, high is a push (a call is added later). Every outreach has thumbs up or down, which Jarvis uses as context next time. Jarvis may draft or suggest in words and never sends mail. Budget: 100 DKK a month in total, with a hard stop. Off until the owner switches it on.

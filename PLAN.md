@@ -1,3 +1,10 @@
+## Notes, Tasks and Graph redesign — 15 November 2026 (#1894, P15-180, PR #1899)
+
+Status: implemented on the branch; waiting for CI (macOS compile) and review. Done: design pack committed, backend task delete,
+JarvisCore logic with tests, new pages/reader/editor/sheets, recovery flows, fixtures and CI captures. Next: fix any CI compile
+or review findings, rebase on main after PR #1896 (vault layout) lands, owner review. Not in scope (see decisions): rename, move, bulk
+select, manual sort, undo, Danish catalog. No TestFlight build is part of this work.
+
 ## PI phases 0 to 2 together: PI agent, Jarvis MCP, chat in the iOS app behind a test switch — 15 November 2026 (#1885, P15-174, PR #1890)
 
 **Status: built and tested offline; not yet run live.** The owner asked for phases 0, 1 and 2 as one piece so he can test chat on PI in the iOS app. It replaces #1874, #1875 and #1876 (phase 0's quality round, routines and long-session items are out: the owner does not want to test long sessions). Everything is inert until the owner sets the test switch to PI in iOS Settings.
