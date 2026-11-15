@@ -1,3 +1,32 @@
+## 14 November 2026 — How the cognitive lattice orb is built and where it stops (P15-143 / #1834)
+
+- **One generator.** The orb is grown, not drawn from an image: `JarvisLatticeModel` (seed 1834, about 340 nodes in a
+  shell, middle and heart layer, about 1,250 connections) and `JarvisLatticeScene` (a pure per-frame pose) live in
+  JarvisCore, so the app, Live Activity, widgets and Watch share them and Linux CI tests them. The web builds the
+  same network from the same arithmetic; `apps/web/src/jarvis-lattice.golden.json` is the contract both test against
+  (regenerate with `JARVIS_WRITE_LATTICE_GOLDEN=1 swift test --filter JarvisLatticeGoldenTests` only on purpose).
+- **Contracts kept.** `JarvisOrbActivity`, `JarvisOrbState` and the wake/state/level model are unchanged apart from
+  two corrections: `input` now releases at 6/s instead of snapping to 0 when listening ends (web and Swift), and
+  the animator integrates a `flow` clock so faster signals never jump. The old whole-orb scale pulse was removed
+  because the brief keeps the glass steady. The microphone is never touched by the orb or the opening.
+- **Detail by size** (minimal below 56 pt, reduced to 120 pt, full above) keeps hubs readable at 18 pt and holds
+  frame cost down; widgets, Live Activities and Reduce Motion draw one still pose. Live Activities pose the orb for
+  the session phase.
+- **Watch.** The owner ruled the orb applies there too ("this is app wide, everywhere"), so the wave glyph is gone:
+  the orb is still in lists and the Voice Session complication and animates only in a live voice strip.
+- **Opening screen.** Cold start only, enforced by one gate model per process. It ends when authentication and one
+  forced Today refresh have settled (success or visible failure), or 8 seconds after authentication; no minimum
+  wait. Progress is never invented: the bar is a moving segment, and a measured fill exists only for work that
+  reports it (none does today). Sign-in and failure states crossfade to their own screens. The launch screen is the
+  same static dark colour. Quick off switch: Settings > General > Opening screen (a local setting, default on) and
+  `--no-opening` in debug.
+- **Icons.** The iPhone and Watch icons and the web favicon, touch and PWA icons are composited from
+  `cognitive-lattice-transparent.png` on the opening's near-black navy; the Watch version is larger for its round mask.
+- **Not decided here.** Dark and tinted iOS icon variants, a measured startup progress source, and real (not synthetic)
+  iPhone audio levels for the orb stay open.
+- **Verification state.** See PLAN.md. Simulator rendering was captured in macOS CI; device behaviour (Face ID timing,
+  Live Activity and WidgetKit rendering, VoiceOver, Reduce Motion, small screens) is not verified and needs the owner.
+
 ## 14 November 2026 — Cognitive lattice orb everywhere (#1832)
 
 The owner selected the cognitive lattice orb as the single Jarvis orb for every

@@ -1,3 +1,26 @@
+## Cognitive lattice orb, opening screen and icons — 14 November 2026 (P15-143 / #1834, PR #1853)
+
+Implemented: the procedural lattice in JarvisCore (model, scene, SwiftUI painter), `JarvisOrb` and every iPhone,
+Live Activity, Dynamic Island, Home widget and Watch orb on it, the cold-start opening screen (cold start only,
+fresh Today refresh, 0.3 s crossfade, Settings off switch, static launch colour), the iPhone and Watch icons and the
+web favicon from the concept, and the web stage, composer and working orbs on the same generator. The old orb
+drawing, geometry, tokens and web shell/ribbons/motes were deleted. The written inventory is
+`docs/ui/cognitive-lattice-inventory.md` and the PR description.
+
+Observed: `swift test` in JarvisCore passes 79 tests on Linux (including the golden file shared with the web, state
+continuity, containment, 1.6 s pulse and the opening layout, network and policy). Web `npm run lint`, `npm run build` and
+`npx vitest run` (33 tests) pass, and the real stage, composer and working orbs were inspected in headless Chrome
+(SwiftShader) in both themes, at desktop and phone widths, with motion on and off, in all four states. In macOS CI (run
+43660895519) the Watch app and complications built for simulator and physical-device release, the iPhone app built with every
+extension, and the simulator captures ran: the orb gallery shows every state and five sizes; the opening video shows the
+network and bar moving; the measured-bar variant and the Home widget layouts render the lattice. Screenshots taken
+at different times for the opening came out byte-identical while the video moved, so rely on the video.
+
+Not verified: any device (Face ID timing, interrupted transitions, background and resume, deep links, VoiceOver,
+Reduce Motion, small screens, battery and frame rate), WidgetKit and Live Activity rendering of the lattice
+(only simulator layout was seen), the Watch simulator orb screens, web on a real GPU, and Linux iOS CI for this
+exact head (the PR is a draft). Next: owner judges the look on TestFlight; the off switch is in Settings.
+
 ## Voice caption follow-up — 13 November 2026 (#1823)
 
 Phone captions follow accumulating user and assistant text in a bounded scroll
