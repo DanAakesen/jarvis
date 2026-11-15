@@ -18,6 +18,12 @@ store resolves a supplied id in the vault before writing, and a repeat answers
 "Already in the inbox". The Watch path in this step is the Shortcut, which runs on
 Apple Watch; a native Watch-app action is a follow-up because it cannot be compiled
 or tested here.
+Review follow-ups: one attempt per capture key at a time (in-process lock, and a fresh
+reservation row answers 409 "already being saved"; an older one is an unknown outcome and the
+vault is checked first), a capture that already landed is recovered from the vault before the
+model is asked again, triage has its own 12-second deadline inside the capture's 30 so a stalled
+model costs only structure, and the verbatim quote limit is 16 KB so the 4000-character contract
+holds in any language (the design said 4 KB).
 
 ## 15 November 2026 — Inbox tools for chat and voice (#1855, step 4)
 

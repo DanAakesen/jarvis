@@ -63,13 +63,14 @@ function credentialStore() {
   return { rows, verify, credentials: new InboxCaptureCredentials(store, config.auth.ownerObjectId) };
 }
 
-function fixture(options: { model?: (prompt: { system: string; user: string }) => Promise<string | undefined>; owner?: boolean } = {}) {
+function fixture(options: { model?: (prompt: { system: string; user: string }, signal: AbortSignal) => Promise<string | undefined>; owner?: boolean; triageTimeoutMs?: number } = {}) {
   const { files, vault } = memoryVault();
   const store = createInboxStore({ vault, now: () => new Date('2026-11-14T21:41:00Z') });
   const creds = credentialStore();
   const capture = createInboxCapture({
     store,
-    ...(options.model ? { model: async (prompt) => options.model!(prompt) } : {}),
+    ...(options.model ? { model: async (prompt, signal) => options.model!(prompt, signal) } : {}),
+    ...(options.triageTimeoutMs === undefined ? {} : { triageTimeoutMs: options.triageTimeoutMs }),
     now: () => new Date('2026-11-14T21:41:00Z'),
   });
   const module = createInboxModule({
@@ -146,6 +147,60 @@ describe('inbox capture endpoint', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json()).toMatchObject({ triaged: false, saved: [{ title: 'ideas still land' }] });
     }
+  });
+
+  it('serializes overlapping attempts with the same key: different titles still make one note', async () => {
+    let call = 0;
+    const { post, creds, files } = fixture({
+      model: async () => {
+        call += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return JSON.stringify({ notes: [{ title: call === 1 ? 'First title' : 'Second title', note: '' }] });
+      },
+    });
+    const { credential } = await creds.credentials.issue('Shortcut');
+    const [first, second] = await Promise.all([
+      post('/inbox/capture', { captureId, text: 'one thought' }, bearer(credential)),
+      post('/inbox/capture', { captureId, text: 'one thought' }, bearer(credential)),
+    ]);
+    expect([first.statusCode, second.statusCode]).toEqual([200, 200]);
+    expect([first.json().repeated, second.json().repeated].sort()).toEqual([false, true]);
+    expect(files.size).toBe(1);
+  });
+
+  it('recovers a capture that already landed from the vault before asking the model again, even with no index', async () => {
+    let available = false;
+    const { post, creds, files } = fixture({
+      model: async () => available
+        ? JSON.stringify({ notes: [{ title: 'Idea one', note: '' }, { title: 'Idea two', note: '' }] })
+        : undefined,
+    });
+    const { credential } = await creds.credentials.issue('Shortcut');
+    expect((await post('/inbox/capture', { captureId, text: 'two ideas in one breath' }, bearer(credential))).json()).toMatchObject({ triaged: false, repeated: false });
+    available = true;
+    const retry = await post('/inbox/capture', { captureId, text: 'two ideas in one breath' }, bearer(credential));
+    expect(retry.json()).toMatchObject({ repeated: true });
+    expect(files.size).toBe(1);
+  });
+
+  it('saves the raw text when the model stalls: triage has its own deadline inside the capture\'s', async () => {
+    const { post, creds, files } = fixture({
+      triageTimeoutMs: 40,
+      model: (_prompt, abort) => new Promise((_resolve, reject) => abort.addEventListener('abort', () => reject(new Error('aborted')), { once: true })),
+    });
+    const { credential } = await creds.credentials.issue('Shortcut');
+    const response = await post('/inbox/capture', { captureId, text: 'saved despite a stalled model' }, bearer(credential));
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ triaged: false, saved: [{ title: 'saved despite a stalled model' }] });
+    expect(files.size).toBe(1);
+  });
+
+  it('accepts the advertised 4000 characters in any language', async () => {
+    const { post, creds, files } = fixture();
+    const { credential } = await creds.credentials.issue('Shortcut');
+    const text = 'ø'.repeat(4_000);
+    expect((await post('/inbox/capture', { captureId, text }, bearer(credential))).statusCode).toBe(200);
+    expect([...files.values()][0]).toContain(`"${text}"`);
   });
 
   it('gives the model only the capture, as data, and never follows instructions inside it', async () => {

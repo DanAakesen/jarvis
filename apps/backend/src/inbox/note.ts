@@ -4,7 +4,8 @@ import { shouldRedact } from '../vault/index.js';
 export const INBOX_DIR = 'Inbox';
 export const INBOX_CLOSED_DIR = 'Inbox/Closed';
 export const MAX_INBOX_NOTE_BYTES = 8 * 1024;
-export const MAX_INBOX_QUOTE_BYTES = 4 * 1024;
+/** Room for 4000 characters in any language (up to four bytes each), so the character limit of capture is the binding one. */
+export const MAX_INBOX_QUOTE_BYTES = 16 * 1024;
 export const MAX_INBOX_TITLE_LENGTH = 120;
 const maxFileNameTitleLength = 80;
 const timeZone = 'Europe/Copenhagen';

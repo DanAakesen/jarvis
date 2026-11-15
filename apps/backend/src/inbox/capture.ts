@@ -4,7 +4,7 @@ import type { InboxIndex } from './item-index.js';
 import { InboxError, cleanText, captureNoteId, inboxDate, MAX_INBOX_QUOTE_BYTES } from './note.js';
 import { shouldRedact } from '../vault/index.js';
 import type { InboxStore } from './store.js';
-import { triageCapture } from './triage.js';
+import { maxTriagedNotes, triageCapture } from './triage.js';
 
 export const captureSources = ['watch', 'shortcut', 'app', 'other'] as const;
 export type CaptureSource = typeof captureSources[number];
@@ -31,6 +31,10 @@ const maxConcurrentTriage = 4;
 const maxTriageCallsPerMinute = 20;
 /** About 0.9 DKK at the design's estimate of 0.015 DKK a call, inside the 1 DKK/day inbox ceiling. Per replica until step 8 measures. */
 const maxTriageCallsPerDay = 60;
+/** Triage is optional: it gets its own deadline so a stalled model can never keep the raw capture from being saved. */
+const triageTimeoutMs = 12_000;
+/** A reservation without a location younger than this is another attempt still running; older means its outcome is unknown. */
+const inFlightMs = 45_000;
 
 export function validRawCapture(value: unknown): value is RawCapture {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -51,12 +55,21 @@ export function createInboxCapture(options: {
   readonly index?: InboxIndex | undefined;
   readonly model?: ApprovalModelPort | undefined;
   readonly now?: () => Date;
+  readonly triageTimeoutMs?: number;
   readonly log?: (event: 'inbox.index_unavailable' | 'inbox.triage', fields: { readonly outcome: string }) => void;
 }) {
   const now = options.now ?? (() => new Date());
   const log = options.log ?? (() => {});
+  const triageDeadline = options.triageTimeoutMs ?? triageTimeoutMs;
   const minute = new SlidingWindowRateLimiter([{ windowMs: 60_000, max: maxTriageCallsPerMinute }], now);
   let triaging = 0;
+  // One attempt at a time per capture key in this replica; the reservation row guards across replicas.
+  const inFlight = new Map<string, Promise<unknown>>();
+  async function serialized<T>(key: string, work: () => Promise<T>): Promise<T> {
+    const run = (inFlight.get(key) ?? Promise.resolve()).catch(() => undefined).then(work);
+    inFlight.set(key, run);
+    try { return await run; } finally { if (inFlight.get(key) === run) inFlight.delete(key); }
+  }
   let day = '';
   let dayCalls = 0;
 
@@ -93,6 +106,10 @@ export function createInboxCapture(options: {
     if (!validRawCapture(value)) {
       throw new InboxError('invalid', 'Send a unique captureId (16-64 letters, digits, dots, hyphens or underscores) and up to 4000 characters of text.');
     }
+    return serialized(value.captureId.toLowerCase(), () => captureOnce(value, signal));
+  };
+
+  async function captureOnce(value: RawCapture, signal: AbortSignal): Promise<CaptureResult> {
     const text = cleanText(value.text, 'text', MAX_INBOX_QUOTE_BYTES);
     if (!text) throw new InboxError('invalid', 'There is nothing to capture.');
     if (shouldRedact(text)) {
@@ -105,13 +122,21 @@ export function createInboxCapture(options: {
       // The first note is written last, so a row with a location means the whole capture landed.
       if (reserved.row.path) {
         const items = await existing(value.captureId, signal);
-        if (items.length > 0) return { items, triaged: true, repeated: true };
-      } else {
-        const earlier = await options.store.find(firstId, signal);
-        if (earlier) {
-          if (options.index) await bestEffort(() => options.index!.complete(earlier.id, earlier.path, earlier.sha, signal), signal);
-          return { items: [{ id: earlier.id, title: earlier.title }], triaged: true, repeated: true };
+        if (items.length > 0) return { items, triaged: false, repeated: true };
+      } else if (at.getTime() - reserved.row.createdAt.getTime() < inFlightMs) {
+        throw new InboxError('conflict', 'This capture is already being saved. Retry in a moment; it will not be saved twice.');
+      }
+    }
+    // Without a fresh reservation (no index, a lost row, or an unknown earlier outcome) the vault is the judge: a capture
+    // that already landed is returned before the model is asked again.
+    if (!reserved?.inserted) {
+      const found = await options.store.findMany(
+        Array.from({ length: maxTriagedNotes }, (_value, position) => captureNoteId(value.captureId, position)), signal);
+      if (found.some((item) => item.id === firstId)) {
+        for (const item of found) {
+          if (options.index) await bestEffort(() => options.index!.complete(item.id, item.path, item.sha, signal), signal);
         }
+        return { items: found.map(({ id, title }) => ({ id, title })), triaged: false, repeated: true };
       }
     }
 
@@ -120,9 +145,12 @@ export function createInboxCapture(options: {
     if (allowTriage(at)) {
       triaging += 1;
       try {
-        const result = await triageCapture(text, options.model, signal);
+        const result = await triageCapture(text, options.model, AbortSignal.any([signal, AbortSignal.timeout(triageDeadline)]));
         notes = result.notes;
         triaged = result.triaged;
+      } catch (error) {
+        // Only the overall deadline or a disconnect stops the capture; a slow or failing model falls back to the raw text.
+        if (signal.aborted) throw error;
       } finally { triaging -= 1; }
     }
     log('inbox.triage', { outcome: triaged ? 'model' : 'raw' });
@@ -146,7 +174,7 @@ export function createInboxCapture(options: {
       items.unshift({ id: item.id, title: item.title });
     }
     return { items, triaged, repeated: writes === 0 };
-  };
+  }
 }
 
 export type InboxCapture = ReturnType<typeof createInboxCapture>;
