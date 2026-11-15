@@ -24,6 +24,11 @@ anchors beyond the edges; two links pass behind the orb and the orb's disc is ma
 macOS CI run 43687222718: the simulator opening screen shows the sparse background with lines passing behind the orb
 (`iteration-2026-11-15/ios-opening-round3-3s.png`).
 
+Round 4 — 15 November 2026: owner asked for a tiny additive glow on the background lines and nodes, no isolated dots
+(every visible node has a link running toward the orb: three links added to a hidden anchor at the orb centre,
+`JarvisOpeningNetwork.orbAnchor`, which the screen maps to the real orb centre) and an opacity fade along links as they
+approach the orb (about 40% at the sphere's edge, still hidden behind it). The orb is untouched.
+
 Observed: `swift test` in JarvisCore passes 79 tests on Linux (including the golden file shared with the web, state
 continuity, containment, 1.6 s pulse and the opening layout, network and policy). Web `npm run lint`, `npm run build` and
 `npx vitest run` (33 tests) pass, and the real stage, composer and working orbs were inspected in headless Chrome

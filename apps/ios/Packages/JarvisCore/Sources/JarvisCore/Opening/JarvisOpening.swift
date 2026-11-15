@@ -50,8 +50,9 @@ public struct JarvisOpeningLayout: Equatable, Sendable {
 }
 
 /// The sparse, dim network behind the orb: a handful of small nodes joined by long, angular lines that run off the
-/// edges of the screen, two of them passing behind the orb. Fixed positions as fractions of the screen (modelled on
-/// `jarvis-opening-selected.png`), so the background is the same on every launch and never moves.
+/// edges of the screen. Every visible node has a link running toward the orb, so no dot is isolated; those links
+/// pass behind the orb or end at its centre (`orbAnchor`), hidden by the sphere. Fixed positions as fractions of the
+/// screen (modelled on `jarvis-opening-selected.png`), so the background is the same on every launch and never moves.
 public struct JarvisOpeningNetwork: Sendable {
     public struct Node: Equatable, Sendable {
         public let x: Double
@@ -62,21 +63,26 @@ public struct JarvisOpeningNetwork: Sendable {
 
     public let nodes: [Node]
     public let links: [[Int]]
+    /// The hidden node at the orb's centre. The screen replaces its position with the real orb centre.
+    public let orbAnchor: Int
 
     public static let shared = JarvisOpeningNetwork()
 
     private init() {
-        // Visible nodes (0...6), then anchors beyond the edges (7...13) that carry lines off-screen.
+        // Visible nodes (0...6), anchors beyond the edges (7...13), then the orb anchor (14).
         let points: [(Double, Double, Double)] = [
             (0.81, 0.055, 0.95), (0.143, 0.238, 1.0), (0.977, 0.284, 0.7), (0.027, 0.488, 0.7),
             (0.904, 0.665, 0.9), (0.089, 0.794, 0.8), (0.911, 0.859, 0.85),
             (-0.08, 0.185, 0), (0.97, -0.05, 0), (1.08, 0.36, 0), (-0.08, 0.55, 0),
             (0.32, 1.05, 0), (0.74, 1.05, 0), (1.08, 0.62, 0),
+            (0.5, 0.39, 0),
         ]
         nodes = points.map { Node(x: $0.0, y: $0.1, brightness: $0.2) }
+        orbAnchor = 14
         links = [
             [1, 4], [0, 5], [0, 1], [0, 2], [2, 4], [4, 6], [3, 5], [1, 3],
             [1, 7], [0, 8], [2, 9], [3, 10], [5, 11], [6, 12], [4, 13],
+            [2, 14], [3, 14], [6, 14],
         ]
     }
 }

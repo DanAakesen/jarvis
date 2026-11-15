@@ -65,37 +65,67 @@ struct JarvisOpeningView: View {
 }
 
 /// The dim network behind the orb. Fixed positions from `JarvisOpeningNetwork`; it never animates. Lines run behind
-/// the orb: the orb's disc is cut out of the network, so nothing is drawn over the sphere.
+/// the orb: the orb's disc is cut out of the network, so nothing is drawn over the sphere. A faint additive glow
+/// softens lines and nodes, and each line fades a little as it nears the orb.
 private struct JarvisOpeningNetworkView: View {
     var orbCenterY: Double
     var orbRadius: Double
 
+    /// How bright a line is at a distance from the orb centre: full far away, about 40% at the sphere's edge.
+    private func fade(_ distance: Double) -> Double {
+        let t = max(0, min(1, (distance - orbRadius) / (orbRadius * 1.6)))
+        return 0.4 + 0.6 * t * t * (3 - 2 * t)
+    }
+
     var body: some View {
         Canvas { context, size in
+            let orbCenter = CGPoint(x: size.width / 2, y: orbCenterY)
             var visible = Path(CGRect(origin: .zero, size: size))
             visible.addEllipse(in: CGRect(
-                x: size.width / 2 - orbRadius, y: orbCenterY - orbRadius, width: orbRadius * 2, height: orbRadius * 2
+                x: orbCenter.x - orbRadius, y: orbCenter.y - orbRadius, width: orbRadius * 2, height: orbRadius * 2
             ))
             context.clip(to: visible, style: FillStyle(eoFill: true))
+            var glow = context
+            glow.blendMode = .plusLighter
             let network = JarvisOpeningNetwork.shared
-            func point(_ node: JarvisOpeningNetwork.Node) -> CGPoint {
-                CGPoint(x: node.x * size.width, y: node.y * size.height)
+            func point(_ index: Int) -> CGPoint {
+                if index == network.orbAnchor { return orbCenter }
+                let node = network.nodes[index]
+                return CGPoint(x: node.x * size.width, y: node.y * size.height)
             }
-            var lines = Path()
+            let line = JarvisDesignTokens.openingLine
             for link in network.links {
-                lines.move(to: point(network.nodes[link[0]]))
-                lines.addLine(to: point(network.nodes[link[1]]))
+                let start = point(link[0]), end = point(link[1])
+                var path = Path()
+                path.move(to: start)
+                path.addLine(to: end)
+                // Sample the fade along the link so it dims toward the orb on whichever side it approaches.
+                func shading(_ base: Double) -> GraphicsContext.Shading {
+                    let steps = 10
+                    let stops = (0...steps).map { step -> Gradient.Stop in
+                        let t = Double(step) / Double(steps)
+                        let x = start.x + (end.x - start.x) * t, y = start.y + (end.y - start.y) * t
+                        let distance = ((x - orbCenter.x) * (x - orbCenter.x) + (y - orbCenter.y) * (y - orbCenter.y)).squareRoot()
+                        return Gradient.Stop(color: line.opacity(base * fade(distance)), location: t)
+                    }
+                    return .linearGradient(Gradient(stops: stops), startPoint: start, endPoint: end)
+                }
+                glow.stroke(path, with: shading(0.07), style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
+                context.stroke(path, with: shading(0.18), style: StrokeStyle(lineWidth: 0.7, lineCap: .round))
             }
-            context.stroke(lines, with: .color(JarvisDesignTokens.openingLine.opacity(0.18)), lineWidth: 0.7)
-            for node in network.nodes where node.brightness > 0 {
-                let p = point(node)
-                context.fill(
-                    Path(ellipseIn: CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)),
-                    with: .color(JarvisDesignTokens.openingLine.opacity(0.09 * node.brightness))
+            for index in network.nodes.indices where network.nodes[index].brightness > 0 {
+                let p = point(index)
+                let brightness = network.nodes[index].brightness
+                glow.fill(
+                    Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)),
+                    with: .radialGradient(
+                        Gradient(colors: [line.opacity(0.22 * brightness), line.opacity(0)]),
+                        center: p, startRadius: 0, endRadius: 7
+                    )
                 )
                 context.fill(
                     Path(ellipseIn: CGRect(x: p.x - 1.4, y: p.y - 1.4, width: 2.8, height: 2.8)),
-                    with: .color(JarvisDesignTokens.openingLine.opacity(0.7 * node.brightness))
+                    with: .color(line.opacity(0.7 * brightness))
                 )
             }
         }

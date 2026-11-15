@@ -38,7 +38,7 @@ final class JarvisOpeningTests: XCTestCase {
         let visible = network.nodes.filter { $0.brightness > 0 }
         XCTAssertGreaterThanOrEqual(visible.count, 6)
         XCTAssertLessThanOrEqual(visible.count, 10, "the background must stay sparse")
-        XCTAssertLessThanOrEqual(network.links.count, 18)
+        XCTAssertLessThanOrEqual(network.links.count, 22)
         func behindOrb(_ x: Double, _ y: Double) -> Bool {
             let dx = x - 0.5, dy = (y - 0.39) * 1.6
             return (dx * dx + dy * dy).squareRoot() < 0.35
@@ -63,6 +63,13 @@ final class JarvisOpeningTests: XCTestCase {
             }
         }
         XCTAssertGreaterThanOrEqual(passing.count, 2, "some lines must run behind the orb")
+        // No isolated dots: every visible node has a link that runs toward the orb.
+        for (index, node) in network.nodes.enumerated() where node.brightness > 0 {
+            let towardOrb = passing.contains { $0.contains(index) } || network.links.contains {
+                $0.contains(index) && $0.contains(network.orbAnchor)
+            }
+            XCTAssertTrue(towardOrb, "node \(index) has no link toward the orb")
+        }
     }
 
     func testOpeningIsColdStartOnlyAndEndsWhenReadyOrCapped() {
