@@ -27,15 +27,15 @@ final class WatchDictationDeadlineTests: XCTestCase {
         }
     }
 
-    func testTimeoutFiresOnceAtTwentyFiveSeconds() async {
+    func testTimeoutFiresOnceAtThirtySeconds() async {
         let sleeper = Sleeper()
         let deadline = WatchDictationDeadline(sleep: { await sleeper.sleep($0) })
         var timeouts = 0
         var finished: CheckedContinuation<Void, Never>?
         deadline.start { timeouts += 1; finished?.resume(); finished = nil }
         let wait = await sleeper.next()
-        XCTAssertEqual(WatchDictationDeadline.seconds, 25)
-        XCTAssertEqual(sleeper.durations, [.seconds(25)])
+        XCTAssertEqual(WatchDictationDeadline.seconds, 30)
+        XCTAssertEqual(sleeper.durations, [.seconds(30)])
         await withCheckedContinuation { finished = $0; wait.resume() }
         XCTAssertEqual(timeouts, 1)
         deadline.cancel()

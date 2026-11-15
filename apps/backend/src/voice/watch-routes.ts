@@ -9,9 +9,13 @@ const MAX_BASE64_LENGTH = Math.ceil(MAX_AUDIO_BYTES / 3) * 4;
 const TRANSCRIPTION_TIMEOUT_MS = 20_000;
 const MAX_ACTIVE_REQUESTS = 2;
 
-const transcriptionRequests = new WeakMap<FastifyRequest, { controller: AbortController; reason?: string }>();
+const transcriptionRequests = new WeakMap<FastifyRequest, { controller: AbortController; reason?: string; lastStage: string }>();
 
-function logStage(request: FastifyRequest, stage: string, fields: { status?: string; reason?: string } = {}): void {
+interface StageFields { status?: string; reason?: string; lastStage?: string; audioBytes?: number; audioMs?: number; errorCode?: number }
+
+function logStage(request: FastifyRequest, stage: string, fields: StageFields = {}): void {
+  const state = transcriptionRequests.get(request);
+  if (state && stage !== 'deadline_exceeded' && stage !== 'completed') state.lastStage = stage;
   request.log.info({ stage, durationMs: Math.round(performance.now() - request.requestStartedAt), ...fields }, 'watch_transcription.stage');
 }
 
@@ -20,12 +24,13 @@ export function installWatchTranscriptionDeadline(app: FastifyInstance<Server, I
     if (request.method !== 'POST' || ![watchTranscriptionPath, '/watch/transcribe'].includes(request.routeOptions.url ?? '')) return;
     logStage(request, 'request_accepted');
     const controller = new AbortController();
-    const state: { controller: AbortController; reason?: string } = { controller };
+    const state: { controller: AbortController; reason?: string; lastStage: string } = { controller, lastStage: 'request_accepted' };
     transcriptionRequests.set(request, state);
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      logStage(request, 'deadline_exceeded');
+      // lastStage shows whether the time went to upload, authentication or recognition.
+      logStage(request, 'deadline_exceeded', { lastStage: state.lastStage });
       if (!reply.sent && !reply.raw.destroyed) {
         reply.header('Cache-Control', 'no-store').code(504).send({ error: 'Transcription timed out' });
       }
@@ -111,6 +116,8 @@ export function registerWatchTranscriptionRoute(app: FastifyInstance<Server, Inc
       return reply.code(400).send({ error: 'Invalid audio' });
     }
     if (!transcribe) return reply.code(503).send({ error: 'Transcription unavailable' });
+    // PCM16 at 24 kHz mono is 48 bytes per millisecond; the request clock also covers the upload.
+    logStage(request, 'audio_received', { audioBytes: pcm.length, audioMs: Math.round(pcm.length / 48) });
 
     const state = transcriptionRequests.get(request);
     if (!state) return reply.code(503).send({ error: 'Transcription unavailable' });
@@ -124,9 +131,9 @@ export function registerWatchTranscriptionRoute(app: FastifyInstance<Server, Inc
     try {
       if (request.raw.aborted || reply.raw.destroyed || app.isStopping) abort();
       const text = await Promise.race([
-        transcribe(pcm, controller.signal, (stage, reason) => {
+        transcribe(pcm, controller.signal, (stage, reason, detail) => {
           if (reason) state.reason = reason;
-          logStage(request, stage, reason ? { reason } : {});
+          logStage(request, stage, { ...(reason ? { reason } : {}), ...(detail?.errorCode === undefined ? {} : { errorCode: detail.errorCode }) });
         }),
         new Promise<never>((_resolve, reject) => {
           if (controller.signal.aborted) {

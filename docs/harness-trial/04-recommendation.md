@@ -1,87 +1,90 @@
-# 4. Recommendation and the smallest first experiment
+# 4. Recommendation and the smallest spike
 
 Part of the [Copilot-harness trial](README.md) (#1837).
 
 ## Recommendation
 
-**Do not replace the harness. Add the Copilot harness as a second brain, in gated steps, starting with a local bench that costs 0 DKK.**
+**Move to one Jarvis agent on the managed Copilot harness in Foundry, in phases, with the current path kept as automatic fallback. Start with a spike that can prove or kill the design in a day.**
+
+Not bits and pieces: the value is the whole package together. One agent with skills, subagents, MCP reach and a long-lived conversation serves chat, proactive and the inbox. The backend shrinks to a gateway.
 
 | Why | Evidence |
 | --- | --- |
-| Most of the "hardcoded" feel sits in tools, guards and the proactive pipeline, which any harness would inherit | [Diagnosis](01-diagnosis.md): R3-R6, G6, H1-H3 |
-| What a harness *does* fix (loop, skills, sessions, compaction, investigating instead of summarising) matches the two top priorities in p0.md: the long-lived inbox and a proactive Jarvis that can look things up | [Gains](02-quality-gains.md) 4-7 |
-| "Unrestricted" is a credential decision. A hosted lane with a read-only Azure role and GitHub access delivers it far cheaper than moving chat | [Diagnosis](01-diagnosis.md#what-makes-the-copilot-app-feel-unrestricted) |
-| A full move costs the most, touches the path Dan uses all day, and would consume more credits than Pro+ includes at assumed usage | [Option D](03-options.md#option-d-full-move-all-chat-turns-on-the-copilot-harness) |
-| The Copilot engine improves with every model release with no work from Jarvis, which is the quality-grows-with-models rule from `docs/decisions.md` (14 Nov 2026) | [Gains](02-quality-gains.md) 10 |
+| Most of the rigid feel is the loop, the tool lookup and the one-shot proactive pipeline, all of which the harness replaces | [Diagnosis](01-diagnosis.md) |
+| The last attempt kept our loop and switched the rest off, so it could not show a gain | [Target](03-target-architecture.md#what-the-parked-attempt-was-and-what-is-different) |
+| Reach, skills, subagents, files and long conversations are the p0.md priorities and are what the harness is for | [Gains](02-quality-gains.md) |
+| No container of ours to run: Foundry runs the loop and sandbox, billed per sandbox hour from 1 Dec and free before | [Cost](03-target-architecture.md#cost) |
+| Models improve under it without work from us | `docs/decisions.md`, 14 Nov |
 
-To the doubt about the own harness: it is not the weakest link. Its loop, discovery and memory window are the parts a mature engine does better; its guards and receipts are the parts worth keeping.
+What it costs: about **+176 DKK a month** for the same work as today and **+385** for the full workload, expected case (603 today, 779 and 988). The high band is far higher if long conversations re-send large contexts, which the gateway caps. See the [comparison](03-target-architecture.md#total-monthly-bill-today-versus-target).
 
-## Path and gates
+What could kill it, all unknown today: per-turn authority on MCP writes, whether Terra works, what a turn really costs, streaming latency, and whether the managed sandbox is released when idle, as hosted-agent sessions are (the measured run-rate of today's agent is only about 2-4 DKK a month).
+
+## Gates
 
 ```mermaid
 flowchart TB
-    S0["Step 0: local A/B bench<br/>P15-158, 5 days, 0 DKK cash,<br/>max 600 credits"] --> G0{"Gate 0<br/>Copilot clearly better on<br/>reach and investigation?"}
-    G0 -->|"no"| Stop["Stop. Keep current harness.<br/>Write down why."]
-    G0 -->|"yes"| A["Option A: Hands lane<br/>cap 1,500 credits, about 9 DKK"]
-    A --> G1{"Gate 1<br/>4 weeks, caps held,<br/>Dan uses it unprompted?"}
-    G1 -->|"no"| Stop
-    G1 -->|"yes"| B["Option B: Night shift<br/>reuses the A worker"]
-    B --> G2{"Gate 2<br/>useful-outreach rate up,<br/>budget held?"}
-    G2 -->|"yes"| C["Option C: Second brain<br/>inbox session"]
-    C --> G3{"Gate 3<br/>chat A/B shows a gain<br/>worth the credits?"}
-    G3 -->|"yes"| D["Option D: Full move<br/>old path stays as fallback"]
-    G3 -->|"no"| Keep["Stay at C"]
+    S0["Spike: one test agent in Foundry<br/>about 1 day, 30 DKK cap"] --> G0{"Gate 0<br/>all seven checks pass?"}
+    G0 -->|"no"| X["Stop or switch to route 2:<br/>Copilot SDK inside a hosted agent"]
+    G0 -->|"yes"| P1["Phase 1: Test runtime selector"]
+    P1 --> G1{"Gate 1<br/>Dan prefers it in a blind A/B,<br/>cost per turn at most 5x today"}
+    G1 -->|"yes"| P2["Phase 2: proactive and inbox behind a flag"]
+    P2 --> G2{"Gate 2<br/>useful-outreach rate up,<br/>budget held"}
+    G2 -->|"yes"| P3["Phase 3: chat default, old path as fallback"]
+    G1 -->|"no"| Stay["Stay on current"]
 ```
 
-| Gate | Measure | Pass |
-| --- | --- | --- |
-| 0 | Blind A/B of 20 tasks scored by Dan; credits and wall time per task | Copilot wins at least 12 of 20 overall and at least 8 of the 12 Azure, GitHub and investigation tasks; median 25 credits or less per task; no guard breach |
-| 1 | Four weeks of the Hands lane | Monthly credits at or under the cap; $0 overage; Dan used it unprompted at least 10 times; no write or secret read slipped past the hooks |
-| 2 | Four weeks of the Night shift beside the old pipeline | Thumbs-up share at or above the old pipeline; at most the agreed pushes per day; proactive spend under 100 DKK/month including credit-equivalent |
-| 3 | Shadow chat turns on the same prompts | Better score in a blind comparison, first-token latency within 1.5x, credits within the plan |
+## The spike (filed as P15-158)
 
-## Smallest first experiment: step 0, local A/B bench (filed as P15-158)
-
-Purpose: measure harness quality and reach with real Jarvis tools and real data, before any Azure resource or product code exists.
+Purpose: answer the seven questions that decide the design, on a new test agent, with nothing in production touched.
 
 ```mermaid
 flowchart LR
-    P["20 prompts<br/>5 buckets"] --> J["Current Jarvis chat<br/>as is"]
-    P --> C["Copilot CLI or SDK<br/>on Dan's PC"]
-    C --> M1["MCP shim over /tools<br/>read-only subset"]
-    C --> M2["GitHub MCP"]
-    C --> M3["Azure MCP --read-only<br/>Dan's az login"]
-    C --> SK["3 starter skills"]
-    J --> Sc["Blind scorecard<br/>score, refusals, time, credits"]
-    C --> Sc
+    SK["1 skill: inbox triage<br/>SKILL.md in the repo"] --> TA
+    TA["New test agent<br/>microsoft_copilot_preview<br/>gpt-6.1-terra, Sweden Central"] --> M1["Jarvis MCP shim<br/>3-5 read tools, logs headers"]
+    TA --> M2["GitHub MCP, read-only"]
+    TA --> M3["Azure MCP, Reader role"]
+    P["20 prompts"] --> TA
+    P --> CUR["Current Jarvis chat"]
+    TA --> SC["Scorecard and cost table"]
+    CUR --> SC
 ```
 
-| Item | Plan |
+| # | Question | How it is answered | Pass |
+| --- | --- | --- | --- |
+| 1 | Does Terra work in the harness? | Repeat the call that failed on 6 Nov, with and without reasoning effort | No 400 |
+| 2 | What identity and headers reach an MCP tool call? | The shim logs what arrives (no bodies) | A stable owner-level identity; whether a per-turn value can be passed |
+| 3 | Can approvals work? | One MCP tool with `require_approval`; answer the `mcp_approval_request` from a script | Round trip works, per tool if possible |
+| 4 | What does a turn cost? | Tokens and cached tokens per response, deployment metrics, Azure cost the next day | Measured context per call, tool-description size, cache hit rate |
+| 5 | Time to first token and streaming | 20 timed streamed turns against current chat | Within 1.5 times today's; text before the first tool call streams |
+| 6 | Does one conversation last? | Resume after 24 hours; push past the context limit | Coherent, or a clear limit and compaction behaviour |
+| 7 | Reach and quality | 20 prompts in 5 buckets (Azure, GitHub, investigation, inbox thread, plain chat), blind scored 1-5 by Dan | Copilot wins at least 12 of 20, and at least 8 of the 12 reach and investigation prompts |
+
+| Limit | Value |
 | --- | --- |
-| Where | Dan's PC. No Azure resource, no deployment, no change to product code. The shim and skills live outside the product tree (a scratch folder or a branch) |
-| Buckets (4 prompts each) | Azure (cost, logs, resources); GitHub (PRs, CI, issues, repo state); investigation (a proactive-style question across sources); inbox and follow-up (a multi-day thread with a resumed session); plain chat and memory |
-| Scoring | Dan scores answers 1-5 blind (A/B order shuffled), plus counts of refusals, tool calls, wall time and credits (`session.usage.getMetrics`) |
-| Cap | 600 credits in total (about 40 DKK-eq; 9% of Pro+), 40 per task via `sessionLimits.maxAiCredits`, 5 days |
-| Preconditions | Dan reads his plan and allowance; sets an additional-usage budget of $0 with "Stop usage when budget limit is reached"; confirms the terms for server-side use of his token before any later hosting |
-| Safety | Everything read-only. No mail send, no writes, no health or banking data in prompts. Prompts and results go to GitHub and its model providers |
-| Cash | 0 DKK |
-| Output | `docs/harness-trial/bench-results.md`: scorecard, credit table, latency table, go or stop for Gate 0 |
-| Exit | Delete the scratch folder. Nothing else was created |
+| Where | One new test agent in the existing Foundry project. The existing `jarvis` agent, backend and voice are untouched. Harness runtime is free before 1 Dec |
+| Spend cap | 30 DKK on models: a dedicated Terra deployment with a low token-per-minute quota, an Azure budget alert at 30 DKK |
+| Safety | Reader role only; read-only GitHub; no writes, no mail, no health or banking data in prompts. The MCP shim and skill live outside the product tree |
+| Time | One day plus a day to read the cost the next morning |
+| Output | `docs/harness-trial/spike-results.md`: the seven answers, scorecard, cost per turn, go or stop for Gate 0 |
+| Exit | Delete the test agent, the deployment and the shim. Nothing else was created |
+
+The spike also checks the **sandbox meter** (Hosted or harness vCPU and memory usage) the day after, to learn the sandbox size and whether idle time is billed. Harness runtime is free before 1 Dec, so the answer must also be checked on the December bill.
 
 ## What this analysis deliberately does not do
 
 | Not done | Why |
 | --- | --- |
 | No product code, infra or settings changes | Requested scope |
-| No credit or latency measurements | None are possible without running the bench; every figure is an assumption listed in [options](03-options.md#assumptions-all-estimates-none-measured-on-jarvis) |
-| No decision entry in `docs/decisions.md` | Nothing is confirmed by Dan yet. Record one after Gate 0 |
+| No measurement of the managed harness | Needs the spike. Every Copilot-side cost is an assumed band |
+| No `docs/decisions.md` entry | Nothing is confirmed by Dan. Record one after Gate 0 |
+| No page fetch of Learn or devblogs | Blocked from this environment; excerpts via search only |
 
 ## Questions only Dan can answer
 
 | Question | Why it matters |
 | --- | --- |
-| Which Copilot plan, and what allowance is left in a normal month? | Option A at its cap equals all of Pro |
-| Credits or BYOK on Foundry if credits run short? | BYOK shows the spend on the Azure bill instead |
-| Is a personal subscription token on a server acceptable, or should a later hosted lane use an organisation token? | Factory does it today; volume and 24/7 use differ |
-| Which data may go to GitHub's model providers? | Health, banking and mail bodies are the sensitive ones |
-| Should quiet hours go (p0.md says none needed)? | They are hardcoded in `proactive/time.ts:87-90` and would limit Option B |
+| Is the design in the [target diagram](03-target-architecture.md#target-design) what you want? | It replaces the earlier A to D ladder |
+| Is a lighter model than Terra acceptable for light proactive checks and the inbox? | About 4.5 times cheaper on those lines |
+| May the spike create a test agent and a Terra deployment in the Foundry project, with a 30 DKK cap? | It needs your Azure approval |
+| Should quiet hours go (p0.md says none needed)? | They are hardcoded in `proactive/time.ts:87-90` |

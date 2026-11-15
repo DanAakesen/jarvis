@@ -122,13 +122,19 @@ describe('Fastify backend', () => {
     expect(response.json()).toEqual({ error: 'Transcription timed out' });
     expect(signal?.aborted).toBe(true);
     const logs = records.map((record) => JSON.parse(record) as { msg?: string; stage?: string; durationMs?: number; status?: string; reason?: string });
-    for (const stage of ['request_accepted', 'owner_authenticated', 'token_acquired', 'recognizer_started',
+    for (const stage of ['request_accepted', 'owner_authenticated', 'audio_received', 'token_acquired', 'recognizer_started',
       'audio_written', 'deadline_exceeded', 'completed']) {
       expect(logs.some((entry) => entry.msg === 'watch_transcription.stage' && entry.stage === stage &&
         typeof entry.durationMs === 'number')).toBe(true);
     }
     expect(logs).toContainEqual(expect.objectContaining({
       stage: 'completed', status: 'timeout', reason: 'deadline_exceeded',
+    }));
+    expect(logs).toContainEqual(expect.objectContaining({
+      stage: 'audio_received', audioBytes: 2, audioMs: 0,
+    }));
+    expect(logs).toContainEqual(expect.objectContaining({
+      stage: 'deadline_exceeded', lastStage: 'audio_written',
     }));
     expect(records.join('')).not.toContain('AAA=');
     expect(records.join('')).not.toContain('a.b.c');

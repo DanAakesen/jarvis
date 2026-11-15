@@ -1,3 +1,58 @@
+## 15 November 2026 — Watch dictation and voice on the first press (P15-160 / #1856)
+
+Build 105 feedback: dictation hung and ended with "transcription timed out", voice
+stopped with "the iPhone companion disconnected", and the voice button needed about
+ten presses. Backend stage logs showed the direct Watch request spending 6.8 s before
+a speech token and then producing no result until the 20 s server deadline, while the
+next request through the iPhone finished in about 4 s.
+
+Findings from the code, not yet confirmed on a device:
+- The Watch gave the direct request 22 s of a 25 s deadline, so a failing direct
+  attempt left the phone fallback about three seconds and the owner saw a timeout
+  even though the phone path works.
+- Every request stamped its clock before the body arrived, and the log allow-list
+  dropped any stage it did not know, so upload time, token time and recognition time
+  could not be told apart.
+- The speech token was fetched from managed identity on each request.
+- Voice start held the shared `busy` flag, disabled the button without feedback for up
+  to 40 s, and a stale phone-side dictation answered "busy" until its 60 s watchdog.
+- The Watch ended voice 3 s after WatchConnectivity reported the phone unreachable,
+  and the phone ended it after the same 3 s. A short flap therefore killed the session.
+
+Decisions:
+- Cache and prewarm the speech token with the existing refresh-ahead cache used for
+  Voice Live. A failed refresh is logged and retried, never hidden.
+- Log `audio_received` (bytes and audio duration), `token_requested`, session start,
+  speech start and end, first interim result, numeric provider error codes and the last
+  stage reached when the deadline fires. Add these to the log allow-list; no audio,
+  transcript, token or provider text is logged.
+- Treat a stopped recognizer session with no end-of-stream event as finished after
+  2 s: return the recognised text if there is any, otherwise fail honestly. This
+  refines the #1812 rule that a stop alone is not success.
+- The 20 s server deadline is unchanged. The Watch transcribing deadline is now 30 s.
+  When the phone is reachable the direct attempt is limited to 10 s and the phone gets
+  the rest; without a reachable phone the direct attempt keeps 22 s. The honest
+  timeout message is unchanged.
+- The phone replaces an abandoned dictation when a new one starts, and stops a leftover
+  dictation when voice starts, instead of answering busy.
+- Voice start no longer uses `busy`. The composer shows Starting voice or Connecting
+  to iPhone with a Cancel button, and the voice button is disabled only while that row
+  is visible. A quick `unavailable` or `busy` start failure is repeated up to three
+  times with the same request ID. This replaces the #1810 rule of never replaying a
+  start: the phone answers a repeated ID from its reply cache or reports busy while the
+  first copy runs, so it cannot open a second session. Capture start is retried twice
+  for a failing first audio-session activation.
+- A reachability loss during a live voice session shows "Reconnecting to iPhone…". The
+  Watch waits up to 10 s after its 3 s debounce and confirms with a heartbeat; the
+  phone waits 15 s. Audio is not sent during the gap and the stall check is paused.
+  If the iPhone does not return, the error still says the companion disconnected, or
+  that voice ended on the phone while it was out of reach.
+- Watch reachability, activation and start timings are logged to the unified log
+  (categories WatchConnection and WatchVoice).
+
+Open: none of this is verified on a paired Watch. The cause of the missing recognition
+result on the direct path is not proven; the new stage logs are meant to show it.
+
 ## 14 November 2026 — How the cognitive lattice orb is built and where it stops (P15-143 / #1834)
 
 - **One generator.** The orb is grown, not drawn from an image: `JarvisLatticeModel` (seed 1834, 112 nodes in a

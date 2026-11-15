@@ -51,6 +51,25 @@ final class WatchVoiceTransportTests: XCTestCase {
         XCTAssertTrue(pressure.stalled(at: start.addingTimeInterval(9)))
     }
 
+    func testVoiceStartRetriesOnlyQuickTransientFailures() {
+        for failure in [WatchFailure.unavailable, .busy] {
+            XCTAssertTrue(WatchVoiceRecovery.shouldRetryStart(failure, attempt: 1, elapsed: 2))
+            XCTAssertTrue(WatchVoiceRecovery.shouldRetryStart(failure, attempt: WatchVoiceRecovery.startAttempts - 1, elapsed: 2))
+            XCTAssertFalse(WatchVoiceRecovery.shouldRetryStart(failure, attempt: WatchVoiceRecovery.startAttempts, elapsed: 2))
+            XCTAssertFalse(WatchVoiceRecovery.shouldRetryStart(failure, attempt: 1, elapsed: WatchVoiceRecovery.startRetryWindowSeconds))
+        }
+        for failure in [WatchFailure.signInRequired, .invalidRequest, .failed, .network] {
+            XCTAssertFalse(WatchVoiceRecovery.shouldRetryStart(failure, attempt: 1, elapsed: 0))
+        }
+        XCTAssertFalse(WatchVoiceRecovery.shouldRetryStart(CancellationError(), attempt: 1, elapsed: 0))
+    }
+
+    func testPhoneWaitsLongerThanTheWatchBeforeEndingAGap() {
+        // The Watch notices a gap after 3 s, then waits for recovery.
+        XCTAssertGreaterThan(WatchVoiceRecovery.phoneGraceSeconds, 3 + WatchVoiceRecovery.reconnectGraceSeconds)
+        XCTAssertLessThanOrEqual(WatchVoiceRecovery.phoneGraceSeconds, 15)
+    }
+
     func testPlaybackPriorityRespectsAudioOrderAndTerminalBarriers() {
         let id = UUID()
         let audio = WatchEvent(.voiceAudio, requestID: id)

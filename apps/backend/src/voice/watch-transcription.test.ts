@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sdk = vi.hoisted(() => {
   const state = {
@@ -10,8 +10,12 @@ const sdk = vi.hoisted(() => {
   };
   class FakeRecognizer {
     recognized?: (_sender: unknown, event: { result: { reason: number; text: string } }) => void;
-    canceled?: (_sender: unknown, event: { reason: number }) => void;
+    canceled?: (_sender: unknown, event: { reason: number; errorCode?: number }) => void;
     sessionStopped?: () => void;
+    sessionStarted?: () => void;
+    speechStartDetected?: () => void;
+    speechEndDetected?: () => void;
+    recognizing?: () => void;
     startContinuousRecognitionAsync = vi.fn((success: () => void) => { if (state.startAutomatically) success(); });
     stopContinuousRecognitionAsync = vi.fn();
     close = vi.fn();
@@ -47,6 +51,8 @@ describe('Watch transcription', () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => { vi.useRealTimers(); });
+
   it('uses English continuous recognition and completes on end of stream without waiting for sessionStopped', async () => {
     const token = vi.fn(async () => 'private-token');
     const stages: string[] = [];
@@ -64,7 +70,7 @@ describe('Watch transcription', () => {
     recognizer.recognized?.(null, { result: { reason: 1, text: ' next segment ' } });
     recognizer.canceled?.(null, { reason: 1 });
     await expect(promise).resolves.toBe('private speech next segment');
-    expect(stages).toEqual(['token_acquired', 'recognizer_started', 'audio_written', 'first_recognized',
+    expect(stages).toEqual(['token_requested', 'token_acquired', 'recognizer_started', 'audio_written', 'first_recognized',
       'recognizer_cancelled', 'cleanup_started', 'cleanup_finished']);
     expect(reasons).toEqual(['end_of_stream']);
     expect(recognizer.stopContinuousRecognitionAsync).toHaveBeenCalledOnce();
@@ -159,5 +165,52 @@ describe('Watch transcription', () => {
     controller.abort();
     await expect(promise).rejects.toThrow('Speech authentication cancelled');
     expect(sdk.state.recognizer).toBeUndefined();
+  });
+  it('logs provider progress and numeric cancellation codes without provider text', async () => {
+    const stages: Array<[string, string | undefined, number | undefined]> = [];
+    const promise = createAzureWatchTranscriber(endpoint, async () => 'token')(
+      Buffer.from([0, 0]), new AbortController().signal,
+      (stage, reason, detail) => stages.push([stage, reason, detail?.errorCode]),
+    );
+    await vi.waitFor(() => expect(sdk.state.recognizer).toBeDefined());
+    const recognizer = sdk.state.recognizer!;
+    recognizer.sessionStarted?.();
+    recognizer.speechStartDetected?.();
+    recognizer.recognizing?.();
+    recognizer.recognizing?.();
+    recognizer.speechEndDetected?.();
+    recognizer.canceled?.(null, { reason: 2, errorCode: 4 });
+    await expect(promise).rejects.toThrow('Speech recognition failed');
+    expect(stages.map(([stage]) => stage)).toEqual(['token_requested', 'token_acquired', 'recognizer_started',
+      'audio_written', 'session_started', 'speech_start_detected', 'first_recognizing', 'speech_end_detected',
+      'recognizer_cancelled', 'cleanup_started', 'cleanup_finished']);
+    expect(stages).toContainEqual(['recognizer_cancelled', 'provider_cancelled', 4]);
+  });
+
+  it('returns recognized speech when a stopped session is never followed by end of stream', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const stages: Array<[string, string | undefined]> = [];
+    const promise = createAzureWatchTranscriber(endpoint, async () => 'token')(
+      Buffer.from([0, 0]), new AbortController().signal, (stage, reason) => stages.push([stage, reason]),
+    );
+    await vi.waitFor(() => expect(sdk.state.recognizer).toBeDefined());
+    const recognizer = sdk.state.recognizer!;
+    recognizer.recognized?.(null, { result: { reason: 1, text: 'spoken words' } });
+    recognizer.sessionStopped?.();
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(stages).not.toContainEqual(['recognizer_stopped', 'stop_grace_elapsed']);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(promise).resolves.toBe('spoken words');
+    expect(stages).toContainEqual(['recognizer_stopped', 'stop_grace_elapsed']);
+  });
+
+  it('fails promptly when a stopped session produced no speech and no end of stream', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const promise = createAzureWatchTranscriber(endpoint, async () => 'token')(Buffer.from([0, 0]), new AbortController().signal);
+    const assertion = expect(promise).rejects.toThrow('Speech recognition ended without a result');
+    await vi.waitFor(() => expect(sdk.state.recognizer).toBeDefined());
+    sdk.state.recognizer!.sessionStopped?.();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await assertion;
   });
 });
