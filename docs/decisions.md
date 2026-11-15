@@ -1,3 +1,7 @@
+## 15 November 2026 — PI provisioning: versions-first create and visible Foundry errors (Deploy 43772286556)
+
+The first Deploy's `pi-agent` job failed on `POST /agents` with `bad_request`; the unrun REST shapes were wrong and the script hid the error body. Changes: the agent is created with `POST /agents/<name>/versions` (metadata plus definition; it creates the agent when absent, as the owner's spike did), with no separate `POST /agents`; feature headers are narrowed to `MicrosoftCopilot=V1Preview,Skills=V1Preview` for agent calls and `Skills=V1Preview` for skill calls; versions returned as integers are accepted. A failed Foundry call now prints its error `code`, `type`, `param` and `message`, sanitized (bearer and `jp.` credentials, JWTs, the MCP secret, GUIDs, URLs, long opaque values and long quoted text are removed, and the request body is never printed). Whether the definition itself (skill references, MCP `headers`) is accepted is still unproven; the next run will say.
+
 ## 15 November 2026 — PI phases 0 to 2 as one build, with a test switch (#1885, P15-174)
 
 Owner, quoted: "can we not do phase 0, 1 and 2 together in one issue? Bigger issues get better results, remember, because the worker has the context. This way I could test chat directly in the iOS app and provide direct feedback." On voice: "I think that trade off is ok. I know when I start voice I need to wait a few seconds, I do that for ChatGPT as well." On long sessions: "I don't want to test long session, as I'm not worried about that."

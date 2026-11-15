@@ -1,5 +1,7 @@
+import argparse
 import json
 import unittest
+from unittest import mock
 
 from hermetic import setUpModule  # noqa: F401
 import provision_pi_agent as pi
@@ -55,12 +57,106 @@ class DefinitionTest(unittest.TestCase):
         self.assertIsNone(pi.recover_secret({"tools": [{"type": "mcp", "headers": {"Authorization": "Bearer ***"}}]}))
         self.assertIsNone(pi.recover_secret({}))
 
+    def test_agent_is_created_versions_first_with_no_separate_agent_post(self):
+        calls = []
+
+        class Fake(pi.Az):
+            def __init__(self):
+                super().__init__("https://p.example/api/projects/x")
+
+            def rest(self, method, path, body=None, *, content_type="application/json"):
+                calls.append((method, path))
+                if method == "GET" and path == "/agents/jarvis-pi":
+                    raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found [code=NotFound]")
+                if method == "POST" and path.startswith("/skills/"):
+                    return {"version": 1}
+                if method == "POST":
+                    return {"version": 3}
+                if method == "GET":
+                    return {"status": "active", "definition": pi.build_definition(
+                        spec, instructions, "https://b/pi/mcp", "S" * 43, [dict(s, version="1") for s in skills])}
+                return {}
+
+        spec, instructions, skills = self.spec, self.instructions, self.skills
+        azure = Fake()
+        self.assertIsNone(pi.current_state(azure, "jarvis-pi"))
+        pi.ensure_skills(azure, skills, False, {})
+        self.assertEqual(skills[0]["version"], "1")
+        self.assertEqual(pi.as_version(3), "3")
+        self.assertEqual(pi.as_version("4"), "4")
+        self.assertNotIn(("POST", "/agents"), calls)
+
+    def test_provision_first_run_posts_only_versions_then_pins(self):
+        calls = []
+        spec, instructions = self.spec, self.instructions
+        stored = {}
+
+        class Fake(pi.Az):
+            def rest(self, method, path, body=None, *, content_type="application/json"):
+                calls.append((method, path))
+                if method == "GET" and path == "/agents/jarvis-pi":
+                    raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found [code=NotFound]")
+                if method == "POST" and path.startswith("/skills/"):
+                    return {"version": 1}
+                if method == "POST" and path == "/agents/jarvis-pi/versions":
+                    stored["definition"] = body["definition"]
+                    return {"version": 1}
+                if method == "GET" and path == "/agents/jarvis-pi/versions/1":
+                    return {"status": "active", "definition": stored["definition"]}
+                return {}
+
+        args = argparse.Namespace(project_endpoint="https://p.example/api/projects/x", backend_fqdn="b.example",
+                                  backend_app="app", resource_group="rg", subscription="sub")
+        with mock.patch.object(pi, "Az", Fake), mock.patch.object(pi, "configure_backend", return_value="S" * 43):
+            result = pi.provision(args)
+        self.assertEqual(result["version"], "1")
+        self.assertTrue(result["created"])
+        self.assertNotIn(("POST", "/agents"), calls)
+        self.assertIn(("POST", "/agents/jarvis-pi/versions"), calls)
+        self.assertEqual(calls[-1], ("PATCH", "/agents/jarvis-pi"))
+
+    def test_agent_and_skill_calls_use_the_documented_feature_headers(self):
+        self.assertEqual(pi.SKILL_FEATURES, "Skills=V1Preview")
+        self.assertIn("MicrosoftCopilot=V1Preview", pi.AGENT_FEATURES)
+
     def test_verify_rejects_a_readback_with_builtins_enabled(self):
         readback = {"definition": self.definition()}
         pi.verify(readback, self.spec, self.instructions)
         readback["definition"]["tools"][0]["default_config"]["enabled"] = True
         with self.assertRaises(pi.Blocked):
             pi.verify(readback, self.spec, self.instructions)
+
+
+class ErrorReportTest(unittest.TestCase):
+    secret = "Q" * 43
+
+    def setUp(self):
+        pi.REDACT[:] = [self.secret]
+
+    def tearDown(self):
+        pi.REDACT.clear()
+
+    def test_shows_foundry_code_param_and_message(self):
+        stderr = (b'ERROR: Bad Request({"error":{"code":"invalid_payload","param":"definition.skills[0].version",'
+                  b'"type":"invalid_request_error","message":"Unknown field skills version."}})')
+        text = pi.describe_error(stderr)
+        self.assertIn("code=invalid_payload", text)
+        self.assertIn("param=definition.skills[0].version", text)
+        self.assertIn("message=Unknown field skills version.", text)
+
+    def test_never_prints_credentials_ids_urls_or_echoed_payloads(self):
+        message = ("Bad header Bearer jp." + self.secret + " for 802efa29-17f2-4a79-8f5f-38f087aed96a at https://x.example/pi/mcp "
+                   "token eyJhbGciOi.eyJzdWIiOiIxIn0.sig and the key " + self.secret + " and 'I am Jarvis and this is a very long quoted instruction text that was echoed back'")
+        stderr = ('ERROR: Bad Request({"error":{"code":"invalid","message":' + json.dumps(message) + '}})').encode()
+        text = pi.describe_error(stderr)
+        for leaked in (self.secret, "802efa29", "x.example", "eyJhbGci", "very long quoted"):
+            self.assertNotIn(leaked, text)
+        self.assertIn("code=invalid", text)
+
+    def test_blocked_message_carries_the_detail_and_still_classifies(self):
+        self.assertEqual(pi.classify(b"ERROR: Not Found(...)"), "not_found")
+        self.assertEqual(pi.describe_error(b"ERROR: timeout"), "")
+        self.assertIn(":not_found", "foundry_get_failed:/agents/x:not_found [code=NotFound]")
 
 
 class SmokeReportTest(unittest.TestCase):

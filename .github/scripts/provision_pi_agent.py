@@ -20,11 +20,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PI = ROOT / "agents" / "pi"
-FEATURES = ",".join((
-    "WorkflowAgents=V1Preview", "ExternalAgents=V1Preview", "DraftAgents=V1Preview", "VoiceAgents=V1Preview",
-    "DigitalWorker=V1Preview", "GitHubCopilot=V1Preview", "Skills=V1Preview", "MicrosoftCopilot=V1Preview",
-    "ModelRouterControls=V1Preview",
-))
+# The harness needs MicrosoftCopilot; skills need Skills. A skill reference in an agent definition needs both.
+AGENT_FEATURES = "MicrosoftCopilot=V1Preview,Skills=V1Preview"
+SKILL_FEATURES = "Skills=V1Preview"
+# Values that must never reach a log, even when Foundry echoes part of the request back in its error message.
+REDACT: list[str] = []
 SECRET_NAME = "pi-mcp-secret"
 FINGERPRINT_KEY = "jarvis_pi_fingerprint"
 
@@ -107,8 +107,9 @@ class Az:
     def rest(self, method: str, path: str, body: dict | None = None, *, content_type: str = "application/json") -> dict:
         require(time.monotonic() < self.deadline, "provision_budget_exhausted")
         url = self.endpoint + path + ("&" if "?" in path else "?") + "api-version=v1"
+        features = SKILL_FEATURES if path.startswith("/skills") else AGENT_FEATURES
         command = ["az", "rest", "--method", method, "--url", url, "--resource", "https://ai.azure.com",
-                   "--only-show-errors", "--output", "json", "--headers", "Foundry-Features=" + FEATURES]
+                   "--only-show-errors", "--output", "json", "--headers", "Foundry-Features=" + features]
         with tempfile.TemporaryDirectory(prefix="jarvis-pi-") as directory:
             if body is not None:
                 file = Path(directory) / "body.json"
@@ -117,8 +118,9 @@ class Az:
                 command += ["Content-Type=" + content_type, "--body", "@" + str(file)]
             result = subprocess.run(command, capture_output=True, check=False, timeout=60)
         if result.returncode != 0:
-            # Never echo stderr: it can quote the request body, which holds the MCP credential.
-            raise Blocked(f"foundry_{method.lower()}_failed:{path.split('?')[0]}:{classify(result.stderr)}")
+            # Never echo stderr as is: it can quote the request body, which holds the MCP credential.
+            raise Blocked(f"foundry_{method.lower()}_failed:{path.split('?')[0]}:{classify(result.stderr)}"
+                          + describe_error(result.stderr))
         return json.loads(result.stdout) if result.stdout.strip() else {}
 
 
@@ -128,6 +130,48 @@ def classify(stderr: bytes) -> str:
         if label in text:
             return label.lower().replace(" ", "_")
     return "error"
+
+
+def sanitize(text: str, limit: int = 300) -> str:
+    """Make provider text safe to print: no credentials, identifiers, long opaque values or quoted payloads."""
+    for secret in REDACT:
+        if secret:
+            text = text.replace(secret, "[redacted]")
+    text = re.sub(r"(?i)bearer\s+\S+", "[redacted]", text)
+    text = re.sub(r"\bjp\.[A-Za-z0-9_-]+", "[redacted]", text)
+    text = re.sub(r"\beyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_.-]+", "[redacted]", text)
+    text = re.sub(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "[id]", text)
+    text = re.sub(r"https://[^\s\"']+", "[url]", text)
+    text = re.sub(r"[A-Za-z0-9+/_=-]{32,}", "[redacted]", text)
+    # A long quoted string is most likely the request body or instructions echoed back.
+    text = re.sub(r"(['\"])[^'\"]{60,}\1", "[quoted text omitted]", text)
+    text = " ".join(text.split())
+    return text[:limit]
+
+
+def describe_error(stderr: bytes) -> str:
+    """Foundry's error code, param and message from an az rest failure, sanitized; empty when it has none."""
+    text = stderr[:16384].decode("utf-8", "replace")
+    fields: dict[str, str] = {}
+    start, end = text.find("{"), text.rfind("}")
+    if 0 <= start < end:
+        try:
+            payload = json.loads(text[start:end + 1])
+            error = payload.get("error", payload) if isinstance(payload, dict) else {}
+            if isinstance(error, dict):
+                fields = {key: error[key] for key in ("code", "param", "type", "message") if isinstance(error.get(key), (str, int))}
+        except ValueError:
+            pass
+    if not fields:
+        for key in ("code", "param", "message"):
+            match = re.search(r'"%s"\s*:\s*"([^"]{1,300})"' % key, text)
+            if match:
+                fields[key] = match[1]
+    parts = []
+    for key, limit in (("code", 64), ("type", 64), ("param", 100), ("message", 300)):
+        if key in fields:
+            parts.append(f"{key}={sanitize(str(fields[key]), limit)}")
+    return (" [" + "; ".join(parts) + "]") if parts else ""
 
 
 def shell(*command: str) -> str:
@@ -190,16 +234,21 @@ def ensure_skills(azure: Az, skills: list[dict], existing_fingerprint_matches: b
         created = azure.rest("POST", f"/skills/{skill['name']}/versions", {
             "inline_content": {"description": skill["description"], "instructions": skill["instructions"]},
         })
-        version = created.get("version")
+        version = as_version(created.get("version"))
         require(isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9._-]{1,64}", version) is not None, "skill_version_invalid")
         skill["version"] = version
+
+
+def as_version(value: object) -> object:
+    """Foundry returns versions as strings or integers."""
+    return str(value) if isinstance(value, int) and not isinstance(value, bool) else value
 
 
 def current_state(azure: Az, name: str) -> dict | None:
     try:
         agent = azure.rest("GET", f"/agents/{name}")
     except Blocked as error:
-        if str(error).endswith(":not_found"):
+        if ":not_found" in str(error):
             return None
         raise
     rules = ((agent.get("agent_endpoint") or {}).get("version_selector") or {}).get("version_selection_rules") or []
@@ -260,6 +309,7 @@ def provision(args: argparse.Namespace) -> dict:
     state = current_state(azure, name)
     secret = configure_backend(args.backend_app, args.resource_group, args.subscription, name,
                                state.get("secret") if state else None)
+    REDACT.append(secret)
     server_url = f"https://{args.backend_fqdn}{spec['mcp']['path']}"
     wanted = fingerprint(spec, instructions, server_url, secret, skills)
     unchanged = bool(state and state["pinned"] and state["metadata"].get(FINGERPRINT_KEY) == wanted and state.get("status") == "active")
@@ -268,13 +318,8 @@ def provision(args: argparse.Namespace) -> dict:
         return {"agent": name, "version": state["pinned"], "created": False, "skills": {s["name"]: s["version"] for s in skills}}
     definition = build_definition(spec, instructions, server_url, secret, skills)
     metadata = {FINGERPRINT_KEY: wanted}
-    if state is None:
-        created = azure.rest("POST", "/agents", {"name": name, "metadata": metadata, "definition": definition})
-        version = (created.get("versions") or {}).get("latest", {}).get("version") or created.get("version")
-        if not version:
-            version = azure.rest("GET", f"/agents/{name}").get("versions", {}).get("latest", {}).get("version")
-    else:
-        version = azure.rest("POST", f"/agents/{name}/versions", {"metadata": metadata, "definition": definition}).get("version")
+    # Versions-first: this creates the agent when it does not exist yet, so there is no separate POST /agents.
+    version = as_version(azure.rest("POST", f"/agents/{name}/versions", {"metadata": metadata, "definition": definition}).get("version"))
     require(isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None, "agent_version_unknown")
     verify(wait_active(azure, name, version), spec, instructions)
     pin(azure, name, version)
