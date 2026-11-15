@@ -160,13 +160,13 @@ struct JarvisLatticePainter {
         let heart = scene.heart
         let p = point(heart.x, heart.y)
         // A wide orange haze under a tighter amber glow: the warmth spreads outward from the heart.
-        let wide = heart.radius * radius * 1.75
+        let wide = heart.radius * radius * 2
         layer.fill(
             circle(heart.x, heart.y, wide),
             with: .radialGradient(
                 Gradient(stops: [
-                    .init(color: color(JarvisLatticePainter.haze, heart.intensity * 0.3), location: 0),
-                    .init(color: color(JarvisLatticePainter.haze, heart.intensity * 0.13), location: 0.5),
+                    .init(color: color(JarvisLatticePainter.haze, heart.intensity * 0.38), location: 0),
+                    .init(color: color(JarvisLatticePainter.haze, heart.intensity * 0.17), location: 0.5),
                     .init(color: color(JarvisLatticePainter.haze, 0), location: 1),
                 ]),
                 center: p, startRadius: 0, endRadius: CGFloat(wide)
@@ -222,7 +222,7 @@ struct JarvisLatticePainter {
     /// Connections are merged into a few paths by colour and brightness, so a frame costs a few dozen strokes
     /// however many nodes there are.
     private func edges(_ layer: inout GraphicsContext) {
-        let width = max(0.5, radius * 0.0036 * scene.detail.lineScale)
+        let width = max(0.5, radius * 0.004 * scene.detail.lineScale)
         var lines: [Int: Path] = [:]
         var glows: [Int: Path] = [:]
         for edge in scene.edges {
@@ -263,21 +263,22 @@ struct JarvisLatticePainter {
 
     private func dots(_ layer: inout GraphicsContext) {
         var bodies: [Int: Path] = [:]
-        var halos: [Int: Path] = [:]
         for dot in scene.dots {
             let r = max(0.6, dot.radius * radius)
             let warm = min(3, Int(dot.warmth * 4))
             let alpha = min(5, Int(dot.alpha * 6))
             bodies[warm * 6 + alpha, default: Path()].addEllipse(in: square(dot.x, dot.y, r))
             if dot.halo > 0.05 {
-                let level = min(2, Int(dot.halo * 3))
-                halos[warm * 3 + level, default: Path()].addEllipse(in: square(dot.x, dot.y, r * 3.6))
+                let tone = blend(Self.nodeCool, Self.nodeMiddle, Self.nodeWarm, dot.warmth)
+                let reach = r * 3.6
+                layer.fill(
+                    circle(dot.x, dot.y, reach),
+                    with: .radialGradient(
+                        Gradient(colors: [color(tone, dot.halo * 0.42), color(tone, 0)]),
+                        center: point(dot.x, dot.y), startRadius: 0, endRadius: CGFloat(reach)
+                    )
+                )
             }
-        }
-        for (key, path) in halos {
-            let warm = (Double(key / 3) + 0.5) / 4
-            let level = (Double(key % 3) + 0.5) / 3
-            layer.fill(path, with: .color(color(blend(Self.nodeCool, Self.nodeMiddle, Self.nodeWarm, warm), level * 0.17)))
         }
         for (key, path) in bodies {
             let warm = (Double(key / 6) + 0.5) / 4
@@ -333,7 +334,7 @@ struct JarvisLatticePainter {
             r += (cool.r * 0.65 + warm.r * 0.35) * tide
             g += (cool.g * 0.65 + warm.g * 0.35) * tide
             b += (cool.b * 0.65 + warm.b * 0.35) * tide
-            let alpha = edge * 0.24 + 0.004 + front * 0.5 + (ripple + voiceRing + inward) * 0.22
+            let alpha = edge * 0.3 + 0.004 + front * 0.5 + (ripple + voiceRing + inward) * 0.22
             let peak = max(r, g, b, 1)
             stops.append(.init(color: color((r / peak, g / peak, b / peak), clamp(alpha, 0, 0.86)), location: rho))
         }
@@ -351,11 +352,11 @@ struct JarvisLatticePainter {
             * clamp(0.7 + 0.3 * scene.outerGain, 0, 1.3)
         let cyan: RGB = (0.42, 0.88, 1.0)
         let blue: RGB = (0.16, 0.5, 0.95)
-        let amber: RGB = (1.0, 0.5, 0.08)
+        let amber: RGB = (1.0, 0.44, 0.06)
         let stops: [(angle: Double, tone: RGB, level: Double)] = [
-            (0, blue, 0.3), (22, amber, 0.35), (40, amber, 0.85), (60, amber, 1.0), (84, amber, 0.8), (108, amber, 0.3),
-            (132, cyan, 0.3), (160, cyan, 0.5), (185, cyan, 0.85), (212, cyan, 1.0), (245, cyan, 0.7), (285, cyan, 0.34),
-            (330, blue, 0.2), (360, blue, 0.3),
+            (0, blue, 0.34), (22, amber, 0.45), (40, amber, 0.95), (60, amber, 1.0), (84, amber, 0.9), (108, amber, 0.4),
+            (132, cyan, 0.36), (160, cyan, 0.6), (185, cyan, 0.9), (212, cyan, 1.0), (245, cyan, 0.8), (285, cyan, 0.45),
+            (330, blue, 0.28), (360, blue, 0.34),
         ]
         func ring(inset: Double, thickness: Double, strength: Double) {
             let shading = GraphicsContext.Shading.conicGradient(
@@ -370,11 +371,11 @@ struct JarvisLatticePainter {
             layer.stroke(Path(ellipseIn: rect), with: shading, lineWidth: CGFloat(radius * thickness))
         }
         if scene.detail != .minimal {
-            ring(inset: 0.05, thickness: 0.08, strength: 0.2)
-            ring(inset: 0.02, thickness: 0.034, strength: 0.5)
+            ring(inset: 0.05, thickness: 0.08, strength: 0.3)
+            ring(inset: 0.02, thickness: 0.034, strength: 0.7)
         }
-        ring(inset: 0.006, thickness: 0.012, strength: 0.95)
-        ring(inset: 0.003, thickness: 0.005, strength: 0.85)
+        ring(inset: 0.006, thickness: 0.014, strength: 1)
+        ring(inset: 0.003, thickness: 0.005, strength: 0.9)
         guard scene.detail != .minimal else { return }
         // The soft inner highlight sits just inside the cyan side.
         let sheen = GraphicsContext.Shading.conicGradient(

@@ -111,10 +111,10 @@ function paintHeartGlow(
   const x = px(heart.x);
   const y = py(heart.y);
   // A wide orange haze under a tighter amber glow: the warmth spreads outward from the heart.
-  const wide = heart.radius * radius * 1.75;
+  const wide = heart.radius * radius * 2;
   const haziness = context.createRadialGradient(x, y, 0, x, y, wide);
-  haziness.addColorStop(0, rgba(haze, heart.intensity * 0.3));
-  haziness.addColorStop(0.5, rgba(haze, heart.intensity * 0.13));
+  haziness.addColorStop(0, rgba(haze, heart.intensity * 0.38));
+  haziness.addColorStop(0.5, rgba(haze, heart.intensity * 0.17));
   haziness.addColorStop(1, rgba(haze, 0));
   context.fillStyle = haziness;
   context.beginPath();
@@ -169,7 +169,7 @@ function paintEdges(
   py: (y: number) => number,
   radius: number,
 ) {
-  const width = Math.max(0.5, radius * 0.0036 * latticeLineScale(scene.detail));
+  const width = Math.max(0.5, radius * 0.004 * latticeLineScale(scene.detail));
   const lines = new Map<number, Path2D>();
   const glows = new Map<number, Path2D>();
   const bucket = (map: Map<number, Path2D>, key: number) => {
@@ -315,7 +315,7 @@ function paintRim(context: CanvasRenderingContext2D, scene: LatticeScene, frame:
     r += (cool[0] * 0.65 + warm[0] * 0.35) * tide;
     g += (cool[1] * 0.65 + warm[1] * 0.35) * tide;
     b += (cool[2] * 0.65 + warm[2] * 0.35) * tide;
-    const alpha = edge * 0.24 + 0.004 + front * 0.5 + (ripple + voiceRing + inward) * 0.22;
+    const alpha = edge * 0.3 + 0.004 + front * 0.5 + (ripple + voiceRing + inward) * 0.22;
     const peak = Math.max(r, g, b, 1);
     shading.addColorStop(rho, rgba([r / peak, g / peak, b / peak], clamp(alpha, 0, 0.86)));
   }
@@ -336,10 +336,10 @@ function paintLimb(context: CanvasRenderingContext2D, scene: LatticeScene, frame
     * clamp(0.7 + 0.3 * scene.outerGain, 0, 1.3);
   const cyan: RGB = [0.42, 0.88, 1.0];
   const blue: RGB = [0.16, 0.5, 0.95];
-  const amber: RGB = [1.0, 0.5, 0.08];
+  const amber: RGB = [1.0, 0.44, 0.06];
   const stops: [number, RGB, number][] = [
-    [0, blue, 0.3], [22, amber, 0.35], [40, amber, 0.85], [60, amber, 1.0], [84, amber, 0.8], [108, amber, 0.3], [132, cyan, 0.3], [160, cyan, 0.5],
-    [185, cyan, 0.85], [212, cyan, 1.0], [245, cyan, 0.7], [285, cyan, 0.34], [330, blue, 0.2], [360, blue, 0.3],
+    [0, blue, 0.34], [22, amber, 0.45], [40, amber, 0.95], [60, amber, 1.0], [84, amber, 0.9], [108, amber, 0.4], [132, cyan, 0.36], [160, cyan, 0.6],
+    [185, cyan, 0.9], [212, cyan, 1.0], [245, cyan, 0.8], [285, cyan, 0.45], [330, blue, 0.28], [360, blue, 0.34],
   ];
   const ring = (inset: number, thickness: number, strength: number) => {
     const shading = context.createConicGradient(0, half, half);
@@ -351,11 +351,11 @@ function paintLimb(context: CanvasRenderingContext2D, scene: LatticeScene, frame
     context.stroke();
   };
   if (scene.detail !== detailMinimal) {
-    ring(0.05, 0.08, 0.2);
-    ring(0.02, 0.034, 0.5);
+    ring(0.05, 0.08, 0.3);
+    ring(0.02, 0.034, 0.7);
   }
-  ring(0.006, 0.012, 0.95);
-  ring(0.003, 0.005, 0.85);
+  ring(0.006, 0.014, 1);
+  ring(0.003, 0.005, 0.9);
   if (scene.detail !== detailMinimal) {
     // The soft inner highlight sits just inside the cyan side.
     const sheen = context.createConicGradient(0, half, half);
