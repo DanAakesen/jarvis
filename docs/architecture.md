@@ -9643,3 +9643,9 @@ Factory board events refresh the iOS Now feed and Live Activity reconciliation w
 the app observes the stream. Proactive runs cancelled for quiet hours or changed
 preferences finish their background jobs as cancelled; genuine failures remain
 failed. Existing historical jobs are not rewritten.
+
+## Dual vault layout — 15 November 2026 (P15-181)
+
+Temporary, until the vault clean-up has merged. Task inboxes exist as `Personal/Inbox.md` and `Work/Inbox.md` (old) or `Personal/Task inbox.md` and `Work/Task inbox.md` (new). The gym log lives in `Health/Gym log/` (old backend path), `Personal/Gym log/` (old iOS path) or `Personal/Health/Gym log/` (new). The agent log folder is `_agent-log` or `_agent-activity`.
+
+`apps/backend/src/vault/layout.ts` holds the one rule for the backend: read the new path if the note exists, else the old one; a missing note is created at the new path only when the tree shows the new layout, else at the old path. `vault_task_create` and the watch task capture (`vault/task-writes.ts`), the proactive todo writer (existing inboxes only, never created) and the gym log writer (`health/gym/gym-log.ts`) use it. The lift delete route accepts both `Personal/Gym log/` and `Personal/Health/Gym log/` lift notes. `JarvisVaultGymLogStore` lists and parses both folders and writes to the folder that already holds logs, else the current one only when the folder tree shows the new layout. `apps/vault-mirror/src/engine/policy.ts` excludes both agent log segments. The old paths and fallbacks are removed in a follow-up once the clean-up has merged.

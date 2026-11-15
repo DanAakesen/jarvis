@@ -257,6 +257,82 @@ final class JarvisClientTransportTests: XCTestCase {
         ]
     }
 
+    func testGymLogNotePathsParseInBothFolders() {
+        let utc = TimeZone(identifier: "UTC")!
+        for folder in ["Personal/Health/Gym log", "Personal/Gym log"] {
+            let parsed = JarvisGymLogNote.parse(path: "\(folder)/2026-11-15-1000-legs.md", timeZone: utc)
+            XCTAssertEqual(parsed?.session, .legs, folder)
+        }
+        XCTAssertNil(JarvisGymLogNote.parse(path: "Health/Gym log/2026-11-15-1000-legs.md", timeZone: utc))
+    }
+
+    func testGymLogSavesToTheFolderThatAlreadyHoldsLogs() async throws {
+        let utc = TimeZone(identifier: "UTC")!
+        for (stubs, folder): ([FakeHTTPTransport.Stub], String) in [
+            ([.response(notesPage(directory: "Personal/Health/Gym log")), .response(createdNote("Personal/Health/Gym log"))], "Personal/Health/Gym log"),
+            ([.response(notesPage(directory: nil)), .response(notesPage(directory: "Personal/Gym log")), .response(createdNote("Personal/Gym log"))], "Personal/Gym log"),
+        ] {
+            let transport = FakeHTTPTransport(stubs)
+            let store = JarvisVaultGymLogStore(client: JarvisNotesClient(client: try makeClient(transport: transport)), timeZone: utc)
+            try await store.save(JarvisGymLogEntry(performedAt: Date(timeIntervalSince1970: 1_794_823_200), session: .legs))
+            let requests = await transport.recordedRequests()
+            let post = try XCTUnwrap(requests.last)
+            XCTAssertEqual(post.method, .post)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(post.body)) as? [String: String])
+            XCTAssertTrue(try XCTUnwrap(body["path"]).hasPrefix(folder + "/"), folder)
+        }
+    }
+
+    func testGymLogStartsInTheCurrentFolderOnlyWhenTheCurrentLayoutIsDetected() async throws {
+        let utc = TimeZone(identifier: "UTC")!
+        for (directories, folder) in [
+            (["Personal", "_agent-activity"], "Personal/Health/Gym log"),
+            (["Personal", "_agent-log"], "Personal/Gym log"),
+        ] {
+            let transport = FakeHTTPTransport([
+                .response(notesPage(directory: nil)), .response(notesPage(directory: nil)),
+                .response(jsonResponse(status: 200, body: [
+                    "directories": directories, "rootNoteCount": 0, "truncated": false, "updatedAt": "2026-11-15T10:00:00Z",
+                ])),
+                .response(createdNote(folder)),
+            ])
+            let store = JarvisVaultGymLogStore(client: JarvisNotesClient(client: try makeClient(transport: transport)), timeZone: utc)
+            try await store.save(JarvisGymLogEntry(performedAt: Date(timeIntervalSince1970: 1_794_823_200), session: .legs))
+            let requests = await transport.recordedRequests()
+            let post = try XCTUnwrap(requests.last)
+            XCTAssertEqual(post.method, .post)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(post.body)) as? [String: String])
+            XCTAssertTrue(try XCTUnwrap(body["path"]).hasPrefix(folder + "/"), folder)
+        }
+    }
+
+    func testGymLogEntriesListBothFolders() async throws {
+        let utc = TimeZone(identifier: "UTC")!
+        let transport = FakeHTTPTransport([
+            .response(notesPage(directory: "Personal/Health/Gym log", name: "2026-11-15-1000-legs.md")),
+            .response(notesPage(directory: "Personal/Gym log", name: "2026-11-14-1000-back.md")),
+        ])
+        let store = JarvisVaultGymLogStore(client: JarvisNotesClient(client: try makeClient(transport: transport)), timeZone: utc)
+        let entries = try await store.entries(since: Date(timeIntervalSince1970: 0))
+        XCTAssertEqual(entries.map(\.session), [.legs, .back])
+    }
+
+    private func notesPage(directory: String?, name: String = "2026-11-15-0900-chest.md") -> HTTPResponse {
+        let notes = directory.map { folder in [[
+            "path": "\(folder)/\(name)", "title": name, "folder": "Personal", "directory": folder,
+            "updatedAt": "2026-11-15T10:00:00Z",
+        ]] } ?? []
+        return jsonResponse(status: 200, body: ["notes": notes, "limit": 50, "offset": 0, "hasMore": false])
+    }
+
+    /// The write response for a legs log at 2026-11-16 10:00 UTC, the time the gym tests save at.
+    private func createdNote(_ folder: String) -> HTTPResponse {
+        jsonResponse(status: 201, body: [
+            "path": "\(folder)/2026-11-16-1000-legs.md", "commit": String(repeating: "c", count: 40),
+            "url": "https://github.com/example/vault/blob/master/note.md",
+        ])
+    }
+
     private func makeClient(
         transport: FakeHTTPTransport,
         tokenStore: FakeTokenStore = FakeTokenStore(),

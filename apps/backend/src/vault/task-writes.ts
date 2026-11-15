@@ -7,6 +7,7 @@ import {
   VaultWriteConflictError,
   type createGitHubVaultClient,
 } from './github-client.js';
+import { resolveVaultPath, taskInboxPaths } from './layout.js';
 
 export interface TaskCreateInput {
   text: string;
@@ -180,7 +181,7 @@ type TextChange =
   | { status: 'changed'; content: string; version: string; done: boolean };
 
 export interface TaskWriterOptions {
-  client: Pick<ReturnType<typeof createGitHubVaultClient>, 'read' | 'write'>;
+  client: Pick<ReturnType<typeof createGitHubVaultClient>, 'read' | 'write' | 'tree'>;
   validateWritePath: (value: string) => string;
   inTaskScope: (path: string) => boolean;
   shouldRedact: (value: string) => boolean;
@@ -323,8 +324,6 @@ export function createTaskWriter(options: TaskWriterOptions) {
         folder = input.scope === 'work' ? 'Work' : 'Personal';
         const text = cleanText(input.text);
         if (input.notes && options.shouldRedact(input.notes)) throw new TaskWriteError(400, 'Secrets and credentials can never be saved to the vault.');
-        const path = options.validateWritePath(`${folder}/Inbox.md`);
-        if (!options.inTaskScope(path)) throw new TaskWriteError(400, 'That note does not hold vault tasks.');
         if (input.time && !input.due) throw new TaskWriteError(400, 'Pick a day for the time.');
         const priority = input.priority === 'high' ? ' ⏫' : input.priority === 'medium' ? ' 🔼' : '';
         if (input.remindAtDue && (!input.due || !input.time || input.priority !== 'high')) {
@@ -336,6 +335,8 @@ export function createTaskWriter(options: TaskWriterOptions) {
         const stableId = submissionId ?? (sourceMessageId ? createHash('sha256').update(JSON.stringify(identity)).digest('hex').slice(0, 24) : undefined);
         const metadata = encodeTaskMetadata({ notes: input.notes, timeZone: input.timeZone, dueAt: input.dueAt });
         const taskLine = `- [ ] ${text}${priority}${input.due ? ` 📅 ${input.due}${input.time ? ` ${input.time}` : ''}` : ''}${input.remindAtDue ? ' [reminder:: at_due_time]' : ''}${stableId ? ` 🆔 ${stableId}` : ''}${metadata ? ` ${metadata}` : ''}`;
+        const path = options.validateWritePath(await resolveVaultPath(taskInboxPaths(input.scope === 'work' ? 'Work' : 'Personal'), options.client, signal));
+        if (!options.inTaskScope(path)) throw new TaskWriteError(400, 'That note does not hold vault tasks.');
         for (let attempt = 0; attempt < 2; attempt += 1) {
           signal.throwIfAborted();
           const current = await options.client.read(path, signal);

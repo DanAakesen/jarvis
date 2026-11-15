@@ -13078,3 +13078,10 @@ with explicit Yes/No and the note's SHA. Reuse the vault's existing Git-backed
 delete rather than inventing a trash store: committed files remain in Git history,
 but unsaved drafts do not. Unknown outcomes require a refresh, not an automatic retry.
 Native gesture and visual acceptance is still pending.
+
+## 2026-11-15 P15-181: Dual vault layout until the vault clean-up has merged
+
+- Decision: accept the old and the new vault paths for now; a later change removes the old ones. Task inboxes: `Personal/Inbox.md` and `Work/Inbox.md` become `Personal/Task inbox.md` and `Work/Task inbox.md`. Gym log: `Health/Gym log/` (backend writer) and `Personal/Gym log/` (iOS notes) become `Personal/Health/Gym log/`; the `gym-log` frontmatter type is unchanged. Agent log folder: `_agent-log` becomes `_agent-activity` (proposed name).
+- Rule: an existing note at the new path wins, else one at the old path. A new note goes to the new path only when the new layout is detected (a new inbox, the new gym folder or `_agent-activity` exists), otherwise to the old path, so both are never created. The backend keeps this in `vault/layout.ts`; the iOS gym log store applies the same rule to its folders.
+- The vault mirror excludes both `_agent-log` and `_agent-activity` segments so nothing from either folder is published.
+- No other fallbacks were added. Removal: delete the old paths, `existingVaultPath` and `resolveVaultPath` fallbacks, `JarvisGymLogNote.legacyFolder` and the second mirror segment once the vault clean-up has merged.

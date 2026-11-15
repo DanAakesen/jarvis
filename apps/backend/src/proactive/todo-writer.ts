@@ -5,6 +5,7 @@ import {
   type createGitHubVaultClient,
 } from '../vault/github-client.js';
 import { isVaultLineSafe } from '../vault/index.js';
+import { existingVaultPath, taskInboxPaths } from '../vault/layout.js';
 import type { FindingsStoredContext } from './engine.js';
 import {
   appendTaskLines,
@@ -32,7 +33,7 @@ interface PreparedTodo {
   itemId: string;
   dedupeKey: string;
   legacyDedupeKey: string;
-  targetPath: string;
+  scope: 'personal' | 'work';
   line: string;
 }
 
@@ -43,8 +44,8 @@ interface VaultFile {
 }
 
 const inboxes = {
-  personal: 'Personal/Inbox.md',
-  work: 'Work/Inbox.md',
+  personal: taskInboxPaths('Personal'),
+  work: taskInboxPaths('Work'),
 } as const;
 const rootTaskPath = /^(?:task|tasks)\.md$/iu;
 const projectPattern = /\b(?:software|engineering|code(?:base| review|ing)?|repository|repo|pull requests?|merge requests?|pr\b|ci\/cd|pipelines?|deployment|deployments?|commits?|branches|unit tests?|test suites?|release engineering|build checks?|software factory|factory tasks?|project(?:s)?)\b/iu;
@@ -232,7 +233,7 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
           itemId: finding.itemId,
           dedupeKey: stableKey,
           legacyDedupeKey: finding.dedupeKey,
-          targetPath: inboxes[scope],
+          scope,
           line: buildSuggestedTodoLine(text, finding.dueAt, stableKey, {
             dueHasTime: finding.dueHasTime,
             highPriority: finding.highPriority,
@@ -251,17 +252,18 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
       const available = new Set(tree.map(({ path }) => path));
       const groups = new Map<string, PreparedTodo[]>();
       for (const todo of prepared) {
-        if (!available.has(todo.targetPath)) {
+        const targetPath = existingVaultPath(inboxes[todo.scope], available);
+        if (!targetPath) {
           log(context, 'todo_destination_missing', [todo.itemId], 0, startedAt);
           continue;
         }
-        const group = groups.get(todo.targetPath) ?? [];
+        const group = groups.get(targetPath) ?? [];
         group.push(todo);
-        groups.set(todo.targetPath, group);
+        groups.set(targetPath, group);
       }
       if (groups.size === 0) return;
       const legacyPaths = tree.filter(({ path }) => !path.includes('/') && rootTaskPath.test(path)).map(({ path }) => path);
-      const inboxPaths = Object.values(inboxes).filter((path) => available.has(path));
+      const inboxPaths = Object.values(inboxes).flatMap(({ current, legacy }) => [current, legacy]).filter((path) => available.has(path));
       const files = new Map<string, VaultFile>();
       for (const path of new Set([...inboxPaths, ...legacyPaths])) {
         const file = await options.vault.read(path, context.signal);
@@ -270,7 +272,7 @@ export function createProactiveTodoWriter(options: ProactiveTodoWriterOptions) {
           return;
         }
         if (Buffer.byteLength(file.content, 'utf8') > MAX_VAULT_FILE_BYTES) {
-          log(context, inboxes.personal === path || inboxes.work === path
+          log(context, inboxPaths.includes(path)
             ? 'todo_file_too_large' : 'todo_destination_unverified', undefined, 0, startedAt);
           return;
         }

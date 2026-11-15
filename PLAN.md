@@ -1,3 +1,14 @@
+## Dual vault layout until the vault clean-up has merged — 15 November 2026 (#1895, P15-181)
+
+**Status: built and tested; waiting for review.** The vault clean-up renames the task inboxes to `Personal/Task inbox.md` and `Work/Task inbox.md`, moves the gym log to `Personal/Health/Gym log/` and renames `_agent-log` to a neutral name (proposed `_agent-activity`). Jarvis now accepts the old and the new paths so that clean-up can merge safely.
+
+| Part | State |
+| --- | --- |
+| Backend helper `vault/layout.ts`; task create, proactive todos, gym log writer and lift delete use it | Done; `vault/layout.test.ts` covers both layouts |
+| Vault mirror excludes both `_agent-log` and `_agent-activity` | Done; `test/policy.test.ts` |
+| iOS gym log store reads both folders and writes to one; preview fixtures use the new inbox names | Done; JarvisCore tests pass on Linux |
+| Remove the old paths once the vault clean-up has merged | **Open**: follow-up change; every legacy path is marked in code |
+
 ## PI phases 0 to 2 together: PI agent, Jarvis MCP, chat in the iOS app behind a test switch — 15 November 2026 (#1885, P15-174, PR #1890)
 
 **Status: built and tested offline; not yet run live.** The owner asked for phases 0, 1 and 2 as one piece so he can test chat on PI in the iOS app. It replaces #1874, #1875 and #1876 (phase 0's quality round, routines and long-session items are out: the owner does not want to test long sessions). Everything is inert until the owner sets the test switch to PI in iOS Settings.

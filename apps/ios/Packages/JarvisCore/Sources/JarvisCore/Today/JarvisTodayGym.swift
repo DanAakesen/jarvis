@@ -165,10 +165,13 @@ public struct JarvisUnavailableGymLogStore: JarvisGymLogStore {
     public func entries(since: Date) async throws -> [JarvisGymLogEntry] { throw JarvisGymLogError.unavailable }
 }
 
-/// How a gym log maps to a vault note: `Personal/Gym log/<yyyy-MM-dd>-<HHmm>-<session>.md`.
+/// How a gym log maps to a vault note: `Personal/Health/Gym log/<yyyy-MM-dd>-<HHmm>-<session>.md`.
 /// The date and session are read back from the file name, so listing needs no note reads.
 public enum JarvisGymLogNote {
-    public static let folder = "Personal/Gym log"
+    public static let folder = "Personal/Health/Gym log"
+    /// Temporary: the folder before the vault clean-up. Remove it, and every use of `folders`, once that has merged.
+    public static let legacyFolder = "Personal/Gym log"
+    static let folders = [folder, legacyFolder]
 
     static func formatter(_ format: String, timeZone: TimeZone) -> DateFormatter {
         let formatter = DateFormatter()
@@ -179,7 +182,7 @@ public enum JarvisGymLogNote {
         return formatter
     }
 
-    public static func path(for entry: JarvisGymLogEntry, timeZone: TimeZone = .current) -> String {
+    public static func path(for entry: JarvisGymLogEntry, timeZone: TimeZone = .current, folder: String = JarvisGymLogNote.folder) -> String {
         let stamp = formatter("yyyy-MM-dd-HHmm", timeZone: timeZone).string(from: entry.performedAt)
         return "\(folder)/\(stamp)-\(entry.session.rawValue).md"
     }
@@ -210,8 +213,7 @@ public enum JarvisGymLogNote {
 
     /// The date and session a note path encodes, or nil when the path is not a gym log.
     public static func parse(path: String, timeZone: TimeZone = .current) -> (performedAt: Date, session: JarvisGymSessionType)? {
-        let prefix = folder + "/"
-        guard path.hasPrefix(prefix), path.hasSuffix(".md") else { return nil }
+        guard let prefix = folders.map({ $0 + "/" }).first(where: { path.hasPrefix($0) }), path.hasSuffix(".md") else { return nil }
         let name = String(path.dropFirst(prefix.count).dropLast(3))
         let parts = name.split(separator: "-", omittingEmptySubsequences: false).map(String.init)
         guard parts.count == 5, let session = JarvisGymSessionType(rawValue: parts[4]),
@@ -236,7 +238,13 @@ public struct JarvisVaultGymLogStore: JarvisGymLogStore {
 
     public func save(_ entry: JarvisGymLogEntry) async throws {
         if let lift = entry.lift, !lift.isValid { throw JarvisGymLogError.invalidEntry }
-        let path = JarvisGymLogNote.path(for: entry, timeZone: timeZone)
+        let folder: String
+        do {
+            folder = try await writeFolder()
+        } catch {
+            throw JarvisGymLogError.failed
+        }
+        let path = JarvisGymLogNote.path(for: entry, timeZone: timeZone, folder: folder)
         guard JarvisNotesLogic.validNotePath(path) else { throw JarvisGymLogError.invalidEntry }
         do {
             _ = try await client.createNote(path: path, content: JarvisGymLogNote.content(for: entry, timeZone: timeZone))
@@ -257,18 +265,34 @@ public struct JarvisVaultGymLogStore: JarvisGymLogStore {
 
     public func entries(since: Date) async throws -> [JarvisGymLogEntry] {
         var result: [JarvisGymLogEntry] = []
-        var offset = 0
-        for _ in 0..<maximumPages {
-            let page = try await client.notes(directory: JarvisGymLogNote.folder, offset: offset)
-            for note in page.notes {
-                guard let parsed = JarvisGymLogNote.parse(path: note.path, timeZone: timeZone),
-                      parsed.performedAt >= since else { continue }
-                result.append(JarvisGymLogEntry(performedAt: parsed.performedAt, session: parsed.session))
+        for folder in JarvisGymLogNote.folders {
+            var offset = 0
+            for _ in 0..<maximumPages {
+                let page = try await client.notes(directory: folder, offset: offset)
+                for note in page.notes {
+                    guard let parsed = JarvisGymLogNote.parse(path: note.path, timeZone: timeZone),
+                          parsed.performedAt >= since else { continue }
+                    result.append(JarvisGymLogEntry(performedAt: parsed.performedAt, session: parsed.session))
+                }
+                guard page.hasMore else { break }
+                offset += page.limit
             }
-            guard page.hasMore else { break }
-            offset += page.limit
         }
         return result.sorted { $0.performedAt > $1.performedAt }
+    }
+
+    /// The folder a new log goes to: where logs already live, else the current folder only when the vault has the
+    /// current layout, so the two folders never both receive new notes.
+    func writeFolder() async throws -> String {
+        for folder in JarvisGymLogNote.folders {
+            let page = try await client.notes(directory: folder)
+            if !page.notes.isEmpty { return folder }
+        }
+        let markers = [JarvisGymLogNote.folder, "_agent-activity"]
+        let current = try await client.folderTree().directories.contains { directory in
+            markers.contains { directory == $0 || directory.hasPrefix($0 + "/") }
+        }
+        return current ? JarvisGymLogNote.folder : JarvisGymLogNote.legacyFolder
     }
 }
 
@@ -380,18 +404,21 @@ extension JarvisVaultGymLogStore {
         var candidates: [(path: String, date: Date, session: JarvisGymSessionType)] = []
         var offset = 0
         var partial = false
-        for pageIndex in 0..<maximumPages {
-            try Task.checkCancellation()
-            guard ContinuousClock.now < deadline else { partial = true; break }
-            let page = try await client.notes(directory: JarvisGymLogNote.folder, offset: offset)
-            for note in page.notes {
-                if let parsed = JarvisGymLogNote.parse(path: note.path, timeZone: timeZone), parsed.performedAt >= since {
-                    candidates.append((note.path, parsed.performedAt, parsed.session))
+        folders: for folder in JarvisGymLogNote.folders {
+            offset = 0
+            for pageIndex in 0..<maximumPages {
+                try Task.checkCancellation()
+                guard ContinuousClock.now < deadline else { partial = true; break folders }
+                let page = try await client.notes(directory: folder, offset: offset)
+                for note in page.notes {
+                    if let parsed = JarvisGymLogNote.parse(path: note.path, timeZone: timeZone), parsed.performedAt >= since {
+                        candidates.append((note.path, parsed.performedAt, parsed.session))
+                    }
                 }
+                if !page.hasMore { break }
+                if pageIndex == maximumPages - 1 { partial = true }
+                offset += page.limit
             }
-            if !page.hasMore { break }
-            if pageIndex == maximumPages - 1 { partial = true }
-            offset += page.limit
         }
         let limit = min(max(maximumNoteReads, 1), 100)
         partial = partial || candidates.count > limit

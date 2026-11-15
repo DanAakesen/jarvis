@@ -24,7 +24,7 @@ export interface KnowledgeNote { id: string; title: string; folder: string; cont
 
 export const knowledgeFolders: readonly KnowledgeFolder[] = ['People', 'Work', 'Personal', 'General'];
 
-/** The Notes map shows only the note categories: the vault root, `_agent-log`, `Templates` and any other folder are left out, with their links. */
+/** The Notes map shows only the note categories: the vault root, the agent log folders (`_agent-log`, `_agent-activity`), `Templates` and any other folder are left out, with their links. */
 export function categoryGraph(graph: KnowledgeGraph): KnowledgeGraph {
   const kept = new Set(graph.nodes.filter((node) => knowledgeFolders.includes(node.folder)).map((node) => node.id));
   if (kept.size === graph.nodes.length) return graph;
