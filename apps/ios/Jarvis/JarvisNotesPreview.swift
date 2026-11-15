@@ -54,12 +54,13 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
     }
     private var notes: [Note] = [
         Note(path: "welcome.md", title: "Welcome — synthetic", content: "# Welcome\n\nSynthetic root note."),
-        Note(path: "Work/Projects/release.md", title: "Release plan — synthetic", content: "# Release plan\n\nSynthetic project note."),
-        Note(path: "Personal/weekend.md", title: "Weekend — synthetic", content: "# Weekend\n\nSynthetic personal note."),
+        Note(path: "Work/Projects/release.md", title: "Release plan — synthetic", content: "# Release plan\n\nSynthetic project note. See [[weekend]].\n"),
+        Note(path: "Personal/weekend.md", title: "Weekend — synthetic", content: "---\ntags: [synthetic]\n---\n# Weekend\n\nKeep decisions and next steps together.\n\n## Plan\n\n- [ ] Check the list\n- [ ] Plan the day\n\nSee also [[release]].\n"),
     ]
     private var inventory = ["Work", "Work/Projects", "Personal", "Attachments/Scans"]
     private let timestamp = "2026-11-05T09:00:00Z"
     private var readCounts: [String: Int] = [:]
+    private var conflictApplied = false
     private var tasks: [[String: Any]] = [[
         "id": String(repeating: "1", count: 64), "text": "Review release — synthetic", "done": false,
         "dueDate": "2026-11-05", "dueTime": NSNull(), "dueAt": NSNull(), "priority": "medium",
@@ -159,16 +160,46 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
         case (.put, "/api/notes/note"):
             guard let path = body["path"] as? String, let content = body["content"] as? String,
                   let index = notes.firstIndex(where: { $0.path == path }) else { return try json(["error": "Synthetic note missing"], status: 404) }
+#if targetEnvironment(simulator)
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-notes-save-failure") {
+                return try json(["error": "Synthetic save failure"], status: 400)
+            }
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-notes-save-conflict"), !conflictApplied {
+                // Another device edits the note after it was read: the first save finds a newer version.
+                conflictApplied = true
+                notes[index].content += "\nChanged on another device.\n"
+                notes[index].sha = String(repeating: "c", count: 40)
+            }
+#endif
             guard body["sha"] as? String == notes[index].sha else {
                 return try json(["currentSha": notes[index].sha, "content": notes[index].content], status: 409)
             }
             notes[index].content = content
             notes[index].sha = String(repeating: "b", count: 40)
             return try json(["path": path, "commit": notes[index].sha, "url": noteURL(path)])
+        case (.delete, "/api/notes/note"):
+            guard let path = body["path"] as? String, let index = notes.firstIndex(where: { $0.path == path }) else {
+                return try json(["error": "Synthetic note missing"], status: 404)
+            }
+            guard body["sha"] as? String == notes[index].sha else { return try json(["error": "Synthetic conflict"], status: 409) }
+            notes.remove(at: index)
+            return HTTPResponse(statusCode: 204, headers: [:], body: Data())
+        case (.delete, "/api/vault/tasks"):
+            guard let index = tasks.firstIndex(where: { ($0["path"] as? String) == (body["path"] as? String) && ($0["line"] as? Int) == (body["line"] as? Int) }) else {
+                return try json(["error": "Synthetic task conflict"], status: 409)
+            }
+            tasks.remove(at: index)
+            return HTTPResponse(statusCode: 204, headers: [:], body: Data())
         case (.get, "/api/knowledge/graph"):
+            let linked: [[String: Any]] = {
+                guard let from = notes.firstIndex(where: { $0.path == "Work/Projects/release.md" }),
+                      let to = notes.firstIndex(where: { $0.path == "Personal/weekend.md" }) else { return [] }
+                return [["source": nodeID(from), "target": nodeID(to), "type": "link"],
+                        ["source": nodeID(to), "target": nodeID(from), "type": "link"]]
+            }()
             return try json(["nodes": notes.enumerated().map { index, note in
                 summary(note).merging(["id": nodeID(index), "degree": 0, "openTaskCount": 0]) { _, new in new }
-            }, "edges": [], "updatedAt": timestamp])
+            }, "edges": linked, "updatedAt": timestamp])
         case (.get, "/api/knowledge/search"):
             let q = query["q"] ?? ""
             return try json(["hits": notes.enumerated().filter { $0.element.title.localizedCaseInsensitiveContains(q) }

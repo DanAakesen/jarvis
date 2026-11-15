@@ -32,23 +32,31 @@ struct JarvisPageHeader<Actions: View>: View {
     @ScaledMetric(relativeTo: .largeTitle) private var titleSize = JarvisPageHeaderMetrics.titleSize
     let title: String
     let language: JarvisAppLanguage
+    let leading: AnyView?
     let actions: Actions
 
-    init(title: String, language: JarvisAppLanguage, @ViewBuilder actions: () -> Actions) {
+    init(title: String, language: JarvisAppLanguage, leading: AnyView? = nil, @ViewBuilder actions: () -> Actions) {
         self.title = title
         self.language = language
+        self.leading = leading
         self.actions = actions()
     }
 
     var body: some View {
         HStack(alignment: .center, spacing: JarvisPageHeaderMetrics.spacing) {
-            Text(title)
-                .font(.system(size: titleSize, weight: .bold))
-                .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, minHeight: JarvisPageHeaderMetrics.actionSize, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("page.title")
+            // A back button leads pages that sit inside another page; an empty title leaves only the buttons.
+            if let leading { leading }
+            if title.isEmpty {
+                Spacer(minLength: 0)
+            } else {
+                Text(title)
+                    .font(.system(size: titleSize, weight: .bold))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: JarvisPageHeaderMetrics.actionSize, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("page.title")
+            }
             HStack(spacing: JarvisPageHeaderMetrics.actionSpacing) {
                 actions
                 JarvisSidebarMenuButton(language: language)

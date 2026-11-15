@@ -708,16 +708,10 @@ struct JarvisTodayScreen: View {
         switch presented {
         case .task:
             if let client = model.notesClient {
-                JarvisNewTaskSheet(
-                    client: client,
-                    copy: JarvisNotesCopy(language: language),
-                    onCreated: {
-                        sheet = nil
-                        Task { await model.refreshTasks() }
-                    }
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                JarvisTaskEditorSheet(client: client, copy: JarvisNotesCopy(language: language), mode: .create(scope: .work)) {
+                    sheet = nil
+                    Task { await model.refreshTasks() }
+                }
             }
         case .taskDetail(let task):
             JarvisTaskDetailSheet(
@@ -725,28 +719,19 @@ struct JarvisTodayScreen: View {
                 today: model.taskData.value?.today ?? "",
                 copy: JarvisNotesCopy(language: language),
                 client: model.notesClient,
-                onComplete: { Task { await completeTask(task) } },
-                onSaved: {
-                    sheet = nil
-                    successConfirmation = JarvisSuccessConfirmation(message: JarvisNotesCopy(language: language).saved)
-                    Task { await model.refreshTasks() }
-                }
+                onOpenSource: nil,
+                onChanged: { Task { await model.refreshTasks() } },
+                onClose: { sheet = nil }
             )
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
         case .note:
             if let client = model.notesClient {
-                JarvisNewNoteSheet(
-                    client: client,
-                    copy: JarvisNotesCopy(language: language),
-                    initialFolder: "",
-                    onCreated: { _ in
-                        sheet = nil
-                        successConfirmation = JarvisSuccessConfirmation(message: JarvisNotesCopy(language: language).saved)
-                    }
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                JarvisNoteEditorSheet(
+                    client: client, copy: JarvisNotesCopy(language: language),
+                    mode: .create(folder: "", staged: [])
+                ) { _, _ in
+                    sheet = nil
+                    successConfirmation = JarvisSuccessConfirmation(message: JarvisNotesCopy(language: language).saved)
+                }
             }
         case .workout, .lift:
             JarvisTodayGymSheet(

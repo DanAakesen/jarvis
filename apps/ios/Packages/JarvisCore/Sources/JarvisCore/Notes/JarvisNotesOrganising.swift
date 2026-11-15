@@ -38,6 +38,20 @@ extension JarvisNotesPresentation {
     }
 }
 
+extension JarvisNotesPresentation {
+    /// The graph limited to a folder and its subfolders. Edges are kept only when both ends remain.
+    public static func graph(_ source: KnowledgeGraph, in folder: String) -> KnowledgeGraph {
+        guard !folder.isEmpty else { return source }
+        let nodes = source.nodes.filter { $0.directory == folder || $0.directory.hasPrefix(folder + "/") }
+        let ids = Set(nodes.map(\.id))
+        return KnowledgeGraph(
+            nodes: nodes, edges: source.edges.filter { ids.contains($0.source) && ids.contains($0.target) },
+            updatedAt: source.updatedAt, openTaskNoteCount: source.openTaskNoteCount,
+            taskCountsPartial: source.taskCountsPartial
+        )
+    }
+}
+
 /// Pin order is display metadata kept on the device; it never moves a file.
 public enum JarvisPinOrder {
     public static func moved(_ items: [String], _ item: String, by offset: Int) -> [String] {

@@ -204,6 +204,11 @@ enum JarvisDesignTokens {
         light: UIColor(red: 45.0 / 255, green: 179.0 / 255, blue: 93.0 / 255, alpha: 1),
         dark: UIColor(red: 61.0 / 255, green: 220.0 / 255, blue: 132.0 / 255, alpha: 1)
     )
+    /// Open task circles keep a warm orange ring that reads on both appearances; meaning is also in the label.
+    static let notesTaskRing = adaptiveColor(
+        light: UIColor(red: 200.0 / 255, green: 90.0 / 255, blue: 0, alpha: 1),
+        dark: UIColor(red: 1, green: 149.0 / 255, blue: 10.0 / 255, alpha: 1)
+    )
     /// Tighter rows in forms and sheets, which open at half height.
     static let sheetRowMinimumHeight: CGFloat = 40
     static let labelledHorizontalPadding: CGFloat = 16

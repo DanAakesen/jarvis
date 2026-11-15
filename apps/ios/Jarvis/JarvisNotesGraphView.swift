@@ -36,11 +36,19 @@ struct JarvisNotesGraphView: View {
             graphCanvas
             if let selected = graph.nodes.first(where: { $0.id == selectedNodeID }) {
                 HStack {
-                    VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                        Text(selected.title).font(.subheadline.weight(.semibold))
-                        Text(selected.directory.isEmpty ? copy.vaultRoot : selected.directory)
-                            .font(.caption).foregroundStyle(.secondary)
+                    // The title opens the reader, as the Open note action does.
+                    Button { Task { await onOpen(selected) } } label: {
+                        VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
+                            Text(selected.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                            Text(selected.directory.isEmpty ? copy.vaultRoot : selected.directory)
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        .frame(minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(copy.openNote)
+                    .accessibilityIdentifier("notes.graph.title")
                     Spacer()
                     JarvisTextButton(title: copy.openNote, identifier: "notes.graph.open") { Task { await onOpen(selected) } }
                 }
