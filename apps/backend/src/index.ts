@@ -106,6 +106,10 @@ import { checkAgentContract } from './core/agent-contract.js';
 import { buildAgentSettingsPayload, readSettings } from './core/settings.js';
 import { createGitHubVaultClient, VAULT_REPOSITORY } from './vault/github-client.js';
 import { createVaultModule } from './vault/index.js';
+import { createInboxModule } from './inbox/module.js';
+import { createInboxStore } from './inbox/store.js';
+import { createInboxIndex } from './inbox/item-index.js';
+import { createInboxIndexStore } from './database/inbox-index-store.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 import { createGoogleApiClient } from './google/api-client.js';
 import { createGoogleTokenProvider, type GoogleOAuthCredentials } from './google/oauth.js';
@@ -579,6 +583,17 @@ try {
       logEmbedding: (fields) => logger.info({ msg: 'memory.embedding', ...fields }, 'memory.embedding'),
     })
     : undefined;
+  const inboxStore = vaultClient ? createInboxStore({
+    vault: vaultClient,
+    log: (fields) => logger.info({ msg: 'inbox.write', ...fields }, 'inbox.write'),
+  }) : undefined;
+  const inboxModule = config.inboxEnabled && inboxStore && memoryStore
+    ? createInboxModule({
+      store: inboxStore,
+      memoryStore,
+      ...(database ? { index: createInboxIndex({ store: createInboxIndexStore(database.pool), inbox: inboxStore }) } : {}),
+    })
+    : undefined;
   const foundryClients = new Map<string, FoundryClient>();
   const trackedRepositories = new Set<string>();
   const taskEventArchive = database && archiveStorageAccount && credential
@@ -1020,6 +1035,7 @@ try {
     sleep: createSleepModule(containerAppScaler),
     recipes: createRecipeModule(recipeStore),
     vault: vaultModule,
+    inbox: inboxModule,
     webResearch: webResearchModule,
     htmlResearch: htmlResearchModule,
     google: googleModule,

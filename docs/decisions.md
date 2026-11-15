@@ -1,3 +1,20 @@
+## 15 November 2026 — Inbox tools for chat and voice (#1855, step 4)
+
+Three tools over the one Inbox module: `inbox_capture`, `inbox_items`, `inbox_close`,
+registered only when `JARVIS_INBOX_ENABLED` is exactly `true` (default off). Capture
+and close verify Dan's current stored message like `vault_write`, so mail, web or note
+text can never create or close an item; reading needs only the owner or agent
+principal. The note quotes Dan's message verbatim: the model may select a passage, but
+it is used only when it really occurs in the message, otherwise the whole message is
+quoted. The capture id is derived from the owner message id and the title, so a
+retried tool call lands on the same note, and an unconfirmed earlier attempt is
+reread from the vault by id before anything is written again. If the index database
+is down, capture still saves to the vault. Routing guidance ("ideas and asks, not
+dated tasks or facts about Dan") lives in the capability index category label and the
+tool descriptions rather than as an extra positional flag through the voice and chat
+instruction builders. Like the task tools, all three are sensitive and refused on phone
+calls. Logs carry only the action, tool and outcome.
+
 ## 15 November 2026 — Inbox index shape (#1855, step 3)
 
 Migration 0081 (0080 belongs to the proactive-events queue, #1862, which must merge first) adds one table, `dbo.inbox_items`: item id, path and sha (a cache so

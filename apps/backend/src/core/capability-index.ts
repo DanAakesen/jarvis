@@ -16,6 +16,8 @@ const exact = (...names: string[]) => (name: string) => names.includes(name);
 const categories: readonly Category[] = [
   { label: 'Tasks and reminders', matches: (name) => name.startsWith('vault_task_') || name === 'owner_reminders',
     examples: ['vault_task_create', 'vault_task_complete', 'vault_task_edit', 'owner_reminders'] },
+  { label: 'Inbox for Dan\'s ideas, asks and loose thoughts that are not dated tasks or facts about him', matches: prefix('inbox_'),
+    examples: ['inbox_capture', 'inbox_items', 'inbox_close'] },
   { label: 'Calendar', matches: prefix('calendar_'),
     examples: ['calendar_today_agenda', 'calendar_list_events', 'calendar_create_event', 'calendar_find_free_slots'] },
   { label: 'Mail', matches: prefix('mail_'),

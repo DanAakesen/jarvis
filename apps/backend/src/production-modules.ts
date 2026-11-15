@@ -7,6 +7,7 @@ export interface ProductionModules {
   readonly sleep: BackendModule;
   readonly recipes: BackendModule;
   readonly vault: BackendModule | undefined;
+  readonly inbox?: BackendModule | undefined;
   readonly webResearch: BackendModule | undefined;
   readonly htmlResearch: BackendModule | undefined;
   readonly google: BackendModule | undefined;
@@ -36,6 +37,7 @@ export function createProductionModules(modules: ProductionModules): BackendModu
     modules.sleep,
     modules.recipes,
     ...(modules.vault ? [modules.vault] : []),
+    ...(modules.inbox ? [modules.inbox] : []),
     ...(modules.webResearch ? [modules.webResearch] : []),
     ...(modules.htmlResearch ? [modules.htmlResearch] : []),
     ...(modules.google ? [modules.google] : []),

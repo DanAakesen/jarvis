@@ -29,6 +29,11 @@ export function newInboxId(): string {
   return randomBytes(4).toString('hex');
 }
 
+/** Same capture, same id: the owner message and the item's title decide, so a retried tool call lands on the same note. */
+export function captureItemId(sourceMessageId: string, title: string): string {
+  return createHash('sha256').update(`${sourceMessageId}\n${cleanTitle(title).toLowerCase()}`).digest('hex').slice(0, 12);
+}
+
 export function isInboxId(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8,32}$/u.test(value);
 }
