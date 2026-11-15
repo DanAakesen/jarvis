@@ -1,3 +1,45 @@
+## PI chat engine (test switch) — 15 November 2026 (#1885, P15-174)
+
+PI is a managed Microsoft Copilot-harness prompt agent (`jarvis-pi`, Terra deployment `gpt-6.1-terra`, reasoning effort `low`, built-ins off) in the existing Foundry project. A chat turn reaches it only when the app sends `engine: "pi"` (the iOS Settings test switch). The default path is unchanged.
+
+```mermaid
+sequenceDiagram
+    participant A as iOS app
+    participant B as Backend (conversation turn route)
+    participant G as PI gateway
+    participant F as Foundry: jarvis-pi
+    participant M as /pi/mcp (find_tools, call_tool)
+    participant T as /tools/:name (existing guards)
+    A->>B: POST turns {text, engine: "pi"}
+    B->>G: stream(input)
+    G->>G: budget check, open turn grant (jt- reference)
+    G->>F: responses (conversation, stream)
+    F-->>G: text deltas
+    G-->>A: delta events (SSE, unchanged contract)
+    F->>M: MCP call + static credential + turn reference
+    M->>M: resolve grant (owner message, session)
+    M->>T: in-process call, message id from the grant
+    T-->>M: outcome, result, confirmation
+    M-->>F: result
+    F-->>G: response.completed (tokens)
+    G->>G: record tokens and DKK, close the grant
+    G-->>A: done
+```
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Agent definition | `agents/pi/definition.json`, `instructions.md`, `skills/*/SKILL.md`; built by `.github/scripts/provision_pi_agent.py` in the Deploy `pi-agent` job | Persona = identity contract kernel plus product identity plus chat rules. Owner preferences, tone and mode go in a context block with the first turn and whenever they change, keeping the cached prefix stable |
+| Gateway | `apps/backend/src/pi/gateway.ts` | Direct Responses call, SSE parse, text before a tool call becomes the acknowledgment and commentary events, 180 s turn deadline, cancel closes the stream and the grant. One in-flight chat turn |
+| Warm conversation | `dbo.pi_conversation` (migration 0086), `POST /pi/warm` | One conversation per owner; a warm-up turn primes the cache when the app opens |
+| Ledger | `dbo.pi_turn`, plus `recordFoundryUsage` (role `chat`) | Per turn: tokens, cached tokens, DKK, first-text ms; the monthly hard stop sums it |
+| MCP server | `apps/backend/src/pi/mcp.ts`, route `/pi/mcp`; credential `jp.<secret>` accepted by `auth/hook.ts` on that route only | Stateless Streamable HTTP like `/inbox/mcp` |
+| Turn authority | `apps/backend/src/pi/turns.ts` | Grant per owner message; refused when forged, closed or aborted; a `smoke` grant runs the existing read-only smoke role |
+| In-process dispatch | `auth/pi-credential.ts` | Random per-process token turned into an agent principal inside the hook, only for routes that opt in as agent routes |
+| Status and smoke | `GET /pi/status` (owner), `POST /pi/warm` (owner), `POST /pi/smoke` (deploy identity) | The smoke runs on a scratch conversation, never the owner's |
+
+Configuration: `JARVIS_PI_AGENT_NAME`, `JARVIS_PI_MCP_SECRET` (Container App secret `pi-mcp-secret`), `JARVIS_PI_MONTHLY_CAP_DKK` (default 250). Both of the first two must be set; otherwise a PI turn ends with `pi_not_configured`. Deploy creates the secret once and sets the first two on the backend; a later infrastructure deployment can drop them, and the same run's `pi-agent` job restores them.
+
+
 ## Inbox sweeps, spend and status — 15 November 2026 (#1855, step 8)
 
 `inbox/audit.ts` (daily missed-capture audit), the weekly mode of `inbox/nudge.ts`,

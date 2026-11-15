@@ -1,3 +1,24 @@
+## 15 November 2026 — PI phases 0 to 2 as one build, with a test switch (#1885, P15-174)
+
+Owner, quoted: "can we not do phase 0, 1 and 2 together in one issue? Bigger issues get better results, remember, because the worker has the context. This way I could test chat directly in the iOS app and provide direct feedback." On voice: "I think that trade off is ok. I know when I start voice I need to wait a few seconds, I do that for ChatGPT as well." On long sessions: "I don't want to test long session, as I'm not worried about that."
+
+Choices made while building (engineering decisions inside that scope; veto any):
+
+| Choice | Why |
+| --- | --- |
+| Reasoning effort `low` in the agent definition (not `none`) | Measured by the dispatcher: none or low must be set in the agent definition and gives true streaming; per-request reasoning, `service_tier` and `prompt_cache_key` are rejected. The 6 Nov rejection was tied to a forced `none` on Terra, so `low` avoids it. One line in `agents/pi/definition.json` |
+| The gateway calls the managed agent directly from the backend; no hosted-agent hop | Lever 8 of the plan; one container hop less |
+| One warm conversation per owner, stored in `dbo.pi_conversation`; a warm-up turn when the app opens, skipped when the cache is fresh (4 minutes) | Measured: a new conversation takes 3.7 to 4.4 s to first text, turn 2 and later about 1.9 s with the cached prompt. A warm-up costs about 0.075 DKK and is counted in the budget |
+| Jarvis tools over MCP as two meta tools, `find_tools` and `call_tool`, not about 150 schemas | Tools are already about 6.4k of the 11k prompt tokens; the current agent and voice use the same lookup |
+| Per-turn authority: the gateway opens a grant for the stored owner message and gives the model an unguessable `jt-` reference that every MCP call must present; the grant ends with the turn. The static MCP credential only proves the caller is the PI agent | The harness sends one static credential; whether the managed agent can pass a per-request header is unproven, so authority does not depend on it. The model can pass the reference but cannot change the message or session it names. Residual risk: a prompt-injected model can use the reference within its own turn, exactly as it can call any tool today; writes still need the tools' own approvals |
+| `call_tool` runs the tool through the normal `/tools/:name` route with an in-process random token | Validation, refusals, approvals, receipts and activity events are the existing ones, not a copy. The token never leaves the process |
+| Harness `require_approval: never` for the Jarvis MCP server; Jarvis's own approvals stay in the tools | The existing owner approval boundary is unchanged. If the harness still asks, the turn ends with an honest error rather than auto-approving |
+| Monthly cap 250 DKK on PI chat, hard stop, no switch to another engine (`JARVIS_PI_MONTHLY_CAP_DKK`) | The plan's proposal (section 11 assumption 6). Cost uses list price and ignores the cached discount, so it never undercounts |
+| Test switch is per turn from the app (`engine: "pi"`), stored on the device; a PI turn that cannot run ends with its own error and never uses the current engine | No runtime fallback. The switch and its call sites are deleted at cutover |
+| The MCP secret lives as a Container App secret created by the Deploy job and as a header in the agent definition | Foundry connections for MCP auth were not verified; hardening to a project connection is open |
+| Not built here: voice, Watch, live screen or camera frames in PI chat (refused with a clear message), standing watches, the brain loop, deleting the old path | Out of scope for this issue |
+
+
 ## 15 November 2026 — PI direction: one harness agent, no runtime fallback, standing watches (#1872, P15-164)
 
 Owner decisions, recorded as given. The system is named PI (Proactive Intelligence). Routes 1 (PI brain) and 4 (chat and voice) on the managed Copilot harness are one plan: one agent, one long session, with Voice Live staying the realtime speech layer and calling the same agent. Decisions are LLM only to begin with; deterministic logic only where an exact result is required. Workers in the drawing are the coding sessions.

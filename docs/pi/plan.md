@@ -4,6 +4,8 @@ Plan for [#1872](https://github.com/DanAakesen/jarvis/issues/1872) (P15-164). Pl
 
 Owner, 15 Nov 2026: "I'm interacting with the harness and agent loop via the chat and voice. So if we keep that out, I'm not sure I will get the full benefit and the full user experience. So I think we need to do a full plan combined of four and one. And also that five seconds start. I think there must be something we can do to optimize that." And: "this is what a mature harness will do and this is why I've been trying to explain to you the reasons to change to Copilot Harness because building this ourself is quite a task."
 
+**Update 15 Nov 2026 (#1885, P15-174, PR #1890):** at the owner's request phases 0, 1 and 2 were built together as one piece so he can test chat on PI in the iOS app behind a test switch. The long-session, quality-scoring and routines items of phase 0 are out. What was built and what is still unproven: `PLAN.md` and `docs/architecture.md` (section "PI chat engine"). Measured latency used for the build (from the owner's dispatcher, not yet in `spike-results.md`): new conversation first text 3.7 to 4.4 s, same-conversation turn 2 and later about 1.9 s with a cached prompt, effort none or low must be set in the agent definition and gives true streaming, per-request reasoning, `service_tier` and `prompt_cache_key` are rejected, tools are about 6.4k of the 11k prompt tokens.
+
 ## The plan on one page
 
 ```mermaid
