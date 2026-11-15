@@ -14,7 +14,7 @@
   visible, runs one forced `JarvisTodayModel.refresh`, then reports readiness; failures settle visibly in Home. The
   overlay window shows `JarvisOpeningView` above content, stays up through a 0.3 s crossfade with touches passing through,
   and the root draws the opening colour for the first frames. `UILaunchScreen` uses the `LaunchBackground` colour.
-  Layout (`JarvisOpeningLayout`), the dim network (`JarvisOpeningNetwork`) and progress semantics (`JarvisOpeningProgress`)
+  Layout (`JarvisOpeningLayout`), the dim background network (`JarvisOpeningNetwork`: fixed positions, drawn with the orb's disc masked out) and progress semantics (`JarvisOpeningProgress`)
   are pure and tested in JarvisCore.
 - **CI.** The macOS Apple build job also builds the iPhone app, which compiles every extension, and captures iPhone
   simulator screenshots and a short opening video (artifact `watch-build-logs`).

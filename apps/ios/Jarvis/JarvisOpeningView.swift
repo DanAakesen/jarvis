@@ -33,7 +33,7 @@ struct JarvisOpeningView: View {
             let center = geometry.size.width / 2
             ZStack {
                 JarvisDesignTokens.openingBackground
-                JarvisOpeningNetworkView()
+                JarvisOpeningNetworkView(orbCenterY: layout.orbCenterY, orbRadius: layout.orbDiameter / 2)
                 RadialGradient(
                     colors: [JarvisDesignTokens.ambientBlue.opacity(0.1), .clear],
                     center: .center, startRadius: layout.orbDiameter * 0.45, endRadius: layout.orbDiameter * 0.85
@@ -64,10 +64,19 @@ struct JarvisOpeningView: View {
     }
 }
 
-/// The dim network behind the orb. Fixed positions from `JarvisOpeningNetwork`; it never animates.
+/// The dim network behind the orb. Fixed positions from `JarvisOpeningNetwork`; it never animates. Lines run behind
+/// the orb: the orb's disc is cut out of the network, so nothing is drawn over the sphere.
 private struct JarvisOpeningNetworkView: View {
+    var orbCenterY: Double
+    var orbRadius: Double
+
     var body: some View {
         Canvas { context, size in
+            var visible = Path(CGRect(origin: .zero, size: size))
+            visible.addEllipse(in: CGRect(
+                x: size.width / 2 - orbRadius, y: orbCenterY - orbRadius, width: orbRadius * 2, height: orbRadius * 2
+            ))
+            context.clip(to: visible, style: FillStyle(eoFill: true))
             let network = JarvisOpeningNetwork.shared
             func point(_ node: JarvisOpeningNetwork.Node) -> CGPoint {
                 CGPoint(x: node.x * size.width, y: node.y * size.height)
@@ -77,7 +86,7 @@ private struct JarvisOpeningNetworkView: View {
                 lines.move(to: point(network.nodes[link[0]]))
                 lines.addLine(to: point(network.nodes[link[1]]))
             }
-            context.stroke(lines, with: .color(JarvisDesignTokens.openingLine.opacity(0.14)), lineWidth: 0.6)
+            context.stroke(lines, with: .color(JarvisDesignTokens.openingLine.opacity(0.18)), lineWidth: 0.7)
             for node in network.nodes where node.brightness > 0 {
                 let p = point(node)
                 context.fill(

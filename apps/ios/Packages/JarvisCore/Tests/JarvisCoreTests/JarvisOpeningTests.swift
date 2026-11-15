@@ -36,11 +36,15 @@ final class JarvisOpeningTests: XCTestCase {
     func testBackgroundNetworkIsFixedSparseAndQuieterThanTheOrb() {
         let network = JarvisOpeningNetwork.shared
         let visible = network.nodes.filter { $0.brightness > 0 }
-        XCTAssertGreaterThan(visible.count, 8)
-        XCTAssertLessThan(network.nodes.count, 40)
+        XCTAssertGreaterThanOrEqual(visible.count, 6)
+        XCTAssertLessThanOrEqual(visible.count, 10, "the background must stay sparse")
+        XCTAssertLessThanOrEqual(network.links.count, 18)
+        func behindOrb(_ x: Double, _ y: Double) -> Bool {
+            let dx = x - 0.5, dy = (y - 0.39) * 1.6
+            return (dx * dx + dy * dy).squareRoot() < 0.35
+        }
         for node in visible {
-            let dx = node.x - 0.5, dy = (node.y - 0.39) * 1.6
-            XCTAssertGreaterThan((dx * dx + dy * dy).squareRoot(), 0.35, "node behind the orb")
+            XCTAssertFalse(behindOrb(node.x, node.y), "a visible node behind the orb")
             XCTAssertTrue((0...1).contains(node.x) && (0...1).contains(node.y))
         }
         var linked = Set<Int>()
@@ -51,6 +55,14 @@ final class JarvisOpeningTests: XCTestCase {
         }
         XCTAssertEqual(linked.count, network.nodes.count, "an unlinked node")
         XCTAssertTrue(network.nodes.contains { $0.x < 0 || $0.x > 1 || $0.y < 0 || $0.y > 1 }, "lines must leave the screen")
+        let passing = network.links.filter { link in
+            let a = network.nodes[link[0]], b = network.nodes[link[1]]
+            return (0...20).contains { step in
+                let t = Double(step) / 20
+                return behindOrb(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
+            }
+        }
+        XCTAssertGreaterThanOrEqual(passing.count, 2, "some lines must run behind the orb")
     }
 
     func testOpeningIsColdStartOnlyAndEndsWhenReadyOrCapped() {

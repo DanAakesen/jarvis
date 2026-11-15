@@ -700,7 +700,9 @@ icon and the favicon. `docs/ui/cognitive-lattice-inventory.md` lists every surfa
 
 Shown on every **cold start**, never on a warm resume, over a static launch screen of the same dark colour
 (`LaunchBackground`). Composition from `jarvis-opening-selected.png`: the lattice orb centred, the white
-**Jarvis** name beneath, a dim network of sparse nodes and lines to the screen edges, and a slim bar near the
+**Jarvis** name beneath, a dim, static background of seven small cyan nodes joined by long angular lines that run off the screen edges, two of
+them passing behind the orb (the orb's disc is cut out, so nothing is drawn over the sphere; the background stays
+clearly quieter than the orb), and a slim bar near the
 bottom (40% of the width, 3 pt, rounded, blue-grey track, amber `#fdcd51`) with no caption and no percentage.
 Startup progress cannot be measured, so the bar is an amber segment travelling along the track; a filled bar is
 used only if work reports real progress. Reduce Motion keeps the orb still and the bar segment fixed, breathing

@@ -49,8 +49,9 @@ public struct JarvisOpeningLayout: Equatable, Sendable {
     }
 }
 
-/// The sparse, dim network behind the orb: a few nodes joined by lines that run off the edges of the screen.
-/// Fixed seed, positions as fractions of the screen, so the background is the same on every launch and never moves.
+/// The sparse, dim network behind the orb: a handful of small nodes joined by long, angular lines that run off the
+/// edges of the screen, two of them passing behind the orb. Fixed positions as fractions of the screen (modelled on
+/// `jarvis-opening-selected.png`), so the background is the same on every launch and never moves.
 public struct JarvisOpeningNetwork: Sendable {
     public struct Node: Equatable, Sendable {
         public let x: Double
@@ -65,47 +66,18 @@ public struct JarvisOpeningNetwork: Sendable {
     public static let shared = JarvisOpeningNetwork()
 
     private init() {
-        var random = JarvisLatticeRandom(seed: 2026)
-        var nodes: [Node] = []
-        // A jittered 4 x 6 grid, skipping cells around the orb so the lines stay quieter than it.
-        for row in 0..<6 {
-            for column in 0..<4 {
-                let x = (Double(column) + 0.2 + random.next() * 0.6) / 4
-                let y = (Double(row) + 0.2 + random.next() * 0.6) / 6
-                let dx = x - 0.5, dy = (y - 0.39) * 1.6
-                guard (dx * dx + dy * dy).squareRoot() > 0.36 else { continue }
-                nodes.append(Node(x: x, y: y, brightness: 0.55 + random.next() * 0.45))
-            }
-        }
-        // Beyond the edges, so some lines leave the screen.
-        for index in 0..<8 {
-            let side = index % 4
-            let along = random.next()
-            switch side {
-            case 0: nodes.append(Node(x: -0.08, y: along, brightness: 0))
-            case 1: nodes.append(Node(x: 1.08, y: along, brightness: 0))
-            case 2: nodes.append(Node(x: along, y: -0.05, brightness: 0))
-            default: nodes.append(Node(x: along, y: 1.05, brightness: 0))
-            }
-        }
-        var links: [[Int]] = []
-        var seen = Set<Int>()
-        for index in nodes.indices {
-            let sorted = nodes.indices.filter { $0 != index }.sorted { left, right in
-                let a = Self.distance(nodes[index], nodes[left]), b = Self.distance(nodes[index], nodes[right])
-                return a == b ? left < right : a < b
-            }
-            for other in sorted.prefix(index % 3 == 0 ? 3 : 2) {
-                let key = min(index, other) * 1000 + max(index, other)
-                if seen.insert(key).inserted { links.append([min(index, other), max(index, other)]) }
-            }
-        }
-        self.nodes = nodes
-        self.links = links
-    }
-
-    private static func distance(_ a: Node, _ b: Node) -> Double {
-        ((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)).squareRoot()
+        // Visible nodes (0...6), then anchors beyond the edges (7...13) that carry lines off-screen.
+        let points: [(Double, Double, Double)] = [
+            (0.81, 0.055, 0.95), (0.143, 0.238, 1.0), (0.977, 0.284, 0.7), (0.027, 0.488, 0.7),
+            (0.904, 0.665, 0.9), (0.089, 0.794, 0.8), (0.911, 0.859, 0.85),
+            (-0.08, 0.185, 0), (0.97, -0.05, 0), (1.08, 0.36, 0), (-0.08, 0.55, 0),
+            (0.32, 1.05, 0), (0.74, 1.05, 0), (1.08, 0.62, 0),
+        ]
+        nodes = points.map { Node(x: $0.0, y: $0.1, brightness: $0.2) }
+        links = [
+            [1, 4], [0, 5], [0, 1], [0, 2], [2, 4], [4, 6], [3, 5], [1, 3],
+            [1, 7], [0, 8], [2, 9], [3, 10], [5, 11], [6, 12], [4, 13],
+        ]
     }
 }
 

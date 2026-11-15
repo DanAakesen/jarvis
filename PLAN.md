@@ -16,6 +16,12 @@ file contract and the listening, thinking and speaking states are unchanged. Obs
 the iPhone simulator opening screen and orb gallery (every state, five sizes) and Home widget layouts render the new
 lattice (`docs/ui/opening-final-2026-11-14/iteration-2026-11-15/`). Still to judge by the owner: the look on a device.
 
+Round 3 — 15 November 2026: the owner approved the orb as of iteration 2 (the iteration 3 experiment with bloom and a
+seven-arm core was reverted at his request) and asked only for a sparser opening background. `JarvisOpeningNetwork` is now
+seven small nodes and fifteen long angular links at fixed positions modelled on `jarvis-opening-selected.png`, with
+anchors beyond the edges; two links pass behind the orb and the orb's disc is masked out of the background canvas. Only
+`JarvisOpeningView` draws the network; the gate and fade screens use the plain colour. The orb is unchanged.
+
 Observed: `swift test` in JarvisCore passes 79 tests on Linux (including the golden file shared with the web, state
 continuity, containment, 1.6 s pulse and the opening layout, network and policy). Web `npm run lint`, `npm run build` and
 `npx vitest run` (33 tests) pass, and the real stage, composer and working orbs were inspected in headless Chrome
