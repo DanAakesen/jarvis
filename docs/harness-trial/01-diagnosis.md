@@ -95,8 +95,14 @@ It is not the harness alone. It is three things together; Jarvis has none of the
 
 Keep these whatever happens: fail-closed pending actions, content-free logging, per-message idempotency and receipts, the identity kernel, secret filtering, and "never send mail" (draft only, p0.md #2). These are the **deterministic-where-exact** parts the design rule protects.
 
-## What this means for the trial
+## What this means for the target
 
-1. A new harness does not remove R3-R6, G6 or H1-H3 by itself; they live in tools, guards and the proactive pipeline.
-2. Unrestricted reach is a **credential and guard decision** first. A harness only makes use of it easier (shell, MCP).
-3. The parts a harness can improve are G1-G5 and A2/A4: loop, skills, sessions, compaction, investigating instead of summarising. See [quality gains](02-quality-gains.md).
+| Finding group | In the [target design](03-target-architecture.md#target-design) |
+| --- | --- |
+| R1, G1, G2 (tool lookup, 15,000-character prompt, long descriptions) | Gone: MCP tools are listed at run time; know-how moves to skills |
+| G3-G5 (no session, fixed memory window) | A long-lived conversation per purpose; the vault stays the record |
+| G6, H1 (reflex classifier, approval regex) | Approvals through `require_approval`, decided by gateway policy |
+| H2-H3, A1-A3 (keyword scope, fixed enums, two slots, no tools) | The agent decides, with a skill for proactive review and triggers instead of two fixed slots |
+| R2 (four Azure tools) | Azure MCP with a read-only role: a credential decision, not a harness feature |
+| R3-R6 (typed GitHub wrappers, about 730 refusals, Gmail regex guard) | The refusals that protect exact results move behind the Jarvis MCP server; the regex guards become gateway policy or approvals |
+| H5, never-send-mail, receipts, secret filter | Stay deterministic in the gateway and the Jarvis MCP server |
