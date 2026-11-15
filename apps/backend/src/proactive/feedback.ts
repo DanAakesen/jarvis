@@ -24,3 +24,13 @@ export function itemFeedback(value: unknown, now: Date): { action: FeedbackActio
       until.getTime() > now.getTime() + 7 * 24 * 60 * 60_000) return undefined;
   return { action: 'snooze', snoozeUntil: until.toISOString() };
 }
+
+export function outreachFeedback(value: unknown): { rating: 'up' | 'down'; note: string | null } | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const body = value as Record<string, unknown>;
+  if (Object.keys(body).some((key) => !['rating', 'note'].includes(key)) ||
+      (body.rating !== 'up' && body.rating !== 'down')) return undefined;
+  if (body.note === undefined) return { rating: body.rating, note: null };
+  if (typeof body.note !== 'string' || Array.from(body.note).length > 400 || /[\p{Cc}\p{Cf}]/u.test(body.note)) return undefined;
+  return { rating: body.rating, note: body.note.trim() || null };
+}

@@ -5,6 +5,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
 import { createProactiveEventStore } from './proactive-event-store.js';
 import { createProactiveOutreachStore } from './proactive-outreach-store.js';
+import { createNowCardChannel, createPushChannel } from '../proactive/events/channels.js';
+import { createEventPipeline } from '../proactive/events/pipeline.js';
+import { createMemoryProactiveStore } from '../proactive/store.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -99,6 +102,47 @@ describe('proactive event queue on SQL Server', () => {
   });
 });
 
+describe('event pipeline on SQL Server', () => {
+  it('runs an event from the queue to a pushed outreach, a Now card and a rating', async () => {
+    await pool.request().query('DELETE dbo.proactive_events; DELETE dbo.proactive_outreach;');
+    const queue = createProactiveEventStore(pool, owner);
+    const outreach = createProactiveOutreachStore(pool, owner);
+    const pushes: unknown[] = [];
+    const cards: unknown[] = [];
+    const pipeline = createEventPipeline({
+      queue, outreach, store: createMemoryProactiveStore(owner), now: () => now, contextSources: [],
+      reasoner: {
+        worstCaseDkk: () => 0.35,
+        async reason(input) {
+          return {
+            decisions: [{ eventIds: [input.events[0]!.id], tier: 'high', title: 'Deploy failed', body: 'Main is red.', why: 'blocks work', category: 'status' }],
+            quiet: input.events.slice(1).map((entry) => ({ eventId: entry.id, why: 'duplicate' })),
+            usage: { model: 'gpt-6.1-terra', inputTokens: 5_000, outputTokens: 500 },
+          };
+        },
+      },
+      channels: [
+        createNowCardChannel({ async record(alert) { cards.push(alert); return true; } }),
+        createPushChannel(async (request) => { pushes.push(request); return { status: 'sent', reason: null, attempted: 1, accepted: 1, statusCode: 201 }; }),
+      ],
+    });
+    await queue.enqueue({ ...event('e2e-1'), occurredAt: new Date(now.getTime() - 60_000) }, now);
+    await queue.enqueue({ ...event('e2e-2'), kind: 'workflow_run.success' }, now);
+    await queue.enqueue({ ...event('e2e-3'), occurredAt: new Date(now.getTime() - 30_000) }, now);
+    pipeline.wake();
+    const result = await pipeline.tick(new AbortController().signal);
+    expect(result).toMatchObject({ outcome: 'done', claimed: 3, dropped: 1, outreach: 1 });
+    expect(pushes).toHaveLength(1);
+    expect(cards).toHaveLength(0);
+    const [row] = await outreach.recent(5, new Date(0));
+    expect(row).toMatchObject({ tier: 'high', rating: null, delivery: [{ channel: 'push', status: 'sent' }] });
+    expect(row?.pushedAt).not.toBeNull();
+    const { recordset } = await pool.request().query('SELECT outcome FROM dbo.proactive_events ORDER BY outcome');
+    expect(recordset.map((entry) => String(entry.outcome).split(' ')[0])).toEqual(['outreach', 'quiet:', 'rule:']);
+    expect(await queue.hasWork(new Date(now.getTime() + 86_400_000))).toBe(false);
+  });
+});
+
 describe('proactive outreach ledger on SQL Server', () => {
   const outreach = createProactiveOutreachStore(pool, owner);
   const itemId = randomUUID();
@@ -108,6 +152,7 @@ describe('proactive outreach ledger on SQL Server', () => {
   };
 
   it('creates, delivers, rates and reads back an outreach, including from the linked item', async () => {
+    await pool.request().query('DELETE dbo.proactive_outreach');
     const created = await outreach.create({ decision, batchId: randomUUID(), itemId }, now);
     expect(created).toMatchObject({ tier: 'medium', rating: null, itemId, eventIds: ['e1'], delivery: [] });
     await outreach.recordDelivery(created.id, [{ channel: 'push', status: 'sent', reason: null }], now);

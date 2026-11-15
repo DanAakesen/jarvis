@@ -10,7 +10,9 @@ export function createNowCardChannel(feed: { record(alert: ActivityAlert): Promi
     async deliver(outreach): Promise<ChannelOutcome> {
       const title = Array.from(`${outreach.title}: ${outreach.body}`).slice(0, 400).join('');
       const created = await feed.record({
-        type: 'proactive_outreach', dedupeKey: `outreach:${outreach.id}`, title, link: null,
+        type: 'proactive_outreach', dedupeKey: `outreach:${outreach.id}`, title,
+        // The card opens the finding, where the thumbs live.
+        link: outreach.itemId ? `proactive:${outreach.itemId}` : null,
       });
       return { channel: 'now_card', status: created ? 'sent' : 'skipped', reason: created ? null : 'already_shown' };
     },

@@ -6,7 +6,8 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { approvalDeciderFor } from '../core/approval-interpreter.js';
 import { budgetState, canRunWithinBudget, estimateCost } from './budget.js';
 import { copenhagenDayStart, monthKey, nextSlotAfter, isQuietHour } from './time.js';
-import { itemFeedback, itemIdPattern as uuidPattern } from './feedback.js';
+import { itemFeedback, itemIdPattern as uuidPattern, outreachFeedback } from './feedback.js';
+import type { OutreachStore } from './events/outreach-store.js';
 import {
   findingCategories, sourceIds, type Item, type RunSummary, type SourceId, type SourceStatus,
 } from './types.js';
@@ -34,6 +35,8 @@ export interface ProactiveRouteOptions {
   now: () => Date;
   run?: (claim: { run: RunSummary; generation: number }, signal?: AbortSignal) => Promise<void>;
   worstCaseDkk?: () => number | Promise<number>;
+  /** Present when the event-driven path is on. */
+  outreach?: OutreachStore;
 }
 
 function validUrl(value: unknown): value is string {
@@ -350,8 +353,41 @@ function registerRoutes<Logger extends FastifyBaseLogger>(
       if (!feedback) return reply.code(400).send({ error: 'invalid_request' });
       const item = await options.store.items.applyFeedback(request.params.id, feedback.action, feedback.snoozeUntil);
       if (!item) return reply.code(404).send({ error: 'not_found' });
+      // The finding of an event outreach carries the thumbs; keep the outreach ledger in step.
+      if (options.outreach && (feedback.action === 'useful' || feedback.action === 'wrong')) {
+        await options.outreach.rateByItem(item.id, feedback.action === 'useful' ? 'up' : 'down')
+          .catch(() => app.log.warn({ reason: 'outreach_rating_failed' }, 'proactive.failed'));
+      }
       return item;
     });
+
+    if (options.outreach) {
+      const outreach = options.outreach;
+      app.get('/proactive/outreach', async (request, reply) => {
+        if (!owner(request, reply)) return;
+        const query = request.query as Record<string, unknown>;
+        const value = query.limit ?? '20';
+        const limit = typeof value === 'string' && /^\d+$/u.test(value) ? Number(value) : Number.NaN;
+        if (Object.keys(query).some((key) => key !== 'limit') || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+          return reply.code(400).send({ error: 'invalid_request' });
+        }
+        return { outreach: await outreach.recent(limit, new Date(options.now().getTime() - 90 * 86_400_000)) };
+      });
+
+      app.post<{ Params: { id: string } }>('/proactive/outreach/:id/feedback', async (request, reply) => {
+        if (!owner(request, reply)) return;
+        if (!uuidPattern.test(request.params.id)) return reply.code(404).send({ error: 'not_found' });
+        const feedback = outreachFeedback(request.body);
+        if (!feedback) return reply.code(400).send({ error: 'invalid_request' });
+        const record = await outreach.rate(request.params.id.toLowerCase(), feedback.rating, feedback.note);
+        if (!record) return reply.code(404).send({ error: 'not_found' });
+        if (record.itemId) {
+          await options.store.items.applyFeedback(record.itemId, feedback.rating === 'up' ? 'useful' : 'wrong')
+            .catch(() => app.log.warn({ reason: 'item_rating_failed' }, 'proactive.failed'));
+        }
+        return record;
+      });
+    }
   };
 }
 

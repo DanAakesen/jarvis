@@ -88,6 +88,8 @@ import { createGitHubReleaseGraphReader } from './github/release-graph.js';
 import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
 import { isVaultDefaultBranchPush } from './github/webhook-mapping.js';
+import { alertEvent, githubEvent } from './proactive/events/producers.js';
+import type { ProactiveEventSink } from './proactive/events/types.js';
 import { createGitHubIssueClient } from './github/issues.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
 import { createProjectPolicyEvaluator } from './github/project-policy.js';
@@ -251,8 +253,18 @@ try {
   const nowFeedStore = database
     ? createNowFeedStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
     : undefined;
+  let proactiveEventSink: ProactiveEventSink | undefined;
+  // Producers outside the proactive module reach the event queue through this entrance, once it is built.
+  const enqueueProactiveEvent = (event: Parameters<ProactiveEventSink['enqueue']>[0]) => {
+    void proactiveEventSink?.enqueue(event).catch(() => {
+      logger.warn({ reason: 'event_enqueue_failed', source: event.source }, 'proactive.events');
+    });
+  };
   const alertActivityStore = database
-    ? createAlertActivityStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
+    ? createAlertActivityStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }), (alert) => {
+      const event = alertEvent(alert, new Date());
+      if (event) enqueueProactiveEvent(event);
+    })
     : undefined;
   const awayModeStore = database
     ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({
@@ -887,6 +899,8 @@ try {
       }
       await checksLoop?.handleMapping(mapping);
       await projectPolicyEvaluator?.handle(mapping);
+      const event = githubEvent(mapping, new Date());
+      if (event) enqueueProactiveEvent(event);
     },
   });
   const phoneStatusModule = createPhoneStatusModule({
@@ -1380,6 +1394,9 @@ try {
     backgroundJobs: app.backgroundJobs,
     ...(conversationStore ? { conversationStore } : {}),
     registerVaultPushHandler: (handler: () => void) => { vaultPushReminderHandler = handler; },
+    eventsEnabled: config.proactiveEventsEnabled,
+    ...(alertActivityStore ? { nowCardFeed: alertActivityStore } : {}),
+    registerEventSink: (sink: ProactiveEventSink) => { proactiveEventSink = sink; },
     ...(alertPushStore ? { pushStore: alertPushStore } : {}),
     ...(ownerReminderStore ? { ownerReminderStore } : {}),
     ...(alertPushSender ? { systemPushSender: alertPushSender } : {}),

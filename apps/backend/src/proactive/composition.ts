@@ -32,6 +32,9 @@ import { createTodoReminderPlanner } from './reminders.js';
 import { createReminderTicker } from './reminder-ticker.js';
 import { createVaultPushReminderPass } from './vault-push-reminders.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
+import type { ActivityAlert } from '../alerts.js';
+import { createEventPath } from './events/wiring.js';
+import type { ProactiveEventSink } from './events/types.js';
 
 const uuidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
 type GitHubVaultClient = ReturnType<typeof createGitHubVaultClient>;
@@ -65,6 +68,12 @@ export interface ProactiveCompositionOptions extends ContextDependencies {
   now?: () => Date;
   logger?: FastifyBaseLogger;
   vaultMirrorStatusReader?: NonNullable<ProactiveEngineOptions['vaultMirrorStatusReader']>;
+  /** The event-driven path (#1858). Off until the owner turns it on; the 07:00 and 18:00 checks run either way. */
+  eventsEnabled?: boolean;
+  /** Writes a card to the Now feed; the low tier needs it. */
+  nowCardFeed?: { record(alert: ActivityAlert): Promise<boolean> };
+  /** Hands producers outside this module (webhook, alerts) the queue's entrance. */
+  registerEventSink?: (sink: ProactiveEventSink) => void;
 }
 
 export function registerProactive<Logger extends FastifyBaseLogger>(
@@ -193,10 +202,28 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
       ...(todoWriter ? [todoWriter] : []),
     ],
   });
+  const events = createEventPath({
+    enabled: options.eventsEnabled === true,
+    ownerObjectId: options.ownerObjectId,
+    pool: options.pool,
+    store,
+    sources,
+    modelCatalogue: options.modelCatalogue,
+    getCredentialToken: options.getCredentialToken,
+    foundryProjectEndpoint: options.foundryProjectEndpoint,
+    systemPushSender: alertsReady ? options.systemPushSender : undefined,
+    nowCardFeed: options.nowCardFeed,
+    usageStore: options.usageStore,
+    now,
+    logger: options.logger,
+  });
+  if (events) options.registerEventSink?.(events.sink);
   const scheduler = createProactiveScheduler({
     store, now, run, ...(options.logger ? { logger: options.logger } : {}),
+    ...(events ? { onTick: events.tick } : {}),
   });
   app.addHook('onReady', async () => {
+    await events?.start();
     await scheduler.start();
     await reminderTicker?.start();
   });
@@ -204,6 +231,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     await vaultPushReminderPass?.stop();
     await reminderTicker?.stop();
     await scheduler.stop();
+    await events?.stop();
   });
   registerProactiveRoutes(app, {
     store,
@@ -216,5 +244,6 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     now,
     run,
     worstCaseDkk: () => model.worstCaseDkk(),
+    ...(events ? { outreach: events.outreach } : {}),
   });
 }

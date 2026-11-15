@@ -7,6 +7,8 @@ export interface ProactiveSchedulerOptions {
   now: () => Date;
   run: (claim: { run: RunSummary; generation: number }, signal?: AbortSignal) => Promise<void>;
   logger?: { warn: (fields: object, message: string) => void } | undefined;
+  /** Runs on every tick after the slot check, also at night. The event pipeline reads its queue here. */
+  onTick?: ((signal: AbortSignal) => Promise<unknown>) | undefined;
 }
 
 export function createProactiveScheduler(options: ProactiveSchedulerOptions) {
@@ -15,6 +17,7 @@ export function createProactiveScheduler(options: ProactiveSchedulerOptions) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let ticking: Promise<void> | undefined;
   let active: { controller: AbortController; task: Promise<void> } | undefined;
+  const shutdown = new AbortController();
   const handledSlots = new Set<string>();
 
   function warn() {
@@ -69,8 +72,15 @@ export function createProactiveScheduler(options: ProactiveSchedulerOptions) {
     active = { controller, task };
   }
 
+  async function tickEvents() {
+    if (stopped || !options.onTick) return;
+    try { await options.onTick(shutdown.signal); } catch { if (!stopped) warn(); }
+  }
+
   function tick(): Promise<void> {
-    ticking ??= evaluate().finally(() => { ticking = undefined; });
+    ticking ??= (async () => {
+      try { await evaluate(); } finally { await tickEvents(); }
+    })().finally(() => { ticking = undefined; });
     return ticking;
   }
 
@@ -100,6 +110,7 @@ export function createProactiveScheduler(options: ProactiveSchedulerOptions) {
     },
     async stop(): Promise<void> {
       stopped = true;
+      shutdown.abort('shutdown');
       if (timer) clearTimeout(timer);
       active?.controller.abort('interrupted_by_restart');
       await startup?.catch(warn);

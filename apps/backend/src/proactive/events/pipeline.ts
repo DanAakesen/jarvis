@@ -22,7 +22,9 @@ const FEEDBACK_WINDOW_MS = 30 * 24 * 60 * 60_000;
 const RETENTION_MS = 45 * 24 * 60 * 60_000;
 const HOUR_MS = 60 * 60_000;
 /** Vault and backend memory plus the state of plans and repos: context the model judges events against. */
-const contextSourceIds: readonly SourceId[] = ['todos', 'calendar', 'factory', 'notes', 'memory'];
+const contextSourceIds: readonly SourceId[] = ['todos', 'calendar', 'factory', 'notes', 'memory', 'health', 'nutrition'];
+/** Health numbers change all day; they inform the model but must not make every timer review look new. */
+const volatileSourceIds: readonly string[] = ['health', 'nutrition'];
 const urgencyForTier = { low: 'fyi', medium: 'normal', high: 'time_critical' } as const;
 
 export interface EventPipelineLogger {
@@ -133,7 +135,8 @@ export function createEventPipeline(options: EventPipelineOptions) {
 
     const facts = await readContext(settings, signal);
     if (survivors.every((event) => event.source === 'timer')) {
-      const fingerprint = digest(JSON.stringify(facts.map(({ source, text }) => [source, text]).sort()));
+      const fingerprint = digest(JSON.stringify(facts
+        .filter(({ source }) => !volatileSourceIds.includes(source)).map(({ source, text }) => [source, text]).sort()));
       if (fingerprint === lastTimerFingerprint) {
         await queue.settle(survivors.map(({ id }) => ({ id, outcome: 'rule: context_unchanged' })), now());
         return result('filtered', claimed.length, dropped + survivors.length);
