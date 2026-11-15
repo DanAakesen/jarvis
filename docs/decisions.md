@@ -12,6 +12,7 @@ Owner: "for the model we should do gpt 6.1, that is very very cheap. so that sho
 - **Budget meter fix**: Terra was unlisted and priced at the highest listed rate (Luna), about five times too low. It is now priced at USD 1 input and USD 5 output per million tokens (Azure OpenAI list price, Global short context, checked 15 November 2026; cached-input discounts ignored). Unlisted models still fall back to the highest listed rate, which is now Terra's.
 - **Switch**: `JARVIS_PROACTIVE_EVENTS_ENABLED` (Bicep `proactiveEventsEnabled`, default false) so the existing checks keep running alone until the new path is proven.
 - Evidence: unit and SQL Server 2022 integration tests, listed in PLAN.md. Not observed: live traffic, push delivery, a real model call, real cost. Estimates in `docs/proactive-events/design.md` are computed, not measured.
+
 ## 15 November 2026 — Watch dictation and voice on the first press (P15-160 / #1856)
 
 Build 105 feedback: dictation hung and ended with "transcription timed out", voice
