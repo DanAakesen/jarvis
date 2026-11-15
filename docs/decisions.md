@@ -1,3 +1,7 @@
+## 15 November 2026 — PI: voice start wait accepted, no long-session test, phases 0 to 2 as one issue (#1872, P15-174)
+
+Owner decisions. **Voice:** "I know when I start voice I need to wait a few seconds, I do that for ChatGPT as well." The 3.5 to 4.4 s harness first-turn wait when voice starts is accepted. There is no separate fast direct path for voice: Voice Live stays the speech layer and every voice turn goes through the PI agent; the warm conversation keeps later turns fast. **Long sessions:** no long-session test and no gate or risk emphasis; one line in the plan. **Issues:** PI phases 0, 1 and 2 are one issue, P15-174 (#1885), replacing #1874 to #1876, so the owner can test chat on the PI agent in the iOS app behind a test selector. Routines and the reminder tool are evaluated in the watches phase. Plan: `docs/pi/plan.md`.
+
 ## 15 November 2026 — Watch Health purpose strings (#1870)
 
 App Store Connect rejected the first upload that included the Watch steps
