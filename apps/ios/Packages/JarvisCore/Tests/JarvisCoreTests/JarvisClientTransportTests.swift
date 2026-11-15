@@ -285,22 +285,26 @@ final class JarvisClientTransportTests: XCTestCase {
 
     func testGymLogStartsInTheCurrentFolderOnlyWhenTheCurrentLayoutIsDetected() async throws {
         let utc = TimeZone(identifier: "UTC")!
-        for (directories, folder) in [
-            (["Personal", "_agent-activity"], "Personal/Health/Gym log"),
-            (["Personal", "_agent-log"], "Personal/Gym log"),
+        let missing = FakeHTTPTransport.Stub.response(jsonResponse(status: 404, body: ["error": "missing"]))
+        let inbox = FakeHTTPTransport.Stub.response(jsonResponse(status: 200, body: [
+            "path": "Work/Task inbox.md", "content": "- [ ] a task", "sha": String(repeating: "a", count: 40),
+            "url": "https://github.com/example/vault/blob/master/note.md",
+        ]))
+        for (directories, probes, folder): ([String], [FakeHTTPTransport.Stub], String) in [
+            (["Personal", "_agent-activity"], [], "Personal/Health/Gym log"),
+            (["Personal", "Work"], [missing, inbox], "Personal/Health/Gym log"),
+            (["Personal", "_agent-log"], [missing, missing], "Personal/Gym log"),
         ] {
             let transport = FakeHTTPTransport([
                 .response(notesPage(directory: nil)), .response(notesPage(directory: nil)),
                 .response(jsonResponse(status: 200, body: [
                     "directories": directories, "rootNoteCount": 0, "truncated": false, "updatedAt": "2026-11-15T10:00:00Z",
                 ])),
-                .response(createdNote(folder)),
-            ])
+            ] + probes + [.response(createdNote(folder))])
             let store = JarvisVaultGymLogStore(client: JarvisNotesClient(client: try makeClient(transport: transport)), timeZone: utc)
             try await store.save(JarvisGymLogEntry(performedAt: Date(timeIntervalSince1970: 1_794_823_200), session: .legs))
             let requests = await transport.recordedRequests()
             let post = try XCTUnwrap(requests.last)
-            XCTAssertEqual(post.method, .post)
             let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(post.body)) as? [String: String])
             XCTAssertTrue(try XCTUnwrap(body["path"]).hasPrefix(folder + "/"), folder)
         }

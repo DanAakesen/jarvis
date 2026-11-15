@@ -289,8 +289,17 @@ public struct JarvisVaultGymLogStore: JarvisGymLogStore {
             if !page.notes.isEmpty { return folder }
         }
         let markers = [JarvisGymLogNote.folder, "_agent-activity"]
-        let current = try await client.folderTree().directories.contains { directory in
+        var current = try await client.folderTree().directories.contains { directory in
             markers.contains { directory == $0 || directory.hasPrefix($0 + "/") }
+        }
+        // The tree lists directories only, so the renamed task inboxes are probed directly.
+        for inbox in ["Personal/Task inbox.md", "Work/Task inbox.md"] where !current {
+            do {
+                _ = try await client.readNote(path: inbox)
+                current = true
+            } catch JarvisNotesClientError.noteNotFound {
+                continue
+            }
         }
         return current ? JarvisGymLogNote.folder : JarvisGymLogNote.legacyFolder
     }
