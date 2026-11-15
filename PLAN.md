@@ -10,7 +10,7 @@ Next, in order, each needing Dan: (a) set `proactiveEventsEnabled` to `true` and
 
 ## Loose Ends (inbox loop) — 15 November 2026 (#1855, P15-159)
 
-Owner go-ahead: "go on loose ends". One issue, eight steps delivered in order, each as its own pull request and verified before the next. All ship dark behind default-off flags; spend stays inside the 100 DKK/month budget.
+Owner go-ahead: "go on loose ends". Status 15 Nov: all eight steps are built and dark; the owner switch-on and device acceptance remain. One issue, eight steps delivered in order, each as its own pull request and verified before the next. All ship dark behind default-off flags; spend stays inside the 100 DKK/month budget.
 
 | Step | Scope | State |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ Owner go-ahead: "go on loose ends". One issue, eight steps delivered in order, e
 | 5 | Capture endpoint, write-only credential, iPhone Shortcut (runs on Apple Watch too) | Built, in review. Native Watch-app action not built (needs a Mac to compile and test) |
 | 6 | MCP server (ChatGPT, Claude, Copilot) | Built with scoped bearer credentials (Claude Code, Codex, Copilot CLI); ChatGPT and claude.ai connectors need an Entra OAuth registration (owner action), not built |
 | 7 | Nudge pass in the proactive run, feedback learning | Built as an `onFindingsStored` hook, dark behind `JARVIS_INBOX_NUDGES_ENABLED`. Thumbs on the push itself (iOS and web notification actions) not built (native work, same as #1862) |
-| 8 | Missed-capture audit, weekly review, spend visibility, owner switch-on | Not started |
+| 8 | Missed-capture audit, weekly review, spend visibility, owner switch-on | Built, dark. Switch-on flags in `infra/main.bicep` default false; acceptance checklist in `docs/inbox-loop/acceptance.md`. Nothing has run live; cost figures are still estimates |
 
 ## Voice caption follow-up — 13 November 2026 (#1823)
 

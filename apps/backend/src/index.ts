@@ -109,6 +109,12 @@ import { createVaultModule } from './vault/index.js';
 import { createInboxModule } from './inbox/module.js';
 import { createInboxRoutes } from './inbox/routes.js';
 import { createInboxMcpRoutes } from './inbox/mcp.js';
+import { createInboxStatusRoute } from './inbox/status.js';
+import { createMissedCaptureAudit } from './inbox/audit.js';
+import { NUDGE_STYLE_KEY } from './inbox/ops.js';
+import { createInboxOpsStore } from './database/inbox-ops-store.js';
+import { estimateCost } from './proactive/budget.js';
+import { dayKey } from './proactive/time.js';
 import { createInboxCapture } from './inbox/capture.js';
 import type { FoundryModelUsage } from './core/usage.js';
 import { createInboxNudgePass } from './inbox/nudge.js';
@@ -597,6 +603,7 @@ try {
   const inboxIndex = inboxStore && database
     ? createInboxIndex({ store: createInboxIndexStore(database.pool), inbox: inboxStore })
     : undefined;
+  const inboxOps = config.inboxEnabled && database ? createInboxOpsStore(database.pool) : undefined;
   const inboxCredentials = config.inboxEnabled && database
     ? new InboxCaptureCredentials(createInboxCaptureCredentialStore(database.pool), config.auth.ownerObjectId)
     : undefined;
@@ -606,6 +613,7 @@ try {
       memoryStore,
       index: inboxIndex,
       credentials: inboxCredentials,
+      ops: inboxOps,
       routes: [createInboxRoutes({
         ownerObjectId: config.auth.ownerObjectId,
         credentials: inboxCredentials,
@@ -625,12 +633,19 @@ try {
                 const selected = chooseApprovalModel(catalogue, (await readSettings(settingsStore, catalogue)).roles.chat.model);
                 return selected ? { ...selected, maxCompletionTokens: 2048 } : undefined;
               },
-              recordUsage: usage => usageStore.recordFoundryUsage!(usage),
+              recordUsage: async (usage) => {
+                await usageStore.recordFoundryUsage!(usage);
+                const cost = estimateCost(usage.model, usage.inputTokens, usage.outputTokens);
+                await inboxOps?.addSpend(dayKey(new Date()), 'triage', {
+                  calls: 1, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, estimatedDkk: cost.estimatedDkk,
+                }, AbortSignal.timeout(5_000)).catch(() => undefined);
+              },
             }),
           } : {}),
           log: (event, fields) => logger.info({ msg: event, ...fields }, event),
         }),
-      }), createInboxMcpRoutes({ store: inboxStore, index: inboxIndex })],
+      }), createInboxMcpRoutes({ store: inboxStore, index: inboxIndex }),
+        createInboxStatusRoute({ ownerObjectId: config.auth.ownerObjectId, index: inboxIndex, ops: inboxOps, nudgesEnabled: config.inboxNudgesEnabled })],
     })
     : undefined;
   const foundryClients = new Map<string, FoundryClient>();
@@ -1453,8 +1468,19 @@ try {
         },
         recordUsage: async (usage) => { inboxUsage.push(usage); await usageStore.recordFoundryUsage!(usage); },
       });
+      const audit = conversationStore?.readDanMessagesSince
+        ? createMissedCaptureAudit({
+          store: inboxStore,
+          index: inboxIndex,
+          model: review,
+          messages: (since, limit) => conversationStore.readDanMessagesSince!(since, limit),
+          log: (fields) => logger.info({ msg: 'inbox.nudge', ...fields }, 'inbox.nudge'),
+        })
+        : undefined;
       return createInboxNudgeHook({
         store: proactiveStore,
+        ops: inboxOps,
+        audit,
         takeUsage: () => inboxUsage.splice(0),
         now: () => new Date(),
         log: (fields) => logger.info({ msg: 'inbox.nudge', ...fields }, 'inbox.nudge'),
@@ -1465,6 +1491,10 @@ try {
           delivery: createProactiveNudgeDelivery(proactiveStore, context, () => new Date()),
           reactions: createProactiveReactions(proactiveStore),
           guidance: async () => (await proactiveStore.settings.read()).guidance,
+          ...(inboxOps ? {
+            nudgeStyle: async () => (await inboxOps.getState(NUDGE_STYLE_KEY, AbortSignal.timeout(5_000))) ?? '',
+            saveNudgeStyle: (style: string, signal: AbortSignal) => inboxOps.setState(NUDGE_STYLE_KEY, style, signal),
+          } : {}),
           log: (fields) => logger.info({ msg: 'inbox.nudge', ...fields }, 'inbox.nudge'),
         }),
       });

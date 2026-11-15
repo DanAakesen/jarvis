@@ -617,7 +617,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   }
   if (input.msg === 'inbox.nudge') {
     if (['nudged', 'quiet', 'nothing_to_review', 'model_unavailable', 'invalid_model_output', 'inbox_unavailable', 'trail_failed',
-      'disabled', 'daily_ceiling', 'budget_exhausted', 'spend_not_recorded'].includes(String(input.outcome))) fields.outcome = input.outcome;
+      'disabled', 'daily_ceiling', 'budget_exhausted', 'spend_not_recorded', 'audit_captured', 'audit_quiet'].includes(String(input.outcome))) fields.outcome = input.outcome;
   }
   if (input.msg === 'inbox.triage') {
     if (['model', 'raw'].includes(String(input.outcome))) fields.outcome = input.outcome;

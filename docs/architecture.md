@@ -1,3 +1,12 @@
+## Inbox sweeps, spend and status — 15 November 2026 (#1855, step 8)
+
+`inbox/audit.ts` (daily missed-capture audit), the weekly mode of `inbox/nudge.ts`,
+`inbox/ops.ts` plus `database/inbox-ops-store.ts` (state and spend ledger, migration 0085),
+`inbox/status.ts` (`GET /inbox/status`, owner only) and the `inbox_nudge_style` tool. The hook in
+`inbox/proactive-hook.ts` orders review, audit (18:00 run, once a day) and weekly review (first
+Sunday run) and records each stage's spend by kind. `ConversationStore.readDanMessagesSince` is
+the new read path for the audit.
+
 ## Inbox nudge pass — 15 November 2026 (#1855, step 7)
 
 `inbox/review.ts` builds the digest, the system prompt and the strict parser;

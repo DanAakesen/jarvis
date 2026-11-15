@@ -6,6 +6,7 @@ import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, type Migration } from './migrations.js';
 import { createWatchCredentialStore, WatchCredentials } from '../auth/watch-credential.js';
 import { createInboxIndexStore } from './inbox-index-store.js';
+import { createInboxOpsStore } from './inbox-ops-store.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentialLimit, InboxCaptureCredentials } from '../auth/inbox-capture-credential.js';
 
 const configuration = loadDatabaseConfig();
@@ -136,6 +137,37 @@ describe('real SQL Server migration contract', () => {
         await pool.request().batch(down);
       }
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.inbox_items', N'U') AS id")).recordset).toEqual([{ id: null }]);
+    });
+  });
+  describe('inbox operational state and spend', () => {
+    it('keeps small state, adds spend per day and kind, and enforces its constraints', async () => {
+      const schema = await readFile(new URL('../../../../db/migrations/0085_inbox_ops.sql', import.meta.url), 'utf8');
+      const down = await readFile(new URL('../../../../db/migrations/down/0085_inbox_ops.sql', import.meta.url), 'utf8');
+      await pool.request().batch(schema);
+      const signal = new AbortController().signal;
+      const ops = createInboxOpsStore(pool);
+      try {
+        expect(await ops.getState('nudge_style', signal)).toBeNull();
+        await Promise.all([ops.setState('nudge_style', 'first', signal), ops.setState('nudge_style', 'second', signal)]);
+        expect(['first', 'second']).toContain(await ops.getState('nudge_style', signal));
+        await ops.setState('nudge_style', 'Foretrækker weekendforslag om morgenen', signal);
+        expect(await ops.getState('nudge_style', signal)).toBe('Foretrækker weekendforslag om morgenen');
+        await ops.deleteState('nudge_style', signal);
+        expect(await ops.getState('nudge_style', signal)).toBeNull();
+        await expect(pool.request().query("INSERT dbo.inbox_state (state_key, state_value) VALUES ('Bad-Key', 'x')")).rejects.toThrow();
+
+        await Promise.all(Array.from({ length: 6 }, () => ops.addSpend('2026-11-15', 'review', { calls: 1, inputTokens: 1000, outputTokens: 100, estimatedDkk: 0.0125 }, signal)));
+        await ops.addSpend('2026-11-15', 'audit', { calls: 1, inputTokens: 2000, outputTokens: 200, estimatedDkk: 0.04 }, signal);
+        await ops.addSpend('2026-11-10', 'triage', { calls: 2, inputTokens: 10, outputTokens: 5, estimatedDkk: 0.002 }, signal);
+        expect(await ops.spendSince('2026-11-12', signal)).toEqual([
+          { day: '2026-11-15', kind: 'audit', calls: 1, inputTokens: 2000, outputTokens: 200, estimatedDkk: 0.04 },
+          { day: '2026-11-15', kind: 'review', calls: 6, inputTokens: 6000, outputTokens: 600, estimatedDkk: 0.075 },
+        ]);
+        await expect(ops.addSpend('2026-11-15', 'other' as never, { calls: 1, inputTokens: 1, outputTokens: 1, estimatedDkk: 0 }, signal)).rejects.toThrow();
+      } finally {
+        await pool.request().batch(down);
+      }
+      expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.inbox_spend', N'U') AS id")).recordset).toEqual([{ id: null }]);
     });
   });
   describe('inbox capture credentials', () => {

@@ -1,3 +1,11 @@
+## Inbox switch-on — 15 November 2026 (#1855)
+
+- Bicep parameters `inboxEnabled` and `inboxNudgesEnabled` (default false) set `JARVIS_INBOX_ENABLED` and
+  `JARVIS_INBOX_NUDGES_ENABLED`. Apply migrations 0081 to 0085 first. Checklist: `docs/inbox-loop/acceptance.md`.
+- `GET /inbox/status` (owner token) shows items, thumbs, spend and last sweep days.
+- Local SQL checks: all five inbox tables are covered by `npm run test:database --workspace @jarvis/backend`.
+
+
 ## Inbox nudges — 15 November 2026 (#1855)
 
 - `JARVIS_INBOX_NUDGES_ENABLED` (exact `true`, default off, not yet in `infra/main.bicep`) adds the

@@ -1,10 +1,12 @@
 import type { FoundryModelUsage } from '../core/usage.js';
-import { canRunWithinBudget, estimateCost } from '../proactive/budget.js';
+import { budgetState, canRunWithinBudget, estimateCost } from '../proactive/budget.js';
 import type { FindingsStoredContext } from '../proactive/engine.js';
 import type { ProactiveStore } from '../proactive/store.js';
 import { dayKey, monthKey } from '../proactive/time.js';
 import { highestFoundryTokenCosts } from '../core/usage-pricing.js';
+import type { MissedCaptureAudit } from './audit.js';
 import type { InboxNudgePass, NudgeDelivery, ProactiveReactions } from './nudge.js';
+import { AUDIT_DAY_KEY, WEEKLY_WEEK_KEY, type InboxOpsStore, type InboxSpendKind } from './ops.js';
 
 /** A review reads at most about 14 000 tokens and writes at most 4 096; priced at the highest known rate until measured. */
 const worstCaseTokens = { input: 14_000, output: 4_096 } as const;
@@ -65,12 +67,23 @@ export function createProactiveReactions(store: Pick<ProactiveStore, 'items'>): 
   };
 }
 
+function copenhagenHourAndWeekday(at: Date): { hour: number; sunday: boolean } {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Copenhagen', hour: '2-digit', weekday: 'short', hourCycle: 'h23',
+  }).formatToParts(at).map(({ type, value }) => [type, value]));
+  return { hour: Number(parts.hour), sunday: parts.weekday === 'Sun' };
+}
+
 /**
- * The inbox review as an `onFindingsStored` hook: it runs once per claimed proactive run (so the existing slot lease, quiet
- * hours, pause switch and monthly budget gate apply), and records what it spent in the shared ledger.
+ * The inbox work of a proactive run as an `onFindingsStored` hook: it runs once per claimed run (so the existing slot lease,
+ * quiet hours, pause switch and monthly budget gate apply), and records what it spent in the shared ledger and, by kind, in
+ * the inbox's own ledger. The slot review always goes first. The daily missed-capture audit (18:00 run) and the weekly
+ * deep review (first Sunday run) only run while the month is under the 80% warning, so they stop first when money is short.
  */
 export function createInboxNudgeHook(options: {
   readonly pass: (context: FindingsStoredContext) => InboxNudgePass;
+  readonly audit?: MissedCaptureAudit | undefined;
+  readonly ops?: InboxOpsStore | undefined;
   readonly store: Pick<ProactiveStore, 'settings' | 'spend'>;
   /** Usage the model transport recorded since the last call. */
   readonly takeUsage: () => FoundryModelUsage[];
@@ -83,6 +96,7 @@ export function createInboxNudgeHook(options: {
 
   return async function onFindingsStored(context: FindingsStoredContext): Promise<void> {
     const at = options.now();
+    const signal = context.signal;
     const settings = await options.store.settings.read();
     if (settings.paused || !settings.sources.notes) {
       log({ outcome: 'disabled' });
@@ -90,31 +104,62 @@ export function createInboxNudgeHook(options: {
     }
     const today = dayKey(at);
     if (today !== spendDay) { spendDay = today; spentToday = 0; }
-    if (spentToday >= INBOX_DAILY_CEILING_DKK) {
-      log({ outcome: 'daily_ceiling' });
-      return;
+    if (options.ops) {
+      const rows = await options.ops.spendSince(today, signal).catch(() => []);
+      spentToday = Math.max(spentToday, rows.filter((row) => row.day === today).reduce((sum, row) => sum + row.estimatedDkk, 0));
     }
+    const month = monthKey(at);
     const worstCase = highestFoundryTokenCosts(worstCaseTokens.input, worstCaseTokens.output);
-    const spent = await options.store.spend.monthTotal(monthKey(at));
-    if (settings.monthlyBudgetDkk === 0 ||
-        !canRunWithinBudget(settings.monthlyBudgetDkk, spent, worstCase.inputDkk + worstCase.outputDkk)) {
-      log({ outcome: 'budget_exhausted' });
-      return;
-    }
-    options.takeUsage();
-    try {
-      await options.pass(context).run(context.signal);
-    } finally {
-      for (const usage of options.takeUsage()) {
-        const cost = estimateCost(usage.model, usage.inputTokens, usage.outputTokens);
-        spentToday += cost.estimatedDkk;
-        try {
-          await options.store.spend.record({
-            runId: context.runId, month: monthKey(at), inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
-            estimatedDkk: cost.estimatedDkk, createdAt: options.now(),
-          });
-        } catch { log({ outcome: 'spend_not_recorded' }); }
+    const worstCaseDkk = worstCase.inputDkk + worstCase.outputDkk;
+    let spentMonth = await options.store.spend.monthTotal(month);
+
+    // Returns false when the budget or the daily ceiling says stop.
+    const stage = async (kind: InboxSpendKind, work: () => Promise<unknown>): Promise<boolean> => {
+      if (spentToday >= INBOX_DAILY_CEILING_DKK) { log({ outcome: 'daily_ceiling' }); return false; }
+      if (settings.monthlyBudgetDkk === 0 || !canRunWithinBudget(settings.monthlyBudgetDkk, spentMonth, worstCaseDkk)) {
+        log({ outcome: 'budget_exhausted' });
+        return false;
       }
+      options.takeUsage();
+      try {
+        await work();
+      } finally {
+        const used = options.takeUsage();
+        let dkk = 0;
+        let input = 0;
+        let output = 0;
+        for (const usage of used) {
+          const cost = estimateCost(usage.model, usage.inputTokens, usage.outputTokens);
+          dkk += cost.estimatedDkk; input += usage.inputTokens; output += usage.outputTokens;
+          try {
+            await options.store.spend.record({
+              runId: context.runId, month, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens,
+              estimatedDkk: cost.estimatedDkk, createdAt: options.now(),
+            });
+          } catch { log({ outcome: 'spend_not_recorded' }); }
+        }
+        spentToday += dkk;
+        spentMonth += dkk;
+        if (used.length > 0 && options.ops) {
+          await options.ops.addSpend(today, kind, { calls: used.length, inputTokens: input, outputTokens: output, estimatedDkk: dkk }, new AbortController().signal)
+            .catch(() => log({ outcome: 'spend_not_recorded' }));
+        }
+      }
+      return true;
+    };
+
+    if (!await stage('review', () => options.pass(context).run(signal, 'slot'))) return;
+    if (budgetState(settings.monthlyBudgetDkk, spentMonth) !== 'ok' || !options.ops) return;
+
+    const { hour, sunday } = copenhagenHourAndWeekday(at);
+    if (options.audit && hour >= 18 && await options.ops.getState(AUDIT_DAY_KEY, signal).catch(() => today) !== today) {
+      if (!await stage('audit', () => options.audit!.run(signal))) return;
+      await options.ops.setState(AUDIT_DAY_KEY, today, signal).catch(() => undefined);
+    }
+    if (budgetState(settings.monthlyBudgetDkk, spentMonth) !== 'ok') return;
+    if (sunday && await options.ops.getState(WEEKLY_WEEK_KEY, signal).catch(() => today) !== today) {
+      if (!await stage('weekly', () => options.pass(context).run(signal, 'weekly'))) return;
+      await options.ops.setState(WEEKLY_WEEK_KEY, today, signal).catch(() => undefined);
     }
   };
 }
