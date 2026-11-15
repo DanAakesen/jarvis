@@ -459,6 +459,22 @@ private final class JarvisGateModel: ObservableObject {
 }
 
 struct JarvisGateRootView: View {
+    /// Plain opening colour over the first frames; see the overlay in `body`.
+    @ViewBuilder
+    private var openingColourCover: some View {
+        if model.openingState == .visible {
+            JarvisDesignTokens.openingBackground
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// Home reports its first fresh data through this, on a cold start only.
+    private var coldStartCallback: (@MainActor () -> Void)? {
+        guard model.openingState == .visible else { return nil }
+        return { [model] in model.homeDataReady() }
+    }
+
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("jarvis.appTheme") private var storedTheme = "system"
     @StateObject private var model = JarvisGateModel()
@@ -481,7 +497,7 @@ struct JarvisGateRootView: View {
                 } else {
                     ContentView(
                         sessionEpoch: model.contentEpoch,
-                        onColdStartData: model.openingState == .visible ? { model.homeDataReady() } : nil
+                        onColdStartData: coldStartCallback
                     )
                 }
             }
@@ -495,13 +511,7 @@ struct JarvisGateRootView: View {
         }
         .environmentObject(navigation)
         // The first frames after the static launch screen show the opening's own colour, never a flash of Home.
-        .overlay {
-            if model.openingState == .visible {
-                JarvisDesignTokens.openingBackground
-                    .ignoresSafeArea()
-                    .accessibilityHidden(true)
-            }
-        }
+        .overlay { openingColourCover }
         // The drawer sits outside ContentView, so the stored theme must be applied at the root as well.
         .preferredColorScheme(storedTheme == "light" ? .light : storedTheme == "dark" ? .dark : nil)
         .task {
