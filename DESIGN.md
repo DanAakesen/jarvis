@@ -76,6 +76,74 @@ progress rather than another approval question. Show a proposal when Dan asks to
 review a plan or when the intended scope is unclear. Reuse the existing proposal
 and activity surfaces; no new confirmation dialog or forced wording. Distinguish
 task creation/queueing from observed runner execution and completed delivery.
+## Native Notes folder direction (15 November 2026; owner selected)
+
+Dan selected **Vault Folders** from the Notes exploration: compact pinned notes,
+the existing vault folders, source-linked tasks and a folder-cluster graph.
+Retain the navy network background and the bottom search plus separate + action.
+Move folder/sort and graph context actions into a three-dot header menu beside
+the existing navigation button. The bottom has two rows: equal-width, centered
+Notes/Tasks/Graph segments, then search and + with matching height, shared outer
+margins and consistent spacing. Remove Recent notes. Task completion circles
+use orange outlines. Short left swipes pin; long left swipes delete. Keep those
+actions distinct from completion and preserve source identity and write failures.
+Remove the graph preview's Open note button; its title row opens the note.
+
+Search, +, the top-right navigation button and the three-way mode switch must
+match the existing app's Apple glass appearance: smoked translucency, restrained
+refraction and soft specular edges, with readable text. Apply this through the
+shared controls and glass surfaces; keep content lists visually quiet. Preserve
+vault identity, version-aware saves, accessibility and right-hand reach.
+
+The [refined concept](output/design-explorations/2026-11-15-notes/vault-folders-refined-v3.png)
+and [refinement brief](output/design-explorations/2026-11-15-notes/REFINEMENT.md)
+record the selected direction and requested adjustments. This is a static design
+revision; existing app behavior and vault data have not been changed.
+
+Dan approved the revised overview and requested its detail pages and sheets.
+The [subpage study](output/design-explorations/2026-11-15-notes-subpages/HANDOFF.md)
+covers note reading/editing, task detail/scheduling, + creation, folder selection,
+search, organisation and recovery. Dan approved the subpage compositions with
+one styling correction: action buttons use neutral Apple glass surfaces, with
+yellow/amber text where emphasis is needed, never yellow/orange filled action
+backgrounds. This applies to Save, Done, Continue to note, Choose folder, Retry
+and Review changes. Native selection indicators and task rings retain their
+semantic colors. Editors put primary actions near the keyboard; modal sheets
+keep underlying browsing controls inactive. This confirms visual direction,
+not implemented or verified runtime behavior.
+
+## Cognitive lattice orb direction (14 November 2026; owner selected)
+
+Dan selected **Cognitive lattice**, option 3 in the 14 November orb exploration.
+The defining feature is a connected brain-like network: visible bright nodes,
+fine angular connections and nested irregular lattice volumes, with a warm
+amber core inside cyan-edged dark glass. Preserve that detail in the app icon
+and shared in-app orb. The selected
+[reference](docs/ios/design/cognitive-lattice-reference.png) is the visual target;
+its listening, thinking and speaking poses are static motion studies.
+
+Keep the outer orb position stable while internal nodes, paths and lattice
+deformation express actual activity. Preserve the existing microphone/playback
+state boundaries, accessible status and Reduced Motion behavior. Implement the
+look through the shared `JarvisOrb`; screen files continue to use shared controls
+and glass surfaces. This is an approved direction, not an implemented asset or
+animation change.
+
+Dan subsequently selected opening option 1's centered orb and **Jarvis** wordmark
+beneath it, combined with option 2's dark extended cyan network background.
+Replace the visible “Opening…” caption with a slim progress bar in the same
+lower centered location. Preserve the full connected-brain orb and animate its
+internal nodes and connections during loading, then transition smoothly to Home.
+The [selected mockup](docs/ios/design/cognitive-lattice-opening-reference.png)
+and [Copilot handoff](output/design-explorations/2026-11-14-opening-final/COPILOT-HANDOFF.md)
+capture this composition. Internal path signals, a restrained core pulse and a
+roughly 300 ms crossfade are proposed motion details, not runtime-verified work.
+
+Use measurable progress when available and indeterminate activity otherwise;
+do not fake percentages or add a minimum loading delay. Preserve Reduced Motion,
+recovery, authentication, privacy and navigation restoration. This is the
+app-owned opening/loading view, separate from the static iOS launch screen and
+the authentication gate. No app implementation is recorded by this selection.
 
 ## Approved runtime test entry (#1350; 29 October 2026)
 

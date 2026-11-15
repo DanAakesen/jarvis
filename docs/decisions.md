@@ -730,6 +730,60 @@ No new credential, grant, default-runtime change or claim reset is authorized by
 this implementation. The user has authorized this scoped release; the coordinator
 owns backend/agent-before-TestFlight deployment and live acceptance. Local fixture
 evidence does not establish live managed inference or native device behavior.
+## 15 November 2026 — Notes subpages approved with neutral glass buttons
+
+Dan approved the note/task detail pages, creation sheets, browsing menus and
+recovery studies, requesting removal of yellow filled button backgrounds.
+Action buttons use the shared neutral Apple glass surface, with yellow/amber
+text for primary actions where needed. Apply this consistently to Save, Done,
+Continue to note, Choose folder, Retry and Review changes. The approved layouts
+remain the visual target; source-vault semantics and implementation requirements
+are captured in the [handoff](../output/design-explorations/2026-11-15-notes-subpages/HANDOFF.md).
+This is a design approval and asset revision, not app implementation or vault mutation.
+
+## 15 November 2026 — Notes folder concept selected with glass refinements
+
+Dan selected the last Notes concept, **Vault Folders**, and requested two changes:
+center and align the three bottom control rows, and match the current app's Apple
+glass on search, +, the top-right navigation button and Notes/Tasks/Graph switch.
+Keep the chosen network background, folder-oriented structure, pinned items,
+source-linked tasks, graph and right-hand reach. The
+[refinement brief](../output/design-explorations/2026-11-15-notes/REFINEMENT.md)
+specifies the adjustments. In the next annotation pass, Dan moved contextual
+actions into a three-dot header menu beside navigation, requested orange task
+circles, removed Recent notes and the graph preview's Open note button, and
+selected short-swipe pin / long-swipe delete. This replaces the earlier three-row
+bottom arrangement with two rows. Selection and mockup revision do not record app
+implementation, backend capability changes or any vault writes.
+
+## 14 November 2026 — Cognitive lattice orb selected
+
+Dan selected option 3, **Cognitive lattice**, because its visible dots and
+connections look like a connected brain. Retain the intricate layered network,
+amber core and cyan glass edge for the app icon and in-app orb. The visual target
+is [the approved reference](ios/design/cognitive-lattice-reference.png).
+
+This confirms the orb identity. Runtime state, authentication and accessibility
+contracts remain in force; no app implementation or deployment is recorded by
+this decision.
+
+## 14 November 2026 — Opening screen composition selected
+
+Dan selected opening option 1's centered full orb with **Jarvis** beneath it and
+option 2's dark background with sparse cyan network connections. Remove the
+visible “Opening…” caption and put a progress bar in its lower centered position.
+Animate the connected orb internally during real loading, then transition
+smoothly to Home. See the
+[combined reference](ios/design/cognitive-lattice-opening-reference.png) and
+[Copilot brief](../output/design-explorations/2026-11-14-opening-final/COPILOT-HANDOFF.md).
+
+The composition and requested behavior are selected. Specific path motion,
+pulse speed and crossfade timings are design proposals for device refinement.
+Progress must reflect measured work or remain indeterminate; opening must not
+impose a minimum wait. Existing authentication, privacy, navigation restoration
+and accessibility contracts remain. This selects an app-owned opening view,
+not a system Lock Screen or a replacement authentication gate. The deliverable
+is a static mockup and handoff, with no app code changes or runtime verification.
 
 ## 5 November 2026 — Notes and Home widgets (P15-89 / #1593)
 
