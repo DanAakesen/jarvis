@@ -133,13 +133,11 @@ def arm_request(method: str, path: str, body: dict | None = None) -> dict:
     """An Azure Resource Manager call as the deployment identity (project connections live there)."""
     url = f"{ARM}{path}?api-version={CONNECTIONS_API}"
     command = ["az", "rest", "--method", method, "--url", url, "--resource", ARM, "--only-show-errors", "--output", "json"]
-    with tempfile.TemporaryDirectory(prefix="jarvis-pi-") as directory:
-        if body is not None:
-            file = Path(directory) / "body.json"
-            file.write_text(canonical(body), encoding="utf-8")
-            file.chmod(0o600)
-            command += ["--headers", "Content-Type=application/json", "--body", "@" + str(file)]
-        result = subprocess.run(command, capture_output=True, check=False, timeout=60)
+    if body is not None:
+        # The body carries the MCP secret, so it goes on the command line of this short-lived call rather than into a file
+        # (the job's runner is ephemeral and single-tenant, and the secret is also given to `az containerapp secret set`).
+        command += ["--headers", "Content-Type=application/json", "--body", canonical(body)]
+    result = subprocess.run(command, capture_output=True, check=False, timeout=60)
     if result.returncode != 0:
         raise Blocked(f"arm_{method.lower()}_failed:{path.rsplit('/', 1)[-1]}:{classify(result.stderr)}" + describe_error(result.stderr))
     return json.loads(result.stdout) if result.stdout.strip() else {}
