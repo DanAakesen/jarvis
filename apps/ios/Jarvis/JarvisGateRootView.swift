@@ -362,6 +362,10 @@ private final class JarvisGateModel: ObservableObject {
         }
     }
 
+    func sessionRevoked() {
+        Task { await signOut() }
+    }
+
     func retryUnlock() async {
         await authenticate()
     }
@@ -519,7 +523,7 @@ struct JarvisGateRootView: View {
             model.clientRequestedSignIn()
         }
         .onReceive(NotificationCenter.default.publisher(for: .jarvisSessionRevoked).receive(on: DispatchQueue.main)) { _ in
-            Task { @MainActor in await model.signOut() }
+            model.sessionRevoked()
         }
     }
 }
