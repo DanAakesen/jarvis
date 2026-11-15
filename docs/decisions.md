@@ -1,3 +1,10 @@
+## 15 November 2026 — Watch Health purpose strings (#1870)
+
+App Store Connect rejected the first upload that included the Watch steps
+complication: a Watch app that uses HealthKit needs both
+`NSHealthShareUsageDescription` and `NSHealthUpdateUsageDescription`. The Watch
+Info.plist now has both; the update string says Jarvis does not write to Health.
+
 ## 15 November 2026 — Loose Ends sweeps, spend ledger and switch-on (#1855, step 8)
 
 The daily missed-capture audit and the weekly deep review run inside the same
