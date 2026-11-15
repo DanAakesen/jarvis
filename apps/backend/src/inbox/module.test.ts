@@ -229,6 +229,40 @@ describe('inbox tools', () => {
     await expect(close.execute({ path: 'Personal/Inbox.md', reason: 'x' }, request(), signal)).rejects.toThrow(/invalid/u);
   });
 
+  it('issues, lists and revokes the write-only capture credential only on Dan\'s stored word, and shows the secret once', async () => {
+    const issued: string[] = [];
+    const credentials = {
+      issue: async (label: string) => { issued.push(label); return { credential: `ji.${'S'.repeat(43)}`, id: 'aaaaaaaaaaaa', label }; },
+      list: async () => [{ id: 'aaaaaaaaaaaa', label: 'iPhone Shortcut', createdAt: at.toISOString(), lastUsedAt: null }],
+      revoke: async (id: string) => id === 'aaaaaaaaaaaa',
+    };
+    const memory = memoryVault();
+    const module = createInboxModule({
+      store: createInboxStore({ vault: memory.vault, now: () => at }),
+      memoryStore: { getSourceMessage: async (id) => id === '42' ? { messageId: id, text: 'make me a shortcut token' } : null },
+      credentials: credentials as never,
+    });
+    const tool = module.tools.find((entry) => entry.name === 'inbox_capture_credential')!;
+    const request = (messageId: string | null = '42') => ({
+      principal: { objectId: owner }, server: { ownerObjectId: owner },
+      headers: messageId === null ? {} : { 'x-jarvis-message-id': messageId }, log: { warn: vi.fn() },
+    }) as unknown as FastifyRequest;
+    await expect(tool.execute({ operation: 'issue', label: 'iPhone Shortcut' }, request(null), signal)).rejects.toThrow(/no stored Dan message/u);
+    expect(issued).toEqual([]);
+    expect(await tool.execute({ operation: 'issue', label: 'iPhone Shortcut' }, request(), signal)).toMatchObject({ credential: `ji.${'S'.repeat(43)}`, id: 'aaaaaaaaaaaa' });
+    const listed = JSON.stringify(await tool.execute({ operation: 'list' }, request(null), signal));
+    expect(listed).toContain('iPhone Shortcut');
+    expect(listed).not.toContain('ji.');
+    expect(await tool.execute({ operation: 'revoke', id: 'aaaaaaaaaaaa' }, request(), signal)).toMatchObject({ confirmation: expect.stringContaining('Revoked') });
+    await expect(tool.execute({ operation: 'revoke', id: 'bbbbbbbbbbbb' }, request(), signal)).rejects.toBeInstanceOf(ToolRefusal);
+    expect(tool.validateInput?.({ operation: 'issue' })).toBe(false);
+    expect(tool.validateInput?.({ operation: 'revoke', id: 'zz' })).toBe(false);
+    expect(tool.sensitive).toBe(true);
+    expect(fixture().tool).toBeDefined();
+    expect(createInboxModule({ store: createInboxStore({ vault: memory.vault }), memoryStore: { getSourceMessage: async () => null } })
+      .tools.some((entry) => entry.name === 'inbox_capture_credential')).toBe(false);
+  });
+
   it('appears in the capability index with its routing hint, and only when the tools exist', () => {
     const { tool } = fixture();
     const registry = createToolRegistry([{ id: 'inbox', tools: ['inbox_capture', 'inbox_items', 'inbox_close'].map(tool) }]);

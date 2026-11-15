@@ -1,3 +1,14 @@
+## Inbox capture — 15 November 2026 (#1855, step 5)
+
+`inbox/capture.ts` turns raw text into notes (`triage.ts`: tool-less model call,
+strictly validated JSON, raw-text fallback) and writes them last-first so the first
+note's index row marks a complete capture. `inbox/routes.ts` serves
+`POST /inbox/capture` and the owner-only `/inbox/credentials` routes.
+`auth/inbox-capture-credential.ts` (+ migration 0082) stores credential hashes;
+`auth/inbox-rate-limit.ts` mirrors the Watch limiter and is installed after it;
+`auth/hook.ts` accepts a `ji.` token only for `POST /inbox/capture`. Triage reuses the
+Foundry JSON completion transport and records usage through the usage store.
+
 ## Inbox tools — 15 November 2026 (#1855, step 4)
 
 `inbox/module.ts` is a backend module (`id: inbox`) contributing `inbox_capture`,

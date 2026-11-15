@@ -18,7 +18,7 @@ Owner go-ahead: "go on loose ends". One issue, eight steps delivered in order, e
 | 2 | Vault `AGENTS.md` convention | Vault PR DanAakesen/vault#1 open, awaiting Dan's approval |
 | 3 | Rebuildable index table (last nudged, thumbs), migration 0081 (0080 is taken by the proactive-events PR #1862, which must merge first) | PR #1863; verified on local SQL Server 2022 |
 | 4 | Chat and voice tools: capture, list, close | Built (`inbox_capture`, `inbox_items`, `inbox_close`), dark behind `JARVIS_INBOX_ENABLED` |
-| 5 | Capture endpoint, write-only credential, Watch action, iPhone Shortcut | Not started |
+| 5 | Capture endpoint, write-only credential, iPhone Shortcut (runs on Apple Watch too) | Built, in review. Native Watch-app action not built (needs a Mac to compile and test) |
 | 6 | MCP server (ChatGPT, Claude, Copilot) | Not started |
 | 7 | Nudge pass in the proactive run, thumbs on the push | Not started |
 | 8 | Missed-capture audit, weekly review, spend visibility, owner switch-on | Not started |

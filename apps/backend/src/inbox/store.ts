@@ -137,9 +137,10 @@ export function createInboxStore(options: {
     return { items, truncated: wanted.length > limit };
   }
 
-  /** Finds a note by id across every live and closed note, wherever it sits or whatever it is called. */
-  async function find(id: string, signal: AbortSignal): Promise<InboxItem | null> {
-    if (!/^[0-9a-f]{8,32}$/u.test(id)) throw new InboxError('invalid', 'The inbox id is invalid.');
+  /** Finds notes by id across every live and closed note, wherever they sit or whatever they are called. */
+  async function findMany(wanted: readonly string[], signal: AbortSignal): Promise<InboxItem[]> {
+    const ids = new Set(wanted);
+    for (const id of ids) if (!/^[0-9a-f]{8,32}$/u.test(id)) throw new InboxError('invalid', 'The inbox id is invalid.');
     const all = entries(await vault.tree(signal));
     const identity = async (entry: InboxEntry): Promise<string | null> => {
       const cached = idBySha.get(entry.sha);
@@ -156,12 +157,27 @@ export function createInboxStore(options: {
       idBySha.set(entry.sha, found);
       return found;
     };
-    const candidates = all.filter((entry) => idBySha.get(entry.sha) === undefined || idBySha.get(entry.sha) === id);
-    const ids = await mapLimited(candidates, readConcurrency, async (entry) => [entry, await identity(entry)] as const);
-    const match = ids.filter(([, found]) => found === id).map(([entry]) => entry).sort((left, right) => left.path.localeCompare(right.path))[0];
-    if (!match) return null;
-    const file = await vault.read(match.path, signal);
-    return file ? toItem(file) : null;
+    const candidates = all.filter((entry) => {
+      const cached = idBySha.get(entry.sha);
+      return cached === undefined || (cached !== null && ids.has(cached));
+    });
+    const resolved = await mapLimited(candidates, readConcurrency, async (entry) => [entry, await identity(entry)] as const);
+    const matches = resolved.filter(([, found]) => found !== null && ids.has(found))
+      .sort(([left], [right]) => left.path.localeCompare(right.path));
+    const items: InboxItem[] = [];
+    const seen = new Set<string>();
+    for (const [entry, found] of matches) {
+      if (seen.has(found!)) continue;
+      const file = await vault.read(entry.path, signal);
+      if (!file) continue;
+      seen.add(found!);
+      items.push(toItem(file));
+    }
+    return items;
+  }
+
+  async function find(id: string, signal: AbortSignal): Promise<InboxItem | null> {
+    return (await findMany([id], signal))[0] ?? null;
   }
 
   async function create(
@@ -280,6 +296,7 @@ export function createInboxStore(options: {
     create,
     list,
     find,
+    findMany,
     read: readNote,
     replace,
     close,

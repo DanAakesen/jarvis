@@ -17,6 +17,7 @@ import { ownerSessionPolicy } from './session/config.js';
 import { OwnerSessionThrottled, OwnerSessionUnavailable, type OwnerSessionContext, type OwnerSessionVerifier } from './session/service.js';
 import { ownerSessionTokenPrefix } from './session/token.js';
 import { watchCredentialPrefix, watchTranscriptionPath, WatchCredentialUnavailable, type WatchCredentials } from './watch-credential.js';
+import { inboxCapturePath, inboxCapturePrefix, InboxCaptureCredentialUnavailable, type InboxCaptureCredentials } from './inbox-capture-credential.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -65,7 +66,7 @@ function voiceWebsocketToken(request: FastifyRequest): string | undefined {
   return token && /^[\w-]+\.[\w-]+\.[\w-]+$/u.test(token) ? token : undefined;
 }
 
-export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth), exportDeviceVerifier?: NutritionExportCredentialVerifier, healthUploadEnabled = false, ownerSessions?: OwnerSessionVerifier, watchCredentials?: WatchCredentials) {
+export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth), exportDeviceVerifier?: NutritionExportCredentialVerifier, healthUploadEnabled = false, ownerSessions?: OwnerSessionVerifier, watchCredentials?: WatchCredentials, inboxCredentials?: InboxCaptureCredentials) {
   app.decorateRequest('principal', null);
   app.decorateRequest('agentPrincipal', null);
   app.decorateRequest('runnerPrincipal', null);
@@ -127,7 +128,10 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       const watchToken = typeof header === 'string' && header.length <= 128 &&
         header.slice(0, 7).toLowerCase() === ['bear', 'er '].join('') &&
         /^jw\.[A-Za-z0-9_-]{43}$/u.test(header.slice(7)) ? header.slice(7) : undefined;
-      const token = header === undefined && !duplicate ? voiceWebsocketToken(request) : match?.[1] ?? watchToken;
+      const inboxToken = typeof header === 'string' && header.length <= 128 &&
+        header.slice(0, 7).toLowerCase() === ['bear', 'er '].join('') &&
+        /^ji\.[A-Za-z0-9_-]{43}$/u.test(header.slice(7)) ? header.slice(7) : undefined;
+      const token = header === undefined && !duplicate ? voiceWebsocketToken(request) : match?.[1] ?? watchToken ?? inboxToken;
       if (duplicate) reason = 'duplicate_authorization';
       else if (!token) reason = header === undefined ? 'missing_token' : 'malformed_authorization';
       if (duplicate || !token) throw new AuthenticationDenied(401);
@@ -138,6 +142,13 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         request.log.info({
           stage: 'credential_verified', durationMs: Math.round(performance.now() - request.requestStartedAt),
         }, 'watch_transcription.stage');
+        return;
+      }
+      if (token.startsWith(inboxCapturePrefix)) {
+        // A capture credential is write-only: it opens this one route and nothing else.
+        if (request.method !== 'POST' || request.routeOptions.url !== inboxCapturePath) throw new AuthenticationDenied(403);
+        if (!inboxCredentials || !await inboxCredentials.verify(token)) throw new AuthenticationDenied(401);
+        request.inboxCaptureCredentialHash = createHash('sha256').update(token).digest('hex');
         return;
       }
       const principal = token.startsWith(ownerSessionTokenPrefix) ? await verifyOwnerSession(request, token) : await verify(token);
@@ -177,7 +188,8 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       }
     } catch (error) {
       const throttled = error instanceof OwnerSessionThrottled;
-      const unavailable = error instanceof OwnerSessionUnavailable || error instanceof WatchCredentialUnavailable;
+      const unavailable = error instanceof OwnerSessionUnavailable || error instanceof WatchCredentialUnavailable ||
+        error instanceof InboxCaptureCredentialUnavailable;
       const statusCode = throttled ? 429 : unavailable ? 503 : error instanceof AuthenticationDenied ? error.statusCode : 401;
       const path = (request.raw.url ?? '').split('?')[0]?.slice(0, 200);
       if (error instanceof OwnerSessionThrottled) auditOwnerSessionRejected(request, 'throttled', { statusCode });

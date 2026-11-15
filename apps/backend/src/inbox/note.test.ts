@@ -36,7 +36,7 @@ describe('inbox note format', () => {
     expect(() => composeNote({ title: 'Keys', note: 'password: hunter2hunter2' }, id, at)).toThrow(InboxError);
     expect(() => composeNote({ title: 'Empty' }, id, at)).toThrow(/note or the original words/u);
     expect(() => composeNote({ title: 'Big', note: 'x'.repeat(8 * 1024 + 1) }, id, at)).toThrow(/longer than/u);
-    expect(() => composeNote({ title: 'Big', quote: 'x'.repeat(4 * 1024 + 1) }, id, at)).toThrow(/longer than/u);
+    expect(() => composeNote({ title: 'Big', quote: 'x'.repeat(16 * 1024 + 1) }, id, at)).toThrow(/longer than/u);
     expect(() => composeNote({ title: '   ', note: 'text' }, id, at)).toThrow(/title/u);
   });
 

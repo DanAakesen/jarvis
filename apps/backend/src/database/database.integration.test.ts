@@ -6,6 +6,7 @@ import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, type Migration } from './migrations.js';
 import { createWatchCredentialStore, WatchCredentials } from '../auth/watch-credential.js';
 import { createInboxIndexStore } from './inbox-index-store.js';
+import { createInboxCaptureCredentialStore, InboxCaptureCredentialLimit, InboxCaptureCredentials } from '../auth/inbox-capture-credential.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -130,6 +131,38 @@ describe('real SQL Server migration contract', () => {
         await pool.request().batch(down);
       }
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.inbox_items', N'U') AS id")).recordset).toEqual([{ id: null }]);
+    });
+  });
+  describe('inbox capture credentials', () => {
+    it('stores hashes only, caps the count per owner, verifies per owner and revokes by id', async () => {
+      const schema = await readFile(new URL('../../../../db/migrations/0082_inbox_capture_credentials.sql', import.meta.url), 'utf8');
+      const down = await readFile(new URL('../../../../db/migrations/down/0082_inbox_capture_credentials.sql', import.meta.url), 'utf8');
+      await pool.request().batch(schema);
+      const store = createInboxCaptureCredentialStore(pool);
+      const owner = randomUUID();
+      const credentials = new InboxCaptureCredentials(store, owner);
+      try {
+        const shortcut = await credentials.issue('iPhone Shortcut');
+        expect(await credentials.verify(shortcut.credential)).toBe(true);
+        expect(await new InboxCaptureCredentials(store, randomUUID()).verify(shortcut.credential)).toBe(false);
+        expect(await credentials.verify(`ji.${'A'.repeat(43)}`)).toBe(false);
+        const stored = await pool.request().query<{ credential_hash: Buffer }>('SELECT credential_hash FROM dbo.inbox_capture_credentials');
+        expect(stored.recordset[0]?.credential_hash).toEqual(createHash('sha256').update(shortcut.credential).digest());
+        const [listed] = await credentials.list();
+        expect(listed).toMatchObject({ id: shortcut.id, label: 'iPhone Shortcut' });
+        expect(listed?.lastUsedAt).not.toBeNull();
+        const results = await Promise.allSettled(Array.from({ length: 8 }, (_value, index) => credentials.issue(`device ${index}`)));
+        expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(4);
+        expect(results.filter((result) => result.status === 'rejected' && result.reason instanceof InboxCaptureCredentialLimit)).toHaveLength(4);
+        expect(await credentials.list()).toHaveLength(5);
+        expect(await credentials.revoke(shortcut.id)).toBe(true);
+        expect(await credentials.revoke(shortcut.id)).toBe(false);
+        expect(await credentials.verify(shortcut.credential)).toBe(false);
+        expect(await credentials.list()).toHaveLength(4);
+      } finally {
+        await pool.request().batch(down);
+      }
+      expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.inbox_capture_credentials', N'U') AS id")).recordset).toEqual([{ id: null }]);
     });
   });
   it('rolls back schema, data and ledger together on a failed migration', async () => {
