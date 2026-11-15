@@ -143,6 +143,22 @@ describe('inbox review validation', () => {
   });
 });
 
+describe('inbox digest robustness', () => {
+  it('shows an oversized note as an excerpt, and skips what cannot fit, instead of emptying the digest', () => {
+    const big = `# Huge\n\n${'word '.repeat(10_000)}\n`;
+    const items = [
+      { id: '11111111', title: 'Huge', path: 'Inbox/2026-11-01 Huge.md', sha: 'a'.repeat(40), content: big, closed: false, date: '2026-11-01', excerpt: 'word '.repeat(100) },
+      { id: '22222222', title: 'Small', path: 'Inbox/2026-11-02 Small.md', sha: 'b'.repeat(40), content: '# Small\n\nx\n', closed: false, date: '2026-11-02', excerpt: 'x' },
+    ];
+    const digest = buildDigest(items, [], now);
+    expect(digest.items.map((item) => item.id)).toEqual(['11111111', '22222222']);
+    expect(digest.items[0]!.note).toBeUndefined();
+    expect(digest.items[0]!.excerpt.length).toBeLessThanOrEqual(200);
+    expect(digest.fullNotes.has('11111111')).toBe(false);
+    expect(digest.fullNotes.has('22222222')).toBe(true);
+  });
+});
+
 describe('inbox nudge pass', () => {
   const nudge = { id: '11111111', tier: 'medium', title: 'Padel night?', body: 'Shall I propose two weekends?', why: 'Floated twice, no date yet' };
 
@@ -199,6 +215,27 @@ describe('inbox nudge pass', () => {
     const { pass, indexStore } = setup({ model: async () => JSON.stringify({ nudge, rewrites: [] }), deliver: async () => null });
     expect(await pass.run(signal)).toMatchObject({ status: 'done', nudged: null });
     expect(indexStore.rows.get('11111111')?.lastNudgedAt).toBeNull();
+  });
+
+  it('follows a changed thumb on the same card, and keeps the identity of a note from another tool', async () => {
+    const setupResult = setup({
+      files: { 'Inbox/2026-11-01 From ChatGPT.md': '# From ChatGPT\n\nbody\n' },
+      thumb: 'down',
+    });
+    await setupResult.index.sync(signal);
+    const [row] = [...setupResult.indexStore.rows.values()];
+    const itemId = row!.itemId;
+    setupResult.indexStore.rows.set(itemId, {
+      ...row!, lastNudgedAt: new Date('2026-11-10T06:00:00Z'), lastNudgeItemId: 'bbbbbbbb-0000-4000-8000-000000000002',
+      lastFeedback: 'up', lastFeedbackAt: new Date('2026-11-11T06:00:00Z'),
+    });
+    await setupResult.pass.run(signal);
+    expect(setupResult.indexStore.rows.get(itemId)).toMatchObject({ lastFeedback: 'down', lastNudgedAt: new Date('2026-11-10T06:00:00Z') });
+    expect(setupResult.files.get('Inbox/2026-11-01 From ChatGPT.md')).toContain('changed the thumb to down on the nudge');
+    // The trail edit added a marker equal to the id the index already uses: still exactly one row, nudge clock intact.
+    await setupResult.index.sync(signal);
+    expect([...setupResult.indexStore.rows.keys()]).toEqual([itemId]);
+    expect(setupResult.indexStore.rows.get(itemId)?.lastNudgeItemId).toBe('bbbbbbbb-0000-4000-8000-000000000002');
   });
 
   it('brings a thumbs down on an earlier nudge into the index, the trail and the next prompt', async () => {

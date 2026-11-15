@@ -20,6 +20,10 @@ not built. A rebuilt index starts every nudge clock at the rebuild time (proacti
 history cannot be queried by item key), so a rebuild means no nudges for 48 hours. The
 weekly rewrite of the nudge-style text and the missed-capture audit belong to step 8.
 Daily ceiling 1 DKK is counted per replica from recorded usage.
+Review follow-ups: a note from another tool keeps its path-derived id when the first edit
+adds the hidden marker (so its nudge clock and thumbs survive), a card's thumb is read every
+pass so a changed thumb reaches the index, trail and prompt, and one oversized note drops to its
+excerpt in the digest instead of blocking the rest.
 
 ## 15 November 2026 — Inbox MCP server uses scoped bearer credentials first (#1855, step 6)
 

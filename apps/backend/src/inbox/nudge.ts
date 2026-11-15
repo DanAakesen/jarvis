@@ -51,17 +51,16 @@ export function createInboxNudgePass(options: {
     for (const row of rows) {
       if (!row.lastNudgeItemId || !row.lastNudgedAt) continue;
       let thumb = row.lastFeedback;
-      if (!thumb || (row.lastFeedbackAt && row.lastFeedbackAt < row.lastNudgedAt)) {
-        try {
-          const found = await options.reactions.thumb(row.lastNudgeItemId, signal);
-          if (found && found !== row.lastFeedback) {
-            await options.index.setFeedback(row.itemId, found, at, signal);
-            thumb = found;
-            if (row.path) await trail(row.path, `thumbs ${found} on the nudge`, signal);
-          }
-        } catch (error) {
-          if (signal.aborted) throw error;
+      // The card's thumb can be changed after the first read (useful to wrong and back), so it is read every pass.
+      try {
+        const found = await options.reactions.thumb(row.lastNudgeItemId, signal);
+        if (found && found !== row.lastFeedback) {
+          await options.index.setFeedback(row.itemId, found, at, signal);
+          thumb = found;
+          if (row.path) await trail(row.path, row.lastFeedback ? `changed the thumb to ${found} on the nudge` : `thumbs ${found} on the nudge`, signal);
         }
+      } catch (error) {
+        if (signal.aborted) throw error;
       }
       if (thumb) {
         reactions.push({

@@ -92,7 +92,7 @@ export function buildDigest(
     if (digest.length >= MAX_DIGEST_ITEMS) break;
     const full = fullNotes.size < MAX_FULL_NOTES && entry.canNudge;
     const note = full ? withoutIdComment(entry.item.content) : undefined;
-    const value: DigestItem = {
+    const describe = (withNote: string | undefined): DigestItem => ({
       id: entry.item.id,
       title: entry.item.title,
       ageDays: entry.ageDays,
@@ -100,13 +100,21 @@ export function buildDigest(
       lastReaction: entry.reaction,
       canNudge: entry.canNudge,
       excerpt: entry.item.excerpt.slice(0, maxExcerpt),
-      ...(note === undefined ? {} : { note }),
-    };
-    const size = Buffer.byteLength(JSON.stringify(value), 'utf8');
-    if (bytes + size > maxDigestBytes) break;
+      ...(withNote === undefined ? {} : { note: withNote }),
+    });
+    // One huge note (Obsidian or another tool can write up to 256 KB) must not block the rest: it drops to its excerpt, or is skipped.
+    let value = describe(note);
+    let size = Buffer.byteLength(JSON.stringify(value), 'utf8');
+    let shownInFull = full;
+    if (bytes + size > maxDigestBytes && note !== undefined) {
+      value = describe(undefined);
+      size = Buffer.byteLength(JSON.stringify(value), 'utf8');
+      shownInFull = false;
+    }
+    if (bytes + size > maxDigestBytes) continue;
     bytes += size;
     digest.push(value);
-    if (full) fullNotes.set(entry.item.id, { path: entry.item.path, sha: entry.item.sha, content: entry.item.content });
+    if (shownInFull) fullNotes.set(entry.item.id, { path: entry.item.path, sha: entry.item.sha, content: entry.item.content });
   }
   return { items: digest, truncated: live.length > digest.length, fullNotes };
 }
