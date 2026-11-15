@@ -29,7 +29,7 @@ describe('PI configuration', () => {
     expect(loadConfig(base).pi).toBeUndefined();
     expect(loadConfig({ ...base, JARVIS_PI_AGENT_NAME: spec.agentName }).pi).toBeUndefined();
     expect(loadConfig({ ...base, JARVIS_PI_AGENT_NAME: spec.agentName, JARVIS_PI_MCP_SECRET: 'a'.repeat(64) }).pi)
-      .toEqual({ agentName: spec.agentName, mcpSecret: 'a'.repeat(64), monthlyCapDkk: 250 });
+      .toEqual({ agentName: spec.agentName, mcpSecret: 'a'.repeat(64), monthlyCapDkk: 100 });
   });
 
   it('takes the monthly cap from the environment and refuses unsafe values', () => {

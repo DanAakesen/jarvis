@@ -6,7 +6,7 @@
 | --- | --- |
 | PI agent defined as code (`agents/pi/`, deployed by the Deploy workflow's `pi-agent` job): managed Copilot harness, Terra deployment, reasoning effort `low`, built-ins off, Jarvis MCP server, skills from the repository | Written; **Deploy has not run it yet** |
 | Jarvis MCP server (`/pi/mcp`: `find_tools`, `call_tool`) with per-turn authority and the in-process dispatch through the normal tool route | Built; 9 offline tests including forged, closed and smoke grants |
-| Gateway (`pi/gateway.ts`): streaming, one warm long conversation per owner, budget (250 DKK a month hard stop), per-turn tokens and DKK, honest errors | Built; 9 offline tests with a fake Foundry stream |
+| Gateway (`pi/gateway.ts`): streaming, one warm long conversation per owner, budget (100 DKK a month hard stop), per-turn tokens and DKK, honest errors | Built; 9 offline tests with a fake Foundry stream |
 | Test selector: turn field `engine: "pi"`, Settings switch in iOS, `GET /pi/status`, `POST /pi/warm` | Built; backend route tests pass; iOS compiled only by CI |
 | Live proof of MCP, streaming, cancellation and first-text times | **Open**: dispatch Deploy with `measure_pi` after merge (about 0.5 DKK); results land in the job summary |
 

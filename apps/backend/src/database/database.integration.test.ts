@@ -202,6 +202,8 @@ describe('real SQL Server migration contract', () => {
         expect(spent.costDkk).toBeCloseTo(0.1462, 6);
         expect(await store.spendSince(new Date(Date.now() + 60_000), signal)).toEqual({ costDkk: 0, turns: 0 });
         expect(await store.lastTurn(signal)).toMatchObject({ kind: 'warm', messageId: null, cachedTokens: 9000, outcome: 'ok' });
+        expect((await store.recentTurns(5, signal)).map((row) => row.kind)).toEqual(['warm', 'chat']);
+        expect(await store.recentTurns(1, signal)).toHaveLength(1);
       } finally {
         await pool.request().batch(down);
       }

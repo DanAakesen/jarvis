@@ -188,7 +188,10 @@
 "chat.engine.engineStatusDisabled" = "Disabled";
 "chat.engine.engineAgentLabel" = "Agent";
 "chat.engine.engineMonthLabel" = "This month";
-"chat.engine.engineMonthFormat" = "%@ of %@ DKK, %@ turns";
+"chat.engine.engineMonthFormat" = "%@ DKK used, %@ turns";
+"chat.engine.engineCapLabel" = "Monthly cap";
+"chat.engine.engineRemainingLabel" = "Left this month";
+"chat.engine.engineDkkFormat" = "%@ DKK";
 "chat.engine.engineWarmLabel" = "Conversation";
 "chat.engine.engineWarm" = "Warm";
 "chat.engine.engineCold" = "Cold, the next message may be slower";

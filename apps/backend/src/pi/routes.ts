@@ -30,7 +30,7 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
       if (!options.gateway) {
         const unconfigured: PiStatus = {
           enabled: false, reason: 'not_configured', agent: { name: null, model: PI_MODEL, effort: PI_REASONING_EFFORT },
-          month: { spentDkk: 0, capDkk: options.monthlyCapDkk, turns: 0 }, warm: { state: 'cold', warmedAt: null }, lastTurn: null,
+          month: { spentDkk: 0, capDkk: options.monthlyCapDkk, remainingDkk: options.monthlyCapDkk, turns: 0 }, warm: { state: 'cold', warmedAt: null }, lastTurn: null,
         };
         return unconfigured;
       }

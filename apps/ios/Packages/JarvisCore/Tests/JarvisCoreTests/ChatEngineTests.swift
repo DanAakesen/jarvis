@@ -49,7 +49,7 @@ final class ChatEngineTests: XCTestCase {
         let full = Data(#"""
         {"enabled":true,"reason":null,
          "agent":{"name":"Jarvis PI","model":"gpt-test","effort":"medium"},
-         "month":{"spentDkk":1.25,"capDkk":100,"turns":7},
+         "month":{"spentDkk":1.25,"capDkk":100,"remainingDkk":98.75,"turns":7},
          "warm":{"state":"warm","warmedAt":"2026-11-15T10:00:00.000Z"},
          "lastTurn":{"at":"2026-11-15T10:01:00.000Z","firstTextMs":900,"totalMs":4200,
                      "inputTokens":1200,"cachedTokens":900,"outputTokens":150,"costDkk":0.08}}
@@ -59,6 +59,7 @@ final class ChatEngineTests: XCTestCase {
         XCTAssertNil(status.reason)
         XCTAssertEqual(status.agent.name, "Jarvis PI")
         XCTAssertEqual(status.month.capDkk, 100)
+        XCTAssertEqual(status.month.remaining, 98.75)
         XCTAssertTrue(status.warm.isWarm)
         XCTAssertEqual(status.lastTurn?.cachedTokens, 900)
         XCTAssertEqual(status.lastTurn?.firstTextMs, 900)
@@ -71,6 +72,7 @@ final class ChatEngineTests: XCTestCase {
         """#.utf8)
         let exhausted = try JSONDecoder().decode(PiStatus.self, from: minimal)
         XCTAssertFalse(exhausted.enabled)
+        XCTAssertEqual(exhausted.month.remaining, 0)
         XCTAssertEqual(exhausted.reason, "budget_exhausted")
         XCTAssertFalse(exhausted.warm.isWarm)
         XCTAssertNil(exhausted.lastTurn)
@@ -84,7 +86,12 @@ final class ChatEngineTests: XCTestCase {
         let chat = JarvisChatClient(client: try makeClient(transport: transport))
 
         let result = try await chat.piWarm()
-        XCTAssertEqual(result, PiWarmResult(state: "warm", alreadyWarm: false, ms: 1800))
+        XCTAssertEqual(result, PiWarmResult(state: "warm", alreadyWarm: false, ms: 1800, skipped: nil))
+        let skipped = try JSONDecoder().decode(
+            PiWarmResult.self,
+            from: Data(#"{"state":"cold","alreadyWarm":false,"ms":0,"skipped":"budget_exhausted"}"#.utf8)
+        )
+        XCTAssertEqual(skipped.skipped, "budget_exhausted")
         do {
             _ = try await chat.piWarm()
             XCTFail("Expected a PI failure")

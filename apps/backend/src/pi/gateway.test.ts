@@ -153,6 +153,47 @@ describe('PI gateway', () => {
     expect(status).toMatchObject({ enabled: true, reason: null, warm: { state: 'warm' }, agent: { name: 'jarvis-pi', effort: 'low' } });
   });
 
+  it('does not spend on a warm-up once over the cap, and shows what is left', async () => {
+    const { gateway, calls, store } = setup([]);
+    expect((await gateway.status(new AbortController().signal)).month).toEqual({ spentDkk: 0, capDkk: 1, remainingDkk: 1, turns: 0 });
+    await store.recordTurn({ kind: 'chat', messageId: null, model: 'm', inputTokens: 0, cachedTokens: 0, outputTokens: 0, costDkk: 1.2, firstTextMs: 1, totalMs: 1, outcome: 'ok' }, new AbortController().signal);
+    expect(await gateway.warm(new AbortController().signal)).toEqual({ state: 'cold', alreadyWarm: false, ms: 0, skipped: 'budget_exhausted' });
+    expect(calls).toEqual([]);
+    expect(await gateway.status(new AbortController().signal)).toMatchObject({ enabled: false, reason: 'budget_exhausted', month: { remainingDkk: 0 } });
+  });
+
+  it('charges a failed warm-up and does not retry it for ten minutes', async () => {
+    let clock = new Date('2026-11-15T16:00:00Z');
+    const { gateway, calls, store } = setup([
+      () => sse(delta('rea'), frame({ type: 'response.failed', response: {} })),
+      () => sse(delta('ready'), completed(11_000, 0, 2)),
+    ], { now: () => clock, monthlyCapDkk: 100 });
+    await expect(gateway.warm(new AbortController().signal)).rejects.toMatchObject({ code: 'pi_failed' });
+    expect(store.turns[0]).toMatchObject({ kind: 'warm', outcome: 'failed', inputTokens: 12_000 });
+    const requests = () => calls.filter(call => call.url.includes('/responses')).length;
+    expect(requests()).toBe(1);
+    clock = new Date('2026-11-15T16:05:00Z');
+    expect(await gateway.warm(new AbortController().signal)).toMatchObject({ skipped: 'recent_failure' });
+    expect(requests()).toBe(1);
+    clock = new Date('2026-11-15T16:11:00Z');
+    expect(await gateway.warm(new AbortController().signal)).toMatchObject({ alreadyWarm: false });
+    expect(requests()).toBe(2);
+  });
+
+  it('pauses warm-ups after three failed turns in a row, and never retries a failed chat turn by itself', async () => {
+    let clock = new Date('2026-11-15T16:00:00Z');
+    const failing = () => new Response('{}', { status: 500 });
+    const { run, gateway, calls } = setup([failing, failing, failing, () => sse(delta('ready'), completed(11_000, 0, 2))], { now: () => clock, monthlyCapDkk: 100 });
+    for (let attempt = 0; attempt < 3; attempt += 1) await expect(run('hi')).rejects.toMatchObject({ code: 'pi_unavailable' });
+    // One request per failed turn: nothing retried behind the owner's back.
+    expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(3);
+    clock = new Date('2026-11-15T16:10:00Z');
+    expect(await gateway.warm(new AbortController().signal)).toMatchObject({ skipped: 'paused_after_failures' });
+    expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(3);
+    clock = new Date('2026-11-15T16:31:00Z');
+    expect(await gateway.warm(new AbortController().signal)).toMatchObject({ alreadyWarm: false });
+  });
+
   it('answers an unconfigured PI selection with its own error', async () => {
     const agent = createUnconfiguredPiAgent();
     await expect(agent.stream({ messageId: '1', text: 'x' }, 'a', new AbortController().signal)[Symbol.asyncIterator]().next())

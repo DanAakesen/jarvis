@@ -31,6 +31,8 @@ export interface PiStore {
   /** Spend of turns at or after `from` (UTC month start); failed and cancelled turns count at an estimate when the model had started. */
   spendSince(from: Date, signal: AbortSignal): Promise<{ readonly costDkk: number; readonly turns: number }>;
   lastTurn(signal: AbortSignal): Promise<PiStoredTurn | null>;
+  /** Newest first; used to pause background warm-ups after repeated failures, so the pause survives a restart. */
+  recentTurns(limit: number, signal: AbortSignal): Promise<readonly PiStoredTurn[]>;
 }
 
 export function createMemoryPiStore(now: () => Date = () => new Date()): PiStore & { readonly turns: PiStoredTurn[] } {
@@ -57,5 +59,6 @@ export function createMemoryPiStore(now: () => Date = () => new Date()): PiStore
       return { costDkk: inRange.reduce((sum, turn) => sum + turn.costDkk, 0), turns: inRange.length };
     },
     async lastTurn() { return turns.at(-1) ?? null; },
+    async recentTurns(limit) { return [...turns].reverse().slice(0, limit); },
   };
 }

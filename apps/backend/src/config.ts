@@ -174,7 +174,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   const piAgentName = env.JARVIS_PI_AGENT_NAME || undefined;
   const piMcpSecret = env.JARVIS_PI_MCP_SECRET || undefined;
   const piCapSetting = env.JARVIS_PI_MONTHLY_CAP_DKK;
-  const piMonthlyCapDkk = piCapSetting === undefined || piCapSetting === '' ? 250 : Number(piCapSetting);
+  const piMonthlyCapDkk = piCapSetting === undefined || piCapSetting === '' ? 100 : Number(piCapSetting);
   if (piAgentName !== undefined && (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(piAgentName) ||
       piAgentName === (foundryChatAgentName ?? 'jarvis') || piAgentName === copilotAgentName)) {
     throw new ConfigurationError('JARVIS_PI_AGENT_NAME must be a valid agent name separate from the other agents');

@@ -573,7 +573,7 @@ try {
     }) : undefined;
   const piModule = {
     id: 'pi', tools: [],
-    registerRoutes: createPiRoutes({ gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 250 }),
+    registerRoutes: createPiRoutes({ gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 100 }),
   };
   const approvalEndpoint = (() => {
     if (!config.foundryProjectEndpoint) return undefined;

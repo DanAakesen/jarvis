@@ -17,6 +17,17 @@ interface ConversationRecord {
   context_hash: string | null;
 }
 
+interface TurnRecord {
+  at: Date; kind: 'chat' | 'warm' | 'smoke'; message_id: string | null; model: string; input_tokens: number; cached_tokens: number;
+  output_tokens: number; cost_dkk: number; first_text_ms: number | null; total_ms: number; outcome: PiStoredTurn['outcome'];
+}
+
+const toTurn = (row: TurnRecord): PiStoredTurn => ({
+  at: row.at, kind: row.kind, messageId: row.message_id, model: row.model, inputTokens: row.input_tokens,
+  cachedTokens: row.cached_tokens, outputTokens: row.output_tokens, costDkk: Number(row.cost_dkk),
+  firstTextMs: row.first_text_ms, totalMs: row.total_ms, outcome: row.outcome,
+});
+
 const toRow = (row: ConversationRecord): PiConversationRow => ({
   agentName: row.agent_name, conversationId: row.conversation_id, warmedAt: row.warmed_at, contextHash: row.context_hash,
 });
@@ -82,18 +93,18 @@ export function createPiStore(pool: sql.ConnectionPool): PiStore {
       const row = result.recordset[0];
       return { costDkk: Number(row?.cost ?? 0), turns: Number(row?.turns ?? 0) };
     },
+    async recentTurns(limit, signal) {
+      const result = await query<TurnRecord>(databaseReadRequest(pool).input('limit', sql.Int, limit),
+        `SELECT TOP (@limit) at, kind, CONVERT(varchar(19), message_id) AS message_id, model, input_tokens, cached_tokens,
+          output_tokens, cost_dkk, first_text_ms, total_ms, outcome FROM dbo.pi_turn ORDER BY id DESC;`, signal);
+      return result.recordset.map(toTurn);
+    },
     async lastTurn(signal) {
-      const result = await query<{
-        at: Date; kind: 'chat' | 'warm' | 'smoke'; message_id: string | null; model: string; input_tokens: number; cached_tokens: number;
-        output_tokens: number; cost_dkk: number; first_text_ms: number | null; total_ms: number; outcome: PiStoredTurn['outcome'];
-      }>(databaseReadRequest(pool), `SELECT TOP (1) at, kind, CONVERT(varchar(19), message_id) AS message_id, model, input_tokens,
-        cached_tokens, output_tokens, cost_dkk, first_text_ms, total_ms, outcome FROM dbo.pi_turn ORDER BY id DESC;`, signal);
+      const result = await query<TurnRecord>(databaseReadRequest(pool), `SELECT TOP (1) at, kind,
+        CONVERT(varchar(19), message_id) AS message_id, model, input_tokens, cached_tokens, output_tokens, cost_dkk,
+        first_text_ms, total_ms, outcome FROM dbo.pi_turn ORDER BY id DESC;`, signal);
       const row = result.recordset[0];
-      return row ? {
-        at: row.at, kind: row.kind, messageId: row.message_id, model: row.model, inputTokens: row.input_tokens,
-        cachedTokens: row.cached_tokens, outputTokens: row.output_tokens, costDkk: Number(row.cost_dkk),
-        firstTextMs: row.first_text_ms, totalMs: row.total_ms, outcome: row.outcome,
-      } : null;
+      return row ? toTurn(row) : null;
     },
   };
 }

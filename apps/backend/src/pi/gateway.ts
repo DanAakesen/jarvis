@@ -17,11 +17,18 @@ export type PiEvent =
   | { readonly kind: 'tool' }
   | { readonly kind: 'done'; readonly usage: PiUsage; readonly responseId: string | null };
 
+export interface PiWarmResult {
+  readonly state: 'warm' | 'cold';
+  readonly alreadyWarm: boolean;
+  readonly ms: number;
+  readonly skipped?: 'budget_exhausted' | 'paused_after_failures' | 'recent_failure';
+}
+
 export interface PiStatus {
   readonly enabled: boolean;
   readonly reason: null | 'not_configured' | 'budget_exhausted';
   readonly agent: { readonly name: string | null; readonly model: string; readonly effort: string };
-  readonly month: { readonly spentDkk: number; readonly capDkk: number; readonly turns: number };
+  readonly month: { readonly spentDkk: number; readonly capDkk: number; readonly remainingDkk: number; readonly turns: number };
   readonly warm: { readonly state: 'cold' | 'warm'; readonly warmedAt: string | null };
   readonly lastTurn: null | {
     readonly at: string; readonly firstTextMs: number | null; readonly totalMs: number; readonly inputTokens: number;
@@ -50,7 +57,8 @@ export interface PiGatewayOptions {
 }
 
 export interface PiGateway extends ConversationAgent {
-  warm(signal: AbortSignal): Promise<{ state: 'warm'; alreadyWarm: boolean; ms: number }>;
+  /** Never spends when over the cap or after failures: it then returns `skipped` instead of calling the model. */
+  warm(signal: AbortSignal): Promise<PiWarmResult>;
   status(signal: AbortSignal): Promise<PiStatus>;
   /** Low-level streaming used by the deploy smoke; it never touches the owner's conversation. */
   readonly smokeKit: {
@@ -67,6 +75,10 @@ export interface PiGateway extends ConversationAgent {
 
 /** Measured fixed prompt of the managed harness (about 11k input tokens per call), used only to price a turn that never reported usage. */
 const estimatedPromptTokens = 12_000;
+/** A failed warm-up is not retried for this long, and three failed turns in a row pause warm-ups for the longer one. */
+const warmFailureCooldownMs = 10 * 60_000;
+const repeatedFailures = 3;
+const repeatedFailurePauseMs = 30 * 60_000;
 const monthStart = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 const count = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100_000_000 ? value : 0;
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -246,15 +258,31 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
   const contextHash = (context: string) => createHash('sha256').update(context).digest('hex');
 
-  async function warm(signal: AbortSignal) {
+  /** Background spend stops after a failure. Derived from the ledger, so a backend restart does not forget it. */
+  async function warmPause(signal: AbortSignal): Promise<'paused_after_failures' | 'recent_failure' | undefined> {
+    const recent = (await options.store.recentTurns(repeatedFailures + 2, signal)).filter(turn => turn.outcome !== 'cancelled' && turn.kind !== 'smoke');
+    const age = (turn: PiStoredTurn) => now().getTime() - turn.at.getTime();
+    const failed = (turn: PiStoredTurn) => turn.outcome === 'failed' || turn.outcome === 'timeout';
+    const streak = recent.findIndex(turn => !failed(turn));
+    const failures = streak === -1 ? recent.length : streak;
+    if (failures >= repeatedFailures && age(recent[0]!) < repeatedFailurePauseMs) return 'paused_after_failures';
+    if (recent[0] && recent[0].kind === 'warm' && failed(recent[0]) && age(recent[0]) < warmFailureCooldownMs) return 'recent_failure';
+    return undefined;
+  }
+
+  async function warm(signal: AbortSignal): Promise<PiWarmResult> {
     const started = performance.now();
-    if (chatActive) return { state: 'warm' as const, alreadyWarm: true, ms: 0 };
+    if (chatActive) return { state: 'warm', alreadyWarm: true, ms: 0 };
+    const spent = await options.store.spendSince(monthStart(now()), signal);
+    if (spent.costDkk >= options.monthlyCapDkk) return { state: 'cold', alreadyWarm: false, ms: 0, skipped: 'budget_exhausted' };
+    const paused = await warmPause(signal);
+    if (paused) return { state: 'cold', alreadyWarm: false, ms: 0, skipped: paused };
     const context = await options.context(signal);
     const stored = await options.store.getConversation(options.owner, signal);
     const fresh = stored?.agentName === options.agentName && stored.warmedAt !== null && stored.contextHash === contextHash(context) &&
       now().getTime() - stored.warmedAt.getTime() < warmFreshMs;
-    if (fresh) return { state: 'warm' as const, alreadyWarm: true, ms: Math.round(performance.now() - started) };
-    if (warming) { await warming.catch(() => {}); return { state: 'warm' as const, alreadyWarm: true, ms: Math.round(performance.now() - started) }; }
+    if (fresh) return { state: 'warm', alreadyWarm: true, ms: Math.round(performance.now() - started) };
+    if (warming) { await warming.catch(() => {}); return { state: 'warm', alreadyWarm: true, ms: Math.round(performance.now() - started) }; }
     const work = (async () => {
       await assertBudget(signal);
       const conversationId = await ensureConversation(signal);
@@ -262,9 +290,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       let usage: PiUsage | undefined;
       let firstTextMs: number | null = null;
       let outcome: PiTurnRecord['outcome'] = 'failed';
+      let modelStarted = false;
       try {
         for await (const event of respond(conversationId, formatWarmup({ context, now: now(), timeZone: options.timeZone }), deadline)) {
-          if (event.kind === 'delta') firstTextMs ??= Math.round(performance.now() - started);
+          if (event.kind === 'delta') { firstTextMs ??= Math.round(performance.now() - started); modelStarted = true; }
           if (event.kind === 'done') usage = event.usage;
         }
         outcome = 'ok';
@@ -273,16 +302,17 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         outcome = signal.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'failed';
         throw error;
       } finally {
+        const billed = usage ?? (modelStarted ? { inputTokens: estimatedPromptTokens, cachedTokens: 0, outputTokens: 1 } : undefined);
         await record({
-          kind: 'warm', messageId: null, model: PI_MODEL, inputTokens: usage?.inputTokens ?? 0, cachedTokens: usage?.cachedTokens ?? 0,
-          outputTokens: usage?.outputTokens ?? 0, costDkk: usage ? costOf(usage) : 0, firstTextMs,
+          kind: 'warm', messageId: null, model: PI_MODEL, inputTokens: billed?.inputTokens ?? 0, cachedTokens: billed?.cachedTokens ?? 0,
+          outputTokens: billed?.outputTokens ?? 0, costDkk: billed ? costOf(billed) : 0, firstTextMs,
           totalMs: Math.round(performance.now() - started), outcome,
-        }, usage, `pi:warm:${now().getTime()}`);
+        }, billed, `pi:warm:${now().getTime()}`);
       }
     })();
     warming = work;
     try { await work; } finally { warming = null; }
-    return { state: 'warm' as const, alreadyWarm: false, ms: Math.round(performance.now() - started) };
+    return { state: 'warm', alreadyWarm: false, ms: Math.round(performance.now() - started) };
   }
 
   async function* stream(input: ConversationAgentInput, _authorization: string, signal: AbortSignal): AsyncGenerator<ConversationAgentChunk> {
@@ -384,7 +414,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     return {
       enabled: !exhausted, reason: exhausted ? 'budget_exhausted' : null,
       agent: { name: options.agentName, model: PI_MODEL, effort: PI_REASONING_EFFORT },
-      month: { spentDkk: Number(spent.costDkk.toFixed(4)), capDkk: options.monthlyCapDkk, turns: spent.turns },
+      month: {
+        spentDkk: Number(spent.costDkk.toFixed(4)), capDkk: options.monthlyCapDkk, turns: spent.turns,
+        remainingDkk: Number(Math.max(0, options.monthlyCapDkk - spent.costDkk).toFixed(4)),
+      },
       warm: { state: warm ? 'warm' : 'cold', warmedAt: warmedAt?.toISOString() ?? null },
       lastTurn: last ? lastTurn(last) : null,
     };

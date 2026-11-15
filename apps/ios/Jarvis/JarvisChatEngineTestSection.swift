@@ -53,6 +53,12 @@ struct JarvisChatEngineTestSection: View {
                     .compactMap { $0 }
                     .joined(separator: ", "))
             }
+            LabeledContent(copy(.engineCapLabel)) { Text(dkk(status.month.capDkk)) }
+            LabeledContent(copy(.engineRemainingLabel)) {
+                Text(dkk(status.month.remaining))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(status.month.remaining <= 0 ? Color.red : Color.primary)
+            }
             LabeledContent(copy(.engineMonthLabel)) { Text(monthText(status.month)) }
             LabeledContent(copy(.engineWarmLabel)) {
                 Text(copy(status.warm.isWarm ? .engineWarm : .engineCold))
@@ -107,7 +113,7 @@ struct JarvisChatEngineTestSection: View {
     }
 
     private func monthText(_ month: PiStatus.Month) -> String {
-        String(format: copy(.engineMonthFormat), amount(month.spentDkk), amount(month.capDkk), String(month.turns))
+        String(format: copy(.engineMonthFormat), amount(month.spentDkk), String(month.turns))
     }
 
     private func tokensText(_ turn: PiStatus.LastTurn) -> String {
@@ -122,6 +128,6 @@ struct JarvisChatEngineTestSection: View {
     }
 
     private func dkk(_ value: Double) -> String {
-        amount(value) + " DKK"
+        String(format: copy(.engineDkkFormat), amount(value))
     }
 }

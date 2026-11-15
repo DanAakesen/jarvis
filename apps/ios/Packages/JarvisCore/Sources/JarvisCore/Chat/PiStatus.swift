@@ -11,7 +11,11 @@ public struct PiStatus: Decodable, Equatable, Sendable {
     public struct Month: Decodable, Equatable, Sendable {
         public let spentDkk: Double
         public let capDkk: Double
+        public let remainingDkk: Double?
         public let turns: Int
+
+        /// What PI may still spend this month; derived when an older backend omits it.
+        public var remaining: Double { remainingDkk ?? max(0, capDkk - spentDkk) }
     }
 
     public struct Warm: Decodable, Equatable, Sendable {
@@ -45,4 +49,6 @@ public struct PiWarmResult: Decodable, Equatable, Sendable {
     public let state: String
     public let alreadyWarm: Bool
     public let ms: Int
+    /// Set when the backend declined to spend: `budget_exhausted`, `paused_after_failures` or `recent_failure`.
+    public let skipped: String?
 }
