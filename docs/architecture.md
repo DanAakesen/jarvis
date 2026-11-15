@@ -1,3 +1,14 @@
+## Inbox tools — 15 November 2026 (#1855, step 4)
+
+`inbox/module.ts` is a backend module (`id: inbox`) contributing `inbox_capture`,
+`inbox_items` and `inbox_close` to the shared tool registry, so chat, voice (via
+find_tools) and the hosted agent get them with no per-channel code. It is created in
+`index.ts` only when `JARVIS_INBOX_ENABLED=true` and the vault client and memory
+store exist; the Azure SQL index is attached when a database is configured and is
+best-effort (the vault is the source of truth). The capability index lists the
+inbox category when the tools are registered. Log events `inbox.write` and
+`inbox.tool` are allow-listed with action, tool and outcome only.
+
 ## Inbox index — 15 November 2026 (#1855, step 3)
 
 `inbox/item-index.ts` keeps the small index in Azure SQL (`dbo.inbox_items`,
