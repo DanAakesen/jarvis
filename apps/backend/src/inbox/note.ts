@@ -34,6 +34,11 @@ export function captureItemId(sourceMessageId: string, title: string): string {
   return createHash('sha256').update(`${sourceMessageId}\n${cleanTitle(title).toLowerCase()}`).digest('hex').slice(0, 12);
 }
 
+/** Id of the k-th note made from one raw capture; the client's capture id is the idempotency key. */
+export function captureNoteId(captureId: string, position: number): string {
+  return createHash('sha256').update(`capture:${captureId.toLowerCase()}:${position}`).digest('hex').slice(0, 12);
+}
+
 export function isInboxId(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8,32}$/u.test(value);
 }
