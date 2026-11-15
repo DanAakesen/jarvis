@@ -1,3 +1,21 @@
+## PI (Proactive Intelligence) on the managed Copilot harness: plan — 15 November 2026 (#1872, P15-164)
+
+**Status: plan written, nothing built.** Plan, diagrams, latency levers, costs and risks: `docs/pi/plan.md`; architecture drawing `docs/pi/pi-architecture-drawing.png`. Owner decisions: routes 1 and 4 combined (one agent, one long session; Voice Live calls it), LLM-only decisions, **no runtime fallback** (build, test, then delete the old path), standing watches.
+
+| Phase | Issue | State |
+| --- | --- | --- |
+| 0 Prove: untested spike items, routines, latency round, measurement harness | P15-165 | Not started; needs Azure access |
+| 1 Jarvis MCP server and turn authority | P15-166 | Not started |
+| 2 Chat on the harness and the 5 s start | P15-167 | Not started |
+| 3 Reach: GitHub, Azure, Workers | P15-168 | Not started |
+| 4 Brain, shadow then live | P15-169 | Not started |
+| 5 Standing watches | P15-170 | Not started |
+| 6 Voice on the same agent | P15-171 | Not started |
+| 7 Cutover: PI is the default | P15-172 | Not started |
+| 8 Delete the old path (gate and inventory in the plan) | P15-173 | Not started |
+
+Latency round 2 numbers are pending in `docs/harness-trial/spike-results.md`; the plan holds a placeholder.
+
 ## Event-driven proactive Jarvis — 15 November 2026 (#1858, P15-161)
 
 **Status: built and tested locally; off by default; no live proof yet.** Design, diagram and numbers: `docs/proactive-events/design.md`.
