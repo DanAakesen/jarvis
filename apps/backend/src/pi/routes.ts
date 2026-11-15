@@ -1,0 +1,75 @@
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
+import { PiGatewayError } from './errors.js';
+import type { PiGateway, PiStatus } from './gateway.js';
+import { createPiMcpRoutes } from './mcp.js';
+import { runPiSmoke } from './smoke.js';
+import type { PiTurnRegistry } from './turns.js';
+import { PI_MODEL, PI_REASONING_EFFORT } from './definition.js';
+
+export interface PiModuleOptions {
+  /** Absent until the Deploy workflow has provisioned the agent and given the backend its name and MCP secret. */
+  readonly gateway?: PiGateway | undefined;
+  readonly registry: PiTurnRegistry;
+  readonly auth: PiAuth;
+  readonly monthlyCapDkk: number;
+}
+
+const isOwner = (app: FastifyInstance, objectId: string | undefined) => objectId?.toLowerCase() === app.ownerObjectId.toLowerCase();
+
+const errorBody = (error: unknown) => error instanceof PiGatewayError
+  ? { error: error.userMessage, code: error.code }
+  : { error: 'PI could not be reached. No other engine was used.', code: 'pi_unavailable' };
+
+/** The test-only PI surface: status for the Settings switch, a warm-up the app calls when it opens, the MCP door, and the deploy smoke. */
+export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
+  return async (app) => {
+    app.get('/pi/status', async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      if (!isOwner(app, request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
+      if (!options.gateway) {
+        const unconfigured: PiStatus = {
+          enabled: false, reason: 'not_configured', agent: { name: null, model: PI_MODEL, effort: PI_REASONING_EFFORT },
+          month: { spentDkk: 0, capDkk: options.monthlyCapDkk, remainingDkk: options.monthlyCapDkk, turns: 0 }, warm: { state: 'cold', warmedAt: null }, lastTurn: null,
+        };
+        return unconfigured;
+      }
+      try { return await options.gateway.status(AbortSignal.timeout(10_000)); } catch {
+        return reply.code(503).send({ error: 'PI status could not be read.', code: 'pi_unavailable' });
+      }
+    });
+
+    app.post('/pi/warm', { schema: { body: { type: ['object', 'null'], additionalProperties: false } } }, async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      if (!isOwner(app, request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
+      if (!options.gateway) {
+        return reply.code(503).send({ error: 'PI is not set up on this backend yet. No other engine was used.', code: 'pi_not_configured' });
+      }
+      const controller = new AbortController();
+      request.raw.once('aborted', () => controller.abort());
+      try { return await options.gateway.warm(AbortSignal.any([controller.signal, AbortSignal.timeout(120_000)])); } catch (error) {
+        return reply.code(503).send(errorBody(error));
+      }
+    });
+
+    if (!options.gateway) return;
+    const gateway = options.gateway;
+    await app.register(createPiMcpRoutes({ registry: options.registry, auth: options.auth }));
+
+    app.post('/pi/smoke', { config: { jarvisDeploySmoke: true }, schema: { body: { type: ['object', 'null'], additionalProperties: false } } },
+      async (request, reply) => {
+        reply.header('Cache-Control', 'no-store');
+        if (!request.deployPrincipal) return reply.code(403).send({ error: 'Forbidden' });
+        try {
+          const status = await gateway.status(AbortSignal.timeout(10_000));
+          if (!status.enabled) return reply.code(409).send({ error: 'PI is over its monthly cap; the smoke did not run.', code: 'pi_budget_exhausted' });
+          return await runPiSmoke(gateway, AbortSignal.timeout(280_000));
+        } catch (error) {
+          request.log.warn({ code: error instanceof PiGatewayError ? error.code : 'unknown' }, 'pi.smoke_failed');
+          return reply.code(502).send(errorBody(error));
+        }
+      });
+  };
+}
+
+export { piMcpPath };

@@ -31,6 +31,21 @@ Run 43762776242: the `watch` job failed only because capture steps hit their 8-m
 Low Power Mode, and the screenshot steps are `continue-on-error` with a 12-minute bound (compile steps stay strict).
 Next: owner review of the captures and a TestFlight build.
 
+## PI phases 0 to 2 together: PI agent, Jarvis MCP, chat in the iOS app behind a test switch — 15 November 2026 (#1885, P15-174, PR #1890)
+
+**Status: built and tested offline; not yet run live.** The owner asked for phases 0, 1 and 2 as one piece so he can test chat on PI in the iOS app. It replaces #1874, #1875 and #1876 (phase 0's quality round, routines and long-session items are out: the owner does not want to test long sessions). Everything is inert until the owner sets the test switch to PI in iOS Settings.
+
+| Part | State |
+| --- | --- |
+| PI agent defined as code (`agents/pi/`, deployed by the Deploy workflow's `pi-agent` job): managed Copilot harness, Terra deployment, reasoning effort `low`, built-ins off, Jarvis MCP server, skills from the repository | Written; **Deploy has not run it yet** |
+| Jarvis MCP server (`/pi/mcp`: `find_tools`, `call_tool`) with per-turn authority and the in-process dispatch through the normal tool route | Built; 9 offline tests including forged, closed and smoke grants |
+| Gateway (`pi/gateway.ts`): streaming, one warm long conversation per owner, budget (100 DKK a month hard stop), per-turn tokens and DKK, honest errors | Built; 9 offline tests with a fake Foundry stream |
+| Test selector: turn field `engine: "pi"`, Settings switch in iOS, `GET /pi/status`, `POST /pi/warm` | Built; backend route tests pass; iOS compiled only by CI |
+| Live proof of MCP, streaming, cancellation and first-text times | **Open**: dispatch Deploy with `measure_pi` after merge (about 0.5 DKK); results land in the job summary |
+
+Next: merge, let Deploy define the agent, dispatch Deploy with `measure_pi`, then the owner tests PI chat on the phone and sends feedback. Phases 3 to 8 are unchanged.
+
+
 ## PI (Proactive Intelligence) on the managed Copilot harness: plan — 15 November 2026 (#1872, P15-164)
 
 **Status: plan written, nothing built.** Plan, diagrams, latency levers, costs and risks: `docs/pi/plan.md`; architecture drawing `docs/pi/pi-architecture-drawing.png`. Owner decisions: routes 1 and 4 combined (one agent, one long session; Voice Live calls it), LLM-only decisions, **no runtime fallback** (build, test, then delete the old path), standing watches.

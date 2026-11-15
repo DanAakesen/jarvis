@@ -1,3 +1,8 @@
+## PI test switch in iOS — 15 November 2026 (#1885, P15-174)
+
+A temporary, clearly marked test control, deleted at cutover. Settings, General, section "Test switch": the shared segmented bar chooses Current engine or PI engine (stored on the device, default Current), an explanation says it affects chat only and has no fallback, and while PI is chosen live rows show status, agent and model, month spend against the cap, warm or cold, the monthly cap (default 100 DKK) and what is left this month (shown in red text at 0), and the last turn (first text ms, tokens including cached, DKK) with a refresh button. The Chat header shows a small "PI test" pill (icon plus text, new shared `JarvisStatusPill`) while PI is chosen. PI failures show the server's own sentence in the chat error banner. Not inspected on a device or simulator by me; the macOS CI compile is the check.
+
+
 ## Event-driven proactive outreach — 15 November 2026 (#1858)
 
 No new screens. A low-tier outreach is one row in the existing Now feed list (alert group) with the model's title and body; it links to the finding on the existing Proactive page, which keeps its useful and wrong buttons as the thumbs. Medium and high use the existing insight push. Thumbs on the push itself, and any iOS rendering of the new card, are not designed or verified here.

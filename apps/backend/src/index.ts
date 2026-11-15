@@ -109,6 +109,13 @@ import { createVaultModule } from './vault/index.js';
 import { createInboxModule } from './inbox/module.js';
 import { createInboxRoutes } from './inbox/routes.js';
 import { createInboxMcpRoutes } from './inbox/mcp.js';
+import { createPiAuth } from './auth/pi-credential.js';
+import { createPiStore } from './database/pi-store.js';
+import { buildPiContext } from './pi/context.js';
+import { createPiGateway } from './pi/gateway.js';
+import { createPiRoutes } from './pi/routes.js';
+import { createPiTurnRegistry } from './pi/turns.js';
+import { defaultAwayModeState } from './core/away-mode.js';
 import { createInboxStatusRoute } from './inbox/status.js';
 import { createMissedCaptureAudit } from './inbox/audit.js';
 import { NUDGE_STYLE_KEY } from './inbox/ops.js';
@@ -541,6 +548,33 @@ try {
           ? metadata.target : null;
       } }
     : undefined;
+  // Test-only PI chat engine. Present and callable only when the Deploy workflow has provisioned the agent and given
+  // the backend its name and MCP secret; even then a chat turn uses it only when the owner's test switch asks for it.
+  const piAuth = createPiAuth(config.auth.tenantId, config.pi?.mcpSecret);
+  const piRegistry = createPiTurnRegistry();
+  const piStore = database ? createPiStore(database.pool) : undefined;
+  const piGateway = config.pi && config.foundryProjectEndpoint && credential && piStore && settingsStore
+    ? createPiGateway({
+      projectEndpoint: config.foundryProjectEndpoint, agentName: config.pi.agentName, owner: config.auth.ownerObjectId,
+      monthlyCapDkk: config.pi.monthlyCapDkk, timeZone: config.googleTimeZone ?? 'Europe/Copenhagen',
+      store: piStore, registry: piRegistry,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('PI identity unavailable');
+        return token.token;
+      },
+      context: async () => buildPiContext(
+        await readSettings(settingsStore, await modelCatalogue.read()),
+        await awayModeStore?.read() ?? defaultAwayModeState,
+      ),
+      recordUsage: usageStore?.recordFoundryUsage
+        ? (usage) => usageStore.recordFoundryUsage!({ role: 'chat', ...usage }) : undefined,
+      log: (event, fields) => logger.info({ msg: event, ...fields }, event),
+    }) : undefined;
+  const piModule = {
+    id: 'pi', tools: [],
+    registerRoutes: createPiRoutes({ gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 100 }),
+  };
   const approvalEndpoint = (() => {
     if (!config.foundryProjectEndpoint) return undefined;
     try {
@@ -1090,6 +1124,7 @@ try {
     recipes: createRecipeModule(recipeStore),
     vault: vaultModule,
     inbox: inboxModule,
+    pi: piModule,
     webResearch: webResearchModule,
     htmlResearch: htmlResearchModule,
     google: googleModule,
@@ -1307,6 +1342,8 @@ try {
   }) : undefined;
   watchSpeechToken?.warm();
   const app = buildApp(config, logger, {
+    piAuth,
+    ...(piGateway ? { piAgent: piGateway } : {}),
     ...(database ? { watchCredentials: new WatchCredentials(createWatchCredentialStore(database.pool), config.auth.ownerObjectId) } : {}),
     ...(inboxModule ? { inboxCapture: { ...(inboxCredentials ? { credentials: inboxCredentials } : {}) } } : {}),
     ...(watchSpeechToken && config.foundryEndpoints ? {

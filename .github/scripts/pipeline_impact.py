@@ -25,6 +25,7 @@ CHECK_ONLY_SCRIPTS = {
     "pipeline_evidence.py", "release_state.py", "project_board.py", "plan_status.py",
     "worker_label.py", "ci_timing.py", "python-ci.sh", "normalize-pr-title.sh", "validate-pr-title.sh",
     "chat_failure_diagnostics.py", "inspect_factory_capacity.py", "reuse_factory_image.py", "provision_managed_chat.py", "provision_managed_chat_handoff.sh",
+    "provision_pi_agent.py", "pi_smoke_report.py",
 }
 
 
@@ -66,6 +67,9 @@ def deploy_parts(path: str) -> set[str]:
         return {"web"}
     if path.startswith("agents/jarvis/"):
         return {"agent"}
+    # The PI agent definition and skills are read by the Deploy PI job, not baked into an image.
+    if path.startswith("agents/pi/"):
+        return set()
     if path in {".github/scripts/backend_log_preflight.py", ".github/scripts/backend_log_probe_parameters.py",
                 ".github/scripts/backend_log_sources.py"}:
         return {"infra"}
@@ -105,6 +109,8 @@ def checks_for(path: str) -> set[str]:
         return NODE_CHECKS | {"jarvis-agent"}
     if path.startswith("agents/jarvis/"):
         return {"jarvis-agent", "python", "backend", "foundry"}
+    if path.startswith("agents/pi/"):
+        return {"backend"}
     if path.startswith("runner/"):
         return {"runner", "python", "backend", "database"}
     if path.startswith("pc-bridge/"):

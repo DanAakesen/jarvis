@@ -18,9 +18,12 @@ import { OwnerSessionThrottled, OwnerSessionUnavailable, type OwnerSessionContex
 import { ownerSessionTokenPrefix } from './session/token.js';
 import { watchCredentialPrefix, watchTranscriptionPath, WatchCredentialUnavailable, type WatchCredentials } from './watch-credential.js';
 import { inboxCapturePath, inboxCapturePrefix, inboxMcpPath, InboxCaptureCredentialUnavailable, type InboxCaptureCredentials } from './inbox-capture-credential.js';
+import { piMcpCredential, piMcpPath, piMcpPrefix, secretsMatch, type PiAuth } from './pi-credential.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
+    /** True only on the PI MCP route, after the managed agent presented the static PI credential. */
+    piMcpAccess: boolean;
     principal: UserPrincipal | null;
     agentPrincipal: AgentPrincipal | null;
     runnerPrincipal: RunnerPrincipal | null;
@@ -66,7 +69,8 @@ function voiceWebsocketToken(request: FastifyRequest): string | undefined {
   return token && /^[\w-]+\.[\w-]+\.[\w-]+$/u.test(token) ? token : undefined;
 }
 
-export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth), exportDeviceVerifier?: NutritionExportCredentialVerifier, healthUploadEnabled = false, ownerSessions?: OwnerSessionVerifier, watchCredentials?: WatchCredentials, inboxCredentials?: InboxCaptureCredentials) {
+export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth), exportDeviceVerifier?: NutritionExportCredentialVerifier, healthUploadEnabled = false, ownerSessions?: OwnerSessionVerifier, watchCredentials?: WatchCredentials, inboxCredentials?: InboxCaptureCredentials, piAuth?: PiAuth) {
+  app.decorateRequest('piMcpAccess', false);
   app.decorateRequest('principal', null);
   app.decorateRequest('agentPrincipal', null);
   app.decorateRequest('runnerPrincipal', null);
@@ -131,7 +135,9 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       const inboxToken = typeof header === 'string' && header.length <= 128 &&
         header.slice(0, 7).toLowerCase() === ['bear', 'er '].join('') &&
         /^ji\.[A-Za-z0-9_-]{43}$/u.test(header.slice(7)) ? header.slice(7) : undefined;
-      const token = header === undefined && !duplicate ? voiceWebsocketToken(request) : match?.[1] ?? watchToken ?? inboxToken;
+      const piSecret = piMcpCredential(header);
+      const token = header === undefined && !duplicate ? voiceWebsocketToken(request) : match?.[1] ?? watchToken ?? inboxToken ??
+        (piSecret === undefined ? undefined : `${piMcpPrefix}${piSecret}`);
       if (duplicate) reason = 'duplicate_authorization';
       else if (!token) reason = header === undefined ? 'missing_token' : 'malformed_authorization';
       if (duplicate || !token) throw new AuthenticationDenied(401);
@@ -155,7 +161,18 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         request.inboxCaptureCredentialHash = createHash('sha256').update(token).digest('hex');
         return;
       }
-      const principal = token.startsWith(ownerSessionTokenPrefix) ? await verifyOwnerSession(request, token) : await verify(token);
+      if (token.startsWith(piMcpPrefix) && piSecret !== undefined) {
+        // The static PI credential opens the PI MCP route and nothing else. It proves the caller is our managed agent;
+        // each tool call is then authorized by the per-turn reference that route checks.
+        if (request.routeOptions.url !== piMcpPath || !['POST', 'GET', 'DELETE'].includes(request.method)) {
+          throw new AuthenticationDenied(403);
+        }
+        if (piAuth?.mcpSecret === undefined || !secretsMatch(piAuth.mcpSecret, piSecret)) throw new AuthenticationDenied(401);
+        request.piMcpAccess = true;
+        return;
+      }
+      const principal = piAuth !== undefined && secretsMatch(piAuth.dispatch.token, token) ? piAuth.dispatch.principal
+        : token.startsWith(ownerSessionTokenPrefix) ? await verifyOwnerSession(request, token) : await verify(token);
       reason = 'principal_not_allowed_on_route';
       if (isHealthConnectorPrincipal(principal)) {
         if (request.routeOptions.config?.jarvisHealthMcp !== true || !healthMcpPaths.has(request.routeOptions.url ?? '') ||
@@ -177,8 +194,9 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         }
         request.phoneEventGridPrincipal = principal;
       } else if (isDeployPrincipal(principal)) {
-        if (request.method !== 'GET' || request.routeOptions.url !== '/status/smoke' ||
-            request.routeOptions.config?.jarvisDeploySmoke !== true) {
+        const deployRoute = (request.method === 'GET' && request.routeOptions.url === '/status/smoke') ||
+          (request.method === 'POST' && request.routeOptions.url === '/pi/smoke');
+        if (!deployRoute || request.routeOptions.config?.jarvisDeploySmoke !== true) {
           throw new AuthenticationDenied(403);
         }
         request.deployPrincipal = principal;

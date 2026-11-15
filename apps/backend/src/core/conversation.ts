@@ -48,6 +48,8 @@ import type { FrameStore } from '../vision/frame-store.js';
 import { registerConversationSummaryRoutes } from './conversation-summary.js';
 import { approvalDeciderFor } from './approval-interpreter.js';
 import { readRuntimeTests, runtimeTestUnavailableMessage } from './runtime-test-availability.js';
+import { PiGatewayError } from '../pi/errors.js';
+import { createUnconfiguredPiAgent } from '../pi/gateway.js';
 import { registerManagedRuntimeRoutes } from './managed-runtime-routes.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -567,6 +569,8 @@ return {
       Params: { sessionId: string };
       Body: {
         text: string;
+        /** Test-only: 'pi' streams this turn from the PI agent instead of the current engine. */
+        engine?: 'pi';
         attachmentIds?: string[];
         screenContext?: string;
         visualContext?: VisualContext;
@@ -586,6 +590,7 @@ return {
           type: 'object',
           properties: {
             text: { type: 'string', minLength: 1, maxLength: 20_000 },
+            engine: { type: 'string', enum: ['pi'] },
             attachmentIds: {
               type: 'array',
               minItems: 0,
@@ -614,7 +619,9 @@ return {
       const turnStartedAt = performance.now();
       const turnStartedAtMs = Date.now();
       const store = app.conversationStore;
-      const agent = app.conversationAgent;
+      const piRequested = request.body.engine === 'pi';
+      // A turn that asks for PI never falls back: an unconfigured PI ends the turn with its own honest error.
+      const agent = piRequested ? (app.piAgent ?? createUnconfiguredPiAgent()) : app.conversationAgent;
       if (!store) return reply.code(503).send({ error: 'Conversation storage unavailable' });
       if (!agent) return reply.code(503).send({ error: 'Chat is unavailable until the Jarvis agent is configured' });
       const { sessionId } = request.params;
@@ -647,6 +654,9 @@ return {
       const session = await store.getSession(sessionId);
       if (!session || session.endedAt !== null) return reply.code(404).send({ error: 'Active chat session not found' });
       if (session.channel !== 'chat') return reply.code(400).send({ error: 'Session is not a chat session' });
+      if (piRequested && session.runtimeTest) {
+        return reply.code(400).send({ error: 'The PI test switch applies to normal chat, not to an isolated runtime test session.' });
+      }
       const runtimeOption = session.runtimeTest ? (await runtimeTests())[session.runtimeTest] : undefined;
       if (runtimeOption && !runtimeOption.available) {
         return reply.code(503).send({ error: runtimeTestUnavailableMessage(runtimeOption) });
@@ -820,6 +830,7 @@ return {
                 text: turnText,
                 ...(proactiveContext ? { proactiveContext } : {}),
                 turnId: activeTurn.rootMessageId,
+                ...(piRequested ? { sessionId } : {}),
                 onAgentPhaseTimings: (timings) => {
                   const replyTimings: AgentPhaseTimings = {};
                   for (const phase of CHAT_AGENT_PHASES) {
@@ -942,7 +953,7 @@ return {
               sessionId,
               role: 'jarvis',
               text: partial,
-              model: null,
+              model: piRequested ? 'pi' : null,
             });
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
@@ -982,6 +993,10 @@ return {
               'conversation.reply_failed',
             );
             publishActivity('failed');
+            if (error instanceof PiGatewayError) {
+              yield streamEvent('error', { error: error.userMessage, code: error.code });
+              return;
+            }
             const code = error instanceof ChatAgentError && error.code !== undefined && chatAgentFailureReasons.has(error.code)
               ? error.code : error instanceof ChatAgentInvocationError && chatAgentInvocationReasons.has(error.reason)
                 ? error.reason : undefined;

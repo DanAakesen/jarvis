@@ -81,6 +81,7 @@ import type { WatchTranscriber } from './voice/watch-transcription.js';
 import type { WatchCredentials } from './auth/watch-credential.js';
 import { installInboxCaptureLimits } from './auth/inbox-rate-limit.js';
 import type { InboxCaptureCredentials } from './auth/inbox-capture-credential.js';
+import type { PiAuth } from './auth/pi-credential.js';
 
 export interface BuildAppOptions {
   readonly watchTranscriber?: WatchTranscriber;
@@ -92,6 +93,9 @@ export interface BuildAppOptions {
   readonly approvalNotifications?: ApprovalNotificationServices;
   readonly notifyApproval?: (confirmation: BrowserConfirmation) => void;
   readonly notifyReply?: (reply: ReplyNotificationInput) => void;
+  /** Test-only PI chat engine: its in-process credentials and the agent a turn that selects PI streams from. */
+  readonly piAuth?: PiAuth;
+  readonly piAgent?: ConversationAgent;
   readonly managedRuntime?: import('./core/managed-runtime-routes.js').ManagedRuntimeServices;
   /** Supplied only after managed definition, settings and application-policy verification. */
   readonly conversationRuntimeTests?: import('./core/runtime-test-availability.js').ConversationRuntimeTestReader;
@@ -200,6 +204,7 @@ declare module 'fastify' {
     proactiveConversationContext: import('./proactive/conversation-context.js').ProactiveConversationContext | null;
     conversationRuntimeTests: import('./core/runtime-test-availability.js').ConversationRuntimeTestReader | null;
     managedRuntime: import('./core/managed-runtime-routes.js').ManagedRuntimeServices | null;
+    piAgent: ConversationAgent | null;
     reflexClassifier: ReflexClassifier | null;
     approvalInterpreter: ApprovalInterpreter;
     browserAgent: BrowserAgent | null;
@@ -283,7 +288,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   installWatchRateLimits(app, config.auth.ownerObjectId);
   // After the Watch limiter, which registers the rate-limit plugin; before authentication, so unknown tokens cannot reach SQL.
   if (options.inboxCapture) installInboxCaptureLimits(app, config.auth.ownerObjectId);
-  installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions, options.watchCredentials, options.inboxCapture?.credentials);
+  installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true, ownerSessions, options.watchCredentials, options.inboxCapture?.credentials, options.piAuth);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('notifyApproval', options.notifyApproval ?? (() => {}));
   app.decorate('notifyReply', options.notifyReply ?? (() => {}));
@@ -395,6 +400,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('proactiveConversationContext', options.proactiveConversationContext ?? null);
   app.decorate('conversationRuntimeTests', options.conversationRuntimeTests ?? null);
   app.decorate('managedRuntime', options.managedRuntime ?? null);
+  app.decorate('piAgent', options.piAgent ?? null);
   app.decorate('conversationAttachments', options.conversationAttachments ?? null);
   app.decorate('conversationSummaryStore', options.conversationSummaryStore ?? null);
   if (options.conversationAttachments) {
