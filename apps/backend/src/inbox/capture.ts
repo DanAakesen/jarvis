@@ -10,7 +10,7 @@ export const captureSources = ['watch', 'shortcut', 'app', 'other'] as const;
 export type CaptureSource = typeof captureSources[number];
 
 export interface RawCapture {
-  /** Client-generated UUID; a retry with the same id never makes a second note. */
+  /** Client-generated unique key (a UUID, or 16-64 letters, digits, dots, hyphens or underscores); a retry with the same key never makes a second note. */
   readonly captureId: string;
   readonly text: string;
   readonly source?: CaptureSource;
@@ -25,7 +25,7 @@ export interface CaptureResult {
 }
 
 export const MAX_RAW_CAPTURE_CHARACTERS = 4_000;
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const captureKey = /^[A-Za-z0-9._-]{16,64}$/u;
 const sourceLabels: Record<CaptureSource, string> = { watch: 'Watch', shortcut: 'Shortcut', app: 'app', other: 'API' };
 const maxConcurrentTriage = 4;
 const maxTriageCallsPerMinute = 20;
@@ -36,7 +36,7 @@ export function validRawCapture(value: unknown): value is RawCapture {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const body = value as Record<string, unknown>;
   return Object.keys(body).every((key) => ['captureId', 'text', 'source'].includes(key)) &&
-    typeof body.captureId === 'string' && uuid.test(body.captureId) &&
+    typeof body.captureId === 'string' && captureKey.test(body.captureId) &&
     typeof body.text === 'string' && body.text.trim().length > 0 && Array.from(body.text).length <= MAX_RAW_CAPTURE_CHARACTERS &&
     (body.source === undefined || captureSources.includes(body.source as CaptureSource));
 }
@@ -91,7 +91,7 @@ export function createInboxCapture(options: {
 
   return async function capture(value: unknown, signal: AbortSignal): Promise<CaptureResult> {
     if (!validRawCapture(value)) {
-      throw new InboxError('invalid', 'Send a capture id (UUID) and up to 4000 characters of text.');
+      throw new InboxError('invalid', 'Send a unique captureId (16-64 letters, digits, dots, hyphens or underscores) and up to 4000 characters of text.');
     }
     const text = cleanText(value.text, 'text', MAX_INBOX_QUOTE_BYTES);
     if (!text) throw new InboxError('invalid', 'There is nothing to capture.');
@@ -128,11 +128,12 @@ export function createInboxCapture(options: {
     log('inbox.triage', { outcome: triaged ? 'model' : 'raw' });
 
     const items: Array<{ id: string; title: string }> = [];
+    let writes = 0;
     const source = value.source === undefined ? undefined : sourceLabels[value.source];
     for (const position of [...notes.keys()].reverse()) {
       const draft = notes[position]!;
       const id = captureNoteId(value.captureId, position);
-      const { item } = await options.store.create({
+      const { item, created } = await options.store.create({
         title: draft.title,
         ...(draft.note ? { note: draft.note } : {}),
         quote: text,
@@ -140,10 +141,11 @@ export function createInboxCapture(options: {
         id,
         at,
       }, signal);
+      if (created) writes += 1;
       if (options.index) await bestEffort(() => options.index!.complete(item.id, item.path, item.sha, signal), signal);
       items.unshift({ id: item.id, title: item.title });
     }
-    return { items, triaged, repeated: false };
+    return { items, triaged, repeated: writes === 0 };
   };
 }
 

@@ -40,7 +40,7 @@ export function createInboxRoutes(options: {
         body: {
           type: 'object',
           properties: {
-            captureId: { type: 'string', maxLength: 36 },
+            captureId: { type: 'string', minLength: 16, maxLength: 64 },
             text: { type: 'string', minLength: 1, maxLength: MAX_RAW_CAPTURE_CHARACTERS },
             source: { type: 'string', enum: [...captureSources] },
           },

@@ -107,6 +107,16 @@ describe('inbox capture endpoint', () => {
     expect(JSON.stringify(response.json())).not.toContain('Inbox/');
   });
 
+  it('accepts a Shortcut-made key (date plus random number) as the capture id', async () => {
+    const { post, creds, files } = fixture();
+    const { credential } = await creds.credentials.issue('Shortcut');
+    const key = '20261115113001123-482913';
+    expect((await post('/inbox/capture', { captureId: key, text: 'from a Shortcut' }, bearer(credential))).statusCode).toBe(200);
+    expect((await post('/inbox/capture', { captureId: key, text: 'from a Shortcut' }, bearer(credential))).json().repeated).toBe(true);
+    expect((await post('/inbox/capture', { captureId: 'short', text: 'x' }, bearer(credential))).statusCode).toBe(400);
+    expect(files.size).toBe(1);
+  });
+
   it('is idempotent on captureId: a retry says it was already saved and writes nothing', async () => {
     const { post, creds, files } = fixture();
     const { credential } = await creds.credentials.issue('Shortcut');

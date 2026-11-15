@@ -1,3 +1,24 @@
+## 15 November 2026 — Inbox capture endpoint and write-only credential (#1855, step 5)
+
+`POST /inbox/capture` takes a unique `captureId` and up to 4000 characters of raw
+text. Callers are the owner (iPhone companion, web) or a **capture credential**
+(`ji.` plus 43 characters): hashed at rest, owner-bound, revocable, at most five,
+no expiry, and accepted only on this one route, so it can add items and read
+nothing. It follows the Watch credential pattern: a transport-peer budget (30 a
+second) runs in an early root hook before authentication can touch SQL, then 60
+captures a minute per credential. Migration 0082 holds the hashes. The owner issues
+and revokes credentials through `inbox_capture_credential` in chat (the secret is
+shown once, in the owner's own chat) or the owner-only `/inbox/credentials` routes.
+Raw text is structured by one low-effort call to the chat model (usage recorded under
+chat); a missing, busy, invalid or over-allowance model only costs structure, the
+raw text becomes the note and the owner's words are always kept verbatim. The daily
+allowance is 60 calls per replica, an approximation of the 1 DKK/day inbox ceiling
+until step 8 measures cost. Idempotency: the client's key derives each note's id, the
+store resolves a supplied id in the vault before writing, and a repeat answers
+"Already in the inbox". The Watch path in this step is the Shortcut, which runs on
+Apple Watch; a native Watch-app action is a follow-up because it cannot be compiled
+or tested here.
+
 ## 15 November 2026 — Inbox tools for chat and voice (#1855, step 4)
 
 Three tools over the one Inbox module: `inbox_capture`, `inbox_items`, `inbox_close`,
