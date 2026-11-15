@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import {
   createTaskWriter, TaskWriteError,
-  taskCreateSchema, taskCompleteSchema, taskEditSchema,
+  taskCreateSchema, taskCompleteSchema, taskDeleteSchema, taskEditSchema,
   validateTaskCreateInput, validateTaskCompleteInput, validateTaskEditInput,
 } from './task-writes.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -469,6 +469,22 @@ function setTaskDone(content: string, path: string, line: number, text: string, 
   return { status: 'changed', content: parts.join(''), version: taskLineVersion(next.replace(/^\uFEFF/u, '')) };
 }
 
+/** Removes one checkbox line, but only when the line is byte-for-byte the one the owner saw. */
+function removeTaskLine(content: string, path: string, line: number, text: string, version: string):
+  { status: 'mismatch' } | { status: 'changed'; content: string } {
+  const todo = parseTodosWithContext(content, path).find((candidate) => candidate.line === line);
+  if (!todo || todo.version !== version || (shouldRedact(todo.text) ? '[redacted]' : todo.text) !== text) {
+    return { status: 'mismatch' };
+  }
+  const parts = content.split(/(\r?\n)/u);
+  const index = (line - 1) * 2;
+  if (parts[index] === undefined) return { status: 'mismatch' };
+  // Take the line and its own line break; the last line has none, so take the break before it instead.
+  if (index + 1 < parts.length) parts.splice(index, 2);
+  else parts.splice(Math.max(0, index - 1), index > 0 ? 2 : 1);
+  return { status: 'changed', content: parts.join('') };
+}
+
 /** Every Tasks-plugin or Dataview marker the parser strips from a task's visible text, so an edit can keep them verbatim. */
 const taskMarkerPattern = new RegExp([
   String.raw`<!-- jarvis-task:[A-Za-z0-9_-]{1,16000} -->`,
@@ -635,7 +651,7 @@ export function knowledgeGraphView(query: string, paths: readonly string[], upda
 }
 
 export const taskWriteHelpers = {
-  newTaskText, setTaskDone, setTaskText, appendVaultTask, vaultTaskId,
+  newTaskText, setTaskDone, removeTaskLine, setTaskText, appendVaultTask, vaultTaskId,
   loggedFolder, validateWritePath, inTaskScope, shouldRedact,
 };
 
@@ -2249,6 +2265,23 @@ export function createVaultModule(options: {
         const signal = AbortSignal.timeout(30_000);
         try {
           return await taskWriter.edit(request.body, signal);
+        } catch (error) {
+          return taskWriteFailure(error, reply);
+        }
+      });
+
+      app.delete<{ Body: { path: string; line: number; text: string; version: string } }>('/vault/tasks', {
+        bodyLimit: 4 * 1024,
+        schema: {
+          body: taskDeleteSchema,
+          response: { 204: { type: 'null' }, 400: taskWriteErrorSchema, 403: apiError, 409: taskWriteErrorSchema, 503: taskWriteErrorSchema },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        const signal = AbortSignal.timeout(30_000);
+        try {
+          await taskWriter.remove(request.body, signal);
+          return reply.code(204).send();
         } catch (error) {
           return taskWriteFailure(error, reply);
         }
