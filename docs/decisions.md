@@ -13,6 +13,22 @@ Owner: "for the model we should do gpt 6.1, that is very very cheap. so that sho
 - **Switch**: `JARVIS_PROACTIVE_EVENTS_ENABLED` (Bicep `proactiveEventsEnabled`, default false) so the existing checks keep running alone until the new path is proven.
 - Evidence: unit and SQL Server 2022 integration tests, listed in PLAN.md. Not observed: live traffic, push delivery, a real model call, real cost. Estimates in `docs/proactive-events/design.md` are computed, not measured.
 
+## 15 November 2026 — Loose Ends build: Inbox store (#1855, step 1)
+
+Owner go-ahead on the inbox loop ("go on loose ends"); build order follows #1855.
+Confirmed shape: one `Inbox` module in the existing backend serves chat and voice
+tools, HTTP and MCP, so safe path, redaction, size limit and idempotent create live
+in one place; the private vault repo is the source of truth; no new Azure services.
+Step 1 choices (reversible, within the approved design): live notes are
+`Inbox/<yyyy-mm-dd> <title>.md`, closed notes sit in `Inbox/Closed/` and closing is
+one atomic Git Data API commit (move plus trail line), never a delete. A note
+carries no status field; its only mechanical element is the hidden
+`<!-- jarvis-inbox:id -->` comment, which callers can never plant. The folder is
+outside the task scope, so checkboxes in an idea never become tasks. A note is
+capped at 8 KB and the verbatim quote at 4 KB. Interrupt tiers for nudges (step 7):
+low is a card in the Now feed; medium and high are push; no phone call for now.
+
+
 ## 15 November 2026 — Watch dictation and voice on the first press (P15-160 / #1856)
 
 Build 105 feedback: dictation hung and ended with "transcription timed out", voice

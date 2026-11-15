@@ -1,6 +1,6 @@
 # Inbox loop: design (P15-145, #1836)
 
-Status: **proposed design, not implemented.** No product code changes in this issue.
+Status: **approved by the owner; build in progress under #1855 (P15-159), step 1 (vault store) built.** Sections below keep the original wording; the build order of #1855 supersedes the phase table in section 11.
 The owner decisions in [decisions.md](../decisions.md)
 and [p0.md](../../p0.md) are fixed inputs; everything marked *proposal* awaits owner review.
 

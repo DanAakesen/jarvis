@@ -4,6 +4,20 @@ The existing proactive ticker (30 seconds) also drains an event queue. Producers
 
 New routes (owner only): `GET /proactive/outreach`, `POST /proactive/outreach/:id/feedback`. The call is an unbuilt `OutreachChannel`.
 
+## Inbox store — 15 November 2026 (#1855, step 1)
+
+`apps/backend/src/inbox/` is the only code that writes the vault's `Inbox/` folder.
+`note.ts` holds the pure format rules (path guard confined to `Inbox/*.md` and
+`Inbox/Closed/*.md`, title and file-name cleaning, redaction through the vault's
+`shouldRedact`, size limits, hidden id, trail lines). `store.ts` provides create
+(create-only, retries a taken name with a suffix, idempotent when the caller's id
+already exists), replace (`expectedSha`, hidden id kept), close (one commit moves
+the note to `Inbox/Closed/` with a trail line) and list. The vault client gained
+`move`, a single-commit rename through the Git Data API that refuses when the
+source changed or the target exists and updates the branch fast-forward only. Later
+steps add the index table, tools, HTTP route, MCP server and nudge pass as adapters
+over this store. Design: `docs/inbox-loop/design.md`.
+
 ## Direct owner requests — 10 November 2026
 
 Owner tool operations execute a resolved request under the existing authenticated route and resource authorization. Same-session owner messages may resolve a recent project for a follow-up; external content is never authority. Resource revisions, secret checks and duplicate/uncertain-write recovery remain separate from interactive approval. Legacy confirmation endpoints remain for compatibility but are not advertised to normal chat or voice.

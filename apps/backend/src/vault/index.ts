@@ -387,7 +387,7 @@ function vaultNoteTitle(path: string, heading: string): string {
     : posix.basename(path).replace(/\.md$/iu, '').replace(/[-_]/gu, ' ')).slice(0, 200);
 }
 
-function shouldRedact(value: string): boolean {
+export function shouldRedact(value: string): boolean {
   return credentialPattern.test(value) || secretPattern.test(value);
 }
 
