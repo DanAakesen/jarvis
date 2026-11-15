@@ -665,35 +665,58 @@ Lock-screen approval previews use locale-aware system-formatted absolute
 hour/minute expiry with the existing Danish/English templates, matching real
 approval notifications. Do not embed a relative phrase in an absolute template.
 
-## Orb appearance (P15-139)
+## Cognitive lattice orb (P15-143; 14 November 2026)
 
-The orb is a dark glass sphere with a cyan rim and an orange, filament-and-spark
-core, not a yellow light source. The web stage is the reference for the moving
-network; the iPhone canvas uses the same seeded geometry. Orb-specific values
-live in `apps/web/src/jarvis-orb-appearance.ts` and
-`apps/ios/Packages/JarvisCore/Sources/JarvisCore/Orb/JarvisOrbModel.swift`:
-cyan `#52dcfa`, orange `#ff8738`, and a radial orange glow from 12% opacity
-at the centre to transparent at 0.52 scene units (shell radius 1.12).
-Filament shading darkens orange to 80% green and 70% blue before the travelling
-signals lift it to the core colour. Core filaments and sparks use normal
-compositing rather than additive stacking; cyan rim and ribbons remain additive.
-The WebGL stage has no separate core halo; the miniature and native canvas
-use the radial glow. The widget uses a static simplified tangle because WidgetKit
-archives its shapes. Theme-specific web rim lighting remains adaptive.
+The Jarvis orb is the owner-approved **cognitive lattice** (`docs/ui/opening-final-2026-11-14/`): a dark glass
+sphere with a cyan limb on the left, a warm amber rim on the lower right and a soft inner highlight, around a
+procedurally drawn connected network. It is airy, not dense: 112 nodes in three layers (a cyan shell, two middle
+shells at different depths, a five-armed amber star at the heart) joined by 262 long, crisp connections that close
+into large triangular and star-shaped facets, so it reads as one connected brain. Connections come from a
+neighbourhood graph (two nodes join only when no third node sits between them), never from random links. It replaces every earlier orb: the
+iPhone, Live Activity and Dynamic Island, Home widgets, Apple Watch, the web stage and composer orbs, the app
+icon and the favicon. `docs/ui/cognitive-lattice-inventory.md` lists every surface.
 
-Idle breathes and stirs slowly; listening responds outward to input, thinking
-pulls the core inward, and speaking pushes it outward with playback. State
-weights and integrated phases make changes interruptible. Reduced Motion holds
-a still state; Live Activities and widgets use static artwork. The iPhone's
-current voice levels are synthetic, unlike the web's microphone/playback levels.
-The Watch uses a glyph rather than an orb. These are platform limitations, not
-claims of pixel-identical rendering.
+- **One generator, no image.** `JarvisLatticeModel` (JarvisCore, seed 1834) grows the topology; `JarvisLatticeScene`
+  poses it for a frame; the SwiftUI painter (`JarvisLatticeOrbView`) and the web Canvas painter only draw the
+  result. The web builds the same network from the same arithmetic and both are tested against
+  `apps/web/src/jarvis-lattice.golden.json`.
+- **Colour.** Bright cyan `#52dcfa` nodes and signals at the glass, glass-body blue `#247af2`, amber `#ffa62e`
+  heart with a `#ffbd4a` hot centre; connections blend from cyan through teal to amber with distance from the heart,
+  and the heart's warmth spreads outward as an orange glow along them. White is only a tiny spark at the very
+  centre; the core is never white-hot. Values
+  live in `JarvisOrbAppearance` (JarvisCore) and `jarvis-orb-appearance.ts`.
+- **Motion** (all inside the glass; the sphere, rim and position stay put and nothing spins):
+  neighbouring nodes light in short sequences along real connections; faint cyan signals travel inward along
+  existing connections to the heart; nine small clusters drift gently in depth, so the connected web shifts but
+  never changes topology; the heart pulses softly every 1.6 seconds.
+- **States keep their contracts.** Listening opens the lattice and lifts the cyan shell with the microphone
+  level; thinking and tool use draw it in, brighten the heart and speed up signals; speaking stretches it
+  sideways into flowing curves with the playback level; muted, reconnecting and offline lose colour. State
+  weights ease in and out, so a change never snaps. The iPhone levels are still synthetic, the web's are real.
+- **Detail by size.** 120 pt and up draws every node and connection; 56 to 120 pt keeps 103 connections and 74
+  nodes; below that, 39 hub nodes and 41 connections, drawn a little heavier. Live Activities, widgets and Watch
+  complications draw one still pose; Reduce Motion draws the same still pose everywhere.
+- **Where it moves.** The iPhone Gate, Voice, composer and the Watch voice strip animate (paused while the
+  app is inactive); a Live Activity shows the still pose for its phase (listening, speaking, thinking, muted).
+  The Watch voice action and the Voice Session complication show the still orb.
 
-The [before](docs/ui/screenshots/p15-139/web-stage-before.png) and
-[after](docs/ui/screenshots/p15-139/web-stage-after.png) images are the actual
-web stage in a reduced-motion Chromium/SwiftShader fixture, not device or
-live-voice evidence. iPhone, Live Activity, Dynamic Island and widget renders
-still need before/after capture and physical-device review.
+## Opening screen (P15-143; 14 November 2026)
+
+Shown on every **cold start**, never on a warm resume, over a static launch screen of the same dark colour
+(`LaunchBackground`). Composition from `jarvis-opening-selected.png`: the lattice orb centred, the white
+**Jarvis** name beneath, a dim, static background of seven small cyan nodes joined by long angular lines that run off the screen edges, two of
+them passing behind the orb (the orb's disc is cut out, so nothing is drawn over the sphere; the background stays
+clearly quieter than the orb). Every node has a link running toward the orb, lines and nodes carry a faint additive
+glow, and each line fades to about 40% as it nears the sphere, and a slim bar near the
+bottom (40% of the width, 3 pt, rounded, blue-grey track, amber `#fdcd51`) with no caption and no percentage.
+Startup progress cannot be measured, so the bar is an amber segment travelling along the track; a filled bar is
+used only if work reports real progress. Reduce Motion keeps the orb still and the bar segment fixed, breathing
+in opacity. VoiceOver reads "Opening Jarvis" (plus a percentage only for a measured bar).
+
+It ends when authentication and the first fresh Home data are ready (a forced Today refresh at cold start),
+or 8 seconds after authentication, whichever is first, then crossfades to Home over 0.3 s (0.15 s with
+Reduce Motion) without shrinking the orb. Sign-in, Face ID failure and retry screens take over through the same
+crossfade. Quick off switch: Settings > General > Opening screen (or `--no-opening` in debug builds).
 
 ## Shared control geometry (16 October 2026; local candidate)
 
@@ -3362,10 +3385,10 @@ and device provisioning; physical rendering and delivery remain device checks.
 One look, taken from the Chat header: Apple glass, 44 pt target, secondary accent icon. It exists once, as shared components, and every screen uses them.
 
 - **Buttons** (`JarvisControls.swift`): `JarvisIconButton` (glass, optional busy state and count badge), `JarvisLabelledButton` (text with optional icon, no large orange fill), `JarvisMenuButton` (glass icon that opens a menu), `JarvisSheetConfirmButton` (check) and `JarvisSheetCloseButton` (X), icon only. `JarvisComposerIconButton` stays orange with no background. `chrome: .onGlass` is for hosts that already draw glass (system toolbar, glass rows); the default `.glass` draws its own.
-- **Orb**: `JarvisOrb` wraps `JarvisOrbCanvas`, the native port of the web orb (dark glass sphere, cyan rim, orange and amber tangled core, live flowing motion). It is always square (fixed aspect ratio, circular clip) and scaled by size only. Home, the Gate, Voice, Chat and the Live Activity use it; no other orb drawing may exist.
+- **Orb**: `JarvisOrb` wraps `JarvisLatticeOrbView` (JarvisCore), the cognitive lattice orb (see the section above). It is always square (fixed aspect ratio, circular clip) and scaled by size only. The Gate, Voice, the lock-screen preview, Live Activities, widgets and the Watch use it; no other orb drawing may exist.
 - **Page scaffold**: `JarvisPageScaffold` is a transparent top bar with a bold left-aligned title of about 32 pt, trailing glass actions level with it, then a data-phrase headline, a hero and sections, on the shared ambient background. Home passes no title. Chat, Settings and Voice keep their own patterns.
 - **Rule**: never call `glassEffect`, define a `ButtonStyle`, or draw an orb in a screen file; to change the look, change the shared component. `JarvisDesignSystemGuardTests` enforces it.
-- **Gallery**: `JarvisComponentGallery` (debug builds only, launch argument `--component-gallery`, no user-facing entry) shows every button state, the orb at three sizes and the scaffold; `ComponentGalleryUITests` attaches a screenshot.
+- **Gallery**: `JarvisComponentGallery` (debug builds only, launch argument `--component-gallery`, no user-facing entry) shows every button state, the orb in every state and at five sizes, and the scaffold; `ComponentGalleryUITests` attaches a screenshot.
 - Apple documentation used: Human Interface Guidelines (Buttons, Toolbars, Materials); SwiftUI `Glass`, `glassEffect`, `ButtonStyle.glass` and `Button`.
 
 ### Native confirmed-action feedback (6 November 2026)

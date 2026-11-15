@@ -162,13 +162,7 @@ enum JarvisDesignTokens {
     static let chatConfirmationSummaryLines = 3
     static let chatPhotoCompressionQuality: CGFloat = 0.88
     static let voiceOrbStrokeWidth: CGFloat = 1.5
-    static let voiceOrbListeningPulse: CGFloat = 0.18
-    static let voiceOrbThinkingPulse: CGFloat = 0.12
-    static let voiceOrbSpeakingPulse: CGFloat = 0.24
     static let voiceOrbHaloInset: CGFloat = 28
-    static let voiceOrbListeningDuration: Double = 2.8
-    static let voiceOrbThinkingDuration: Double = 1.5
-    static let voiceOrbSpeakingDuration: Double = 0.9
     /// Floating glass buttons share the chat header button size everywhere.
     static let voiceControlDiameter: CGFloat = chatMinimumTapTarget
     static let voiceControlSpacing: CGFloat = 16
@@ -305,10 +299,6 @@ enum JarvisDesignTokens {
     static let gateActionAccent = primaryAccent
     static let gateActionForeground = primaryAccent
     static let gateFaceIDSymbolSize: CGFloat = 44
-    static let gateIdlePulse: CGFloat = 0.025
-    static let gateSigningPulse: CGFloat = 0.09
-    static let gateOrbIdleDuration: Double = 3.2
-    static let gateOrbSigningDuration: Double = 0.9
     /// The board's light glass fill (`--g-fill-bar`): white in light, deep blue-grey in dark.
     static let glassFill = adaptiveColor(
         light: UIColor(white: 1, alpha: 0.44),
@@ -319,9 +309,15 @@ enum JarvisDesignTokens {
         light: UIColor(red: 1, green: 150.0 / 255, blue: 40.0 / 255, alpha: 1),
         dark: UIColor(red: 1, green: 205.0 / 255, blue: 120.0 / 255, alpha: 1)
     )
-    static let orbCore = Color(red: 1, green: 0.34, blue: 0.12)
-    static let orbCoreHighlight = Color(red: 1, green: 0.69, blue: 0.28)
-    static let orbCoreEdgeOpacity: Double = 0.2
+
+    // The cold-start opening screen is always dark, whatever the theme (docs/ui/opening-final-2026-11-14).
+    static let openingBackground = Color(red: 2.0 / 255, green: 7.0 / 255, blue: 15.0 / 255)
+    static let openingTrack = Color(red: 29.0 / 255, green: 55.0 / 255, blue: 84.0 / 255)
+    static let openingAmber = Color(red: 253.0 / 255, green: 205.0 / 255, blue: 81.0 / 255)
+    static let openingLine = Color(red: 82.0 / 255, green: 220.0 / 255, blue: 250.0 / 255)
+    static let openingFadeDuration: Double = 0.3
+    static let openingReducedFadeDuration: Double = 0.15
+    static let openingBarCycle: Double = 1.5
 
     private static func adaptiveColor(light: UIColor, dark: UIColor) -> Color {
         Color(uiColor: UIColor { traits in

@@ -1,11 +1,12 @@
 import WatchConnectivity
 import WatchKit
 
-/// Budgeted refresh keeps installed complications useful without requiring the app to stay onscreen.
+/// Budgeted refresh plus HealthKit background delivery keep installed complications useful without the app onscreen.
 final class WatchAppDelegate: NSObject, WKApplicationDelegate {
     func applicationDidFinishLaunching() {
         Task { @MainActor in
             _ = WatchConnection.shared
+            WatchStepsMonitor.shared.start()
             scheduleNextRefresh()
         }
     }
@@ -16,6 +17,8 @@ final class WatchAppDelegate: NSObject, WKApplicationDelegate {
                 switch task {
                 case is WKApplicationRefreshBackgroundTask:
                     scheduleNextRefresh()
+                    // Steps come from this Watch's HealthKit, so they refresh even when the iPhone is out of reach.
+                    await WatchStepsMonitor.shared.refresh()
                     let connection = WatchConnection.shared
                     let activationDeadline = Date().addingTimeInterval(2)
                     while WCSession.default.activationState != .activated, Date() < activationDeadline {

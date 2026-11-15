@@ -42,6 +42,8 @@ public enum JarvisSettingsLocalizationKey: String, CaseIterable, Hashable, Senda
     case loadMore = "settings.loadMore"
     case showMore = "settings.showMore"
     case appearanceRow = "settings.row.appearance"
+    case openingScreen = "settings.openingScreen"
+    case openingScreenHint = "settings.openingScreen.hint"
     case personalityRow = "settings.row.personality"
     case identityRow = "settings.row.identity"
     case voiceRow = "settings.row.voice"

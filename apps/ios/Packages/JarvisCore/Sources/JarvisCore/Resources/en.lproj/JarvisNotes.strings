@@ -97,6 +97,8 @@
 "gate.signedOut" = "You are signed out";
 "gate.faceIDReason" = "Unlock Jarvis";
 "gate.faceIDLabel" = "Face ID";
+"opening.label" = "Opening Jarvis";
+"opening.progressValue" = "%d percent";
 "voice.captionYou" = "You";
 "voice.connecting" = "Connecting";
 "voice.reconnecting" = "Reconnecting";

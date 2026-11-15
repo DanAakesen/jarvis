@@ -46,6 +46,23 @@
 - Operate: `GET /proactive/outreach` lists recent outreach with tier, delivery and rating; `proactive.events` log lines carry counts and reasons, never message text. Events in `proactive_events` show their free-text `outcome`.
 - Not verifiable on Linux: native push delivery, rendered Now feed card, a real Terra call and real cost.
 
+## Cognitive lattice orb and opening screen — 14 November 2026 (P15-143 / #1834)
+
+- **Never draw an orb in a screen file.** Use `JarvisOrb` (app) or `JarvisLatticeOrbView` (JarvisCore; Watch, widgets).
+  To change the look, change `JarvisLatticePainter.swift` and `JarvisLatticeScene.swift`; if the model or scene arithmetic
+  changes, regenerate the golden file (`JARVIS_WRITE_LATTICE_GOLDEN=1 swift test --filter JarvisLatticeGoldenTests` in
+  `apps/ios/Packages/JarvisCore`) and update `jarvis-lattice.ts` until `npx vitest run src/jarvis-lattice.test.ts` passes.
+- **Checks.** `swift test` in `apps/ios/Packages/JarvisCore` (Linux, includes the lattice, golden and opening tests) and, in
+  `apps/web`, `npm run lint`, `npm run build`, `npx vitest run`. SwiftUI code compiles only on macOS CI (Apple build workflow).
+- **Debug launch arguments (simulator debug builds).** `--component-gallery` (orb in every state and size),
+  `--opening-preview` (holds the opening on screen), `--opening-preview --opening-progress=0.4` (measured bar),
+  `--widget-layout-gallery` (Home widget layouts), `--no-opening` (skip the opening). The opening's off switch for users is
+  Settings > General > Opening screen (`UserDefaults` key `jarvis.opening.enabled`, default on).
+- **Apple simulator evidence.** The Watch workflow captures opening, measured-progress, orb-gallery and widget-gallery
+  states in separate timeout-bounded steps, so one slow simulator capture does not prevent later gallery artifacts.
+- **Icons.** Regenerate from `docs/ui/opening-final-2026-11-14/cognitive-lattice-transparent.png`: iPhone and Watch
+  `AppIcon.appiconset/JarvisAppIcon.png` (Watch orb larger for the round mask) and the web icons in `apps/web/public`.
+
 ## Watch direct dictation — 12 November 2026 (#1807)
 
 - Only dictation has direct Watch backend access. Chat, tasks and live voice

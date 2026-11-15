@@ -208,6 +208,39 @@ Decisions:
 Open: none of this is verified on a paired Watch. The cause of the missing recognition
 result on the direct path is not proven; the new stage logs are meant to show it.
 
+## 14 November 2026 — How the cognitive lattice orb is built and where it stops (P15-143 / #1834)
+
+- **One generator.** The orb is grown, not drawn from an image: `JarvisLatticeModel` (seed 1834, 112 nodes in a
+  shell, two middle shells and a five-armed heart star, 262 connections) and `JarvisLatticeScene` (a pure per-frame pose) live in
+  JarvisCore, so the app, Live Activity, widgets and Watch share them and Linux CI tests them. The web builds the
+  same network from the same arithmetic; `apps/web/src/jarvis-lattice.golden.json` is the contract both test against
+  (regenerate with `JARVIS_WRITE_LATTICE_GOLDEN=1 swift test --filter JarvisLatticeGoldenTests` only on purpose).
+- **Contracts kept.** `JarvisOrbActivity`, `JarvisOrbState` and the wake/state/level model are unchanged apart from
+  two corrections: `input` now releases at 6/s instead of snapping to 0 when listening ends (web and Swift), and
+  the animator integrates a `flow` clock so faster signals never jump. The old whole-orb scale pulse was removed
+  because the brief keeps the glass steady. The microphone is never touched by the orb or the opening.
+- **Detail by size** (minimal below 56 pt, reduced to 120 pt, full above) keeps hubs readable at 18 pt and holds
+  frame cost down; widgets, Live Activities and Reduce Motion draw one still pose. Live Activities pose the orb for
+  the session phase.
+- **Watch.** The owner ruled the orb applies there too ("this is app wide, everywhere"), so the wave glyph is gone:
+  the orb is still in lists and the Voice Session complication and animates only in a live voice strip.
+- **Opening screen.** Cold start only, enforced by one gate model per process. It ends when authentication and one
+  forced Today refresh have settled (success or visible failure), or 8 seconds after authentication; no minimum
+  wait. Progress is never invented: the bar is a moving segment, and a measured fill exists only for work that
+  reports it (none does today). Sign-in and failure states crossfade to their own screens. The launch screen is the
+  same static dark colour. Quick off switch: Settings > General > Opening screen (a local setting, default on) and
+  `--no-opening` in debug.
+- **Icons.** The iPhone and Watch icons and the web favicon, touch and PWA icons are composited from
+  `cognitive-lattice-transparent.png` on the opening's near-black navy; the Watch version is larger for its round mask.
+- **Not decided here.** Dark and tinted iOS icon variants, a measured startup progress source, and real (not synthetic)
+  iPhone audio levels for the orb stay open.
+- **Verification state.** See PLAN.md. Simulator rendering was captured in macOS CI; device behaviour (Face ID timing,
+  Live Activity and WidgetKit rendering, VoiceOver, Reduce Motion, small screens) is not verified and needs the owner.
+
+## 15 November 2026 — Watch steps are read on the Watch (#1859)
+
+The owner reported the steps complication was "more than a half day behind". Cause: steps reached the complication only as an iPhone-built snapshot, requested over WatchConnectivity while the Watch app was running or on a 15-minute background refresh that needs the phone in reach, so with the phone away or asleep nothing refreshed. Decision: the Watch reads steps from its own HealthKit (`WatchStepsMonitor`: observer query, hourly background delivery, the existing 15-minute background refresh and a 60-second foreground loop), saves them into the existing shared health snapshot and reloads only the steps complication. Steps only grow within a day, so a lower Watch or iPhone count never replaces a higher one. Steps carry their own age (`stepsAt`, 20-minute freshness); a stale value stays visible with "Saved … ago", never presented as current. The widget extension does not read HealthKit itself, so only the Watch app needs the HealthKit and background-delivery entitlements. The timeline keeps its 15-minute `.after` policy. A statistics result with no quantities (access denied or no samples yet) is unavailable, never zero steps, and yesterday's count is not shown as today's. Readings only extend a snapshot the iPhone has pushed and are ignored after a phone sign-out (including queries already in flight), so they cannot repopulate the cleared cache. Paired-device behaviour (permission prompt, background delivery cadence, signing with the new capability) is unverified.
+
 ## 14 November 2026 — Inbox loop design and build plan recorded (#1836)
 
 The design (capture, note format, tools and prompts, nudge scheduling, feedback,

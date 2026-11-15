@@ -63,6 +63,7 @@ private struct JarvisSettingsGroup: Identifiable {
 struct JarvisSettingsArea: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Binding var storedTheme: String
+    @AppStorage(JarvisOpening.enabledKey) private var openingEnabled = true
 
     let client: JarvisSettingsClient?
     let onSignedOut: () -> Void
@@ -234,6 +235,16 @@ struct JarvisSettingsArea: View {
                         }
                         .textCase(nil)
                     }
+                }
+                if section == .general && search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Section {
+                        Toggle(copy(.openingScreen), isOn: $openingEnabled)
+                            .tint(JarvisDesignTokens.primaryAccent)
+                            .accessibilityIdentifier("settings.openingScreen")
+                    } footer: {
+                        Text(copy(.openingScreenHint))
+                    }
+                    .textCase(nil)
                 }
                 if section == .account && !visibleAccountActions.isEmpty {
                     Section { accountActions }

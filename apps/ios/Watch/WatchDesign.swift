@@ -1,3 +1,4 @@
+import JarvisCore
 import SwiftUI
 
 /// Watch-specific equivalents of the iOS shared controls; UIKit-backed controls cannot link into watchOS.
@@ -19,17 +20,17 @@ struct WatchSurface: ViewModifier {
         }
     }
 }
-struct WatchWave: View {
+/// The Jarvis orb on the Watch: the shared cognitive lattice from JarvisCore. Still unless a voice session is live,
+/// so a glyph in a list or complication costs no animation.
+struct WatchOrb: View {
+    var activity: JarvisOrbActivity = .calm
+    var isAnimated = false
+
     var body: some View {
-        GeometryReader { proxy in
-            let levels: [CGFloat] = [0.08, 0.13, 0.27, 0.55, 0.82, 1, 0.75, 0.48, 0.22, 0.4, 0.28, 0.18, 0.12, 0.08, 0.04]
-            HStack(spacing: max(1, proxy.size.width / 55)) {
-                ForEach(levels.indices, id: \.self) { i in
-                    Capsule().fill(LinearGradient(colors: [WatchStyle.amber, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
-                        .frame(height: max(2, proxy.size.height * levels[i]))
-                }
-            }.frame(height: proxy.size.height)
-        }.accessibilityHidden(true)
+        JarvisLatticeOrbView(activity: activity, isStatic: !isAnimated)
+            .aspectRatio(1, contentMode: .fit)
+            .clipShape(Circle())
+            .accessibilityHidden(true)
     }
 }
 struct WatchGlyph: View {
@@ -38,7 +39,7 @@ struct WatchGlyph: View {
     var body: some View {
         Group {
             switch kind {
-            case .voice: WatchWave()
+            case .voice: WatchOrb()
             case .dictate:
                 HStack(spacing: 2) {
                     WatchMiniWave()

@@ -30,6 +30,8 @@ targets:
       - path: Shared
       # The simulator gallery renders the extension's actual layouts, not copies.
       - path: Widgets/JarvisWidgetComponents.swift
+      - path: Widgets/JarvisHomeWidgetViews.swift
+      - path: Widgets/JarvisWidgetOrb.swift
       - path: Widgets/JarvisGymWidgetViews.swift
       - path: Widgets/JarvisFactoryWidgetViews.swift
       - path: Widgets/JarvisNotesWidgetViews.swift
@@ -66,6 +68,10 @@ targets:
     type: application
     platform: watchOS
     deploymentTarget: "26.0"
+    attributes:
+      SystemCapabilities:
+        com.apple.HealthKit:
+          enabled: 1
     sources:
       - path: Watch
       - path: Jarvis/VoiceAudioEngine.swift
@@ -129,7 +135,6 @@ targets:
     sources:
       - path: VoiceActivity
       - path: Shared
-      - path: Jarvis/JarvisOrbCanvas.swift
       - path: Jarvis/JarvisDesignSystem.swift
       - path: Jarvis/JarvisControls.swift
       - path: Jarvis/JarvisLoadingView.swift

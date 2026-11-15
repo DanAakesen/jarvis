@@ -12,7 +12,7 @@ concurrency:
 jobs:
   watch:
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Select Xcode
@@ -29,6 +29,8 @@ jobs:
           set -o pipefail
           xcodegen generate
           xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' -derivedDataPath "$RUNNER_TEMP/WatchBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/watch-build.log"
+          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
+          if [[ -n "$PHONE_ID" ]]; then xcrun simctl boot "$PHONE_ID" || true; fi
       - name: Compile release for physical Watch architectures
         working-directory: apps/ios
         run: |
@@ -77,6 +79,83 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/PhoneBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/phone-build.log"
+      - name: Capture iPhone opening screen
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
+          if [[ -z "$PHONE_ID" ]]; then
+            echo "::warning::No iPhone Pro simulator is available; iPhone screenshots were not captured."
+            exit 0
+          fi
+          APP="$RUNNER_TEMP/PhoneBuild/Build/Products/Debug-iphonesimulator/Jarvis.app"
+          OUT="$RUNNER_TEMP/iphone-screenshots"
+          mkdir -p "$OUT"
+          xcrun simctl boot "$PHONE_ID" || true
+          xcrun simctl bootstatus "$PHONE_ID" -b
+          xcrun simctl ui "$PHONE_ID" appearance dark
+          xcrun simctl install "$PHONE_ID" "$APP"
+          shot() { xcrun simctl io "$PHONE_ID" screenshot "$OUT/$1.png"; }
+          # Opening screen, held on screen by the debug preview flag: several instants show the network moving.
+          xcrun simctl launch --terminate-running-process "$PHONE_ID" com.danaakesen.jarvis --opening-preview
+          xcrun simctl io "$PHONE_ID" recordVideo --codec=h264 "$OUT/opening.mp4" & RECORDING=$!
+          sleep 3; shot opening-3s
+          sleep 1.6; shot opening-5s
+          sleep 1; kill -INT "$RECORDING"; wait "$RECORDING" || true
+
+      - name: Capture measured opening progress
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
+          if [[ -z "$PHONE_ID" ]]; then
+            echo "::warning::No iPhone Pro simulator; skipping the measured screenshot."
+            exit 0
+          fi
+          OUT="$RUNNER_TEMP/iphone-screenshots"
+          mkdir -p "$OUT"
+          shot() { xcrun simctl io "$PHONE_ID" screenshot "$OUT/$1.png"; }
+          xcrun simctl launch --terminate-running-process "$PHONE_ID" \
+            com.danaakesen.jarvis --opening-preview --opening-progress=0.4
+          sleep 10; shot opening-measured
+
+      - name: Capture iPhone orb gallery
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
+          if [[ -z "$PHONE_ID" ]]; then
+            echo "::warning::No iPhone Pro simulator; skipping orb-gallery screenshots."
+            exit 0
+          fi
+          OUT="$RUNNER_TEMP/iphone-screenshots"
+          mkdir -p "$OUT"
+          shot() { xcrun simctl io "$PHONE_ID" screenshot "$OUT/$1.png"; }
+          xcrun simctl launch --terminate-running-process "$PHONE_ID" \
+            com.danaakesen.jarvis --component-gallery
+          sleep 3; shot orb-gallery-3s
+          sleep 2.7; shot orb-gallery-5s
+
+      - name: Capture Home widget layouts
+        if: ${{ !cancelled() }}
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
+          if [[ -z "$PHONE_ID" ]]; then
+            echo "::warning::No iPhone Pro simulator; skipping Home widget layouts."
+            exit 0
+          fi
+          OUT="$RUNNER_TEMP/iphone-screenshots"
+          mkdir -p "$OUT"
+          shot() { xcrun simctl io "$PHONE_ID" screenshot "$OUT/$1.png"; }
+          xcrun simctl launch --terminate-running-process "$PHONE_ID" \
+            com.danaakesen.jarvis --widget-layout-gallery
+          sleep 3; shot widget-gallery
+          xcrun simctl terminate "$PHONE_ID" com.danaakesen.jarvis || true
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -87,3 +166,4 @@ jobs:
             ${{ runner.temp }}/watch-device-build.log
             ${{ runner.temp }}/phone-build.log
             ${{ runner.temp }}/watch-screenshots
+            ${{ runner.temp }}/iphone-screenshots

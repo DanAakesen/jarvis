@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var proactiveOpenError: String?
     private let chatClient: JarvisClient?
     private let startupError: String?
+    private let onColdStartData: (@MainActor () -> Void)?
     private let fixtureMode: Bool
     private let navigationFixtureMode: Bool
     private let settingsClient: JarvisSettingsClient?
@@ -37,8 +38,14 @@ struct ContentView: View {
         .default
     }
 
-    init(client: JarvisClient? = nil, webAppURL: URL? = nil, sessionEpoch: Int = 0) {
+    /// `onColdStartData` is passed only on a cold start: Home then loads fresh data once and reports when it has
+    /// settled, so the opening screen can end. It is never called by a timer.
+    init(
+        client: JarvisClient? = nil, webAppURL: URL? = nil, sessionEpoch: Int = 0,
+        onColdStartData: (@MainActor () -> Void)? = nil
+    ) {
         self.sessionEpoch = sessionEpoch
+        self.onColdStartData = onColdStartData
         _appliedSessionEpoch = State(initialValue: sessionEpoch)
         let arguments = ProcessInfo.processInfo.arguments
 #if targetEnvironment(simulator)
@@ -149,6 +156,11 @@ struct ContentView: View {
         .preferredColorScheme(themeColorScheme)
         .onDisappear { workspaceRuntime.resetSession() }
         .onAppear { openProactiveNotificationIfNeeded() }
+        .task {
+            guard let onColdStartData else { return }
+            if !fixtureMode { await todayModel.refresh(force: true) }
+            await onColdStartData()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .jarvisProactiveNotificationOpened)) { _ in
             openProactiveNotificationIfNeeded()
         }

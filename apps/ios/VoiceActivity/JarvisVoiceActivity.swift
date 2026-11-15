@@ -21,6 +21,7 @@ struct JarvisVoiceActivity: Widget {
                 DynamicIslandExpandedRegion(.leading) {
                     VoiceActivityMark(
                         diameter: 30,
+                        phase: context.state.phase,
                         language: .default,
                         status: voiceActivityStatusText(
                             context.state.phase, language: .default
@@ -100,6 +101,7 @@ struct JarvisVoiceActivity: Widget {
             } compactLeading: {
                 VoiceActivityMark(
                     diameter: 18,
+                    phase: context.state.phase,
                     language: context.attributes.appLanguage,
                     status: voiceActivityStatusText(
                         context.state.phase, language: context.attributes.appLanguage
@@ -116,6 +118,7 @@ struct JarvisVoiceActivity: Widget {
             } minimal: {
                 VoiceActivityMark(
                     diameter: 18,
+                    phase: context.state.phase,
                     language: context.attributes.appLanguage,
                     status: voiceActivityStatusText(
                         context.state.phase, language: context.attributes.appLanguage
@@ -135,11 +138,12 @@ private func voiceActivityStatusText(
 
 private struct VoiceActivityMark: View {
     let diameter: CGFloat
+    let phase: VoiceLiveActivityPhase
     let language: JarvisAppLanguage
     let status: String
 
     var body: some View {
-        JarvisOrb(activity: .calm, size: diameter, isStatic: true)
+        JarvisOrb(activity: JarvisOrbActivity(livePhase: phase), size: diameter, isStatic: true)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(VoiceLiveActivityCopy.title.text(language: language))
             .accessibilityValue(status)
@@ -185,7 +189,7 @@ struct VoiceLockScreenView: View {
         VStack(spacing: JarvisDesignTokens.liveActivitySpacing) {
             HStack(spacing: JarvisDesignTokens.rowSpacing) {
                 JarvisOrb(
-                    activity: .calm, size: JarvisDesignTokens.liveActivityOrbSize,
+                    activity: JarvisOrbActivity(livePhase: state.phase), size: JarvisDesignTokens.liveActivityOrbSize,
                     isStatic: true
                 )
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.compactSpacing) {
