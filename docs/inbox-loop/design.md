@@ -1,6 +1,6 @@
 # Inbox loop: design (P15-145, #1836)
 
-Status: **approved by the owner; build in progress under #1855 (P15-159), step 1 (vault store) built.** Sections below keep the original wording; the build order of #1855 supersedes the phase table in section 11.
+Status: **approved by the owner; build in progress under #1855 (P15-159), steps 1 (vault store) and 3 (index) built; step 2 is a pull request in the vault repo.** Sections below keep the original wording; the build order of #1855 supersedes the phase table in section 11.
 The owner decisions in [decisions.md](../decisions.md)
 and [p0.md](../../p0.md) are fixed inputs; everything marked *proposal* awaits owner review.
 
@@ -162,7 +162,7 @@ flowchart LR
 | Service | New backend module `apps/backend/src/inbox/` (TypeScript, Fastify); the only code that writes `Inbox/` | new |
 | Adapters | Jarvis tool registry; Fastify route; MCP via `@modelcontextprotocol/server` stateless handler (same library and pattern as `health/mcp/routes.ts`) | tools existing, others new |
 | Auth | Entra ID OAuth with a new connector app registration and `inbox.read` and `inbox.write` scopes (same pattern as `healthConnectorClientId`); hashed, revocable, write-only capture tokens for Shortcut and headless clients | pattern existing |
-| Index | Azure SQL (`mssql`), migration 0080, one table | new |
+| Index | Azure SQL (`mssql`), migration 0081, one table | new |
 | Model | Foundry gpt-5.6-luna through the existing proactive transport and spend ledger | existing |
 | Scheduler and push | Existing in-process proactive scheduler, insight push, push-to-chat | existing |
 
@@ -222,13 +222,13 @@ Related: [[Team]]
 | Size | One note ≤ 8 KB. Over that, the model must condense (the verbatim quote is capped at 4 KB). |
 | Secrets | Existing `shouldRedact` refusal applies to every write. |
 
-**Index** (proposal; migration `0080_inbox_items.sql`, one table, rebuildable):
+**Index** (proposal; migration `0081_inbox_items.sql`, one table, rebuildable):
 
 | Column | Why |
 | --- | --- |
 | `item_id` (PK, from the hidden comment; path-derived until the comment exists) | stable identity across renames |
 | `path`, `sha` | cache so a tick does not reread every note |
-| `capture_key` (unique) | idempotent capture |
+| (no `capture_key`) | Build decision: the capture id is the note's hidden id, so the vault answers idempotency and a rebuild cannot lose it; a row without a path is a reservation |
 | `last_nudged_at` | the one scheduling fact |
 | `last_feedback` (`up`/`down`/null), `last_feedback_at` | owner's two-value signal |
 
