@@ -5,6 +5,14 @@ complication: a Watch app that uses HealthKit needs both
 `NSHealthShareUsageDescription` and `NSHealthUpdateUsageDescription`. The Watch
 Info.plist now has both; the update string says Jarvis does not write to Health.
 
+## 15 November 2026 — PI direction: one harness agent, no runtime fallback, standing watches (#1872, P15-164)
+
+Owner decisions, recorded as given. The system is named PI (Proactive Intelligence). Routes 1 (PI brain) and 4 (chat and voice) on the managed Copilot harness are one plan: one agent, one long session, with Voice Live staying the realtime speech layer and calling the same agent. Decisions are LLM only to begin with; deterministic logic only where an exact result is required. Workers in the drawing are the coding sessions.
+
+**No runtime fallback.** PI is built on the harness and tested beside the old path; when the owner is happy, everything it replaces is deleted (custom agent loop, tool lookup, chat runtime path, the replaced parts of the one-shot proactive pipeline, dead tests, docs and infra). No fallback or compatibility code stays. Rollback is redeploying the previous release or reverting a commit. A test-only runtime selector is allowed while testing and is deleted in the cutover phases. Deletion is an explicit final phase with an inventory and a gate. This replaces the earlier "automatic fallback" wording in `docs/harness-trial/`. Consequence accepted by the choice: the harness is in public preview with no SLA, so after deletion a Foundry outage is a PI outage.
+
+**Standing watches.** The owner can ask PI to keep him updated on a build, topic, price, person or repo. A watch is a free-text vault note; the brain loop loads open watches as part of Get context; the model decides what is worth reporting; reports use the normal comms channels and are logged to the vault; the owner lists, changes and stops watches in chat or voice. Research found no documented way for the managed harness to wake itself (Foundry routines are preview with GitHub-issue events only; the reminder tool is documented for hosted agents), so the existing ticker is the waker and the vault is the truth. Plan: `docs/pi/plan.md`. Phase issues P15-165 to P15-173.
+
 ## 15 November 2026 — Loose Ends sweeps, spend ledger and switch-on (#1855, step 8)
 
 The daily missed-capture audit and the weekly deep review run inside the same

@@ -4,7 +4,9 @@ Analysis for [#1837](https://github.com/DanAakesen/jarvis/issues/1837) (P15-146)
 
 ## Verdict
 
-**Replace the brain of the Jarvis agent with one managed Copilot-harness agent in the same Foundry project. One agent serves chat, proactive runs and the inbox, with skills, subagents, MCP reach and a long-lived conversation. The backend becomes a gateway. Keep the current path as automatic fallback until the new one has earned the default.**
+**Replace the brain of the Jarvis agent with one managed Copilot-harness agent in the same Foundry project. One agent serves chat, proactive runs and the inbox, with skills, subagents, MCP reach and a long-lived conversation. The backend becomes a gateway. Build it beside the current path and test it; the current path is deleted once the owner is happy (no runtime fallback; see [the PI plan](../pi/plan.md)).**
+
+> 15 Nov 2026: the owner decided on **no runtime fallback** and on standing watches. Files 03 and 04 still describe an automatic fallback and a four-phase path; [docs/pi/plan.md](../pi/plan.md) supersedes those parts (phases, rollback, deletion).
 
 Smallest first step: a one-day spike on a new test agent in Foundry, capped at 30 DKK ([#1851](https://github.com/DanAakesen/jarvis/issues/1851), P15-158). Nothing in production changes.
 
