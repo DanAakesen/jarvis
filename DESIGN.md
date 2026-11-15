@@ -744,6 +744,9 @@ be alive with the states, and the lines and dots must not be static but fire "li
   for full effects and 20 fps calm), clipped around the orb's disc. It pauses while the app is inactive or the gate
   covers it, and Reduce Motion, the Settings switch (General > Background motion) and `.still` draw one fixed pose. No
   microphone is implied: the opening drives the network with the working state, never listening.
+- **Cheap path.** In the Simulator (software rendering) and on a device in Low Power Mode the background skips its soft
+  additive glow passes and draws at 20 fps (full) or 10 fps (calm); a device on normal power draws the quality path at
+  60 fps. Simulator captures therefore show the crisp lines, nodes and signals without the glow.
 - **Overlay window.** The gate and opening live in their own window, outside the app's scene, so SwiftUI never reported a
   scene phase there and the orb and background stood still. The overlay now reports the gate's own pause state as its
   scene phase, so both run, and still pause when the app is inactive.

@@ -26,6 +26,9 @@ battery, thermal behaviour, VoiceOver, Reduce Motion by hand (covered by unit te
 switch by hand, and a pause behind sheets (calm signals keep running behind a presented sheet; they are two faint
 20 fps signals at most). Needs a device: 60 fps on an iPhone 16 Pro Max class, battery, daylight look.
 
+Run 43762776242: the `watch` job failed only because capture steps hit their 8-minute bound (simulator launches took 2.5 to
+5 minutes, screenshots 1 to 2); compile steps passed. Response: the background draws a cheap path in the Simulator and in
+Low Power Mode, and the screenshot steps are `continue-on-error` with a 12-minute bound (compile steps stay strict).
 Next: owner review of the captures and a TestFlight build.
 
 ## PI (Proactive Intelligence) on the managed Copilot harness: plan — 15 November 2026 (#1872, P15-164)

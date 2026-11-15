@@ -28,6 +28,7 @@ public struct JarvisNeuralBackgroundView: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(JarvisNeuralEffects.motionEnabledKey) private var motionEnabled = true
     @State private var clock = JarvisNeuralClock()
+    @State private var isCheap = JarvisNeuralRendering.usesCheapPath
 
     /// `intensity` scales how bright the lines and signals are (1 on voice and the opening, less behind chat text).
     public init(
@@ -49,13 +50,13 @@ public struct JarvisNeuralBackgroundView: View {
     public var body: some View {
         GeometryReader { proxy in
             let geometry = JarvisNeuralGeometry(size: proxy.size, orb: orb)
-            let palette = JarvisNeuralPalette(isDark: colorScheme == .dark, saturation: activity.saturation)
+            let palette = JarvisNeuralPalette(isDark: colorScheme == .dark, saturation: activity.saturation, isCheap: isCheap)
             ZStack {
                 Canvas { context, _ in
                     JarvisNeuralPainter.paintNetwork(&context, geometry: geometry, palette: palette, intensity: intensity)
                 }
                 if !isStill {
-                    let interval = effects == .full ? 1.0 / 60.0 : 1.0 / 20.0
+                    let interval = JarvisNeuralRendering.frameInterval(effects, isCheap: isCheap)
                     TimelineView(.animation(minimumInterval: interval, paused: isPaused || scenePhase != .active)) { timeline in
                         let frame = clock.frame(at: timeline.date, activity: activity, effects: effects)
                         let scene = JarvisNeuralScene.make(layout: geometry.layout, frame: frame)
@@ -68,8 +69,33 @@ public struct JarvisNeuralBackgroundView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
+            isCheap = JarvisNeuralRendering.usesCheapPath
+        }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// When the background draws its cheap path: no additive glow passes and fewer frames. The Simulator renders in
+/// software (a 60 fps canvas of blended glows starves it and its capture tooling), and Low Power Mode asks apps to
+/// spend less. A device on normal power always gets the quality path.
+enum JarvisNeuralRendering {
+    static var usesCheapPath: Bool {
+#if targetEnvironment(simulator)
+        true
+#else
+        ProcessInfo.processInfo.isLowPowerModeEnabled
+#endif
+    }
+
+    static func frameInterval(_ effects: JarvisNeuralEffects, isCheap: Bool) -> Double {
+        switch (effects, isCheap) {
+        case (.full, false): 1.0 / 60.0
+        case (.full, true): 1.0 / 20.0
+        case (_, false): 1.0 / 20.0
+        case (_, true): 1.0 / 10.0
+        }
     }
 }
 
@@ -159,10 +185,13 @@ struct JarvisNeuralPalette {
     let warm: Color
     /// Dark backgrounds add light; light ones draw plain, softer strokes.
     let isDark: Bool
+    /// The cheap path skips the soft additive glow passes (the crisp lines, nodes and signals stay).
+    let isCheap: Bool
     private let components: (cool: (Double, Double, Double), warm: (Double, Double, Double))
 
-    init(isDark: Bool, saturation: Double) {
+    init(isDark: Bool, saturation: Double, isCheap: Bool = false) {
         self.isDark = isDark
+        self.isCheap = isCheap
         let cool = isDark
             ? (JarvisOrbAppearance.cool.r, JarvisOrbAppearance.cool.g, JarvisOrbAppearance.cool.b)
             : (20.0 / 255, 118.0 / 255, 141.0 / 255)
@@ -201,23 +230,27 @@ enum JarvisNeuralPainter {
         let strength = palette.isDark ? intensity : intensity * 1.25
         if !geometry.hasOrb {
             let center = geometry.orbCenter, radius = geometry.emberRadius
-            glow.fill(
-                Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)),
-                with: .radialGradient(
-                    Gradient(colors: [line.opacity(0.09 * strength), line.opacity(0)]),
-                    center: center, startRadius: 0, endRadius: radius
+            if !palette.isCheap {
+                glow.fill(
+                    Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)),
+                    with: .radialGradient(
+                        Gradient(colors: [line.opacity(0.09 * strength), line.opacity(0)]),
+                        center: center, startRadius: 0, endRadius: radius
+                    )
                 )
-            )
+            }
         }
         for link in network.links {
             let start = geometry.point(link[0]), end = geometry.point(link[1])
             var path = Path()
             path.move(to: start)
             path.addLine(to: end)
-            glow.stroke(
-                path, with: geometry.shading(from: start, to: end, color: line, opacity: 0.05 * strength),
-                style: StrokeStyle(lineWidth: 2.8, lineCap: .round)
-            )
+            if !palette.isCheap {
+                glow.stroke(
+                    path, with: geometry.shading(from: start, to: end, color: line, opacity: 0.05 * strength),
+                    style: StrokeStyle(lineWidth: 2.8, lineCap: .round)
+                )
+            }
             context.stroke(
                 path, with: geometry.shading(from: start, to: end, color: line, opacity: 0.18 * strength),
                 style: StrokeStyle(lineWidth: 0.7, lineCap: .round)
@@ -226,13 +259,15 @@ enum JarvisNeuralPainter {
         for index in network.nodes.indices where network.nodes[index].brightness > 0 {
             let p = geometry.point(index)
             let brightness = network.nodes[index].brightness
-            glow.fill(
-                Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)),
-                with: .radialGradient(
-                    Gradient(colors: [line.opacity(0.17 * brightness * strength), line.opacity(0)]),
-                    center: p, startRadius: 0, endRadius: 7
+            if !palette.isCheap {
+                glow.fill(
+                    Path(ellipseIn: CGRect(x: p.x - 7, y: p.y - 7, width: 14, height: 14)),
+                    with: .radialGradient(
+                        Gradient(colors: [line.opacity(0.17 * brightness * strength), line.opacity(0)]),
+                        center: p, startRadius: 0, endRadius: 7
+                    )
                 )
-            )
+            }
             context.fill(
                 Path(ellipseIn: CGRect(x: p.x - 1.4, y: p.y - 1.4, width: 2.8, height: 2.8)),
                 with: .color(line.opacity(0.7 * brightness * strength))
@@ -258,10 +293,12 @@ enum JarvisNeuralPainter {
             path.move(to: start)
             path.addLine(to: end)
             let lit = scene.linkGlow[index] * strength
-            glow.stroke(
-                path, with: geometry.shading(from: start, to: end, color: line, opacity: 0.16 * lit),
-                style: StrokeStyle(lineWidth: 3.2, lineCap: .round)
-            )
+            if !palette.isCheap {
+                glow.stroke(
+                    path, with: geometry.shading(from: start, to: end, color: line, opacity: 0.16 * lit),
+                    style: StrokeStyle(lineWidth: 3.2, lineCap: .round)
+                )
+            }
             context.stroke(
                 path, with: geometry.shading(from: start, to: end, color: line, opacity: 0.55 * lit),
                 style: StrokeStyle(lineWidth: 0.9, lineCap: .round)
@@ -272,13 +309,15 @@ enum JarvisNeuralPainter {
             let p = geometry.point(index)
             let level = scene.nodeGlow[index] * network.nodes[index].brightness * strength
             let reach = 9 + 9 * scene.nodeGlow[index]
-            glow.fill(
-                Path(ellipseIn: CGRect(x: p.x - reach, y: p.y - reach, width: reach * 2, height: reach * 2)),
-                with: .radialGradient(
-                    Gradient(colors: [line.opacity(0.5 * level), line.opacity(0)]),
-                    center: p, startRadius: 0, endRadius: reach
+            if !palette.isCheap {
+                glow.fill(
+                    Path(ellipseIn: CGRect(x: p.x - reach, y: p.y - reach, width: reach * 2, height: reach * 2)),
+                    with: .radialGradient(
+                        Gradient(colors: [line.opacity(0.5 * level), line.opacity(0)]),
+                        center: p, startRadius: 0, endRadius: reach
+                    )
                 )
-            )
+            }
             let radius = 1.4 + 1.4 * scene.nodeGlow[index]
             context.fill(
                 Path(ellipseIn: CGRect(x: p.x - radius, y: p.y - radius, width: radius * 2, height: radius * 2)),
@@ -300,17 +339,21 @@ enum JarvisNeuralPainter {
                 path.move(to: CGPoint(x: a.x, y: a.y))
                 path.addLine(to: CGPoint(x: b.x, y: b.y))
                 let ramp = Double(step + 1) / Double(steps)
-                glow.stroke(path, with: .color(tone.opacity(0.3 * level * ramp * ramp)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                if !palette.isCheap {
+                    glow.stroke(path, with: .color(tone.opacity(0.3 * level * ramp * ramp)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                }
                 context.stroke(path, with: .color(tone.opacity(min(1, 1.2 * level * ramp * ramp))), style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
             }
             let center = CGPoint(x: head.x, y: head.y)
-            glow.fill(
-                Path(ellipseIn: CGRect(x: head.x - 11, y: head.y - 11, width: 22, height: 22)),
-                with: .radialGradient(
-                    Gradient(colors: [tone.opacity(0.55 * level), tone.opacity(0)]),
-                    center: center, startRadius: 0, endRadius: 11
+            if !palette.isCheap {
+                glow.fill(
+                    Path(ellipseIn: CGRect(x: head.x - 11, y: head.y - 11, width: 22, height: 22)),
+                    with: .radialGradient(
+                        Gradient(colors: [tone.opacity(0.55 * level), tone.opacity(0)]),
+                        center: center, startRadius: 0, endRadius: 11
+                    )
                 )
-            )
+            }
             context.fill(
                 Path(ellipseIn: CGRect(x: head.x - 2.4, y: head.y - 2.4, width: 4.8, height: 4.8)),
                 with: .color(tone.opacity(min(1, 1.1 * level)))
@@ -319,13 +362,15 @@ enum JarvisNeuralPainter {
 
         for flare in scene.flares {
             let center = CGPoint(x: flare.x, y: flare.y)
-            glow.fill(
-                Path(ellipseIn: CGRect(x: flare.x - 30, y: flare.y - 30, width: 60, height: 60)),
-                with: .radialGradient(
-                    Gradient(colors: [line.opacity(0.38 * flare.strength * strength), line.opacity(0)]),
-                    center: center, startRadius: 0, endRadius: 30
+            if !palette.isCheap {
+                glow.fill(
+                    Path(ellipseIn: CGRect(x: flare.x - 30, y: flare.y - 30, width: 60, height: 60)),
+                    with: .radialGradient(
+                        Gradient(colors: [line.opacity(0.38 * flare.strength * strength), line.opacity(0)]),
+                        center: center, startRadius: 0, endRadius: 30
+                    )
                 )
-            )
+            }
         }
     }
 }

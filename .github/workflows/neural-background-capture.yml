@@ -36,6 +36,7 @@ jobs:
           xcodegen generate
           xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/PhoneBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/phone-build.log"
       - name: Capture the living background
+        continue-on-error: true
         timeout-minutes: 30
         run: |
           set -uo pipefail
