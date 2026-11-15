@@ -29,6 +29,8 @@ jobs:
           set -o pipefail
           xcodegen generate
           xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS Simulator' -derivedDataPath "$RUNNER_TEMP/WatchBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/watch-build.log"
+          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
+          if [[ -n "$PHONE_ID" ]]; then xcrun simctl boot "$PHONE_ID" || true; fi
       - name: Compile release for physical Watch architectures
         working-directory: apps/ios
         run: |
@@ -38,8 +40,6 @@ jobs:
         timeout-minutes: 5
         run: |
           set -euo pipefail
-          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
-          if [[ -n "$PHONE_ID" ]]; then xcrun simctl boot "$PHONE_ID" || true; fi
           WATCH_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | contains("Apple Watch")) | select(.name | contains("Ultra"))][0].udid // empty')"
           if [[ -z "$WATCH_ID" ]]; then
             echo "::warning::No Ultra simulator is available; Watch screenshots were not captured."
