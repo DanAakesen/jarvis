@@ -179,7 +179,7 @@ extension JarvisLatticeScene {
             let depth = 0.6 + 0.4 * ((a.z + b.z) / 4 + 0.5)
             let light = max(lit[edge.a], lit[edge.b]) * 0.75
             let length = ((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)).squareRoot()
-            let alpha = (0.36 + 0.34 * warmth) / (1 + length * (0.9 - 0.4 * warmth)) * gain * depth * detail.alphaScale + light * 0.4
+            let alpha = (0.28 + 0.42 * warmth) / (1 + length * (0.9 - 0.4 * warmth)) * gain * depth * detail.alphaScale + light * 0.4
             scene.edges.append(Edge(
                 ax: a.x, ay: a.y, cx: control.x, cy: control.y, bx: b.x, by: b.y,
                 warmth: warmth, alpha: min(1, alpha), light: light
@@ -205,7 +205,7 @@ extension JarvisLatticeScene {
                 x: p.x, y: p.y,
                 radius: node.size * (1 + 0.35 * lit[index]) * (1 + 0.1 * p.z) * detail.dotScale * coreBeat,
                 warmth: node.warmth, alpha: alpha,
-                halo: min(1, lit[index] * 0.8 + (node.rank == 0 ? 0.4 : 0))
+                halo: min(1, lit[index] * 0.8 + (node.rank == 0 ? 0.55 : 0.16))
             ))
         }
         let coreCount = Double(max(1, model.coreNodes.count))
@@ -252,7 +252,7 @@ extension JarvisLatticeScene {
         scene.heart = Heart(
             x: heartX, y: heartY,
             radius: 0.5 * (1 + 0.04 * pulse),
-            intensity: min(1.6, coreGain * beat * 0.5),
+            intensity: min(1.9, coreGain * beat * 0.6),
             heat: min(1, 0.35 + 0.3 * pulse + kick + 0.25 * busy + 0.3 * heldSpeech)
         )
         return scene

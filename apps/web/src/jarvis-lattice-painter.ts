@@ -1,5 +1,5 @@
 import { orbAppearance } from './jarvis-orb-appearance';
-import { latticeLineScale, detailMinimal, type LatticeScene, type SceneDot } from './jarvis-lattice';
+import { latticeLineScale, detailFull, detailMinimal, type LatticeScene, type SceneDot } from './jarvis-lattice';
 import { smoothstep, type OrbFrame } from './jarvis-orb-motion';
 
 /*
@@ -12,12 +12,12 @@ import { smoothstep, type OrbFrame } from './jarvis-orb-motion';
 type RGB = readonly [number, number, number];
 
 const edgeCool: RGB = [0.22, 0.70, 1.0];
-const edgeWarm: RGB = [1.0, 0.5, 0.07];
+const edgeWarm: RGB = [1.0, 0.42, 0.05];
 const nodeCool: RGB = [0.58, 0.92, 1.0];
 const edgeMiddle: RGB = [0.45, 0.78, 0.62];
 const nodeMiddle: RGB = [0.72, 0.9, 0.55];
 const nodeWarm: RGB = [1.0, 0.64, 0.16];
-const haze: RGB = [1.0, 0.42, 0.06];
+const haze: RGB = [1.0, 0.36, 0.04];
 const spark: RGB = [1.0, 0.93, 0.78];
 const signalCool: RGB = [0.45, 0.85, 1.0];
 const signalWarm: RGB = [1.0, 0.8, 0.4];
@@ -111,19 +111,19 @@ function paintHeartGlow(
   const x = px(heart.x);
   const y = py(heart.y);
   // A wide orange haze under a tighter amber glow: the warmth spreads outward from the heart.
-  const wide = heart.radius * radius * 2;
+  const wide = heart.radius * radius * 2.2;
   const haziness = context.createRadialGradient(x, y, 0, x, y, wide);
-  haziness.addColorStop(0, rgba(haze, heart.intensity * 0.38));
-  haziness.addColorStop(0.5, rgba(haze, heart.intensity * 0.17));
+  haziness.addColorStop(0, rgba(haze, heart.intensity * 0.28));
+  haziness.addColorStop(0.4, rgba(haze, heart.intensity * 0.13));
   haziness.addColorStop(1, rgba(haze, 0));
   context.fillStyle = haziness;
   context.beginPath();
   context.arc(x, y, wide, 0, Math.PI * 2);
   context.fill();
-  const reach = heart.radius * radius * 1.05;
+  const reach = heart.radius * radius * 1.25;
   const shading = context.createRadialGradient(x, y, 0, x, y, reach);
-  shading.addColorStop(0, rgba(edgeWarm, heart.intensity * 0.55));
-  shading.addColorStop(0.5, rgba(edgeWarm, heart.intensity * 0.2));
+  shading.addColorStop(0, rgba(edgeWarm, heart.intensity * 0.34));
+  shading.addColorStop(0.5, rgba(edgeWarm, heart.intensity * 0.12));
   shading.addColorStop(1, rgba(edgeWarm, 0));
   context.fillStyle = shading;
   context.beginPath();
@@ -142,10 +142,10 @@ function paintHeartCore(
   const { heart } = scene;
   const x = px(heart.x);
   const y = py(heart.y);
-  const reach = radius * 0.1 * (1 + heart.heat);
+  const reach = radius * 0.12 * (1 + heart.heat);
   const shading = context.createRadialGradient(x, y, 0, x, y, reach);
-  shading.addColorStop(0, rgba(appearance.hot, heart.heat * 0.7));
-  shading.addColorStop(0.4, rgba(appearance.warm, heart.heat * 0.3));
+  shading.addColorStop(0, rgba(appearance.hot, heart.heat * 0.75));
+  shading.addColorStop(0.4, rgba(appearance.warm, heart.heat * 0.4));
   shading.addColorStop(1, rgba(appearance.warm, 0));
   context.fillStyle = shading;
   context.beginPath();
@@ -197,14 +197,21 @@ function paintEdges(
     const warm = Math.trunc(key / alphaBuckets) % warmBuckets + 0.5;
     const alpha = (key % alphaBuckets + 0.5) * alphaStep;
     const tone = blend(edgeCool, edgeMiddle, edgeWarm, warm / warmBuckets);
-    context.lineWidth = width;
-    context.strokeStyle = rgba(tone, alpha);
-    context.stroke(path);
-    if (scene.detail !== detailMinimal) {
-      context.lineWidth = width * 4.5;
-      context.strokeStyle = rgba(tone, alpha * (0.1 + 0.26 * warm / warmBuckets));
+    const heat = warm / warmBuckets;
+    // Soft light first, widest to narrowest, so overlapping lines add up into translucent facets.
+    if (scene.detail === detailFull) {
+      context.lineWidth = width * 11;
+      context.strokeStyle = rgba(tone, alpha * (0.025 + 0.03 * heat));
       context.stroke(path);
     }
+    if (scene.detail !== detailMinimal) {
+      context.lineWidth = width * 4;
+      context.strokeStyle = rgba(tone, alpha * (0.1 + 0.1 * heat));
+      context.stroke(path);
+    }
+    context.lineWidth = width;
+    context.strokeStyle = rgba(tone, Math.min(1, alpha * (1.2 - 0.3 * heat)));
+    context.stroke(path);
   }
   context.lineWidth = width * 2.4;
   for (const [key, path] of glows) {
@@ -242,7 +249,7 @@ function paintDots(
     const r = Math.max(0.6, dot.radius * radius);
     const x = px(dot.x);
     const y = py(dot.y);
-    if (dot.halo > 0.05) paintHalo(context, x, y, r * 3.6, blend(nodeCool, nodeMiddle, nodeWarm, dot.warmth), dot.halo * 0.42);
+    if (dot.halo > 0.05) paintHalo(context, x, y, r * 4.5, blend(nodeCool, nodeMiddle, nodeWarm, dot.warmth), Math.min(1, dot.halo * 0.5));
     const key = Math.min(3, Math.trunc(dot.warmth * 4)) * 6 + Math.min(5, Math.trunc(dot.alpha * 6));
     let path = bodies.get(key);
     if (!path) {
@@ -334,7 +341,7 @@ function paintLimb(context: CanvasRenderingContext2D, scene: LatticeScene, frame
   const m = frame.motion;
   const lift = (0.55 + 0.45 * m.awake) * (1 + 0.25 * m.surge + 0.2 * m.listen * m.input)
     * clamp(0.7 + 0.3 * scene.outerGain, 0, 1.3);
-  const cyan: RGB = [0.42, 0.88, 1.0];
+  const cyan: RGB = [0.3, 0.86, 1.0];
   const blue: RGB = [0.16, 0.5, 0.95];
   const amber: RGB = [1.0, 0.44, 0.06];
   const stops: [number, RGB, number][] = [
@@ -351,23 +358,29 @@ function paintLimb(context: CanvasRenderingContext2D, scene: LatticeScene, frame
     context.stroke();
   };
   if (scene.detail !== detailMinimal) {
-    ring(0.05, 0.08, 0.3);
-    ring(0.02, 0.034, 0.7);
+    ring(0.09, 0.16, 0.2);
+    ring(0.05, 0.08, 0.4);
+    ring(0.02, 0.036, 0.8);
   }
-  ring(0.006, 0.014, 1);
-  ring(0.003, 0.005, 0.9);
+  ring(0.008, 0.018, 1);
+  ring(0.003, 0.006, 1);
   if (scene.detail !== detailMinimal) {
-    // The soft inner highlight sits just inside the cyan side.
-    const sheen = context.createConicGradient(0, half, half);
-    sheen.addColorStop(0, rgba(cyan, 0));
-    sheen.addColorStop(150 / 360, rgba(cyan, 0));
-    sheen.addColorStop(215 / 360, rgba([0.8, 0.95, 1.0], 0.2 * lift));
-    sheen.addColorStop(275 / 360, rgba(cyan, 0));
-    sheen.addColorStop(1, rgba(cyan, 0));
-    context.strokeStyle = sheen;
-    context.lineWidth = radius * 0.1;
-    context.beginPath();
-    context.arc(half, half, radius * 0.93, 0, Math.PI * 2);
-    context.stroke();
+    // The inner highlight and the specular glint: light catching the upper left of the glass.
+    const bright: RGB = [0.82, 0.97, 1.0];
+    const highlight = (from: number, peak: number, to: number, width: number, inset: number, level: number) => {
+      const sheen = context.createConicGradient(0, half, half);
+      sheen.addColorStop(0, rgba(cyan, 0));
+      sheen.addColorStop(from / 360, rgba(cyan, 0));
+      sheen.addColorStop(peak / 360, rgba(bright, level * lift));
+      sheen.addColorStop(to / 360, rgba(cyan, 0));
+      sheen.addColorStop(1, rgba(cyan, 0));
+      context.strokeStyle = sheen;
+      context.lineWidth = radius * width;
+      context.beginPath();
+      context.arc(half, half, radius * (1 - inset), 0, Math.PI * 2);
+      context.stroke();
+    };
+    highlight(140, 218, 290, 0.12, 0.07, 0.3);
+    highlight(168, 222, 262, 0.022, 0.014, 0.95);
   }
 }
