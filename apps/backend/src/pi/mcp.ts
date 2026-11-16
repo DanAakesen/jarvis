@@ -66,11 +66,11 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
       description: 'Jarvis tools are not listed. Look one up by a few keywords to get its description and argument schema, then use call_tool. Pass the turn reference from the current message.',
       inputSchema: findSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    }, async (input) => {
+    }, async (input, ctx) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: 'find_tools', outcome: 'refused', result: { refused: unknownTurn } }, true);
       // GitHub's tools are searched like Jarvis's own, so only the ones a turn asks for are ever put in front of the model.
-      const githubTools = github ? await github.tools(signal) : [];
+      const githubTools = github ? await github.tools(AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal])) : [];
       const catalogue: ToolRegistry = githubTools.length === 0 ? app.jarvisTools : {
         list: () => [...app.jarvisTools.list(), ...githubTools],
         get: (name) => app.jarvisTools.get(name) ?? githubTools.find((tool) => tool.name === name),

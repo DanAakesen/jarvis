@@ -49,6 +49,16 @@ describe('the GitHub bridge', () => {
     await expect(bridge.call('issue_read', {}, signal())).rejects.toThrow('not_a_github_tool');
   });
 
+  it('does not make a search wait for a stalled GitHub, and stops waiting when the turn is cancelled', async () => {
+    const stalled = createGithubBridge({ url: 'https://gh.example', token: 't', fetch: (async (_url: string, init: RequestInit) => new Promise((_, reject) => {
+      init.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+    })) as unknown as typeof fetch });
+    const turn = new AbortController();
+    const waiting = stalled.tools(turn.signal);
+    turn.abort(new Error('turn cancelled'));
+    await expect(waiting).rejects.toThrow('turn cancelled');
+  });
+
   it('opens a new session when the old one expired, and answers with an empty list instead of failing when GitHub is down', async () => {
     const expiring = server({ sse: true, expireOnce: true });
     const bridge = createGithubBridge({ url: 'https://gh.example/mcp/x/all', token: 'github_pat_x', fetch: expiring.fetchStub });

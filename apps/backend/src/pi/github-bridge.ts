@@ -6,6 +6,8 @@ export const githubToolPrefix = 'gh_';
 const protocolVersion = '2025-06-18';
 const listTtlMs = 30 * 60_000;
 const maxPages = 10;
+/** A search of the local tools must not wait long for GitHub's catalogue. */
+const listTimeoutMs = 8_000;
 
 interface RemoteTool { readonly name: string; readonly description?: string; readonly inputSchema?: Record<string, unknown> }
 interface RpcResponse { readonly result?: Record<string, unknown>; readonly error?: { readonly message?: string } }
@@ -51,6 +53,7 @@ export function createGithubBridge(options: { readonly url: string; readonly tok
   let session: string | undefined | null = null;
   let counter = 0;
   let listed: { readonly at: number; readonly tools: readonly RegisteredTool[] } | undefined;
+  let refreshing: Promise<void> | undefined;
 
   const headers = (extra: Record<string, string> = {}): Record<string, string> => ({
     authorization: `Bearer ${options.token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream',
@@ -112,14 +115,18 @@ export function createGithubBridge(options: { readonly url: string; readonly tok
   return {
     async tools(signal) {
       if (listed && now() - listed.at < listTtlMs) return listed.tools;
-      try {
-        listed = { at: now(), tools: await fetchTools(signal) };
-      } catch (error) {
-        if (signal.aborted) throw error;
-        // Keep the last list, and try again after a minute instead of on every search.
-        listed = { at: now() - listTtlMs + 60_000, tools: listed?.tools ?? [] };
-      }
-      return listed.tools;
+      // One refresh at a time, shared by every search that arrives meanwhile, and bounded: a slow GitHub costs a search a few
+      // seconds once, then the last list (or none) is used for a minute.
+      refreshing ??= fetchTools(AbortSignal.timeout(listTimeoutMs))
+        .then((tools) => { listed = { at: now(), tools }; }, () => {
+          listed = { at: now() - listTtlMs + 60_000, tools: listed?.tools ?? [] };
+        })
+        .finally(() => { refreshing = undefined; });
+      await Promise.race([refreshing, new Promise<never>((_, reject) => {
+        if (signal.aborted) reject(signal.reason);
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      })]);
+      return listed?.tools ?? [];
     },
 
     async call(name, args, signal) {
