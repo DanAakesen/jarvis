@@ -53,6 +53,12 @@ export interface PiStore {
   /** A chat message the brain sent: the daily limit and the repeat check read these. */
   recordMessage(message: PiMessageRecord, at: Date, signal: AbortSignal): Promise<void>;
   messagesSince(from: Date, signal: AbortSignal): Promise<{ readonly count: number; readonly textHashes: readonly string[] }>;
+  /** One look at a standing watch, recorded when the wake records it. The cost is filled in when the wake ends. */
+  recordLook(watch: string, runId: string, at: Date, signal: AbortSignal): Promise<void>;
+  /** Gives every look of a wake its share of what the wake cost. */
+  allocateRunCost(runId: string, perLookDkk: number, signal: AbortSignal): Promise<void>;
+  /** Looks and cost per watch since `from`, with the time of the latest look. */
+  watchActivity(from: Date, signal: AbortSignal): Promise<readonly { readonly watch: string; readonly looks: number; readonly costDkk: number; readonly lastLookAt: Date }[]>;
 }
 
 export function createMemoryPiStore(now: () => Date = () => new Date()): PiStore & { readonly turns: PiStoredTurn[]; readonly messages: (PiMessageRecord & { readonly at: Date })[] } {
@@ -60,6 +66,7 @@ export function createMemoryPiStore(now: () => Date = () => new Date()): PiStore
   const turns: PiStoredTurn[] = [];
   const messages: (PiMessageRecord & { at: Date })[] = [];
   const switches = new Map<string, { enabled: boolean; updatedAt: Date }>();
+  const looks: { watch: string; runId: string; at: Date; costDkk: number }[] = [];
   return {
     turns, messages,
     async getConversation(owner) { return conversations.get(owner) ?? null; },
@@ -91,6 +98,19 @@ export function createMemoryPiStore(now: () => Date = () => new Date()): PiStore
     async messagesSince(from) {
       const inRange = messages.filter(message => message.at >= from);
       return { count: inRange.length, textHashes: inRange.map(message => message.textHash) };
+    },
+    async recordLook(watch, runId, at) { looks.push({ watch, runId, at, costDkk: 0 }); },
+    async allocateRunCost(runId, perLookDkk) { for (const look of looks) if (look.runId === runId) look.costDkk = perLookDkk; },
+    async watchActivity(from) {
+      const byWatch = new Map<string, { looks: number; costDkk: number; lastLookAt: Date }>();
+      for (const look of looks.filter(entry => entry.at >= from)) {
+        const row = byWatch.get(look.watch) ?? { looks: 0, costDkk: 0, lastLookAt: look.at };
+        row.looks += 1;
+        row.costDkk += look.costDkk;
+        if (look.at > row.lastLookAt) row.lastLookAt = look.at;
+        byWatch.set(look.watch, row);
+      }
+      return [...byWatch].map(([watch, row]) => ({ watch, ...row }));
     },
   };
 }

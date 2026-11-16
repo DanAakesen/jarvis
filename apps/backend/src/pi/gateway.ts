@@ -466,7 +466,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   async function runBrain(input: { readonly runId: string; readonly body: string }, signal: AbortSignal): Promise<PiBrainRunResult> {
     const started = performance.now();
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(options.brainTimeoutMs ?? 240_000)]);
-    const run: PiBrainRun = { runId: input.runId, sent: [], wrote: [] };
+    const run: PiBrainRun = { runId: input.runId, sent: [], wrote: [], looked: [] };
     let grant: PiTurnGrant | undefined;
     let usage: PiUsage | undefined;
     let firstTextMs: number | null = null;

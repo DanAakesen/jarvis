@@ -60,7 +60,7 @@ function setup() {
     const text = JSON.parse(line.slice(5)).result.content[0].text as string;
     return JSON.parse(text) as { outcome: string; result: Record<string, unknown> };
   }
-  const wake = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '', brain: { runId: 'run-1', sent: [], wrote: [] }, signal: live() });
+  const wake = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '', brain: { runId: 'run-1', sent: [], wrote: [], looked: [] }, signal: live() });
   const chat = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '41', signal: live() });
   return { app, registry, tool, wake, chat, vault, pushes, conversations };
 }

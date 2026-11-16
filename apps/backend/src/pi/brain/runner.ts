@@ -6,6 +6,7 @@ import type { QueuedEvent } from '../../proactive/events/types.js';
 import type { ProactiveStore } from '../../proactive/store.js';
 import { copenhagenDayStart, isQuietHour, monthKey } from '../../proactive/time.js';
 import { PI_MODEL } from '../definition.js';
+import type { PiBrainRun } from '../turns.js';
 import type { PiGateway } from '../gateway.js';
 import type { PiStore } from '../store.js';
 import { BrainCommsRefusal, type BrainComms } from './comms.js';
@@ -17,6 +18,7 @@ export const MIN_WAKE_GAP_MS = 10 * 60_000;
 export const MAX_WAKES_PER_DAY = 12;
 const LEASE_MS = 6 * 60_000;
 const HOUR_MS = 60 * 60_000;
+const RETRY_MS = 5 * 60_000;
 const timerMaxAgeMs = HOUR_MS;
 const defaultMaxAgeMs = 24 * HOUR_MS;
 /** What one wake may cost at worst, for the budget check before it starts: a long prompt and a long answer at the model's price. */
@@ -40,7 +42,9 @@ export interface BrainOptions {
   readonly extras?: {
     /** When something besides the queue is due, so the wake is not missed. */
     nextDueAt(signal: AbortSignal): Promise<Date | null>;
-    sections(now: Date, signal: AbortSignal): Promise<{ sections: readonly string[]; lines: readonly string[] }>;
+    sections(now: Date, signal: AbortSignal): Promise<{ sections: readonly string[]; lines: readonly string[]; due: readonly string[] }>;
+    /** After a wake: what it cost, and what woke it, so each watch looked at can be given its share. */
+    afterRun(input: { runId: string; costDkk: number; events: number; run: PiBrainRun; due: readonly string[] }, signal: AbortSignal): Promise<void>;
   } | undefined;
 }
 
@@ -89,7 +93,7 @@ export function createBrain(options: BrainOptions) {
     const text = state === 'warn'
       ? `PI has used ${spent.toFixed(0)} of its ${limit.toFixed(0)} DKK proactive budget this month. I will be more sparing.`
       : `PI has used its ${limit.toFixed(0)} DKK proactive budget for this month, so it has stopped looking on its own. Chat still works. You can raise the budget in the proactive settings, or it starts again next month.`;
-    try { await options.comms.send({ text }, { runId: 'budget', sent: [], wrote: [] }, signal); } catch (error) {
+    try { await options.comms.send({ text }, { runId: 'budget', sent: [], wrote: [], looked: [] }, signal); } catch (error) {
       // Kept only once Dan has it (or already had exactly this today); any other refusal or failure is tried again on a later tick.
       if (!(error instanceof BrainCommsRefusal && error.reason === 'duplicate')) notified.delete(key);
       log('warn', { reason: 'budget_notice_failed' });
@@ -105,7 +109,14 @@ export function createBrain(options: BrainOptions) {
     const settings = await proactive.settings.read();
     if (settings.paused) return result('paused');
     const queueDue = await queue.hasWork(current);
-    const extraDue = options.extras ? await options.extras.nextDueAt(signal) : null;
+    let extraDue: Date | null = null;
+    if (options.extras) {
+      try { extraDue = await options.extras.nextDueAt(signal); } catch {
+        // The vault could not be read, so what is due is unknown: look again in a few minutes, without a model call.
+        wake(new Date(current.getTime() + RETRY_MS));
+        log('warn', { reason: 'watches_unavailable' });
+      }
+    }
     const extraNow = extraDue !== null && extraDue <= current;
     if (!queueDue && !extraNow) return result('empty');
     const sinceLast = current.getTime() - lastWakeAt;
@@ -146,7 +157,17 @@ export function createBrain(options: BrainOptions) {
     if (settled.length > 0) await queue.settle(settled, current);
     if (survivors.length === 0 && !extraNow) return result('filtered', claimed.length);
 
-    const extra = options.extras ? await options.extras.sections(current, signal) : { sections: [], lines: [] };
+    let extra: { sections: readonly string[]; lines: readonly string[]; due: readonly string[] } = { sections: [], lines: [], due: [] };
+    if (options.extras) {
+      try { extra = await options.extras.sections(current, signal); } catch {
+        // Without the open watches a wake would miss what the events are about; keep the events and try again shortly.
+        const retryAt = new Date(current.getTime() + RETRY_MS);
+        if (survivors.length > 0) await queue.retryLater(survivors.map(({ id }) => id), retryAt);
+        wake(retryAt);
+        log('warn', { reason: 'watches_unavailable' });
+        return result('watches_unavailable', claimed.length);
+      }
+    }
     const runId = (options.newRunId ?? randomUUID)();
     // Counted before the call, so a failing or crashing wake still uses up the daily allowance.
     await queue.startBatch(runId, current, survivors.length);
@@ -162,6 +183,8 @@ export function createBrain(options: BrainOptions) {
         estimatedDkk: outcome.costDkk, createdAt: at,
       }).catch(() => log('warn', { reason: 'spend_record_failed' }));
     }
+    await options.extras?.afterRun({ runId, costDkk: outcome.costDkk, events: survivors.length, run: outcome.run, due: extra.due }, signal)
+      .catch(() => log('warn', { reason: 'watch_cost_not_recorded' }));
     if (outcome.ok) {
       await queue.settle(survivors.map(({ id }) => ({ id, outcome: `brain wake ${runId.slice(0, 8)}`, batchId: runId })), at);
     } else {
@@ -189,8 +212,9 @@ export function createBrain(options: BrainOptions) {
     async start(): Promise<void> {
       const due = await queue.nextDueAt();
       if (due) wake(due);
-      const extraDue = options.extras ? await options.extras.nextDueAt(AbortSignal.timeout(15_000)).catch(() => null) : null;
-      if (extraDue) wake(extraDue);
+      const extraDue = options.extras ? await options.extras.nextDueAt(AbortSignal.timeout(15_000)).catch(() => 'retry' as const) : null;
+      if (extraDue === 'retry') wake(new Date(now().getTime() + RETRY_MS));
+      else if (extraDue) wake(extraDue);
     },
     /** One pass. Idle without a database read when nothing is due. */
     tick(signal: AbortSignal): Promise<BrainTick> {
@@ -202,8 +226,9 @@ export function createBrain(options: BrainOptions) {
         if (!['off', 'paused', 'budget_exhausted', 'daily_cap', 'spaced'].includes(tick.outcome)) {
           const due = await queue.nextDueAt().catch(() => null);
           if (due) wake(new Date(Math.max(due.getTime(), lastWakeAt + MIN_WAKE_GAP_MS)));
-          const extraDue = options.extras ? await options.extras.nextDueAt(signal).catch(() => null) : null;
-          if (extraDue) wake(new Date(Math.max(extraDue.getTime(), lastWakeAt + MIN_WAKE_GAP_MS)));
+          const extraDue = options.extras ? await options.extras.nextDueAt(signal).catch(() => 'retry' as const) : null;
+          if (extraDue === 'retry') wake(new Date(now().getTime() + RETRY_MS));
+          else if (extraDue) wake(new Date(Math.max(extraDue.getTime(), lastWakeAt + MIN_WAKE_GAP_MS)));
         }
         return tick;
       }, (error: unknown) => {

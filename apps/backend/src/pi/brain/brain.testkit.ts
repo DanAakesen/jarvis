@@ -76,7 +76,7 @@ export function scriptedGateway(
   return {
     wakes,
     async runBrain(input) {
-      const run: PiBrainRun = { runId: input.runId, sent: [], wrote: [] };
+      const run: PiBrainRun = { runId: input.runId, sent: [], wrote: [], looked: [] };
       const wake = { runId: input.runId, body: input.body, run };
       wakes.push(wake);
       const decision = await decide(wake);

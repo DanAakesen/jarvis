@@ -1,3 +1,7 @@
+## PI standing watches — 16 November 2026 (#1886, P15-175)
+
+No new screen: watches are listed, changed and stopped in chat or by voice, in plain sentences (name, next look, looks today, an estimated cost in DKK with the word "estimate"). The reply to "keep me updated on X" is one sentence: what is watched and when the first look is. A report from a watch is an ordinary Jarvis chat message and push, only when something changed that matters; there is never a "still waiting" message. The Watch is parked and was not touched.
+
 ## PI brain test switch in iOS — 16 November 2026 (#1886, P15-175)
 
 A second section under the PI engine switch in Settings, General, titled "PI brain (test)", with the same temporary status as the engine switch. A native toggle turns the brain on or off (saved on the backend, so it holds on every device); it is disabled, with the status row saying why, while the app has no backend, a request is running, or the backend has no brain ("Not set up on this backend"). Rows show the status (On, Off, Paused in proactive settings), the proactive budget used against its limit with plain text for "Almost used" and "Used: the brain has stopped" (red text for the stop, never colour alone), wakes and DKK this month, messages today, the last wake (outcome, time, DKK) and, only when above zero, decision-log entries waiting for the vault. A refresh button uses the shared labelled button; a loading row and a red error line cover the other states. Not inspected on a device or simulator: it compiles only in the Apple CI.

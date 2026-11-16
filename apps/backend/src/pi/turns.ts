@@ -16,6 +16,8 @@ export interface PiBrainRun {
   readonly sent: { readonly title: string | null; readonly text: string; readonly messageId: string }[];
   /** Notes written to the vault area in this run: path only, never content. */
   readonly wrote: string[];
+  /** Standing watches this run recorded a look at. */
+  readonly looked: string[];
 }
 
 export interface PiTurnGrant {

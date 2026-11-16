@@ -1,3 +1,10 @@
+## PI standing watches (#1886, P15-175)
+
+- Needs everything from the brain section plus migration `0088_pi_watch_look.sql`. The watches live in the vault under `PI/Watches` (closed ones in `PI/Watches/Closed`); read or edit them like any note. A hand-edited note is picked up after the next restart; the hidden last line sets the next look.
+- Use: say "keep me updated on X" in chat or voice; "what are you watching" lists them with next look, looks today and the estimated cost; "change" and "stop" work in words. Limits: 10 open, 8 looks a day each, 5 minutes apart.
+- Foundry wake-up probe (manual, about 0.3 DKK, about 10 minutes): Deploy with input `probe_pi_wake`. It creates the throwaway agent `jarvis-pi-probe`, tries the reminder tool and a one-off timer routine, writes what it observed to the job log and summary, and deletes the agent and routine. Paste the table into `docs/harness-trial/spike-results.md`.
+- Local checks: `cd apps/backend && npx vitest run src/pi`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; the SQL contract with the loopback SQL Server container.
+
 ## PI brain: turn it on and watch it (#1886, P15-175)
 
 - Needs: PI configured (the Deploy `pi-agent` job), `JARVIS_PROACTIVE_ENABLED` (it is already on in Bicep), the vault (the decision log lives there), migration `0087_pi_brain.sql` (applied by the normal migration step), and `JARVIS_PROACTIVE_EVENTS_ENABLED` **off** (the old pipeline; both on stops the backend at startup).

@@ -1,3 +1,17 @@
+## 16 November 2026 — PI phase 5: standing watches inside the loop (#1886, P15-175, part 3)
+
+Owner brief, quoted: "Standing watches must work inside the loop (free-text notes in the vault, woken by our own small ticker; record test results of Foundry routines and the reminder tool)". Rules as before: no fallbacks, LLM-only decisions, free-form with minimal fixed fields.
+
+| Choice | Why |
+| --- | --- |
+| A watch is a note in `PI/Watches` with one exact field, the next look, as a hidden last line | The waker needs an exact instant; everything else is prose the model and Dan own. The vault is the truth and the index is rebuilt from it |
+| Only Dan's message opens or changes a watch; a wake can look and stop | Text read by a watch (web pages, feeds) is untrusted. A wake cannot create or widen a watch, start a Worker, send mail or write outside `PI/` |
+| Exact limits: 10 open, 8 looks a day each, 5 minutes apart; a limit moves the next look instead of leaving the watch due | The plan's proposal, kept. Without the move, a limit would make the same watch wake the brain every 10 minutes at a cost |
+| Cost per watch is an estimate: a wake's cost is split evenly over what woke it | Wakes are batched on purpose (the fixed prompt is paid once), so exact attribution does not exist. It is labelled as an estimate everywhere it is shown |
+| Watches spend on the shared proactive ledger and its 100 DKK stop | One budget, one stop; no second meter |
+| Foundry routines and the reminder tool are tested by a manual probe on a throwaway agent, not adopted | The platform's wake-ups are preview, cover GitHub issues only (routines) or hosted agents (reminder tool) as documented, and would put the schedule where Dan cannot list or stop it from chat. The probe records what really happens; our ticker stays the waker either way |
+| No watch UI in the app; list, change and stop are chat and voice | The owner asked for them "from chat"; the Watch is parked |
+
 ## 16 November 2026 — PI phase 4: the brain loop (#1886, P15-175, part 2)
 
 Owner rules, quoted from the brief: no fallbacks, no dual or shadow paths, no transition code; "the old one-shot proactive pipeline already ships switched off; do not run it in parallel or in shadow" and do not extend it; "LLM-only decisions; let the model's judgement decide, free-form with minimal fixed fields"; tiers: "no urgent/watch tiers; a chat message always pushes to phone (and Watch); no call yet".

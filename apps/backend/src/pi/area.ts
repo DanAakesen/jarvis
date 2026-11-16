@@ -84,7 +84,7 @@ export function createPiArea(options: { readonly vault: PiVault }) {
       try {
         const prefix = `${PI_AREA_ROOT}/${area}/${options.closed ? 'Closed/' : ''}`;
         return (await vault.tree(signal))
-          .filter(({ path }) => path.startsWith(prefix) && isPiPath(path))
+          .filter(({ path }) => path.startsWith(prefix) && isPiPath(path) && (options.closed || path.split('/').length === 3))
           .map(({ path, sha }) => ({ path, sha }));
       } catch (error) { return unavailable(error); }
     },

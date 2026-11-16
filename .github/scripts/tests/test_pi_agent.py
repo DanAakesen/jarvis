@@ -43,11 +43,12 @@ class DefinitionTest(unittest.TestCase):
         self.assertNotIn("{{", self.instructions)
 
     def test_skills_are_repository_files_pinned_by_version(self):
-        self.assertEqual([skill["name"] for skill in self.skills], ["jarvis-inbox-triage", "jarvis-workers", "jarvis-brain"])
+        self.assertEqual([skill["name"] for skill in self.skills], ["jarvis-inbox-triage", "jarvis-workers", "jarvis-brain", "jarvis-watches"])
         self.assertEqual(self.definition()["skills"], [
             {"type": "skill_reference", "name": "jarvis-inbox-triage", "version": "1"},
             {"type": "skill_reference", "name": "jarvis-workers", "version": "1"},
-            {"type": "skill_reference", "name": "jarvis-brain", "version": "1"}])
+            {"type": "skill_reference", "name": "jarvis-brain", "version": "1"},
+            {"type": "skill_reference", "name": "jarvis-watches", "version": "1"}])
 
     def test_fingerprint_changes_with_instructions_url_and_skill_content_only(self):
         base = pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", self.skills)

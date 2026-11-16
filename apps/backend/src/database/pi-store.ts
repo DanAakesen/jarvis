@@ -125,6 +125,19 @@ export function createPiStore(pool: sql.ConnectionPool): PiStore {
         .input('session', sql.BigInt, message.sessionId).input('message', sql.BigInt, message.messageId).input('hash', sql.Char(64), message.textHash),
       `INSERT dbo.pi_message (at, run_id, session_id, message_id, text_hash) VALUES (@at, @run, @session, @message, @hash);`, signal);
     },
+    async recordLook(watch, runId, at, signal) {
+      await query(pool.request().input('watch', sql.NVarChar(120), watch).input('run', sql.Char(36), runId).input('at', sql.DateTime2, at),
+        `INSERT dbo.pi_watch_look (at, watch, run_id) VALUES (@at, @watch, @run);`, signal);
+    },
+    async allocateRunCost(runId, perLookDkk, signal) {
+      await query(pool.request().input('run', sql.Char(36), runId).input('cost', sql.Decimal(12, 6), perLookDkk),
+        `UPDATE dbo.pi_watch_look SET cost_dkk=@cost WHERE run_id=@run;`, signal);
+    },
+    async watchActivity(from, signal) {
+      const result = await query<{ watch: string; looks: number; cost: number; last: Date }>(databaseReadRequest(pool).input('from', sql.DateTime2, from),
+        `SELECT watch, COUNT(*) AS looks, COALESCE(SUM(cost_dkk), 0) AS cost, MAX(at) AS last FROM dbo.pi_watch_look WHERE at >= @from GROUP BY watch;`, signal);
+      return result.recordset.map(row => ({ watch: row.watch, looks: Number(row.looks), costDkk: Number(row.cost), lastLookAt: row.last }));
+    },
     async messagesSince(from, signal) {
       const result = await query<{ text_hash: string }>(databaseReadRequest(pool).input('from', sql.DateTime2, from),
         `SELECT text_hash FROM dbo.pi_message WHERE at >= @from;`, signal);

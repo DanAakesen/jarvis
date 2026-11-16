@@ -1,3 +1,40 @@
+## PI standing watches (#1886, P15-175, part 3)
+
+"Keep me updated on X" is a free-text note in the vault, looked at by the brain loop. Our own ticker is the waker; the vault is the truth.
+
+```mermaid
+sequenceDiagram
+    participant D as Dan (chat or voice)
+    participant A as PI agent
+    participant V as Vault: PI/Watches
+    participant T as 30 s ticker (brain loop)
+    participant X as Read tools, GitHub, Azure
+    participant C as Chat message + push
+    D->>A: keep me updated on the deploy
+    A->>V: watch_create (verifies Dan's stored message, quotes his words)
+    A->>D: Watching. First look 14:00
+    T->>T: a next look is due, or an event arrives (guards first)
+    T->>A: wake: open watches in brief, due ones in full
+    A->>X: look
+    A->>V: watch_look (result, next look; limits enforced)
+    alt worth his attention
+        A->>C: message_dan
+    end
+    D->>A: list, change or stop my watches
+    A->>V: watch_list, watch_update, watch_stop
+```
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| A watch | `PI/Watches/<name>.md` (`pi/watch/note.ts`) | Title, Dan's quoted words, free text, a dated Trail, and one hidden last line `<!-- jarvis-watch:next=<ISO> -->`: the exact next look, or absent for events only. Closing moves the note to `PI/Watches/Closed/` with a trail line and no marker |
+| Index | `pi/watch/store.ts` | In memory, rebuilt from the vault on first use and after a restart; it only makes "what is due next" cheap. If the vault cannot be read, the brain keeps its events, calls no model and tries again in 5 minutes |
+| Tools | `pi/watch/tools.ts` | `watch_create`, `watch_update` (chat only: they verify Dan's stored message like `inbox_capture`), `watch_list` (read; chat and wake), `watch_stop` (Dan's word in chat, or the watch's own stop condition in a wake), `watch_look` (wake only, hidden from chat). A wake can never open or change a watch, so text read from outside cannot start one |
+| Guards | `pi/watch/store.ts` | At most 10 open watches; at most 8 looks per watch per day; at least 5 minutes between looks; next look 5 minutes to 400 days ahead. Hitting a look limit moves the next look (to tomorrow morning, or 5 minutes on) so a limit can never leave a watch due and wake the brain over and over; a due watch that got no look is moved an hour ahead with a trail line |
+| Waker | `pi/brain/runner.ts` `extras` | The ticker asks for the soonest next look; a due watch wakes the brain with no event. One wake covers every due watch and every queued event, so the fixed prompt is paid once. The wake text carries every open watch in brief (to match events) and the due ones in full with their recent trail, labelled as data |
+| Cost per watch | `dbo.pi_watch_look` (migration 0088), `watch_list` | One row per look. After a wake its cost is split evenly over what woke it (each event and each watch looked at); `watch_list` shows looks today, last look and an estimated DKK today and this month. Watch wakes spend on the same 100 DKK proactive ledger as the brain, so the same stop applies |
+| Untrusted content | brain policy | What a watch reads (web pages, feeds, repository text) is data. A wake reaches only read-only tools plus its own message, note, trail and look tools; it cannot write, send or start a Worker whatever the text says |
+| Foundry wake-ups | `.github/scripts/probe_pi_wake.py`, Deploy input `probe_pi_wake` | A throwaway agent tries the reminder tool and a timer routine and reports what it observed. Not a dependency; see `docs/harness-trial/spike-results.md` |
+
 ## PI brain loop (#1886, P15-175, part 2)
 
 The brain is the PI agent woken by a trigger, with the `jarvis-brain` skill. One wake runs in its own scratch conversation, never Dan's chat conversation. Exact things are code; what an event means and what to do about it is the model's decision.
