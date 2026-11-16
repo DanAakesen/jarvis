@@ -43,6 +43,11 @@ describe('PI configuration', () => {
     expect(loadConfig({ ...base, JARVIS_PI_AGENT_NAME: spec.agentName }).pi).toBeUndefined();
     expect(loadConfig({ ...base, JARVIS_PI_AGENT_NAME: spec.agentName, JARVIS_PI_MCP_SECRET: 'a'.repeat(64) }).pi)
       .toEqual({ agentName: spec.agentName, mcpSecret: 'a'.repeat(64), monthlyCapDkk: 100 });
+    const env = { ...base, JARVIS_PI_AGENT_NAME: spec.agentName, JARVIS_PI_MCP_SECRET: 'a'.repeat(64) };
+    const azure = { JARVIS_PI_AZURE_MCP_URL: 'https://az.example.io', JARVIS_PI_AZURE_MCP_CLIENT_ID: '3e94b90c-3e35-4187-8f08-9bba23bc8886' };
+    expect(loadConfig({ ...env, ...azure }).pi?.azureMcp).toEqual({ url: 'https://az.example.io', clientId: '3e94b90c-3e35-4187-8f08-9bba23bc8886' });
+    expect(() => loadConfig({ ...env, JARVIS_PI_AZURE_MCP_URL: azure.JARVIS_PI_AZURE_MCP_URL })).toThrow('JARVIS_PI_AZURE_MCP_URL');
+    expect(() => loadConfig({ ...env, ...azure, JARVIS_PI_AZURE_MCP_URL: 'http://az.example.io' })).toThrow('JARVIS_PI_AZURE_MCP_URL');
     const token = `github_pat_${'A'.repeat(60)}`;
     expect(loadConfig({ ...base, JARVIS_PI_AGENT_NAME: spec.agentName, JARVIS_PI_MCP_SECRET: 'a'.repeat(64), JARVIS_PI_GITHUB_TOKEN: token }).pi?.githubToken).toBe(token);
     expect(() => loadConfig({ ...base, JARVIS_PI_AGENT_NAME: spec.agentName, JARVIS_PI_MCP_SECRET: 'a'.repeat(64), JARVIS_PI_GITHUB_TOKEN: `ghp_${'A'.repeat(36)}` })).toThrow('JARVIS_PI_GITHUB_TOKEN');

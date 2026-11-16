@@ -19,11 +19,11 @@ CHECKS = {
     "cancellation": "a cancelled turn stopped quickly and the conversation still works",
     "warm_faster_than_cold": "a warm turn starts faster than the cold one",
 }
-# Present only for a reach server the harness listed tools for: a server that is not attached has no turn and no check.
+# Present only for a reach server whose tools were listed (GitHub and Azure through the Jarvis door): a server that is not attached has no turn and no check.
 REACH_CHECKS = {
-    "reach_github": "the GitHub server answered a read and the harness reported no error",
-    "reach_azure": "the Azure server answered a read and the harness reported no error",
-    "mcp_listing": "every MCP server the harness reported returned its tools",
+    "reach_github": "a GitHub tool answered a read through the Jarvis door",
+    "reach_azure": "an Azure tool answered a read through the Jarvis door",
+    "mcp_listing": "every remote server (GitHub, Azure) listed its tools",
 }
 
 
@@ -72,7 +72,7 @@ def render(report: dict) -> str:
               f"Smoke cost: {report['totalCostDkk']:.4f} DKK (list price, cached discount ignored).", ""]
     listed = report.get("listed", [])
     servers = ", ".join(f"{item['server'] or 'unknown'}: {'FAILED to list' if item['failed'] else str(item['tools']) + ' tools'}" for item in listed)
-    lines += [f"MCP servers the harness listed tools for: {servers or 'none reported'}.", ""]
+    lines += [f"Remote servers whose tools were listed: {servers or 'none reported'}.", ""]
     for entry in report.get("reach", []):
         calls = ", ".join(f"{call['name'] or 'call'}={'failed' if call['failed'] else 'ok'}" for call in entry["turn"].get("reachCalls", []))
         lines.append(f"Reach {entry['server']}: {calls or 'no call'}; reply: {entry['turn']['text']!r}")
@@ -112,6 +112,8 @@ def main(argv: list[str] | None = None) -> int:
         except ValueError:
             detail = {}
         message = detail.get("error", "no detail") if isinstance(detail, dict) else "no detail"
+        if isinstance(detail, dict) and isinstance(detail.get("detail"), str):
+            message += f" (provider code: {detail['detail']})"
         print(f"::error::The PI smoke failed with HTTP {error.code}: {message}", file=sys.stderr)
         args.summary.write_text(f"### PI live smoke\n\nFailed with HTTP {error.code}: {message}\n", encoding="utf-8")
         return 1

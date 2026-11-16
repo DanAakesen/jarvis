@@ -1,13 +1,21 @@
 import type { RegisteredTool } from '../core/tool-registry.js';
 
-/** GitHub's tools reach PI through the Jarvis MCP door, so the harness lists two tools instead of about a hundred. */
+/**
+ * Remote MCP servers (GitHub, Azure) reach PI through the Jarvis MCP door instead of being tools of the harness: the harness
+ * lists every tool of every server in every turn (GitHub's alone cost seconds and 13k tokens), and a server that is slow to
+ * answer or to authenticate would fail the whole turn. Here their tools are searched like Jarvis's own and called on demand.
+ */
 export const githubToolPrefix = 'gh_';
+export const azureToolPrefix = 'az_';
 
 const protocolVersion = '2025-06-18';
 const listTtlMs = 30 * 60_000;
 const maxPages = 10;
-/** A search of the local tools must not wait long for GitHub's catalogue. */
-const listTimeoutMs = 8_000;
+/** A search of the local tools never waits long for a remote catalogue... */
+const searchWaitMs = 8_000;
+/** ...but the refresh itself may take this long, so a container that scales from zero can finish starting in the background. */
+const refreshTimeoutMs = 90_000;
+const callTimeoutMs = 120_000;
 
 interface RemoteTool { readonly name: string; readonly description?: string; readonly inputSchema?: Record<string, unknown> }
 interface RpcResponse { readonly result?: Record<string, unknown>; readonly error?: { readonly message?: string } }
@@ -17,9 +25,11 @@ export interface GithubCallResult {
   readonly result: unknown;
 }
 
-export interface GithubBridge {
-  /** The remote server's tools as catalogue entries named `gh_<tool>`; empty when GitHub cannot be reached. */
-  tools(signal: AbortSignal): Promise<readonly RegisteredTool[]>;
+export interface RemoteMcpBridge {
+  /** `gh_` or `az_`: the start of every tool name this bridge offers. */
+  readonly prefix: string;
+  /** The remote server's tools as catalogue entries named `<prefix><tool>`; empty when it cannot be reached. */
+  tools(signal: AbortSignal, waitMs?: number): Promise<readonly RegisteredTool[]>;
   call(name: string, args: Record<string, unknown>, signal: AbortSignal): Promise<GithubCallResult>;
 }
 
@@ -44,10 +54,19 @@ function text(content: unknown): string {
 }
 
 /**
- * A small client for the GitHub MCP server (Streamable HTTP). The token is the owner's fine-grained one and stays on the backend.
- * The tool list is read once and kept for half an hour; a failed refresh keeps the last list.
+ * A small client for a remote MCP server (Streamable HTTP). The credential comes from `token()` on every request, so a managed
+ * identity token is renewed by its own library and a static one stays on the backend. The tool list is read once and kept for
+ * half an hour; a failed refresh keeps the last list.
  */
-export function createGithubBridge(options: { readonly url: string; readonly token: string; readonly fetch?: typeof fetch; readonly now?: () => number }): GithubBridge {
+export function createRemoteMcpBridge(options: {
+  readonly url: string;
+  readonly prefix: string;
+  /** Names the server in descriptions, for example `GitHub`. */
+  readonly label: string;
+  readonly token: (signal: AbortSignal) => Promise<string>;
+  readonly fetch?: typeof fetch;
+  readonly now?: () => number;
+}): RemoteMcpBridge {
   const send = options.fetch ?? fetch;
   const now = options.now ?? Date.now;
   let session: string | undefined | null = null;
@@ -55,15 +74,15 @@ export function createGithubBridge(options: { readonly url: string; readonly tok
   let listed: { readonly at: number; readonly tools: readonly RegisteredTool[] } | undefined;
   let refreshing: Promise<void> | undefined;
 
-  const headers = (extra: Record<string, string> = {}): Record<string, string> => ({
-    authorization: `Bearer ${options.token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream',
-    ...(session ? { 'mcp-session-id': session, 'mcp-protocol-version': protocolVersion } : {}), ...extra,
+  const headers = async (signal: AbortSignal): Promise<Record<string, string>> => ({
+    authorization: `Bearer ${await options.token(signal)}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream',
+    ...(session ? { 'mcp-session-id': session, 'mcp-protocol-version': protocolVersion } : {}),
   });
 
   async function rpc(method: string, params: Record<string, unknown>, signal: AbortSignal): Promise<Record<string, unknown>> {
     counter += 1;
     const id = counter;
-    const response = await send(options.url, { method: 'POST', headers: headers(), body: JSON.stringify({ jsonrpc: '2.0', id, method, params }), signal });
+    const response = await send(options.url, { method: 'POST', headers: await headers(signal), body: JSON.stringify({ jsonrpc: '2.0', id, method, params }), signal });
     if (response.status === 404 && session) { session = null; throw new Error('github_mcp_session_expired'); }
     if (!response.ok) throw new Error(`github_mcp_http_${response.status}`);
     const answer = await readRpc(response, id);
@@ -76,13 +95,13 @@ export function createGithubBridge(options: { readonly url: string; readonly tok
     counter += 1;
     const id = counter;
     const response = await send(options.url, {
-      method: 'POST', headers: headers(), signal,
+      method: 'POST', headers: await headers(signal), signal,
       body: JSON.stringify({ jsonrpc: '2.0', id, method: 'initialize', params: { protocolVersion, capabilities: {}, clientInfo: { name: 'jarvis-pi', version: '1.0.0' } } }),
     });
     if (!response.ok) throw new Error(`github_mcp_http_${response.status}`);
     await readRpc(response, id);
     session = response.headers.get('mcp-session-id') ?? undefined;
-    await send(options.url, { method: 'POST', headers: headers(), signal, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) });
+    await send(options.url, { method: 'POST', headers: await headers(signal), signal, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) });
   }
 
   async function withSession<T>(work: () => Promise<T>, signal: AbortSignal): Promise<T> {
@@ -104,42 +123,45 @@ export function createGithubBridge(options: { readonly url: string; readonly tok
       if (!cursor) break;
     }
     return found.filter((tool) => /^[A-Za-z0-9_-]{1,60}$/u.test(tool.name)).map((tool) => ({
-      name: `${githubToolPrefix}${tool.name}`,
-      description: `GitHub: ${tool.description ?? tool.name}`,
+      name: `${options.prefix}${tool.name}`,
+      description: `${options.label}: ${tool.description ?? tool.name}`,
       inputSchema: tool.inputSchema ?? { type: 'object' },
       moduleId: 'github',
-      execute: async () => { throw new Error('GitHub tools run through the bridge'); },
+      execute: async () => { throw new Error('Remote tools run through the bridge'); },
     }));
   }
 
   return {
-    async tools(signal) {
+    prefix: options.prefix,
+    async tools(signal, waitMs = searchWaitMs) {
       if (listed && now() - listed.at < listTtlMs) return listed.tools;
       // One refresh at a time, shared by every search that arrives meanwhile, and bounded: a slow GitHub costs a search a few
       // seconds once, then the last list (or none) is used for a minute.
-      refreshing ??= fetchTools(AbortSignal.timeout(listTimeoutMs))
+      refreshing ??= fetchTools(AbortSignal.timeout(refreshTimeoutMs))
         .then((tools) => { listed = { at: now(), tools }; }, () => {
           listed = { at: now() - listTtlMs + 60_000, tools: listed?.tools ?? [] };
         })
         .finally(() => { refreshing = undefined; });
-      await Promise.race([refreshing, new Promise<never>((_, reject) => {
-        if (signal.aborted) reject(signal.reason);
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      const wait = AbortSignal.any([signal, AbortSignal.timeout(waitMs)]);
+      await Promise.race([refreshing, new Promise<void>((resolve, reject) => {
+        const stop = () => (signal.aborted ? reject(signal.reason) : resolve());
+        if (wait.aborted) stop(); else wait.addEventListener('abort', stop, { once: true });
       })]);
       return listed?.tools ?? [];
     },
 
     async call(name, args, signal) {
-      if (!name.startsWith(githubToolPrefix)) throw new Error('not_a_github_tool');
+      if (!name.startsWith(options.prefix)) throw new Error('not_a_remote_tool');
+      const bounded = AbortSignal.any([signal, AbortSignal.timeout(callTimeoutMs)]);
       try {
-        const result = await withSession(() => rpc('tools/call', { name: name.slice(githubToolPrefix.length), arguments: args }, signal), signal);
+        const result = await withSession(() => rpc('tools/call', { name: name.slice(options.prefix.length), arguments: args }, bounded), bounded);
         const body = text(result.content);
         let parsed: unknown = body;
         try { parsed = JSON.parse(body); } catch { /* plain text stays text */ }
-        return result.isError === true ? { outcome: 'error', result: { error: body || 'GitHub returned an error.' } } : { outcome: 'ok', result: parsed };
+        return result.isError === true ? { outcome: 'error', result: { error: body || `${options.label} returned an error.` } } : { outcome: 'ok', result: parsed };
       } catch (error) {
         if (signal.aborted) throw error;
-        return { outcome: 'error', result: { error: 'GitHub could not be reached. Nothing is confirmed as done.' } };
+        return { outcome: 'error', result: { error: `${options.label} could not be reached. Nothing is confirmed as done.` } };
       }
     },
   };

@@ -136,6 +136,14 @@ function httpFailure(status: number, retryAfter: string | null): PiGatewayError 
   return new PiGatewayError('pi_unavailable', `Foundry could not run PI (HTTP ${status}). No other engine was used.`);
 }
 
+/** The provider's own short code for a failed stream (for example `server_error`), or the event type; never its message. */
+function failureCode(payload: Record<string, unknown>, type: string): string {
+  const response = isObject(payload.response) ? payload.response : {};
+  const error = isObject(response.error) ? response.error : isObject(payload.error) ? payload.error : payload;
+  const code = typeof error.code === 'string' ? error.code : typeof response.status === 'string' ? response.status : type;
+  return /^[A-Za-z0-9_.:-]{1,64}$/u.test(code) ? code : type;
+}
+
 export function createPiGateway(options: PiGatewayOptions): PiGateway {
   const fetcher = options.fetcher ?? fetch;
   const now = options.now ?? (() => new Date());
@@ -268,7 +276,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             };
             break;
           } else if (type === 'response.failed' || type === 'response.incomplete' || type === 'error') {
-            throw new PiGatewayError('pi_failed', 'PI stopped before it finished the reply. Check saved conversation and action status before trying again.');
+            const detail = failureCode(payload, type);
+            log('pi.stream_failed', { event: type, ...(detail ? { code: detail } : {}) });
+            throw new PiGatewayError('pi_failed', 'PI stopped before it finished the reply. Check saved conversation and action status before trying again.', { detail });
           }
         }
       }

@@ -161,6 +161,11 @@ describe('PI gateway', () => {
     await expect(limited.run('hi')).rejects.toMatchObject({ code: 'pi_unavailable', userMessage: expect.stringContaining('12 s') });
     const failed = setup([() => sse(delta('half'), frame({ type: 'response.failed', response: {} }))]);
     await expect(failed.run('hi')).rejects.toMatchObject({ code: 'pi_failed' });
+    // The provider's own short error code is kept for the log and the smoke; its message never is.
+    const coded = setup([() => sse(frame({ type: 'response.failed', response: { error: { code: 'tool_user_error', message: 'Bearer secret leaked here' } } }))]);
+    await expect(coded.run('hi')).rejects.toMatchObject({ code: 'pi_failed', detail: 'tool_user_error' });
+    const odd = setup([() => sse(frame({ type: 'response.failed', response: { error: { code: 'not a code with spaces' } } }))]);
+    await expect(odd.run('hi')).rejects.toMatchObject({ detail: 'response.failed' });
     // The model had started, so the turn is charged at an estimate and counts toward the cap.
     expect(failed.store.turns[0]).toMatchObject({ outcome: 'failed', inputTokens: 12_000, outputTokens: 2 });
     expect(failed.store.turns[0]!.costDkk).toBeGreaterThan(0.07);

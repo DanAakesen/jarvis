@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GithubBridge } from './github-bridge.js';
+import type { RemoteMcpBridge } from './remote-mcp.js';
 import type { PiEvent, PiGateway, PiUsage } from './gateway.js';
 import { isSpokenShape, runPiSmoke, toolRanOk } from './smoke.js';
 import type { PiTurnGrant } from './turns.js';
@@ -31,11 +31,7 @@ function fakeGateway(toolOutcome: 'ok' | 'error' | 'none', options: { claimToolT
         for (const server of options.listed ?? []) yield { kind: 'tools_listed', server, tools: 12, failed: false };
         // GitHub runs through the Jarvis door: the door, not the harness, records its call.
         if (input.includes('gh_issue_read')) (grants.get(turn)!.results as { tool: string; outcome: 'ok' | 'error' }[]).push({ tool: 'gh_issue_read', outcome: options.failReach === true ? 'error' : 'ok' });
-        const reachServer = /use the (azure) tools/iu.exec(input)?.[1]?.toLowerCase();
-        if (reachServer) {
-          yield { kind: 'tool', server: reachServer };
-          yield { kind: 'tool_done', server: reachServer, name: 'read', failed: options.failReach === true };
-        }
+        if (input.includes('azure resource groups list')) (grants.get(turn)!.results as { tool: string; outcome: 'ok' | 'error' }[]).push({ tool: 'az_group_list', outcome: options.failReach === true ? 'error' : 'ok' });
         if (isTools) {
           yield { kind: 'tool', server: 'jarvis' };
           if (toolOutcome !== 'none') (grants.get(turn)!.results as { tool: string; outcome: 'ok' | 'error' }[]).push({ tool: 'list_jobs', outcome: toolOutcome });
@@ -53,7 +49,8 @@ function fakeGateway(toolOutcome: 'ok' | 'error' | 'none', options: { claimToolT
   } as unknown as PiGateway;
 }
 
-const bridge = (count: number): GithubBridge => ({
+const bridge = (count: number, prefix = 'gh_'): RemoteMcpBridge => ({
+  prefix,
   tools: async () => Array.from({ length: count }, (_, index) => ({ name: `gh_t${index}`, description: 'x', inputSchema: {}, moduleId: 'github', execute: async () => ({}) })),
   call: async () => ({ outcome: 'ok', result: {} }),
 });
@@ -78,24 +75,24 @@ describe('PI live smoke', () => {
     const none = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1 });
     expect(none.reach).toEqual([]);
     expect(Object.keys(none.checks).filter(key => key.startsWith('reach_'))).toEqual([]);
-    const both = await runPiSmoke(fakeGateway('ok', { listed: ['azure'] }), new AbortController().signal, { warmTurns: 1, github: bridge(12) });
+    const both = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1, bridges: [bridge(12), bridge(5, 'az_')] });
     expect(both.reach.map(({ server }) => server)).toEqual(['github', 'azure']);
     expect(both.checks).toMatchObject({ reach_github: true, reach_azure: true, mcp_listing: true });
-    expect(both.listed).toEqual([{ server: 'azure', tools: 12, failed: false }, { server: 'github', tools: 12, failed: false }]);
+    expect(both.listed).toEqual([{ server: 'github', tools: 12, failed: false }, { server: 'azure', tools: 5, failed: false }]);
   });
 
-  it('fails a reach check when the harness reports the call as failed', async () => {
-    const report = await runPiSmoke(fakeGateway('ok', { listed: ['azure'], failReach: true }), new AbortController().signal, { warmTurns: 1 });
+  it('fails a reach check when the door recorded the call as failed', async () => {
+    const report = await runPiSmoke(fakeGateway('ok', { failReach: true }), new AbortController().signal, { warmTurns: 1, bridges: [bridge(5, 'az_')] });
     expect(report.checks.reach_azure).toBe(false);
   });
 
   it('reports GitHub through the Jarvis door: listed by the bridge, checked by the door\'s own record of the call', async () => {
-    const good = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1, github: bridge(30) });
+    const good = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1, bridges: [bridge(30)] });
     expect(good.listed).toEqual([{ server: 'github', tools: 30, failed: false }]);
     expect(good.checks.reach_github).toBe(true);
-    const failed = await runPiSmoke(fakeGateway('ok', { failReach: true }), new AbortController().signal, { warmTurns: 1, github: bridge(30) });
+    const failed = await runPiSmoke(fakeGateway('ok', { failReach: true }), new AbortController().signal, { warmTurns: 1, bridges: [bridge(30)] });
     expect(failed.checks.reach_github).toBe(false);
-    const empty = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1, github: bridge(0) });
+    const empty = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1, bridges: [bridge(0)] });
     expect(empty.listed).toEqual([{ server: 'github', tools: 0, failed: true }]);
     expect(empty.reach).toEqual([]);
     expect(empty.checks.reach_github).toBe(false);
