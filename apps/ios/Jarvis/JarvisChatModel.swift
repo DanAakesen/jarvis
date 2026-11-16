@@ -101,8 +101,14 @@ final class JarvisChatModel: ObservableObject {
     @Published var dismissingBackgroundTaskIDs = Set<String>()
     @Published var historyError: String?
     @Published var actionError: String?
-    /// The text of the last turn that failed, so the error can offer Retry. Cleared by the next send.
-    @Published private(set) var failedTurnText: String?
+    /// The last turn that failed, as it was sent, so the error can offer Retry without touching the composer.
+    @Published private(set) var failedTurn: FailedTurn?
+
+    struct FailedTurn {
+        let text: String
+        let attachments: [PendingChatAttachment]
+        let visualFrame: PendingVisualFrame?
+    }
     @Published var statusLine: String?
     @Published var streamingText = ""
     @Published private(set) var acknowledgment: String?
@@ -336,20 +342,34 @@ final class JarvisChatModel: ObservableObject {
             steer()
             return
         }
+        let text = composerDraft.consume()
+        startTurn(text: text, attachments: pendingAttachments, visualFrame: visualFrame, fromComposer: true)
+    }
+
+    /// Sends the turn that failed again, as a new turn, with its own attachments; the composer keeps any draft.
+    func retryFailedTurn() {
+        guard let turn = failedTurn, !isSending else { return }
+        startTurn(text: turn.text, attachments: turn.attachments, visualFrame: turn.visualFrame, fromComposer: false)
+    }
+
+    private func startTurn(
+        text: String,
+        attachments: [PendingChatAttachment],
+        visualFrame: PendingVisualFrame?,
+        fromComposer: Bool
+    ) {
         if fixtureMode { fixtureTurnUsed = true }
         isSending = true
         turnStartedAt = Date()
         progressUpdates = []
         isCancelling = false
         actionError = nil
-        failedTurnText = nil
+        failedTurn = nil
         streamingText = ""
         acknowledgment = nil
         isReconnecting = false
         toolActivities = []
         turnMessageIDs = []
-        let text = composerDraft.consume()
-        let attachments = pendingAttachments
         sentTurnAttachments = []
         thinkingPhrase = ChatThinkingPhrase.phrase(
             forRequest: text,
@@ -365,14 +385,9 @@ final class JarvisChatModel: ObservableObject {
             text: text,
             at: ISO8601DateFormatter().string(from: Date())
         ))
-        sendTask = Task { await sendTurn(text: text, attachments: attachments, visualFrame: visualFrame) }
-    }
-
-    /// Sends the text of the turn that failed again, as a new turn.
-    func retryFailedTurn() {
-        guard let text = failedTurnText, !isSending else { return }
-        draft = text
-        send()
+        sendTask = Task {
+            await sendTurn(text: text, attachments: attachments, visualFrame: visualFrame, fromComposer: fromComposer)
+        }
     }
 
     /// The composer stays active while Jarvis answers: a follow-up joins the running turn instead of waiting for it.
@@ -648,7 +663,8 @@ final class JarvisChatModel: ObservableObject {
     private func sendTurn(
         text: String,
         attachments: [PendingChatAttachment],
-        visualFrame: PendingVisualFrame?
+        visualFrame: PendingVisualFrame?,
+        fromComposer: Bool = true
     ) async {
         defer { sentTurnAttachments = [] }
         guard let client else {
@@ -695,8 +711,10 @@ final class JarvisChatModel: ObservableObject {
                 visualContext: visualContext,
                 engine: fixtureMode ? nil : ChatEngineSelection.load()
             )
-            pendingAttachments = []
-            uploadedAttachmentIDs = [:]
+            if fromComposer {
+                pendingAttachments = []
+                uploadedAttachmentIDs = [:]
+            }
             try await consume(events)
             discardOptimisticMessage()
             discardSteeringPlaceholders()
@@ -715,7 +733,7 @@ final class JarvisChatModel: ObservableObject {
             discardOptimisticMessage()
             if !Task.isCancelled {
                 actionError = message(for: error)
-                failedTurnText = text
+                failedTurn = FailedTurn(text: text, attachments: attachments, visualFrame: visualFrame)
             }
             // Keep any partial reply readable beside the failure; it is not a completed response.
         }
