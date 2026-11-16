@@ -5,7 +5,7 @@ import { loadConfig } from '../../config.js';
 import { coreModule } from '../../core/index.js';
 import type { JarvisTool } from '../../core/tool-registry.js';
 import { createPiArea } from '../area.js';
-import type { GithubBridge } from '../github-bridge.js';
+import type { RemoteMcpBridge } from '../remote-mcp.js';
 import { createPiRoutes } from '../routes.js';
 import { createMemoryPiStore } from '../store.js';
 import { createPiTurnRegistry } from '../turns.js';
@@ -28,7 +28,7 @@ const probes: JarvisTool[] = ['list_projects', 'create_issue'].map((name) => ({
   execute: async (_input, request) => { calls.push(`${name}:${String(request.headers['x-jarvis-message-id'])}:${String(request.jarvisPi)}`); return { ok: true }; },
 }));
 
-function setup(github?: GithubBridge) {
+function setup(...bridges: RemoteMcpBridge[]) {
   calls.length = 0;
   const registry = createPiTurnRegistry();
   const auth = createPiAuth(config.auth.tenantId, secret);
@@ -40,7 +40,7 @@ function setup(github?: GithubBridge) {
   const app = buildApp(config, undefined, {
     modules: [coreModule, { id: 'probe', tools: probes, registerRoutes: async () => {} },
       { id: 'pi', tools: createBrainTools({ registry, comms, area: createPiArea({ vault }), now: () => new Date('2026-11-16T10:00:00Z') }),
-        registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250, github }) }],
+        registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250, bridges }) }],
     auth: async (token) => {
       if (token === 'agent.token.fixture') return { kind: 'jarvis-agent', objectId: '11111111-2222-4333-8444-555555555555', tenantId: config.auth.tenantId };
       if (token !== ownerToken) throw new Error('rejected');
@@ -130,7 +130,8 @@ describe('GitHub through the Jarvis door', () => {
   const ghTool = { name: 'gh_issue_write', description: 'GitHub: Create or update an issue', inputSchema: { type: 'object' }, moduleId: 'github', execute: async () => ({}) };
   const bridge = () => {
     const called: string[] = [];
-    const github: GithubBridge = {
+    const github: RemoteMcpBridge = {
+      prefix: 'gh_',
       tools: async () => [ghTool],
       call: async (name, args) => { called.push(`${name}:${JSON.stringify(args)}`); return { outcome: 'ok', result: { number: 7 } }; },
     };
@@ -148,6 +149,21 @@ describe('GitHub through the Jarvis door', () => {
       expect(grant.results).toEqual([{ tool: 'gh_issue_write', outcome: 'ok' }]);
     }
     expect(called).toEqual(['gh_issue_write:{"title":"x"}', 'gh_issue_write:{"title":"x"}']);
+  });
+
+  it('routes each remote tool to its own server by prefix', async () => {
+    const calls: string[] = [];
+    const make = (prefix: string, name: string): RemoteMcpBridge => ({
+      prefix,
+      tools: async () => [{ name: `${prefix}${name}`, description: `${prefix} tool ${name}`, inputSchema: { type: 'object' }, moduleId: 'remote', execute: async () => ({}) }],
+      call: async (called) => { calls.push(called); return { outcome: 'ok', result: { from: prefix } }; },
+    });
+    const { tool, wake } = setup(make('gh_', 'issue_write'), make('az_', 'group_list'));
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'tool issue_write group_list' });
+    expect(await tool('call_tool', { turn: grant.turn, name: 'az_group_list', arguments: {} })).toMatchObject({ outcome: 'ok', result: { from: 'az_' } });
+    expect(await tool('call_tool', { turn: grant.turn, name: 'gh_issue_write', arguments: {} })).toMatchObject({ result: { from: 'gh_' } });
+    expect(calls).toEqual(['az_group_list', 'gh_issue_write']);
   });
 
   it('refuses a GitHub tool that was not looked up first, and is absent without a token', async () => {

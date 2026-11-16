@@ -1,3 +1,15 @@
+## 16 November 2026 — Azure reaches PI through the Jarvis door too, not as a harness tool (#1886, P15-175)
+
+Deploy 43924888427 attached the Azure MCP server to the harness (a `ProjectManagedIdentity` connection to the scale-to-zero container) and the smoke's very first call failed after about 28 s with "PI stopped before it finished the reply": every earlier measure_pi run had passed, so Azure was the new thing. Foundry's own error was not visible (the gateway discarded it), but the shape is known: the harness fails the whole turn when an MCP server's tool list does not come back, and a cold container plus a project-identity token (marked "unproven live" since the design) is where that happens. This would have broken PI chat for everything, to keep one optional server.
+
+| Choice | Why |
+| --- | --- |
+| Azure is offered through the Jarvis MCP door as `az_<tool>`, exactly like GitHub (one client, `pi/remote-mcp.ts`); the harness lists only the Jarvis door | A slow, cold or unauthenticated Azure server can no longer fail a turn, no Foundry connection or project identity is involved, and all capability stays. The earlier lesson (GitHub as a harness tool cost 13k tokens and seconds a turn) points the same way |
+| The backend calls the guarded server with its own managed identity (`api://<client id>/.default`); `infra/setup-azure-mcp.ps1` grants the app role to the backend identity and removes any other holder. The Bicep outputs `backendIdentityPrincipalId` | The Deploy has no Microsoft Graph rights by design, so the grant stays an owner-run step (idempotent). Until it is run, Azure is simply not found by `find_tools`; chat is unaffected |
+| A catalogue read waits at most 8 s for a search, but the refresh may take 90 s; `/pi/warm` and the smoke start it; a call may take 120 s; failures are cached for a minute | A container that scales from zero can finish starting in the background, and a search of the local tools never waits for it |
+| The Deploy deletes both old harness connections (`jarvis-pi-github`, `jarvis-pi-azure`), and the provisioner sets or removes `JARVIS_PI_AZURE_MCP_URL` and `JARVIS_PI_AZURE_MCP_CLIENT_ID` on the backend | A withdrawn input leaves nothing behind |
+| A failed stream logs `pi.stream_failed` with the provider's short error code (letters, digits and `_.:-` only; never its message) and the smoke's 502 shows it | The next failure names itself |
+
 ## 16 November 2026 — The harness built-ins stay on; what they cost was measured (#1886, P15-175)
 
 Owner direction, as before: no restrictions on PI. The built-ins (shell, filesystem read and write, web, sub-agents) were turned on in #1914 and their cost was measured with one variant per Deploy (the `pi_experiment` input from #1916).

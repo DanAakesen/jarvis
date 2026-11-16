@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createGithubBridge } from './github-bridge.js';
+import { createRemoteMcpBridge } from './remote-mcp.js';
 
 const signal = () => new AbortController().signal;
 
@@ -30,7 +30,7 @@ function server(options: { sse?: boolean; expireOnce?: boolean } = {}) {
 describe('the GitHub bridge', () => {
   it('lists the remote tools as gh_ catalogue entries with the token, once, and drops unusable names', async () => {
     const { seen, fetchStub } = server();
-    const bridge = createGithubBridge({ url: 'https://gh.example/mcp/x/all', token: 'github_pat_x', fetch: fetchStub });
+    const bridge = createRemoteMcpBridge({ url: 'https://gh.example/mcp/x/all', prefix: 'gh_', label: 'GitHub', token: async () => 'github_pat_x', fetch: fetchStub });
     const tools = await bridge.tools(signal());
     expect(tools.map(({ name }) => name)).toEqual(['gh_issue_write']);
     expect(tools[0]!.description).toBe('GitHub: Create or update an issue');
@@ -42,15 +42,15 @@ describe('the GitHub bridge', () => {
 
   it('calls a tool, reads a streamed answer, keeps the session and reports a remote error as an error', async () => {
     const { seen, fetchStub } = server({ sse: true });
-    const bridge = createGithubBridge({ url: 'https://gh.example/mcp/x/all', token: 'github_pat_x', fetch: fetchStub });
+    const bridge = createRemoteMcpBridge({ url: 'https://gh.example/mcp/x/all', prefix: 'gh_', label: 'GitHub', token: async () => 'github_pat_x', fetch: fetchStub });
     expect(await bridge.call('gh_issue_read', { issue_number: 700 }, signal())).toEqual({ outcome: 'ok', result: { number: 700, title: 'Hello' } });
     expect(seen.at(-1)).toMatchObject({ method: 'tools/call', session: 's1' });
     expect(await bridge.call('gh_broken', {}, signal())).toEqual({ outcome: 'error', result: { error: 'Not Found' } });
-    await expect(bridge.call('issue_read', {}, signal())).rejects.toThrow('not_a_github_tool');
+    await expect(bridge.call('issue_read', {}, signal())).rejects.toThrow('not_a_remote_tool');
   });
 
   it('does not make a search wait for a stalled GitHub, and stops waiting when the turn is cancelled', async () => {
-    const stalled = createGithubBridge({ url: 'https://gh.example', token: 't', fetch: (async (_url: string, init: RequestInit) => new Promise((_, reject) => {
+    const stalled = createRemoteMcpBridge({ url: 'https://gh.example', prefix: 'gh_', label: 'GitHub', token: async () => 't', fetch: (async (_url: string, init: RequestInit) => new Promise((_, reject) => {
       init.signal?.addEventListener('abort', () => reject(init.signal!.reason));
     })) as unknown as typeof fetch });
     const turn = new AbortController();
@@ -59,12 +59,28 @@ describe('the GitHub bridge', () => {
     await expect(waiting).rejects.toThrow('turn cancelled');
   });
 
+  it('lets a server that scales from zero finish starting after a search stopped waiting, and uses the list at the next search', async () => {
+    let started = false;
+    const slow = server();
+    const bridge = createRemoteMcpBridge({
+      url: 'https://az.example', prefix: 'az_', label: 'Azure', token: async () => 'token',
+      fetch: (async (url: string, init: RequestInit) => {
+        if (!started) await new Promise((resolve) => setTimeout(resolve, 150));
+        started = true;
+        return slow.fetchStub(url, init);
+      }) as unknown as typeof fetch,
+    });
+    // A search that gives up after 20 ms gets nothing; the refresh goes on and the next search has the list.
+    expect(await bridge.tools(signal(), 20)).toEqual([]);
+    expect((await bridge.tools(signal(), 2_000)).map(({ name }) => name)).toEqual(['az_issue_write']);
+  });
+
   it('opens a new session when the old one expired, and answers with an empty list instead of failing when GitHub is down', async () => {
     const expiring = server({ sse: true, expireOnce: true });
-    const bridge = createGithubBridge({ url: 'https://gh.example/mcp/x/all', token: 'github_pat_x', fetch: expiring.fetchStub });
+    const bridge = createRemoteMcpBridge({ url: 'https://gh.example/mcp/x/all', prefix: 'gh_', label: 'GitHub', token: async () => 'github_pat_x', fetch: expiring.fetchStub });
     expect((await bridge.tools(signal())).map(({ name }) => name)).toEqual(['gh_issue_write']);
     expect(expiring.seen.filter(({ method }) => method === 'initialize')).toHaveLength(2);
-    const down = createGithubBridge({ url: 'https://gh.example', token: 't', fetch: (async () => { throw new Error('offline'); }) as unknown as typeof fetch });
+    const down = createRemoteMcpBridge({ url: 'https://gh.example', prefix: 'gh_', label: 'GitHub', token: async () => 't', fetch: (async () => { throw new Error('offline'); }) as unknown as typeof fetch });
     expect(await down.tools(signal())).toEqual([]);
     expect(await down.call('gh_x', {}, signal())).toMatchObject({ outcome: 'error' });
   });

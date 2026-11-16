@@ -4,7 +4,7 @@ import { createMcpHandler, McpServer, type CallToolResult } from '@modelcontextp
 import { z } from 'zod';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
 import { isCurrentAssistantTool, isWakeTool, type RegisteredTool, type ToolRegistry } from '../core/tool-registry.js';
-import { githubToolPrefix, type GithubBridge } from './github-bridge.js';
+import { azureToolPrefix, githubToolPrefix, type RemoteMcpBridge } from './remote-mcp.js';
 import { searchVoiceTools, shortenVoiceDescription } from '../voice/voice-tools.js';
 import { piTurnPattern, type PiTurnRegistry } from './turns.js';
 
@@ -41,17 +41,22 @@ function shapeSchema(tool: RegisteredTool): unknown {
  * Authority is the per-turn reference (see turns.ts): the owner message and session come from the server-side grant,
  * never from anything the model writes.
  */
-export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; readonly auth: PiAuth; readonly github?: GithubBridge | undefined }): FastifyPluginAsync {
-  const { registry, auth, github } = options;
+export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; readonly auth: PiAuth; readonly bridges?: readonly RemoteMcpBridge[] | undefined }): FastifyPluginAsync {
+  const { registry, auth } = options;
+  const bridges = options.bridges ?? [];
 
-  async function callGithub(name: string, args: Record<string, unknown>, grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>, signal: AbortSignal): Promise<CallToolResult> {
-    if (!github) return text({ tool: name, outcome: 'refused', result: { refused: notFound } });
-    // The Deploy smoke may read one issue, as the old smoke role did, and nothing else.
-    if (grant.smoke === true && (name !== `${githubToolPrefix}issue_read` || args.issue_number !== 700 || args.method !== 'get')) {
+  /** The Deploy smoke may read one GitHub issue and list Azure resources, as the old smoke role did, and nothing else. */
+  function smokeMayCall(name: string, args: Record<string, unknown>): boolean {
+    if (name.startsWith(githubToolPrefix)) return name === `${githubToolPrefix}issue_read` && args.issue_number === 700 && args.method === 'get';
+    return name.startsWith(azureToolPrefix) && /^[a-z_]*list[a-z_]*$/u.test(name.slice(azureToolPrefix.length));
+  }
+
+  async function callRemote(bridge: RemoteMcpBridge, name: string, args: Record<string, unknown>, grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>, signal: AbortSignal): Promise<CallToolResult> {
+    if (grant.smoke === true && !smokeMayCall(name, args)) {
       grant.results.push({ tool: name, outcome: 'refused' });
-      return text({ tool: name, outcome: 'refused', result: { refused: 'The smoke may only read issue 700. Nothing was done.' } });
+      return text({ tool: name, outcome: 'refused', result: { refused: 'The smoke may only read one GitHub issue and list Azure resources. Nothing was done.' } });
     }
-    const done = await github.call(name, args, signal);
+    const done = await bridge.call(name, args, signal);
     grant.results.push({ tool: name, outcome: done.outcome });
     const body = JSON.stringify(done.result);
     const result = body.length > maxResultCharacters
@@ -69,11 +74,13 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     }, async (input, ctx) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: 'find_tools', outcome: 'refused', result: { refused: unknownTurn } }, true);
-      // GitHub's tools are searched like Jarvis's own, so only the ones a turn asks for are ever put in front of the model.
-      const githubTools = github ? await github.tools(AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal])) : [];
-      const catalogue: ToolRegistry = githubTools.length === 0 ? app.jarvisTools : {
-        list: () => [...app.jarvisTools.list(), ...githubTools],
-        get: (name) => app.jarvisTools.get(name) ?? githubTools.find((tool) => tool.name === name),
+      // The remote servers' tools (GitHub, Azure) are searched like Jarvis's own, so only the ones a turn asks for are ever put in
+      // front of the model. Each catalogue is bounded, so a slow server never holds up a search of the local tools.
+      const turnSignal = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
+      const remoteTools = (await Promise.all(bridges.map((bridge) => bridge.tools(turnSignal)))).flat();
+      const catalogue: ToolRegistry = remoteTools.length === 0 ? app.jarvisTools : {
+        list: () => [...app.jarvisTools.list(), ...remoteTools],
+        get: (name) => app.jarvisTools.get(name) ?? remoteTools.find((tool) => tool.name === name),
       };
       const matches = searchVoiceTools(catalogue, input.query, grant.brain ? isWakeTool : undefined);
       const full = matches.slice(0, maxFullResults);
@@ -95,8 +102,9 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     }, async (input, ctx) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
-      if (input.name.startsWith(githubToolPrefix) && grant.discovered.has(input.name)) {
-        return callGithub(input.name, input.arguments, grant, AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]));
+      const bridge = bridges.find((candidate) => input.name.startsWith(candidate.prefix));
+      if (bridge && grant.discovered.has(input.name)) {
+        return callRemote(bridge, input.name, input.arguments, grant, AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]));
       }
       const tool = app.jarvisTools.get(input.name);
       const visible = tool && (grant.brain ? isWakeTool(tool.name) : isCurrentAssistantTool(tool.name));

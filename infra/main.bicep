@@ -1355,6 +1355,8 @@ output containerRegistryName string = registry.name
 output containerRegistryLoginServer string = registry.properties.loginServer
 output azureMcpUrl string = deployAzureMcp ? 'https://${azureMcpApp!.properties.configuration.ingress.fqdn}' : ''
 output foundryProjectPrincipalId string = foundryProject.identity.principalId
+// The backend calls the Azure MCP server with this identity (setup-azure-mcp.ps1 grants it the server's app role).
+output backendIdentityPrincipalId string = backendIdentity.properties.principalId
 output foundryAccountName string = foundryAccount.name
 output foundryProjectName string = foundryProject.name
 output foundryAdminEndpoint string = 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
