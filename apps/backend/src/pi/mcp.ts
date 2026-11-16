@@ -3,9 +3,8 @@ import { toNodeHandler } from '@modelcontextprotocol/node';
 import { createMcpHandler, McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
-import { isCurrentAssistantTool, type RegisteredTool } from '../core/tool-registry.js';
+import { isCurrentAssistantTool, isWakeTool, type RegisteredTool } from '../core/tool-registry.js';
 import { searchVoiceTools, shortenVoiceDescription } from '../voice/voice-tools.js';
-import { brainMayRun, brainSeesTool } from './brain/policy.js';
 import { piTurnPattern, type PiTurnRegistry } from './turns.js';
 
 const maxFullResults = 3;
@@ -54,7 +53,7 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     }, async (input) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: 'find_tools', outcome: 'refused', result: { refused: unknownTurn } }, true);
-      const matches = searchVoiceTools(app.jarvisTools, input.query, grant.brain ? brainSeesTool : undefined);
+      const matches = searchVoiceTools(app.jarvisTools, input.query, grant.brain ? isWakeTool : undefined);
       const full = matches.slice(0, maxFullResults);
       for (const tool of full) grant.discovered.add(tool.name);
       return text({
@@ -68,20 +67,16 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     });
     server.registerTool('call_tool', {
       title: 'Run a Jarvis tool',
-      description: 'Run a tool that find_tools returned, with its exact name and arguments that follow its schema. Pass the turn reference from the current message. Writes need Dan\'s approval inside the tool; report what the result says, never more.',
+      description: 'Run a tool that find_tools returned, with its exact name and arguments that follow its schema. Pass the turn reference from the current message. Report what the result says, never more.',
       inputSchema: callSchema,
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     }, async (input, ctx) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
       const tool = app.jarvisTools.get(input.name);
-      const visible = tool && (grant.brain ? brainSeesTool(tool.name) : isCurrentAssistantTool(tool.name));
+      const visible = tool && (grant.brain ? isWakeTool(tool.name) : isCurrentAssistantTool(tool.name));
       if (!tool || !visible || !grant.discovered.has(tool.name)) {
         return text({ tool: input.name, outcome: 'refused', result: { refused: notFound } });
-      }
-      if (grant.brain && !brainMayRun(tool, input.arguments)) {
-        grant.results.push({ tool: tool.name, outcome: 'refused' });
-        return text({ tool: tool.name, outcome: 'refused', result: { refused: 'A background wake can only read, or use its own message, note and trail tools. Nothing was done.' } });
       }
       const abort = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
       try {
@@ -91,10 +86,10 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
           headers: {
             authorization: `Bearer ${auth.dispatch.token}`,
             'content-type': 'application/json',
-            // The stored owner message of this turn, from the grant. Tools prove the write against it.
-            // A brain wake has no owner message: it carries its run id, and the route lets only the brain's tools through.
+            // The stored owner message of this turn, from the grant. A brain wake has no owner message: it carries its run id.
             ...(grant.smoke === true ? { 'x-jarvis-smoke': 'true' }
-              : grant.brain ? { 'x-jarvis-brain': grant.brain.runId } : { 'x-jarvis-message-id': grant.messageId }),
+              : grant.brain ? { 'x-jarvis-pi': 'wake', 'x-jarvis-brain': grant.brain.runId }
+                : { 'x-jarvis-pi': 'turn', 'x-jarvis-message-id': grant.messageId }),
           },
           payload: JSON.stringify(input.arguments),
           signal: abort,

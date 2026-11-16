@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import { isPiWake, piWakeSource } from '../core/pi-authority.js';
 import {
   InboxCaptureCredentialLimit, InboxCaptureCredentialUnavailable, maxInboxCaptureCredentials,
   type InboxCaptureCredentials,
@@ -109,6 +110,7 @@ export function createInboxModule(options: {
   const { store, index } = options;
 
   async function ownerMessage(request: FastifyRequest, signal: AbortSignal): Promise<{ id: string; text: string }> {
+    if (isPiWake(request)) return { id: piWakeSource(request).sessionId, text: '' };
     const header = request.headers['x-jarvis-message-id'] ??
       request.jarvisConversationMessage?.id ?? request.jarvisMemorySourceMessageId;
     if (typeof header !== 'string' || !messageIdPattern.test(header) || BigInt(header) > maxSqlMessageId) {

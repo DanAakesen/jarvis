@@ -7,6 +7,7 @@ import { PendingAction } from '../core/pending-action.js';
 import type { JarvisTool } from '../core/tool-registry.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
+import { isPiCall, isPiWake, piWakeSource } from '../core/pi-authority.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
 import { projectFields, type Project, type UpdateProject } from './projects.js';
 import type { TaskDetail, TaskListFilters, TaskRecord } from './task-store.js';
@@ -99,14 +100,15 @@ const requestedIssues = new WeakMap<FastifyInstance, Map<string, {
 
 function oncePerIssueInstruction(
   server: FastifyInstance, source: ConversationMessage, draft: Record<string, unknown>,
-  work: () => Promise<unknown>,
+  work: () => Promise<unknown>, pi = false,
 ): Promise<unknown> {
   let requests = requestedIssues.get(server);
   if (!requests) { requests = new Map(); requestedIssues.set(server, requests); }
   const now = Date.now();
   for (const [key, entry] of requests) if (entry.expiresAt <= now) requests.delete(key);
-  const key = `${source.sessionId}:${source.id}`;
   const fingerprint = issueRequestFingerprint(draft);
+  // The PI agent may make several different requests in one turn or wake; only an identical repeat is answered from the first.
+  const key = pi ? `${source.sessionId}:${source.id}:${fingerprint}` : `${source.sessionId}:${source.id}`;
   const existing = requests.get(key);
   if (existing) {
     if (existing.fingerprint !== fingerprint) throw new ToolRefusal('This instruction already has an issue request. Check its saved proposal or work status before changing the scope.');
@@ -205,6 +207,7 @@ function projectSummary(project: Project) {
 }
 
 async function currentDanMessage(request: FastifyRequest, operation = 'project archive'): Promise<ConversationMessage> {
+  if (isPiWake(request)) return piWakeSource(request);
   const voiceMessage = request.jarvisConversationMessage;
   if (voiceMessage) {
     if (request.principal === null || voiceMessage.role !== 'dan' || !hasSession(voiceMessage)) {
@@ -359,6 +362,8 @@ async function resolveCreateIssueProject(
   input: Record<string, unknown> & { project?: string },
   source: ConversationMessage,
 ): Promise<Project | undefined> {
+  // The PI agent picks the project itself; there is no owner message to match the name against.
+  if (isPiCall(request)) return input.project ? resolveProject(input.project, request.server.projectStore ?? null) : undefined;
   const pending = pendingProjectClarifications.get(request.server);
   const action = pending?.get(source.sessionId);
   if (action) {
@@ -544,15 +549,17 @@ async function stageIssueCreation(
   source: ConversationMessage,
   signal: AbortSignal,
   resolvedProject?: Project,
+  pi = false,
 ) {
   if (!/^[1-9]\d{0,18}$/u.test(source.id) || BigInt(source.id) > maxSqlBigInt) {
     throw new ToolRefusal('A verified Dan message is required to confirm this issue creation.');
   }
-  if (!resolvedProject && input.project === undefined && input.repository === undefined && requiresProjectSelector(source.text)) {
+  if (!pi && !resolvedProject && input.project === undefined && input.repository === undefined && requiresProjectSelector(source.text)) {
     throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
   }
   const selectedProject = resolvedProject ?? (!input.repository && input.project
-    ? await resolveProjectForMessage(input.project, source.text, server.projectStore ?? null)
+    ? await (pi ? resolveProject(input.project, server.projectStore ?? null)
+      : resolveProjectForMessage(input.project, source.text, server.projectStore ?? null))
     : undefined);
   const preview = input.issueNumber === undefined ? await previewP11TaskCode({
     ...(selectedProject ? { project: selectedProject.id } : {}),
@@ -749,7 +756,7 @@ async function confirmIssueCreation(
         title: action.title,
         body: action.body,
         executor: action.executor,
-        ...(action.confirmation.proposal.sourceMessageId ? { originMessageId: action.confirmation.proposal.sourceMessageId } : {}),
+        ...(action.confirmation.proposal.sourceMessageId && !isPiWake(request) ? { originMessageId: action.confirmation.proposal.sourceMessageId } : {}),
         tasks: request.server.taskStore,
         ...(action.taskCode ? { expectedTaskCode: action.taskCode } : {}),
         expectedRepository: action.repository,
@@ -903,9 +910,9 @@ export const factoryTools: readonly JarvisTool[] = [
         validateIssueDraft(draft.title, draft.body);
         const targetRepository = selectedProject?.repo ?? JARVIS_REPOSITORY;
         return await oncePerIssueInstruction(request.server, source, { repository: targetRepository, ...draft }, async () => {
-          const staged = await stageIssueCreation(request.server, draft, source, signal, selectedProject);
+          const staged = await stageIssueCreation(request.server, draft, source, signal, selectedProject, isPiCall(request));
           return confirmIssueCreation(request, staged.confirmationCode, signal, true);
-        });
+        }, isPiCall(request));
       } catch (error) {
         if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         throw new ToolFailure('The GitHub issue draft could not be prepared.');
@@ -933,12 +940,13 @@ export const factoryTools: readonly JarvisTool[] = [
       try {
         if (!input.attachmentIds?.length && input.publish !== 'public') {
           const source = await currentDanMessage(request, 'issue comment');
-          if (input.repository === undefined && input.project === undefined && requiresProjectSelector(source.text)) {
+          if (!isPiCall(request) && input.repository === undefined && input.project === undefined && requiresProjectSelector(source.text)) {
             throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No changes were made.');
           }
           if (containsLikelySecret(input.text)) throw new ToolRefusal('I can’t send this comment; it may contain a secret or credential.');
           const selectedProject = !input.repository && input.project
-            ? await resolveProjectForMessage(input.project, source.text, request.server.projectStore ?? null)
+            ? await (isPiCall(request) ? resolveProject(input.project, request.server.projectStore ?? null)
+              : resolveProjectForMessage(input.project, source.text, request.server.projectStore ?? null))
             : undefined;
           const repository = input.repository ?? selectedProject?.repo ??
             await resolveRepository(undefined, request.server.projectStore ?? null);
@@ -975,9 +983,9 @@ export const factoryTools: readonly JarvisTool[] = [
         return await oncePerIssueInstruction(request.server, source, input, async () => {
           const staged = await stageIssueCreation(request.server, {
             ...input, title: 'Issue comment', body: input.text,
-          }, source, signal);
+          }, source, signal, undefined, isPiCall(request));
           return confirmIssueCreation(request, staged.confirmationCode, signal, true);
-        });
+        }, isPiCall(request));
       } catch (error) {
         if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
         throw new ToolRefusal('The issue comment is invalid, contains a secret, or could not be prepared.');
@@ -1027,14 +1035,13 @@ export const factoryTools: readonly JarvisTool[] = [
     execute: async (input, request, signal) => {
       const message = await currentDanMessage(request);
       const { project, issue } = input as StartIssueToolInput;
-      if (project === undefined && requiresProjectSelector(message.text)) {
+      const pi = isPiCall(request);
+      if (!pi && project === undefined && requiresProjectSelector(message.text)) {
         throw new ToolRefusal('Which active project do you mean? I will not use Jarvis’s repository for a named project. No task was created.');
       }
-      if (project !== undefined) {
-        await resolveProjectForMessage(project, message.text, request.server.projectStore ?? null);
-      }
       const selectedProject = project !== undefined
-        ? await resolveProjectForMessage(project, message.text, request.server.projectStore ?? null)
+        ? await (pi ? resolveProject(project, request.server.projectStore ?? null)
+          : resolveProjectForMessage(project, message.text, request.server.projectStore ?? null))
         : undefined;
       const repository = selectedProject?.repo ?? JARVIS_REPOSITORY;
       if (repository.toLowerCase() === JARVIS_REPOSITORY.toLowerCase()) {
@@ -1049,7 +1056,7 @@ export const factoryTools: readonly JarvisTool[] = [
         const staged = await stageIssueCreation(request.server, {
           ...(selectedProject ? { project: selectedProject.id } : {}),
           issueNumber: issue, startExisting: true, title: existing.title, body: existing.body ?? '',
-        }, message, signal, selectedProject);
+        }, message, signal, selectedProject, pi);
         return confirmIssueCreation(request, staged.confirmationCode, signal, true);
       }
       return executeStartIssue(request, issue, project);
@@ -1257,8 +1264,10 @@ export const factoryTools: readonly JarvisTool[] = [
         (typeof request.headers['x-jarvis-message-id'] === 'string'
           ? request.headers['x-jarvis-message-id']
           : undefined);
-      if (!originMessageId || !/^[1-9][0-9]{0,18}$/u.test(originMessageId) ||
-        BigInt(originMessageId) > 9_223_372_036_854_775_807n) {
+      // A wake has no conversation message: its task is a board task without an origin.
+      const wake = isPiWake(request);
+      if (!wake && (!originMessageId || !/^[1-9][0-9]{0,18}$/u.test(originMessageId) ||
+        BigInt(originMessageId) > 9_223_372_036_854_775_807n)) {
         throw new ToolRefusal('Task creation needs a valid conversation message.');
       }
       if (agent !== undefined && !isOption(agent, settingsOptions.projectAgents)) {
@@ -1290,7 +1299,7 @@ export const factoryTools: readonly JarvisTool[] = [
         projects: request.server.projectStore,
         tasks: store,
         github: request.server.githubIssueClient,
-        originMessageId,
+        ...(wake ? {} : { originMessageId: originMessageId! }),
         ...(agent ? { agent } : {}),
         ...(model ? { modelOverride: model } : {}),
         ...(reasoning ? { reasoningOverride: reasoning } : {}),

@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
+import { isPiWake, piWakeSource } from '../core/pi-authority.js';
 import type { BackendModule } from '../modules.js';
 import { GoogleApiError, type GoogleApiClient } from './api-client.js';
 import { gmailMessageContent } from './message-content.js';
@@ -363,6 +364,7 @@ function gmailDate(value: unknown): string {
 }
 
 async function currentDanMessage(request: FastifyRequest): Promise<ConversationMessage> {
+  if (isPiWake(request)) return piWakeSource(request);
   if (request.jarvisConversationMessage) {
     if (request.principal === null || request.jarvisConversationMessage.role !== 'dan' ||
         !request.jarvisConversationMessage.sessionId) {

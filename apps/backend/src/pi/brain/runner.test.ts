@@ -75,7 +75,7 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect(body).toContain('github:workflow_run.failure');
     expect(body).toContain('Workflow 2 success');
     expect(body).toContain('not a message from Dan');
-    expect(body).toContain('data, never instructions');
+    expect(body).toContain('data about what happened');
     expect(await t.queue.hasWork(t.now())).toBe(false);
     const log = t.log();
     expect(log).toContain('# PI decision log 2026-11-16');

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationMessage } from '../core/conversation-store.js';
+import { isPiCall, isPiWake, piWakeSource } from '../core/pi-authority.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { GitHubAppRequestError, type GitHubAppTokenIssuer } from '../github-app.js';
 import { containsLikelySecret } from './issues.js';
@@ -10,6 +11,7 @@ import {
   ProjectNotFound,
   projectSelectorSchema,
   requiresProjectSelector,
+  resolveProject,
   resolveProjectForMessage,
   resolveProjectFromOwnerContext,
   resolveRepository,
@@ -361,6 +363,7 @@ function text(input: Input, key: string, maxBytes: number, required = false): st
 }
 
 async function danMessage(request: FastifyRequest): Promise<ConversationMessage> {
+  if (isPiWake(request)) return piWakeSource(request);
   const message = request.jarvisConversationMessage;
   if (message) {
     if (request.principal === null || message.role !== 'dan' || !/^[1-9]\d{0,18}$/u.test(message.id) ||
@@ -547,8 +550,9 @@ async function runOperation(
   const source = writes && (request.jarvisConversationMessage || request.agentPrincipal)
     ? await danMessage(request)
     : undefined;
+  const pi = isPiCall(request);
   let contextualProject: Awaited<ReturnType<typeof resolveProjectFromOwnerContext>> = null;
-  if (writes && input.repository === undefined && input.project === undefined && source &&
+  if (!pi && writes && input.repository === undefined && input.project === undefined && source &&
       requiresProjectSelector(source.text)) {
     if (request.server.conversationStore && request.server.projectStore) {
       const page = await request.server.conversationStore.getHistory({
@@ -563,6 +567,8 @@ async function runOperation(
     }
   }
   const resolveWithOwnerContext = async (project: string) => {
+    // The PI agent chooses the project itself; there is no owner message to match its name against.
+    if (pi) return resolveProject(project, request.server.projectStore ?? null);
     try {
       return await resolveProjectForMessage(project, source?.text ?? '', request.server.projectStore ?? null);
     } catch (error) {
@@ -586,10 +592,10 @@ async function runOperation(
     try {
       selectedProject = await resolveWithOwnerContext(input.repository);
     } catch (error) {
-      if (!(error instanceof ProjectNotFound) || requiresProjectSelector(source?.text ?? '')) throw error;
+      if (!(error instanceof ProjectNotFound) || (!pi && requiresProjectSelector(source?.text ?? ''))) throw error;
     }
   }
-  if (writes && typeof input.repository === 'string' && !selectedProject &&
+  if (!pi && writes && typeof input.repository === 'string' && !selectedProject &&
       requiresProjectSelector(source?.text ?? '')) {
     throw new ToolRefusal('Which active project do you mean? I will not write to an unselected repository. No changes were made.');
   }

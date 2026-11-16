@@ -1,3 +1,4 @@
+import { isPiWake, piWakeSource } from '../core/pi-authority.js';
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
@@ -134,6 +135,7 @@ function parseInput(value: unknown): ReminderInput | undefined {
 }
 
 async function ownerMessage(request: FastifyRequest, ownerObjectId: string, signal: AbortSignal): Promise<{ id: string; text: string }> {
+  if (isPiWake(request)) return { id: piWakeSource(request).sessionId, text: '' };
   const direct = request.jarvisConversationMessage;
   const authorized = request.principal?.objectId.toLowerCase() === ownerObjectId.toLowerCase() ||
     request.agentPrincipal !== null && request.agentPrincipal !== undefined;
@@ -246,7 +248,8 @@ export function createOwnerReminderTool(options: {
         if (matches.length !== 1) throw new ToolRefusal('That task is ambiguous. Identify its unique task name before scheduling.');
         const task = matches[0]!;
         const candidate: NewOwnerReminder = {
-          idempotencyKey: createHash('sha256').update(message.id).digest('hex'),
+          // A wake has no message to tell its reminders apart, so each task and time is its own request.
+          idempotencyKey: createHash('sha256').update(isPiWake(request) ? `${message.id}:${input.task}:${input.fireAt}` : message.id).digest('hex'),
           taskIdentity: task.taskIdentity,
           taskTitle: task.text,
           fireAt: intent.fireAt,
