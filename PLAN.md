@@ -19,6 +19,10 @@ Owner, 16 November 2026 (binding): "Start PI phase 6 now. I need to go to bed so
 
 Next: Deploy with `measure_pi`, the owner's phone test of voice on PI, then the cutover pull requests (checklist and deletion inventory in `docs/pi/cutover.md`).
 
+## PI voice measured, and the prompt grew — 16 November 2026 (#1887, P15-176)
+
+First `measure_pi` after voice (Deploy run 43831735508): the PI leg of a voice turn is 1.6 s to first text (plain) and 1.4 s (with a tool, after a spoken sentence from PI); the voice checks pass. Warm turns now carry about 17.7k input tokens (was about 7.5k), 99 percent cached, which is about 0.12 DKK per warm turn at list price (0.007 at the assumed cached rate). Details, what the repository says about the cause, the options (none implemented) and the new "fixed prompt" smoke row that separates the base prompt from conversation growth: `docs/harness-trial/spike-results.md`, "PI voice leg and prompt size".
+
 ## Notes, Tasks and Graph redesign — 15 November 2026 (#1894, P15-180, PR #1899)
 
 Status: implemented on the branch; waiting for CI (macOS compile) and review. Done: design pack committed, backend task delete,

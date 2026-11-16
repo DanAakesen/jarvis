@@ -46,7 +46,8 @@ def bar(value: float | None, scale: float, width: int = 40) -> str:
 
 
 def render(report: dict) -> str:
-    turns = [("cold, new conversation", report["cold"])] + [
+    turns = [("fixed prompt, new conversation", report["baseline"])] if report.get("baseline") else []
+    turns += [("cold, new conversation", report["cold"])] + [
         (f"warm turn {index + 2}", turn) for index, turn in enumerate(report["warm"])
     ] + [("tool turn (MCP)", report["tools"])] + [
         (f"voice: {label}", turn) for label, turn in (("plain", report.get("voice", {}).get("plain")), ("with a tool", report.get("voice", {}).get("tools"))) if turn
@@ -55,7 +56,7 @@ def render(report: dict) -> str:
     ]
     scale = max([turn["firstTextMs"] or 0 for _, turn in turns] + [1000])
     lines = ["### PI live smoke", "", "First text, observed through the gateway (one block is the same width for every row):", "", "```text"]
-    lines += [f"{label:<26}|{bar(turn['firstTextMs'], scale)}" for label, turn in turns]
+    lines += [f"{label:<31}|{bar(turn['firstTextMs'], scale)}" for label, turn in turns]
     lines += ["```", "", "| Turn | First text | Total | Pieces | Input | Cached | Output | DKK |", "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for label, turn in turns:
         usage = turn["usage"]
