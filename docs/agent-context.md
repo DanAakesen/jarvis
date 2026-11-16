@@ -3,6 +3,14 @@
 - Consult the apple-hig skill (justinwetch/HIGAgentSkills, MIT) for iOS UI sizes, padding, Dynamic Type and accessibility. Clone it into a scratch directory outside the repository each time and never commit it.
 - Notes redesign checks: `cd apps/ios/Packages/JarvisCore && swift test` (Linux, `swift:6.2` image works locally); `cd apps/backend && npx vitest run src/vault`. The SwiftUI screens compile only in the macOS `watch` job (`watch-build.yml`), which also captures the Notes states as screenshots (`notes-*.png` in the `watch-build-logs` artifact; continue-on-error, 14-minute bound). Launch with `--ui-test-navigation --screenshot-screen=notes --ui-test-task-list-board --screenshot-notes-state=<state>` (simulator only; states are listed in `JarvisNotesArea+Chrome.swift`).
 
+## PI voice: test it and measure it (#1887, P15-176)
+
+- Needs PI configured (the Deploy `pi-agent` job) and the Deploy that contains this change, because the agent instructions gained a Voice section (a new agent version).
+- Test: iOS Settings, General, "Engine test switch" to "PI engine", then start voice. The first answer takes a few seconds; later turns are about as fast as warm chat. Say something that needs a tool ("what is on my calendar today") to hear PI's short sentence before the answer. Interrupt it: the newest sentence wins. Roll back by switching to "Current engine" (a new voice session picks it up).
+- Measure: Deploy by hand with `measure_pi`; the job summary and log add "voice: plain" and "voice: with a tool" rows and the checks `voice_spoken_shape` and `voice_tools_over_mcp`. This is the PI leg only (about 0.3 to 0.5 DKK for the whole smoke). Real audio latency: backend logs `voice.pi_turn` (`transcriptToFirstTextMs`, `transcriptToDoneMs`) and `voice.turn_timing` (`firstAudioDeltaMs`), cost per turn in `pi.turn` (`channel: voice`) or Settings, "Last turn".
+- Local checks: `cd apps/backend && npx vitest run src/voice src/pi src/logging.test.ts`; `npx tsc --noEmit -p tsconfig.json`; `npx eslint src`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; `swift test` in `apps/ios/Packages/JarvisCore` (Linux, the `swift:6.2` image). The relay test (`voice/relay-pi.test.ts`) drives the real relay against a local WebSocket standing in for Voice Live; it does not speak audio. SwiftUI changes compile only in the macOS `watch` job.
+- Not verifiable here: Voice Live accepting a session with no `tools` (the relay omits the keys instead of sending an empty list), real audio and echo behaviour with spoken replies, and what a real PI says in voice.
+
 ## PI standing watches (#1886, P15-175)
 
 - Needs everything from the brain section plus migration `0088_pi_watch_look.sql`. The watches live in the vault under `PI/Watches` (closed ones in `PI/Watches/Closed`); read or edit them like any note. A hand-edited note is picked up after the next restart; the hidden last line sets the next look.

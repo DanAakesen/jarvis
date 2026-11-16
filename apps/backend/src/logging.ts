@@ -107,7 +107,7 @@ const events = new Set([
   'voice.proactive_context_unavailable', 'voice.credential_refresh_failed',
   'vision.watch', 'visual.path',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
-  'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
+  'voice.upstream_event_error', 'voice.turn_timing', 'voice.pi_turn', 'pi.turn', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'voice.session_stage', 'voice.stage_timeout', 'voice.session_summary', 'watch_transcription.stage',
   'voice.tool_budget_attempt', 'voice.tool_budget_selected', 'voice.tool_budget_exhausted',
   'voice.tool_budget_probe',
@@ -642,6 +642,20 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (['click', 'type', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked']
       .includes(String(input.action))) fields.action = input.action;
     if (['completed', 'refused', 'error'].includes(String(input.outcome))) fields.outcome = input.outcome;
+  }
+  if (input.msg === 'pi.turn' || input.msg === 'voice.pi_turn') {
+    if (input.channel === 'chat' || input.channel === 'voice') fields.channel = input.channel;
+    if (['ok', 'failed', 'cancelled', 'timeout', 'superseded'].includes(String(input.outcome))) fields.outcome = input.outcome;
+    if (typeof input.estimated === 'boolean') fields.estimated = input.estimated;
+    for (const key of ['firstTextMs', 'totalMs', 'transcriptToFirstTextMs', 'transcriptToDoneMs', 'transcriptToSpeakMs',
+      'inputTokens', 'cachedTokens', 'outputTokens']) {
+      const value = input[key];
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 100_000_000) fields[key] = value;
+    }
+    if (typeof input.costDkk === 'number' && Number.isFinite(input.costDkk) && input.costDkk >= 0 && input.costDkk <= 1_000) {
+      fields.costDkk = input.costDkk;
+    }
+    if (typeof input.acknowledged === 'boolean') fields.acknowledged = input.acknowledged;
   }
   if (input.msg === 'voice.turn_timing') {
     if (typeof input.turnId === 'string' && /^[\da-f-]{36}$/iu.test(input.turnId)) {

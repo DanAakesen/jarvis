@@ -211,6 +211,7 @@ public protocol WebSocketTransport: Sendable {
 
 public actor VoiceSessionClient {
     private let baseURL: URL
+    private let engine: ChatEngine
     private let transport: any WebSocketTransport
     private let clock: any ChatClock
     private let reconnectPolicy: VoiceReconnectPolicy
@@ -229,6 +230,7 @@ public actor VoiceSessionClient {
 
     public init(
         baseURL: URL,
+        engine: ChatEngine = .current,
         transport: any WebSocketTransport,
         clock: any ChatClock = ContinuousChatClock(),
         reconnectPolicy: VoiceReconnectPolicy = VoiceReconnectPolicy(),
@@ -237,6 +239,7 @@ public actor VoiceSessionClient {
         onStateChange: @escaping @Sendable (VoiceSessionState) -> Void = { _ in }
     ) {
         self.baseURL = baseURL
+        self.engine = engine
         self.transport = transport
         self.clock = clock
         self.reconnectPolicy = reconnectPolicy
@@ -252,7 +255,7 @@ public actor VoiceSessionClient {
     public func start(accessToken: String) async throws {
         guard machine.state == .idle else { throw VoiceProtocolError.invalidState }
         guard Self.isValidSubprotocolToken(accessToken) else { throw VoiceProtocolError.invalidToken }
-        let target = try VoiceEndpoint.url(baseURL: baseURL)
+        let target = try VoiceEndpoint.url(baseURL: baseURL, engine: engine)
         endpoint = target
         subprotocols = [VoiceEndpoint.subprotocol, "jarvis.auth.\(accessToken)"]
         apply(.start)

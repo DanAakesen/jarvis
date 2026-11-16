@@ -42,6 +42,8 @@ export interface ConversationAgentInput {
   readonly agentSessionId?: string;
   readonly turnId?: string;
   readonly text: string;
+  /** Set by the voice relay on the PI engine: the reply is spoken aloud, so the agent keeps it short and plain. */
+  readonly channel?: 'voice';
   readonly smoke?: boolean;
   readonly smokeHistory?: readonly { readonly role: 'user' | 'assistant'; readonly text: string }[];
   readonly smokeApproval?: boolean;

@@ -76,6 +76,15 @@ describe('PI gateway', () => {
     expect(registry.resolve(turn)).toBeUndefined();
   });
 
+  it('tells the agent a voice turn is spoken, and a chat turn nothing of the kind', async () => {
+    const { gateway, calls } = setup([() => sse(delta('x'), completed(1, 0, 1)), () => sse(delta('y'), completed(1, 0, 1))]);
+    const input = () => (calls.at(-1)!.body!.input as Array<{ content: string }>)[0]!.content;
+    for await (const chunk of gateway.stream({ messageId: '42', sessionId: '7', text: 'hi', channel: 'voice' }, '', new AbortController().signal)) void chunk;
+    expect(input()).toMatch(/\[Channel: voice\. [^\]]*spoken[^\]]*\]\n\nhi$/u);
+    for await (const chunk of gateway.stream({ messageId: '43', sessionId: '7', text: 'again' }, '', new AbortController().signal)) void chunk;
+    expect(input()).not.toContain('Channel: voice');
+  });
+
   it('marks text before a tool call as an acknowledgment, then commentary', async () => {
     const { run } = setup([() => sse(delta('Checking.'), tool, delta('Still on it.'), tool, delta('Done.'), completed(5, 0, 5))]);
     expect(await run('look')).toEqual([

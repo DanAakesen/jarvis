@@ -6,7 +6,7 @@ import {
 import { foundryTokenCosts } from '../core/usage-pricing.js';
 import { PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
 import { PiGatewayError } from './errors.js';
-import { formatTurn, formatWarmup } from './prompt.js';
+import { formatTurn, formatWarmup, voiceChannelNote } from './prompt.js';
 import { chatTurnKinds, type PiStore, type PiStoredTurn, type PiTurnRecord } from './store.js';
 import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
 
@@ -94,7 +94,7 @@ export interface PiGateway extends ConversationAgent {
     openGrant(signal: AbortSignal): PiTurnGrant;
     closeGrant(turn: string): void;
     recordSmoke(turn: PiTurnRecord, signal: AbortSignal): Promise<void>;
-    format(turn: string, text: string): string;
+    format(turn: string, text: string, channel?: 'voice'): string;
     cost(usage: PiUsage): number;
     now(): Date;
   };
@@ -372,7 +372,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
   async function* stream(input: ConversationAgentInput, _authorization: string, signal: AbortSignal): AsyncGenerator<ConversationAgentChunk> {
     const started = performance.now();
-    const notes: string[] = [];
+    const notes: string[] = input.channel === 'voice' ? [voiceChannelNote] : [];
     if (input.visualContext !== undefined) {
       const description = input.visualContext.description;
       if (!description) throw new PiGatewayError('pi_unsupported', 'PI chat does not handle live screen or camera frames yet, so nothing was sent.');
@@ -459,7 +459,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
         inputTokens: billed?.inputTokens ?? 0, cachedTokens: billed?.cachedTokens ?? 0, outputTokens: billed?.outputTokens ?? 0,
         costDkk: billed ? costOf(billed) : 0, firstTextMs, totalMs, outcome,
       }, billed, `pi:${input.messageId}:${now().getTime()}`);
-      log('pi.turn', { outcome, firstTextMs, totalMs, ...(billed ?? {}), estimated: usage === undefined && billed !== undefined, costDkk: billed ? costOf(billed) : 0 });
+      log('pi.turn', { channel: input.channel ?? 'chat', outcome, firstTextMs, totalMs, ...(billed ?? {}), estimated: usage === undefined && billed !== undefined, costDkk: billed ? costOf(billed) : 0 });
     }
   }
 
@@ -542,7 +542,9 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       openGrant: (signal) => options.registry.open({ ownerObjectId: options.owner, sessionId: '', messageId: '', smoke: true, signal }),
       closeGrant: (turn) => options.registry.close(turn),
       recordSmoke: (turn, signal) => options.store.recordTurn(turn, signal),
-      format: (turn, text) => formatTurn({ turn, now: now(), timeZone: options.timeZone, text }),
+      format: (turn, text, channel) => formatTurn({
+        turn, now: now(), timeZone: options.timeZone, text, ...(channel === 'voice' ? { notes: [voiceChannelNote] } : {}),
+      }),
       cost: costOf,
       now,
     },

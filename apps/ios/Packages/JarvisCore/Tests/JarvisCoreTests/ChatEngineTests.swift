@@ -17,6 +17,25 @@ final class ChatEngineTests: XCTestCase {
         XCTAssertEqual(ChatEngineSelection.load(from: defaults), .current)
     }
 
+    func testVoiceEndpointCarriesEngineOnlyForPi() throws {
+        let base = try XCTUnwrap(URL(string: "https://example.invalid/api"))
+        XCTAssertEqual(try VoiceEndpoint.url(baseURL: base).absoluteString, "wss://example.invalid/api/voice")
+        XCTAssertEqual(try VoiceEndpoint.url(baseURL: base, engine: .current).absoluteString, "wss://example.invalid/api/voice")
+        XCTAssertEqual(try VoiceEndpoint.url(baseURL: base, engine: .pi).absoluteString, "wss://example.invalid/api/voice?engine=pi")
+    }
+
+    func testVoiceSessionConnectsWithTheChosenEngine() async throws {
+        let base = try XCTUnwrap(URL(string: "https://example.invalid/api"))
+        let pi = VoiceRecordingSocket()
+        try await VoiceSessionClient(baseURL: base, engine: .pi, transport: pi).start(accessToken: "a.b.c")
+        let current = VoiceRecordingSocket()
+        try await VoiceSessionClient(baseURL: base, transport: current).start(accessToken: "a.b.c")
+        let piURLs = await pi.connectedURLs()
+        let currentURLs = await current.connectedURLs()
+        XCTAssertEqual(piURLs.map(\.absoluteString), ["wss://example.invalid/api/voice?engine=pi"])
+        XCTAssertEqual(currentURLs.map(\.absoluteString), ["wss://example.invalid/api/voice"])
+    }
+
     func testWarmThrottleAllowsOneAttemptPerInterval() {
         var throttle = PiWarmThrottle(interval: 300)
         let start = Date(timeIntervalSince1970: 1_000)
@@ -148,6 +167,17 @@ final class ChatEngineTests: XCTestCase {
             accessTokenProvider: StaticTokenProvider()
         )
     }
+}
+
+private actor VoiceRecordingSocket: WebSocketTransport {
+    private var urls: [URL] = []
+
+    func connect(url: URL, subprotocols: [String]) async throws { urls.append(url) }
+    func send(text: String) async throws {}
+    func receive() async -> AsyncThrowingStream<String, any Error> { AsyncThrowingStream { $0.finish() } }
+    func close(code: UInt16) async {}
+
+    func connectedURLs() -> [URL] { urls }
 }
 
 private actor RecordingTransport: HTTPTransport {

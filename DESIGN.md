@@ -30,6 +30,10 @@ switch while a query is present; clearing the query restores the previous folder
 - Sheets can stack where the design returns to the same draft (editor to folder chooser, Edit task to Date & time);
   apple-hig prefers one sheet at a time. This is a known, deliberate deviation.
 
+## PI voice — 16 November 2026 (#1887, P15-176)
+
+No new screen. The existing voice screen and orb are unchanged; the only visible differences with the PI engine are in what Jarvis says and when. Settings, General, "Engine test switch" (renamed from "Chat engine test switch") now applies to chat and voice: the choice is read when a voice session starts, the Watch keeps the current engine, and the explanation says so in one sentence plus the two limits that matter to a tester (no camera or screen sharing with PI yet; no fallback to the current engine). When Dan starts voice with PI the first answer takes a few seconds (accepted); a turn that needs a tool opens with one short spoken sentence from PI, then the answer. Replies are one to three short sentences; anything long is offered in chat. If PI cannot answer, Jarvis says why in one sentence ("No other engine was used"). Not inspected on a device or simulator: it is a copy change and a connection parameter, and the Apple CI compile is the check.
+
 ## PI standing watches — 16 November 2026 (#1886, P15-175)
 
 No new screen: watches are listed, changed and stopped in chat or by voice, in plain sentences (name, next look, looks today, an estimated cost in DKK with the word "estimate"). The reply to "keep me updated on X" is one sentence: what is watched and when the first look is. A report from a watch is an ordinary Jarvis chat message and push, only when something changed that matters; there is never a "still waiting" message. The Watch is parked and was not touched.
@@ -46,7 +50,7 @@ No visible UI. PI says in plain words when a read-only server is not attached ("
 
 ## PI test switch in iOS — 15 November 2026 (#1885, P15-174)
 
-A temporary, clearly marked test control, deleted at cutover. Settings, General, section "Test switch": the shared segmented bar chooses Current engine or PI engine (stored on the device, default Current), an explanation says it affects chat only and has no fallback, and while PI is chosen live rows show status, agent and model, month spend against the cap, warm or cold, the monthly cap (default 100 DKK) and what is left this month (shown in red text at 0), and the last turn (first text ms, tokens including cached, DKK) with a refresh button. The Chat header shows a small "PI test" pill (icon plus text, new shared `JarvisStatusPill`) while PI is chosen. PI failures show the server's own sentence in the chat error banner. Not inspected on a device or simulator by me; the macOS CI compile is the check.
+A temporary, clearly marked test control, deleted at cutover. Settings, General, section "Test switch": the shared segmented bar chooses Current engine or PI engine (stored on the device, default Current), an explanation says it affected chat only (from 16 November 2026 it covers voice too, see "PI voice" above) and has no fallback, and while PI is chosen live rows show status, agent and model, month spend against the cap, warm or cold, the monthly cap (default 100 DKK) and what is left this month (shown in red text at 0), and the last turn (first text ms, tokens including cached, DKK) with a refresh button. The Chat header shows a small "PI test" pill (icon plus text, new shared `JarvisStatusPill`) while PI is chosen. PI failures show the server's own sentence in the chat error banner. Not inspected on a device or simulator by me; the macOS CI compile is the check.
 
 
 ## Event-driven proactive outreach — 15 November 2026 (#1858)

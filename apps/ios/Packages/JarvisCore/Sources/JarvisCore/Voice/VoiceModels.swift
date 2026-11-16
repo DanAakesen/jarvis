@@ -3,7 +3,7 @@ import Foundation
 public enum VoiceEndpoint {
     public static let subprotocol = "jarvis.voice.v1"
 
-    public static func url(baseURL: URL) throws -> URL {
+    public static func url(baseURL: URL, engine: ChatEngine = .current) throws -> URL {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false),
               ["http", "https"].contains(components.scheme?.lowercased() ?? ""),
               components.host != nil,
@@ -21,6 +21,8 @@ public enum VoiceEndpoint {
             options: .regularExpression
         )
         components.path = "\(basePath)/voice"
+        // TEST-ONLY: the engine test switch. Only PI is named; the current engine is the route's default.
+        if engine == .pi { components.queryItems = [URLQueryItem(name: "engine", value: "pi")] }
         guard let url = components.url else { throw JarvisClientError.invalidBaseURL }
         return url
     }
