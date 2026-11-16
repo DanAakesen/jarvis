@@ -91,7 +91,7 @@ struct JarvisFolderChooserSheet: View {
             HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
                 if allowsNewFolder {
                     JarvisLabelledButton(
-                        title: copy.newFolder, systemImage: "plus",
+                        title: copy.newFolderTitle, systemImage: "plus",
                         identifier: "folders.new", isDisabled: failed || loading
                     ) {
                         folderError = nil
@@ -108,7 +108,7 @@ struct JarvisFolderChooserSheet: View {
         .jarvisAmbientBackground()
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
-        .alert(copy.newFolder, isPresented: $newFolderPresented) {
+        .alert(copy.newFolderTitle, isPresented: $newFolderPresented) {
             TextField(copy.folderName, text: $newFolderName)
             Button(copy.create) { stageFolder() }
             Button(copy.cancel, role: .cancel) {}
@@ -234,7 +234,7 @@ struct JarvisNewFolderSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
             HStack {
-                Text(copy.newFolder).font(.title2.weight(.bold)).accessibilityAddTraits(.isHeader)
+                Text(copy.newFolderTitle).font(.title2.weight(.bold)).accessibilityAddTraits(.isHeader)
                 Spacer()
                 JarvisSheetCloseButton(title: copy.cancel, action: onClose)
             }

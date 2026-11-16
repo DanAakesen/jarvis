@@ -151,7 +151,7 @@ extension JarvisNotesArea {
                 noteButton
                 taskButton
             }
-            Button { sheet = .newFolder } label: { Label(copy.newFolder, systemImage: "folder.badge.plus") }
+            Button { sheet = .newFolder } label: { Label(copy.newFolderTitle, systemImage: "folder.badge.plus") }
                 .accessibilityIdentifier("notes.newFolder")
         }
     }

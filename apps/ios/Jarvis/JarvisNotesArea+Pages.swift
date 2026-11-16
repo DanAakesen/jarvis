@@ -76,7 +76,7 @@ extension JarvisNotesArea {
                     }
                 }
                 if !folders.isEmpty {
-                    sectionHeader(copy.folders)
+                    sectionHeader(copy[.folders])
                     ForEach(folders) { folder in
                         folderRow(folder, first: folder.id == folders.first?.id, last: folder.id == folders.last?.id)
                     }
