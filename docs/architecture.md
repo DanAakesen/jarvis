@@ -1,3 +1,48 @@
+## PI brain loop (#1886, P15-175, part 2)
+
+The brain is the PI agent woken by a trigger, with the `jarvis-brain` skill. One wake runs in its own scratch conversation, never Dan's chat conversation. Exact things are code; what an event means and what to do about it is the model's decision.
+
+```mermaid
+flowchart TB
+    subgraph SIG["Signals (existing producers, one queue)"]
+        S1["GitHub webhook<br/>workflow and deploy results"]
+        S2["Alerts: budget, deploy, sandbox"]
+        S3["Mail and calendar changes<br/>polled every 15 min"]
+        S4["Timer review<br/>every 6 h, not at night"]
+        S5["Worker results<br/>done, needs attention, cancelled, PR opened"]
+    end
+    Q[("dbo.proactive_events<br/>queue, dedupe, leases")]
+    T["30 s ticker<br/>(proactive scheduler)"]
+    G{"Exact guards<br/>owner switch, pause,<br/>10 min spacing, 12 wakes a day,<br/>100 DKK budget stop"}
+    W["Wake: PI agent, scratch conversation<br/>jarvis-brain skill"]
+    R["Read-only Jarvis tools<br/>+ GitHub and Azure MCP"]
+    A["Brain-only tools<br/>message_dan, pi_note, inbox_trail"]
+    C["Chat message from Jarvis<br/>stored in Dan's chat, pushed (iOS, mirrored to Watch)"]
+    L[("Vault: PI/Log/day.md<br/>PI/Notes, inbox trail")]
+    SIG --> Q --> T --> G --> W
+    W <--> R
+    W --> A
+    A --> C
+    A --> L
+    W -->|"closing statement + facts"| L
+    L -. "next wake reads it" .-> W
+```
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Loop | `pi/brain/runner.ts` | Per tick: switch, pause, due work, spacing, daily count, budget, claim up to 30 events, admit (retry cap, staleness, a lone timer review skipped in quiet hours), `startBatch`, wake, bill, settle or retry, decision log. The old pipeline's rules that judged events (routine build results, hourly caps) are **not** used: the model decides |
+| Wake text | `pi/brain/wake.ts` | Why it woke (events with id, source, kind, age, summary, small detail), the budget note, and a request for a short closing statement. Event text is labelled as data |
+| Gateway | `pi/gateway.ts` `runBrain` | Scratch conversation, brain grant, 240 s deadline, usage recorded as a `brain` turn in `dbo.pi_turn` (tokens, cached tokens, DKK) and through `recordFoundryUsage` (event id `pi:brain:<run>`). A failure is returned with what was billed; a wake that reached the model without a usage report is charged at an estimate |
+| Reading | `pi/brain/policy.ts`, `pi/mcp.ts`, `core/index.ts` | A wake has no owner message. Its grant (`brain`) reaches only listed read-only tools whose call is classified as a read, plus three brain-only tools. The tool route lets the `x-jarvis-brain` header through only for the PI agent principal and applies the same rule again |
+| Speaking | `pi/brain/comms.ts`, tool `message_dan` | A chat message: stored in the chat feed (the session of the latest message, or a new one), an open app is told to refresh, and the existing reply push is called exactly once (APNs, which the phone mirrors to the Watch). There are no tiers and no second channel; the only cap is 8 messages a day, and exact repeats are refused, so every message that is sent pushes |
+| Memory | `pi/area.ts`, tools `pi_note`, `inbox_trail` | PI writes only under `PI/Log`, `PI/Watches`, `PI/Notes` (exact path shape, 64 KiB a note, 256 KiB a file, the vault secret filter). `inbox_trail` adds a dated line to an open inbox item; capturing and closing stay with Dan's words in chat |
+| Decision log | `pi/brain/decision-log.ts` | Written by the system after every wake to `PI/Log/<day>.md`: events, tools used and their outcomes (from the MCP server's own record), what was told to Dan, what was written, tokens and DKK, and the model's closing statement. A statement that looks like a credential is withheld. If the vault is down the entry is kept (up to 24) and retried on every tick |
+| Budget | `proactive_spend` ledger, settings `monthlyBudgetDkk` (default 100) | Hard stop before a wake (worst case of one wake against what is left), one chat notice at 80 percent and one at the stop, a note in the wake text after 80 percent. The brain and the watches share this ledger. Chat and voice keep their own cap (`pi_turn` kinds `chat`, `warm`, `smoke`) |
+| Test switch | `dbo.pi_switch`, `GET` and `PUT /pi/brain` (owner), iOS Settings, "PI brain (test)" | Off until the owner turns it on; saved on the backend. While off, producers still queue events (cheap rows) but nothing is claimed and no model is called |
+| One reader | `proactive/events/wiring.ts` | The queue has one reader: the brain **or** the old one-shot pipeline. Turning both on is a startup `ConfigurationError`, so nothing runs in parallel or in shadow. The old pipeline stays switched off and is deleted in #1887 |
+
+Not covered: the call channel, the Now card, tiers (owner decision: none for now), voice, standing watches (next pull request).
+
 ## PI reach: GitHub, Azure and Workers (#1886, P15-175, part 1)
 
 The PI agent gets three kinds of reach. Jarvis tools stay the only way to **change** anything: GitHub and Azure are read-only by construction, and Workers are driven through Jarvis tools that already carry owner-message proof, approvals and receipts.

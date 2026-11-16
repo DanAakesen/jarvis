@@ -1,3 +1,20 @@
+## 16 November 2026 — PI phase 4: the brain loop (#1886, P15-175, part 2)
+
+Owner rules, quoted from the brief: no fallbacks, no dual or shadow paths, no transition code; "the old one-shot proactive pipeline already ships switched off; do not run it in parallel or in shadow" and do not extend it; "LLM-only decisions; let the model's judgement decide, free-form with minimal fixed fields"; tiers: "no urgent/watch tiers; a chat message always pushes to phone (and Watch); no call yet".
+
+| Choice | Why |
+| --- | --- |
+| The brain reads the existing event queue instead of the old pipeline; both on is a startup error | One reader per queue. This is the only change to the old wiring (the consumer is injected); no rule, prompt or tier of the old pipeline is reused or extended |
+| Proof is replay plus the owner's test switch, not a shadow run | The replay test feeds 38 real Actions results of this repository (15 to 16 November, 3 failed Deploys of main) through the real producers, queue, loop, tools and decision log with a scripted model: 21 wakes, each event in exactly one wake, 3 messages. It proves the mechanics and what the model is given, not the model's judgement; that is judged by the owner behind the switch |
+| The model judges events; no "routine build" or per-source hourly rules | The exact limits are on wakes (10 minutes apart, 12 a day) and money, so noise costs at most a few DKK a day and the model is not pre-filtered |
+| A wake has no owner message, so it can only read, speak, write PI's own notes and add an inbox trail line | Starting a Worker, sending mail, creating tasks and changing Dan's notes need his words. Text read from outside can therefore never cause them |
+| One chat message, no tiers: stored in the chat feed and pushed through the existing reply push; a limit of 8 messages a day and no exact repeats | "A chat message always pushes" holds only if the cap is on messages, not on pushes. The Watch gets the iOS notification mirrored by the phone; no Watch work was done |
+| The system writes the decision log; the model supplies its closing statement | "Every decision logged" must not depend on the model remembering to log. Facts are exact (events, tools from the MCP server's record, what was sent, cost); the reasoning is free text |
+| The brain's budget is the existing 100 DKK proactive ledger, separate from the chat cap; stop before a wake, notice at 80 percent and at the stop | The owner already sets this budget; a stopped brain must tell Dan once instead of going quiet |
+| Scratch conversation per wake | No shared growth, no leakage between wakes; the vault log is the memory. Cost of a new conversation (no cache, about 1.2 s start) is accepted and counted. Whether a cached long conversation is cheaper is a measurement for later |
+| Timer review alone is skipped in quiet hours | A review at night would cost money and the morning one covers it |
+| Not built: the owner's test switch for Watch, any call, the Now card, voice | Out of scope or parked by the owner |
+
 ## 16 November 2026 — PI phase 3: reach is read-only by construction, and a missing input is said, not hidden (#1886, P15-175)
 
 Owner brief, quoted: reach is "GitHub MCP (read-only by default, scoped token that only the owner can create; say clearly what the owner must provide), Azure MCP (Reader, read-only; any container scales to zero) and Workers (start and follow coding sessions) as tools of the PI agent". Rules: no fallbacks, no dual paths, no transition code.

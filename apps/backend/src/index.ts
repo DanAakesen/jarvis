@@ -90,6 +90,7 @@ import { createGithubWebhookModule } from './github/webhook.js';
 import { isVaultDefaultBranchPush } from './github/webhook-mapping.js';
 import { alertEvent, githubEvent, workerEvent } from './proactive/events/producers.js';
 import type { ProactiveEventSink } from './proactive/events/types.js';
+import type { EventQueueStore } from './proactive/events/event-queue.js';
 import { createGitHubIssueClient } from './github/issues.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
 import { createProjectPolicyEvaluator } from './github/project-policy.js';
@@ -115,6 +116,12 @@ import { buildPiContext } from './pi/context.js';
 import { createPiGateway } from './pi/gateway.js';
 import { createPiRoutes } from './pi/routes.js';
 import { createPiTurnRegistry } from './pi/turns.js';
+import { createPiArea } from './pi/area.js';
+import { createBrain, type Brain } from './pi/brain/runner.js';
+import { createBrainComms } from './pi/brain/comms.js';
+import { createBrainControl } from './pi/brain/control.js';
+import { createBrainTools } from './pi/brain/tools.js';
+import { createDecisionLog } from './pi/brain/decision-log.js';
 import { defaultAwayModeState } from './core/away-mode.js';
 import { createInboxStatusRoute } from './inbox/status.js';
 import { createMissedCaptureAudit } from './inbox/audit.js';
@@ -576,10 +583,6 @@ try {
         ? (usage) => usageStore.recordFoundryUsage!({ role: 'chat', ...usage }) : undefined,
       log: (event, fields) => logger.info({ msg: event, ...fields }, event),
     }) : undefined;
-  const piModule = {
-    id: 'pi', tools: [],
-    registerRoutes: createPiRoutes({ gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 100 }),
-  };
   const approvalEndpoint = (() => {
     if (!config.foundryProjectEndpoint) return undefined;
     try {
@@ -1113,6 +1116,26 @@ try {
       onReminderScheduled: (fireAt: Date) => scheduleOwnerReminderWake(fireAt),
     } : {}),
   });
+  // The PI brain: its own tools (message to Dan, notes in PI's corner of the vault, an inbox trail line), its test switch and its
+  // status. The brain itself is built when the event queue exists (registerProactive below); it needs the vault for its decision log.
+  const piArea = vaultClient ? createPiArea({ vault: vaultClient }) : undefined;
+  let announceBrainMessage: () => void = () => {};
+  let brainHandle: Brain | undefined;
+  const brainComms = piGateway && piStore && conversationStore && piArea
+    ? createBrainComms({
+      conversations: conversationStore, store: piStore, ownerObjectId: config.auth.ownerObjectId,
+      push: (message) => notifyReply?.(message), announce: () => announceBrainMessage(), now: () => new Date(),
+    }) : undefined;
+  const brainControl = piGateway && piStore && brainComms && proactiveStore
+    ? createBrainControl({ owner: config.auth.ownerObjectId, store: piStore, proactive: proactiveStore, now: () => new Date(), brain: () => brainHandle })
+    : undefined;
+  const piModule = {
+    id: 'pi',
+    tools: brainComms ? createBrainTools({ registry: piRegistry, comms: brainComms, area: piArea, inbox: inboxStore, now: () => new Date() }) : [],
+    registerRoutes: createPiRoutes({
+      gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 100, brain: brainControl,
+    }),
+  };
   const modules: BackendModule[] = createProductionModules({
     core: coreModule,
     backendLogs: createBackendLogsModule({
@@ -1468,6 +1491,7 @@ try {
     ...(ownerInteractions ? { ownerInteractions } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
   });
+  announceBrainMessage = () => app.jarvisActivityHub.publish({ type: 'ended', activityId: randomUUID(), source: 'chat' });
   registerPushRoutes(app, config.pushEnabled, () => ({
     store: createPushStore(database!.pool),
     ...(proactiveStore ? {
@@ -1571,6 +1595,17 @@ try {
     eventsEnabled: config.proactiveEventsEnabled,
     ...(alertActivityStore ? { nowCardFeed: alertActivityStore } : {}),
     registerEventSink: (sink: ProactiveEventSink) => { proactiveEventSink = sink; },
+    // PI reads the event queue instead of the old one-shot pipeline; the owner's test switch decides whether it wakes.
+    ...(piGateway && piStore && brainComms && piArea && proactiveStore ? {
+      brain: (queue: EventQueueStore) => {
+        brainHandle = createBrain({
+          queue, gateway: piGateway, proactive: proactiveStore, piStore, comms: brainComms,
+          decisionLog: createDecisionLog({ area: piArea }), owner: config.auth.ownerObjectId,
+          timeZone: config.googleTimeZone ?? 'Europe/Copenhagen', now: () => new Date(), logger,
+        });
+        return brainHandle;
+      },
+    } : {}),
     ...(alertPushStore ? { pushStore: alertPushStore } : {}),
     ...(ownerReminderStore ? { ownerReminderStore } : {}),
     ...(alertPushSender ? { systemPushSender: alertPushSender } : {}),

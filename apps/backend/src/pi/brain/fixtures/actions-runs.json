@@ -1,0 +1,692 @@
+[
+ {
+  "id": 37129969223,
+  "name": "Backend CI",
+  "branch": "codex/p0-03-backend-skeleton",
+  "event": "pull_request",
+  "conclusion": "failure",
+  "runNumber": 1,
+  "startedAt": "2026-10-03T14:32:39Z",
+  "completedAt": "2026-10-03T14:34:04Z"
+ },
+ {
+  "id": 37130184184,
+  "name": "Backend CI",
+  "branch": "codex/p0-03-backend-skeleton",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 2,
+  "startedAt": "2026-10-03T14:36:09Z",
+  "completedAt": "2026-10-03T14:37:37Z"
+ },
+ {
+  "id": 37130563604,
+  "name": "Backend CI",
+  "branch": "codex/p0-03-backend-skeleton",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 3,
+  "startedAt": "2026-10-03T14:42:20Z",
+  "completedAt": "2026-10-03T14:43:33Z"
+ },
+ {
+  "id": 37130585058,
+  "name": "Backend CI",
+  "branch": "codex/p0-03-backend-skeleton",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 4,
+  "startedAt": "2026-10-03T14:42:43Z",
+  "completedAt": "2026-10-03T14:44:00Z"
+ },
+ {
+  "id": 37131051116,
+  "name": "Backend CI",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 5,
+  "startedAt": "2026-10-03T14:50:11Z",
+  "completedAt": "2026-10-03T14:51:23Z"
+ },
+ {
+  "id": 37131344880,
+  "name": "Backend CI",
+  "branch": "codex/p2-02-runner",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 6,
+  "startedAt": "2026-10-03T14:54:57Z",
+  "completedAt": "2026-10-03T14:56:18Z"
+ },
+ {
+  "id": 37131344993,
+  "name": "Backend CI",
+  "branch": "codex/p2-04-foundry-client",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 7,
+  "startedAt": "2026-10-03T14:54:57Z",
+  "completedAt": "2026-10-03T14:56:24Z"
+ },
+ {
+  "id": 37131380832,
+  "name": "Backend CI",
+  "branch": "codex/p2-04-foundry-client",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 8,
+  "startedAt": "2026-10-03T14:55:33Z",
+  "completedAt": "2026-10-03T14:56:57Z"
+ },
+ {
+  "id": 37131478037,
+  "name": "Backend CI",
+  "branch": "codex/p2-02-runner",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 9,
+  "startedAt": "2026-10-03T14:57:06Z",
+  "completedAt": "2026-10-03T14:58:29Z"
+ },
+ {
+  "id": 37131496162,
+  "name": "Backend CI",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 10,
+  "startedAt": "2026-10-03T14:57:25Z",
+  "completedAt": "2026-10-03T14:59:55Z"
+ },
+ {
+  "id": 37131654446,
+  "name": "Backend CI",
+  "branch": "codex/p2-02-runner",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 11,
+  "startedAt": "2026-10-03T15:00:02Z",
+  "completedAt": "2026-10-03T15:01:25Z"
+ },
+ {
+  "id": 37133249178,
+  "name": "Backend CI",
+  "branch": "copilot/p0-10-ci-workflow",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 12,
+  "startedAt": "2026-10-03T15:26:30Z",
+  "completedAt": "2026-10-03T15:27:57Z"
+ },
+ {
+  "id": 37133257060,
+  "name": "Backend CI",
+  "branch": "copilot/p0-14-cloud-agent-environments",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 13,
+  "startedAt": "2026-10-03T15:26:39Z",
+  "completedAt": "2026-10-03T15:28:00Z"
+ },
+ {
+  "id": 37133407511,
+  "name": "Backend CI",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 14,
+  "startedAt": "2026-10-03T15:29:18Z",
+  "completedAt": "2026-10-03T15:30:43Z"
+ },
+ {
+  "id": 37133629279,
+  "name": "Backend CI",
+  "branch": "copilot/p0-14-cloud-agent-environments",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 15,
+  "startedAt": "2026-10-03T15:32:55Z",
+  "completedAt": "2026-10-03T15:34:08Z"
+ },
+ {
+  "id": 37133917206,
+  "name": "Backend CI",
+  "branch": "copilot/p0-14-cloud-agent-environments",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 16,
+  "startedAt": "2026-10-03T15:37:48Z",
+  "completedAt": "2026-10-03T15:39:13Z"
+ },
+ {
+  "id": 37133972002,
+  "name": "Backend CI",
+  "branch": "copilot/p0-14-cloud-agent-environments",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 17,
+  "startedAt": "2026-10-03T15:38:45Z",
+  "completedAt": "2026-10-03T15:40:03Z"
+ },
+ {
+  "id": 37134590070,
+  "name": "Backend CI",
+  "branch": "codex/fix-main-runner-prerequisite",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 18,
+  "startedAt": "2026-10-03T15:49:18Z",
+  "completedAt": "2026-10-03T15:50:41Z"
+ },
+ {
+  "id": 37134957928,
+  "name": "Backend CI",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 19,
+  "startedAt": "2026-10-03T15:55:25Z",
+  "completedAt": "2026-10-03T15:57:27Z"
+ },
+ {
+  "id": 37135107518,
+  "name": "Backend CI",
+  "branch": "p0-12-copilot-ready-fix",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 20,
+  "startedAt": "2026-10-03T15:58:00Z",
+  "completedAt": "2026-10-03T15:59:22Z"
+ },
+ {
+  "id": 37135242525,
+  "name": "Backend CI",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 21,
+  "startedAt": "2026-10-03T16:00:13Z",
+  "completedAt": "2026-10-03T16:01:39Z"
+ },
+ {
+  "id": 37135649586,
+  "name": "Backend CI",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 22,
+  "startedAt": "2026-10-03T16:06:46Z",
+  "completedAt": "2026-10-03T16:08:42Z"
+ },
+ {
+  "id": 43337112388,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 896,
+  "startedAt": "2026-11-13T00:26:42Z",
+  "completedAt": "2026-11-13T00:28:15Z"
+ },
+ {
+  "id": 43339478355,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 897,
+  "startedAt": "2026-11-13T00:44:37Z",
+  "completedAt": "2026-11-13T00:49:06Z"
+ },
+ {
+  "id": 43373467877,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 898,
+  "startedAt": "2026-11-13T05:39:41Z",
+  "completedAt": "2026-11-13T05:44:35Z"
+ },
+ {
+  "id": 43379908731,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 899,
+  "startedAt": "2026-11-13T06:36:45Z",
+  "completedAt": "2026-11-13T06:40:04Z"
+ },
+ {
+  "id": 43401707891,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 900,
+  "startedAt": "2026-11-13T09:29:13Z",
+  "completedAt": "2026-11-13T09:34:05Z"
+ },
+ {
+  "id": 43539699380,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 901,
+  "startedAt": "2026-11-14T01:17:36Z",
+  "completedAt": "2026-11-14T01:18:57Z"
+ },
+ {
+  "id": 43542426110,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 902,
+  "startedAt": "2026-11-14T01:45:00Z",
+  "completedAt": "2026-11-14T01:46:31Z"
+ },
+ {
+  "id": 43545671756,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 903,
+  "startedAt": "2026-11-14T02:19:41Z",
+  "completedAt": "2026-11-14T02:23:12Z"
+ },
+ {
+  "id": 43547266206,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 904,
+  "startedAt": "2026-11-14T02:36:41Z",
+  "completedAt": "2026-11-14T02:42:07Z"
+ },
+ {
+  "id": 43707865494,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 905,
+  "startedAt": "2026-11-15T11:13:18Z",
+  "completedAt": "2026-11-15T11:18:38Z"
+ },
+ {
+  "id": 43709840419,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 906,
+  "startedAt": "2026-11-15T11:37:41Z",
+  "completedAt": "2026-11-15T11:42:52Z"
+ },
+ {
+  "id": 43710570135,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 907,
+  "startedAt": "2026-11-15T11:46:55Z",
+  "completedAt": "2026-11-15T11:57:39Z"
+ },
+ {
+  "id": 43711892879,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 908,
+  "startedAt": "2026-11-15T12:03:23Z",
+  "completedAt": "2026-11-15T12:09:14Z"
+ },
+ {
+  "id": 43712826134,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 909,
+  "startedAt": "2026-11-15T12:14:32Z",
+  "completedAt": "2026-11-15T12:20:35Z"
+ },
+ {
+  "id": 43714132094,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 910,
+  "startedAt": "2026-11-15T12:29:47Z",
+  "completedAt": "2026-11-15T12:34:34Z"
+ },
+ {
+  "id": 43715700839,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 911,
+  "startedAt": "2026-11-15T12:48:19Z",
+  "completedAt": "2026-11-15T12:53:36Z"
+ },
+ {
+  "id": 43717247794,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 912,
+  "startedAt": "2026-11-15T13:06:22Z",
+  "completedAt": "2026-11-15T13:11:09Z"
+ },
+ {
+  "id": 43719682516,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 913,
+  "startedAt": "2026-11-15T13:34:14Z",
+  "completedAt": "2026-11-15T13:35:49Z"
+ },
+ {
+  "id": 43723856040,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 914,
+  "startedAt": "2026-11-15T14:20:49Z",
+  "completedAt": "2026-11-15T14:24:39Z"
+ },
+ {
+  "id": 43725360343,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 915,
+  "startedAt": "2026-11-15T14:37:23Z",
+  "completedAt": "2026-11-15T14:49:55Z"
+ },
+ {
+  "id": 43741008739,
+  "name": "CI",
+  "branch": "danaakesen-effective-system",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5035,
+  "startedAt": "2026-11-15T17:25:19Z",
+  "completedAt": "2026-11-15T17:30:05Z"
+ },
+ {
+  "id": 43746486414,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 916,
+  "startedAt": "2026-11-15T18:23:22Z",
+  "completedAt": "2026-11-15T18:24:45Z"
+ },
+ {
+  "id": 43746398993,
+  "name": "CI",
+  "branch": "danaakesen-effective-system",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5036,
+  "startedAt": "2026-11-15T18:22:31Z",
+  "completedAt": "2026-11-15T18:26:04Z"
+ },
+ {
+  "id": 43746917424,
+  "name": "CI",
+  "branch": "p0-update",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5037,
+  "startedAt": "2026-11-15T18:28:04Z",
+  "completedAt": "2026-11-15T18:29:12Z"
+ },
+ {
+  "id": 43747828993,
+  "name": "CI",
+  "branch": "danaakesen-sturdy-waddle",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5038,
+  "startedAt": "2026-11-15T18:37:47Z",
+  "completedAt": "2026-11-15T18:39:05Z"
+ },
+ {
+  "id": 43750067418,
+  "name": "CI",
+  "branch": "danaakesen-effective-system",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5039,
+  "startedAt": "2026-11-15T19:01:48Z",
+  "completedAt": "2026-11-15T19:05:46Z"
+ },
+ {
+  "id": 43765414049,
+  "name": "CI",
+  "branch": "danaakesen-effective-system",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5044,
+  "startedAt": "2026-11-15T21:45:11Z",
+  "completedAt": "2026-11-15T21:48:32Z"
+ },
+ {
+  "id": 43772286556,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "failure",
+  "runNumber": 917,
+  "startedAt": "2026-11-15T22:59:16Z",
+  "completedAt": "2026-11-15T23:11:52Z"
+ },
+ {
+  "id": 43773568644,
+  "name": "CI",
+  "branch": "danaakesen-improved-lamp",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5047,
+  "startedAt": "2026-11-15T23:12:49Z",
+  "completedAt": "2026-11-15T23:16:33Z"
+ },
+ {
+  "id": 43773951440,
+  "name": "CI",
+  "branch": "pi-provision-fix",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5048,
+  "startedAt": "2026-11-15T23:16:51Z",
+  "completedAt": "2026-11-15T23:20:10Z"
+ },
+ {
+  "id": 43774326609,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "failure",
+  "runNumber": 918,
+  "startedAt": "2026-11-15T23:21:03Z",
+  "completedAt": "2026-11-15T23:22:45Z"
+ },
+ {
+  "id": 43774210901,
+  "name": "CI",
+  "branch": "danaakesen-improved-lamp",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5049,
+  "startedAt": "2026-11-15T23:19:48Z",
+  "completedAt": "2026-11-15T23:23:02Z"
+ },
+ {
+  "id": 43775226279,
+  "name": "CI",
+  "branch": "pi-mcp-connection",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5050,
+  "startedAt": "2026-11-15T23:30:55Z",
+  "completedAt": "2026-11-15T23:34:48Z"
+ },
+ {
+  "id": 43775635441,
+  "name": "CI",
+  "branch": "pi-mcp-connection",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5051,
+  "startedAt": "2026-11-15T23:35:25Z",
+  "completedAt": "2026-11-15T23:38:59Z"
+ },
+ {
+  "id": 43775847336,
+  "name": "CI",
+  "branch": "danaakesen-improved-lamp",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5052,
+  "startedAt": "2026-11-15T23:37:48Z",
+  "completedAt": "2026-11-15T23:41:17Z"
+ },
+ {
+  "id": 43776027710,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "push",
+  "conclusion": "success",
+  "runNumber": 919,
+  "startedAt": "2026-11-15T23:39:55Z",
+  "completedAt": "2026-11-15T23:45:44Z"
+ },
+ {
+  "id": 43778028552,
+  "name": "Deploy",
+  "branch": "main",
+  "event": "workflow_dispatch",
+  "conclusion": "failure",
+  "runNumber": 920,
+  "startedAt": "2026-11-16T00:02:33Z",
+  "completedAt": "2026-11-16T00:04:36Z"
+ },
+ {
+  "id": 43779072143,
+  "name": "CI",
+  "branch": "danaakesen-improved-lamp",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5056,
+  "startedAt": "2026-11-16T00:13:20Z",
+  "completedAt": "2026-11-16T00:17:20Z"
+ },
+ {
+  "branch": "infra/budget-600",
+  "completedAt": "2026-11-16T00:19:41Z",
+  "conclusion": "failure",
+  "event": "pull_request",
+  "id": 43779690220,
+  "name": "PR title",
+  "runNumber": 6068,
+  "startedAt": "2026-11-16T00:19:32Z"
+ },
+ {
+  "branch": "infra/budget-600",
+  "completedAt": "2026-11-16T00:19:57Z",
+  "conclusion": "success",
+  "event": "pull_request_target",
+  "id": 43779689854,
+  "name": "Worker label",
+  "runNumber": 7084,
+  "startedAt": "2026-11-16T00:19:31Z"
+ },
+ {
+  "branch": "infra/budget-600",
+  "completedAt": "2026-11-16T00:21:20Z",
+  "conclusion": "success",
+  "event": "pull_request",
+  "id": 43779690167,
+  "name": "CodeQL",
+  "runNumber": 2717,
+  "startedAt": "2026-11-16T00:19:32Z"
+ },
+ {
+  "id": 43779690176,
+  "name": "CI",
+  "branch": "infra/budget-600",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5057,
+  "startedAt": "2026-11-16T00:19:32Z",
+  "completedAt": "2026-11-16T00:23:25Z"
+ },
+ {
+  "branch": "danaakesen-improved-system",
+  "completedAt": "2026-11-16T00:23:38Z",
+  "conclusion": "success",
+  "event": "pull_request",
+  "id": 43780081836,
+  "name": "PR title",
+  "runNumber": 6069,
+  "startedAt": "2026-11-16T00:23:28Z"
+ },
+ {
+  "branch": "danaakesen-improved-system",
+  "completedAt": "2026-11-16T00:23:57Z",
+  "conclusion": "success",
+  "event": "pull_request_target",
+  "id": 43780081807,
+  "name": "Worker label",
+  "runNumber": 7085,
+  "startedAt": "2026-11-16T00:23:28Z"
+ },
+ {
+  "branch": "danaakesen-improved-system",
+  "completedAt": "2026-11-16T00:25:38Z",
+  "conclusion": "success",
+  "event": "pull_request",
+  "id": 43780081975,
+  "name": "CodeQL",
+  "runNumber": 2718,
+  "startedAt": "2026-11-16T00:23:28Z"
+ },
+ {
+  "id": 43780081861,
+  "name": "CI",
+  "branch": "danaakesen-improved-system",
+  "event": "pull_request",
+  "conclusion": "success",
+  "runNumber": 5058,
+  "startedAt": "2026-11-16T00:23:28Z",
+  "completedAt": "2026-11-16T00:26:52Z"
+ },
+ {
+  "branch": "danaakesen-ideal-chainsaw",
+  "completedAt": "2026-11-16T00:31:44Z",
+  "conclusion": "success",
+  "event": "pull_request",
+  "id": 43780890257,
+  "name": "PR title",
+  "runNumber": 6070,
+  "startedAt": "2026-11-16T00:31:34Z"
+ }
+]

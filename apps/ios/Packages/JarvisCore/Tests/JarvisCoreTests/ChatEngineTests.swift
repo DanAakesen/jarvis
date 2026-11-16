@@ -108,6 +108,38 @@ final class ChatEngineTests: XCTestCase {
         XCTAssertEqual(requests.first?.body, Data("{}".utf8))
     }
 
+    func testPiBrainStatusDecodesAndTheSwitchIsAPutWithTheFlagOnly() async throws {
+        let body = #"""
+        {"available":true,"enabled":true,"updatedAt":"2026-11-16T10:00:00.000Z","paused":false,
+         "budget":{"limitDkk":100,"spentDkk":82.5,"state":"warn"},
+         "month":{"wakes":14,"costDkk":1.9},"today":{"messages":2},
+         "lastWake":{"at":"2026-11-16T10:00:00.000Z","totalMs":4100,"inputTokens":12000,"cachedTokens":9000,"outputTokens":300,"costDkk":0.09,"outcome":"ok"},
+         "logPending":1}
+        """#
+        let transport = RecordingTransport([
+            HTTPResponse(statusCode: 200, body: Data(body.utf8)),
+            HTTPResponse(statusCode: 200, body: Data(body.utf8)),
+        ])
+        let chat = JarvisChatClient(client: try makeClient(transport: transport))
+
+        let status = try await chat.piBrainStatus()
+        XCTAssertTrue(status.available)
+        XCTAssertTrue(status.enabled)
+        XCTAssertEqual(status.budget, PiBrainStatus.Budget(limitDkk: 100, spentDkk: 82.5, state: "warn"))
+        XCTAssertEqual(status.month.wakes, 14)
+        XCTAssertEqual(status.today.messages, 2)
+        XCTAssertEqual(status.lastWake?.cachedTokens, 9000)
+        XCTAssertEqual(status.logPending, 1)
+
+        _ = try await chat.setPiBrain(enabled: false)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests.map(\.method), [.get, .put])
+        XCTAssertEqual(requests.map(\.url.path), ["/api/pi/brain", "/api/pi/brain"])
+        let sent = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(requests[1].body)) as? [String: Any])
+        XCTAssertEqual(sent["enabled"] as? Bool, false)
+        XCTAssertEqual(sent.count, 1)
+    }
+
     private func makeClient(transport: RecordingTransport) throws -> JarvisClient {
         try JarvisClient(
             configuration: JarvisClientConfiguration(baseURL: URL(string: "https://api.example.invalid/api")!),
