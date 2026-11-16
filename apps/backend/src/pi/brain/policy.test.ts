@@ -1,14 +1,14 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isCurrentAssistantTool } from '../../core/tool-registry.js';
 import { brainMayRun, brainOnlyTools, brainSeesTool } from './policy.js';
 
 function sources(dir: string): string[] {
-  return readdirSync(dir).flatMap((entry) => {
-    const path = join(dir, entry);
-    if (statSync(path).isDirectory()) return entry === 'node_modules' ? [] : sources(path);
-    return path.endsWith('.ts') && !path.endsWith('.test.ts') ? [readFileSync(path, 'utf8')] : [];
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : sources(path);
+    return entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') ? [readFileSync(path, 'utf8')] : [];
   });
 }
 
@@ -17,7 +17,7 @@ describe('what a brain wake may run', () => {
     for (const name of ['calendar_today_agenda', 'mail_search', 'vault_read', 'get_work_status', 'list_tasks', 'github_read', 'ci_log']) {
       expect(brainMayRun({ name }, {})).toBe(true);
     }
-    for (const name of ['create_issue', 'start_issue', 'create_task', 'steer_task', 'mail_send', 'vault_write', 'vault_task_create',
+    for (const name of ['create_issue', 'start_issue', 'create_task', 'steer_task', 'research', 'weather', 'mail_send', 'vault_write', 'vault_task_create',
       'calendar_create_event', 'inbox_capture', 'inbox_close', 'memory_remember', 'github_write', 'update_settings', 'pc_open', 'codex_prompt']) {
       expect(brainMayRun({ name }, {})).toBe(false);
       expect(brainSeesTool(name)).toBe(false);

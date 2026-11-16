@@ -21,7 +21,7 @@ afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close(
 const live = () => new AbortController().signal;
 
 const calls: string[] = [];
-const probes: JarvisTool[] = ['weather', 'create_issue'].map((name) => ({
+const probes: JarvisTool[] = ['list_projects', 'create_issue'].map((name) => ({
   name, description: `Probe ${name}. Keyword: probe.`,
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   execute: async (_input, request) => { calls.push(`${name}:${String(request.headers['x-jarvis-message-id'])}`); return { ok: true }; },
@@ -69,14 +69,14 @@ describe('a brain wake over the Jarvis MCP server', () => {
   it('finds only read tools and its own tools, and runs a read without any owner message', async () => {
     const { tool, wake } = setup();
     const grant = wake();
-    const found = await tool('find_tools', { turn: grant.turn, query: 'probe weather message note' });
+    const found = await tool('find_tools', { turn: grant.turn, query: 'probe list_projects message note' });
     const names = (found.result.tools as Array<{ name: string }>).map(({ name }) => name);
-    expect(names).toContain('weather');
+    expect(names).toContain('list_projects');
     expect(names).toContain('message_dan');
     expect(names).not.toContain('create_issue');
-    const run = await tool('call_tool', { turn: grant.turn, name: 'weather', arguments: {} });
+    const run = await tool('call_tool', { turn: grant.turn, name: 'list_projects', arguments: {} });
     expect(run.outcome).toBe('ok');
-    expect(calls).toEqual(['weather:undefined']);
+    expect(calls).toEqual(['list_projects:undefined']);
   });
 
   it('refuses a write tool, even one forced into the discovered set', async () => {
@@ -129,7 +129,7 @@ describe('chat and the brain stay apart', () => {
   it('refuses the brain header on the tool route for anyone but the PI agent, and brain tools outside a live wake', async () => {
     const { app } = setup();
     const response = await app.inject({
-      method: 'POST', url: '/tools/weather', payload: {},
+      method: 'POST', url: '/tools/list_projects', payload: {},
       headers: { authorization: bearer(ownerToken), 'content-type': 'application/json', 'x-jarvis-brain': 'run-1' },
     });
     expect(response.statusCode).toBe(403);

@@ -90,7 +90,8 @@ export function createBrain(options: BrainOptions) {
       ? `PI has used ${spent.toFixed(0)} of its ${limit.toFixed(0)} DKK proactive budget this month. I will be more sparing.`
       : `PI has used its ${limit.toFixed(0)} DKK proactive budget for this month, so it has stopped looking on its own. Chat still works. You can raise the budget in the proactive settings, or it starts again next month.`;
     try { await options.comms.send({ text }, { runId: 'budget', sent: [], wrote: [] }, signal); } catch (error) {
-      if (!(error instanceof BrainCommsRefusal)) notified.delete(key);
+      // Kept only once Dan has it (or already had exactly this today); any other refusal or failure is tried again on a later tick.
+      if (!(error instanceof BrainCommsRefusal && error.reason === 'duplicate')) notified.delete(key);
       log('warn', { reason: 'budget_notice_failed' });
     }
   }

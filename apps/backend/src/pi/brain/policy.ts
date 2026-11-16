@@ -7,10 +7,13 @@ import type { ToolExecutionMetadata } from '../../core/tool-registry.js';
  */
 export const brainOnlyTools: ReadonlySet<string> = new Set(['message_dan', 'pi_note', 'inbox_trail']);
 
-/** Tools that only read. Anything not listed is out of reach for a wake, whatever the model asks for. */
+/**
+ * Tools that only read. Anything not listed is out of reach for a wake, whatever the model asks for. A tool that starts a job,
+ * opens a workspace window or writes anything (`research`, `weather`) is not here, even though it has no write verb in its name.
+ */
 const brainReadTools: ReadonlySet<string> = new Set([
   'calendar_list_events', 'calendar_next_event', 'calendar_today_agenda', 'calendar_find_free_slots',
-  'mail_search', 'mail_list_drafts', 'weather', 'web_research', 'research',
+  'mail_search', 'mail_list_drafts', 'web_research',
   'vault_read', 'vault_search', 'memory_search', 'memory_list', 'memory_history', 'conversation_search',
   'inbox_items', 'proactive_recent_items',
   'list_projects', 'list_tasks', 'get_task', 'get_work_status', 'list_jobs', 'get_job', 'list_releases', 'get_release',

@@ -149,6 +149,20 @@ describe('the brain loop: exact mechanics around the model\'s decision', () => {
     expect(t.pushes).toHaveLength(1);
   });
 
+  it('tries a budget notice again when the daily message limit refused it, instead of dropping it for the month', async () => {
+    const t = setup({ budgetDkk: 0.2 });
+    await t.ready;
+    for (let n = 0; n < 8; n += 1) await t.comms.send({ text: `Earlier news ${n}.` }, { runId: 'x', sent: [], wrote: [], looked: [] }, signal());
+    await t.enqueue(event(1));
+    expect((await t.tick()).outcome).toBe('budget_exhausted');
+    expect(t.pushes).toHaveLength(8);
+    t.advance(24 * 60 * 60_000);
+    await t.enqueue(event(2, 'github', '2026-11-17T09:00:00Z'));
+    await t.tick();
+    expect(t.pushes).toHaveLength(9);
+    expect(t.pushes[8]!.text).toContain('proactive budget for this month');
+  });
+
   it('warns the model and tells Dan once at 80 percent of the budget', async () => {
     const t = setup({ budgetDkk: 1 });
     await t.proactive.spend.record({ runId: 'earlier', month: '2026-11', inputTokens: 1, outputTokens: 1, estimatedDkk: 0.85, createdAt: t.now() });

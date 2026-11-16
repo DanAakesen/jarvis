@@ -55,6 +55,15 @@ describe('the brain\'s chat message', () => {
     expect(pushes).toHaveLength(MAX_BRAIN_MESSAGES_PER_DAY);
   });
 
+  it('admits parallel sends one at a time, so neither the daily limit nor the repeat check can be passed by racing', async () => {
+    const { comms, pushes } = setup();
+    const same = await Promise.allSettled(Array.from({ length: 10 }, () => comms.send({ text: 'Same news.' }, run(), signal)));
+    expect(same.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const many = await Promise.allSettled(Array.from({ length: 20 }, (_, n) => comms.send({ text: `Different ${n}.` }, run(), signal)));
+    expect(many.filter((result) => result.status === 'fulfilled')).toHaveLength(MAX_BRAIN_MESSAGES_PER_DAY - 1);
+    expect(pushes).toHaveLength(MAX_BRAIN_MESSAGES_PER_DAY);
+  });
+
   it('does not push a message the chat could not store', async () => {
     const { comms, conversations, pushes } = setup();
     (conversations.store as { addMessage: () => Promise<null> }).addMessage = async () => null;
