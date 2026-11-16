@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { piDispatchObjectId } from '../auth/pi-credential.js';
 import type { ConversationMessage } from './conversation-store.js';
 
 declare module 'fastify' {
@@ -10,6 +11,11 @@ declare module 'fastify' {
 
 /** Not a real message id: it passes the id format checks but can never match a stored row, so a wrong use fails loudly. */
 const wakeMessageId = '9223372036854775807';
+
+/** True only for the in-process identity the PI MCP door uses for its own dispatches, never for another agent identity. */
+export function isPiDispatch(request: FastifyRequest): boolean {
+  return request.agentPrincipal?.objectId.toLowerCase() === piDispatchObjectId;
+}
 
 /** True for any call the PI agent makes itself, in a chat or voice turn or in a wake. */
 export function isPiCall(request: FastifyRequest): boolean {

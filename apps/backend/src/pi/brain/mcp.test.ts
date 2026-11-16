@@ -42,6 +42,7 @@ function setup(github?: GithubBridge) {
       { id: 'pi', tools: createBrainTools({ registry, comms, area: createPiArea({ vault }), now: () => new Date('2026-11-16T10:00:00Z') }),
         registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250, github }) }],
     auth: async (token) => {
+      if (token === 'agent.token.fixture') return { kind: 'jarvis-agent', objectId: '11111111-2222-4333-8444-555555555555', tenantId: config.auth.tenantId };
       if (token !== ownerToken) throw new Error('rejected');
       return { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Owner' };
     },
@@ -189,5 +190,11 @@ describe('chat and the brain stay apart', () => {
       headers: { authorization: bearer(ownerToken), 'content-type': 'application/json', 'x-jarvis-pi': 'wake' },
     });
     expect(pi.statusCode).toBe(403);
+    // Another agent identity is not the PI door: it cannot claim a wake either.
+    const other = await app.inject({
+      method: 'POST', url: '/tools/list_projects', payload: {},
+      headers: { authorization: bearer('agent.token.fixture'), 'content-type': 'application/json', 'x-jarvis-pi': 'wake', 'x-jarvis-brain': 'run-1' },
+    });
+    expect(other.statusCode).toBe(403);
   });
 });
