@@ -5,6 +5,10 @@
 folder order loaded and saved through the backend, two simulator captures. Not in scope: the folder chooser's order, Apple Watch,
 moving pins to the backend. No TestFlight build.
 
+## 3D Notes graph: design brief — 16 November 2026 (#1924, P15-186)
+
+**Status: step 1 (design brief) written; waiting for review. No implementation.** `docs/ui/graph-3d/brief.md` covers what the graph shows, the interactions, the motion language tied to the neural background, a performance budget, the rendering options with a recommendation (projected 3D in `Canvas`, gated by a measured device spike, Metal if it misses the budget; nothing measured yet), and 12 open questions. Next: the owner makes the designs and answers the questions; then the spike, then the build.
+
 ## PI phase 7: cutover prepared, not done — 16 November 2026 (#1887, P15-176, part 2)
 
 Owner, 16 November 2026: "Just dont delete the old harness." Prepared: `docs/pi/cutover.md` (what the owner tests, the exact flip, the deletion gate, the reference-scanned deletion inventory for phase 8, the manual Foundry steps including the legacy agent `jarvis-main-copilot-preview`, an approval record) and the flip itself as a separate draft pull request that merges only on the owner's written word. **Nothing is deleted and no default changed.** One thing needs his decision before phase 8: the 07:00 and 18:00 proactive slots feed four kept features (inbox nudges, todo writes, reminder planning, alerts) and PI has no scheduled replacement (decision A in the file). The scan also found couplings that break the build if `agents/jarvis/` is removed first (the PI provisioner and the backend read three files from it); they are listed as "move first".
