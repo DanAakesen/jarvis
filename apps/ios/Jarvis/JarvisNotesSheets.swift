@@ -123,7 +123,7 @@ struct JarvisFolderChooserSheet: View {
             if row.isExpandable {
                 JarvisIconButton(
                     title: row.name, systemImage: row.isExpanded ? "chevron.down" : "chevron.right",
-                    identifier: "folders.expand.\(row.path)", isCompact: false,
+                    identifier: "folders.expand.\(row.path)",
                     hint: row.isExpanded ? copy.expanded : copy.collapsed
                 ) {
                     if expanded.contains(row.path) { expanded.remove(row.path) } else { expanded.insert(row.path) }
