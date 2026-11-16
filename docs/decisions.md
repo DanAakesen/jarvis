@@ -1,3 +1,49 @@
+## 16 November 2026 — PI phase 5: standing watches inside the loop (#1886, P15-175, part 3)
+
+Owner brief, quoted: "Standing watches must work inside the loop (free-text notes in the vault, woken by our own small ticker; record test results of Foundry routines and the reminder tool)". Rules as before: no fallbacks, LLM-only decisions, free-form with minimal fixed fields.
+
+| Choice | Why |
+| --- | --- |
+| A watch is a note in `PI/Watches` with one exact field, the next look, as a hidden last line | The waker needs an exact instant; everything else is prose the model and Dan own. The vault is the truth and the index is rebuilt from it |
+| Only Dan's message opens or changes a watch; a wake can look and stop | Text read by a watch (web pages, feeds) is untrusted. A wake cannot create or widen a watch, start a Worker, send mail or write outside `PI/` |
+| Exact limits: 10 open, 8 looks a day each, 5 minutes apart; a limit moves the next look instead of leaving the watch due | The plan's proposal, kept. Without the move, a limit would make the same watch wake the brain every 10 minutes at a cost |
+| Cost per watch is an estimate: a wake's cost is split evenly over what woke it | Wakes are batched on purpose (the fixed prompt is paid once), so exact attribution does not exist. It is labelled as an estimate everywhere it is shown |
+| Watches spend on the shared proactive ledger and its 100 DKK stop | One budget, one stop; no second meter |
+| Foundry routines and the reminder tool are tested by a manual probe on a throwaway agent, not adopted | The platform's wake-ups are preview, cover GitHub issues only (routines) or hosted agents (reminder tool) as documented, and would put the schedule where Dan cannot list or stop it from chat. The probe records what really happens; our ticker stays the waker either way |
+| No watch UI in the app; list, change and stop are chat and voice | The owner asked for them "from chat"; the Watch is parked |
+
+## 16 November 2026 — PI phase 4: the brain loop (#1886, P15-175, part 2)
+
+Owner rules, quoted from the brief: no fallbacks, no dual or shadow paths, no transition code; "the old one-shot proactive pipeline already ships switched off; do not run it in parallel or in shadow" and do not extend it; "LLM-only decisions; let the model's judgement decide, free-form with minimal fixed fields"; tiers: "no urgent/watch tiers; a chat message always pushes to phone (and Watch); no call yet".
+
+| Choice | Why |
+| --- | --- |
+| The brain reads the existing event queue instead of the old pipeline; both on is a startup error | One reader per queue. This is the only change to the old wiring (the consumer is injected); no rule, prompt or tier of the old pipeline is reused or extended |
+| Proof is replay plus the owner's test switch, not a shadow run | The replay test feeds 38 real Actions results of this repository (15 to 16 November, 3 failed Deploys of main) through the real producers, queue, loop, tools and decision log with a scripted model: 21 wakes, each event in exactly one wake, 3 messages. It proves the mechanics and what the model is given, not the model's judgement; that is judged by the owner behind the switch |
+| The model judges events; no "routine build" or per-source hourly rules | The exact limits are on wakes (10 minutes apart, 12 a day) and money, so noise costs at most a few DKK a day and the model is not pre-filtered |
+| A wake has no owner message, so it can only read, speak, write PI's own notes and add an inbox trail line | Starting a Worker, sending mail, creating tasks and changing Dan's notes need his words. Text read from outside can therefore never cause them |
+| One chat message, no tiers: stored in the chat feed and pushed through the existing reply push; a limit of 8 messages a day and no exact repeats | "A chat message always pushes" holds only if the cap is on messages, not on pushes. The Watch gets the iOS notification mirrored by the phone; no Watch work was done |
+| The system writes the decision log; the model supplies its closing statement | "Every decision logged" must not depend on the model remembering to log. Facts are exact (events, tools from the MCP server's record, what was sent, cost); the reasoning is free text |
+| The brain's budget is the existing 100 DKK proactive ledger, separate from the chat cap; stop before a wake, notice at 80 percent and at the stop | The owner already sets this budget; a stopped brain must tell Dan once instead of going quiet |
+| Scratch conversation per wake | No shared growth, no leakage between wakes; the vault log is the memory. Cost of a new conversation (no cache, about 1.2 s start) is accepted and counted. Whether a cached long conversation is cheaper is a measurement for later |
+| Timer review alone is skipped in quiet hours | A review at night would cost money and the morning one covers it |
+| Not built: the owner's test switch for Watch, any call, the Now card, voice | Out of scope or parked by the owner |
+
+## 16 November 2026 — PI phase 3: reach is read-only by construction, and a missing input is said, not hidden (#1886, P15-175)
+
+Owner brief, quoted: reach is "GitHub MCP (read-only by default, scoped token that only the owner can create; say clearly what the owner must provide), Azure MCP (Reader, read-only; any container scales to zero) and Workers (start and follow coding sessions) as tools of the PI agent". Rules: no fallbacks, no dual paths, no transition code.
+
+| Choice | Why |
+| --- | --- |
+| GitHub through the remote read-only MCP URL and a fine-grained token, repository secret `PI_GITHUB_READ_TOKEN`; a classic token is refused | A fine-grained token can be limited to chosen repositories and read permissions; only the owner can create it. The read-only URL and the token permissions are two independent locks. Writes still go through Jarvis tools (`create_issue` and the rest), which keep approvals and receipts |
+| Azure MCP in a container that scales to zero, started `--read-only`, with its own identity holding only Reader, guarded by an Entra app role held only by the Foundry project identity | Reader cannot write or read secrets or cost; the server's read-only flag is a third lock; the unauthenticated call is refused (observed locally, 401). Never the flag that disables incoming authentication |
+| The Entra app is created by an owner-run script (`infra/setup-azure-mcp.ps1`), not by the Deploy workflow | The deploy identity has no Microsoft Graph rights by design; creating apps stays with the owner, as in `bootstrap.ps1` |
+| Azure image pinned to `3.0.0` | An update is a reviewed change; the unpinned `latest` of the Microsoft sample would change behaviour silently |
+| A server whose input is missing is **left out and reported** ("not attached: the owner has not provided X"); a connection that fails to write leaves the server out and fails the Deploy job after the agent is defined | The owner asked for explicit statements when something is unusable. This is configuration, not a runtime fallback: PI never swaps one engine or path for another |
+| Workers get a skill and queue events, not new tools | The Jarvis tools to start, follow, steer and judge work already exist with owner-message proof. A Worker therefore starts only from Dan's own words; text read from mail, web or a repository never starts one |
+| Worker results (`done`, `needs attention`, `cancelled`, `pull request opened`) enter the event queue with source `worker` | The brain hears exactly what the chat notice says. No consumer until the brain pull request, so nothing runs in parallel with the old pipeline |
+| Smoke: the cold turn asks for about 60 words | The first live smoke failed its streaming check on a one-sentence reply, which cannot show streaming. The check is unchanged; the prompt is fixed and the report now shows the number of pieces per turn. The numbers are also printed in the job log because the step summary needs a sign-in |
+
 ## 15 November 2026 — One living neural background (#1892, P15-179; absorbs #1891)
 
 Owner direction, recorded as given: "Now the new background does not match the in app background. So let's change the in app background to match this new background with the orb." "Actually we could do the exact same on voice and chat. Just on chat the window and composer overlays the background." The lines and dots "should not be static. These are like neurons, so when Jarvis works and thinks it fires these off and they come back, like a brain. This is what I want on voice and chat. And if possible this should also go on the loading screen. For all other screens let's keep a more calm but the same background, just with less, not zero, but less animation."

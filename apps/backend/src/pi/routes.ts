@@ -5,6 +5,7 @@ import type { PiGateway, PiStatus } from './gateway.js';
 import { createPiMcpRoutes } from './mcp.js';
 import { runPiSmoke } from './smoke.js';
 import type { PiTurnRegistry } from './turns.js';
+import type { BrainControl } from './brain/control.js';
 import { PI_MODEL, PI_REASONING_EFFORT } from './definition.js';
 
 export interface PiModuleOptions {
@@ -13,6 +14,8 @@ export interface PiModuleOptions {
   readonly registry: PiTurnRegistry;
   readonly auth: PiAuth;
   readonly monthlyCapDkk: number;
+  /** The owner's test switch and status for the brain; absent when the brain is not wired on this backend. */
+  readonly brain?: BrainControl | undefined;
 }
 
 const isOwner = (app: FastifyInstance, objectId: string | undefined) => objectId?.toLowerCase() === app.ownerObjectId.toLowerCase();
@@ -49,6 +52,26 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
       request.raw.once('aborted', () => controller.abort());
       try { return await options.gateway.warm(AbortSignal.any([controller.signal, AbortSignal.timeout(120_000)])); } catch (error) {
         return reply.code(503).send(errorBody(error));
+      }
+    });
+
+    app.get('/pi/brain', async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      if (!isOwner(app, request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
+      if (!options.brain || !options.gateway) return reply.code(503).send({ error: 'The PI brain is not set up on this backend yet.', code: 'pi_not_configured' });
+      try { return await options.brain.read(AbortSignal.timeout(10_000)); } catch {
+        return reply.code(503).send({ error: 'The PI brain status could not be read.', code: 'pi_unavailable' });
+      }
+    });
+
+    app.put<{ Body: { enabled: boolean } }>('/pi/brain', {
+      schema: { body: { type: 'object', additionalProperties: false, required: ['enabled'], properties: { enabled: { type: 'boolean' } } } },
+    }, async (request, reply) => {
+      reply.header('Cache-Control', 'no-store');
+      if (!isOwner(app, request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
+      if (!options.brain || !options.gateway) return reply.code(503).send({ error: 'The PI brain is not set up on this backend yet.', code: 'pi_not_configured' });
+      try { return await options.brain.write(request.body.enabled, AbortSignal.timeout(10_000)); } catch {
+        return reply.code(503).send({ error: 'The PI brain switch could not be saved.', code: 'pi_unavailable' });
       }
     });
 

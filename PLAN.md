@@ -9,6 +9,24 @@
 | Cutover: merge this, deploy the backend, then merge vault PRs #4 and #5 | **Open**; a short inconsistent window is accepted |
 | Remove the `_agent-log` mirror rule after vault PR #5 has merged | **Open** |
 
+## PI phases 3 to 5: reach, the brain loop and standing watches — 16 November 2026 (#1886, P15-175)
+
+Delivered as three stacked pull requests in the order of the issue. Owner rules for all three: no fallbacks, no dual or shadow paths, no transition code; the old one-shot proactive pipeline stays switched off and is deleted in #1887; decisions are the model's, free-form.
+
+| Part | Pull request | State |
+| --- | --- | --- |
+| 1 Reach: read-only GitHub MCP, read-only Azure MCP (Reader, scales to zero), Workers as a skill plus Worker results as queue events | Reach | **Built and tested offline; nothing attached live yet.** Needs two things only the owner can supply (below), then one Deploy |
+| 2 Brain loop and cost guards | Brain | **Built and tested offline and against SQL Server 2022; not run live.** Replay of 38 real events, mechanics tests, SQL contract. The owner turns it on behind "PI brain (test)" in Settings after merge and Deploy |
+| 3 Standing watches | Watches | **Built and tested offline and against SQL Server 2022; not run live.** The Foundry wake-up probe is ready but unrun (no Azure access) |
+
+**Brain, what was built and observed.** The brain reads the event queue, wakes the PI agent in a scratch conversation under exact guards (owner switch, pause, 10 minutes between wakes, 12 wakes a day, the 100 DKK proactive budget stop with notices at 80 percent and at the stop), lets it read, tell Dan (a chat message that always pushes; at most 8 a day, no repeats), keep notes under `PI/` and add inbox trail lines, and writes every decision to `PI/Log/<day>.md`. Replay of 38 real Actions results (15 to 16 November) through the real producers, queue, loop, tools and log with a scripted model: 21 wakes, each event in exactly one wake, 3 messages (the 3 failed Deploys of main); backend suite and the SQL contract on SQL Server 2022 pass. **Not proven:** the model's judgement (the owner judges it behind the test switch), real cost per wake, the iOS rows (Apple CI only), and the push on a real device. Until the owner turns the switch on, nothing is claimed and nothing is spent.
+
+**Watches, what was built and observed.** A watch is a free-text note in `PI/Watches` with one exact field, the next look; Dan opens, changes and stops them in chat or voice, a wake looks and may stop a watch (its own stop condition) but cannot open or change one. Our ticker wakes the brain when a look is due; one wake covers every due watch and every queued event. Limits: 10 open, 8 looks a day each, 5 minutes apart, and a limit moves the next look so it cannot loop. Replay of a simulated week (a daily topic, an hourly price capped at 8 looks a day, an events-only build) through the real loop, with a scripted model: 84 wakes (12 a day, the daily cap), about 7.5 DKK on the shared proactive ledger of which the hourly watch is about 4.8, one message. Cost per watch is an estimate (a wake is split evenly over what woke it) and is shown by `watch_list`. **Not proven:** a real model's cadence choices and reporting judgement, and the Foundry routine and reminder-tool test (probe ready, unrun).
+
+**Reach, what the owner must provide.** (a) A GitHub **fine-grained** personal access token limited to the repositories PI may read, with read-only repository permissions (Contents, Issues, Pull requests, Actions, Metadata), stored as the repository secret `PI_GITHUB_READ_TOKEN`. Classic tokens are refused. (b) Run `infra/setup-azure-mcp.ps1` once from a PC signed in to Azure CLI and GitHub CLI: it creates the Entra app that guards the Azure MCP server, lets only the Foundry project call it, and sets the variable `JARVIS_AZURE_MCP_CLIENT_ID`. The first Deploy after merge outputs the project identity the script reads, so the order is: merge, Deploy, run the script, Deploy. Until then the summary of the Deploy `pi-agent` job says which server is "not attached" and why; PI says so too instead of pretending.
+
+Proven so far (16 November, Linux): the Azure MCP Server 3.0.0 image starts with `--transport http --read-only --outgoing-auth-strategy UseHostingEnvironmentIdentity` and answers `401` with a bearer challenge to an unauthenticated call; the Bicep builds (0.49); the backend suite (472 tests) and the Python suite (38 tests) pass and lint is clean, with new tests for the definition, the connections, "left out and visible", the smoke, the stream parsing and the Worker producer. **Unproven until the first live run:** that Foundry accepts a `ProjectManagedIdentity` connection (category `RemoteTool`) for a prompt-agent MCP tool, that the harness lists both servers' tools, and the cold start of a scaled-to-zero Azure MCP container when a conversation starts. The smoke now lists the servers the harness reports and runs one read per attached server, and its numbers are printed in the job log as well as the summary (the summary needs a sign-in).
+
 ## One living neural background — 15 November 2026 (#1892, P15-179; absorbs #1891; PR #1893)
 
 **Status: built; Linux tests pass; observed in the macOS simulator; device judgement still the owner's.** One shared background
@@ -64,9 +82,9 @@ Next: merge, let Deploy define the agent, dispatch Deploy with `measure_pi`, the
 | Phase | Issue | State |
 | --- | --- | --- |
 | 0 to 2 Prove, Jarvis MCP, chat in the iOS app behind a test selector | P15-174 (#1885), replaces P15-165 to P15-167 (#1874 to #1876) | Not started; needs Azure access |
-| 3 Reach: GitHub, Azure, Workers | P15-168 (#1877) | Not started |
-| 4 Brain, shadow then live | P15-169 (#1878) | Not started |
-| 5 Standing watches | P15-170 (#1879) | Not started |
+| 3 Reach: GitHub, Azure, Workers | P15-175 (#1886), replaces P15-168 (#1877) | Built, not live (see the section above) |
+| 4 Brain loop: tested by replaying recorded events and by the owner behind the test switch; no shadow run | P15-175 (#1886), replaces P15-169 (#1878) | Built, not live (pull request 2 of the section above) |
+| 5 Standing watches | P15-175 (#1886), replaces P15-170 (#1879) | Built, not live (pull request 3 of the section above) |
 | 6 Voice on the same agent (every turn through the PI agent; start wait accepted) | P15-171 (#1880) | Not started |
 | 7 Cutover: PI is the default | P15-172 (#1881) | Not started |
 | 8 Delete the old path (gate and inventory in the plan) | P15-173 (#1882) | Not started |

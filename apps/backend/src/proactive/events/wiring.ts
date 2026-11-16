@@ -14,10 +14,22 @@ import { createMemoryOutreachStore, type OutreachStore } from './outreach-store.
 import { createEventPipeline } from './pipeline.js';
 import { createFoundryEventReasoner } from './reasoner.js';
 import { createSourceChangePoller, createTimerProducer } from './scheduled-producers.js';
+import { ConfigurationError } from '../../configuration-error.js';
+import type { EventQueueStore } from './event-queue.js';
 import type { OutreachChannel, ProactiveEventSink } from './types.js';
 
+/** What reads the queue: the old one-shot pipeline, or the PI brain. */
+export interface EventConsumer {
+  wake(): void;
+  start(): Promise<void>;
+  tick(signal: AbortSignal): Promise<unknown>;
+}
+
 export interface EventPathOptions {
+  /** The old one-shot pipeline (switched off in production, deleted with #1887). */
   enabled: boolean;
+  /** The PI brain reads the queue instead. It cannot run together with the old pipeline: two readers would split the events. */
+  brain?: ((queue: EventQueueStore) => EventConsumer) | undefined;
   ownerObjectId: string;
   pool?: sql.ConnectionPool | undefined;
   store: ProactiveStore;
@@ -34,7 +46,8 @@ export interface EventPathOptions {
 
 export interface EventPath {
   sink: ProactiveEventSink;
-  outreach: OutreachStore;
+  /** Only the old pipeline records outreach. */
+  outreach?: OutreachStore | undefined;
   tick(signal: AbortSignal): Promise<unknown>;
   start(): Promise<void>;
   stop(): Promise<void>;
@@ -42,37 +55,46 @@ export interface EventPath {
 
 /** The queue, rules, reasoner, tiers and producers, assembled. Undefined when switched off or not configured. */
 export function createEventPath(options: EventPathOptions): EventPath | undefined {
-  if (!options.enabled) return undefined;
-  if (!options.modelCatalogue || !options.getCredentialToken || !options.foundryProjectEndpoint) {
-    options.logger?.warn({ reason: 'model_not_configured' }, 'proactive.events_disabled');
-    return undefined;
+  if (options.enabled && options.brain) {
+    throw new ConfigurationError('JARVIS_PROACTIVE_EVENTS_ENABLED (the old one-shot pipeline) and the PI brain both read the event queue; turn the old pipeline off.');
   }
-  const getToken = options.getCredentialToken;
+  if (!options.enabled && !options.brain) return undefined;
   const queue = options.pool
     ? createProactiveEventStore(options.pool, options.ownerObjectId) : createMemoryEventQueueStore();
-  const outreach = options.pool
-    ? createProactiveOutreachStore(options.pool, options.ownerObjectId) : createMemoryOutreachStore();
-  const channels: OutreachChannel[] = [
-    ...(options.nowCardFeed ? [createNowCardChannel(options.nowCardFeed)] : []),
-    ...(options.systemPushSender ? [createPushChannel(options.systemPushSender)] : []),
-  ];
-  const pipeline = createEventPipeline({
-    queue, outreach, store: options.store,
-    reasoner: createFoundryEventReasoner({
-      modelCatalogue: options.modelCatalogue,
-      foundryProjectEndpoint: options.foundryProjectEndpoint,
-      getCredentialToken: async (scope, signal) => {
-        const token = await getToken(scope, signal);
-        if (!token) throw new Error('Model unavailable');
-        return token;
-      },
+  let outreach: OutreachStore | undefined;
+  let pipeline: EventConsumer;
+  if (options.brain) {
+    pipeline = options.brain(queue);
+  } else {
+    if (!options.modelCatalogue || !options.getCredentialToken || !options.foundryProjectEndpoint) {
+      options.logger?.warn({ reason: 'model_not_configured' }, 'proactive.events_disabled');
+      return undefined;
+    }
+    const getToken = options.getCredentialToken;
+    outreach = options.pool
+      ? createProactiveOutreachStore(options.pool, options.ownerObjectId) : createMemoryOutreachStore();
+    const channels: OutreachChannel[] = [
+      ...(options.nowCardFeed ? [createNowCardChannel(options.nowCardFeed)] : []),
+      ...(options.systemPushSender ? [createPushChannel(options.systemPushSender)] : []),
+    ];
+    pipeline = createEventPipeline({
+      queue, outreach, store: options.store,
+      reasoner: createFoundryEventReasoner({
+        modelCatalogue: options.modelCatalogue,
+        foundryProjectEndpoint: options.foundryProjectEndpoint,
+        getCredentialToken: async (scope, signal) => {
+          const token = await getToken(scope, signal);
+          if (!token) throw new Error('Model unavailable');
+          return token;
+        },
+        ...(options.logger ? { logger: options.logger } : {}),
+      }),
+      contextSources: options.sources, channels,
+      ...(options.usageStore ? { usageStore: options.usageStore } : {}),
+      now: options.now,
       ...(options.logger ? { logger: options.logger } : {}),
-    }),
-    contextSources: options.sources, channels,
-    ...(options.usageStore ? { usageStore: options.usageStore } : {}),
-    now: options.now,
-    ...(options.logger ? { logger: options.logger } : {}),
-  });
+    });
+  }
   const sink: ProactiveEventSink = {
     async enqueue(event) {
       const result = await queue.enqueue(event, options.now());

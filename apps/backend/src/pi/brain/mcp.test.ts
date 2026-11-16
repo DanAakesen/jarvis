@@ -1,0 +1,142 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { buildApp } from '../../app.js';
+import { createPiAuth } from '../../auth/pi-credential.js';
+import { loadConfig } from '../../config.js';
+import { coreModule } from '../../core/index.js';
+import type { JarvisTool } from '../../core/tool-registry.js';
+import { createPiArea } from '../area.js';
+import { createPiRoutes } from '../routes.js';
+import { createMemoryPiStore } from '../store.js';
+import { createPiTurnRegistry } from '../turns.js';
+import { memoryConversations, memoryVault } from './brain.testkit.js';
+import { createBrainComms } from './comms.js';
+import { createBrainTools } from './tools.js';
+
+const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
+const secret = 'A'.repeat(43);
+const ownerToken = 'owner.token.fixture';
+const bearer = (value: string) => `${['Bear', 'er'].join('')} ${value}`;
+const apps: ReturnType<typeof buildApp>[] = [];
+afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
+const live = () => new AbortController().signal;
+
+const calls: string[] = [];
+const probes: JarvisTool[] = ['list_projects', 'create_issue'].map((name) => ({
+  name, description: `Probe ${name}. Keyword: probe.`,
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  execute: async (_input, request) => { calls.push(`${name}:${String(request.headers['x-jarvis-message-id'])}`); return { ok: true }; },
+}));
+
+function setup() {
+  calls.length = 0;
+  const registry = createPiTurnRegistry();
+  const auth = createPiAuth(config.auth.tenantId, secret);
+  const vault = memoryVault();
+  const conversations = memoryConversations();
+  const pushes: unknown[] = [];
+  const store = createMemoryPiStore();
+  const comms = createBrainComms({ conversations: conversations.store, store, ownerObjectId: config.auth.ownerObjectId, push: (m) => pushes.push(m), announce: () => {}, now: () => new Date('2026-11-16T10:00:00Z') });
+  const app = buildApp(config, undefined, {
+    modules: [coreModule, { id: 'probe', tools: probes, registerRoutes: async () => {} },
+      { id: 'pi', tools: createBrainTools({ registry, comms, area: createPiArea({ vault }), now: () => new Date('2026-11-16T10:00:00Z') }),
+        registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250 }) }],
+    auth: async (token) => {
+      if (token !== ownerToken) throw new Error('rejected');
+      return { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Owner' };
+    },
+    toolCallStore: { record: async () => {} },
+    piAuth: auth,
+  });
+  apps.push(app);
+  let id = 0;
+  async function tool(name: string, args: Record<string, unknown>) {
+    id += 1;
+    const response = await app.inject({
+      method: 'POST', url: '/pi/mcp', remoteAddress: '10.0.0.9',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-06-18', authorization: bearer(`jp.${secret}`) },
+      payload: { jsonrpc: '2.0', id, method: 'tools/call', params: { name, arguments: args } },
+    });
+    const line = response.body.split('\n').find((candidate) => candidate.startsWith('data:'))!;
+    const text = JSON.parse(line.slice(5)).result.content[0].text as string;
+    return JSON.parse(text) as { outcome: string; result: Record<string, unknown> };
+  }
+  const wake = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '', messageId: '', brain: { runId: 'run-1', sent: [], wrote: [], looked: [] }, signal: live() });
+  const chat = () => registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '41', signal: live() });
+  return { app, registry, tool, wake, chat, vault, pushes, conversations };
+}
+
+describe('a brain wake over the Jarvis MCP server', () => {
+  it('finds only read tools and its own tools, and runs a read without any owner message', async () => {
+    const { tool, wake } = setup();
+    const grant = wake();
+    const found = await tool('find_tools', { turn: grant.turn, query: 'probe list_projects message note' });
+    const names = (found.result.tools as Array<{ name: string }>).map(({ name }) => name);
+    expect(names).toContain('list_projects');
+    expect(names).toContain('message_dan');
+    expect(names).not.toContain('create_issue');
+    const run = await tool('call_tool', { turn: grant.turn, name: 'list_projects', arguments: {} });
+    expect(run.outcome).toBe('ok');
+    expect(calls).toEqual(['list_projects:undefined']);
+  });
+
+  it('refuses a write tool, even one forced into the discovered set', async () => {
+    const { tool, wake } = setup();
+    const grant = wake();
+    grant.discovered.add('create_issue');
+    const refused = await tool('call_tool', { turn: grant.turn, name: 'create_issue', arguments: {} });
+    expect(refused.outcome).toBe('refused');
+    expect(calls).toEqual([]);
+  });
+
+  it('lets the wake message Dan and keep a note, and records both on the run', async () => {
+    const { tool, wake, vault, pushes, conversations } = setup();
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'message note dan' });
+    const sent = await tool('call_tool', { turn: grant.turn, name: 'message_dan', arguments: { text: 'The deploy failed.' } });
+    expect(sent.outcome).toBe('ok');
+    expect(pushes).toHaveLength(1);
+    expect(conversations.messages.at(-1)).toMatchObject({ role: 'jarvis', model: 'pi' });
+    const noted = await tool('call_tool', { turn: grant.turn, name: 'pi_note', arguments: { name: 'Deploys', text: 'Waiting for the next green run.' } });
+    expect(noted.outcome).toBe('ok');
+    expect(vault.files.get('PI/Notes/Deploys.md')).toContain('Waiting for the next green run.');
+    expect(grant.brain!.sent.map(({ text }) => text)).toEqual(['The deploy failed.']);
+    expect(grant.brain!.wrote).toEqual(['PI/Notes/Deploys.md']);
+  });
+
+  it('never lets a note leave PI\'s corner of the vault or carry a credential', async () => {
+    const { tool, wake, vault } = setup();
+    const grant = wake();
+    await tool('find_tools', { turn: grant.turn, query: 'note' });
+    for (const name of ['../Inbox/x', 'a/b', '.hidden', 'x#y']) {
+      expect((await tool('call_tool', { turn: grant.turn, name: 'pi_note', arguments: { name, text: 'x' } })).outcome).toBe('refused');
+    }
+    const secretNote = await tool('call_tool', { turn: grant.turn, name: 'pi_note', arguments: { name: 'Keys', text: 'token ghp_' + 'A'.repeat(36) } });
+    expect(secretNote.outcome).toBe('refused');
+    expect([...vault.files.keys()]).toEqual([]);
+  });
+});
+
+describe('chat and the brain stay apart', () => {
+  it('hides the brain tools from a chat turn and refuses them if named anyway', async () => {
+    const { tool, chat } = setup();
+    const grant = chat();
+    const found = await tool('find_tools', { turn: grant.turn, query: 'message note dan' });
+    expect((found.result.tools as Array<{ name: string }> | undefined ?? []).map(({ name }) => name)).not.toContain('message_dan');
+    grant.discovered.add('message_dan');
+    expect((await tool('call_tool', { turn: grant.turn, name: 'message_dan', arguments: { text: 'hi' } })).outcome).toBe('refused');
+  });
+
+  it('refuses the brain header on the tool route for anyone but the PI agent, and brain tools outside a live wake', async () => {
+    const { app } = setup();
+    const response = await app.inject({
+      method: 'POST', url: '/tools/list_projects', payload: {},
+      headers: { authorization: bearer(ownerToken), 'content-type': 'application/json', 'x-jarvis-brain': 'run-1' },
+    });
+    expect(response.statusCode).toBe(403);
+    const message = await app.inject({
+      method: 'POST', url: '/tools/message_dan', payload: { text: 'hi' },
+      headers: { authorization: bearer(ownerToken), 'content-type': 'application/json', 'x-jarvis-brain': 'run-1' },
+    });
+    expect(message.statusCode).toBe(403);
+  });
+});

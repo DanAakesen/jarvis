@@ -1,3 +1,17 @@
+## PI standing watches — 16 November 2026 (#1886, P15-175)
+
+No new screen: watches are listed, changed and stopped in chat or by voice, in plain sentences (name, next look, looks today, an estimated cost in DKK with the word "estimate"). The reply to "keep me updated on X" is one sentence: what is watched and when the first look is. A report from a watch is an ordinary Jarvis chat message and push, only when something changed that matters; there is never a "still waiting" message. The Watch is parked and was not touched.
+
+## PI brain test switch in iOS — 16 November 2026 (#1886, P15-175)
+
+A second section under the PI engine switch in Settings, General, titled "PI brain (test)", with the same temporary status as the engine switch. A native toggle turns the brain on or off (saved on the backend, so it holds on every device); it is disabled, with the status row saying why, while the app has no backend, a request is running, or the backend has no brain ("Not set up on this backend"). Rows show the status (On, Off, Paused in proactive settings), the proactive budget used against its limit with plain text for "Almost used" and "Used: the brain has stopped" (red text for the stop, never colour alone), wakes and DKK this month, messages today, the last wake (outcome, time, DKK) and, only when above zero, decision-log entries waiting for the vault. A refresh button uses the shared labelled button; a loading row and a red error line cover the other states. Not inspected on a device or simulator: it compiles only in the Apple CI.
+
+A message from the brain is an ordinary Jarvis chat message and an ordinary reply push; there is no new card, tier or channel.
+
+## PI reach — 16 November 2026 (#1886, P15-175)
+
+No visible UI. PI says in plain words when a read-only server is not attached ("I have no GitHub tools in this session") and never claims to have looked; Azure and GitHub results arrive as ordinary chat text.
+
 ## PI test switch in iOS — 15 November 2026 (#1885, P15-174)
 
 A temporary, clearly marked test control, deleted at cutover. Settings, General, section "Test switch": the shared segmented bar chooses Current engine or PI engine (stored on the device, default Current), an explanation says it affects chat only and has no fallback, and while PI is chosen live rows show status, agent and model, month spend against the cap, warm or cold, the monthly cap (default 100 DKK) and what is left this month (shown in red text at 0), and the last turn (first text ms, tokens including cached, DKK) with a refresh button. The Chat header shows a small "PI test" pill (icon plus text, new shared `JarvisStatusPill`) while PI is chosen. PI failures show the server's own sentence in the chat error banner. Not inspected on a device or simulator by me; the macOS CI compile is the check.
