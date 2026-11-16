@@ -138,8 +138,16 @@ over this store. Design: `docs/inbox-loop/design.md`.
   visible, runs one forced `JarvisTodayModel.refresh`, then reports readiness; failures settle visibly in Home. The
   overlay window shows `JarvisOpeningView` above content, stays up through a 0.3 s crossfade with touches passing through,
   and the root draws the opening colour for the first frames. `UILaunchScreen` uses the `LaunchBackground` colour.
-  Layout (`JarvisOpeningLayout`), the dim background network (`JarvisOpeningNetwork`: fixed positions, drawn with the orb's disc masked out) and progress semantics (`JarvisOpeningProgress`)
+  Layout (`JarvisOpeningLayout`) and progress semantics (`JarvisOpeningProgress`)
   are pure and tested in JarvisCore.
+- **Neural background (P15-179).** `JarvisNeuralNetwork` (fixed nodes, links and shortest routes from the orb), `JarvisNeuralAnimator`
+  (spawns signals from the orb's own `JarvisOrbAnimator` weights, deterministic seed) and `JarvisNeuralScene` (pure geometry
+  in points) live in `JarvisCore/Neural`; `JarvisNeuralBackgroundView` paints a static network Canvas plus a timeline-driven
+  signals Canvas. The app's `JarvisNeuralBackground` (design system) is the only entry: Voice, Chat (`JarvisNeuralStage`, with a
+  live `JarvisOrb`), the gate and the opening ask for `.full` effects with the orb's activity; `jarvisAmbientBackground()` gives
+  every other page `.calm`; sheets, the drawer and the privacy cover use `JarvisScreenBackground` (`.still`). The gate sets
+  `jarvisBackgroundPaused` while it covers content. `UserDefaults` key `jarvis.background.motion` (Settings > General) and
+  Reduce Motion force the still pose. `JarvisOrbActivity.tool` is the chat tool-work state.
 - **CI.** The macOS Apple build job also builds the iPhone app, which compiles every extension, and captures iPhone
   simulator screenshots and a short opening video (artifact `watch-build-logs`).
 

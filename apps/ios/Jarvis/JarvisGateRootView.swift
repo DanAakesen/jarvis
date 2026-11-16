@@ -186,6 +186,18 @@ private final class JarvisGateModel: ObservableObject {
 
     func load() async {
         guard case .loading = presentation else { return }
+#if targetEnvironment(simulator)
+        // Simulator captures only: show a gate state without signing in.
+        if let state = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--screenshot-gate=") }) {
+            switch state.dropFirst("--screenshot-gate=".count) {
+            case "lock-failed": presentation = .lock(.failed)
+            case "lock-waiting": presentation = .lock(.waiting)
+            case "sign-in": presentation = .signIn(.idle)
+            default: break
+            }
+            if presentation != .loading { return }
+        }
+#endif
         if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-fixture") ||
             ProcessInfo.processInfo.arguments.contains("--screenshot-health-fixture") ||
             ProcessInfo.processInfo.arguments.contains("--screenshot-settings-fixture") ||
@@ -503,6 +515,8 @@ struct JarvisGateRootView: View {
             }
             // Only sign-out discards the shell; sign-in resets session content explicitly.
             .id(model.signOutGeneration)
+            // Backgrounds under the gate hold still: nobody can see them.
+            .environment(\.jarvisBackgroundPaused, model.shouldCoverContent)
             // Gating applies to the page only; the root drawer and edge strip stay outside it.
             .blur(radius: model.shouldCoverContent ? JarvisDesignTokens.gateBackgroundBlurRadius : 0)
             .allowsHitTesting(!model.shouldCoverContent)
@@ -558,6 +572,9 @@ private struct JarvisGateOverlayView: View {
             }
         }
         .accessibilityAddTraits(.isModal)
+        // This window is hosted outside the app's scene, so SwiftUI never reports the scene's phase to it and the
+        // orb and background would never run. Report the gate's own view of it instead.
+        .environment(\.scenePhase, model.isRenderingPaused ? .inactive : .active)
     }
 
     /// What lies under the opening. While the opening is visible it is a plain colour, so only one orb is drawn;
@@ -573,12 +590,12 @@ private struct JarvisGateOverlayView: View {
                 presentation: model.presentation,
                 language: language,
                 watchRevocationNotice: model.watchRevocationNotice,
+                isPaused: model.isRenderingPaused,
                 onPrimaryAction: model.performPrimaryAction
             )
         } else if model.shouldCoverContent {
-            JarvisDesignTokens.pageBackground
-                .ignoresSafeArea()
-                .accessibilityHidden(true)
+            // The privacy cover: the same background, still.
+            JarvisScreenBackground()
         } else {
             Color.clear
         }
@@ -589,7 +606,11 @@ private struct JarvisGateSurface: View {
     let presentation: JarvisGatePresentation
     let language: JarvisAppLanguage
     let watchRevocationNotice: String?
+    var isPaused = false
     let onPrimaryAction: () -> Void
+
+    /// The orb's frame on screen: the living background fans out from it in every gate state.
+    @State private var orbFrame: CGRect = .zero
 
     private var isSignIn: Bool {
         if case .signIn = presentation { return true }
@@ -635,18 +656,21 @@ private struct JarvisGateSurface: View {
         return false
     }
 
+    private var orb: some View {
+        JarvisOrb(activity: orbActivity, isPaused: isPaused)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { orbFrame = $0 }
+    }
+
     var body: some View {
         ZStack {
-            if isSignIn {
-                JarvisGateAmbientBackground()
-            } else {
-                Rectangle().fill(.regularMaterial)
-                JarvisDesignTokens.pageBackground.opacity(JarvisDesignTokens.gateBackgroundOpacity)
-            }
+            // One background for every gate state, so a failed Face ID crossfades like the others.
+            JarvisNeuralBackground(
+                activity: orbActivity == .idle ? .calm : orbActivity, effects: .full, orb: .screen(orbFrame), isPaused: isPaused
+            )
 
             if isSignIn {
                 GeometryReader { geometry in
-                    JarvisOrb(activity: orbActivity)
+                    orb
                         .position(
                             x: geometry.size.width / 2,
                             y: JarvisDesignTokens.gateOrbCenterTop
@@ -672,10 +696,11 @@ private struct JarvisGateSurface: View {
                     .padding(.bottom, JarvisDesignTokens.gateSignInBottomInset)
                     .frame(maxHeight: .infinity, alignment: .bottom)
                 }
+                .transition(.opacity)
             } else {
                 VStack(spacing: JarvisDesignTokens.gateControlSpacing) {
                     Spacer(minLength: JarvisDesignTokens.gateControlSpacing)
-                    JarvisOrb(activity: orbActivity)
+                    orb
 
                     if isLocked {
                         Image(systemName: "faceid")
@@ -690,9 +715,11 @@ private struct JarvisGateSurface: View {
                 }
                 .padding(.horizontal, JarvisDesignTokens.gateContentInset)
                 .padding(.bottom, JarvisDesignTokens.gateContentInset)
+                .transition(.opacity)
             }
         }
         .ignoresSafeArea()
+        .animation(.easeInOut(duration: JarvisDesignTokens.gateStateFadeDuration), value: presentation)
     }
 
     @ViewBuilder
@@ -702,6 +729,7 @@ private struct JarvisGateSurface: View {
                 .font(.body)
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
+                .transition(.opacity)
         }
     }
 
@@ -716,13 +744,8 @@ private struct JarvisGateSurface: View {
                 isFullWidth: true,
                 action: onPrimaryAction
             )
+            .transition(.opacity)
         }
-    }
-}
-
-private struct JarvisGateAmbientBackground: View {
-    var body: some View {
-        JarvisScreenBackground()
     }
 }
 

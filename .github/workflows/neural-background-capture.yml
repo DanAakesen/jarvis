@@ -1,0 +1,110 @@
+name: Neural background capture
+# Builds the iPhone app for the simulator and captures the living background in every state it has: voice, chat,
+# a calm screen, the Face ID failure gate and the opening. Only the files that draw the background trigger it.
+on:
+  pull_request:
+    paths:
+      - 'apps/ios/Packages/JarvisCore/Sources/JarvisCore/Neural/**'
+      - 'apps/ios/Packages/JarvisCore/Sources/JarvisCore/Orb/**'
+      - 'apps/ios/Jarvis/JarvisDesignSystem.swift'
+      - 'apps/ios/Jarvis/JarvisGateRootView.swift'
+      - 'apps/ios/Jarvis/JarvisOpeningView.swift'
+      - '.github/workflows/neural-background-capture.yml'
+permissions:
+  contents: read
+concurrency:
+  group: neural-capture-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  capture:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Select Xcode
+        run: sudo xcode-select --switch /Applications/Xcode_26.6.app
+      - name: Install pinned XcodeGen
+        run: |
+          curl -fsSL https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip -o "$RUNNER_TEMP/xcodegen.zip"
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum --check
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Build the iPhone app for the simulator
+        working-directory: apps/ios
+        run: |
+          set -o pipefail
+          xcodegen generate
+          xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/PhoneBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/phone-build.log"
+      - name: Capture the living background
+        continue-on-error: true
+        timeout-minutes: 30
+        run: |
+          set -uo pipefail
+          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
+          if [[ -z "$PHONE_ID" ]]; then
+            echo "::warning::No iPhone Pro simulator is available; nothing was captured."
+            exit 0
+          fi
+          OUT="$RUNNER_TEMP/neural"
+          mkdir -p "$OUT"
+          APP=com.danaakesen.jarvis
+          xcrun simctl boot "$PHONE_ID" || true
+          xcrun simctl bootstatus "$PHONE_ID" -b
+          xcrun simctl ui "$PHONE_ID" appearance dark
+          xcrun simctl install "$PHONE_ID" "$RUNNER_TEMP/PhoneBuild/Build/Products/Debug-iphonesimulator/Jarvis.app"
+          # Every simctl call is bounded, so one stuck simulator call cannot use up the whole job.
+          bounded() { perl -e 'alarm shift; exec @ARGV' 90 "$@"; }
+          shot() { bounded xcrun simctl io "$PHONE_ID" screenshot "$OUT/$1.png" || echo "::warning::screenshot $1 failed"; }
+          run() {
+            bounded xcrun simctl launch --terminate-running-process "$PHONE_ID" "$APP" "$@" \
+              || bounded xcrun simctl launch --terminate-running-process "$PHONE_ID" "$APP" "$@" \
+              || echo "::warning::launch $* failed"
+          }
+          # The first launch after an install is slow on these runners: warm it up before any capture.
+          run --screenshot-chat-fixture
+          sleep 20
+          # Voice: the three states, each at three instants so signals are seen moving out and back.
+          for state in listening thinking speaking; do
+            run --screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=$state
+            sleep 3; shot voice-$state-a; sleep 0.7; shot voice-$state-b; sleep 0.7; shot voice-$state-c
+          done
+          # Chat: idle, then the working states over the message window.
+          run --screenshot-chat-fixture
+          sleep 3; shot chat-idle
+          for state in thinking tool speaking listening; do
+            run --screenshot-chat-fixture --screenshot-chat-state=$state
+            sleep 3; shot chat-$state-a; sleep 0.7; shot chat-$state-b
+          done
+          # Calm screens (Settings, Health), dark and light, and a light chat.
+          run --screenshot-settings-fixture
+          sleep 3; shot calm-settings-dark
+          run --screenshot-health-fixture
+          sleep 3; shot calm-health-dark
+          xcrun simctl ui "$PHONE_ID" appearance light
+          run --screenshot-settings-fixture
+          sleep 3; shot calm-settings-light
+          run --screenshot-chat-fixture --screenshot-chat-state=thinking
+          sleep 3; shot chat-thinking-light
+          xcrun simctl ui "$PHONE_ID" appearance dark
+          # The gate: Face ID failed, waiting, and sign-in. The background must stay in all of them.
+          for gate in lock-failed lock-waiting sign-in; do
+            run --screenshot-gate=$gate
+            sleep 3; shot gate-$gate-a; sleep 0.7; shot gate-$gate-b
+          done
+          # The opening, held on screen, at three instants.
+          run --opening-preview
+          sleep 3; shot opening-a; sleep 0.7; shot opening-b; sleep 0.7; shot opening-c
+          # Voice thinking in motion.
+          run --screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=thinking
+          xcrun simctl io "$PHONE_ID" recordVideo --codec=h264 "$OUT/voice-thinking.mp4" & RECORDING=$!
+          sleep 8; kill -INT "$RECORDING" 2>/dev/null; wait "$RECORDING" 2>/dev/null || true
+          xcrun simctl terminate "$PHONE_ID" "$APP" || true
+          ls -l "$OUT"
+      - name: Upload captures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: neural-background-captures
+          path: |
+            ${{ runner.temp }}/neural
+            ${{ runner.temp }}/phone-build.log
