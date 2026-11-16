@@ -26,11 +26,15 @@ actor URLSessionWebSocketTransport: WebSocketTransport {
             try await withThrowingTaskGroup(of: Void.self) { group in
                 group.addTask {
                     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                        // The handler can fire again when the socket closes; a second resume traps the app.
+                        let once = ResumeOnce()
                         socket.sendPing { error in
-                            if let error {
-                                continuation.resume(throwing: error)
-                            } else {
-                                continuation.resume()
+                            once.run {
+                                if let error {
+                                    continuation.resume(throwing: error)
+                                } else {
+                                    continuation.resume()
+                                }
                             }
                         }
                     }

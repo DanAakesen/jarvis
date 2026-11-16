@@ -6,6 +6,7 @@
 | The Azure question that opened a browser ran on the old engine, which has no `az_` tools. The default engine is not changed here | Owner decision: the cutover (#1910) needs his written word. The old engine is told to say so plainly when it lacks a tool |
 | The Deploy smoke reports tool choice on natural prompts and does not fail on it | A model's choices are measured and read, not asserted; the smoke role refuses every action but its reads, so a PC request cannot act |
 | The voice WebSocket handshake starts reading at once and fails after 15 s | A pong is only handed over while a receive is outstanding, and nothing bounded the wait, so a stalled handshake showed "Connecting" for ever. Failure is now visible (existing error and retry), not a fallback |
+| The WebSocket ping handler resumes its continuation through `ResumeOnce` | The build 111 crash log showed `CheckedContinuation.resume` trapping a second time in `URLSessionWebSocketTransport.connect` every time a voice session closed: the ping handler fires again on close. Root cause, not a guard around the symptom |
 | A failed chat turn shows the server's own plain message and a Retry button; the backend logs the provider's error code from a closed list | The cause of `model_response_incomplete` was invisible; the app dropped the user's message and the server text |
 
 ## 16 November 2026 — PI knows its environment: a runtime note, not committed identifiers (#1886, P15-175)
