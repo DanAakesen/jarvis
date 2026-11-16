@@ -133,6 +133,25 @@ describe('PI voice turns', () => {
     expect(events).toEqual(['start first', 'first released', 'start second']);
   });
 
+  it('says nothing more when Dan starts speaking while PI is still working', async () => {
+    let aborted = false;
+    const agent: PiVoiceAgent = {
+      async *stream(_input, _authorization, signal) {
+        await new Promise<void>(resolve => signal.addEventListener('abort', () => { aborted = true; resolve(); }, { once: true }));
+        if (signal.aborted) throw signal.reason;
+        yield 'Too late.';
+      },
+    };
+    const { turns, spoken, logs, settled } = setup(agent);
+    turns.start(turn);
+    await new Promise(resolve => setTimeout(resolve, 1));
+    turns.cancel();
+    await settled();
+    expect(aborted).toBe(true);
+    expect(spoken).toEqual([]);
+    expect(logs[0]).toMatchObject({ outcome: 'superseded' });
+  });
+
   it('says nothing when the voice session ends mid-turn', async () => {
     const agent: PiVoiceAgent = {
       async *stream(_input, _authorization, signal) {

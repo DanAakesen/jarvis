@@ -46,6 +46,8 @@ export interface PiVoiceTurnsOptions {
 export interface PiVoiceTurns {
   /** Starts a turn. A turn still in flight is cancelled first: the newest utterance wins. */
   start(turn: PiVoiceTurn): void;
+  /** Dan started speaking: the turn in flight is cancelled and says nothing more, so no stale answer lands on top of him. */
+  cancel(): void;
   /** Primes the shared conversation when the voice session opens, so the first turn does not pay the cold start alone. */
   warm(): void;
 }
@@ -119,6 +121,7 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
       });
       current = { cancel: () => controller.abort(), done };
     },
+    cancel() { current?.cancel(); },
     warm() {
       const warm = options.agent.warm;
       if (!warm) return;

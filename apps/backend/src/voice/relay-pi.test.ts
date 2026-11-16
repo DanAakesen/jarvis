@@ -86,7 +86,7 @@ async function harness(agent: PiVoiceAgent | undefined) {
     sockets[0]!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', item_id: itemId, transcript }));
   };
   const responses = () => upstreamEvents.filter(event => event.type === 'response.create');
-  return { upstreamEvents, connect, speak, responses };
+  return { upstreamEvents, sockets, connect, speak, responses };
 }
 
 describe('voice relay on the PI engine', () => {
@@ -111,6 +111,25 @@ describe('voice relay on the PI engine', () => {
     expect(reply.tool_choice).toBe('none');
     expect(reply.tools).toEqual([]);
     expect(reply.instructions).toContain(JSON.stringify('You have two meetings today.'));
+  });
+
+  it('cancels the PI turn in flight when Dan starts speaking, so no stale answer is spoken over him', async () => {
+    let aborted = false;
+    const agent: PiVoiceAgent = {
+      async *stream(_input, _authorization, signal) {
+        await new Promise<void>(resolve => signal.addEventListener('abort', () => { aborted = true; resolve(); }, { once: true }));
+        yield 'Stale answer.' as ConversationAgentChunk;
+      },
+    };
+    const { sockets, speak, responses, connect } = await harness(agent);
+    connect('?engine=pi');
+    await until(() => responses().length === 1, 'the greeting');
+    speak('First question');
+    await sleep(50);
+    sockets[0]!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started', item_id: 'item_2' }));
+    await until(() => aborted, 'the cancellation');
+    await sleep(50);
+    expect(responses()).toHaveLength(1);
   });
 
   it('says a PI failure out loud and does not use another engine', async () => {

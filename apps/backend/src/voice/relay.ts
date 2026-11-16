@@ -2617,6 +2617,8 @@ function registerVoiceRoute(
             }
             if (event?.type === 'input_audio_buffer.speech_started') {
               limits.touch();
+              // Whatever PI is still working on belongs to what Dan said before; its answer must not land on top of him.
+              piTurns?.cancel();
               clearCameraImage();
               pendingImageUsageItem = undefined;
               cameraGeneration += 1;
