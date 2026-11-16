@@ -321,6 +321,14 @@ class SmokeReportTest(unittest.TestCase):
         self.assertIn("read-only GitHub server answered a read and the harness reported no error | **FAIL**", text)
         self.assertNotIn("Azure server answered", text)
         self.assertIn("every MCP server the harness reported returned its tools | **FAIL**", text)
+    def test_render_shows_the_fixed_prompt_row_when_the_report_has_one(self):
+        base = {"cold": self.turn(4000), "warm": [self.turn(1900, 10000)],
+                "tools": dict(self.turn(2500), toolResults=[{"tool": "list_jobs", "outcome": "ok"}]),
+                "cancel": {"abortToCloseMs": 120, "partialCharacters": 31, "followUpOk": True}, "totalCostDkk": 0.4,
+                "checks": {"streaming": True, "tools_over_mcp": True, "cancellation": True, "warm_faster_than_cold": True}}
+        self.assertNotIn("fixed prompt", report.render(base))
+        self.assertIn("| fixed prompt, new conversation | 1000 ms |", report.render(dict(base, baseline=self.turn(1000, 0))))
+
     def test_render_shows_voice_turns_and_their_checks_only_when_present(self):
         base = {"cold": self.turn(4000), "warm": [self.turn(1900, 10000)],
                 "tools": dict(self.turn(2500), toolResults=[{"tool": "list_jobs", "outcome": "ok"}]),

@@ -1,3 +1,47 @@
+## PI voice leg and prompt size (16 November 2026, Deploy run 43831735508, `measure_pi` after #1908)
+
+Observed through the gateway on agent `jarvis-pi` with the voice instructions and the brain, watches and workers skills. Reach servers were not attached, so no reach rows.
+
+| Turn | First text | Total | Input | Cached | Output | DKK (list price) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Cold, new conversation | 3764 ms | 11099 ms | 40865 | 23255 | 426 | 0.2828 |
+| Warm, turn 2 | 2394 ms | 2731 ms | 17760 | 17601 | 11 | 0.1172 |
+| Warm, turn 3 | 1456 ms | 1785 ms | 17847 | 17757 | 12 | 0.1178 |
+| Warm, turn 4 | 1176 ms | 1551 ms | 17936 | 17844 | 11 | 0.1184 |
+| Tool turn (Jarvis MCP, 2 calls) | 1156 ms | 12822 ms | 55089 | 54444 | 122 | 0.3664 |
+| **Voice, plain (PI leg only)** | **1641 ms** | 2007 ms | 18730 | 18569 | 9 | 0.1235 |
+| **Voice, with a tool (PI leg only)** | **1442 ms** | 6321 ms | 57668 | 56958 | 119 | 0.3833 |
+
+```text
+First text (1 block = 0.1 s)
+voice plain      |████████████████▍  1.6 s
+voice with tool  |██████████████▍    1.4 s
+warm turn 4      |███████████▊       1.2 s
+cold             |█████████████████████████████████████▋  3.8 s
+```
+
+Voice checks passed: replies read as speech, a voice turn ran `list_jobs` through the MCP server with an `ok` result, and PI wrote a sentence before the tool call (the spoken acknowledgement). These are the PI leg only: Voice Live's audio in and out is not in them.
+
+**The prompt grew.** A warm turn carried about 17.7k input tokens, against about 7.5k on 16 November before the brain, watches and workers skills and the voice section. At list price with no cached discount that is about 0.12 DKK per warm turn (was 0.05) and 0.28 DKK cold (was 0.05).
+
+What the repository says about where the tokens are (Derived, from the files):
+
+- The authored definition is small: `agents/pi/instructions.md` is about 6.6k characters (about 1.7k tokens), the persona kernel about 1.9k characters, and the four skill descriptions together about 1k characters (about 0.25k tokens). The skill bodies (about 10.5k characters, about 2.6k tokens) enter a conversation only when the model loads a skill.
+- So the base prompt cannot have grown by 10k tokens from the definition alone. The cold turn (40.9k input over several calls) and the tool turn (55k over about three calls of about 18k) show the conversation itself getting large: the smoke's cold prompt ("say what you can do") makes the model load skills and look tools up, and those results stay in the conversation and are re-sent, cached, on every later turn.
+- **Cached tokens are 99 percent of input from turn 2.** At the cached input rate assumed in the plan (USD 0.05 per million, not yet checked against an invoice) a warm turn costs about 0.007 DKK and the cold turn about 0.14 DKK, not 0.12 and 0.28. The ledger and the monthly cap still use the conservative list price on purpose (`core/usage-pricing.ts`), so they over-count by roughly an order of magnitude on warm turns.
+
+Not yet measured: the base prompt on its own. The smoke now has a first row, "fixed prompt, new conversation" (a new conversation and the reply `ready`, no skill or tool), so the next `measure_pi` separates the fixed prompt from the growth.
+
+Options, none implemented (the behaviour risk is larger than the saving until the baseline is known):
+
+| Option | Saving | Risk and cost |
+| --- | --- | --- |
+| Shorter skill descriptions and bodies | at most about 1k tokens of the fixed prompt; bodies only when loaded | The model may stop loading the right skill; needs a quality check in the iOS test chat |
+| Load the brain and watches skills only on wakes (a second agent definition for the brain) | about 0.1k tokens of descriptions in chat turns | Breaks the one-agent plan, doubles provisioning and gives the brain a cold prompt of its own. Not worth it |
+| Keep the smoke's cold prompt from pulling skills in (only changes the measurement) | none in production | Hides real behaviour; better to read the baseline row |
+| Price cached input in the ledger and cap | makes the cap realistic (about 10 times fewer false stops) | A decision for the owner: the cap is conservative by design. Needs one invoice check of the cached rate first |
+| Shorter tool results (`find_tools` returns up to three full schemas and five short matches) | tool turns: tens of percent of a turn | Larger change in `pi/mcp.ts`; measure first with the baseline |
+
 ## PI live smoke and wake-up probe (16 November 2026, #1886)
 
 Observed by the Deploy run with `measure_pi` and `probe_pi_wake` after the PI stack merged. Agent `jarvis-pi` version 2 (skills inbox-triage v4, workers v1, brain v1, watches v1; connection `jarvis-pi-mcp`).

@@ -109,6 +109,12 @@ describe('PI live smoke', () => {
     expect(failed.checks.voice_tools_over_mcp).toBe(false);
   });
 
+  it('measures the fixed prompt on its own, in a new conversation', async () => {
+    const report = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1 });
+    expect(report.baseline.usage.inputTokens).toBe(11_000);
+    expect(report.baseline.toolCalls).toBe(0);
+  });
+
   it('tells speech from chat formatting', () => {
     expect(isSpokenShape('You have two meetings today, the first at nine.')).toBe(true);
     for (const text of ['', '- one\n- two', 'Here is **bold** text', 'See [this](http://x)', 'First line\nSecond line', 'word '.repeat(80)]) {

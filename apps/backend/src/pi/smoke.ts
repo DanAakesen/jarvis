@@ -23,6 +23,8 @@ interface Measured {
 }
 
 export interface PiSmokeReport {
+  /** The fixed prompt: first call of a new conversation with a trivial reply. Not a check; it explains the growth of longer turns. */
+  readonly baseline: Measured;
   readonly cold: Measured;
   readonly warm: readonly Measured[];
   readonly tools: Measured;
@@ -60,7 +62,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
   const conversationId = await kit.createConversation(signal);
   const listed = new Map<string, { tools: number; failed: boolean }>();
 
-  async function measure(text: string, config: { abortAfterFirstText?: boolean; voice?: boolean } = {}): Promise<Measured & { abortToCloseMs: number }> {
+  async function measure(text: string, config: { abortAfterFirstText?: boolean; voice?: boolean; conversation?: string } = {}): Promise<Measured & { abortToCloseMs: number }> {
     const controller = new AbortController();
     const turnSignal = AbortSignal.any([signal, controller.signal]);
     const grant = kit.openGrant(turnSignal);
@@ -76,7 +78,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
     let usage = noUsage;
     let abortedAt: number | null = null;
     try {
-      for await (const event of kit.respond(conversationId, kit.format(grant.turn, text, config.voice ? 'voice' : undefined), turnSignal) as AsyncIterable<PiEvent>) {
+      for await (const event of kit.respond(config.conversation ?? conversationId, kit.format(grant.turn, text, config.voice ? 'voice' : undefined), turnSignal) as AsyncIterable<PiEvent>) {
         const at = performance.now() - started;
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(at);
@@ -107,6 +109,9 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
       spokenShape: isSpokenShape(output), textBeforeTool, aborted: abortedAt !== null, abortToCloseMs: closedMs };
   }
 
+  // The fixed prompt on its own: a new conversation and a reply that needs no skill or tool. Its input tokens are what every
+  // conversation starts with; anything a longer turn adds beyond it (skills loaded, tool results) is the conversation's own growth.
+  const baseline = await measure('Reply with exactly: ready', { conversation: await kit.createConversation(signal) });
   // A reply of a few dozen words, so streaming can be told from one buffered chunk; one short sentence cannot.
   const cold = await measure('In about 60 words, introduce yourself as PI, Jarvis on the Copilot harness, and say what you can do for Dan.');
   const warm: Measured[] = [];
@@ -139,10 +144,10 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
   const cancelled = await measure('Write a very long, detailed story of at least 400 words about a butler.', { abortAfterFirstText: true });
   const followUp = await measure('Reply with exactly: still here').then(turn => turn.characters > 0, () => false);
 
-  const all = [cold, ...warm, tools, voicePlain, voiceTools, ...reach.map(({ turn }) => turn), cancelled];
+  const all = [baseline, cold, ...warm, tools, voicePlain, voiceTools, ...reach.map(({ turn }) => turn), cancelled];
   const warmMedian = [...warm].map(turn => turn.firstTextMs ?? Infinity).sort((a, b) => a - b)[Math.floor(warm.length / 2)] ?? Infinity;
   return {
-    cold: strip(cold), warm: warm, tools: strip(tools),
+    cold: strip(cold), warm: warm, tools: strip(tools), baseline: strip(baseline),
     voice: { plain: strip(voicePlain), tools: strip(voiceTools) },
     listed: [...listed].map(([server, entry]) => ({ server, ...entry })), reach,
     cancel: { abortToCloseMs: cancelled.abortToCloseMs, partialCharacters: cancelled.characters, followUpOk: followUp },
