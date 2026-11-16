@@ -369,3 +369,10 @@ private struct JarvisOptionalAccessibilityAction: ViewModifier {
         }
     }
 }
+
+/// A horizontal hairline for row separators drawn in an overlay, where `Divider` would pick the wrong axis.
+struct JarvisHairline: View {
+    var body: some View {
+        Rectangle().fill(Color.primary.opacity(0.12)).frame(height: 0.5).accessibilityHidden(true)
+    }
+}

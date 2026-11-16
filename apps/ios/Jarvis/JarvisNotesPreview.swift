@@ -172,7 +172,7 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
             }
 #endif
             guard body["sha"] as? String == notes[index].sha else {
-                return try json(["currentSha": notes[index].sha, "content": notes[index].content], status: 409)
+                return try json(["error": "Synthetic conflict", "currentSha": notes[index].sha, "content": notes[index].content], status: 409)
             }
             notes[index].content = content
             notes[index].sha = String(repeating: "b", count: 40)

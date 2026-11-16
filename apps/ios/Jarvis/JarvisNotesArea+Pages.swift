@@ -111,7 +111,7 @@ extension JarvisNotesArea {
     }
 
     private func rowDivider(_ last: Bool) -> some View {
-        Divider().padding(.leading, 52).opacity(last ? 0 : 1)
+        JarvisHairline().padding(.leading, 52).opacity(last ? 0 : 1)
     }
 
     func noteRow(_ note: VaultNoteSummary, first: Bool, last: Bool) -> some View {
@@ -255,7 +255,7 @@ extension JarvisNotesArea {
                 task: task, copy: copy, today: today, isPinned: isPinned, isBusy: isBusy,
                 onComplete: { Task { await completeTask(task) } }
             )
-            .overlay(alignment: .bottom) { Divider().padding(.leading, 52).opacity(last ? 0 : 1) }
+            .overlay(alignment: .bottom) { JarvisHairline().padding(.leading, 52).opacity(last ? 0 : 1) }
         }
         .jarvisLazyRowSurface(first: first, last: last)
     }

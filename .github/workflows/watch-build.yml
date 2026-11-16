@@ -32,13 +32,11 @@ jobs:
           PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
           if [[ -n "$PHONE_ID" ]]; then xcrun simctl boot "$PHONE_ID" || true; fi
       - name: Compile release for physical Watch architectures
-        if: false # TEMPORARY (#1894 iteration): remove before merge
         working-directory: apps/ios
         run: |
           set -o pipefail
           xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS' -configuration Release -derivedDataPath "$RUNNER_TEMP/WatchDeviceBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/watch-device-build.log"
       - name: Capture isolated Watch previews
-        if: false # TEMPORARY (#1894 iteration): remove before merge
         timeout-minutes: 5
         run: |
           set -euo pipefail

@@ -126,6 +126,16 @@ extension JarvisNotesArea {
         }
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
         .padding(.vertical, JarvisDesignTokens.notesSectionSpacing)
+        // Rows scroll under the dock; a fading backdrop keeps their text from colliding with the controls.
+        .background(alignment: .bottom) {
+            LinearGradient(
+                colors: [.clear, JarvisDesignTokens.pageBackground.opacity(0.94)],
+                startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)
+            )
+            .ignoresSafeArea(edges: .bottom)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
     }
 
     private func scopeTitle(_ scope: JarvisNotesSearchScope) -> String {
