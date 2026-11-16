@@ -23,6 +23,7 @@ CHECKS = {
 REACH_CHECKS = {
     "reach_github": "the read-only GitHub server answered a read and the harness reported no error",
     "reach_azure": "the read-only Azure server answered a read and the harness reported no error",
+    "mcp_listing": "every MCP server the harness reported returned its tools",
 }
 
 

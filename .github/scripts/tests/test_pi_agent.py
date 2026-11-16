@@ -311,13 +311,14 @@ class SmokeReportTest(unittest.TestCase):
                 "listed": [{"server": "github", "tools": 41, "failed": False}, {"server": "azure", "tools": 0, "failed": True}],
                 "reach": [{"server": "github", "turn": dict(self.turn(3000), text="Issue 700", reachCalls=[{"server": "github", "name": "get_issue", "failed": False}])}],
                 "cancel": {"abortToCloseMs": 120, "partialCharacters": 31, "followUpOk": True}, "totalCostDkk": 0.4,
-                "checks": {"streaming": True, "tools_over_mcp": True, "cancellation": True, "warm_faster_than_cold": True, "reach_github": False}}
+                "checks": {"streaming": True, "tools_over_mcp": True, "cancellation": True, "warm_faster_than_cold": True, "reach_github": False, "mcp_listing": False}}
         text = report.render(data)
         self.assertIn("github: 41 tools, azure: FAILED to list", text)
         self.assertIn("| reach: github | 3000 ms |", text)
         self.assertIn("get_issue=ok", text)
         self.assertIn("read-only GitHub server answered a read and the harness reported no error | **FAIL**", text)
         self.assertNotIn("Azure server answered", text)
+        self.assertIn("every MCP server the harness reported returned its tools | **FAIL**", text)
 
 
 if __name__ == "__main__":

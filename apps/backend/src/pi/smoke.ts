@@ -134,8 +134,15 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
       tools_over_mcp: toolRanOk(tools.toolResults),
       cancellation: cancelled.aborted && cancelled.abortToCloseMs < 5_000 && followUp,
       warm_faster_than_cold: warmMedian < (cold.firstTextMs ?? 0),
-      // A reach check exists only for an attached server; the call must have finished without the harness reporting an error.
-      ...Object.fromEntries(reach.map(({ server, turn }) => [`reach_${server}`, turn.reachCalls.some(call => call.server === server && !call.failed)])),
+      // A reach check exists only for a server the harness reported on: a server that listed its tools must also answer a read
+      // without an error, and one whose listing failed fails its check. A server that is not attached has no check at all.
+      ...Object.fromEntries(['github', 'azure'].flatMap((server) => {
+        const entry = listed.get(server);
+        if (!entry) return [];
+        const turn = reach.find((candidate) => candidate.server === server)?.turn;
+        return [[`reach_${server}`, !entry.failed && turn !== undefined && turn.reachCalls.some(call => call.server === server && !call.failed)]];
+      })),
+      ...(listed.size > 0 ? { mcp_listing: [...listed.values()].every(entry => !entry.failed) } : {}),
     },
   };
 }

@@ -72,13 +72,27 @@ describe('PI live smoke', () => {
     expect(Object.keys(none.checks).filter(key => key.startsWith('reach_'))).toEqual([]);
     const both = await runPiSmoke(fakeGateway('ok', { listed: ['github', 'azure'] }), new AbortController().signal, { warmTurns: 1 });
     expect(both.reach.map(({ server }) => server)).toEqual(['github', 'azure']);
-    expect(both.checks).toMatchObject({ reach_github: true, reach_azure: true });
+    expect(both.checks).toMatchObject({ reach_github: true, reach_azure: true, mcp_listing: true });
     expect(both.listed).toEqual([{ server: 'github', tools: 12, failed: false }, { server: 'azure', tools: 12, failed: false }]);
   });
 
   it('fails a reach check when the harness reports the call as failed', async () => {
     const report = await runPiSmoke(fakeGateway('ok', { listed: ['github'], failReach: true }), new AbortController().signal, { warmTurns: 1 });
     expect(report.checks.reach_github).toBe(false);
+  });
+
+  it('fails the check of a server whose tool listing failed, instead of skipping it', async () => {
+    const gateway = fakeGateway('ok');
+    const original = gateway.smokeKit.respond;
+    gateway.smokeKit.respond = async function* (conversation, input, signal) {
+      yield { kind: 'tools_listed', server: 'github', tools: 0, failed: true } as PiEvent;
+      yield { kind: 'tools_listed', server: '', tools: 0, failed: true } as PiEvent;
+      yield* original(conversation, input, signal);
+    };
+    const report = await runPiSmoke(gateway, new AbortController().signal, { warmTurns: 1 });
+    expect(report.reach).toEqual([]);
+    expect(report.checks).toMatchObject({ reach_github: false, mcp_listing: false });
+    expect(report.checks.reach_azure).toBeUndefined();
   });
 
   it('does not count a Jarvis call as reach', async () => {
