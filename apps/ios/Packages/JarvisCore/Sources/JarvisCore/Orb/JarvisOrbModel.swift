@@ -25,6 +25,8 @@ public enum JarvisOrbActivity: Equatable, Sendable {
     case calm
     case listening
     case thinking
+    /// Jarvis is working with tools (a chat turn running a tool).
+    case tool
     case speaking
     case muted
     case reconnecting
@@ -37,7 +39,7 @@ public enum JarvisOrbActivity: Equatable, Sendable {
         case .calm, .muted: 0.35
         case .reconnecting: 0.5
         case .signingIn: 0.6
-        case .listening, .thinking, .speaking: 1
+        case .listening, .thinking, .tool, .speaking: 1
         }
     }
 
@@ -45,6 +47,7 @@ public enum JarvisOrbActivity: Equatable, Sendable {
         switch self {
         case .listening: .listening
         case .thinking, .signingIn, .reconnecting: .thinking
+        case .tool: .tool
         case .speaking: .speaking
         case .idle, .calm, .muted, .offline: .idle
         }

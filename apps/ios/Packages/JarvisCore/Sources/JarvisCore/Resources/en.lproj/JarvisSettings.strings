@@ -41,6 +41,8 @@
 "settings.row.appearance" = "Appearance";
 "settings.openingScreen" = "Opening screen";
 "settings.openingScreen.hint" = "Show the animated opening when Jarvis starts from closed. Turning it off skips straight to the lock screen and Home.";
+"settings.backgroundMotion" = "Background motion";
+"settings.backgroundMotion.hint" = "Let signals travel along the network behind every screen. Turning it off keeps the network still. It is always still while Reduce Motion is on.";
 "settings.row.personality" = "Personality";
 "settings.row.identity" = "Identity and role";
 "settings.row.voice" = "Voice";

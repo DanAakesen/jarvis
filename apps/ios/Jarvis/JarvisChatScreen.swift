@@ -281,7 +281,7 @@ struct JarvisChatScreen: View {
 
     var body: some View {
         attachmentPickers
-        .jarvisAmbientBackground(transparentNavigationBar: true)
+        .jarvisAmbientBackground(transparentNavigationBar: true, stage: JarvisNeuralStage(activity: orbActivity))
         .onAppear {
             refreshScreenSharing()
             model.warmPiIfNeeded()
@@ -316,6 +316,27 @@ struct JarvisChatScreen: View {
             reduceMotion ? nil : .easeOut(duration: JarvisDesignTokens.chatMessageAnimationDuration),
             value: model.messages.count
         )
+    }
+
+    /// What the chat's living orb shows: Jarvis working, using a tool or writing; the microphone only while dictating.
+    private var orbActivity: JarvisOrbActivity {
+#if targetEnvironment(simulator)
+        // Simulator captures only: `--screenshot-chat-state=listening|thinking|tool|speaking` shows a state without a turn.
+        if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--screenshot-chat-state=") }) {
+            switch String(argument.dropFirst("--screenshot-chat-state=".count)) {
+            case "listening": return .listening
+            case "thinking": return .thinking
+            case "tool": return .tool
+            case "speaking": return .speaking
+            default: break
+            }
+        }
+#endif
+        if dictation.isListening { return .listening }
+        if model.isReconnecting { return .reconnecting }
+        guard model.isSending else { return .calm }
+        if model.liveTools.contains(where: { $0.outcome == nil }) { return .tool }
+        return model.streamingText.isEmpty ? .thinking : .speaking
     }
 
     private func activitySheetDismissed() {

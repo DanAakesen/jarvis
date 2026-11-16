@@ -82,6 +82,13 @@ Local checks: `PYTHONPATH=.github/scripts python3 -m unittest discover -s .githu
   Settings > General > Opening screen (`UserDefaults` key `jarvis.opening.enabled`, default on).
 - **Apple simulator evidence.** The Watch workflow captures opening, measured-progress, orb-gallery and widget-gallery
   states in separate timeout-bounded steps, so one slow simulator capture does not prevent later gallery artifacts.
+- **Neural background (P15-179).** The only background is `JarvisNeuralBackground` (design system); never draw another
+  one in a screen file. Model, animator and painter are in `JarvisCore/Neural`; `swift test --filter JarvisNeuralTests` covers
+  routes, firing by state, calm versus full, still poses and continuity (Linux). Simulator-only launch arguments:
+  `--screenshot-chat-state=listening|thinking|tool|speaking` (with `--screenshot-chat-fixture`), `--screenshot-gate=lock-failed|lock-waiting|sign-in`,
+  plus the existing `--screenshot-voice-fixture --screenshot-voice-state=...` and `--opening-preview`. The
+  `Neural background capture` workflow builds the app and uploads those captures (artifact `neural-background-captures`).
+  Settings > General > Background motion is the `jarvis.background.motion` key.
 - **Icons.** Regenerate from `docs/ui/opening-final-2026-11-14/cognitive-lattice-transparent.png`: iPhone and Watch
   `AppIcon.appiconset/JarvisAppIcon.png` (Watch orb larger for the round mask) and the web icons in `apps/web/public`.
 
