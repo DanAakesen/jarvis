@@ -6,8 +6,8 @@ that carries the instructions, the Jarvis MCP server (by connection) and the ski
 that version, and gives the backend the agent name and the MCP secret. It is idempotent: when nothing changed it creates nothing.
 It invokes no model and prints no definition, because the definition carries the MCP credential.
 
-Reach: the read-only GitHub MCP server (a fine-grained token the owner creates) and the Azure MCP server (Reader, scale to
-zero) are attached when their inputs exist. A server whose input is missing is left out and reported as not attached; a
+Reach: the full GitHub MCP server (a fine-grained token the owner creates) and the Azure MCP server (Contributor on the
+Jarvis resource group, scale to zero) are attached when their inputs exist. A server whose input is missing is left out and reported as not attached; a
 server whose connection cannot be written is left out and fails the job after the agent is defined, so nothing is hidden.
 """
 from __future__ import annotations
@@ -345,7 +345,7 @@ def resolve_reach(spec: dict, args: argparse.Namespace) -> tuple[list[dict], dic
             if not token:
                 status[label] = f"not attached: the owner has not provided the {server['tokenEnv']} secret"
                 continue
-            # Only a fine-grained token can be limited to chosen repositories and to read permissions.
+            # Only a fine-grained token can be limited to chosen repositories and permissions; a classic token reaches everything.
             require(GITHUB_TOKEN_PATTERN.fullmatch(token) is not None, "github_token_not_fine_grained")
             REDACT.append(token)
             attached.append({**server, "secret": token})
@@ -363,7 +363,7 @@ def resolve_reach(spec: dict, args: argparse.Namespace) -> tuple[list[dict], dic
 
 
 def connect_reach(project_id: str, server: dict) -> bool:
-    """Write the connection one reach server needs. GitHub gets a read-only token header; Azure uses the project's identity."""
+    """Write the connection one reach server needs. GitHub gets a token header; Azure uses the project's identity."""
     if server["kind"] == "github":
         return upsert_connection(project_id, server["connection"], {
             "category": "CustomKeys", "authType": "CustomKeys", "target": server["url"], "isSharedToAll": False,

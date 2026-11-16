@@ -42,10 +42,10 @@ param inboxNudgesEnabled bool = false
 @description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')
 param pcBridgeClientId string = ''
 
-@description('Client ID of the Entra app that guards the read-only Azure MCP server of the PI agent (created by infra/setup-azure-mcp.ps1). Empty leaves the server out.')
+@description('Client ID of the Entra app that guards the Azure MCP server of the PI agent (created by infra/setup-azure-mcp.ps1). Empty leaves the server out.')
 param azureMcpClientId string = ''
 
-@description('Azure MCP Server image. Pinned, so an update is a reviewed change. The server is started read-only.')
+@description('Azure MCP Server image. Pinned, so an update is a reviewed change.')
 param azureMcpImage string = 'mcr.microsoft.com/azure-sdk/azure-mcp:3.0.0'
 
 @description('Azure MCP namespaces to expose; the server advises at most three.')
@@ -120,7 +120,7 @@ var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 var cognitiveServicesUserRoleId = 'a97b65f3-24c7-4388-baec-2e87135dc908'
 var cognitiveServicesContributorRoleId = '25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68'
 var foundryDeploymentReaderRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
-var readerRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
+var contributorRoleId = 'b24988ac-6180-42a0-ab88-20f7382dd24c'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var backendAppName = 'ca-jarvis-backend-${suffix}'
 var deployBackendApp = !empty(backendImage)
@@ -135,7 +135,6 @@ var azureMcpArgs = flatten(concat([
     'UseHostingEnvironmentIdentity'
     '--mode'
     'all'
-    '--read-only'
   ]
 ], azureMcpNamespaceArgs))
 var deployVaultMirror = vaultMirrorEnabled && !empty(vaultMirrorImage)
@@ -1104,15 +1103,15 @@ resource backendAppScaleAssignment 'Microsoft.Authorization/roleAssignments@2022
   }
 }
 
-// Read-only Azure MCP server for the PI agent. Scales to zero, so it costs nothing while PI does not look at Azure. Incoming
-// calls need an Entra token with the app role only the Foundry project's identity holds; outgoing calls use this app's own
-// identity, which has the Reader role on this resource group and nothing else, and the server itself refuses writes.
+// Azure MCP server for the PI agent. Scales to zero, so it costs nothing while PI does not use Azure. Incoming calls need an
+// Entra token with the app role only the Foundry project's identity holds; outgoing calls use this app's own identity, which
+// has the Contributor role on this resource group. Widening beyond this resource group is the owner's call.
 resource azureMcpApp 'Microsoft.App/containerApps@2024-03-01' = if (deployAzureMcp) {
   name: azureMcpAppName
   location: resourceGroup().location
   tags: {
     project: 'jarvis'
-    purpose: 'azure-mcp-read-only'
+    purpose: 'azure-mcp'
   }
   identity: {
     type: 'SystemAssigned'
@@ -1208,11 +1207,11 @@ resource azureMcpApp 'Microsoft.App/containerApps@2024-03-01' = if (deployAzureM
   }
 }
 
-resource azureMcpReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployAzureMcp) {
-  name: guid(resourceGroup().id, azureMcpAppName, readerRoleId)
+resource azureMcpContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployAzureMcp) {
+  name: guid(resourceGroup().id, azureMcpAppName, contributorRoleId)
   scope: resourceGroup()
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', readerRoleId)
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', contributorRoleId)
     principalId: azureMcpApp!.identity.principalId
     principalType: 'ServicePrincipal'
   }

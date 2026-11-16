@@ -21,7 +21,7 @@ flowchart LR
 | Voice | Same switch; start voice (first answer takes a few seconds), ask something that needs a tool, interrupt it, ask a follow-up | A short sentence from PI before a tool call, then a short spoken answer; the newest sentence wins; later turns about as fast as warm chat; chat and voice remember each other | PR #1908; `voice.pi_turn` and `voice.turn_timing` logs |
 | Brain | Settings, "PI brain (test)" on | Messages worth reading, no storms, budget inside 100 DKK | `docs/agent-context.md`, "PI brain" |
 | Watches | "Keep me updated on X"; list; stop | Looks and reports as asked, cost per watch shown, no storm | `docs/agent-context.md`, "PI standing watches" |
-| Reach | After the owner provides `PI_GITHUB_READ_TOKEN` and runs `infra/setup-azure-mcp.ps1` | Reads work on real questions; or PI says plainly it is not attached | `docs/agent-context.md`, "PI reach" |
+| Reach | After the owner provides `PI_GITHUB_TOKEN` (fine-grained token, see `docs/agent-context.md`) and runs `infra/setup-azure-mcp.ps1` | Reads and actions work on real questions; or PI says plainly it is not attached | `docs/agent-context.md`, "PI reach" |
 | Cost | Settings status rows, `measure_pi` summary | A plain turn about 0.05 DKK, a tool turn about 0.17 DKK, month inside the cap | `docs/pi/plan.md` section 8 |
 
 **Known gaps to decide on before the flip (not bugs):** voice with PI has no camera or screen sharing yet; the Watch keeps its current engine until the flip (the flip makes the server default PI, so the Watch follows it); the web app has no PI switch and also follows the server default; the 07:00 and 18:00 proactive slots are not replaced by anything in PI (section 4.3, decision A).

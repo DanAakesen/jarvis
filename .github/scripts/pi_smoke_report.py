@@ -21,8 +21,8 @@ CHECKS = {
 }
 # Present only for a reach server the harness listed tools for: a server that is not attached has no turn and no check.
 REACH_CHECKS = {
-    "reach_github": "the read-only GitHub server answered a read and the harness reported no error",
-    "reach_azure": "the read-only Azure server answered a read and the harness reported no error",
+    "reach_github": "the GitHub server answered a read and the harness reported no error",
+    "reach_azure": "the Azure server answered a read and the harness reported no error",
     "mcp_listing": "every MCP server the harness reported returned its tools",
 }
 

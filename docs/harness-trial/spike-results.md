@@ -76,7 +76,7 @@ What this changes against the plan (section 6):
 
 ### Reach servers
 
-The harness listed tools for **no MCP server other than Jarvis**: GitHub was not attached (the `PI_GITHUB_READ_TOKEN` secret is missing) and the Azure MCP container is not deployed. The reach turns therefore did not run and nothing about GitHub or Azure reach is proven yet.
+The harness listed tools for **no MCP server other than Jarvis**: GitHub was not attached (the GitHub token secret was missing) and the Azure MCP container is not deployed. The reach turns therefore did not run and nothing about GitHub or Azure reach is proven yet.
 
 ### Wake-up features on a harness agent
 

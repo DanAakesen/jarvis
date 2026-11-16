@@ -5,7 +5,7 @@ description: Start, follow, steer and judge Workers, the Software Factory coding
 
 # Workers
 
-A Worker is a Factory coding session that works on one GitHub issue and ends in a pull request. Everything about Workers goes through Jarvis tools (find them with `find_tools`: "issue", "task", "work status", "project"). Reading GitHub itself (code, issues, pull requests, workflow runs) can also use the read-only GitHub tools when they are attached.
+A Worker is a Factory coding session that works on one GitHub issue and ends in a pull request. Everything about Workers goes through Jarvis tools (find them with `find_tools`: "issue", "task", "work status", "project"). Reading GitHub itself (code, issues, pull requests, workflow runs) can also use the `github` tools when they are attached, which also create issues and pull requests, comment, dispatch workflows and start and follow GitHub coding sessions.
 
 ## Rules
 

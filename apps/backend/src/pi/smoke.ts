@@ -9,7 +9,7 @@ interface Measured {
   readonly toolCalls: number;
   /** What the tools run in this turn returned, from the MCP server's own record. */
   readonly toolResults: readonly { readonly tool: string; readonly outcome: 'ok' | 'refused' | 'error' }[];
-  /** Calls to the read-only reach servers (GitHub, Azure) with the harness's own verdict; Jarvis calls are in `toolResults`. */
+  /** Calls to the reach servers (GitHub, Azure) with the harness's own verdict; Jarvis calls are in `toolResults`. */
   readonly reachCalls: readonly { readonly server: string; readonly name: string; readonly failed: boolean }[];
   readonly characters: number;
   readonly text: string;

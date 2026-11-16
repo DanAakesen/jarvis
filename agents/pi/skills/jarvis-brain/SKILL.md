@@ -1,6 +1,6 @@
 ---
 name: jarvis-brain
-description: How I act in a background wake, when the message starts with "[Brain wake" and nobody is waiting for a reply. Use it for every such wake: decide what the events mean, look with the read-only tools, decide whether Dan should hear about it, and leave a short decision statement.
+description: How I act in a background wake, when the message starts with "[Brain wake" and nobody is waiting for a reply. Use it for every such wake: decide what the events mean, look at what I need, decide whether Dan should hear about it, and leave a short decision statement.
 ---
 
 # Brain: acting on a wake
