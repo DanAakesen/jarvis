@@ -3,6 +3,12 @@
 - Consult the apple-hig skill (justinwetch/HIGAgentSkills, MIT) for iOS UI sizes, padding, Dynamic Type and accessibility. Clone it into a scratch directory outside the repository each time and never commit it.
 - Notes redesign checks: `cd apps/ios/Packages/JarvisCore && swift test` (Linux, `swift:6.2` image works locally); `cd apps/backend && npx vitest run src/vault`. The SwiftUI screens compile only in the macOS `watch` job (`watch-build.yml`), which also captures the Notes states as screenshots (`notes-*.png` in the `watch-build-logs` artifact; continue-on-error, 14-minute bound). Launch with `--ui-test-navigation --screenshot-screen=notes --ui-test-task-list-board --screenshot-notes-state=<state>` (simulator only; states are listed in `JarvisNotesArea+Chrome.swift`).
 
+## PI cutover: flip, roll back, delete (#1887, P15-176)
+
+- Everything is in `docs/pi/cutover.md`. Nothing is deleted and the default is unchanged until the owner approves in writing on #1887.
+- Flip: the draft pull request "P15-176: PI cutover flip" (server default PI, iOS default PI). Merge only on his word; then Deploy. Roll back by reverting that commit and redeploying the previous release. Before the flip, tag the release it merges from: `git tag pi-last-old-path <commit>` and push the tag (gate check 6); that tag is the rollback target for phase 8.
+- Before phase 8: repeat the reference scan (the commands are in cutover.md, section 5), run the full backend, Python and Swift suites after each move in section 4.1, and keep the manual Foundry steps (4.7) for last, after a week of zero requests to the old agents.
+
 ## PI voice: test it and measure it (#1887, P15-176)
 
 - Needs PI configured (the Deploy `pi-agent` job) and the Deploy that contains this change, because the agent instructions gained a Voice section (a new agent version).

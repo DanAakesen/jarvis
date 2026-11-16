@@ -1,3 +1,7 @@
+## PI phase 7: cutover prepared, not done — 16 November 2026 (#1887, P15-176, part 2)
+
+Owner, 16 November 2026: "Just dont delete the old harness." Prepared: `docs/pi/cutover.md` (what the owner tests, the exact flip, the deletion gate, the reference-scanned deletion inventory for phase 8, the manual Foundry steps including the legacy agent `jarvis-main-copilot-preview`, an approval record) and the flip itself as a separate draft pull request that merges only on the owner's written word. **Nothing is deleted and no default changed.** One thing needs his decision before phase 8: the 07:00 and 18:00 proactive slots feed four kept features (inbox nudges, todo writes, reminder planning, alerts) and PI has no scheduled replacement (decision A in the file). The scan also found couplings that break the build if `agents/jarvis/` is removed first (the PI provisioner and the backend read three files from it); they are listed as "move first".
+
 ## PI phase 6: voice on the PI agent — 16 November 2026 (#1887, P15-176, part 1)
 
 Owner, 16 November 2026 (binding): "Start PI phase 6 now. I need to go to bed so get everything done in the next 8 hours. Just dont delete the old harness. Just implement the full issue 3 and make a testflight build ready so i can test everything." So: voice now, the cutover is prepared but **not done**, and **nothing old is deleted** (the hard stop in #1887 between stage 1 and stage 2 is replaced by the owner's written approval of the deletion).

@@ -6,7 +6,7 @@ Owner, 15 Nov 2026: "I'm interacting with the harness and agent loop via the cha
 
 **Update 16 Nov 2026 (#1886):** phases 3 to 5 are merged and deployed. First live smoke through the gateway: warm first text 1.1 to 1.3 s, cold 3.3 s, about 7.5k input tokens, about 0.05 DKK per plain turn and 0.17 DKK per tool turn; all four checks pass. GitHub and Azure reach are **not attached yet** (token and Azure MCP missing), so reach is unproven live. The reminder tool is not supported on a harness prompt agent: our ticker and the vault stay the waker. Details: `docs/harness-trial/spike-results.md`.
 
-**Update 16 Nov 2026 (#1887 part 1, phase 6):** voice runs on PI behind the iOS test switch. One change to the plan below: Voice Live has **no `ask_pi` tool**; the relay starts the PI turn from the final transcript and Voice Live only reads PI's words (reasons in `docs/decisions.md`, 16 November 2026). The owner's instruction that night: build everything for the cutover, **delete nothing**; the cutover checklist and the exact deletion inventory follow in the next pull request (`docs/pi/cutover.md`).
+**Update 16 Nov 2026 (#1887 part 1, phase 6):** voice runs on PI behind the iOS test switch. One change to the plan below: Voice Live has **no `ask_pi` tool**; the relay starts the PI turn from the final transcript and Voice Live only reads PI's words (reasons in `docs/decisions.md`, 16 November 2026). The owner's instruction that night: build everything for the cutover, **delete nothing**; the cutover checklist and the exact deletion inventory are in [cutover.md](cutover.md).
 
 **Update 15 Nov 2026 (#1885, P15-174, PR #1890):** at the owner's request phases 0, 1 and 2 were built together as one piece so he can test chat on PI in the iOS app behind a test switch. The long-session, quality-scoring and routines items of phase 0 are out. What was built and what is still unproven: `PLAN.md` and `docs/architecture.md` (section "PI chat engine"). Measured latency used for the build (from the owner's dispatcher, not yet in `spike-results.md`): new conversation first text 3.7 to 4.4 s, same-conversation turn 2 and later about 1.9 s with a cached prompt, effort none or low must be set in the agent definition and gives true streaming, per-request reasoning, `service_tier` and `prompt_cache_key` are rejected, tools are about 6.4k of the 11k prompt tokens.
 
@@ -430,6 +430,8 @@ Each phase ships dark behind its own flag and is verified before the next starts
 | 7 | The deletion inventory is reviewed by a reference scan (nothing outside the list still calls it) |
 
 ### Deletion inventory (candidates; phase 8 starts with a reference scan and deletes what has no remaining caller)
+
+**16 November 2026: the reference scan is done and supersedes this table. See [cutover.md](cutover.md), section 4** (it found that several rows below are splits or keeps, not deletes, and one open decision about the 07:00 and 18:00 slots). Nothing has been deleted.
 
 | Area | Goes |
 | --- | --- |
