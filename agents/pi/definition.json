@@ -8,5 +8,5 @@
     { "kind": "azure", "serverLabel": "azure", "connection": "jarvis-pi-azure" }
   ],
   "builtinTools": "disabled",
-  "skills": ["jarvis-inbox-triage", "jarvis-workers"]
+  "skills": ["jarvis-inbox-triage", "jarvis-workers", "jarvis-brain"]
 }

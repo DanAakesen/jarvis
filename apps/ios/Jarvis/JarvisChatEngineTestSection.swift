@@ -11,6 +11,9 @@ struct JarvisChatEngineTestSection: View {
     @State private var status: PiStatus?
     @State private var isLoading = false
     @State private var failed = false
+    @State private var brain: PiBrainStatus?
+    @State private var isBrainLoading = false
+    @State private var brainFailed = false
 
     private func copy(_ key: JarvisChatLocalizationKey) -> String {
         JarvisChatLocalization.string(key, language: .default)
@@ -24,6 +27,13 @@ struct JarvisChatEngineTestSection: View {
     }
 
     var body: some View {
+        Group {
+            engineSection
+            brainSection
+        }
+    }
+
+    private var engineSection: some View {
         Section {
             JarvisSegmentedBar(
                 title: copy(.engineChoiceLabel),
@@ -42,6 +52,96 @@ struct JarvisChatEngineTestSection: View {
             Text(copy(.engineExplanation))
         }
         .textCase(nil)
+    }
+
+    private var brainSection: some View {
+        Section {
+            Toggle(copy(.brainToggle), isOn: Binding(
+                get: { brain?.enabled ?? false },
+                set: { newValue in Task { await setBrain(newValue) } }
+            ))
+            .disabled(client == nil || isBrainLoading || brain?.available != true)
+            .accessibilityIdentifier("settings.piBrain.toggle")
+            brainRows
+            JarvisLabelledButton(
+                title: copy(.brainRefresh),
+                systemImage: "arrow.clockwise",
+                identifier: "settings.piBrain.refresh",
+                isBusy: isBrainLoading,
+                isDisabled: client == nil
+            ) { Task { await loadBrain() } }
+        } header: {
+            JarvisSectionHeadline(copy(.brainTitle))
+        } footer: {
+            Text(copy(.brainExplanation))
+        }
+        .textCase(nil)
+        .task { await loadBrain() }
+    }
+
+    @ViewBuilder
+    private var brainRows: some View {
+        if let brain {
+            LabeledContent(copy(.brainStatusLabel)) { Text(brainStatusText(brain)) }
+            LabeledContent(copy(.brainBudgetLabel)) {
+                Text(String(format: copy(.brainBudgetFormat), amount(brain.budget.spentDkk), amount(brain.budget.limitDkk)))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(brain.budget.state == "exhausted" ? Color.red : Color.primary)
+            }
+            if brain.budget.state == "warn" { Text(copy(.brainBudgetWarn)).foregroundStyle(.secondary) }
+            if brain.budget.state == "exhausted" { Text(copy(.brainBudgetExhausted)).foregroundStyle(.red) }
+            LabeledContent(copy(.brainMonthLabel)) {
+                Text(String(format: copy(.brainMonthFormat), String(brain.month.wakes), amount(brain.month.costDkk)))
+            }
+            LabeledContent(copy(.brainTodayLabel)) { Text(String(brain.today.messages)) }
+            if let wake = brain.lastWake {
+                LabeledContent(copy(.brainLastWakeLabel)) {
+                    Text("\(wake.outcome), \(wake.totalMs) ms, \(dkk(wake.costDkk))")
+                }
+            } else {
+                LabeledContent(copy(.brainLastWakeLabel)) { Text(copy(.brainNoWake)) }
+            }
+            if brain.logPending > 0 {
+                LabeledContent(copy(.brainLogPending)) { Text(String(brain.logPending)) }
+            }
+        }
+        if isBrainLoading {
+            JarvisLoadingView(title: copy(.engineStatusLoading), size: .inline)
+        } else if brainFailed {
+            Text(copy(.brainFailed)).foregroundStyle(.red)
+        } else if client == nil {
+            Text(copy(.engineStatusUnavailable)).foregroundStyle(.secondary)
+        }
+    }
+
+    private func brainStatusText(_ brain: PiBrainStatus) -> String {
+        if !brain.available { return copy(.brainUnavailable) }
+        if brain.paused { return copy(.brainPaused) }
+        return copy(brain.enabled ? .brainOn : .brainOff)
+    }
+
+    private func loadBrain() async {
+        guard let client else { return }
+        isBrainLoading = true
+        brainFailed = false
+        do {
+            brain = try await client.piBrainStatus()
+        } catch {
+            if !Task.isCancelled { brainFailed = true }
+        }
+        isBrainLoading = false
+    }
+
+    private func setBrain(_ enabled: Bool) async {
+        guard let client else { return }
+        isBrainLoading = true
+        brainFailed = false
+        do {
+            brain = try await client.setPiBrain(enabled: enabled)
+        } catch {
+            if !Task.isCancelled { brainFailed = true }
+        }
+        isBrainLoading = false
     }
 
     @ViewBuilder

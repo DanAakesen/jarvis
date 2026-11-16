@@ -1,3 +1,13 @@
+## PI brain: turn it on and watch it (#1886, P15-175)
+
+- Needs: PI configured (the Deploy `pi-agent` job), `JARVIS_PROACTIVE_ENABLED` (it is already on in Bicep), the vault (the decision log lives there), migration `0087_pi_brain.sql` (applied by the normal migration step), and `JARVIS_PROACTIVE_EVENTS_ENABLED` **off** (the old pipeline; both on stops the backend at startup).
+- Switch: iOS Settings, General, "PI brain (test)", or `PUT /pi/brain {"enabled": true}` with the owner token. Off by default; turning it on wakes the brain at once if events are waiting. `GET /pi/brain` shows availability, pause, budget, wakes and cost this month, messages today, the last wake and decision-log entries waiting for the vault.
+- Budget: the proactive page's monthly budget (default 100 DKK). The brain stops before a wake that could pass it and tells Dan once at 80 percent and once at the stop.
+- Read what it did: `PI/Log/<day>.md` in the vault (every wake: events, tools, what Dan was told, cost, the model's statement), `proactive.events` is not used; the brain logs `pi.brain` (outcome, counts, DKK, never message text) and `pi.brain_run`.
+- Rollback: turn the switch off, or revert the commit. The migration has a down script that removes the brain's tables and `brain` turns.
+- Local checks: `cd apps/backend && npx vitest run src/pi src/proactive`; the SQL contract (`PI conversation and turn ledger`) with the loopback SQL Server container from `database-ci.yml`; `swift test` in `apps/ios/Packages/JarvisCore` (Linux) and the Apple build for the Settings rows (CI only, not run here).
+- Limits to know: while the app is open on another screen a new message appears when the chat refreshes (the app is told to); a backgrounded phone gets the push. The foreground banner for a chat reply is suppressed by the app by design.
+
 ## PI reach: GitHub, Azure, Workers (#1886, P15-175)
 
 What only the owner can do, in order:

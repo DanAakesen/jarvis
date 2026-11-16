@@ -30,11 +30,11 @@ export function shortenVoiceDescription(text: string): string {
 }
 
 /** Ranks catalogue tools by query words in their name (strongest) and description. */
-export function searchVoiceTools(tools: ToolRegistry, query: string): RegisteredTool[] {
+export function searchVoiceTools(tools: ToolRegistry, query: string, visible: (name: string) => boolean = isCurrentAssistantTool): RegisteredTool[] {
   const words = [...new Set(query.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((word) => word.length >= 2))].slice(0, 8);
   if (words.length === 0) return [];
   return tools.list()
-    .filter((tool) => isCurrentAssistantTool(tool.name))
+    .filter((tool) => visible(tool.name))
     .map((tool) => {
       const name = tool.name.toLowerCase();
       const segments = name.split('_');

@@ -7,8 +7,8 @@ import { foundryTokenCosts } from '../core/usage-pricing.js';
 import { PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
 import { PiGatewayError } from './errors.js';
 import { formatTurn, formatWarmup } from './prompt.js';
-import type { PiStore, PiStoredTurn, PiTurnRecord } from './store.js';
-import type { PiTurnGrant, PiTurnRegistry } from './turns.js';
+import { chatTurnKinds, type PiStore, type PiStoredTurn, type PiTurnRecord } from './store.js';
+import type { PiBrainRun, PiTurnGrant, PiTurnRegistry } from './turns.js';
 
 export interface PiUsage { readonly inputTokens: number; readonly cachedTokens: number; readonly outputTokens: number }
 
@@ -58,9 +58,32 @@ export interface PiGatewayOptions {
   readonly turnTimeoutMs?: number;
   readonly connectTimeoutMs?: number;
   readonly warmFreshMs?: number;
+  readonly brainTimeoutMs?: number;
+}
+
+export interface PiBrainRunResult {
+  readonly ok: boolean;
+  /** What the model said at the end of the wake: its own plain statement of what it saw and decided. */
+  readonly text: string;
+  readonly usage: PiUsage;
+  readonly costDkk: number;
+  /** True when the provider never reported usage and the cost is the conservative estimate. */
+  readonly estimated: boolean;
+  readonly outcome: PiTurnRecord['outcome'];
+  readonly firstTextMs: number | null;
+  readonly totalMs: number;
+  /** What each tool of the wake returned, as the MCP server recorded it. */
+  readonly toolResults: PiTurnGrant['results'];
+  readonly run: PiBrainRun;
+  readonly error?: PiGatewayError | undefined;
 }
 
 export interface PiGateway extends ConversationAgent {
+  /**
+   * One brain wake in its own scratch conversation, never the owner's chat conversation. It spends against the brain's
+   * budget, not the chat cap; the caller has already checked that budget. A failure is returned with what was billed.
+   */
+  runBrain(input: { readonly runId: string; readonly body: string }, signal: AbortSignal): Promise<PiBrainRunResult>;
   /** Never spends when over the cap or after failures: it then returns `skipped` instead of calling the model. */
   warm(signal: AbortSignal): Promise<PiWarmResult>;
   status(signal: AbortSignal): Promise<PiStatus>;
@@ -265,7 +288,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   };
 
   async function assertBudget(signal: AbortSignal): Promise<void> {
-    const spent = await options.store.spendSince(monthStart(now()), signal).catch((error: unknown) => {
+    const spent = await options.store.spendSince(monthStart(now()), chatTurnKinds, signal).catch((error: unknown) => {
       throw new PiGatewayError('pi_unavailable', 'PI could not read its spend, so it did not run. No other engine was used.', { cause: error });
     });
     if (spent.costDkk >= options.monthlyCapDkk) {
@@ -287,7 +310,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
 
   /** Background spend stops after a failure. Derived from the ledger, so a backend restart does not forget it. */
   async function warmPause(signal: AbortSignal): Promise<'paused_after_failures' | 'recent_failure' | undefined> {
-    const recent = (await options.store.recentTurns(repeatedFailures + 2, signal)).filter(turn => turn.outcome !== 'cancelled' && turn.kind !== 'smoke');
+    const recent = (await options.store.recentTurns(repeatedFailures + 2, chatTurnKinds, signal)).filter(turn => turn.outcome !== 'cancelled' && turn.kind !== 'smoke');
     const age = (turn: PiStoredTurn) => now().getTime() - turn.at.getTime();
     const failed = (turn: PiStoredTurn) => turn.outcome === 'failed' || turn.outcome === 'timeout';
     const streak = recent.findIndex(turn => !failed(turn));
@@ -308,7 +331,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   }
 
   async function warmOnce(started: number, signal: AbortSignal): Promise<PiWarmResult> {
-    const spent = await options.store.spendSince(monthStart(now()), signal);
+    const spent = await options.store.spendSince(monthStart(now()), chatTurnKinds, signal);
     if (spent.costDkk >= options.monthlyCapDkk) return { state: 'cold', alreadyWarm: false, ms: 0, skipped: 'budget_exhausted' };
     const paused = await warmPause(signal);
     if (paused) return { state: 'cold', alreadyWarm: false, ms: 0, skipped: paused };
@@ -440,11 +463,61 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
     }
   }
 
+  async function runBrain(input: { readonly runId: string; readonly body: string }, signal: AbortSignal): Promise<PiBrainRunResult> {
+    const started = performance.now();
+    const deadline = AbortSignal.any([signal, AbortSignal.timeout(options.brainTimeoutMs ?? 240_000)]);
+    const run: PiBrainRun = { runId: input.runId, sent: [], wrote: [] };
+    let grant: PiTurnGrant | undefined;
+    let usage: PiUsage | undefined;
+    let firstTextMs: number | null = null;
+    let outcome: PiTurnRecord['outcome'];
+    let sawModel = false;
+    let streamed = 0;
+    let text = '';
+    let failure: PiGatewayError | undefined;
+    try {
+      const conversationId = await createConversation(deadline);
+      const context = await options.context(deadline);
+      grant = options.registry.open({ ownerObjectId: options.owner, sessionId: '', messageId: '', brain: run, signal: deadline });
+      const message = formatTurn({ context, turn: grant.turn, now: now(), timeZone: options.timeZone, text: input.body });
+      for await (const event of respond(conversationId, message, deadline)) {
+        if (event.kind === 'delta') {
+          firstTextMs ??= Math.round(performance.now() - started);
+          sawModel = true;
+          streamed += event.text.length;
+          text += event.text;
+        } else if (event.kind === 'tool') sawModel = true;
+        else if (event.kind === 'done') usage = event.usage;
+      }
+      outcome = 'ok';
+    } catch (error) {
+      outcome = signal.aborted ? 'cancelled' : deadline.aborted ? 'timeout' : 'failed';
+      failure = error instanceof PiGatewayError ? error
+        : deadline.aborted && !signal.aborted ? new PiGatewayError('pi_timeout', 'The brain wake took too long and was stopped.', { cause: error })
+        : new PiGatewayError('pi_failed', 'The brain wake failed.', { cause: error });
+    }
+    const toolResults = grant ? [...grant.results] : [];
+    if (grant) options.registry.close(grant.turn);
+    // As for chat: a wake that reached the model without a usage report is charged at an estimate, so the stop cannot be dodged.
+    const billed = usage ?? (sawModel ? { inputTokens: estimatedPromptTokens, cachedTokens: 0, outputTokens: Math.ceil(streamed / 3) } : undefined);
+    const totalMs = Math.round(performance.now() - started);
+    const costDkk = billed ? costOf(billed) : 0;
+    await record({
+      kind: 'brain', messageId: null, model: PI_MODEL, inputTokens: billed?.inputTokens ?? 0, cachedTokens: billed?.cachedTokens ?? 0,
+      outputTokens: billed?.outputTokens ?? 0, costDkk, firstTextMs, totalMs, outcome,
+    }, billed, `pi:brain:${input.runId}`);
+    log('pi.brain_run', { outcome, firstTextMs, totalMs, ...(billed ?? {}), estimated: usage === undefined && billed !== undefined, costDkk, tools: toolResults.length });
+    return {
+      ok: outcome === 'ok', text: text.trim(), usage: billed ?? { inputTokens: 0, cachedTokens: 0, outputTokens: 0 }, costDkk,
+      estimated: usage === undefined && billed !== undefined, outcome, firstTextMs, totalMs, toolResults, run, ...(failure ? { error: failure } : {}),
+    };
+  }
+
   async function status(signal: AbortSignal): Promise<PiStatus> {
     const [stored, spent, last] = await Promise.all([
       options.store.getConversation(options.owner, signal),
-      options.store.spendSince(monthStart(now()), signal),
-      options.store.lastTurn(signal),
+      options.store.spendSince(monthStart(now()), chatTurnKinds, signal),
+      options.store.lastTurn(chatTurnKinds, signal),
     ]);
     const warmedAt = stored?.agentName === options.agentName ? stored.warmedAt : null;
     const warm = warmedAt !== null && now().getTime() - warmedAt.getTime() < warmFreshMs;
@@ -462,7 +535,7 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
   }
 
   return {
-    stream, warm, status,
+    stream, warm, status, runBrain,
     smokeKit: {
       createConversation,
       respond,
