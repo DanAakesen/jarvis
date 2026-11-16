@@ -166,6 +166,47 @@ jobs:
             com.danaakesen.jarvis --widget-layout-gallery
           sleep 3; shot widget-gallery
           xcrun simctl terminate "$PHONE_ID" com.danaakesen.jarvis || true
+      - name: Capture Notes redesign states
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 14
+        run: |
+          set -uo pipefail
+          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
+          if [[ -z "$PHONE_ID" ]]; then
+            echo "::warning::No iPhone Pro simulator; skipping Notes captures."
+            exit 0
+          fi
+          OUT="$RUNNER_TEMP/iphone-screenshots"
+          mkdir -p "$OUT"
+          APP=com.danaakesen.jarvis
+          xcrun simctl boot "$PHONE_ID" || true
+          xcrun simctl bootstatus "$PHONE_ID" -b || true
+          # Synthetic fixture data only: the navigation fixture, no network and no owner data.
+          capture() {
+            local name="$1"; shift
+            xcrun simctl launch --terminate-running-process "$PHONE_ID" "$APP" \
+              --ui-test-navigation --screenshot-screen=notes --ui-test-task-list-board "$@" || return 0
+            sleep 9
+            xcrun simctl io "$PHONE_ID" screenshot "$OUT/notes-$name.png" || true
+          }
+          xcrun simctl ui "$PHONE_ID" appearance dark
+          xcrun simctl ui "$PHONE_ID" content_size large || true
+          for state in notes folder tasks graph search reader new-note new-task new-folder folder-scope graph-list pins task-detail; do
+            capture "$state" --screenshot-notes-state="$state"
+          done
+          # Recovery states: a save that finds a newer version, and a save that fails.
+          capture conflict --screenshot-notes-state=reader --screenshot-notes-open-editor --screenshot-notes-edit-save --ui-test-notes-save-conflict
+          capture save-failed --screenshot-notes-state=reader --screenshot-notes-open-editor --screenshot-notes-edit-save --ui-test-notes-save-failure
+          # Large text and light appearance on the busiest pages.
+          xcrun simctl ui "$PHONE_ID" content_size accessibility-extra-large || true
+          capture tasks-large-text --screenshot-notes-state=tasks
+          capture notes-large-text --screenshot-notes-state=notes
+          xcrun simctl ui "$PHONE_ID" content_size large || true
+          xcrun simctl ui "$PHONE_ID" appearance light
+          capture tasks-light --screenshot-notes-state=tasks
+          xcrun simctl ui "$PHONE_ID" appearance dark
+          xcrun simctl terminate "$PHONE_ID" "$APP" || true
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

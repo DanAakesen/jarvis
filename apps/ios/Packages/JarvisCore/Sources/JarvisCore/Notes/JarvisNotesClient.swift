@@ -38,6 +38,13 @@ public struct VaultNote: Codable, Equatable, Sendable, Identifiable {
     public let sha: String
     public let url: String
 
+    public init(path: String, content: String, sha: String, url: String) {
+        self.path = path
+        self.content = content
+        self.sha = sha
+        self.url = url
+    }
+
     public var id: String { path }
 }
 
@@ -524,6 +531,31 @@ public final class JarvisNotesClient: Sendable {
         }
     }
 
+    /// Removes exactly this task line from its note. A changed line is a conflict; an unclear outcome is never retried.
+    public func deleteTask(_ task: VaultTask) async throws {
+        guard Self.validTask(task) else { throw JarvisNotesClientError.invalidRequest }
+        let body = TaskDeleteRequest(path: task.path, line: task.line, text: task.text, version: task.version)
+        do {
+            let response = try await request(
+                method: .delete,
+                path: ["vault", "tasks"],
+                body: try JSONEncoder().encode(body),
+                idempotent: false,
+                additionalSuccessStatuses: [409]
+            )
+            if response.statusCode == 409 { throw JarvisNotesClientError.taskConflict }
+            guard response.statusCode == 204 else { throw JarvisNotesClientError.writeOutcomeUnknown }
+        } catch JarvisClientError.serviceUnavailable {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.networkFailure {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.timedOut {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        } catch JarvisClientError.responseDecodingFailure {
+            throw JarvisNotesClientError.writeOutcomeUnknown
+        }
+    }
+
     public func editTask(
         _ task: VaultTask,
         text: String,
@@ -799,6 +831,13 @@ private struct TaskCompleteRequest: Encodable {
     let text: String
     let version: String
     let done: Bool
+}
+
+private struct TaskDeleteRequest: Encodable {
+    let path: String
+    let line: Int
+    let text: String
+    let version: String
 }
 
 private struct TaskEditRequest: Encodable {

@@ -34,6 +34,33 @@ final class JarvisClientTransportTests: XCTestCase {
                        ["path": "Personal/example.md", "sha": sha])
     }
 
+    func testSaveConflictCarriesTheLatestVersionAndTaskDeleteSendsExactIdentity() async throws {
+        let latest = String(repeating: "c", count: 40)
+        let transport = FakeHTTPTransport([
+            .response(jsonResponse(status: 409, body: ["error": "changed", "currentSha": latest, "content": "# Newer"])),
+            .response(HTTPResponse(statusCode: 204)),
+        ])
+        let client = JarvisNotesClient(client: try makeClient(transport: transport))
+        do {
+            _ = try await client.saveNote(path: "Personal/example.md", content: "# Mine", sha: String(repeating: "a", count: 40))
+            XCTFail("Expected conflict")
+        } catch {
+            XCTAssertEqual(error as? JarvisNotesClientError, .noteConflict(currentSha: latest, content: "# Newer"))
+        }
+        let task = VaultTask(
+            id: String(repeating: "1", count: 64), text: "Pay rent", done: false, dueDate: nil, dueTime: nil, dueAt: nil,
+            priority: .normal, path: "Personal/Inbox.md", line: 3, heading: nil, version: String(repeating: "2", count: 64)
+        )
+        try await client.deleteTask(task)
+        let requests = await transport.recordedRequests()
+        XCTAssertEqual(requests[1].method, .delete)
+        XCTAssertEqual(requests[1].url.path, "/api/vault/tasks")
+        let body = try XCTUnwrap(requests[1].body)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(object["line"] as? Int, 3)
+        XCTAssertEqual(object["text"] as? String, "Pay rent")
+    }
+
     func testNoteDeletionRejectsUnsafePathAndReportsConflict() async throws {
         let transport = FakeHTTPTransport([.response(jsonResponse(status: 409, body: ["error": "changed"]))])
         let client = JarvisNotesClient(client: try makeClient(transport: transport))

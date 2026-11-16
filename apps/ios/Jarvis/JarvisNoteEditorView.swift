@@ -2,480 +2,536 @@ import Foundation
 import JarvisCore
 import SwiftUI
 
-private enum JarvisNoteEditorAlert: Equatable {
-    case discard
-    case delete
-    case info(String)
-}
+/// The one document editor, used to create a note and to edit one. Title and body are editable at once, Cancel and
+/// Save sit in the accessory above the keyboard, and the draft is never replaced or lost: a conflict or a failed
+/// write keeps it on screen and offers a way forward the owner chooses.
+struct JarvisNoteEditorSheet: View {
+    enum Mode: Equatable {
+        case create(folder: String, staged: [String])
+        case edit(VaultNote)
+    }
 
-struct JarvisNoteEditorView: View {
-    let client: JarvisNotesClient?
+    private enum Field: Hashable { case title, body }
+
+    private enum Failure: Equatable {
+        case failed, unconfirmed, exists, missing, notSignedIn(String)
+    }
+
+    let client: JarvisNotesClient
     let copy: JarvisNotesCopy
-    let onSaved: (VaultNote) -> Void
-    let onPin: (Bool) -> Void
-    let onDeleted: (String) -> Void
-    let onClose: () -> Void
-    @State private var isPinned: Bool
-    @State private var document: JarvisNoteDocument
-    @State private var rawMode = false
-    @State private var undoHistory: [String] = []
-    @FocusState private var editingBlock: UUID?
-    @FocusState private var editingTitle: Bool
+    let mode: Mode
+    let onSaved: (String, VaultNote?) -> Void
 
-    @State private var note: VaultNote
-    @State private var draft: String
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var focus: Field?
+    @State private var parts: JarvisNoteParts
+    @State private var newTitle = ""
+    @State private var folder: String
+    @State private var stagedFolders: [String]
+    @State private var baseline: VaultNote?
+    @State private var selection: TextSelection?
     @State private var saving = false
-    @State private var deleting = false
-    @State private var status: String?
-    @State private var latestConflict: VaultNote?
-    @State private var needsReload = false
-    @State private var activeAlert: JarvisNoteEditorAlert?
+    @State private var failure: Failure?
+    @State private var conflict: VaultNote?
+    @State private var discardPresented = false
+    @State private var folderPickerPresented = false
 
-    init(
-        client: JarvisNotesClient?,
-        copy: JarvisNotesCopy,
-        note: VaultNote,
-        onSaved: @escaping (VaultNote) -> Void,
-        isPinned: Bool = false,
-        onPin: @escaping (Bool) -> Void = { _ in },
-        onDeleted: @escaping (String) -> Void,
-        onClose: @escaping () -> Void
-    ) {
+    init(client: JarvisNotesClient, copy: JarvisNotesCopy, mode: Mode, onSaved: @escaping (String, VaultNote?) -> Void) {
         self.client = client
         self.copy = copy
+        self.mode = mode
         self.onSaved = onSaved
-        self.onClose = onClose
-        self.onPin = onPin
-        self.onDeleted = onDeleted
-        _isPinned = State(initialValue: isPinned)
-        _document = State(initialValue: JarvisNoteDocument(note.content))
-        _note = State(initialValue: note)
-        _draft = State(initialValue: note.content)
-    }
-
-    private var title: String {
-        document.blocks.first(where: { $0.headingLevel == 1 })?.text ?? URL(fileURLWithPath: note.path).deletingPathExtension().lastPathComponent
-            .replacingOccurrences(of: "-", with: " ")
-            .capitalized
-    }
-
-    private var hasChanges: Bool { draft != note.content }
-
-    private var visibleStatus: String? {
-        if deleting { return "Deleting…" }
-        if saving { return copy.saving }
-        if latestConflict != nil { return copy.conflict }
-        if let status { return status }
-        if hasChanges { return copy.unsaved }
-        return copy.saved
-    }
-
-    private var alertTitle: String {
-        switch activeAlert {
-        case .discard: copy.discardTitle
-        case .delete: "Delete note?"
-        default: copy.title
+        switch mode {
+        case let .create(folder, staged):
+            _parts = State(initialValue: JarvisNoteParts(newTitle: "", body: ""))
+            _folder = State(initialValue: folder)
+            _stagedFolders = State(initialValue: staged)
+            _baseline = State(initialValue: nil)
+        case let .edit(note):
+            _parts = State(initialValue: JarvisNoteParts(note.content))
+            _folder = State(initialValue: "")
+            _stagedFolders = State(initialValue: [])
+            _baseline = State(initialValue: note)
         }
+    }
+
+    private var isCreating: Bool {
+        if case .create = mode { return true }
+        return false
+    }
+
+    private var bodyBinding: Binding<String> {
+        Binding(get: { parts.body }, set: { parts.body = $0; failure = nil })
+    }
+
+    private var titleBinding: Binding<String> {
+        Binding(
+            get: { isCreating ? newTitle : parts.title ?? "" },
+            set: { value in
+                if value.contains("\n") { focus = .body }
+                let clean = value.replacingOccurrences(of: "\n", with: " ")
+                if isCreating { newTitle = clean } else { parts.title = clean }
+                failure = nil
+            }
+        )
+    }
+
+    private var draftContent: String {
+        isCreating ? JarvisNoteParts(newTitle: newTitle, body: parts.body).content : parts.content
+    }
+
+    private var isDirty: Bool {
+        isCreating
+            ? !newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || !parts.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            : draftContent != baseline?.content
+    }
+
+    private var notePath: String? {
+        isCreating
+            ? JarvisNotesLogic.notePath(folder: folder, title: newTitle)
+            : baseline?.path
+    }
+
+    private var blockedReason: String? {
+        if isCreating {
+            if notePath == nil { return copy[.saveNeedsTitle] }
+        } else if !isDirty {
+            return copy[.saveNothingChanged]
+        } else if parts.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+            return copy[.saveNeedsTitle]
+        }
+        return JarvisNotesLogic.validNoteText(draftContent) ? nil : copy.unavailable
+    }
+
+    private var location: String {
+        let value = isCreating ? folder : JarvisNoteTitle.location(path: baseline?.path ?? "")
+        return value.isEmpty ? copy.vaultRoot : value.replacingOccurrences(of: "/", with: " / ")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    if let index = document.blocks.firstIndex(where: { $0.headingLevel == 1 }) {
-                        TextField(copy.titleField, text: Binding(
-                            get: { document.blocks[index].text },
-                            set: { value in
-                                remember(draft)
-                                document.blocks[index].text = value
-                                draft = document.markdown
-                                clearStatus()
-                            }), axis: .vertical)
-                            .font(.largeTitle.bold())
-                            .focused($editingTitle)
-                            .accessibilityIdentifier("note.title")
-                    } else {
-                        Text(title).font(.largeTitle.bold()).fixedSize(horizontal: false, vertical: true)
-                    }
-                    Text(note.path.split(separator: "/").dropLast().joined(separator: " / "))
-                        .font(.subheadline).foregroundStyle(.secondary)
+            if isCreating {
+                HStack {
+                    Text(copy.newNote)
+                        .font(.title2.weight(.bold))
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer()
+                    JarvisSheetCloseButton(title: copy.cancel, isDisabled: saving) { cancel() }
                 }
-                Spacer(minLength: 0)
-                JarvisIconButton(title: isPinned ? copy.unpin : copy.pin,
-                                 systemImage: isPinned ? "pin.fill" : "pin",
-                                 identifier: "note.pin") {
-                    isPinned.toggle()
-                    onPin(isPinned)
+                JarvisRowGroup {
+                    JarvisDetailRow(
+                        title: location, systemImage: "folder", identifier: "editor.destination",
+                        isDisabled: saving, action: { folderPickerPresented = true }
+                    )
                 }
-                JarvisIconButton(title: "Delete note", systemImage: "trash", identifier: "note.delete",
-                                 isDisabled: saving || latestConflict != nil || needsReload || client == nil) {
-                    activeAlert = .delete
-                }
-            }
-            Divider()
-            if let visibleStatus {
-                Text(visibleStatus)
-                    .font(.caption)
-                    .foregroundStyle(latestConflict == nil ? Color.secondary : Color.orange)
-                    .accessibilityLabel(visibleStatus)
-            }
-            if latestConflict == nil,
-               status == copy.conflict || status == copy.unknownWrite || status == copy.savedNeedsRefresh {
-                JarvisLabelledButton(title: copy.reload, isDisabled: saving) {
-                    Task { await reloadLatest() }
-                }
-            }
-            if let latestConflict {
-                conflictActions(latestConflict)
-            }
-            if rawMode {
-                TextEditor(text: $draft)
-                    .font(.body.monospaced())
-                    .scrollContentBackground(.hidden)
-                    .accessibilityLabel(copy.contentField)
-                    .accessibilityIdentifier("note.rawEditor")
-                    .onChange(of: draft) { previous, next in
-                        document = JarvisNoteDocument(next)
-                        if previous != next { remember(previous) }
-                        clearStatus()
-                    }
+                .accessibilityLabel(copy[.destination])
             } else {
-                formattedEditor
+                Label(location, systemImage: "folder")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("editor.location")
             }
-
+            if isCreating || parts.title != nil {
+                TextField(copy.titleField, text: titleBinding, axis: .vertical)
+                    .font(.title.weight(.bold))
+                    .lineLimit(1...3)
+                    .submitLabel(.next)
+                    .focused($focus, equals: .title)
+                    .onSubmit { focus = .body }
+                    .disabled(saving)
+                    .accessibilityIdentifier("editor.title")
+            } else {
+                Text(JarvisNoteTitle.fileTitle(path: baseline?.path ?? ""))
+                    .font(.title.weight(.bold))
+                    .accessibilityAddTraits(.isHeader)
+            }
+            ZStack(alignment: .topLeading) {
+                TextEditor(text: bodyBinding, selection: $selection)
+                    .scrollContentBackground(.hidden)
+                    .focused($focus, equals: .body)
+                    .disabled(saving)
+                    .accessibilityLabel(copy.contentField)
+                    .accessibilityIdentifier("editor.body")
+                if parts.body.isEmpty {
+                    Text(copy[.startWriting])
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 8)
+                        .padding(.leading, 5)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+            .frame(maxHeight: .infinity)
+            if let blockedReason {
+                Text(blockedReason)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("editor.blocked")
+            }
+            if let failure { banner(failure) }
         }
-        .disabled(deleting)
         .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
         .padding(.top, JarvisDesignTokens.notesSectionSpacing)
-        .safeAreaInset(edge: .bottom) {
-            if !rawMode && editingBlock == nil && !editingTitle {
-                formattingToolbar
-                    .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-            }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            JarvisEditorAccessory(
+                cancelTitle: copy.cancel, saveTitle: copy.save,
+                isSaveDisabled: blockedReason != nil, isSaving: saving, isCancelDisabled: saving,
+                saveHint: blockedReason ?? "",
+                onCancel: cancel, onSave: { Task { await save() } }
+            ) { tools }
         }
         .jarvisAmbientBackground()
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden()
-        .toolbar(.visible, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                JarvisIconButton(
-                    title: copy.back,
-                    systemImage: "chevron.left",
-                    identifier: "note.back",
-                    isDisabled: deleting
-                ) {
-                    if hasChanges { activeAlert = .discard } else { onClose() }
-                }
-            }
-            .sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .topBarTrailing) {
-                JarvisTextButton(title: rawMode ? copy.formatted : copy.raw, identifier: "note.raw") {
-                    editingBlock = nil
-                    editingTitle = false
-                    rawMode.toggle()
-                }
-                .disabled(deleting)
-            }.sharedBackgroundVisibility(.hidden)
-            ToolbarItem(placement: .topBarTrailing) {
-                JarvisSheetConfirmButton(title: copy.save, isWorking: saving,
-                                         isDisabled: latestConflict != nil || needsReload || client == nil) {
-                    editingBlock = nil
-                    editingTitle = false
-                    if hasChanges {
-                        Task { if await saveDraft(sha: note.sha) { onClose() } }
-                    } else { onClose() }
-                }
-            }.sharedBackgroundVisibility(.hidden)
-            if !rawMode {
-                ToolbarItemGroup(placement: .keyboard) {
-                    formattingToolbar
-                }
-            }
+        .interactiveDismissDisabled(isDirty || saving)
+        .confirmationDialog(copy.discardTitle, isPresented: $discardPresented, titleVisibility: .visible) {
+            Button(copy.discard, role: .destructive) { dismiss() }
+            Button(copy[.keepEditing], role: .cancel) {}
         }
-        .alert(alertTitle, isPresented: Binding(
-            get: { activeAlert != nil },
-            set: { if !$0 { activeAlert = nil } }
-        )) {
-            if activeAlert == .discard {
-                Button(copy.cancel, role: .cancel) { activeAlert = nil }
-                Button(copy.discard, role: .destructive) {
-                    activeAlert = nil
-                    onClose()
-                }
-            } else if activeAlert == .delete {
-                Button("No", role: .cancel) { activeAlert = nil }
-                Button("Yes", role: .destructive) {
-                    activeAlert = nil
-                    Task { await deleteNote() }
-                }
-            } else {
-                Button(copy.ok, role: .cancel) { activeAlert = nil }
-            }
-        } message: {
-            if case let .info(message) = activeAlert {
-                Text(message)
-            } else if activeAlert == .delete {
-                Text(hasChanges
-                     ? "Delete this note and discard your unsaved changes? It can be recovered from vault Git history."
-                     : "Delete this note? It can be recovered from vault Git history.")
-            } else {
-                Text(verbatim: "")
-            }
+        .sheet(isPresented: $folderPickerPresented) {
+            JarvisFolderChooserSheet(
+                client: client, copy: copy, initial: folder, stagedFolders: $stagedFolders,
+                onChoose: { folder = $0; folderPickerPresented = false }
+            )
         }
-    }
-
-    private var formattedEditor: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(document.blocks.enumerated()), id: \.element.id) { index, block in
-                        if index != document.blocks.firstIndex(where: { $0.headingLevel == 1 }) {
-                            blockEditor(index, block: block).id(block.id)
-                        }
-                    }
+        .sheet(item: $conflict) { latest in
+            JarvisNoteConflictSheet(
+                copy: copy, draft: draftContent, latest: latest,
+                onKeepEditing: { conflict = nil },
+                onUseLatest: { applyLatest(latest) },
+                onSaveOverLatest: {
+                    baseline = latest
+                    conflict = nil
+                    Task { await save() }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 24)
-            }
-            .accessibilityIdentifier("note.formattedEditor")
-            .onChange(of: editingBlock) { _, target in
-                if let target { proxy.scrollTo(target, anchor: .center) }
-            }
+            )
         }
-    }
-
-    private var formattingToolbar: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 4) {
-                JarvisMenuButton(title: copy.heading, systemImage: "textformat", identifier: "note.format") {
-                    Button(copy.heading) { appendBlock(prefix: "## ") }
-                    Button(copy.contentField) { appendBlock(prefix: "") }
-                }
-                JarvisIconButton(title: copy.checklist, systemImage: "checkmark.square", identifier: "note.checklist") {
-                    appendBlock(prefix: "- [ ] ")
-                }
-                JarvisIconButton(title: "Bullet list", systemImage: "list.bullet", identifier: "note.bullet") {
-                    appendBlock(prefix: "- ")
-                }
-                JarvisIconButton(title: "Quote", systemImage: "text.quote", identifier: "note.quote") {
-                    appendBlock(prefix: "> ")
-                }
-                JarvisIconButton(title: copy.addLink, systemImage: "link", identifier: "note.link") {
-                    appendBlock(prefix: "", text: "[](https://)")
-                }
-                JarvisIconButton(title: copy.undo, systemImage: "arrow.uturn.backward", identifier: "note.undo",
-                                 isDisabled: undoHistory.isEmpty) {
-                    guard let previous = undoHistory.popLast() else { return }
-                    draft = previous
-                    document = JarvisNoteDocument(previous)
-                    editingBlock = nil
-                    clearStatus()
-                }
+        .task {
+            try? await Task.sleep(for: .milliseconds(300))
+            focus = isCreating ? .title : .body
+#if targetEnvironment(simulator)
+            // CI captures only: type a change and save, to show the conflict or failed-save recovery states.
+            if !isCreating, ProcessInfo.processInfo.arguments.contains("--screenshot-notes-edit-save") {
+                try? await Task.sleep(for: .seconds(1))
+                parts.body += "\nEdited in the fixture.\n"
+                try? await Task.sleep(for: .seconds(1))
+                await save()
             }
-        }
-        .scrollIndicators(.hidden)
-        .disabled(deleting)
-    }
-
-    private func deleteNote() async {
-        guard let client, !saving, latestConflict == nil, !needsReload else { return }
-        saving = true
-        deleting = true
-        defer { saving = false; deleting = false }
-        do {
-            try await client.deleteNote(path: note.path, sha: note.sha)
-            onDeleted(note.path)
-        } catch JarvisNotesClientError.noteConflict {
-            needsReload = true
-            status = copy.conflict
-            activeAlert = .info("The note changed. Reload it before trying again.")
-        } catch {
-            needsReload = true
-            status = copy.unknownWrite
-            activeAlert = .info("Deletion could not be confirmed. Refresh the note before trying again.")
+#endif
         }
     }
 
     @ViewBuilder
-    private func blockEditor(_ index: Int, block: JarvisNoteDocument.Block) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            if block.isChecklist {
-                JarvisIconButton(title: block.isChecked ? copy.completed : copy.complete,
-                                 systemImage: block.isChecked ? "checkmark.square" : "square",
-                                 identifier: "note.check.\(index)") {
-                    remember(draft)
-                    document.blocks[index].toggleCheck()
-                    draft = document.markdown
-                    clearStatus()
-                }
-            } else if block.isBullet {
-                Text("•").accessibilityHidden(true)
-            }
-            TextField(document.blocks.count == 1 ? copy.contentField : "", text: Binding(
-                get: { document.blocks[index].text },
-                set: { value in
-                    remember(draft)
-                    document.blocks[index].text = value
-                    draft = document.markdown
-                    clearStatus()
-                }), axis: .vertical)
-                .font(blockFont(block))
-                .foregroundStyle(block.isChecked ? Color.secondary : Color.primary)
-                .strikethrough(block.isChecked)
-                .focused($editingBlock, equals: block.id)
-                .accessibilityLabel(copy.contentField)
-                .accessibilityIdentifier("note.block.\(index)")
+    private var tools: some View {
+        JarvisAccessoryToolMenu(title: copy[.formatting], systemImage: "textformat", identifier: "editor.format") {
+            Button(copy.heading) { prefixLine("## ") }
+            Button(copy[.bulletList]) { prefixLine("- ") }
+            Button(copy[.quote]) { prefixLine("> ") }
         }
-        .padding(.top, block.headingLevel > 0 ? 12 : 0)
-    }
-
-    private func blockFont(_ block: JarvisNoteDocument.Block) -> Font {
-        if block.isCode { return .body.monospaced() }
-        switch block.headingLevel {
-        case 1: return .title.bold()
-        case 2: return .title2.bold()
-        case 3...6: return .headline
-        default: return .body
+        JarvisAccessoryToolButton(title: copy.checklist, systemImage: "checkmark.square", identifier: "editor.checklist", isDisabled: saving) {
+            prefixLine("- [ ] ")
+        }
+        JarvisAccessoryToolButton(title: copy.addLink, systemImage: "link", identifier: "editor.link", isDisabled: saving) {
+            insertAtCursor("[link](https://)")
         }
     }
 
-    private func appendBlock(prefix: String, text: String = "") {
-        remember(draft)
-        editingBlock = document.append(prefix: prefix, text: text)
-        draft = document.markdown
-        clearStatus()
-    }
-
-    private func remember(_ source: String) {
-        guard undoHistory.last != source else { return }
-        undoHistory.append(source)
-        if undoHistory.count > 100 { undoHistory.removeFirst() }
-    }
-
-    private func clearStatus() {
-        if !saving && latestConflict == nil && !needsReload { status = nil }
-    }
-
-    private func conflictActions(_ latest: VaultNote) -> some View {
-        VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
-            Text(copy.latestVersion)
-                .font(.subheadline.weight(.semibold))
-            ScrollView {
-                Text(latest.content)
-                    .font(.caption.monospaced())
-                    .frame(maxWidth: .infinity, alignment: .leading)
+    @ViewBuilder
+    private func banner(_ current: Failure) -> some View {
+        switch current {
+        case .failed, .unconfirmed:
+            JarvisInlineBanner(
+                message: current == .failed ? copy[.saveFailed] : copy[.saveUnconfirmed], identifier: "editor.failure"
+            ) {
+                JarvisLabelledButton(title: copy[.continueEditing], isCompact: true) { failure = nil }
+                JarvisLabelledButton(title: copy.retry, identifier: "editor.retry", isEmphasised: true, isCompact: true) {
+                    Task { await retry() }
+                }
             }
-            .frame(maxHeight: JarvisDesignTokens.notesConflictPreviewMaximumHeight)
-            HStack {
-                JarvisLabelledButton(title: copy.reload) {
-                    applyLatest(latest)
-                }
-                JarvisLabelledButton(title: copy.keepDraft, isDisabled: saving) {
-                    if draft == latest.content {
-                        applyLatest(latest)
-                    } else {
-                        Task { await saveDraft(sha: latest.sha) }
-                    }
-                }
+        case .exists:
+            JarvisInlineBanner(message: copy[.noteExists], identifier: "editor.failure") {
+                JarvisLabelledButton(title: copy[.continueEditing], isCompact: true) { failure = nil }
+            }
+        case .missing:
+            JarvisInlineBanner(message: copy.noteMissing, identifier: "editor.failure") {
+                JarvisLabelledButton(title: copy[.continueEditing], isCompact: true) { failure = nil }
+            }
+        case let .notSignedIn(message):
+            JarvisInlineBanner(message: message, identifier: "editor.failure") {
+                JarvisLabelledButton(title: copy[.continueEditing], isCompact: true) { failure = nil }
             }
         }
-        .padding(JarvisDesignTokens.notesSectionSpacing)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: JarvisDesignTokens.notesConflictPanelRadius)
-        )
-        .accessibilityElement(children: .contain)
     }
 
-    @discardableResult
-    private func saveDraft(sha: String) async -> Bool {
-        guard let client, hasChanges, !saving else { return false }
-        let path = note.path
-        let submitted = draft
-        saving = true
-        status = copy.saving
-        defer { saving = false }
-        do {
-            _ = try await client.saveNote(path: path, content: submitted, sha: sha)
-            await JarvisAppCache.invalidateAll(.notes)
-            do {
-                let refreshed = try await client.readNote(path: path)
-                guard !Task.isCancelled, note.path == path else { return false }
-                note = refreshed
-                if draft == submitted {
-                    draft = refreshed.content
-                    document = JarvisNoteDocument(refreshed.content)
-                }
-                latestConflict = nil
-                status = copy.saved
-                onSaved(refreshed)
-                return draft == refreshed.content
-            } catch {
-                guard !Task.isCancelled, note.path == path else { return false }
-                status = copy.savedNeedsRefresh
-                needsReload = true
-                activeAlert = .info(copy.savedNeedsRefresh)
-            }
-        } catch let error as JarvisNotesClientError {
-            guard !Task.isCancelled, note.path == path else { return false }
-            switch error {
-            case .noteConflict:
-                status = copy.conflict
-                do {
-                    let latest = try await client.readNote(path: path)
-                    guard !Task.isCancelled, note.path == path else { return false }
-                    latestConflict = latest
-                } catch {
-                    guard !Task.isCancelled, note.path == path else { return false }
-                    latestConflict = nil
-                    needsReload = true
-                    activeAlert = .info(copy.conflict)
-                }
-            case .writeOutcomeUnknown:
-                status = copy.unknownWrite
-                needsReload = true
-                activeAlert = .info(copy.unknownWrite)
-            case .noteNotFound:
-                status = copy.noteMissing
-                activeAlert = .info(copy.noteMissing)
-            default:
-                status = copy.unavailable
-                activeAlert = .info(copy.unavailable)
-            }
-        } catch {
-            guard !Task.isCancelled, note.path == path else { return false }
-            status = copy.unavailable
-            activeAlert = .info(copy.unavailable)
+    private func cancel() {
+        guard !saving else { return }
+        if isDirty { discardPresented = true } else { dismiss() }
+    }
+
+    private func cursorIndex(in text: String) -> String.Index {
+        if let selection, case let .selection(range) = selection.indices {
+            return min(range.lowerBound, text.endIndex)
         }
-        return false
+        return text.endIndex
+    }
+
+    private func prefixLine(_ prefix: String) {
+        let text = parts.body
+        let insertion = cursorIndex(in: text)
+        let lineStart = text[..<insertion].lastIndex(of: "\n").map { text.index(after: $0) } ?? text.startIndex
+        let offset = text.distance(from: text.startIndex, to: lineStart) + prefix.count
+        parts.body.insert(contentsOf: prefix, at: lineStart)
+        selection = TextSelection(insertionPoint: parts.body.index(parts.body.startIndex, offsetBy: offset))
+        focus = .body
+    }
+
+    private func insertAtCursor(_ value: String) {
+        let text = parts.body
+        let insertion = cursorIndex(in: text)
+        let offset = text.distance(from: text.startIndex, to: insertion) + value.count
+        parts.body.insert(contentsOf: value, at: insertion)
+        selection = TextSelection(insertionPoint: parts.body.index(parts.body.startIndex, offsetBy: offset))
+        focus = .body
     }
 
     private func applyLatest(_ latest: VaultNote) {
-        note = latest
-        draft = latest.content
-        document = JarvisNoteDocument(latest.content)
-        undoHistory = []
-        latestConflict = nil
-        needsReload = false
-        status = nil
-        onSaved(latest)
+        parts = JarvisNoteParts(latest.content)
+        baseline = latest
+        conflict = nil
+        failure = nil
     }
 
-    private func reloadLatest() async {
-        guard let client, !saving else { return }
-        let path = note.path
-        let submitted = draft
+    @MainActor
+    private func save() async {
+        guard !saving, blockedReason == nil, let path = notePath else { return }
         saving = true
-        defer { saving = false }
+        failure = nil
+        focus = nil
+        let submitted = draftContent
         do {
-            let latest = try await client.readNote(path: path)
-            guard !Task.isCancelled, note.path == path, draft == submitted else { return }
-            applyLatest(latest)
+            if isCreating {
+                _ = try await client.createNote(path: path, content: submitted)
+            } else if let sha = baseline?.sha {
+                _ = try await client.saveNote(path: path, content: submitted, sha: sha)
+            }
+            await finish(path: path)
         } catch {
-            guard !Task.isCancelled, note.path == path else { return }
-            activeAlert = .info(copy.unavailable)
+            saving = false
+            await handle(error, path: path, submitted: submitted)
         }
+    }
+
+    @MainActor
+    private func finish(path: String) async {
+        await JarvisAppCache.invalidateAll(.notes)
+        await JarvisAppCache.invalidateAll(.tasks)
+        let refreshed = try? await client.readNote(path: path)
+        saving = false
+        onSaved(path, refreshed)
+        dismiss()
+    }
+
+    @MainActor
+    private func handle(_ error: Error, path: String, submitted: String) async {
+        switch JarvisNoteSaveFailure.classify(error) {
+        case .conflict:
+            if isCreating {
+                failure = .exists
+            } else {
+                await presentConflict(path: path, submitted: submitted, reported: Self.reportedLatest(error, path: path, url: baseline?.url))
+            }
+        case .outcomeUnknown: failure = .unconfirmed
+        case .notFound: failure = .missing
+        case .signInRequired:
+            failure = .notSignedIn((error as? JarvisClientError) == .notOwner ? copy.notOwner : copy.signIn)
+        case .other: failure = .failed
+        }
+    }
+
+    /// A conflict keeps the draft. If the latest version already holds exactly this draft, the save did land.
+    @MainActor
+    private func presentConflict(path: String, submitted: String, reported: VaultNote?) async {
+        do {
+            // The vault's own conflict reply carries the newer version; a fresh read is the fallback.
+            let latest: VaultNote
+            if let reported { latest = reported } else { latest = try await client.readNote(path: path) }
+            if latest.content == submitted {
+                await finish(path: path)
+            } else {
+                conflict = latest
+            }
+        } catch {
+            failure = .unconfirmed
+        }
+    }
+
+    private static func reportedLatest(_ error: Error, path: String, url: String?) -> VaultNote? {
+        guard case let JarvisNotesClientError.noteConflict(sha?, content?) = error, let url else { return nil }
+        return VaultNote(path: path, content: content, sha: sha, url: url)
+    }
+
+    /// Retry first checks what the vault holds, so a write that actually succeeded is never repeated or reported as a failure.
+    @MainActor
+    private func retry() async {
+        guard !saving, let path = notePath else { return }
+        saving = true
+        failure = nil
+        let submitted = draftContent
+        do {
+            if isCreating {
+                do {
+                    let existing = try await client.readNote(path: path)
+                    saving = false
+                    if existing.content == submitted { await finish(path: path) } else { failure = .exists }
+                    return
+                } catch JarvisNotesClientError.noteNotFound {
+                    _ = try await client.createNote(path: path, content: submitted)
+                    await finish(path: path)
+                    return
+                }
+            }
+            let latest = try await client.readNote(path: path)
+            switch JarvisNoteSaveRecovery.decide(draft: submitted, baselineSha: baseline?.sha ?? "", latest: latest) {
+            case .alreadySaved: await finish(path: path)
+            case .writeAgain:
+                _ = try await client.saveNote(path: path, content: submitted, sha: latest.sha)
+                await finish(path: path)
+            case .conflict:
+                saving = false
+                conflict = latest
+            }
+        } catch {
+            saving = false
+            await handle(error, path: path, submitted: submitted)
+        }
+    }
+}
+
+/// "This note changed": the draft stays, the latest version is shown beside it, and nothing is saved until the owner picks.
+struct JarvisNoteConflictSheet: View {
+    let copy: JarvisNotesCopy
+    let draft: String
+    let latest: VaultNote
+    let onKeepEditing: () -> Void
+    let onUseLatest: () -> Void
+    let onSaveOverLatest: () -> Void
+
+    @State private var reviewing = false
+    @State private var confirmOverwrite = false
+    @State private var confirmUseLatest = false
+
+    private func excerpt(_ text: String) -> String {
+        text.split(separator: "\n", omittingEmptySubsequences: true).prefix(4).joined(separator: "\n")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
+            HStack {
+                Text(reviewing ? copy[.reviewChanges] : copy[.noteChangedTitle])
+                    .font(.title2.weight(.bold))
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                JarvisSheetCloseButton(title: copy[.keepEditing], action: onKeepEditing)
+            }
+            if reviewing { review } else { summary }
+        }
+        .padding(JarvisDesignTokens.notesHorizontalInset)
+        .jarvisAmbientBackground()
+        .presentationDetents(reviewing ? [.large] : [.medium, .large])
+        .presentationDragIndicator(.visible)
+        .interactiveDismissDisabled()
+        .accessibilityIdentifier("editor.conflict")
+        .confirmationDialog(copy[.overwriteTitle], isPresented: $confirmOverwrite, titleVisibility: .visible) {
+            Button(copy[.useMyDraft], role: .destructive, action: onSaveOverLatest)
+            Button(copy.cancel, role: .cancel) {}
+        } message: {
+            Text(copy[.overwriteBody])
+        }
+        .confirmationDialog(copy[.useLatest], isPresented: $confirmUseLatest, titleVisibility: .visible) {
+            Button(copy[.useLatest], role: .destructive, action: onUseLatest)
+            Button(copy.cancel, role: .cancel) {}
+        } message: {
+            Text(copy[.discardTitle])
+        }
+    }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
+            Text(copy[.noteChangedBody]).font(.body).foregroundStyle(.secondary)
+            card(copy[.yourDraft], excerpt(draft))
+            card(copy.latestVersion, excerpt(latest.content))
+            Spacer(minLength: 0)
+            HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+                JarvisLabelledButton(title: copy[.keepEditing], identifier: "editor.conflict.keep", isFullWidth: true, action: onKeepEditing)
+                JarvisLabelledButton(title: copy[.reviewChanges], identifier: "editor.conflict.review", isFullWidth: true, isEmphasised: true) {
+                    reviewing = true
+                }
+            }
+        }
+    }
+
+    private func card(_ title: String, _ text: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.subheadline.weight(.semibold))
+            Text(text.isEmpty ? "—" : text)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(5)
+        }
+        .padding(JarvisDesignTokens.notesSectionSpacing)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var review: some View {
+        if draft == latest.content {
+            Text(copy[.noDifferences]).foregroundStyle(.secondary)
+        } else if let rows = JarvisLineDiff.rows(latest: latest.content, draft: draft) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(rows) { row in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Image(systemName: row.kind == .added ? "plus" : row.kind == .removed ? "minus" : "circle.fill")
+                                .font(.caption2)
+                                .frame(width: 14)
+                                .foregroundStyle(row.kind == .same ? Color.secondary.opacity(0.4) : Color.primary)
+                                .accessibilityHidden(true)
+                            Text(row.text.isEmpty ? " " : row.text)
+                                .font(.footnote.monospaced())
+                                .foregroundStyle(row.kind == .same ? Color.secondary : Color.primary)
+                                .strikethrough(row.kind == .removed)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 2)
+                        .background(row.kind == .same ? Color.clear : Color.primary.opacity(0.08))
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(
+                            (row.kind == .added ? copy[.onlyInDraft] : row.kind == .removed ? copy[.onlyInLatest] : "") + " " + row.text
+                        )
+                    }
+                }
+            }
+            .accessibilityIdentifier("editor.conflict.diff")
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: JarvisDesignTokens.notesSectionSpacing) {
+                    card(copy[.yourDraft], draft)
+                    card(copy.latestVersion, latest.content)
+                }
+            }
+        }
+        Text("− \(copy[.onlyInLatest])    + \(copy[.onlyInDraft])")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        HStack(spacing: JarvisDesignTokens.notesSectionSpacing) {
+            JarvisLabelledButton(title: copy[.useLatest], identifier: "editor.conflict.useLatest", isFullWidth: true) {
+                confirmUseLatest = true
+            }
+            JarvisLabelledButton(title: copy[.useMyDraft], identifier: "editor.conflict.useDraft", isFullWidth: true, isEmphasised: true) {
+                confirmOverwrite = true
+            }
+        }
+        JarvisLabelledButton(title: copy.back, identifier: "editor.conflict.back", isFullWidth: true) { reviewing = false }
     }
 }

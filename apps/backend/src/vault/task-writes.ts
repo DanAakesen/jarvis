@@ -28,6 +28,8 @@ export interface TaskCompleteInput {
   done: boolean;
 }
 
+export type TaskDeleteInput = Omit<TaskCompleteInput, 'done'>;
+
 export interface TaskEditInput extends Omit<TaskCompleteInput, 'done'> {
   newText: string;
   due?: string | null;
@@ -76,6 +78,13 @@ export const taskCompleteSchema = {
   type: 'object',
   properties: { ...identityProperties, done: { type: 'boolean' } },
   required: ['path', 'line', 'text', 'version', 'done'],
+  additionalProperties: false,
+};
+
+export const taskDeleteSchema = {
+  type: 'object',
+  properties: identityProperties,
+  required: ['path', 'line', 'text', 'version'],
   additionalProperties: false,
 };
 
@@ -145,6 +154,10 @@ export function validateTaskCompleteInput(value: unknown): value is TaskComplete
     validIdentity(value) && typeof value.done === 'boolean';
 }
 
+export function validateTaskDeleteInput(value: unknown): value is TaskDeleteInput {
+  return record(value) && onlyKeys(value, ['path', 'line', 'text', 'version']) && validIdentity(value);
+}
+
 export function validateTaskEditInput(value: unknown): value is TaskEditInput {
   return record(value) && onlyKeys(value, ['path', 'line', 'text', 'version', 'newText', 'due', 'time', 'priority', 'remindAtDue', 'notes', 'timeZone']) &&
     validIdentity(value) && boundedText(value.newText, 400) &&
@@ -173,6 +186,10 @@ type DoneChange =
   | { status: 'unchanged'; version: string }
   | { status: 'changed'; content: string; version: string };
 
+type RemoveChange =
+  | { status: 'mismatch' }
+  | { status: 'changed'; content: string };
+
 type TextChange =
   | { status: 'mismatch' }
   | { status: 'refused' }
@@ -186,6 +203,7 @@ export interface TaskWriterOptions {
   shouldRedact: (value: string) => boolean;
   newTaskText: (value: string) => string;
   setTaskDone: (content: string, path: string, line: number, text: string, version: string, done: boolean) => DoneChange;
+  removeTaskLine: (content: string, path: string, line: number, text: string, version: string) => RemoveChange;
   setTaskText: (
     content: string, path: string, line: number, text: string, version: string,
     edit: { newText: string; due?: string | null | undefined; time?: string | null | undefined; priority?: 'high' | 'medium' | 'normal' | undefined; remindAtDue?: boolean | undefined; notes?: string | undefined; timeZone?: string | undefined },
@@ -315,6 +333,34 @@ export function createTaskWriter(options: TaskWriterOptions) {
     },
     edit(input: TaskEditInput, signal = AbortSignal.timeout(30_000)) {
       return update(input, signal, 'edit');
+    },
+    /** Deletes exactly the task line the owner saw. A changed line or note is a conflict, never a guess. */
+    async remove(input: TaskDeleteInput, signal = AbortSignal.timeout(30_000)): Promise<void> {
+      let folder = 'other';
+      return run(() => folder, async () => {
+        if (!validateTaskDeleteInput(input)) {
+          throw new TaskWriteError(400, 'Invalid task input. Read the task list and supply its path, line, text and version.');
+        }
+        const path = options.validateWritePath(input.path);
+        folder = options.loggedFolder(path);
+        if (!options.inTaskScope(path)) throw new TaskWriteError(400, 'That note does not hold vault tasks.');
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          signal.throwIfAborted();
+          const current = await options.client.read(path, signal);
+          if (!current) throw new TaskWriteError(409, 'The task note no longer exists. Refresh the list.');
+          const change = options.removeTaskLine(current.content, path, input.line, input.text, input.version);
+          if (change.status === 'mismatch') throw new TaskWriteError(409, changedMessage);
+          try {
+            signal.throwIfAborted();
+            await options.client.write(path, change.content, 'jarvis: delete a task\n\nCo-authored-by: Jarvis', current.sha, signal);
+            saved(folder);
+            return;
+          } catch (error) {
+            if (!(error instanceof VaultWriteConflictError) || attempt === 1) throw error;
+          }
+        }
+        throw new TaskWriteError(409, changedMessage);
+      });
     },
     async create(input: TaskCreateInput, signal = AbortSignal.timeout(30_000), sourceMessageId?: string, submissionId?: string): Promise<TaskWriteResult> {
       let folder = 'other';

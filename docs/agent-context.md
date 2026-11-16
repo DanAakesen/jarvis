@@ -1,3 +1,8 @@
+## iOS UI guidance — 15 November 2026 (#1894)
+
+- Consult the apple-hig skill (justinwetch/HIGAgentSkills, MIT) for iOS UI sizes, padding, Dynamic Type and accessibility. Clone it into a scratch directory outside the repository each time and never commit it.
+- Notes redesign checks: `cd apps/ios/Packages/JarvisCore && swift test` (Linux, `swift:6.2` image works locally); `cd apps/backend && npx vitest run src/vault`. The SwiftUI screens compile only in the macOS `watch` job (`watch-build.yml`), which also captures the Notes states as screenshots (`notes-*.png` in the `watch-build-logs` artifact; continue-on-error, 14-minute bound). Launch with `--ui-test-navigation --screenshot-screen=notes --ui-test-task-list-board --screenshot-notes-state=<state>` (simulator only; states are listed in `JarvisNotesArea+Chrome.swift`).
+
 ## PI standing watches (#1886, P15-175)
 
 - Needs everything from the brain section plus migration `0088_pi_watch_look.sql`. The watches live in the vault under `PI/Watches` (closed ones in `PI/Watches/Closed`); read or edit them like any note. A hand-edited note is picked up after the next restart; the hidden last line sets the next look.

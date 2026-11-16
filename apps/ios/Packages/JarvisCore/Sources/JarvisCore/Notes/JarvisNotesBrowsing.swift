@@ -96,6 +96,35 @@ extension JarvisCache {
 }
 
 
+extension JarvisCache {
+    /// Replaces the pinned order, for Reorder pins. Unknown or invalid paths are dropped.
+    public func setPinnedNotePaths(_ paths: [String]) async {
+        guard let originalSession = session() else { return }
+        var seen = Set<String>()
+        let clean = paths.filter { JarvisNotesLogic.validNotePath($0) && seen.insert($0).inserted }
+        guard isCurrent(originalSession), let data = try? JSONEncoder().encode(clean) else { return }
+        await write(data: data, validator: nil, key: "pinnedNotePaths", session: originalSession)
+    }
+
+    /// Task pins are local preferences too, keyed by `VaultTask.pinKey`.
+    public func pinnedTaskIDs() async -> [String] {
+        guard let originalSession = session(),
+              let entry = await read("pinnedTaskIDs"), isCurrent(originalSession),
+              let ids = try? JSONDecoder().decode([String].self, from: entry.data) else { return [] }
+        var seen = Set<String>()
+        return ids.filter { !$0.isEmpty && $0.utf16.count <= 400 && seen.insert($0).inserted }
+    }
+
+    public func setTaskPinned(id: String, pinned: Bool) async {
+        guard !id.isEmpty, id.utf16.count <= 400, let originalSession = session() else { return }
+        var ids = await pinnedTaskIDs().filter { $0 != id }
+        guard isCurrent(originalSession) else { return }
+        if pinned { ids.insert(id, at: 0) }
+        guard let data = try? JSONEncoder().encode(ids) else { return }
+        await write(data: data, validator: nil, key: "pinnedTaskIDs", session: originalSession)
+    }
+}
+
 /// A stable, complete library projection. The view renders these rows lazily.
 public struct JarvisNoteLibraryGroup: Identifiable, Equatable, Sendable {
     public enum Period: String, CaseIterable, Sendable {

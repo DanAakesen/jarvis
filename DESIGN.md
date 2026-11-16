@@ -1,3 +1,35 @@
+## Notes, Tasks and Graph: Vault Folders (15 November 2026; owner approved; #1894)
+
+Dan selected **Vault Folders** and approved its subpages (`docs/ui/notes-subpages-2026-11-15/`, HANDOFF.md is the
+contract). Notes, Tasks and Graph share one simple, fast structure like Apple Notes and Reminders: a title row with a
+three-dot header menu beside the navigation button, the content, and a fixed two-row dock (equal-width
+Notes/Tasks/Graph switch, then Search and a separate +). Home keeps its header with phrase. No Recent section.
+Folder, sort and graph context actions live in the header menu. Search scopes (All/Notes/Tasks) replace the mode
+switch while a query is present; clearing the query restores the previous folder, mode and scroll position.
+
+- **Buttons.** Every action uses the shared neutral smoked glass (`JarvisLabelledButton`, `JarvisIconButton`, `JarvisMenuButton`,
+  `jarvisGlassSurface`). Primary labels (Save, Done, Continue to note, Choose folder, Retry, Review changes, Edit) are
+  amber text; secondary labels are neutral and disabled ones muted. No yellow or orange fill. Orange is kept for task
+  rings, which are always paired with a label and state.
+- **Controls added to the shared layer** (`JarvisNotesControls.swift`): editor accessory (Cancel left, Save right, tools between,
+  in the bottom safe area so it rides above the keyboard and stays usable without one), inline banner, detail and choice
+  rows, task ring, and the Pin/Delete swipe row (short left swipe pins, long left swipe deletes; both are named
+  accessibility actions, and deletion always asks first).
+- **Reader and editor.** The reader (title, compact folder provenance, rendered Markdown, properties hidden) has a lower Close / Edit
+  row. One editor serves new and existing notes, so title and body are editable at once; formatting tools sit in the
+  accessory. Draft protection applies only after a real change. Task detail, Edit task, Date & time and Task options follow the
+  same anatomy; the schedule and options sheets return to the same draft.
+- **Recovery.** A conflict keeps the draft and offers Keep editing or Review changes (a line comparison, then an
+  explicit, confirmed choice). A failed or unconfirmed save keeps the draft and offers Retry, which first checks what the
+  vault holds. Nothing is overwritten without an explicit choice.
+- **Reduce Transparency** swaps glass for solid fills through the shared surfaces; Reduce Motion removes the swipe-row and
+  press animation. Large text stacks row metadata instead of truncating it.
+- **Not built (no backend or no safe semantics):** Rename and Move to folder (a path change would break links and task
+  identity), Select items (bulk), the Manual sort, an in-page pin reorder (done in a sheet instead), and Undo after
+  deletion. The reader has no Search/+ row; it is not a browsing page. Details: `docs/decisions.md`, 15 November 2026.
+- Sheets can stack where the design returns to the same draft (editor to folder chooser, Edit task to Date & time);
+  apple-hig prefers one sheet at a time. This is a known, deliberate deviation.
+
 ## PI standing watches — 16 November 2026 (#1886, P15-175)
 
 No new screen: watches are listed, changed and stopped in chat or by voice, in plain sentences (name, next look, looks today, an estimated cost in DKK with the word "estimate"). The reply to "keep me updated on X" is one sentence: what is watched and when the first look is. A report from a watch is an ordinary Jarvis chat message and push, only when something changed that matters; there is never a "still waiting" message. The Watch is parked and was not touched.

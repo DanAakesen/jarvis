@@ -1,3 +1,10 @@
+## Notes, Tasks and Graph redesign — 15 November 2026 (#1894, P15-180, PR #1899)
+
+Status: implemented on the branch; waiting for CI (macOS compile) and review. Done: design pack committed, backend task delete,
+JarvisCore logic with tests, new pages/reader/editor/sheets, recovery flows, fixtures and CI captures. Next: fix any CI compile
+or review findings, rebase on main after PR #1896 (vault layout) lands, owner review. Not in scope (see decisions): rename, move, bulk
+select, manual sort, undo, Danish catalog. No TestFlight build is part of this work.
+
 ## Single vault layout, cut over with the vault clean-up — 15 November 2026 (#1895, P15-181)
 
 **Status: built and tested; waiting for review and the cutover.** Jarvis moves to the new vault paths only: `Personal/Task inbox.md`, `Work/Task inbox.md` and `Personal/Health/Gym log/` (`gym-log` type kept). No old paths, detection or fallbacks remain. The vault mirror excludes `_agent-activity` and keeps `_agent-log` until vault PR #5 has merged.

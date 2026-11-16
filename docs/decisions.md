@@ -1,3 +1,28 @@
+## 15 November 2026 — Notes, Tasks and Graph redesign: Vault Folders implemented (#1894, P15-180)
+
+Dan selected **Vault Folders** (pinned notes, vault folders, source-linked tasks, folder-cluster graph) and approved
+the subpages with one correction: action buttons use neutral Apple glass, with yellow/amber text for primary
+actions and never a yellow or orange filled background. Native selection indicators and task rings keep their
+semantic colors. The design pack and its HANDOFF are in `docs/ui/notes-subpages-2026-11-15/`.
+
+Shipped behaviour (the earlier concept text claimed more than the vault supports; this is what is true):
+- **Supported and built:** pin/unpin (local, per account), pin reorder (local display order, in a sheet), Updated/Title sort,
+  folder scope, task sort (due date or priority) and Work/Personal filter, delete note (existing route, version-checked),
+  delete task (new `DELETE /vault/tasks`, removes exactly the identified line and returns a conflict if the line or note
+  changed), edit and complete tasks, new note/task, staged new folder, search with scopes, linked notes from real graph edges.
+- **Not built, and why:** Rename and Move to folder (no route; a path change would break links and task identity), bulk Select items,
+  Manual note sort, Undo after delete (no restore route), standalone folders (a folder exists only once its first note is saved),
+  moving a task between scopes (scope comes from the source note), and any new reminder. The Date & time sheet only states the
+  reminder the backend already sends (about one hour before a high-priority task with a time).
+- **Task pins** are keyed by the source note and the exact line text, so they follow the task when other lines move; editing the task's words lapses its pin. This is display metadata only.
+- **No durable offline drafts.** Drafts live in memory for the editor's session; interactive dismissal is blocked while there are unsaved
+  edits or a save is running. A device restart or a killed app loses an unsaved draft.
+- **One sheet at a time** (apple-hig) is relaxed where the design returns to the same draft.
+- **Languages.** The app catalog is English only (no Danish catalog or language setting exists); new strings use `JarvisNotesLocalization`
+  so a catalog can be added without code changes.
+- Vault layout: no inbox or gym paths are hardcoded by this work; the task inbox location stays the backend's (PR #1896).
+- Native verification was by CI compile and fixture screenshots only; no physical-device or VoiceOver pass is recorded here.
+
 ## 16 November 2026 — PI phase 5: standing watches inside the loop (#1886, P15-175, part 3)
 
 Owner brief, quoted: "Standing watches must work inside the loop (free-text notes in the vault, woken by our own small ticker; record test results of Foundry routines and the reminder tool)". Rules as before: no fallbacks, LLM-only decisions, free-form with minimal fixed fields.
