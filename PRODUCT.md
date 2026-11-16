@@ -361,7 +361,7 @@ still requires verification before full issue acceptance.
 P15-38 / #1478 applies Chat's approved ambient background to every native
 screen and app-owned sheet: one light/dark definition and the same glow positions,
 with glass content surfaces above it. The 1 November reconciliation reuses main's
-`JarvisScreenBackground` (also used by `JarvisGateAmbientBackground`), without
+`JarvisScreenBackground` (superseded on 15 November 2026 by the living neural background, #1892), without
 adding another renderer or decorative orb. Voice and sign-in/lock
 keep their foreground orb over the shared ambient base. This changes no routes,
 notification delivery support or screen functionality.

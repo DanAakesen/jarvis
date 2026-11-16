@@ -5,7 +5,7 @@ import { loadConfig } from '../config.js';
 import { PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
 
 const spec = JSON.parse(readFileSync(new URL('../../../../agents/pi/definition.json', import.meta.url), 'utf8')) as {
-  agentName: string; model: string; reasoningEffort: string; mcp: { serverLabel: string; path: string; requireApproval: string };
+  agentName: string; model: string; reasoningEffort: string; mcp: { serverLabel: string; path: string; requireApproval: string; connection: string };
 };
 const base = { STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net', FOUNDRY_PROJECT_ENDPOINT: 'https://a.services.ai.azure.com/api/projects/p' };
 
@@ -16,6 +16,8 @@ describe('PI definition', () => {
     expect(PI_MCP_SERVER_LABEL).toBe(spec.mcp.serverLabel);
     expect(piMcpPath).toBe(spec.mcp.path);
     expect(spec.mcp.requireApproval).toBe('never');
+    // The MCP secret reaches the harness through a project connection; the tool itself carries no headers.
+    expect(spec.mcp.connection).toMatch(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/u);
   });
 
   it('sends the same preview header as the managed Python adapter', () => {

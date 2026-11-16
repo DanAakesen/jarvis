@@ -32,7 +32,7 @@ sequenceDiagram
 | Gateway | `apps/backend/src/pi/gateway.ts` | Direct Responses call, SSE parse, text before a tool call becomes the acknowledgment and commentary events, 180 s turn deadline, cancel closes the stream and the grant. One in-flight request on the conversation: a single-flight lock, claimed synchronously, keeps a warm-up and a chat turn from ever overlapping (a turn waits for a running warm-up; a warm-up yields to a turn) |
 | Warm conversation | `dbo.pi_conversation` (migration 0086), `POST /pi/warm` | One conversation per owner; a warm-up turn primes the cache when the app opens |
 | Ledger | `dbo.pi_turn`, plus `recordFoundryUsage` (role `chat`) | Per turn: tokens, cached tokens, DKK, first-text ms; the monthly hard stop sums it |
-| MCP server | `apps/backend/src/pi/mcp.ts`, route `/pi/mcp`; credential `jp.<secret>` accepted by `auth/hook.ts` on that route only | Stateless Streamable HTTP like `/inbox/mcp` |
+| MCP server | `apps/backend/src/pi/mcp.ts`, route `/pi/mcp`; credential `jp.<secret>` (injected by the Foundry project connection `jarvis-pi-mcp`) accepted by `auth/hook.ts` on that route only | Stateless Streamable HTTP like `/inbox/mcp` |
 | Turn authority | `apps/backend/src/pi/turns.ts` | Grant per owner message; refused when forged, closed or aborted; a `smoke` grant runs the existing read-only smoke role |
 | In-process dispatch | `auth/pi-credential.ts` | Random per-process token turned into an agent principal inside the hook, only for routes that opt in as agent routes |
 | Status and smoke | `GET /pi/status` (owner), `POST /pi/warm` (owner), `POST /pi/smoke` (deploy identity) | The smoke runs on a scratch conversation, never the owner's; its MCP check passes only when `list_jobs` ran through `call_tool` and the MCP server's own record of the result is `ok` (the grant keeps `results`), not on model text |
@@ -138,8 +138,16 @@ over this store. Design: `docs/inbox-loop/design.md`.
   visible, runs one forced `JarvisTodayModel.refresh`, then reports readiness; failures settle visibly in Home. The
   overlay window shows `JarvisOpeningView` above content, stays up through a 0.3 s crossfade with touches passing through,
   and the root draws the opening colour for the first frames. `UILaunchScreen` uses the `LaunchBackground` colour.
-  Layout (`JarvisOpeningLayout`), the dim background network (`JarvisOpeningNetwork`: fixed positions, drawn with the orb's disc masked out) and progress semantics (`JarvisOpeningProgress`)
+  Layout (`JarvisOpeningLayout`) and progress semantics (`JarvisOpeningProgress`)
   are pure and tested in JarvisCore.
+- **Neural background (P15-179).** `JarvisNeuralNetwork` (fixed nodes, links and shortest routes from the orb), `JarvisNeuralAnimator`
+  (spawns signals from the orb's own `JarvisOrbAnimator` weights, deterministic seed) and `JarvisNeuralScene` (pure geometry
+  in points) live in `JarvisCore/Neural`; `JarvisNeuralBackgroundView` paints a static network Canvas plus a timeline-driven
+  signals Canvas. The app's `JarvisNeuralBackground` (design system) is the only entry: Voice, Chat (`JarvisNeuralStage`, with a
+  live `JarvisOrb`), the gate and the opening ask for `.full` effects with the orb's activity; `jarvisAmbientBackground()` gives
+  every other page `.calm`; sheets, the drawer and the privacy cover use `JarvisScreenBackground` (`.still`). The gate sets
+  `jarvisBackgroundPaused` while it covers content. `UserDefaults` key `jarvis.background.motion` (Settings > General) and
+  Reduce Motion force the still pose. `JarvisOrbActivity.tool` is the chat tool-work state.
 - **CI.** The macOS Apple build job also builds the iPhone app, which compiles every extension, and captures iPhone
   simulator screenshots and a short opening video (artifact `watch-build-logs`).
 
