@@ -43,8 +43,8 @@ interface VaultFile {
 }
 
 const inboxes = {
-  personal: 'Personal/Inbox.md',
-  work: 'Work/Inbox.md',
+  personal: 'Personal/Task inbox.md',
+  work: 'Work/Task inbox.md',
 } as const;
 const rootTaskPath = /^(?:task|tasks)\.md$/iu;
 const projectPattern = /\b(?:software|engineering|code(?:base| review|ing)?|repository|repo|pull requests?|merge requests?|pr\b|ci\/cd|pipelines?|deployment|deployments?|commits?|branches|unit tests?|test suites?|release engineering|build checks?|software factory|factory tasks?|project(?:s)?)\b/iu;

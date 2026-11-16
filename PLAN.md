@@ -1,3 +1,14 @@
+## Single vault layout, cut over with the vault clean-up — 15 November 2026 (#1895, P15-181)
+
+**Status: built and tested; waiting for review and the cutover.** Jarvis moves to the new vault paths only: `Personal/Task inbox.md`, `Work/Task inbox.md` and `Personal/Health/Gym log/` (`gym-log` type kept). No old paths, detection or fallbacks remain. The vault mirror excludes `_agent-activity` and keeps `_agent-log` until vault PR #5 has merged.
+
+| Part | State |
+| --- | --- |
+| Backend (task create, proactive todos, gym log writer, lift delete), iOS gym store and preview fixtures on the new paths; tests and docs updated | Done |
+| Vault mirror excludes `_agent-activity`; `test/policy.test.ts` | Done |
+| Cutover: merge this, deploy the backend, then merge vault PRs #4 and #5 | **Open**; a short inconsistent window is accepted |
+| Remove the `_agent-log` mirror rule after vault PR #5 has merged | **Open** |
+
 ## PI phases 3 to 5: reach, the brain loop and standing watches — 16 November 2026 (#1886, P15-175)
 
 Delivered as three stacked pull requests in the order of the issue. Owner rules for all three: no fallbacks, no dual or shadow paths, no transition code; the old one-shot proactive pipeline stays switched off and is deleted in #1887; decisions are the model's, free-form.
