@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { ActivityAlert } from '../../alerts.js';
+import { taskStatusMessage, taskStatusNotification } from '../../factory/task-status-notifications.js';
+import type { TaskEventMessage } from '../../factory/task-store.js';
 import type { GithubWebhookMapping } from '../../github/webhook-mapping.js';
 import type { SourceFact } from '../types.js';
 import type { ProactiveEventInput } from './types.js';
@@ -47,6 +49,24 @@ export function alertEvent(alert: ActivityAlert, now: Date): ProactiveEventInput
   return {
     source: 'alert', kind: alert.type, dedupeKey: `alert:${alert.dedupeKey}`, summary: oneLine(alert.title, 400),
     detail: alert.link ? { link: alert.link } : {}, occurredAt: now,
+  };
+}
+
+/**
+ * What a Worker (a Factory coding session) reports: it finished, needs attention, was cancelled or opened a pull request.
+ * The same four states the chat notification uses, so the brain hears exactly what Dan's chat hears. Other task events are
+ * progress noise and stay out of the queue.
+ */
+export function workerEvent(event: TaskEventMessage, now: Date): ProactiveEventInput | undefined {
+  const notification = taskStatusNotification(event);
+  if (!notification) return undefined;
+  const at = Date.parse(event.at);
+  return {
+    source: 'worker', kind: `task.${notification.state.replace(/([a-z])([A-Z])/gu, '$1_$2').toLowerCase()}`,
+    dedupeKey: `worker:${event.taskId}:${notification.state}`,
+    summary: oneLine(taskStatusMessage(event.taskId, notification.state, notification.url), 400),
+    detail: { taskId: event.taskId, state: notification.state, ...(notification.url ? { pullRequestUrl: notification.url } : {}) },
+    occurredAt: Number.isFinite(at) ? new Date(at) : now,
   };
 }
 

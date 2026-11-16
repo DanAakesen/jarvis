@@ -11,6 +11,119 @@
   line, and reports an unconfirmed write as 503; covered by `src/vault/task-delete.test.ts`.
 - CI: the macOS `watch` job compiles the iPhone app and captures the Notes states (continue-on-error, bounded).
 
+## PI standing watches (#1886, P15-175, part 3)
+
+"Keep me updated on X" is a free-text note in the vault, looked at by the brain loop. Our own ticker is the waker; the vault is the truth.
+
+```mermaid
+sequenceDiagram
+    participant D as Dan (chat or voice)
+    participant A as PI agent
+    participant V as Vault: PI/Watches
+    participant T as 30 s ticker (brain loop)
+    participant X as Read tools, GitHub, Azure
+    participant C as Chat message + push
+    D->>A: keep me updated on the deploy
+    A->>V: watch_create (verifies Dan's stored message, quotes his words)
+    A->>D: Watching. First look 14:00
+    T->>T: a next look is due, or an event arrives (guards first)
+    T->>A: wake: open watches in brief, due ones in full
+    A->>X: look
+    A->>V: watch_look (result, next look; limits enforced)
+    alt worth his attention
+        A->>C: message_dan
+    end
+    D->>A: list, change or stop my watches
+    A->>V: watch_list, watch_update, watch_stop
+```
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| A watch | `PI/Watches/<name>.md` (`pi/watch/note.ts`) | Title, Dan's quoted words, free text, a dated Trail, and one hidden last line `<!-- jarvis-watch:next=<ISO> -->`: the exact next look, or absent for events only. Closing moves the note to `PI/Watches/Closed/` with a trail line and no marker |
+| Index | `pi/watch/store.ts` | In memory, rebuilt from the vault on first use and after a restart; it only makes "what is due next" cheap. If the vault cannot be read, the brain keeps its events, calls no model and tries again in 5 minutes |
+| Tools | `pi/watch/tools.ts` | `watch_create`, `watch_update` (chat only: they verify Dan's stored message like `inbox_capture`), `watch_list` (read; chat and wake), `watch_stop` (Dan's word in chat, or the watch's own stop condition in a wake), `watch_look` (wake only, hidden from chat). A wake can never open or change a watch, so text read from outside cannot start one |
+| Guards | `pi/watch/store.ts` | At most 10 open watches; at most 8 looks per watch per day; at least 5 minutes between looks; next look 5 minutes to 400 days ahead. Hitting a look limit moves the next look (to tomorrow morning, or 5 minutes on) so a limit can never leave a watch due and wake the brain over and over; a due watch that got no look is moved an hour ahead with a trail line |
+| Waker | `pi/brain/runner.ts` `extras` | The ticker asks for the soonest next look; a due watch wakes the brain with no event. One wake covers every due watch and every queued event, so the fixed prompt is paid once. The wake text carries every open watch in brief (to match events) and the due ones in full with their recent trail, labelled as data |
+| Cost per watch | `dbo.pi_watch_look` (migration 0088), `watch_list` | One row per look. After a wake its cost is split evenly over what woke it (each event and each watch looked at); `watch_list` shows looks today, last look and an estimated DKK today and this month. Watch wakes spend on the same 100 DKK proactive ledger as the brain, so the same stop applies |
+| Untrusted content | brain policy | What a watch reads (web pages, feeds, repository text) is data. A wake reaches only read-only tools plus its own message, note, trail and look tools; it cannot write, send or start a Worker whatever the text says |
+| Foundry wake-ups | `.github/scripts/probe_pi_wake.py`, Deploy input `probe_pi_wake` | A throwaway agent tries the reminder tool and a timer routine and reports what it observed. Not a dependency; see `docs/harness-trial/spike-results.md` |
+
+## PI brain loop (#1886, P15-175, part 2)
+
+The brain is the PI agent woken by a trigger, with the `jarvis-brain` skill. One wake runs in its own scratch conversation, never Dan's chat conversation. Exact things are code; what an event means and what to do about it is the model's decision.
+
+```mermaid
+flowchart TB
+    subgraph SIG["Signals (existing producers, one queue)"]
+        S1["GitHub webhook<br/>workflow and deploy results"]
+        S2["Alerts: budget, deploy, sandbox"]
+        S3["Mail and calendar changes<br/>polled every 15 min"]
+        S4["Timer review<br/>every 6 h, not at night"]
+        S5["Worker results<br/>done, needs attention, cancelled, PR opened"]
+    end
+    Q[("dbo.proactive_events<br/>queue, dedupe, leases")]
+    T["30 s ticker<br/>(proactive scheduler)"]
+    G{"Exact guards<br/>owner switch, pause,<br/>10 min spacing, 12 wakes a day,<br/>100 DKK budget stop"}
+    W["Wake: PI agent, scratch conversation<br/>jarvis-brain skill"]
+    R["Read-only Jarvis tools<br/>+ GitHub and Azure MCP"]
+    A["Brain-only tools<br/>message_dan, pi_note, inbox_trail"]
+    C["Chat message from Jarvis<br/>stored in Dan's chat, pushed (iOS, mirrored to Watch)"]
+    L[("Vault: PI/Log/day.md<br/>PI/Notes, inbox trail")]
+    SIG --> Q --> T --> G --> W
+    W <--> R
+    W --> A
+    A --> C
+    A --> L
+    W -->|"closing statement + facts"| L
+    L -. "next wake reads it" .-> W
+```
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Loop | `pi/brain/runner.ts` | Per tick: switch, pause, due work, spacing, daily count, budget, claim up to 30 events, admit (retry cap, staleness, a lone timer review skipped in quiet hours), `startBatch`, wake, bill, settle or retry, decision log. The old pipeline's rules that judged events (routine build results, hourly caps) are **not** used: the model decides |
+| Wake text | `pi/brain/wake.ts` | Why it woke (events with id, source, kind, age, summary, small detail), the budget note, and a request for a short closing statement. Event text is labelled as data |
+| Gateway | `pi/gateway.ts` `runBrain` | Scratch conversation, brain grant, 240 s deadline, usage recorded as a `brain` turn in `dbo.pi_turn` (tokens, cached tokens, DKK) and through `recordFoundryUsage` (event id `pi:brain:<run>`). A failure is returned with what was billed; a wake that reached the model without a usage report is charged at an estimate |
+| Reading | `pi/brain/policy.ts`, `pi/mcp.ts`, `core/index.ts` | A wake has no owner message. Its grant (`brain`) reaches only listed read-only tools whose call is classified as a read, plus three brain-only tools. The tool route lets the `x-jarvis-brain` header through only for the PI agent principal and applies the same rule again |
+| Speaking | `pi/brain/comms.ts`, tool `message_dan` | A chat message: stored in the chat feed (the session of the latest message, or a new one), an open app is told to refresh, and the existing reply push is called exactly once (APNs, which the phone mirrors to the Watch). There are no tiers and no second channel; the only cap is 8 messages a day, and exact repeats are refused, so every message that is sent pushes |
+| Memory | `pi/area.ts`, tools `pi_note`, `inbox_trail` | PI writes only under `PI/Log`, `PI/Watches`, `PI/Notes` (exact path shape, 64 KiB a note, 256 KiB a file, the vault secret filter). `inbox_trail` adds a dated line to an open inbox item; capturing and closing stay with Dan's words in chat |
+| Decision log | `pi/brain/decision-log.ts` | Written by the system after every wake to `PI/Log/<day>.md`: events, tools used and their outcomes (from the MCP server's own record), what was told to Dan, what was written, tokens and DKK, and the model's closing statement. A statement that looks like a credential is withheld. If the vault is down the entry is kept (up to 24) and retried on every tick |
+| Budget | `proactive_spend` ledger, settings `monthlyBudgetDkk` (default 100) | Hard stop before a wake (worst case of one wake against what is left), one chat notice at 80 percent and one at the stop, a note in the wake text after 80 percent. The brain and the watches share this ledger. Chat and voice keep their own cap (`pi_turn` kinds `chat`, `warm`, `smoke`) |
+| Test switch | `dbo.pi_switch`, `GET` and `PUT /pi/brain` (owner), iOS Settings, "PI brain (test)" | Off until the owner turns it on; saved on the backend. While off, producers still queue events (cheap rows) but nothing is claimed and no model is called |
+| One reader | `proactive/events/wiring.ts` | The queue has one reader: the brain **or** the old one-shot pipeline. Turning both on is a startup `ConfigurationError`, so nothing runs in parallel or in shadow. The old pipeline stays switched off and is deleted in #1887 |
+
+Not covered: the call channel, the Now card, tiers (owner decision: none for now), voice, standing watches (next pull request).
+
+## PI reach: GitHub, Azure and Workers (#1886, P15-175, part 1)
+
+The PI agent gets three kinds of reach. Jarvis tools stay the only way to **change** anything: GitHub and Azure are read-only by construction, and Workers are driven through Jarvis tools that already carry owner-message proof, approvals and receipts.
+
+```mermaid
+flowchart LR
+    PI["PI agent<br/>managed harness, built-ins off"]
+    JM["Jarvis MCP /pi/mcp<br/>find_tools, call_tool"]
+    GH["GitHub MCP, remote<br/>/mcp/readonly"]
+    AZ["Azure MCP 3.0.0<br/>container, scales to zero<br/>--read-only, Reader only"]
+    PI -->|"connection jarvis-pi-mcp<br/>static secret + per-turn grant"| JM
+    PI -->|"connection jarvis-pi-github<br/>fine-grained read-only token"| GH
+    PI -->|"connection jarvis-pi-azure<br/>project identity, Entra app role"| AZ
+    JM --> W["Workers<br/>create_issue, start_issue, get_work_status,<br/>steer_task, list_tasks"]
+    W -->|"task events"| Q[("Event queue<br/>source: worker")]
+```
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| Reach declaration | `agents/pi/definition.json` (`reach`) | One entry per server: label, connection, URL. The same file feeds the provisioner and a test |
+| Attach logic | `.github/scripts/provision_pi_agent.py` (`resolve_reach`, `connect_reach`, `verify`) | A server is attached only when its input exists. A missing input is reported as "not attached: <what the owner must provide>"; a connection that cannot be written leaves the server out, is reported, and fails the job after the agent is defined. Nothing is silent and nothing is retried in a different way |
+| GitHub | remote server `https://api.githubcopilot.com/mcp/readonly`, connection `jarvis-pi-github` (custom keys, `Authorization: Bearer <token>`) | The token is the repository secret `PI_GITHUB_READ_TOKEN`: fine-grained only (the script refuses a classic token), read-only repository permissions chosen by the owner. The read-only URL and the token's own permissions both enforce read-only |
+| Azure | `Microsoft.App/containerApps` `ca-jarvis-azmcp-*` in `infra/main.bicep` (created only when `azureMcpClientId` is set), image `mcr.microsoft.com/azure-sdk/azure-mcp:3.0.0`, args `--transport http --outgoing-auth-strategy UseHostingEnvironmentIdentity --mode all --read-only --namespace group --namespace monitor --namespace containerapps`, minimum replicas 0 | Incoming calls need an Entra token carrying the app role `Mcp.Tools.ReadWrite.All`, held only by the Foundry project's identity (set up by `infra/setup-azure-mcp.ps1`). Outgoing calls use the container's own system identity with the **Reader** role on `rg-jarvis`; Reader cannot read cost data or secrets. The unauthenticated call returns 401 (observed) |
+| Azure connection | `jarvis-pi-azure`, auth type `ProjectManagedIdentity`, audience `api://<client id>` | **Unproven live.** Learn lists project-identity authentication for agent MCP tools, but one Microsoft sample note says it works through a toolbox only. The first Deploy with the server settles it; if Foundry refuses it, the error code is in the job output |
+| Workers | Jarvis tools in `factory/tools.ts`; procedure in `agents/pi/skills/jarvis-workers/SKILL.md` | Starting, steering and retrying need the current owner message, so a Worker can only start from Dan's own words in a chat turn, never from text the agent read. Results come back as queue events (below) and as the existing chat notice |
+| Worker results as signals | `workerEvent` in `proactive/events/producers.ts`, subscribed to the task event hub in `index.ts` | Source `worker`, kinds `task.done`, `task.needs_attention`, `task.cancelled`, `task.pull_request_opened` (the queue only accepts lowercase kinds; a test normalises each one), one dedupe key per task and state. They enter the existing queue; the queue has no consumer until the brain (next pull request) |
+| Stream parsing | `pi/gateway.ts` | The harness's `mcp_list_tools` and finished `mcp_call` items are read (labels sanitised) so the smoke and the logs can say which servers are attached and whether a call failed. A failed list or call is logged; it does not by itself fail a chat turn |
+| Smoke | `pi/smoke.ts`, `.github/scripts/pi_smoke_report.py` | Lists the servers the harness reports, runs one read per attached reach server and adds a check for each. The report prints in the job log as well as the summary |
+
+Cost and latency: the Azure container is 0.25 vCPU and 0.5 GiB and scales to zero (about 5 DKK a month in the plan, less when idle). A new conversation lists the servers' tools; a cold container adds its start time to that first turn. Not yet measured.
+
 ## PI chat engine (test switch) — 15 November 2026 (#1885, P15-174)
 
 PI is a managed Microsoft Copilot-harness prompt agent (`jarvis-pi`, Terra deployment `gpt-6.1-terra`, reasoning effort `low`, built-ins off) in the existing Foundry project. A chat turn reaches it only when the app sends `engine: "pi"` (the iOS Settings test switch). The default path is unchanged.
@@ -1768,8 +1881,8 @@ protocols) so Linux CI tests it; English-only copy is the `JarvisToday` strings 
 `com.apple.developer.healthkit` and a localized `NSHealthShareUsageDescription`).
 
 Data: tasks come from `GET /vault/tasks` and note correlation from `GET /notes` through the existing
-`JarvisNotesClient`; workouts come from Gym logs saved by `POST /notes` as `Personal/Gym log/<date>-<time>-<session>.md`
-and read back with `GET /notes?directory=Personal/Gym log`; steps come from HealthKit. No backend route exists
+`JarvisNotesClient`; workouts come from Gym logs saved by `POST /notes` as `Personal/Health/Gym log/<date>-<time>-<session>.md`
+and read back with `GET /notes?directory=Personal/Health/Gym log`; steps come from HealthKit. No backend route exists
 that lists calendar entries for the phone, so Next up shows "Calendar unavailable" through
 `JarvisUnavailableCalendarSource` instead of inventing entries. (P15-77 added it: `GET /calendar/events?from&to`, Dan-only,
 registered by the Google module, reads the primary calendar with the `calendar.events` scope and returns the
@@ -4017,7 +4130,7 @@ missing reads and other partial failures yield unavailable, never an empty or
 partial success. Unknown sizes reserve the per-file maximum against the budget.
 `todo-file.ts` provides the shared parser; fenced examples/query blocks are
 ignored. The proactive writer reads available inbox and root task notes for
-deduplication but writes only to existing `Personal/Inbox.md` or `Work/Inbox.md`.
+deduplication but writes only to existing `Personal/Task inbox.md` or `Work/Task inbox.md`.
 One sanitizer removes
 control characters, HTML and markdown link destinations and caps fact text at
 300 characters. `🔺`, `⏫`, bracketed or parenthesized `priority:: highest` and
@@ -4055,7 +4168,7 @@ Only model findings with a suggested todo and a non-`todo` category qualify.
 The writer excludes Factory evidence and project/software/engineering cues in
 the suggestion or its cited facts, regardless of source or category. It routes
 only a clearly personal or non-project work task, and writes only to the
-corresponding existing `Personal/Inbox.md` or `Work/Inbox.md`. Missing identity,
+corresponding existing `Personal/Task inbox.md` or `Work/Task inbox.md`. Missing identity,
 ambiguous scope, an unavailable destination or an unsafe file fails closed with
 a content-free reason; the finding remains stored as an observation.
 
@@ -5632,7 +5745,7 @@ strips control characters, comments and metadata emoji, caps text at 200 charact
 refuses secret-looking text, and appends `- [ ] text` (with `📅 date`, plus ` HH:MM` when
 timed, and `⏫`/`🔼` for optional high/medium priority; normal or omitted priority
 adds no marker) to
-`Personal/Inbox.md` or `Work/Inbox.md`, creating the note when missing and refusing
+`Personal/Task inbox.md` or `Work/Task inbox.md`, creating the note when missing and refusing
 an open code fence or an oversized file. Both commit as Jarvis (`jarvis: complete a
 task`, `reopen a task`, `edit a task` or `add a task`), refresh the notes index and log
 `vault.write`. Non-owners get 403. The web client (`tasks-data.ts`) maps 409 to
@@ -9054,7 +9167,7 @@ retain a usable row without attempting unavailable backend detail. Local dates
 and retained timestamp fallbacks use Copenhagen boundaries. A failed local read
 does not erase retained server data.
 
-`JarvisVaultGymLogStore.recentLifts` lists existing `Personal/Gym log` notes and
+`JarvisVaultGymLogStore.recentLifts` lists existing `Personal/Health/Gym log` notes and
 reads at most 30 recent note bodies, with cancellation and a 25-second budget
 checked between bounded requests. It parses the same validated format Home
 writes and exposes partial coverage. The Health view combines those lifts with
@@ -9413,7 +9526,7 @@ Health rows retain UUIDs for database lifts or original path/SHA/content for leg
 iOS Gym log notes. Edits use PATCH /health/lifts/:id or SHA-checked PUT /notes/note,
 changing only the legacy lift line. Deletion uses the existing health DELETE route
 or the new owner-only DELETE /notes/gym-lift with original SHA. The latter is
-restricted to legacy Personal/Gym log filenames and lift-note content; tool-level
+restricted to legacy lift-note filenames under Personal/Health/Gym log and lift-note content; tool-level
 vault deletion approvals are unchanged. Successful writes refresh summaries and
 invalidate Notes/Health caches. Failed writes are shown without optimistic removal.
 
@@ -9664,3 +9777,7 @@ Factory board events refresh the iOS Now feed and Live Activity reconciliation w
 the app observes the stream. Proactive runs cancelled for quiet hours or changed
 preferences finish their background jobs as cancelled; genuine failures remain
 failed. Existing historical jobs are not rewritten.
+
+## Vault layout paths — 15 November 2026 (P15-181)
+
+Jarvis uses one vault layout: task inboxes `Personal/Task inbox.md` and `Work/Task inbox.md`, gym log `Personal/Health/Gym log/` (backend writer, lift delete route, iOS `JarvisGymLogNote`; frontmatter type `gym-log` unchanged) and the agent log folder `_agent-activity`. There is no detection and no second location. The vault mirror (`apps/vault-mirror/src/engine/policy.ts`) excludes the `_agent-activity` segment and, until vault PR #5 has merged, the old `_agent-log` segment; remove the `_agent-log` rule then. The archived `General/Archive/Agent activity log/` is a normal tracked folder and is not excluded.

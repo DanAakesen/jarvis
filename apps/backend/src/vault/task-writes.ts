@@ -369,7 +369,7 @@ export function createTaskWriter(options: TaskWriterOptions) {
         folder = input.scope === 'work' ? 'Work' : 'Personal';
         const text = cleanText(input.text);
         if (input.notes && options.shouldRedact(input.notes)) throw new TaskWriteError(400, 'Secrets and credentials can never be saved to the vault.');
-        const path = options.validateWritePath(`${folder}/Inbox.md`);
+        const path = options.validateWritePath(`${folder}/Task inbox.md`);
         if (!options.inTaskScope(path)) throw new TaskWriteError(400, 'That note does not hold vault tasks.');
         if (input.time && !input.due) throw new TaskWriteError(400, 'Pick a day for the time.');
         const priority = input.priority === 'high' ? ' ⏫' : input.priority === 'medium' ? ' 🔼' : '';

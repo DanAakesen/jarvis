@@ -8,6 +8,7 @@ For each prompt, use this map to select context for the task. Read only relevant
 
 - `PRODUCT.md`: purpose, users, workflows, scope, requirements, and success criteria; consult for product behavior or scope changes.
 - `PLAN.md`: implementation summary, phases, current focus, steps, completion criteria, and ideas; consult when planning, resuming work, or implementing a phase. Ideas are proposals, not implementation authorization.
+- `docs/ui/style-guide.md`: one-page Jarvis look (colour, glass, type, orb and neural background, motion, hard rules); read it first for any new or visible UI, including other platforms, then `DESIGN.md` for detail.
 - `DESIGN.md`: agreed visual direction, UI composition, interactions, and design findings; consult for visible UI or interaction changes. Requirements belong in PRODUCT.md, token values in code.
 - `docs/architecture.md`: current stack/versions, frontend, backend, middleware/integrations, data flows, and deployment topology; consult for affected system boundaries.
 - `docs/agent-context.md`: scope, setup, run/check commands, environment restrictions, and release procedure; consult before execution. Commands are candidates until verified.

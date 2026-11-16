@@ -165,10 +165,10 @@ public struct JarvisUnavailableGymLogStore: JarvisGymLogStore {
     public func entries(since: Date) async throws -> [JarvisGymLogEntry] { throw JarvisGymLogError.unavailable }
 }
 
-/// How a gym log maps to a vault note: `Personal/Gym log/<yyyy-MM-dd>-<HHmm>-<session>.md`.
+/// How a gym log maps to a vault note: `Personal/Health/Gym log/<yyyy-MM-dd>-<HHmm>-<session>.md`.
 /// The date and session are read back from the file name, so listing needs no note reads.
 public enum JarvisGymLogNote {
-    public static let folder = "Personal/Gym log"
+    public static let folder = "Personal/Health/Gym log"
 
     static func formatter(_ format: String, timeZone: TimeZone) -> DateFormatter {
         let formatter = DateFormatter()

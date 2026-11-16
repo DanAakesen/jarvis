@@ -175,7 +175,13 @@ describe('real SQL Server migration contract', () => {
     it('binds one conversation per owner, re-binds on a new agent, and sums spend by month', async () => {
       const schema = await readFile(new URL('../../../../db/migrations/0086_pi_chat.sql', import.meta.url), 'utf8');
       const down = await readFile(new URL('../../../../db/migrations/down/0086_pi_chat.sql', import.meta.url), 'utf8');
+      const brainSchema = await readFile(new URL('../../../../db/migrations/0087_pi_brain.sql', import.meta.url), 'utf8');
+      const brainDown = await readFile(new URL('../../../../db/migrations/down/0087_pi_brain.sql', import.meta.url), 'utf8');
+      const watchSchema = await readFile(new URL('../../../../db/migrations/0088_pi_watch_look.sql', import.meta.url), 'utf8');
+      const watchDown = await readFile(new URL('../../../../db/migrations/down/0088_pi_watch_look.sql', import.meta.url), 'utf8');
       await pool.request().batch(schema);
+      await pool.request().batch(brainSchema);
+      await pool.request().batch(watchSchema);
       const signal = new AbortController().signal;
       const store = createPiStore(pool);
       const owner = randomUUID();
@@ -197,16 +203,51 @@ describe('real SQL Server migration contract', () => {
         await store.recordTurn({ ...turn, kind: 'warm', messageId: null, firstTextMs: null }, signal);
         await expect(store.recordTurn({ ...turn, kind: 'other' as never }, signal)).rejects.toThrow();
         await expect(store.recordTurn({ ...turn, kind: 'chat', outcome: 'maybe' as never }, signal)).rejects.toThrow();
-        const spent = await store.spendSince(new Date(Date.now() - 60_000), signal);
+        const chatKinds = ['chat', 'warm', 'smoke'] as const;
+        const spent = await store.spendSince(new Date(Date.now() - 60_000), chatKinds, signal);
         expect(spent.turns).toBe(2);
         expect(spent.costDkk).toBeCloseTo(0.1462, 6);
-        expect(await store.spendSince(new Date(Date.now() + 60_000), signal)).toEqual({ costDkk: 0, turns: 0 });
-        expect(await store.lastTurn(signal)).toMatchObject({ kind: 'warm', messageId: null, cachedTokens: 9000, outcome: 'ok' });
-        expect((await store.recentTurns(5, signal)).map((row) => row.kind)).toEqual(['warm', 'chat']);
-        expect(await store.recentTurns(1, signal)).toHaveLength(1);
+        expect(await store.spendSince(new Date(Date.now() + 60_000), chatKinds, signal)).toEqual({ costDkk: 0, turns: 0 });
+        expect(await store.lastTurn(chatKinds, signal)).toMatchObject({ kind: 'warm', messageId: null, cachedTokens: 9000, outcome: 'ok' });
+        expect((await store.recentTurns(5, chatKinds, signal)).map((row) => row.kind)).toEqual(['warm', 'chat']);
+        expect(await store.recentTurns(1, chatKinds, signal)).toHaveLength(1);
+
+        // The brain's wakes are a kind of their own: they never count against the chat cap, nor show as the last chat turn.
+        await store.recordTurn({ ...turn, kind: 'brain', messageId: null, costDkk: 0.2 }, signal);
+        expect((await store.spendSince(new Date(Date.now() - 60_000), chatKinds, signal)).turns).toBe(2);
+        expect(await store.spendSince(new Date(Date.now() - 60_000), ['brain'], signal)).toMatchObject({ turns: 1 });
+        expect(await store.lastTurn(chatKinds, signal)).toMatchObject({ kind: 'warm' });
+        expect(await store.lastTurn(['brain'], signal)).toMatchObject({ kind: 'brain', costDkk: 0.2 });
+
+        expect(await store.readBrainSwitch(owner, signal)).toEqual({ enabled: false, updatedAt: null });
+        await store.writeBrainSwitch(owner, true, at, signal);
+        expect(await store.readBrainSwitch(owner, signal)).toEqual({ enabled: true, updatedAt: at });
+        await store.writeBrainSwitch(owner, false, at, signal);
+        expect((await store.readBrainSwitch(owner, signal)).enabled).toBe(false);
+
+        const day = new Date(Date.now() - 60_000);
+        await store.recordMessage({ runId: randomUUID(), sessionId: '7', messageId: '9', textHash: 'b'.repeat(64) }, new Date(), signal);
+        expect(await store.messagesSince(day, signal)).toEqual({ count: 1, textHashes: ['b'.repeat(64)] });
+        expect(await store.messagesSince(new Date(Date.now() + 60_000), signal)).toEqual({ count: 0, textHashes: [] });
+
+        // Standing-watch looks: counted per watch and day, with the wake's cost shared out afterwards.
+        const dayStart = new Date(Date.now() - 3_600_000);
+        const wake = randomUUID();
+        await store.recordLook('Deploy of main', wake, new Date(), signal);
+        await store.recordLook('Price', wake, new Date(Date.now() - 1000), signal);
+        await store.recordLook('Price', randomUUID(), new Date(Date.now() - 2000), signal);
+        await store.allocateRunCost(wake, 0.05, signal);
+        const activity = await store.watchActivity(dayStart, signal);
+        expect(activity.map(({ watch, looks, costDkk }) => ({ watch, looks, costDkk })).sort((a, b) => a.watch.localeCompare(b.watch)))
+          .toEqual([{ watch: 'Deploy of main', looks: 1, costDkk: 0.05 }, { watch: 'Price', looks: 2, costDkk: 0.05 }]);
+        expect(await store.watchActivity(new Date(Date.now() + 60_000), signal)).toEqual([]);
       } finally {
+        await pool.request().batch(watchDown);
+        await pool.request().batch(brainDown);
         await pool.request().batch(down);
       }
+      expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_watch_look', N'U') AS id")).recordset).toEqual([{ id: null }]);
+      expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_message', N'U') AS id")).recordset).toEqual([{ id: null }]);
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_turn', N'U') AS id")).recordset).toEqual([{ id: null }]);
     });
   });

@@ -3,6 +3,10 @@
   "model": "gpt-6.1-terra",
   "reasoningEffort": "low",
   "mcp": { "serverLabel": "jarvis", "path": "/pi/mcp", "requireApproval": "never", "connection": "jarvis-pi-mcp" },
+  "reach": [
+    { "kind": "github", "serverLabel": "github", "connection": "jarvis-pi-github", "url": "https://api.githubcopilot.com/mcp/readonly", "tokenEnv": "PI_GITHUB_READ_TOKEN" },
+    { "kind": "azure", "serverLabel": "azure", "connection": "jarvis-pi-azure" }
+  ],
   "builtinTools": "disabled",
-  "skills": ["jarvis-inbox-triage"]
+  "skills": ["jarvis-inbox-triage", "jarvis-workers", "jarvis-brain", "jarvis-watches"]
 }

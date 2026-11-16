@@ -63,7 +63,7 @@ export function isApprovedPath(policy: ValidatedPolicy, path: string): boolean {
   const segments = folded.split('/');
   const name = segments.at(-1)!;
   const extension = name.slice(name.lastIndexOf('.'));
-  return !segments.some(segment => segment.startsWith('.') || segment === '_agent-log') &&
+  return !segments.some(segment => segment.startsWith('.') || segment === '_agent-log' || segment === '_agent-activity') &&
     !policy.excludedPrefixes.some(prefix => folded.startsWith(prefix)) &&
     (segments.length === 1 || policy.allowedRoots.includes(segments[0]!)) &&
     name.includes('.') && policy.allowedExtensions.includes(extension) &&

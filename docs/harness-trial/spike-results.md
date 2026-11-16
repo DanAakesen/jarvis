@@ -1,3 +1,7 @@
+## Wake-up features on a harness agent: reminder tool and routines (16 November 2026, #1886)
+
+**Not yet observed.** The session that built the watches had no Azure access, so the test could not run. What exists: the manual probe `.github/scripts/probe_pi_wake.py` (Deploy input `probe_pi_wake`), which on a throwaway harness prompt agent checks (1) whether `reminder_preview` is accepted in the definition, whether the agent uses it and whether the same conversation is re-invoked without a client call, and (2) whether a one-off timer routine (`invoke_agent_responses_api`) is accepted for it and leaves a run record. The probe prints each observation and Foundry's sanitized error code, and deletes the agent and routine. The routine request shape comes from the Learn examples (`triggers` with a `timer` and `at`, an `invoke_agent_responses_api` action); the REST paths are assumptions the probe settles. Result table: to be pasted here after the first run. The PI watches do not depend on it: the ticker and the vault are the waker either way.
+
 # Spike results: managed Copilot-harness agent in Foundry
 
 Spike for [#1851](https://github.com/DanAakesen/jarvis/issues/1851) (P15-158), part of the [Copilot-harness trial](README.md) (#1837). Written 15 Nov 2026.

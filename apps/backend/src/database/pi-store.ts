@@ -1,5 +1,5 @@
 import sql from 'mssql';
-import type { PiConversationRow, PiStore, PiStoredTurn } from '../pi/store.js';
+import type { PiConversationRow, PiStore, PiStoredTurn, PiTurnKind } from '../pi/store.js';
 import { databaseReadRequest } from './wake-retry.js';
 
 async function query<T>(request: sql.Request, statement: string, signal: AbortSignal): Promise<sql.IResult<T>> {
@@ -18,7 +18,7 @@ interface ConversationRecord {
 }
 
 interface TurnRecord {
-  at: Date; kind: 'chat' | 'warm' | 'smoke'; message_id: string | null; model: string; input_tokens: number; cached_tokens: number;
+  at: Date; kind: PiTurnKind; message_id: string | null; model: string; input_tokens: number; cached_tokens: number;
   output_tokens: number; cost_dkk: number; first_text_ms: number | null; total_ms: number; outcome: PiStoredTurn['outcome'];
 }
 
@@ -86,25 +86,62 @@ export function createPiStore(pool: sql.ConnectionPool): PiStore {
       `INSERT dbo.pi_turn (kind, message_id, model, input_tokens, cached_tokens, output_tokens, cost_dkk, first_text_ms, total_ms, outcome)
         VALUES (@kind, @message, @model, @input, @cached, @output, @cost, @first, @total, @outcome);`, signal);
     },
-    async spendSince(from, signal) {
+    async spendSince(from, kinds, signal) {
       const result = await query<{ cost: number | null; turns: number }>(
-        databaseReadRequest(pool).input('from', sql.DateTime2, from),
-        `SELECT COALESCE(SUM(cost_dkk), 0) AS cost, COUNT(*) AS turns FROM dbo.pi_turn WHERE at >= @from;`, signal);
+        databaseReadRequest(pool).input('from', sql.DateTime2, from).input('kinds', sql.VarChar(64), kinds.join(',')),
+        `SELECT COALESCE(SUM(cost_dkk), 0) AS cost, COUNT(*) AS turns FROM dbo.pi_turn
+          WHERE at >= @from AND kind IN (SELECT value FROM STRING_SPLIT(@kinds, ','));`, signal);
       const row = result.recordset[0];
       return { costDkk: Number(row?.cost ?? 0), turns: Number(row?.turns ?? 0) };
     },
-    async recentTurns(limit, signal) {
-      const result = await query<TurnRecord>(databaseReadRequest(pool).input('limit', sql.Int, limit),
+    async recentTurns(limit, kinds, signal) {
+      const result = await query<TurnRecord>(databaseReadRequest(pool).input('limit', sql.Int, limit).input('kinds', sql.VarChar(64), kinds.join(',')),
         `SELECT TOP (@limit) at, kind, CONVERT(varchar(19), message_id) AS message_id, model, input_tokens, cached_tokens,
-          output_tokens, cost_dkk, first_text_ms, total_ms, outcome FROM dbo.pi_turn ORDER BY id DESC;`, signal);
+          output_tokens, cost_dkk, first_text_ms, total_ms, outcome FROM dbo.pi_turn
+          WHERE kind IN (SELECT value FROM STRING_SPLIT(@kinds, ',')) ORDER BY id DESC;`, signal);
       return result.recordset.map(toTurn);
     },
-    async lastTurn(signal) {
-      const result = await query<TurnRecord>(databaseReadRequest(pool), `SELECT TOP (1) at, kind,
+    async lastTurn(kinds, signal) {
+      const result = await query<TurnRecord>(databaseReadRequest(pool).input('kinds', sql.VarChar(64), kinds.join(',')), `SELECT TOP (1) at, kind,
         CONVERT(varchar(19), message_id) AS message_id, model, input_tokens, cached_tokens, output_tokens, cost_dkk,
-        first_text_ms, total_ms, outcome FROM dbo.pi_turn ORDER BY id DESC;`, signal);
+        first_text_ms, total_ms, outcome FROM dbo.pi_turn WHERE kind IN (SELECT value FROM STRING_SPLIT(@kinds, ',')) ORDER BY id DESC;`, signal);
       const row = result.recordset[0];
       return row ? toTurn(row) : null;
+    },
+    async readBrainSwitch(owner, signal) {
+      const result = await query<{ brain: boolean; updated_at: Date }>(databaseReadRequest(pool).input('owner', sql.UniqueIdentifier, owner),
+        `SELECT brain, updated_at FROM dbo.pi_switch WHERE owner_object_id=@owner;`, signal);
+      const row = result.recordset[0];
+      return { enabled: row?.brain === true, updatedAt: row?.updated_at ?? null };
+    },
+    async writeBrainSwitch(owner, enabled, at, signal) {
+      await query(pool.request().input('owner', sql.UniqueIdentifier, owner).input('brain', sql.Bit, enabled).input('at', sql.DateTime2, at), `
+        MERGE dbo.pi_switch WITH (HOLDLOCK) AS target USING (SELECT @owner AS owner_object_id) AS source ON target.owner_object_id = source.owner_object_id
+        WHEN MATCHED THEN UPDATE SET brain=@brain, updated_at=@at
+        WHEN NOT MATCHED THEN INSERT (owner_object_id, brain, updated_at) VALUES (@owner, @brain, @at);`, signal);
+    },
+    async recordMessage(message, at, signal) {
+      await query(pool.request().input('at', sql.DateTime2, at).input('run', sql.Char(36), message.runId)
+        .input('session', sql.BigInt, message.sessionId).input('message', sql.BigInt, message.messageId).input('hash', sql.Char(64), message.textHash),
+      `INSERT dbo.pi_message (at, run_id, session_id, message_id, text_hash) VALUES (@at, @run, @session, @message, @hash);`, signal);
+    },
+    async recordLook(watch, runId, at, signal) {
+      await query(pool.request().input('watch', sql.NVarChar(120), watch).input('run', sql.Char(36), runId).input('at', sql.DateTime2, at),
+        `INSERT dbo.pi_watch_look (at, watch, run_id) VALUES (@at, @watch, @run);`, signal);
+    },
+    async allocateRunCost(runId, perLookDkk, signal) {
+      await query(pool.request().input('run', sql.Char(36), runId).input('cost', sql.Decimal(12, 6), perLookDkk),
+        `UPDATE dbo.pi_watch_look SET cost_dkk=@cost WHERE run_id=@run;`, signal);
+    },
+    async watchActivity(from, signal) {
+      const result = await query<{ watch: string; looks: number; cost: number; last: Date }>(databaseReadRequest(pool).input('from', sql.DateTime2, from),
+        `SELECT watch, COUNT(*) AS looks, COALESCE(SUM(cost_dkk), 0) AS cost, MAX(at) AS last FROM dbo.pi_watch_look WHERE at >= @from GROUP BY watch;`, signal);
+      return result.recordset.map(row => ({ watch: row.watch, looks: Number(row.looks), costDkk: Number(row.cost), lastLookAt: row.last }));
+    },
+    async messagesSince(from, signal) {
+      const result = await query<{ text_hash: string }>(databaseReadRequest(pool).input('from', sql.DateTime2, from),
+        `SELECT text_hash FROM dbo.pi_message WHERE at >= @from;`, signal);
+      return { count: result.recordset.length, textHashes: result.recordset.map(row => row.text_hash.trim()) };
     },
   };
 }

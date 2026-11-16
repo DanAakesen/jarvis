@@ -19,6 +19,12 @@ CHECKS = {
     "cancellation": "a cancelled turn stopped quickly and the conversation still works",
     "warm_faster_than_cold": "a warm turn starts faster than the cold one",
 }
+# Present only for a reach server the harness listed tools for: a server that is not attached has no turn and no check.
+REACH_CHECKS = {
+    "reach_github": "the read-only GitHub server answered a read and the harness reported no error",
+    "reach_azure": "the read-only Azure server answered a read and the harness reported no error",
+    "mcp_listing": "every MCP server the harness reported returned its tools",
+}
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -35,25 +41,34 @@ def bar(value: float | None, scale: float, width: int = 40) -> str:
 def render(report: dict) -> str:
     turns = [("cold, new conversation", report["cold"])] + [
         (f"warm turn {index + 2}", turn) for index, turn in enumerate(report["warm"])
-    ] + [("tool turn (MCP)", report["tools"])]
+    ] + [("tool turn (MCP)", report["tools"])] + [
+        (f"reach: {entry['server']}", entry["turn"]) for entry in report.get("reach", [])
+    ]
     scale = max([turn["firstTextMs"] or 0 for _, turn in turns] + [1000])
     lines = ["### PI live smoke", "", "First text, observed through the gateway (one block is the same width for every row):", "", "```text"]
     lines += [f"{label:<26}|{bar(turn['firstTextMs'], scale)}" for label, turn in turns]
-    lines += ["```", "", "| Turn | First text | Total | Input | Cached | Output | DKK |", "| --- | ---: | ---: | ---: | ---: | ---: | ---: |"]
+    lines += ["```", "", "| Turn | First text | Total | Pieces | Input | Cached | Output | DKK |", "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for label, turn in turns:
         usage = turn["usage"]
         first = f"{turn['firstTextMs']} ms" if turn["firstTextMs"] is not None else "none"
-        lines.append(f"| {label} | {first} | {turn['totalMs']} ms | {usage['inputTokens']} | {usage['cachedTokens']} | "
-                     f"{usage['outputTokens']} | {turn['costDkk']:.4f} |")
+        lines.append(f"| {label} | {first} | {turn['totalMs']} ms | {turn.get('deltas', 0)} | {usage['inputTokens']} | "
+                     f"{usage['cachedTokens']} | {usage['outputTokens']} | {turn['costDkk']:.4f} |")
     cancel = report["cancel"]
     results = ", ".join(r["tool"] + "=" + r["outcome"] for r in report["tools"].get("toolResults", []))
     lines += ["", f"Cancellation: stream closed {cancel['abortToCloseMs']} ms after the abort, "
                   f"{cancel['partialCharacters']} characters had arrived, follow-up turn {'worked' if cancel['followUpOk'] else 'FAILED'}.",
               f"Tool turn: {report['tools']['toolCalls']} MCP tool call(s), server-recorded results: "
                   f"{results or 'none'}, reply: {report['tools']['text']!r}",
-              f"Smoke cost: {report['totalCostDkk']:.4f} DKK (list price, cached discount ignored).", "",
-              "| Check | Result |", "| --- | --- |"]
+              f"Smoke cost: {report['totalCostDkk']:.4f} DKK (list price, cached discount ignored).", ""]
+    listed = report.get("listed", [])
+    servers = ", ".join(f"{item['server'] or 'unknown'}: {'FAILED to list' if item['failed'] else str(item['tools']) + ' tools'}" for item in listed)
+    lines += [f"MCP servers the harness listed tools for: {servers or 'none reported'}.", ""]
+    for entry in report.get("reach", []):
+        calls = ", ".join(f"{call['name'] or 'call'}={'failed' if call['failed'] else 'ok'}" for call in entry["turn"].get("reachCalls", []))
+        lines.append(f"Reach {entry['server']}: {calls or 'no call'}; reply: {entry['turn']['text']!r}")
+    lines += ["", "| Check | Result |", "| --- | --- |"]
     lines += [f"| {CHECKS[key]} | {'pass' if report['checks'].get(key) else '**FAIL**'} |" for key in CHECKS]
+    lines += [f"| {text} | {'pass' if report['checks'].get(key) else '**FAIL**'} |" for key, text in REACH_CHECKS.items() if key in report.get("checks", {})]
     return "\n".join(lines) + "\n"
 
 
@@ -89,8 +104,12 @@ def main(argv: list[str] | None = None) -> int:
     except (urllib.error.URLError, TimeoutError, ValueError):
         print("::error::The PI smoke did not return a report.", file=sys.stderr)
         return 1
-    args.summary.write_text(render(report), encoding="utf-8")
-    failed = [key for key in CHECKS if not report.get("checks", {}).get(key)]
+    rendered = render(report)
+    args.summary.write_text(rendered, encoding="utf-8")
+    # The step summary needs a sign-in to read; the log shows the same numbers to anyone who can open the run.
+    print(rendered)
+    required = [*CHECKS, *(key for key in REACH_CHECKS if key in report.get("checks", {}))]
+    failed = [key for key in required if not report.get("checks", {}).get(key)]
     if failed:
         print("::error::PI smoke checks failed: " + ", ".join(failed), file=sys.stderr)
         return 1

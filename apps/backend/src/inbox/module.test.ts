@@ -226,7 +226,7 @@ describe('inbox tools', () => {
     expect([...files.keys()].filter((path) => !path.startsWith('Inbox/Closed/'))).toEqual([]);
     await expect(close.execute({ id: '11111111', reason: 'again' }, request(), signal)).rejects.toThrow(/No live inbox item/u);
     await expect(close.execute({ id: '11111111', path: 'Inbox/a.md', reason: 'x' }, request(), signal)).rejects.toThrow(/invalid/u);
-    await expect(close.execute({ path: 'Personal/Inbox.md', reason: 'x' }, request(), signal)).rejects.toThrow(/invalid/u);
+    await expect(close.execute({ path: 'Personal/Task inbox.md', reason: 'x' }, request(), signal)).rejects.toThrow(/invalid/u);
   });
 
   it('issues, lists and revokes the write-only capture credential only on Dan\'s stored word, and shows the secret once', async () => {
