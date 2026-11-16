@@ -29,7 +29,7 @@ struct WorkspacesView: View {
     var body: some View {
         results
         .jarvisPageHeader { JarvisPageHeader(title: text(.title), language: language) }
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .toolbar(.hidden, for: .navigationBar)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             searchField

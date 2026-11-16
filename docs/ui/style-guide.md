@@ -174,7 +174,7 @@ Waking takes 1.05 s, sleeping 0.7 s (`jarvis-orb-motion.ts`).
 | Effects | Where | Max signals | Rate × | Speed × | Brightness | Breathing | Frame rate (quality / cheap) |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `full` (alive) | Voice, Chat, opening and loading | 9 | 1 | 1 | 1 | 0.16 | 60 fps / 20 fps |
-| `calm` | every other screen, no orb | 2 | 0.6 | 0.55 | 0.55 (energy ×0.4) | 0.1 | 20 fps / 10 fps |
+| `calm` | every other page (with the orb behind it since 16 Nov, #1923); sheets draw the network without an orb | 2 | 0.6 | 0.55 | 0.55 (energy ×0.4) | 0.1 | 20 fps / 10 fps |
 | `still` | sheets, drawer, privacy cover, Reduce Motion, previews | 0 | 0 | 0 | 0 | 0 | the network is drawn once; no timeline |
 
 - **Calm vs alive (Decision):** the same network everywhere; only the amount of life changes. Calm is "not zero, but

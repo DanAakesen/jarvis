@@ -177,7 +177,7 @@ struct JarvisRoutinesSettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .navigationTitle(copy(.routinesRow))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load(force: true) }
@@ -304,7 +304,7 @@ struct JarvisMemorySettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .navigationTitle(copy(.memoryRow))
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: copy(.memorySearch))
@@ -1007,7 +1007,7 @@ struct JarvisCredentialsSettingsView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .navigationTitle(copy(.credentialsRow))
         .navigationBarTitleDisplayMode(.inline)
     }

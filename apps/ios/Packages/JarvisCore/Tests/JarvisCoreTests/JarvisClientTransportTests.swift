@@ -11,6 +11,12 @@ final class JarvisClientTransportTests: XCTestCase {
         XCTAssertEqual(JarvisNotesLogic.swipeAction(distance: 160), .delete)
     }
 
+    func testPinnedRowSwipeUnpinsAtAnyLengthAndNeverDeletes() {
+        XCTAssertEqual(JarvisNotesLogic.swipeAction(distance: 71, allowsDelete: false), .none)
+        XCTAssertEqual(JarvisNotesLogic.swipeAction(distance: 72, allowsDelete: false), .pin)
+        XCTAssertEqual(JarvisNotesLogic.swipeAction(distance: 400, allowsDelete: false), .pin)
+    }
+
     func testNoteDeletionUsesExactVersionAndDoesNotRetryUnknownOutcome() async throws {
         let transport = FakeHTTPTransport([
             .response(HTTPResponse(statusCode: 204)),

@@ -316,7 +316,7 @@ struct JarvisReorderPinsSheet: View {
                             if !item.location.isEmpty { Text(item.location).font(.caption).foregroundStyle(.secondary) }
                         }
                         .frame(minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .leading)
-                        .listRowBackground(JarvisGlassSurface())
+                        .listRowBackground(JarvisGlassRowBackground())
                         .accessibilityElement(children: .combine)
                         .accessibilityAction(named: Text(copy[.moveUp])) { move(path, by: -1) }
                         .accessibilityAction(named: Text(copy[.moveDown])) { move(path, by: 1) }

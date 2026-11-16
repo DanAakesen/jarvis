@@ -116,10 +116,11 @@ struct JarvisNotesArea: View {
             }
         }
         .jarvisPageHeader { header }
+        .jarvisEdgeSwipeBack(isEnabled: canNavigateUp) { navigateUp() }
         .jarvisSuccessFeedback($successConfirmation)
         .environment(\.locale, language.locale)
         .jarvisPageFooter { dock }
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .toolbarBackground(.hidden, for: .bottomBar)
         .scrollEdgeEffectHidden(true, for: .bottom)
         .task(id: "\(selectedTab.rawValue)-\(refreshVersion)") {

@@ -33,7 +33,7 @@ struct JarvisFactoryTaskDetailView: View {
 
     var body: some View {
         detailContent(loadedTaskID == taskID ? task : nil)
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .navigationTitle(loadedTaskID == taskID ? task?.title ?? copy.text(.taskDetail) : copy.text(.taskDetail))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)

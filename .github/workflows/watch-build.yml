@@ -207,6 +207,43 @@ jobs:
           capture tasks-light --screenshot-notes-state=tasks
           xcrun simctl ui "$PHONE_ID" appearance dark
           xcrun simctl terminate "$PHONE_ID" "$APP" || true
+      - name: Capture app polish states
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        timeout-minutes: 14
+        run: |
+          set -uo pipefail
+          PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
+          if [[ -z "$PHONE_ID" ]]; then
+            echo "::warning::No iPhone Pro simulator; skipping app polish captures."
+            exit 0
+          fi
+          OUT="$RUNNER_TEMP/iphone-screenshots"
+          mkdir -p "$OUT"
+          APP=com.danaakesen.jarvis
+          xcrun simctl boot "$PHONE_ID" || true
+          xcrun simctl bootstatus "$PHONE_ID" -b || true
+          # Synthetic fixture data only. Each page now carries the orb and glass list rows.
+          polish() {
+            local name="$1"; shift
+            xcrun simctl launch --terminate-running-process "$PHONE_ID" "$APP" "$@" || return 0
+            sleep 9
+            xcrun simctl io "$PHONE_ID" screenshot "$OUT/polish-$name.png" || true
+          }
+          xcrun simctl ui "$PHONE_ID" appearance dark
+          xcrun simctl ui "$PHONE_ID" content_size large || true
+          NOTES=(--ui-test-navigation --screenshot-screen=notes --ui-test-task-list-board)
+          polish graph-search "${NOTES[@]}" --screenshot-notes-state=graph-search
+          polish notes-pinned "${NOTES[@]}" --screenshot-notes-state=pinned
+          polish today --ui-test-navigation --ui-test-today
+          polish settings --screenshot-settings-fixture
+          polish health --screenshot-health-fixture
+          polish chat-keyboard --screenshot-chat-fixture --screenshot-chat-keyboard
+          xcrun simctl ui "$PHONE_ID" appearance light
+          polish notes-pinned-light "${NOTES[@]}" --screenshot-notes-state=pinned
+          polish today-light --ui-test-navigation --ui-test-today
+          xcrun simctl ui "$PHONE_ID" appearance dark
+          xcrun simctl terminate "$PHONE_ID" "$APP" || true
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

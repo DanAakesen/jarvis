@@ -399,7 +399,7 @@ struct JarvisHealthArea: View {
         .jarvisPageHeader { header }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: dashboard?.preset)
         .onAppear { goals = JarvisHealthGoals.load() }
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .tint(JarvisDesignTokens.healthAccent)
         .environment(\.locale, language.locale)
         .task(id: "\(periodPreset.rawValue)-\(refreshVersion)") {

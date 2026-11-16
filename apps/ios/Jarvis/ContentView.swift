@@ -210,6 +210,7 @@ struct ContentView: View {
                                 .id(sessionEpoch)
                         }
                     }
+                    .jarvisSwipeBack()
                 }
                 .tint(JarvisDesignTokens.primaryAccent)
                 .environment(\.jarvisCarryOver, carryOver)
@@ -648,7 +649,7 @@ private struct JarvisPlaceholderView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .toolbar(.hidden, for: .navigationBar)
     }
 }

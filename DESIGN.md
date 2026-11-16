@@ -1,3 +1,15 @@
+## App polish from build 111 (16 November 2026; owner testing; #1923)
+
+- **Rows.** One row surface for every list: the clear glass of the glass buttons (`jarvisRowSurface`, built on `jarvisGlassSurface`), in the row's own
+  corner pattern. Native lists use `JarvisGlassRowBackground`. Cards, banners, fields and hero panels keep the material; they are not list rows. Reduce
+  Transparency still gives the solid fallback. HIG prefers regular glass for text-heavy surfaces; the owner asked for the button look, so rows keep the
+  same light fill (`glassFill`) that the buttons carry and the captures are checked for legibility.
+- **Orb on every page.** `jarvisPageBackground()` puts the shared orb and the calm neural network behind each page (the page chrome owns it; sheets and forms
+  keep `jarvisAmbientBackground()` without an orb). Chat keeps the full effects. Reduce Motion, the Background motion switch and Low Power Mode (half the orb frames) apply.
+- **Search field.** The clear control is a bare glyph inside the field, not a second glass button.
+- **Swipe back.** The system edge swipe for pushed pages (kept alive although pages hide the navigation bar) and the same edge swipe for Notes folders. The back button stays
+  (HIG: supplement standard gestures, do not replace them). The sidebar opens by a swipe in the other direction.
+
 ## Notes, Tasks and Graph: Vault Folders (15 November 2026; owner approved; #1894)
 
 Dan selected **Vault Folders** and approved its subpages (`docs/ui/notes-subpages-2026-11-15/`, HANDOFF.md is the

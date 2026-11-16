@@ -1,3 +1,13 @@
+## App polish: page chrome, row surface, swipe back (16 November 2026, #1923, P15-185)
+
+- iOS only, no backend or data change. `JarvisSwipeBack.swift`: `jarvisSwipeBack()` re-enables the `UINavigationController` interactive pop gesture (delegate on the
+  controller, active only with more than one page) for the root stack and the Settings stack; `jarvisEdgeSwipeBack` is the same edge swipe for state-based back (Notes folder).
+- `jarvisPageBackground()` (`JarvisDesignSystem.swift`) draws `JarvisNeuralStage` (orb plus calm network) behind pages; `JarvisLatticeOrbView(adaptsToLowPower:)` halves its frames on
+  the neural cheap path. Sheets and forms keep `jarvisAmbientBackground()`.
+- `jarvisRowSurface` (`JarvisPageHeader.swift`) is the one list-row background; `JarvisRowGroup`, `jarvisLazyRowSurface`, task and agenda rows and `JarvisList`/`JarvisForm` use it.
+- Chat: `ChatFollowState.keyboardOpened()` resumes following when the composer gains focus. `JarvisNotesLogic.swipeAction(distance:allowsDelete:)` gives pinned rows unpin only.
+- CI: the `watch` job captures `polish-*` Simulator states (graph search, pinned rows, Today, Settings, Health, chat keyboard, light mode).
+
 ## Notes, Tasks and Graph pages — 15 November 2026 (#1894, P15-180)
 
 - iOS: `JarvisNotesArea` (state and loading, plus `+Pages` and `+Chrome` extensions) hosts the three pages, header menu and dock;

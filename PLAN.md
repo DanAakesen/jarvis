@@ -1,3 +1,9 @@
+## App polish batch from build 111 — 16 November 2026 (#1923, P15-185)
+
+**Status: built, waiting for CI and the owner's TestFlight check. No build cut.** One pull request covers the seven items: graph search clear button and
+result spacing, swipe to unpin, centred task circle, edge-swipe back, the orb on every page, one glass row surface, and the chat keyboard following the
+latest message. Simulator captures run in the `watch` job (`polish-*`). Open: the owner confirms the pinned-row swipe reading and the glass rows on a device.
+
 ## 3D Notes graph: design brief — 16 November 2026 (#1924, P15-186)
 
 **Status: step 1 (design brief) written; waiting for review. No implementation.** `docs/ui/graph-3d/brief.md` covers what the graph shows, the interactions, the motion language tied to the neural background, a performance budget, the rendering options with a recommendation (projected 3D in `Canvas`, gated by a measured device spike, Metal if it misses the budget; nothing measured yet), and 12 open questions. Next: the owner makes the designs and answers the questions; then the spike, then the build.
