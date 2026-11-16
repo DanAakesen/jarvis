@@ -132,6 +132,20 @@ describe('voice relay on the PI engine', () => {
     expect(responses()).toHaveLength(1);
   });
 
+  it('does not start a turn for an earlier utterance whose transcript arrives while Dan is speaking again', async () => {
+    let calls = 0;
+    const agent: PiVoiceAgent = { async *stream() { calls += 1; yield 'x' as ConversationAgentChunk; } };
+    const { sockets, responses, connect } = await harness(agent);
+    connect('?engine=pi');
+    await until(() => responses().length === 1, 'the greeting');
+    sockets[0]!.send(JSON.stringify({ type: 'input_audio_buffer.speech_started', item_id: 'item_2' }));
+    await sleep(30);
+    sockets[0]!.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'item_1', transcript: 'An older sentence' }));
+    await sleep(100);
+    expect(calls).toBe(0);
+    expect(responses()).toHaveLength(1);
+  });
+
   it('says a PI failure out loud and does not use another engine', async () => {
     const agent: PiVoiceAgent = {
       // eslint-disable-next-line require-yield

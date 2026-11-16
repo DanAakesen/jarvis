@@ -85,11 +85,12 @@ export function createPiVoiceTurns(options: PiVoiceTurnsOptions): PiVoiceTurns {
           partial += chunk;
           continue;
         }
-        // The note before a tool call is also part of the streamed text; take it out of the answer either way.
-        const interim = partial.trimStart();
-        if (!interim.startsWith(chunk.text.trimStart())) throw new Error('PI progress note did not match the streamed reply');
-        partial = interim.slice(chunk.text.trimStart().length);
-        if (chunk.type === 'acknowledgment' && !acknowledged && chunk.text.trim() && !signal.aborted) {
+        // The note before a tool call is also part of the streamed text; take it out of the answer wherever it sits. A note is
+        // sent only for a short segment, so text before it may be an unannounced longer one that stays in the answer.
+        const note = chunk.text.trimStart();
+        const at = partial.indexOf(note);
+        if (at >= 0) partial = partial.slice(0, at) + partial.slice(at + note.length);
+        if (chunk.type === 'acknowledgment' && !acknowledged && chunk.text.trim() && !signal.aborted && at >= 0) {
           acknowledged = true;
           options.speak(chunk.text.trim());
         }

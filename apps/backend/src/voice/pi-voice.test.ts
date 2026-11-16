@@ -48,6 +48,17 @@ describe('PI voice turns', () => {
     expect(logs[0]).toMatchObject({ outcome: 'ok', acknowledged: true });
   });
 
+  it('keeps a long unannounced segment in the answer and still strips a later note', async () => {
+    const long = 'First a long stretch of text that the gateway did not announce. '.repeat(10);
+    const { turns, spoken, logs, settled } = setup(replying(
+      long, 'One moment. ', { type: 'acknowledgment', text: 'One moment. ' }, 'Done.',
+    ));
+    turns.start(turn);
+    await settled();
+    expect(logs[0]).toMatchObject({ outcome: 'ok', acknowledged: true });
+    expect(spoken).toEqual(['One moment.', `${long}Done.`.trim()]);
+  });
+
   it('says a failure plainly and never runs another engine', async () => {
     // eslint-disable-next-line require-yield
     const agent: PiVoiceAgent = { async *stream() { throw new PiGatewayError('pi_unavailable', 'PI could not reach Foundry. No other engine was used.'); } };

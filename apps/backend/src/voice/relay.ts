@@ -1290,6 +1290,8 @@ function registerVoiceRoute(
         piBusy = active;
         reflexPending = active || finalReflexPending || pendingPartialReflex > 0;
         if (active && microphoneActive) publishActivity('thinking');
+        // A turn that ends without a spoken reply (cancelled, empty transcript) must not leave the screen on "thinking".
+        else if (!active && microphoneActive && !assistantResponding && !userSpeaking && pendingToolCalls === 0) publishActivity('listening');
         if (!active) statusAnnouncer?.flush();
       },
       log: (turn) => request.log.info({ ...turn, channel: 'voice' }, 'voice.pi_turn'),
@@ -1301,6 +1303,12 @@ function registerVoiceRoute(
       void (async () => {
         await transcriptQueue;
         if (controller.signal.aborted || endRequested) return;
+        // The transcript of an earlier utterance can arrive after Dan has started the next one: the newest wins, and
+        // nothing of the older one runs or is spoken over him.
+        if (userSpeaking) {
+          request.log.info({ outcome: 'superseded', channel: 'voice' }, 'voice.pi_turn');
+          return;
+        }
         const message = savedUserMessages.get(itemId);
         if (!message || !sessionId) {
           speakReply('I could not save what you said, so I did not send it to PI. Please say it again.');
