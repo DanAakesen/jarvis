@@ -172,13 +172,15 @@ jobs:
           OUT="$RUNNER_TEMP/iphone-screenshots"
           mkdir -p "$OUT"
           APP=com.danaakesen.jarvis
+          xcrun simctl boot "$PHONE_ID" || true
+          xcrun simctl bootstatus "$PHONE_ID" -b || true
           # Synthetic fixture data only: the navigation fixture, no network and no owner data.
           capture() {
             local name="$1"; shift
-            timeout 60 xcrun simctl launch --terminate-running-process "$PHONE_ID" "$APP" \
+            xcrun simctl launch --terminate-running-process "$PHONE_ID" "$APP" \
               --ui-test-navigation --screenshot-screen=notes --ui-test-task-list-board "$@" || return 0
             sleep 9
-            timeout 30 xcrun simctl io "$PHONE_ID" screenshot "$OUT/notes-$name.png" || true
+            xcrun simctl io "$PHONE_ID" screenshot "$OUT/notes-$name.png" || true
           }
           xcrun simctl ui "$PHONE_ID" appearance dark
           xcrun simctl ui "$PHONE_ID" content_size large || true
