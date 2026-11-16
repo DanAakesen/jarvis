@@ -1,7 +1,8 @@
-"""Probe whether a managed-harness prompt agent can be woken without our ticker: the reminder tool and Foundry routines.
+"""Probe whether a managed-harness prompt agent can be woken by a Foundry routine without our ticker.
 
-Manual only (Deploy input `probe_pi_wake`, about 0.3 DKK of model spend). It creates a throwaway agent `jarvis-pi-probe`, which
-is not the PI agent and never gets its MCP connections, tries the two documented wake-up features and deletes everything again.
+Manual only (Deploy input `probe_pi_wake`, small model spend). It creates a throwaway agent `jarvis-pi-probe`, which is not the
+PI agent and never gets its MCP connections, creates a one-off timer routine for it and deletes everything again. (The reminder
+tool was probed on 16 November 2026 and is not supported on a harness prompt agent, so that step is gone.)
 It records what it observed as plain statuses and Foundry's sanitized error codes. It never raises on an unexpected shape: an
 unexpected shape is a result. The PI watches do not depend on the outcome (our ticker and the vault are the waker and the truth).
 """
@@ -19,7 +20,6 @@ import provision_pi_agent as pi
 PROBE_AGENT = "jarvis-pi-probe"
 PROBE_ROUTINE = "jarvis-pi-probe-routine"
 ROUTINE_FEATURES = pi.AGENT_FEATURES + ",Routines=V1Preview"
-POLL_SECONDS = 20
 WAIT_SECONDS = 240
 
 
@@ -49,38 +49,13 @@ def attempt(steps: list[dict], name: str, action) -> dict | None:
     return None
 
 
-def item_summary(items: list) -> list[str]:
-    return [f"{item.get('type', '?')}:{item.get('role', '')}" for item in items if isinstance(item, dict)]
-
-
-def definition(spec: dict, with_reminder: bool) -> dict:
+def definition(spec: dict) -> dict:
     tools: list[dict] = [{"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": False}}]
-    if with_reminder:
-        tools.append({"type": "reminder_preview"})
     return {
         "kind": "prompt", "harness": {"type": "microsoft_copilot_preview"}, "model": spec["model"],
         "reasoning": {"effort": spec["reasoningEffort"]}, "instructions": "You are a probe agent. Reply in one short sentence.",
         "tools": tools,
     }
-
-
-def respond(azure: Probe, conversation: str, text: str) -> dict:
-    # The runtime and admin endpoints share the agent path; the call is not streamed, so the whole answer is one body.
-    return azure.rest("POST", f"/agents/{PROBE_AGENT}/endpoint/protocols/openai/responses",
-                      {"conversation": conversation, "input": [{"role": "user", "content": text}], "stream": False})
-
-
-def wait_for_new_assistant_message(azure: Probe, conversation: str, before: int) -> dict:
-    deadline = time.monotonic() + WAIT_SECONDS
-    last: list[str] = []
-    while True:
-        time.sleep(POLL_SECONDS)
-        listing = azure.rest("GET", f"/agents/{PROBE_AGENT}/endpoint/protocols/openai/conversations/{conversation}/items")
-        last = item_summary(listing.get("data", []))
-        if len([entry for entry in last if entry.endswith("assistant")]) > before:
-            return {"woke": True, "items": last}
-        if time.monotonic() >= deadline:
-            return {"woke": False, "items": last}
 
 
 def run_probe(args: argparse.Namespace) -> list[dict]:
@@ -90,30 +65,18 @@ def run_probe(args: argparse.Namespace) -> list[dict]:
     steps: list[dict] = []
     created = False
     try:
-        # 1. Reminder tool on a harness prompt agent: is the definition accepted, and does it re-invoke the same conversation?
-        def reminder_agent() -> dict:
-            version = azure.rest("POST", f"/agents/{PROBE_AGENT}/versions", {"definition": definition(spec, True)})
+        def plain_agent() -> dict:
+            version = azure.rest("POST", f"/agents/{PROBE_AGENT}/versions", {"definition": definition(spec)})
             nonlocal created
             created = True
-            readback = pi.wait_active(azure, PROBE_AGENT, pi.as_version(version.get("version")))
-            tools = [tool.get("type") for tool in (readback.get("definition") or {}).get("tools", [])]
-            pi.pin(azure, PROBE_AGENT, pi.as_version(version.get("version")))
-            return {"definition_accepted": True, "tools_in_readback": tools}
+            number = pi.as_version(version.get("version"))
+            pi.wait_active(azure, PROBE_AGENT, number)
+            pi.pin(azure, PROBE_AGENT, number)
+            return {"definition_accepted": True}
 
-        accepted = attempt(steps, "reminder_preview accepted on a harness prompt agent", reminder_agent)
-        conversation = None
-        if accepted:
-            def schedule() -> dict:
-                nonlocal conversation
-                conversation = azure.rest("POST", f"/agents/{PROBE_AGENT}/endpoint/protocols/openai/conversations", {}).get("id")
-                reply = respond(azure, conversation, "Use the reminder tool to wake yourself in 1 minute with the text 'probe woke'. Then say 'scheduled'.")
-                return {"output_items": item_summary(reply.get("output", [])), "status": reply.get("status")}
+        attempt(steps, "throwaway harness prompt agent created", plain_agent)
 
-            attempt(steps, "agent used the reminder tool", schedule)
-            if conversation:
-                attempt(steps, "same conversation re-invoked without a client call", lambda: wait_for_new_assistant_message(azure, conversation, 1))
-
-        # 2. Foundry routines: a one-off timer routine that invokes the agent.
+        # A one-off timer routine that invokes the agent through the responses API.
         if created:
             at = datetime.now(timezone.utc) + timedelta(seconds=90)
             routine = {
@@ -137,11 +100,11 @@ def run_probe(args: argparse.Namespace) -> list[dict]:
 
 
 def render(steps: list[dict]) -> str:
-    lines = ["### PI wake probe: reminder tool and Foundry routines", "", "| Step | Result | What was observed |", "| --- | --- | --- |"]
+    lines = ["### PI wake probe: Foundry routine", "", "| Step | Result | What was observed |", "| --- | --- | --- |"]
     for step in steps:
         detail = json.dumps(step.get("observed", step.get("error", "")), sort_keys=True)
         lines.append(f"| {step['step']} | {step['status']} | `{detail[:300]}` |")
-    lines += ["", "Our ticker and the vault stay the waker either way; this only decides whether Foundry can replace the timer part."]
+    lines += ["", "Our ticker and the vault stay the waker either way."]
     return "\n".join(lines) + "\n"
 
 

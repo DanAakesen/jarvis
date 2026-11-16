@@ -48,7 +48,7 @@ on:
         required: false
 
       probe_pi_wake:
-        description: Probe whether the managed harness can wake itself (reminder tool, Foundry routine) on a throwaway agent; about 0.3 DKK, about 10 minutes
+        description: Probe whether a Foundry routine can invoke a harness agent on a throwaway agent; about 5 minutes
         type: boolean
         default: false
         required: false
@@ -625,7 +625,7 @@ jobs:
           python .github/scripts/pi_smoke_report.py --backend-fqdn "$BACKEND_FQDN" --summary "$RUNNER_TEMP/pi-smoke.md" || status=$?
           cat "$RUNNER_TEMP/pi-smoke.md" >>"$GITHUB_STEP_SUMMARY" 2>/dev/null || true
           exit "${status:-0}"
-      - name: Probe the harness for a self-wake (manual only; throwaway agent, spends model tokens)
+      - name: Probe a Foundry routine on a throwaway harness agent (manual only)
         if: ${{ !cancelled() && inputs.probe_pi_wake == true }}
         run: |
           python .github/scripts/probe_pi_wake.py --project-endpoint "$FOUNDRY_ADMIN" --summary "$RUNNER_TEMP/pi-wake-probe.md"

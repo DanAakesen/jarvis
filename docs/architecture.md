@@ -33,7 +33,7 @@ sequenceDiagram
 | Waker | `pi/brain/runner.ts` `extras` | The ticker asks for the soonest next look; a due watch wakes the brain with no event. One wake covers every due watch and every queued event, so the fixed prompt is paid once. The wake text carries every open watch in brief (to match events) and the due ones in full with their recent trail, labelled as data |
 | Cost per watch | `dbo.pi_watch_look` (migration 0088), `watch_list` | One row per look. After a wake its cost is split evenly over what woke it (each event and each watch looked at); `watch_list` shows looks today, last look and an estimated DKK today and this month. Watch wakes spend on the same 100 DKK proactive ledger as the brain, so the same stop applies |
 | Untrusted content | brain policy | What a watch reads (web pages, feeds, repository text) is data. A wake reaches only read-only tools plus its own message, note, trail and look tools; it cannot write, send or start a Worker whatever the text says |
-| Foundry wake-ups | `.github/scripts/probe_pi_wake.py`, Deploy input `probe_pi_wake` | A throwaway agent tries the reminder tool and a timer routine and reports what it observed. Not a dependency; see `docs/harness-trial/spike-results.md` |
+| Foundry wake-ups | `.github/scripts/probe_pi_wake.py`, Deploy input `probe_pi_wake` | Observed 16 November 2026: the reminder tool is not supported on a harness prompt agent. The probe now only creates a timer routine on a throwaway plain harness agent and reports what happens. Not a dependency |
 
 ## PI brain loop (#1886, P15-175, part 2)
 
