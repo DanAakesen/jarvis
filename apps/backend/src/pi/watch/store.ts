@@ -50,8 +50,11 @@ export function createWatches(options: {
   readonly area: PiAreaStore;
   readonly store: Pick<PiStore, 'recordLook' | 'allocateRunCost' | 'watchActivity'>;
   readonly now: () => Date;
+  /** Called whenever the set of watches or a next look changes, so the waker re-reads what is due. */
+  readonly changed?: (() => void) | undefined;
 }) {
   const { area, store, now } = options;
+  const changed = () => { try { options.changed?.(); } catch { /* A waker hint cannot undo a saved watch. */ } };
   const open = new Map<string, ParsedWatch>();
   let loaded = false;
   let loading: Promise<void> | undefined;
@@ -96,6 +99,7 @@ export function createWatches(options: {
   async function writeBack(name: string, content: string, signal: AbortSignal): Promise<void> {
     try { await area.replace(watchPath(name), content.trimEnd(), signal, `PI: watch ${name}`); } catch (error) { unavailable(error); }
     open.set(name, parseWatch(watchPath(name), content));
+    changed();
   }
 
   type Activity = Awaited<ReturnType<typeof store.watchActivity>>;
@@ -137,6 +141,7 @@ export function createWatches(options: {
       const content = composeWatch({ ...input, at: now() });
       try { await area.replace(watchPath(name), content.trimEnd(), signal, `PI: open watch ${name}`); } catch (error) { unavailable(error); }
       open.set(name, parseWatch(watchPath(name), content));
+      changed();
       return { name };
     },
 
@@ -172,9 +177,14 @@ export function createWatches(options: {
         await writeBack(input.name, withNextLook(watch.body, watch.nextLook !== null && watch.nextLook > later ? watch.nextLook : later), signal);
         throw new WatchError('limit', 'This watch was looked at less than 5 minutes ago, so it was not recorded again. Its next look is at least 5 minutes away.');
       }
+      // The ledger first: a look that cannot be counted must not be reported as recorded, and a counted look whose note write
+      // then fails only makes the limits stricter, never looser.
+      try { await store.recordLook(input.name, run.runId, at, signal); } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
+        throw new WatchError('unavailable', 'The look could not be counted, so nothing was recorded. Try again.');
+      }
       const content = withNextLook(appendTrailLine(watch.body, `looked: ${input.result}`, at), input.nextLook);
       await writeBack(input.name, content, signal);
-      await store.recordLook(input.name, run.runId, at, signal).catch(() => undefined);
       run.looked.push(input.name);
     },
 
@@ -191,6 +201,7 @@ export function createWatches(options: {
         });
       } catch (error) { unavailable(error); }
       open.delete(watch.name);
+      changed();
       return { closedAs: target };
     },
 
@@ -233,7 +244,8 @@ export function createWatches(options: {
     async afterRun(input: { runId: string; costDkk: number; events: number; run: PiBrainRun; due: readonly string[] }, signal: AbortSignal): Promise<void> {
       const looks = input.run.looked.length;
       if (looks > 0) await store.allocateRunCost(input.runId, Number((input.costDkk / (input.events + looks)).toFixed(6)), signal);
-      const skipped = input.due.filter((name) => !input.run.looked.includes(name) && open.has(name));
+      // Only a watch that is still due: a look limit has already moved its next look, and that move must stay.
+      const skipped = input.due.filter((name) => !input.run.looked.includes(name) && (open.get(name)?.nextLook ?? null) !== null && open.get(name)!.nextLook! <= now());
       const retryAt = new Date(now().getTime() + 60 * 60_000);
       for (const name of skipped) {
         const watch = open.get(name)!;

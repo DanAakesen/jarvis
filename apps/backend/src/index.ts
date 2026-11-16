@@ -1129,7 +1129,7 @@ try {
       push: (message) => notifyReply?.(message), announce: () => announceBrainMessage(), now: () => new Date(),
     }) : undefined;
   // Standing watches: free-text notes in PI's corner of the vault, woken by the same ticker, listed and stopped from chat.
-  const watches = piArea && piStore ? createWatches({ area: piArea, store: piStore, now: () => new Date() }) : undefined;
+  const watches = piArea && piStore ? createWatches({ area: piArea, store: piStore, now: () => new Date(), changed: () => brainHandle?.wake() }) : undefined;
   const brainControl = piGateway && piStore && brainComms && proactiveStore
     ? createBrainControl({ owner: config.auth.ownerObjectId, store: piStore, proactive: proactiveStore, now: () => new Date(), brain: () => brainHandle })
     : undefined;

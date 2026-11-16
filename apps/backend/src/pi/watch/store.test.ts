@@ -94,6 +94,43 @@ describe('standing watches in the vault', () => {
     expect(t.vault.files.get('PI/Watches/Stuck.md')).toContain('no look was recorded');
   });
 
+  it('keeps a next look that a look limit already moved, instead of pulling it back to an hour ahead', async () => {
+    const t = setup();
+    await t.watches.create({ title: 'Busy', text: 'x', nextLook: new Date(t.clock.t.getTime() + hours(1)) }, signal);
+    for (let n = 0; n < MAX_LOOKS_PER_WATCH_PER_DAY; n += 1) {
+      t.advance(MIN_LOOK_GAP_MS + 1_000);
+      await t.watches.look({ name: 'Busy', result: `look ${n}`, nextLook: new Date(t.clock.t.getTime() + 600_000) }, t.run(`r${n}`), signal);
+    }
+    t.advance(MIN_LOOK_GAP_MS + 1_000);
+    await expect(t.watches.look({ name: 'Busy', result: 'ninth', nextLook: null }, t.run('rn'), signal)).rejects.toMatchObject({ code: 'limit' });
+    const tomorrow = await t.watches.nextDueAt(signal);
+    await t.watches.afterRun({ runId: 'rn', costDkk: 0.1, events: 0, run: t.run('rn'), due: ['Busy'] }, signal);
+    expect(await t.watches.nextDueAt(signal)).toEqual(tomorrow);
+  });
+
+  it('does not report a look as recorded when the ledger cannot count it, and changes nothing', async () => {
+    const t = setup();
+    await t.watches.create({ title: 'Ledger', text: 'x', nextLook: new Date(t.clock.t.getTime() + hours(1)) }, signal);
+    const before = t.vault.files.get('PI/Watches/Ledger.md');
+    (t.store as { recordLook: unknown }).recordLook = async () => { throw new Error('sql down'); };
+    const run = t.run();
+    await expect(t.watches.look({ name: 'Ledger', result: 'x', nextLook: null }, run, signal)).rejects.toMatchObject({ code: 'unavailable' });
+    expect(run.looked).toEqual([]);
+    expect(t.vault.files.get('PI/Watches/Ledger.md')).toBe(before);
+  });
+
+  it('tells the waker whenever a watch is opened, rescheduled or stopped', async () => {
+    const t = setup();
+    let hints = 0;
+    const watches = createWatches({ area: createPiArea({ vault: t.vault }), store: t.store, now: () => t.clock.t, changed: () => { hints += 1; } });
+    await watches.create({ title: 'Hinted', text: 'x', nextLook: new Date(t.clock.t.getTime() + hours(1)) }, signal);
+    await watches.update({ name: 'Hinted', change: 'sooner', nextLook: new Date(t.clock.t.getTime() + 10 * 60_000) }, signal);
+    t.advance(MIN_LOOK_GAP_MS + 1_000);
+    await watches.look({ name: 'Hinted', result: 'ok', nextLook: null }, t.run(), signal);
+    await watches.stop({ name: 'Hinted', reason: 'done' }, signal);
+    expect(hints).toBe(4);
+  });
+
   it('closes a watch into Closed with a trail line and no next look, and lists it no more', async () => {
     const t = setup();
     await t.watches.create({ title: 'Old', text: 'x', nextLook: new Date(t.clock.t.getTime() + hours(1)) }, signal);

@@ -24,11 +24,13 @@ function setup(decide: (wake: ScriptedWake, t: ReturnType<typeof setup>) => Prom
   const conversations = memoryConversations();
   const pushes: Array<{ text: string }> = [];
   const comms = createBrainComms({ conversations: conversations.store, store: piStore, ownerObjectId: owner, push: (m) => pushes.push(m), announce: () => {}, now });
-  const watches = createWatches({ area, store: piStore, now });
+  const hint: { brain?: { wake(): void } } = {};
+  const watches = createWatches({ area, store: piStore, now, changed: () => hint.brain?.wake() });
   const gateway = scriptedGateway((wake) => decide(wake, t));
   const brain = createBrain({
     queue, gateway, proactive, piStore, comms, decisionLog: createDecisionLog({ area }), extras: watches, owner, timeZone: 'Europe/Copenhagen', now,
   });
+  hint.brain = brain;
   const t = { clock, now, queue, piStore, proactive, vault, watches, gateway, brain, pushes, comms, ready: piStore.writeBrainSwitch(owner, true, now(), signal()) };
   return t;
 }
@@ -60,6 +62,26 @@ describe('standing watches inside the brain loop', () => {
     expect([...t.vault.files].find(([path]) => path.startsWith('PI/Log/'))![1]).toContain('Looked at watches: Deploy of main.');
     expect((await t.watches.nextDueAt(signal()))).toEqual(new Date('2026-11-16T11:00:00Z'));
     expect(t.pushes).toEqual([]);
+  });
+
+  it('picks up a watch opened after startup, and one rescheduled earlier, without waiting for an event', async () => {
+    const t = setup(async (wake) => {
+      for (const name of ['Late', 'Soon']) {
+        if (new RegExp(`${name} \\[DUE NOW\\]`, 'u').test(wake.body)) await t.watches.look({ name, result: 'ok', nextLook: null }, wake.run, signal());
+      }
+      return { text: 'Looked.' };
+    });
+    await t.ready;
+    await t.brain.start();
+    for (let n = 0; n < 4; n += 1) { await t.brain.tick(signal()); t.clock.t = new Date(t.clock.t.getTime() + 30_000); }
+    expect(t.gateway.wakes).toEqual([]);
+    await t.watches.create({ title: 'Late', text: 'x', nextLook: new Date(t.clock.t.getTime() + hours(5)) }, signal());
+    await t.watches.update({ name: 'Late', change: 'sooner please', nextLook: new Date(t.clock.t.getTime() + 20 * 60_000) }, signal());
+    // No second start() here: only the hint from the watch change can tell the loop about the new deadline.
+    const until = t.clock.t.getTime() + 25 * 60_000;
+    while (t.clock.t.getTime() < until) { await t.brain.tick(signal()); t.clock.t = new Date(t.clock.t.getTime() + 30_000); }
+    expect(t.gateway.wakes).toHaveLength(1);
+    expect(t.gateway.wakes[0]!.body).toContain('Late [DUE NOW]');
   });
 
   it('matches an arriving event to the open watches by showing them, and reports only when the model says so', async () => {
