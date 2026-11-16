@@ -37,6 +37,8 @@ jobs:
           set -o pipefail
           xcodebuild -project Jarvis.xcodeproj -scheme JarvisWatch -destination 'generic/platform=watchOS' -configuration Release -derivedDataPath "$RUNNER_TEMP/WatchDeviceBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/watch-device-build.log"
       - name: Capture isolated Watch previews
+        # Screenshots are evidence, not a gate: a flaky simulator launch must not turn the build red.
+        continue-on-error: true
         timeout-minutes: 5
         run: |
           set -euo pipefail
@@ -81,7 +83,9 @@ jobs:
           xcodebuild -project Jarvis.xcodeproj -scheme Jarvis -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/PhoneBuild" CODE_SIGNING_ALLOWED=NO build | tee "$RUNNER_TEMP/phone-build.log"
       - name: Capture iPhone opening screen
         if: ${{ !cancelled() }}
-        timeout-minutes: 8
+        # Screenshots are evidence, not a gate: a slow simulator must not turn the build red (the compile steps stay strict).
+        continue-on-error: true
+        timeout-minutes: 12
         run: |
           set -euo pipefail
           PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
@@ -106,7 +110,9 @@ jobs:
 
       - name: Capture measured opening progress
         if: ${{ !cancelled() }}
-        timeout-minutes: 8
+        # Screenshots are evidence, not a gate: a slow simulator must not turn the build red (the compile steps stay strict).
+        continue-on-error: true
+        timeout-minutes: 12
         run: |
           set -euo pipefail
           PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
@@ -123,7 +129,9 @@ jobs:
 
       - name: Capture iPhone orb gallery
         if: ${{ !cancelled() }}
-        timeout-minutes: 8
+        # Screenshots are evidence, not a gate: a slow simulator must not turn the build red (the compile steps stay strict).
+        continue-on-error: true
+        timeout-minutes: 12
         run: |
           set -euo pipefail
           PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"
@@ -141,7 +149,9 @@ jobs:
 
       - name: Capture Home widget layouts
         if: ${{ !cancelled() }}
-        timeout-minutes: 8
+        # Screenshots are evidence, not a gate: a slow simulator must not turn the build red (the compile steps stay strict).
+        continue-on-error: true
+        timeout-minutes: 12
         run: |
           set -euo pipefail
           PHONE_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | startswith("iPhone")) | select(.name | contains("Pro")) | select(.name | contains("Max") | not)][0].udid // empty')"

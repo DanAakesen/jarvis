@@ -34,7 +34,7 @@ final class JarvisOpeningTests: XCTestCase {
     }
 
     func testBackgroundNetworkIsFixedSparseAndQuieterThanTheOrb() {
-        let network = JarvisOpeningNetwork.shared
+        let network = JarvisNeuralNetwork.shared
         let visible = network.nodes.filter { $0.brightness > 0 }
         XCTAssertGreaterThanOrEqual(visible.count, 6)
         XCTAssertLessThanOrEqual(visible.count, 10, "the background must stay sparse")
