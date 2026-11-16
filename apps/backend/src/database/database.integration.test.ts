@@ -177,8 +177,11 @@ describe('real SQL Server migration contract', () => {
       const down = await readFile(new URL('../../../../db/migrations/down/0086_pi_chat.sql', import.meta.url), 'utf8');
       const brainSchema = await readFile(new URL('../../../../db/migrations/0087_pi_brain.sql', import.meta.url), 'utf8');
       const brainDown = await readFile(new URL('../../../../db/migrations/down/0087_pi_brain.sql', import.meta.url), 'utf8');
+      const watchSchema = await readFile(new URL('../../../../db/migrations/0088_pi_watch_look.sql', import.meta.url), 'utf8');
+      const watchDown = await readFile(new URL('../../../../db/migrations/down/0088_pi_watch_look.sql', import.meta.url), 'utf8');
       await pool.request().batch(schema);
       await pool.request().batch(brainSchema);
+      await pool.request().batch(watchSchema);
       const signal = new AbortController().signal;
       const store = createPiStore(pool);
       const owner = randomUUID();
@@ -226,10 +229,24 @@ describe('real SQL Server migration contract', () => {
         await store.recordMessage({ runId: randomUUID(), sessionId: '7', messageId: '9', textHash: 'b'.repeat(64) }, new Date(), signal);
         expect(await store.messagesSince(day, signal)).toEqual({ count: 1, textHashes: ['b'.repeat(64)] });
         expect(await store.messagesSince(new Date(Date.now() + 60_000), signal)).toEqual({ count: 0, textHashes: [] });
+
+        // Standing-watch looks: counted per watch and day, with the wake's cost shared out afterwards.
+        const dayStart = new Date(Date.now() - 3_600_000);
+        const wake = randomUUID();
+        await store.recordLook('Deploy of main', wake, new Date(), signal);
+        await store.recordLook('Price', wake, new Date(Date.now() - 1000), signal);
+        await store.recordLook('Price', randomUUID(), new Date(Date.now() - 2000), signal);
+        await store.allocateRunCost(wake, 0.05, signal);
+        const activity = await store.watchActivity(dayStart, signal);
+        expect(activity.map(({ watch, looks, costDkk }) => ({ watch, looks, costDkk })).sort((a, b) => a.watch.localeCompare(b.watch)))
+          .toEqual([{ watch: 'Deploy of main', looks: 1, costDkk: 0.05 }, { watch: 'Price', looks: 2, costDkk: 0.05 }]);
+        expect(await store.watchActivity(new Date(Date.now() + 60_000), signal)).toEqual([]);
       } finally {
+        await pool.request().batch(watchDown);
         await pool.request().batch(brainDown);
         await pool.request().batch(down);
       }
+      expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_watch_look', N'U') AS id")).recordset).toEqual([{ id: null }]);
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_message', N'U') AS id")).recordset).toEqual([{ id: null }]);
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_turn', N'U') AS id")).recordset).toEqual([{ id: null }]);
     });

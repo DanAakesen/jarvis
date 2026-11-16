@@ -4,7 +4,7 @@ import { memoryConversations } from './brain.testkit.js';
 import { BrainCommsRefusal, MAX_BRAIN_MESSAGES_PER_DAY, createBrainComms } from './comms.js';
 
 const signal = new AbortController().signal;
-const run = () => ({ runId: 'r1', sent: [] as { title: string | null; text: string; messageId: string }[], wrote: [] as string[] });
+const run = () => ({ runId: 'r1', sent: [] as { title: string | null; text: string; messageId: string }[], wrote: [] as string[], looked: [] as string[] });
 
 function setup(options: { empty?: boolean; announce?: () => void } = {}) {
   const now = () => new Date('2026-11-16T10:00:00Z');

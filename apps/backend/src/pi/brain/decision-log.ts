@@ -46,6 +46,7 @@ export function renderDecision(record: DecisionRecord): string {
     `Looked with: ${toolLine}.`,
     `Told Dan: ${told}.`,
     result.run.wrote.length > 0 ? `Wrote: ${result.run.wrote.join(', ')}.` : 'Wrote: nothing.',
+    ...(result.run.looked.length > 0 ? [`Looked at watches: ${result.run.looked.join(', ')}.`] : []),
     `Cost: ${result.usage.inputTokens} in (${result.usage.cachedTokens} cached), ${result.usage.outputTokens} out, ${result.costDkk.toFixed(4)} DKK${result.estimated ? ' (estimated)' : ''}.`,
     '',
     statementText,

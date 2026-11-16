@@ -192,7 +192,7 @@ sequenceDiagram
 | Reporting | A normal PI chat message through the comms channels, so the push guarantee applies. The look is logged to the vault whether or not Dan is told |
 | Control | "List, change or stop my watches" in chat or voice. Tools: `watch_list`, `watch_update`, `watch_stop`. A watch ends on Dan's word or on its own stop condition, which the model reports |
 | Source of truth | The vault note. Nothing about a watch lives only in Foundry |
-| Foundry routines | Evaluated in phase 5 as a possible replacement for the **timer part only**. Not a dependency, and the vault stays the truth |
+| Foundry routines | Evaluated in phase 5 as a possible replacement for the **timer part only**. Not a dependency, and the vault stays the truth. Built 16 November 2026 (#1886): the ticker is the waker; the Foundry probe is `probe_pi_wake` in Deploy and its result is still to be recorded in `docs/harness-trial/spike-results.md` |
 
 Why our own ticker and not Foundry routines: the ticker and queue already exist and carry mail, calendar, webhook, budget and Worker events; routines are preview, have a 5 minute minimum, cover GitHub issues only, and would put the schedule in a place Dan cannot list or stop from chat without extra code.
 

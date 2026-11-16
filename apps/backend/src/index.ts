@@ -122,6 +122,8 @@ import { createBrainComms } from './pi/brain/comms.js';
 import { createBrainControl } from './pi/brain/control.js';
 import { createBrainTools } from './pi/brain/tools.js';
 import { createDecisionLog } from './pi/brain/decision-log.js';
+import { createWatches } from './pi/watch/store.js';
+import { createWatchTools } from './pi/watch/tools.js';
 import { defaultAwayModeState } from './core/away-mode.js';
 import { createInboxStatusRoute } from './inbox/status.js';
 import { createMissedCaptureAudit } from './inbox/audit.js';
@@ -1126,12 +1128,17 @@ try {
       conversations: conversationStore, store: piStore, ownerObjectId: config.auth.ownerObjectId,
       push: (message) => notifyReply?.(message), announce: () => announceBrainMessage(), now: () => new Date(),
     }) : undefined;
+  // Standing watches: free-text notes in PI's corner of the vault, woken by the same ticker, listed and stopped from chat.
+  const watches = piArea && piStore ? createWatches({ area: piArea, store: piStore, now: () => new Date() }) : undefined;
   const brainControl = piGateway && piStore && brainComms && proactiveStore
     ? createBrainControl({ owner: config.auth.ownerObjectId, store: piStore, proactive: proactiveStore, now: () => new Date(), brain: () => brainHandle })
     : undefined;
   const piModule = {
     id: 'pi',
-    tools: brainComms ? createBrainTools({ registry: piRegistry, comms: brainComms, area: piArea, inbox: inboxStore, now: () => new Date() }) : [],
+    tools: [
+      ...(brainComms ? createBrainTools({ registry: piRegistry, comms: brainComms, area: piArea, inbox: inboxStore, now: () => new Date() }) : []),
+      ...(watches && memoryStore ? createWatchTools({ watches, registry: piRegistry, memoryStore }) : []),
+    ],
     registerRoutes: createPiRoutes({
       gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 100, brain: brainControl,
     }),
@@ -1600,7 +1607,7 @@ try {
       brain: (queue: EventQueueStore) => {
         brainHandle = createBrain({
           queue, gateway: piGateway, proactive: proactiveStore, piStore, comms: brainComms,
-          decisionLog: createDecisionLog({ area: piArea }), owner: config.auth.ownerObjectId,
+          decisionLog: createDecisionLog({ area: piArea }), extras: watches, owner: config.auth.ownerObjectId,
           timeZone: config.googleTimeZone ?? 'Europe/Copenhagen', now: () => new Date(), logger,
         });
         return brainHandle;

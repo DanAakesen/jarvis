@@ -3,9 +3,12 @@ import type { ToolExecutionMetadata } from '../../core/tool-registry.js';
 /**
  * What a brain wake may run. A wake has no owner message, so nothing that needs Dan's words (starting a Worker, sending
  * mail, creating tasks, writing his notes) is reachable. The brain reads the world through these read-only Jarvis tools and
- * speaks and writes through the three brain-only tools below.
+ * speaks and writes through the brain-only tools below, and uses the shared watch tools.
  */
-export const brainOnlyTools: ReadonlySet<string> = new Set(['message_dan', 'pi_note', 'inbox_trail']);
+export const brainOnlyTools: ReadonlySet<string> = new Set(['message_dan', 'pi_note', 'inbox_trail', 'watch_look']);
+
+/** Tools Dan's chat and a wake both use: listing watches, and stopping one (Dan's word, or the watch's own stop condition). */
+const sharedTools: ReadonlySet<string> = new Set(['watch_list', 'watch_stop']);
 
 /**
  * Tools that only read. Anything not listed is out of reach for a wake, whatever the model asks for. A tool that starts a job,
@@ -27,7 +30,7 @@ export function isBrainOnlyTool(name: string): boolean {
 
 /** Visible to a brain wake in `find_tools`. */
 export function brainSeesTool(name: string): boolean {
-  return brainReadTools.has(name) || brainOnlyTools.has(name);
+  return brainReadTools.has(name) || brainOnlyTools.has(name) || sharedTools.has(name);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -49,6 +52,6 @@ function effectOf(execution: ToolExecutionMetadata | undefined, input: unknown):
 
 /** The exact rule for a wake: a listed read-only tool whose call is classified as a read, or one of the brain-only tools. */
 export function brainMayRun(tool: { readonly name: string; readonly execution?: ToolExecutionMetadata | undefined }, input: unknown): boolean {
-  if (brainOnlyTools.has(tool.name)) return true;
+  if (brainOnlyTools.has(tool.name) || sharedTools.has(tool.name)) return true;
   return brainReadTools.has(tool.name) && effectOf(tool.execution, input) === 'read';
 }
