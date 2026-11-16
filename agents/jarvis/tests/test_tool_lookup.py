@@ -43,3 +43,15 @@ def test_lookup_offers_two_small_tools_and_refuses_a_tool_not_looked_up() -> Non
     )[0]
     assert real.local_result is None
     assert (real.name, real.arguments) == ("vault_task_create", '{"title":"Milk"}')
+
+
+def test_stream_failure_code_reports_only_known_content_free_codes() -> None:
+    from model_client import stream_failure_code
+
+    rate_limited = SimpleNamespace(code="rate_limit_exceeded")
+    failed = SimpleNamespace(type="response.failed", response=SimpleNamespace(error=rate_limited))
+    assert stream_failure_code(failed) == "rate_limit_exceeded"
+    unknown = SimpleNamespace(code="a made-up value with user text")
+    error = SimpleNamespace(type="error", error=unknown)
+    assert stream_failure_code(error) == "other"
+    assert stream_failure_code(SimpleNamespace(type="response.incomplete")) == "other"

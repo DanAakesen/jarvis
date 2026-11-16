@@ -64,6 +64,7 @@ from jarvis_tools import (
     current_turn,
     model_tools,
 )
+from managed_provider_cause import CODES as PROVIDER_ERROR_CODES
 from model_contract import (
     MAX_ACKNOWLEDGMENT_CHARACTERS,
     AcknowledgmentBoundary,
@@ -167,6 +168,15 @@ IMAGE_REQUEST_MAX_TEXT_BYTES = 400_000
 
 _tracer = trace.get_tracer("VoiceHostedAgent.Model")
 logger = logging.getLogger("model_client")
+
+
+def stream_failure_code(event: Any) -> str:
+    """A failed stream event's provider error code, only when it is a known content-free one."""
+    error = getattr(event, "error", None)
+    if error is None:
+        error = getattr(getattr(event, "response", None), "error", None)
+    code = getattr(error, "code", None)
+    return code if isinstance(code, str) and code in PROVIDER_ERROR_CODES else "other"
 
 
 class SummaryUnavailable(RuntimeError):
@@ -1385,6 +1395,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                                 raise RuntimeError(
                                                     "Model response content filtered"
                                                 )
+                                        logger.warning(
+                                            "Foundry stream did not complete; event=%s code=%s",
+                                            event.type, stream_failure_code(event),
+                                        )
                                         raise RuntimeError(
                                             "Foundry model response did not complete"
                                         )

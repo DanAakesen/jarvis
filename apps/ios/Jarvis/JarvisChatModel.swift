@@ -101,6 +101,8 @@ final class JarvisChatModel: ObservableObject {
     @Published var dismissingBackgroundTaskIDs = Set<String>()
     @Published var historyError: String?
     @Published var actionError: String?
+    /// The text of the last turn that failed, so the error can offer Retry. Cleared by the next send.
+    @Published private(set) var failedTurnText: String?
     @Published var statusLine: String?
     @Published var streamingText = ""
     @Published private(set) var acknowledgment: String?
@@ -340,6 +342,7 @@ final class JarvisChatModel: ObservableObject {
         progressUpdates = []
         isCancelling = false
         actionError = nil
+        failedTurnText = nil
         streamingText = ""
         acknowledgment = nil
         isReconnecting = false
@@ -363,6 +366,13 @@ final class JarvisChatModel: ObservableObject {
             at: ISO8601DateFormatter().string(from: Date())
         ))
         sendTask = Task { await sendTurn(text: text, attachments: attachments, visualFrame: visualFrame) }
+    }
+
+    /// Sends the text of the turn that failed again, as a new turn.
+    func retryFailedTurn() {
+        guard let text = failedTurnText, !isSending else { return }
+        draft = text
+        send()
     }
 
     /// The composer stays active while Jarvis answers: a follow-up joins the running turn instead of waiting for it.
@@ -703,7 +713,10 @@ final class JarvisChatModel: ObservableObject {
             activeMessageID = nil
             statusLine = nil
             discardOptimisticMessage()
-            if !Task.isCancelled { actionError = message(for: error) }
+            if !Task.isCancelled {
+                actionError = message(for: error)
+                failedTurnText = text
+            }
             // Keep any partial reply readable beside the failure; it is not a completed response.
         }
         sendTask = nil
@@ -877,10 +890,10 @@ final class JarvisChatModel: ObservableObject {
     }
 
     private func message(for error: any Error) -> String {
-        // PI failures carry an honest server message; show it instead of the generic turn text.
+        // A failed turn carries the server's own plain message (what failed, and that an action may have completed); show it instead of the generic turn text.
         if let error = error as? JarvisChatClientError,
            case .serverEvent(let code, let text) = error,
-           let code, code.hasPrefix("pi_"),
+           code != nil,
            let text, !text.isEmpty {
             return text
         }

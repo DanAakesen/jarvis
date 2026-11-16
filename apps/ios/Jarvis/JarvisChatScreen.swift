@@ -641,6 +641,13 @@ struct JarvisChatScreen: View {
                         .foregroundStyle(.red)
                         .accessibilityAddTraits(.isStaticText)
                     Spacer(minLength: 0)
+                    if model.failedTurnText != nil {
+                        JarvisLabelledButton(
+                            title: "Retry",
+                            isDisabled: model.isSending,
+                            accessibilityTitle: "Retry the message that failed"
+                        ) { model.retryFailedTurn() }
+                    }
                     JarvisLabelledButton(
                         title: "Dismiss",
                         isDisabled: model.isSending,
