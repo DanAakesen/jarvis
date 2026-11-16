@@ -1702,7 +1702,7 @@ the step, and a separate always-run step removes the local key.
 | Files | Azure Blob Storage for artifacts, logs, and archived task events | Decided |
 | Secrets | Azure Key Vault (RBAC) | Decided |
 | Images | Azure Container Registry: backend and sandbox images | Decided |
-| Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); allowlisted voice-turn and PC bridge timings; stateful Azure Monitor email alerts and 300 DKK budget thresholds | Timing fields are content-free and allowlisted; Azure's monthly budget poll stores one 80% activity alert per UTC calendar month in SQL, independent of the budget activation date; alert contracts, deduplication and Bicep compile offline; SQL Server integration, live ingestion, budget reads and email delivery remain unverified |
+| Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); allowlisted voice-turn and PC bridge timings; stateful Azure Monitor email alerts and 600 DKK budget thresholds | Timing fields are content-free and allowlisted; Azure's monthly budget poll stores one 80% activity alert per UTC calendar month in SQL, independent of the budget activation date; alert contracts, deduplication and Bicep compile offline; SQL Server integration, live ingestion, budget reads and email delivery remain unverified |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Bicep provisions no Teams Bot or separate Speech F0 resources; local Bicep checks pass, live Azure setup remains pending |
 
 ### iOS networking and authentication (P15-03)
@@ -7443,7 +7443,7 @@ Normal Bicep deployment is idempotent and does not require a portal step.
 
 The deploy script explicitly uses ARM **Incremental** mode. In that mode, resources omitted from a deployment template are left unchanged, so runtime-created Foundry deployments not declared in Bicep are preserved. Bicep continues to reconcile its explicitly declared model deployments.
 
-`sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, and `budgetStartDate` to `2026-10-01T00:00:00Z`. Budget notification emails are required through `budgetContactEmails`; actual cost is interpreted in the subscription billing currency, which remains to be confirmed as DKK.
+`sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `600`, and `budgetStartDate` to `2026-10-01T00:00:00Z`. Budget notification emails are required through `budgetContactEmails`; actual cost is interpreted in the subscription billing currency, which remains to be confirmed as DKK.
 
 ## Cost
 

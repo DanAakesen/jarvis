@@ -83,8 +83,8 @@ param backendLogProbePrincipalId string = ''
 param backendLogProbeAppName string = ''
 param backendLogProbeForeignWorkspaceId string = ''
 
-@description('The subscription currency amount for the monthly resource group budget (300 DKK).')
-param monthlyBudgetAmount int = 300
+@description('The subscription currency amount for the monthly resource group budget (600 DKK).')
+param monthlyBudgetAmount int = 600
 
 @description('Start of the budget period. Fixed, because Azure rejects changing the start date of an existing budget.')
 param budgetStartDate string = '2026-10-01T00:00:00Z'

@@ -13086,3 +13086,7 @@ with explicit Yes/No and the note's SHA. Reuse the vault's existing Git-backed
 delete rather than inventing a trash store: committed files remain in Git history,
 but unsaved drafts do not. Unknown outcomes require a refresh, not an automatic retry.
 Native gesture and visual acceptance is still pending.
+
+## 15 November 2026 - Monthly budget raised to 600 DKK
+
+The owner approved raising the resource group monthly budget from 300 to 600 DKK. The expected run rate with PI is about 450 to 750 DKK per month, so a 300 DKK budget alerted constantly without informing anything. Alerts stay at 80% and 100% of actual cost. This is an alert threshold, not a spending cap; the proactive PI hard stop (100 DKK) is separate.
