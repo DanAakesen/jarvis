@@ -34,7 +34,9 @@ public struct JarvisNoteParts: Equatable, Sendable {
     }
 
     public var content: String {
-        head + (title.map { "# " + $0 + titleEnding } ?? "") + body
+        // A title that ended the file has no line break; body text added after it must start on its own line.
+        let ending = titleEnding.isEmpty && !body.isEmpty ? "\n" : titleEnding
+        return head + (title.map { "# " + $0 + ending } ?? "") + body
     }
 
     /// The text the reader shows under the title and provenance: no properties and no repeated title.

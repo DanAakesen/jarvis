@@ -19,6 +19,13 @@ final class JarvisNotesRedesignTests: XCTestCase {
         XCTAssertEqual(JarvisNoteParts("No heading\nText").content, "No heading\nText")
     }
 
+    func testBodyAddedAfterAnUnterminatedTitleStartsOnItsOwnLine() {
+        var parts = JarvisNoteParts("# Title")
+        XCTAssertEqual(parts.content, "# Title")
+        parts.body = "Body"
+        XCTAssertEqual(parts.content, "# Title\nBody")
+    }
+
     func testNewNoteGetsARealTitleHeading() {
         XCTAssertEqual(JarvisNoteParts(newTitle: " Plan ", body: "Body").content, "# Plan\n\nBody")
     }

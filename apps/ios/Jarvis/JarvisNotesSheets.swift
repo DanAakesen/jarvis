@@ -121,23 +121,19 @@ struct JarvisFolderChooserSheet: View {
         let isSelected = row.path == selection
         return HStack(spacing: 0) {
             if row.isExpandable {
-                Button {
+                JarvisIconButton(
+                    title: row.name, systemImage: row.isExpanded ? "chevron.down" : "chevron.right",
+                    identifier: "folders.expand.\(row.path)", isCompact: false,
+                    hint: row.isExpanded ? copy.expanded : copy.collapsed
+                ) {
                     if expanded.contains(row.path) { expanded.remove(row.path) } else { expanded.insert(row.path) }
-                } label: {
-                    Image(systemName: row.isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
-                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(row.name)
-                .accessibilityValue(row.isExpanded ? copy.expanded : copy.collapsed)
-                .accessibilityIdentifier("folders.expand.\(row.path)")
+                .scaleEffect(0.8)
+                .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
             } else {
                 Color.clear.frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
             }
-            Button { selection = row.path; folderError = nil } label: {
+            JarvisRowButton(identifier: "folders.row.\(row.path)", action: { selection = row.path; folderError = nil }) {
                 HStack(spacing: 12) {
                     Image(systemName: row.path.isEmpty ? "tray.full" : "folder")
                         .foregroundStyle(JarvisDesignTokens.primaryAccent)
@@ -148,15 +144,11 @@ struct JarvisFolderChooserSheet: View {
                         Image(systemName: "checkmark").foregroundStyle(JarvisDesignTokens.primaryAccent).accessibilityHidden(true)
                     }
                 }
-                .frame(maxWidth: .infinity, minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .leading)
                 .padding(.horizontal, 8)
                 .background(isSelected ? Color.primary.opacity(0.1) : Color.clear, in: RoundedRectangle(cornerRadius: 12))
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
             .accessibilityValue(isSelected ? copy[.selected] : "")
             .accessibilityAddTraits(isSelected ? .isSelected : [])
-            .accessibilityIdentifier("folders.row.\(row.path)")
         }
         .padding(.leading, CGFloat(row.depth) * 16)
     }
