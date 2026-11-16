@@ -143,10 +143,12 @@ The PI agent gets three kinds of reach. GitHub (the full server) and Azure (Cont
 flowchart LR
     PI["PI agent<br/>managed harness, built-ins on"]
     JM["Jarvis MCP /pi/mcp<br/>find_tools, call_tool"]
+    GB["GitHub bridge in the backend<br/>token held by the backend"]
     GH["GitHub MCP, remote, full<br/>/mcp/x/all"]
     AZ["Azure MCP 3.0.0<br/>container, scales to zero<br/>Contributor on rg-jarvis"]
     PI -->|"connection jarvis-pi-mcp<br/>static secret + per-turn grant"| JM
-    PI -->|"connection jarvis-pi-github<br/>fine-grained token"| GH
+    JM -->|"gh_ tools, searched like the others"| GB
+    GB -->|"fine-grained token"| GH
     PI -->|"connection jarvis-pi-azure<br/>project identity, Entra app role"| AZ
     JM --> W["Workers<br/>create_issue, start_issue, get_work_status,<br/>steer_task, list_tasks"]
     W -->|"task events"| Q[("Event queue<br/>source: worker")]
@@ -156,7 +158,7 @@ flowchart LR
 | --- | --- | --- |
 | Reach declaration | `agents/pi/definition.json` (`reach`) | One entry per server: label, connection, URL. The same file feeds the provisioner and a test |
 | Attach logic | `.github/scripts/provision_pi_agent.py` (`resolve_reach`, `connect_reach`, `verify`) | A server is attached only when its input exists. A missing input is reported as "not attached: <what the owner must provide>"; a connection that cannot be written leaves the server out, is reported, and fails the job after the agent is defined. Nothing is silent and nothing is retried in a different way |
-| GitHub | remote server `https://api.githubcopilot.com/mcp/x/all` (the all-toolsets URL; the bare `/mcp/` serves only the default toolsets, without Actions and Copilot), connection `jarvis-pi-github` (custom keys, `Authorization: Bearer <token>`) | The token is the repository secret `PI_GITHUB_TOKEN`: fine-grained only (the script refuses a classic token, which cannot be limited to chosen repositories). Its permissions, set by the owner, are the only limit |
+| GitHub | remote server `https://api.githubcopilot.com/mcp/x/all` (the all-toolsets URL; the bare `/mcp/` serves only the default toolsets, without Actions and Copilot), reached by the backend (`pi/github-bridge.ts`, a small Streamable HTTP client) and offered through the Jarvis MCP door as tools named `gh_<tool>` | **Not a harness tool.** Attached as a harness MCP tool, the full server put its whole tool list (about 13k input tokens, and a tool listing per turn) in every turn: first text went from 1.1 to 1.5 s to 2.4 to 5.7 s (Deploy 43901841128). Through the door, `find_tools` ranks the GitHub tools with the Jarvis ones and `call_tool` forwards the call, so the harness lists two tools and nothing is lost. The token is the repository secret `PI_GITHUB_TOKEN`: fine-grained only (the script refuses a classic token), held by the backend as the Container App secret `pi-github-token` (env `JARVIS_PI_GITHUB_TOKEN`, a fingerprint in `JARVIS_PI_GITHUB_FP`), no longer in a Foundry connection (the old `jarvis-pi-github` connection is deleted by the Deploy). Its permissions, set by the owner, are the only limit. The tool list is cached for 30 minutes |
 | Azure | `Microsoft.App/containerApps` `ca-jarvis-azmcp-*` in `infra/main.bicep` (created only when `azureMcpClientId` is set), image `mcr.microsoft.com/azure-sdk/azure-mcp:3.0.0`, args `--transport http --outgoing-auth-strategy UseHostingEnvironmentIdentity --mode all --namespace group --namespace monitor --namespace containerapps`, minimum replicas 0 | Incoming calls need an Entra token carrying the app role `Mcp.Tools.ReadWrite.All`, held only by the Foundry project's identity (set up by `infra/setup-azure-mcp.ps1`). Outgoing calls use the container's own system identity with the **Contributor** role on `rg-jarvis`; widening beyond that resource group is the owner's call. The unauthenticated call returns 401 (observed) |
 | Azure connection | `jarvis-pi-azure`, auth type `ProjectManagedIdentity`, audience `api://<client id>` | **Unproven live.** Learn lists project-identity authentication for agent MCP tools, but one Microsoft sample note says it works through a toolbox only. The first Deploy with the server settles it; if Foundry refuses it, the error code is in the job output |
 | Workers | Jarvis tools in `factory/tools.ts`; procedure in `agents/pi/skills/jarvis-workers/SKILL.md` | PI starts, steers and retries Workers on its own judgement, in a chat turn or in a wake. Results come back as queue events (below) and as the existing chat notice |

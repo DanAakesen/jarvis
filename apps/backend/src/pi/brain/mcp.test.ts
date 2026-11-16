@@ -5,6 +5,7 @@ import { loadConfig } from '../../config.js';
 import { coreModule } from '../../core/index.js';
 import type { JarvisTool } from '../../core/tool-registry.js';
 import { createPiArea } from '../area.js';
+import type { GithubBridge } from '../github-bridge.js';
 import { createPiRoutes } from '../routes.js';
 import { createMemoryPiStore } from '../store.js';
 import { createPiTurnRegistry } from '../turns.js';
@@ -27,7 +28,7 @@ const probes: JarvisTool[] = ['list_projects', 'create_issue'].map((name) => ({
   execute: async (_input, request) => { calls.push(`${name}:${String(request.headers['x-jarvis-message-id'])}:${String(request.jarvisPi)}`); return { ok: true }; },
 }));
 
-function setup() {
+function setup(github?: GithubBridge) {
   calls.length = 0;
   const registry = createPiTurnRegistry();
   const auth = createPiAuth(config.auth.tenantId, secret);
@@ -39,8 +40,9 @@ function setup() {
   const app = buildApp(config, undefined, {
     modules: [coreModule, { id: 'probe', tools: probes, registerRoutes: async () => {} },
       { id: 'pi', tools: createBrainTools({ registry, comms, area: createPiArea({ vault }), now: () => new Date('2026-11-16T10:00:00Z') }),
-        registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250 }) }],
+        registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250, github }) }],
     auth: async (token) => {
+      if (token === 'agent.token.fixture') return { kind: 'jarvis-agent', objectId: '11111111-2222-4333-8444-555555555555', tenantId: config.auth.tenantId };
       if (token !== ownerToken) throw new Error('rejected');
       return { objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Owner' };
     },
@@ -124,6 +126,43 @@ describe('a brain wake over the Jarvis MCP server', () => {
   });
 });
 
+describe('GitHub through the Jarvis door', () => {
+  const ghTool = { name: 'gh_issue_write', description: 'GitHub: Create or update an issue', inputSchema: { type: 'object' }, moduleId: 'github', execute: async () => ({}) };
+  const bridge = () => {
+    const called: string[] = [];
+    const github: GithubBridge = {
+      tools: async () => [ghTool],
+      call: async (name, args) => { called.push(`${name}:${JSON.stringify(args)}`); return { outcome: 'ok', result: { number: 7 } }; },
+    };
+    return { github, called };
+  };
+
+  it('finds a GitHub tool next to the Jarvis ones and runs it for a chat turn and a wake, with no owner message', async () => {
+    const { github, called } = bridge();
+    const { tool, chat, wake } = setup(github);
+    for (const grant of [chat(), wake()]) {
+      const found = await tool('find_tools', { turn: grant.turn, query: 'github issue write' });
+      expect((found.result.tools as Array<{ name: string }>).map(({ name }) => name)).toContain('gh_issue_write');
+      const done = await tool('call_tool', { turn: grant.turn, name: 'gh_issue_write', arguments: { title: 'x' } });
+      expect(done).toMatchObject({ outcome: 'ok', result: { number: 7 } });
+      expect(grant.results).toEqual([{ tool: 'gh_issue_write', outcome: 'ok' }]);
+    }
+    expect(called).toEqual(['gh_issue_write:{"title":"x"}', 'gh_issue_write:{"title":"x"}']);
+  });
+
+  it('refuses a GitHub tool that was not looked up first, and is absent without a token', async () => {
+    const { github, called } = bridge();
+    const { tool, chat } = setup(github);
+    const grant = chat();
+    expect((await tool('call_tool', { turn: grant.turn, name: 'gh_issue_write', arguments: {} })).outcome).toBe('refused');
+    expect(called).toEqual([]);
+    const without = setup();
+    const other = without.chat();
+    const found = await without.tool('find_tools', { turn: other.turn, query: 'github issue write' });
+    expect(JSON.stringify(found.result)).not.toContain('gh_issue_write');
+  });
+});
+
 describe('chat and the brain stay apart', () => {
   it('hides the brain tools from a chat turn and refuses them if named anyway', async () => {
     const { tool, chat } = setup();
@@ -151,5 +190,11 @@ describe('chat and the brain stay apart', () => {
       headers: { authorization: bearer(ownerToken), 'content-type': 'application/json', 'x-jarvis-pi': 'wake' },
     });
     expect(pi.statusCode).toBe(403);
+    // Another agent identity is not the PI door: it cannot claim a wake either.
+    const other = await app.inject({
+      method: 'POST', url: '/tools/list_projects', payload: {},
+      headers: { authorization: bearer('agent.token.fixture'), 'content-type': 'application/json', 'x-jarvis-pi': 'wake', 'x-jarvis-brain': 'run-1' },
+    });
+    expect(other.statusCode).toBe(403);
   });
 });

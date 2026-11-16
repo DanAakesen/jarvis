@@ -6,9 +6,11 @@ that carries the instructions, the Jarvis MCP server (by connection) and the ski
 that version, and gives the backend the agent name and the MCP secret. It is idempotent: when nothing changed it creates nothing.
 It invokes no model and prints no definition, because the definition carries the MCP credential.
 
-Reach: the full GitHub MCP server (a fine-grained token the owner creates) and the Azure MCP server (Contributor on the
-Jarvis resource group, scale to zero) are attached when their inputs exist. A server whose input is missing is left out and reported as not attached; a
-server whose connection cannot be written is left out and fails the job after the agent is defined, so nothing is hidden.
+Reach: the full GitHub MCP server and the Azure MCP server (Contributor on the Jarvis resource group, scale to zero) are
+attached when their inputs exist. GitHub is not a harness tool: listing about a hundred tools in every turn cost seconds and
+tokens, so the backend holds the owner's fine-grained token and offers GitHub's tools through the Jarvis MCP door (find_tools
+and call_tool), where they are searched like every other tool. A server whose input is missing is left out and reported as not
+attached; a server whose connection cannot be written is left out and fails the job after the agent is defined, so nothing is hidden.
 """
 from __future__ import annotations
 
@@ -32,6 +34,7 @@ SKILL_FEATURES = "Skills=V1Preview"
 # Values that must never reach a log, even when Foundry echoes part of the request back in its error message.
 REDACT: list[str] = []
 SECRET_NAME = "pi-mcp-secret"
+GITHUB_SECRET_NAME = "pi-github-token"
 ARM = "https://management.azure.com"
 CONNECTIONS_API = "2025-04-01-preview"
 FINGERPRINT_KEY = "jarvis_pi_fingerprint"
@@ -62,6 +65,7 @@ def load_spec() -> dict:
     require(spec["reasoningEffort"] in {"none", "low", "medium", "high"}, "reasoning_effort_invalid")
     require(spec["mcp"]["requireApproval"] == "never", "approval_policy_unsupported")
     require(spec["builtinTools"] in {"enabled", "disabled"}, "builtin_tools_invalid")
+    require(spec["github"]["url"].startswith("https://") and re.fullmatch(r"[A-Z][A-Z0-9_]{0,63}", spec["github"]["tokenEnv"]) is not None, "github_spec_invalid")
     labels = [spec["mcp"]["serverLabel"]] + [server["serverLabel"] for server in spec.get("reach", [])]
     require(len(labels) == len(set(labels)) and all(re.fullmatch(r"[a-z][a-z0-9_]{0,31}", label) for label in labels), "reach_label_invalid")
     return spec
@@ -224,8 +228,10 @@ def backend_secret(app: str, group: str, subscription: str) -> str | None:
     return None
 
 
-def configure_backend(app: str, group: str, subscription: str, agent_name: str) -> str:
+def configure_backend(app: str, group: str, subscription: str, agent_name: str, github_token: str | None = None) -> str:
     """Return the MCP secret, creating it once. The backend gets it as a Container App secret, never as plain text.
+
+    The owner's GitHub token goes the same way, as a second secret, and is removed again when the owner withdraws it.
 
     The value is never printed: az output and errors are not echoed anywhere in this script.
     """
@@ -242,11 +248,28 @@ def configure_backend(app: str, group: str, subscription: str, agent_name: str) 
         shell("az", "containerapp", "secret", "set", "--name", app, "--resource-group", group, "--subscription", subscription,
               "--secrets", f"{SECRET_NAME}={secret}", "--only-show-errors", "--output", "none")
     wanted = {"JARVIS_PI_AGENT_NAME": agent_name, "JARVIS_PI_MCP_SECRET": SECRET_NAME}
-    if created or any(current.get(key) != value for key, value in wanted.items()):
-        shell("az", "containerapp", "update", "--name", app, "--resource-group", group, "--subscription", subscription,
-              "--set-env-vars", f"JARVIS_PI_AGENT_NAME={agent_name}", f"JARVIS_PI_MCP_SECRET=secretref:{SECRET_NAME}",
-              "--only-show-errors", "--output", "none")
+    # A fingerprint of the token (not the token) tells whether the backend already has this one.
+    github_fp = sha256(github_token)[:16] if github_token else ""
+    github_changed = current.get("JARVIS_PI_GITHUB_FP", "") != github_fp
+    if github_changed and github_token:
+        shell("az", "containerapp", "secret", "set", "--name", app, "--resource-group", group, "--subscription", subscription,
+              "--secrets", f"{GITHUB_SECRET_NAME}={github_token}", "--only-show-errors", "--output", "none")
+    if created or github_changed or any(current.get(key) != value for key, value in wanted.items()):
+        command = ["az", "containerapp", "update", "--name", app, "--resource-group", group, "--subscription", subscription]
+        env_vars = [f"JARVIS_PI_AGENT_NAME={agent_name}", f"JARVIS_PI_MCP_SECRET=secretref:{SECRET_NAME}"]
+        if github_token:
+            env_vars += [f"JARVIS_PI_GITHUB_TOKEN=secretref:{GITHUB_SECRET_NAME}", f"JARVIS_PI_GITHUB_FP={github_fp}"]
+        command += ["--set-env-vars", *env_vars]
+        if not github_token and ("JARVIS_PI_GITHUB_TOKEN" in current or "JARVIS_PI_GITHUB_FP" in current):
+            command += ["--remove-env-vars", "JARVIS_PI_GITHUB_TOKEN", "JARVIS_PI_GITHUB_FP"]
+        shell(*command, "--only-show-errors", "--output", "none")
         wait_ready(app, group, subscription)
+        if not github_token and github_changed:
+            listing = json.loads(shell("az", "containerapp", "secret", "list", "--name", app, "--resource-group", group, "--subscription",
+                                       subscription, "--only-show-errors", "--output", "json"))
+            if any(item.get("name") == GITHUB_SECRET_NAME for item in listing):
+                shell("az", "containerapp", "secret", "remove", "--name", app, "--resource-group", group, "--subscription", subscription,
+                      "--secret-names", GITHUB_SECRET_NAME, "--only-show-errors", "--output", "none")
     return secret
 
 
@@ -340,16 +363,7 @@ def resolve_reach(spec: dict, args: argparse.Namespace) -> tuple[list[dict], dic
     status: dict[str, str] = {}
     for server in spec.get("reach", []):
         label = server["serverLabel"]
-        if server["kind"] == "github":
-            token = os.environ.get(server["tokenEnv"], "").strip()
-            if not token:
-                status[label] = f"not attached: the owner has not provided the {server['tokenEnv']} secret"
-                continue
-            # Only a fine-grained token can be limited to chosen repositories and permissions; a classic token reaches everything.
-            require(GITHUB_TOKEN_PATTERN.fullmatch(token) is not None, "github_token_not_fine_grained")
-            REDACT.append(token)
-            attached.append({**server, "secret": token})
-        elif server["kind"] == "azure":
+        if server["kind"] == "azure":
             url = (getattr(args, "azure_mcp_url", "") or "").strip()
             client = (getattr(args, "azure_mcp_client_id", "") or "").strip()
             if not url or not client:
@@ -362,13 +376,29 @@ def resolve_reach(spec: dict, args: argparse.Namespace) -> tuple[list[dict], dic
     return attached, status
 
 
+def resolve_github(spec: dict) -> tuple[str | None, str]:
+    """The owner's GitHub token, or None, with a plain-words status."""
+    env = spec["github"]["tokenEnv"]
+    token = os.environ.get(env, "").strip()
+    if not token:
+        return None, f"not attached: the owner has not provided the {env} secret"
+    # Only a fine-grained token can be limited to chosen repositories and permissions; a classic token reaches everything.
+    require(GITHUB_TOKEN_PATTERN.fullmatch(token) is not None, "github_token_not_fine_grained")
+    REDACT.append(token)
+    return token, "attached"
+
+
+def remove_connection(project_id: str, name: str) -> None:
+    """Delete a project connection that no longer has a purpose (its key was readable by project members). Absent is fine."""
+    try:
+        arm_request("DELETE", f"{project_id}/connections/{name}")
+    except Blocked as error:
+        if ":not_found" not in str(error):
+            raise
+
+
 def connect_reach(project_id: str, server: dict) -> bool:
-    """Write the connection one reach server needs. GitHub gets a token header; Azure uses the project's identity."""
-    if server["kind"] == "github":
-        return upsert_connection(project_id, server["connection"], {
-            "category": "CustomKeys", "authType": "CustomKeys", "target": server["url"], "isSharedToAll": False,
-            "credentials": {"keys": {"Authorization": f"Bearer {server['secret']}"}}},
-            {"jarvis_secret_sha256": sha256(server["secret"]), "jarvis_purpose": "pi-github-mcp"}, ["target"])
+    """Write the connection one reach server needs. Azure uses the project's identity."""
     return upsert_connection(project_id, server["connection"], {
         "category": "RemoteTool", "authType": "ProjectManagedIdentity", "target": server["url"],
         "audience": server["audience"], "isSharedToAll": False},
@@ -398,14 +428,18 @@ def provision(args: argparse.Namespace) -> dict:
     instructions = instructions_text()
     skills = [parse_skill(skill) for skill in spec["skills"]]
     candidates, reach_status = resolve_reach(spec, args)
+    github_token, github_status = resolve_github(spec)
     azure = Az(args.project_endpoint)
     state = current_state(azure, name)
-    secret = configure_backend(args.backend_app, args.resource_group, args.subscription, name)
+    secret = configure_backend(args.backend_app, args.resource_group, args.subscription, name, github_token)
+    reach_status = {"github": github_status, **reach_status}
     REDACT.append(secret)
     server_url = f"https://{args.backend_fqdn}{spec['mcp']['path']}"
     project_id = (f"/subscriptions/{args.subscription}/resourceGroups/{args.resource_group}/providers/"
                   f"Microsoft.CognitiveServices/accounts/{args.foundry_account}/projects/{args.foundry_project}")
     connection_written = ensure_connection(project_id, spec, server_url, secret)
+    # GitHub used to be a harness tool with its own connection holding the token; the backend holds it now.
+    remove_connection(project_id, spec["github"]["legacyConnection"])
     reach: list[dict] = []
     problems: list[str] = []
     for server in candidates:

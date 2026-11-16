@@ -115,6 +115,8 @@ import { createPiStore } from './database/pi-store.js';
 import { buildPiContext } from './pi/context.js';
 import { createPiGateway } from './pi/gateway.js';
 import { createPiRoutes } from './pi/routes.js';
+import { createGithubBridge } from './pi/github-bridge.js';
+import { PI_GITHUB_MCP_URL } from './pi/definition.js';
 import { createPiTurnRegistry } from './pi/turns.js';
 import { createPiArea } from './pi/area.js';
 import { createBrain, type Brain } from './pi/brain/runner.js';
@@ -1141,6 +1143,7 @@ try {
     ],
     registerRoutes: createPiRoutes({
       gateway: piGateway, registry: piRegistry, auth: piAuth, monthlyCapDkk: config.pi?.monthlyCapDkk ?? 100, brain: brainControl,
+      ...(config.pi?.githubToken ? { github: createGithubBridge({ url: PI_GITHUB_MCP_URL, token: config.pi.githubToken }) } : {}),
     }),
   };
   const modules: BackendModule[] = createProductionModules({

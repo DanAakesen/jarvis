@@ -39,6 +39,9 @@ describe('standing watches in the vault', () => {
     const t = setup();
     for (let n = 0; n < 12; n += 1) await t.watches.create({ title: `Watch ${n}`, text: 'x' }, signal);
     expect(await t.watches.list(signal)).toHaveLength(12);
+    for (let n = 12; n < 55; n += 1) await t.watches.create({ title: `Watch ${n}`, text: 'x' }, signal);
+    // A restart reads every note, not only the first fifty.
+    expect(await t.make().list(signal)).toHaveLength(55);
     await expect(t.watches.create({ title: 'Bad', text: 'x', nextLook: new Date(Number.NaN) }, signal)).rejects.toMatchObject({ code: 'invalid' });
     await t.watches.create({ title: 'Build', text: 'x', nextLook: new Date(t.clock.t.getTime() + hours(1)) }, signal);
     const run = t.run();

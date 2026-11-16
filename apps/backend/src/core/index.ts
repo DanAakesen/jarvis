@@ -1,6 +1,7 @@
 import { backendLogAuthorizationSchema } from '../operations/backend-log-authorization.js';
 import { randomUUID } from 'node:crypto';
 import { generatedViewSchema, isGeneratedView } from '@jarvis/contracts';
+import { isPiDispatch } from './pi-authority.js';
 import type { BackendModule } from '../modules.js';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { isCurrentAssistantTool, ToolFailure, ToolRefusal } from './tool-registry.js';
@@ -205,7 +206,7 @@ export const coreModule: BackendModule = {
         // A PI brain wake has no owner message. Only the agent principal may say so; the brain's own tools prove the wake themselves.
         const brain = typeof request.headers['x-jarvis-brain'] === 'string';
         const piHeader = request.headers['x-jarvis-pi'];
-        if ((brain || piHeader !== undefined) && !request.agentPrincipal) {
+        if ((brain || piHeader !== undefined) && !isPiDispatch(request)) {
           return reply.code(403).send({ error: 'Tool is unavailable to a background wake' });
         }
         if (piHeader === 'turn' || piHeader === 'wake') request.jarvisPi = piHeader;

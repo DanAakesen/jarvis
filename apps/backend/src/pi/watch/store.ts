@@ -6,7 +6,6 @@ import {
   WatchError, appendTrailLine, composeWatch, parseWatch, watchFileName, withNextLook, type ParsedWatch,
 } from './note.js';
 
-const maxLoaded = 50;
 const readConcurrency = 5;
 const dueFullNoteCharacters = 2_400;
 const listedExcerptCharacters = 220;
@@ -55,7 +54,7 @@ export function createWatches(options: {
   let loading: Promise<void> | undefined;
 
   async function load(signal: AbortSignal): Promise<void> {
-    const listed = (await area.list('Watches', signal)).slice(0, maxLoaded);
+    const listed = await area.list('Watches', signal);
     const found = new Map<string, ParsedWatch>();
     let next = 0;
     await Promise.all(Array.from({ length: Math.min(readConcurrency, listed.length) }, async () => {

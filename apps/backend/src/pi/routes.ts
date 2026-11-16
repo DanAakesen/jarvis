@@ -3,6 +3,7 @@ import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
 import { PiGatewayError } from './errors.js';
 import type { PiGateway, PiStatus } from './gateway.js';
 import { createPiMcpRoutes } from './mcp.js';
+import type { GithubBridge } from './github-bridge.js';
 import { runPiSmoke } from './smoke.js';
 import type { PiTurnRegistry } from './turns.js';
 import type { BrainControl } from './brain/control.js';
@@ -16,6 +17,8 @@ export interface PiModuleOptions {
   readonly monthlyCapDkk: number;
   /** The owner's test switch and status for the brain; absent when the brain is not wired on this backend. */
   readonly brain?: BrainControl | undefined;
+  /** GitHub's tools, reached through the Jarvis MCP door. Absent when no token is configured. */
+  readonly github?: GithubBridge | undefined;
 }
 
 const isOwner = (app: FastifyInstance, objectId: string | undefined) => objectId?.toLowerCase() === app.ownerObjectId.toLowerCase();
@@ -77,7 +80,7 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
 
     if (!options.gateway) return;
     const gateway = options.gateway;
-    await app.register(createPiMcpRoutes({ registry: options.registry, auth: options.auth }));
+    await app.register(createPiMcpRoutes({ registry: options.registry, auth: options.auth, github: options.github }));
 
     app.post('/pi/smoke', { config: { jarvisDeploySmoke: true }, schema: { body: { type: ['object', 'null'], additionalProperties: false } } },
       async (request, reply) => {
@@ -86,7 +89,7 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
         try {
           const status = await gateway.status(AbortSignal.timeout(10_000));
           if (!status.enabled) return reply.code(409).send({ error: 'PI is over its monthly cap; the smoke did not run.', code: 'pi_budget_exhausted' });
-          return await runPiSmoke(gateway, AbortSignal.timeout(280_000));
+          return await runPiSmoke(gateway, AbortSignal.timeout(280_000), { github: options.github });
         } catch (error) {
           request.log.warn({ code: error instanceof PiGatewayError ? error.code : 'unknown' }, 'pi.smoke_failed');
           return reply.code(502).send(errorBody(error));

@@ -27,7 +27,7 @@ export interface BackendConfig {
   foundryCopilot?: { agentName: string; version: string; fingerprint: string };
   foundryCopilotPolicyCompatibility?: string;
   /** PI chat engine (managed Copilot-harness agent). Present only when its agent name and MCP secret are both set; test-selector only. */
-  pi?: { agentName: string; mcpSecret: string; monthlyCapDkk: number };
+  pi?: { agentName: string; mcpSecret: string; monthlyCapDkk: number; githubToken?: string };
   foundryProjectEndpoint?: string;
   foundryMemoryEmbeddingDeploymentName?: string;
   codexToolModel: string;
@@ -188,8 +188,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (piAgentName !== undefined && foundryProjectEndpoint === undefined) {
     throw new ConfigurationError('FOUNDRY_PROJECT_ENDPOINT is required when JARVIS_PI_AGENT_NAME is configured');
   }
+  const piGithubToken = env.JARVIS_PI_GITHUB_TOKEN || undefined;
+  if (piGithubToken !== undefined && !/^github_pat_[A-Za-z0-9_]{50,255}$/u.test(piGithubToken)) {
+    throw new ConfigurationError('JARVIS_PI_GITHUB_TOKEN must be a fine-grained GitHub token');
+  }
   const pi = piAgentName !== undefined && piMcpSecret !== undefined
-    ? { agentName: piAgentName, mcpSecret: piMcpSecret, monthlyCapDkk: piMonthlyCapDkk } : undefined;
+    ? { agentName: piAgentName, mcpSecret: piMcpSecret, monthlyCapDkk: piMonthlyCapDkk, ...(piGithubToken ? { githubToken: piGithubToken } : {}) } : undefined;
   const foundryMemoryEmbeddingDeploymentName = env.JARVIS_MEMORY_EMBEDDING_DEPLOYMENT_NAME;
   if (foundryMemoryEmbeddingDeploymentName !== undefined &&
       !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(foundryMemoryEmbeddingDeploymentName)) {
