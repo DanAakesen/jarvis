@@ -590,7 +590,7 @@ jobs:
       - name: Define the PI agent, skills and MCP connections, and give the backend its name and MCP secret
         id: provision
         env:
-          # The owner's fine-grained GitHub token. Absent: the GitHub server is left out and the summary says so.
+          # The owner's fine-grained GitHub token, handed to the backend. Absent: GitHub is not attached and the summary says so.
           PI_GITHUB_TOKEN: ${{ secrets.PI_GITHUB_TOKEN }}
         run: |
           python .github/scripts/provision_pi_agent.py --project-endpoint "$FOUNDRY_ADMIN" --backend-fqdn "$BACKEND_FQDN" \

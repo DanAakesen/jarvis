@@ -1,4 +1,5 @@
 import { PI_MCP_SERVER_LABEL } from './definition.js';
+import { githubToolPrefix, type GithubBridge } from './github-bridge.js';
 import type { PiEvent, PiGateway, PiUsage } from './gateway.js';
 
 interface Measured {
@@ -57,7 +58,7 @@ export function isSpokenShape(text: string): boolean {
  * through the Jarvis MCP server under the read-only smoke role, and a cancelled turn followed by a normal one. It reports
  * what it observed; the workflow, not this code, decides how to present it.
  */
-export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: { warmTurns?: number } = {}): Promise<PiSmokeReport> {
+export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: { warmTurns?: number; github?: GithubBridge | undefined } = {}): Promise<PiSmokeReport> {
   const kit = gateway.smokeKit;
   const conversationId = await kit.createConversation(signal);
   const listed = new Map<string, { tools: number; failed: boolean }>();
@@ -96,6 +97,8 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
       if (!(config.abortAfterFirstText && controller.signal.aborted)) throw error;
     } finally {
       toolResults.push(...grant.results);
+      // GitHub runs through the Jarvis door, so its calls are the door's own record, reported as the github server's.
+      reachCalls.push(...grant.results.filter(result => result.tool.startsWith(githubToolPrefix)).map(result => ({ server: 'github', name: result.tool.slice(githubToolPrefix.length), failed: result.outcome !== 'ok' })));
       kit.closeGrant(grant.turn);
     }
     const closedMs = abortedAt === null ? 0 : Math.round(performance.now() - abortedAt);
@@ -134,9 +137,13 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
   };
   // A reach server gets a turn only when the harness listed its tools; a server that is not attached is reported as such.
   const reach: { server: 'github' | 'azure'; turn: Measured }[] = [];
+  if (options.github) {
+    const githubTools = await options.github.tools(signal).catch(() => []);
+    listed.set('github', { tools: githubTools.length, failed: githubTools.length === 0 });
+  }
   const reachPrompts = {
-    github: 'Use the github tools (read only) to read the title of issue 700 in the repository DanAakesen/jarvis, then say it in one sentence.',
-    azure: 'Use the azure tools (read only) to list the resource groups of the subscription, then say how many there are in one sentence.',
+    github: 'Use find_tools to look up "github issue read", then call the GitHub tool gh_issue_read with owner "DanAakesen", repo "jarvis", issue_number 700 and method "get", then say the issue title in one sentence.',
+    azure: 'Use the azure tools to list the resource groups of the subscription, then say how many there are in one sentence.',
   } as const;
   for (const server of ['github', 'azure'] as const) {
     if (listed.get(server) && !listed.get(server)!.failed) reach.push({ server, turn: strip(await measure(reachPrompts[server])) });

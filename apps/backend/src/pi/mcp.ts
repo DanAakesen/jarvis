@@ -3,7 +3,8 @@ import { toNodeHandler } from '@modelcontextprotocol/node';
 import { createMcpHandler, McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
-import { isCurrentAssistantTool, isWakeTool, type RegisteredTool } from '../core/tool-registry.js';
+import { isCurrentAssistantTool, isWakeTool, type RegisteredTool, type ToolRegistry } from '../core/tool-registry.js';
+import { githubToolPrefix, type GithubBridge } from './github-bridge.js';
 import { searchVoiceTools, shortenVoiceDescription } from '../voice/voice-tools.js';
 import { piTurnPattern, type PiTurnRegistry } from './turns.js';
 
@@ -40,8 +41,23 @@ function shapeSchema(tool: RegisteredTool): unknown {
  * Authority is the per-turn reference (see turns.ts): the owner message and session come from the server-side grant,
  * never from anything the model writes.
  */
-export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; readonly auth: PiAuth }): FastifyPluginAsync {
-  const { registry, auth } = options;
+export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; readonly auth: PiAuth; readonly github?: GithubBridge | undefined }): FastifyPluginAsync {
+  const { registry, auth, github } = options;
+
+  async function callGithub(name: string, args: Record<string, unknown>, grant: NonNullable<ReturnType<PiTurnRegistry['resolve']>>, signal: AbortSignal): Promise<CallToolResult> {
+    if (!github) return text({ tool: name, outcome: 'refused', result: { refused: notFound } });
+    // The Deploy smoke may read one issue, as the old smoke role did, and nothing else.
+    if (grant.smoke === true && (name !== `${githubToolPrefix}issue_read` || args.issue_number !== 700 || args.method !== 'get')) {
+      grant.results.push({ tool: name, outcome: 'refused' });
+      return text({ tool: name, outcome: 'refused', result: { refused: 'The smoke may only read issue 700. Nothing was done.' } });
+    }
+    const done = await github.call(name, args, signal);
+    grant.results.push({ tool: name, outcome: done.outcome });
+    const body = JSON.stringify(done.result);
+    const result = body.length > maxResultCharacters
+      ? { truncated: true, preview: body.slice(0, maxResultCharacters), note: 'The result was too long; this is its start.' } : done.result;
+    return text({ tool: name, outcome: done.outcome, result }, done.outcome === 'error');
+  }
 
   function buildServer(app: FastifyInstance, signal: AbortSignal): McpServer {
     const server = new McpServer({ name: 'jarvis', version: '1.0.0' });
@@ -53,7 +69,13 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     }, async (input) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: 'find_tools', outcome: 'refused', result: { refused: unknownTurn } }, true);
-      const matches = searchVoiceTools(app.jarvisTools, input.query, grant.brain ? isWakeTool : undefined);
+      // GitHub's tools are searched like Jarvis's own, so only the ones a turn asks for are ever put in front of the model.
+      const githubTools = github ? await github.tools(signal) : [];
+      const catalogue: ToolRegistry = githubTools.length === 0 ? app.jarvisTools : {
+        list: () => [...app.jarvisTools.list(), ...githubTools],
+        get: (name) => app.jarvisTools.get(name) ?? githubTools.find((tool) => tool.name === name),
+      };
+      const matches = searchVoiceTools(catalogue, input.query, grant.brain ? isWakeTool : undefined);
       const full = matches.slice(0, maxFullResults);
       for (const tool of full) grant.discovered.add(tool.name);
       return text({
@@ -73,6 +95,9 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     }, async (input, ctx) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
+      if (input.name.startsWith(githubToolPrefix) && grant.discovered.has(input.name)) {
+        return callGithub(input.name, input.arguments, grant, AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]));
+      }
       const tool = app.jarvisTools.get(input.name);
       const visible = tool && (grant.brain ? isWakeTool(tool.name) : isCurrentAssistantTool(tool.name));
       if (!tool || !visible || !grant.discovered.has(tool.name)) {

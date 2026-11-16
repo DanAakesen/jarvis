@@ -125,8 +125,10 @@ class DefinitionTest(unittest.TestCase):
         with mock.patch.object(pi, "Az", Fake), mock.patch.object(pi, "configure_backend", return_value="S" * 43), \
                 mock.patch.object(pi, "arm_request", fake_arm):
             result = pi.provision(args)
-        self.assertEqual([m for m, _ in arm], ["GET", "PUT"])
+        # The Jarvis connection is written, and the old GitHub connection (which held the token) is removed.
+        self.assertEqual([m for m, _ in arm], ["GET", "PUT", "DELETE"])
         self.assertTrue(arm[1][1].endswith("/accounts/acct/projects/proj/connections/jarvis-pi-mcp"))
+        self.assertTrue(arm[2][1].endswith("/connections/jarvis-pi-github"))
         self.assertTrue(result["connectionWritten"])
         self.assertEqual(result["connection"], "jarvis-pi-mcp")
         self.assertEqual(result["version"], "1")
@@ -165,44 +167,43 @@ class ReachTest(unittest.TestCase):
     def test_missing_inputs_leave_a_server_out_and_say_who_must_provide_what(self):
         with mock.patch.dict("os.environ", {}, clear=True):
             attached, status = pi.resolve_reach(self.spec, argparse.Namespace(azure_mcp_url="", azure_mcp_client_id=""))
+            token, github_status = pi.resolve_github(self.spec)
         self.assertEqual(attached, [])
-        self.assertIn("PI_GITHUB_TOKEN", status["github"])
+        self.assertIsNone(token)
+        self.assertEqual(github_status, "not attached: the owner has not provided the PI_GITHUB_TOKEN secret")
         self.assertIn("JARVIS_AZURE_MCP_CLIENT_ID", status["azure"])
 
     def test_only_a_fine_grained_github_token_is_accepted_and_it_is_redacted(self):
         with mock.patch.dict("os.environ", {"PI_GITHUB_TOKEN": "ghp_" + "A" * 36}, clear=True), self.assertRaises(pi.Blocked):
-            pi.resolve_reach(self.spec, self.args)
+            pi.resolve_github(self.spec)
         with mock.patch.dict("os.environ", {"PI_GITHUB_TOKEN": self.token}, clear=True):
-            attached, _ = pi.resolve_reach(self.spec, self.args)
-        self.assertEqual([server["serverLabel"] for server in attached], ["github", "azure"])
+            token, status = pi.resolve_github(self.spec)
+        self.assertEqual((token, status), (self.token, "attached"))
         self.assertIn(self.token, pi.REDACT)
 
-    def test_reach_tools_are_the_full_servers_behind_connections_with_no_headers(self):
-        with mock.patch.dict("os.environ", {"PI_GITHUB_TOKEN": self.token}, clear=True):
-            attached, _ = pi.resolve_reach(self.spec, self.args)
+    def test_github_is_not_a_harness_tool_so_the_turn_does_not_carry_its_tool_list(self):
+        attached, _ = pi.resolve_reach(self.spec, self.args)
         instructions = pi.instructions_text()
         skills = [dict(pi.parse_skill(name), version="1") for name in self.spec["skills"]]
         definition = pi.build_definition(self.spec, instructions, "https://b/pi/mcp", skills, attached)
         tools = {tool["server_label"]: tool for tool in definition["tools"] if tool["type"] == "mcp"}
-        self.assertEqual(set(tools), {"jarvis", "github", "azure"})
-        self.assertEqual(tools["github"]["server_url"], "https://api.githubcopilot.com/mcp/x/all")
-        self.assertEqual(tools["github"]["project_connection_id"], "jarvis-pi-github")
+        self.assertEqual(set(tools), {"jarvis", "azure"})
         self.assertEqual(tools["azure"]["server_url"], "https://azure-mcp.example")
         for tool in tools.values():
             self.assertEqual(tool["require_approval"], "never")
             self.assertNotIn("headers", tool)
-        self.assertNotIn("readonly", tools["github"]["server_url"])
         self.assertNotIn("read-only", instructions.lower())
         for skill in skills:
             self.assertNotIn("read-only", json.dumps(skill).lower())
-        self.assertNotIn(self.token, json.dumps(definition))
+        self.assertNotIn("githubcopilot", json.dumps(definition))
         pi.verify({"definition": definition}, self.spec, instructions, attached)
         with self.assertRaises(pi.Blocked):
-            pi.verify({"definition": definition}, self.spec, instructions, attached[:1])
+            pi.verify({"definition": definition}, self.spec, instructions, [])
         base = pi.fingerprint(self.spec, instructions, "https://b/pi/mcp", skills)
         self.assertNotEqual(base, pi.fingerprint(self.spec, instructions, "https://b/pi/mcp", skills, attached))
+        self.assertEqual(self.spec["github"]["url"], "https://api.githubcopilot.com/mcp/x/all")
 
-    def test_connections_hold_the_github_token_and_the_azure_audience_but_never_both_in_metadata(self):
+    def test_the_azure_connection_holds_the_audience_and_no_credential(self):
         stored = {}
 
         def fake(method, path, body=None):
@@ -211,23 +212,33 @@ class ReachTest(unittest.TestCase):
             stored[path.rsplit("/", 1)[-1]] = body["properties"]
             return {}
 
-        with mock.patch.dict("os.environ", {"PI_GITHUB_TOKEN": self.token}, clear=True), mock.patch.object(pi, "arm_request", fake):
+        with mock.patch.object(pi, "arm_request", fake):
             attached, _ = pi.resolve_reach(self.spec, self.args)
             for server in attached:
                 self.assertTrue(pi.connect_reach(self.project, server))
-        github, azure = stored["jarvis-pi-github"], stored["jarvis-pi-azure"]
-        self.assertEqual(github["credentials"], {"keys": {"Authorization": "Bearer " + self.token}})
-        self.assertNotIn(self.token, json.dumps(github["metadata"]))
+        azure = stored["jarvis-pi-azure"]
+        self.assertEqual(list(stored), ["jarvis-pi-azure"])
         self.assertEqual((azure["authType"], azure["audience"]), ("ProjectManagedIdentity", "api://11111111-2222-3333-4444-555555555555"))
         self.assertNotIn("credentials", azure)
 
-    def test_a_connection_that_cannot_be_written_is_left_out_and_fails_the_job_after_the_agent_is_defined(self):
+    def test_the_old_github_connection_is_deleted_and_a_missing_one_is_fine(self):
         calls = []
+
+        def fake(method, path, body=None):
+            calls.append((method, path.rsplit("/", 1)[-1]))
+            raise pi.Blocked("arm_delete_failed:jarvis-pi-github:not_found")
+
+        with mock.patch.object(pi, "arm_request", fake):
+            pi.remove_connection(self.project, "jarvis-pi-github")
+        self.assertEqual(calls, [("DELETE", "jarvis-pi-github")])
+        with mock.patch.object(pi, "arm_request", side_effect=pi.Blocked("arm_delete_failed:x:forbidden")), self.assertRaises(pi.Blocked):
+            pi.remove_connection(self.project, "jarvis-pi-github")
+
+    def test_a_connection_that_cannot_be_written_is_left_out_and_fails_the_job_after_the_agent_is_defined(self):
         stored = {}
 
         class Fake(pi.Az):
             def rest(self, method, path, body=None, *, content_type="application/json"):
-                calls.append((method, path))
                 if method == "GET" and path == "/agents/jarvis-pi":
                     raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found")
                 if method == "POST" and path.startswith("/skills/"):
@@ -240,7 +251,7 @@ class ReachTest(unittest.TestCase):
                 return {}
 
         def fake_arm(method, path, body=None):
-            if method == "GET":
+            if method == "GET" or method == "DELETE":
                 raise pi.Blocked("arm_get_failed:x:not_found")
             if path.endswith("jarvis-pi-azure"):
                 raise pi.Blocked("arm_put_failed:jarvis-pi-azure:bad_request")
@@ -250,15 +261,54 @@ class ReachTest(unittest.TestCase):
                                   foundry_project="proj", backend_app="app", resource_group="rg", subscription="sub",
                                   azure_mcp_url="https://azure-mcp.example", azure_mcp_client_id="11111111-2222-3333-4444-555555555555",
                                   output=None)
+        configure = mock.Mock(return_value="S" * 43)
         with mock.patch.dict("os.environ", {"PI_GITHUB_TOKEN": self.token}, clear=True), mock.patch.object(pi, "Az", Fake), \
-                mock.patch.object(pi, "configure_backend", return_value="S" * 43), mock.patch.object(pi, "arm_request", fake_arm):
+                mock.patch.object(pi, "configure_backend", configure), mock.patch.object(pi, "arm_request", fake_arm):
             result = pi.provision(args)
         labels = [tool["server_label"] for tool in stored["definition"]["tools"] if tool["type"] == "mcp"]
-        self.assertEqual(labels, ["jarvis", "github"])
+        self.assertEqual(labels, ["jarvis"])
         self.assertEqual(result["reach"]["github"], "attached")
         self.assertIn("not attached", result["reach"]["azure"])
+        self.assertEqual(configure.call_args.args[-1], self.token)
         self.assertEqual(len(result["problems"]), 1)
         self.assertTrue(result["created"])
+
+
+class BackendTokenTest(unittest.TestCase):
+    token = "github_pat_" + "B" * 60
+
+    def run_configure(self, token, env, secrets_listed=()):
+        commands = []
+
+        def fake_shell(*command):
+            commands.append(command)
+            if command[:3] == ("az", "containerapp", "secret") and command[3] == "list":
+                return json.dumps([{"name": "pi-mcp-secret", "value": "S" * 43}, *[{"name": name} for name in secrets_listed]])
+            if command[:3] == ("az", "containerapp", "show"):
+                return json.dumps([{"name": key, "value": value} for key, value in env.items()])
+            return ""
+
+        with mock.patch.object(pi, "shell", fake_shell), mock.patch.object(pi, "wait_ready"):
+            pi.configure_backend("app", "rg", "sub", "jarvis-pi", token)
+        return commands
+
+    def test_the_token_becomes_a_backend_secret_and_a_secret_reference_never_a_plain_value(self):
+        commands = self.run_configure(self.token, {"JARVIS_PI_AGENT_NAME": "jarvis-pi", "JARVIS_PI_MCP_SECRET": "pi-mcp-secret"})
+        setting = [c for c in commands if "secret" in c and "set" in c]
+        self.assertTrue(any(f"pi-github-token={self.token}" in c for c in setting))
+        update = [c for c in commands if c[:4] == ("az", "containerapp", "update", "--name")][-1]
+        self.assertIn("JARVIS_PI_GITHUB_TOKEN=secretref:pi-github-token", update)
+        self.assertTrue(any(part.startswith("JARVIS_PI_GITHUB_FP=") and self.token not in part for part in update))
+
+    def test_an_unchanged_token_changes_nothing_and_a_withdrawn_one_is_removed(self):
+        fp = pi.sha256(self.token)[:16]
+        env = {"JARVIS_PI_AGENT_NAME": "jarvis-pi", "JARVIS_PI_MCP_SECRET": "pi-mcp-secret", "JARVIS_PI_GITHUB_TOKEN": "pi-github-token", "JARVIS_PI_GITHUB_FP": fp}
+        same = self.run_configure(self.token, env)
+        self.assertFalse([c for c in same if c[:4] == ("az", "containerapp", "update", "--name")])
+        gone = self.run_configure(None, env, secrets_listed=["pi-github-token"])
+        update = [c for c in gone if c[:4] == ("az", "containerapp", "update", "--name")][-1]
+        self.assertIn("--remove-env-vars", update)
+        self.assertTrue(any("remove" in c and "pi-github-token" in c for c in gone))
 
 
 class ErrorReportTest(unittest.TestCase):

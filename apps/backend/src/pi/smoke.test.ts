@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { GithubBridge } from './github-bridge.js';
 import type { PiEvent, PiGateway, PiUsage } from './gateway.js';
 import { isSpokenShape, runPiSmoke, toolRanOk } from './smoke.js';
 import type { PiTurnGrant } from './turns.js';
@@ -28,7 +29,9 @@ function fakeGateway(toolOutcome: 'ok' | 'error' | 'none', options: { claimToolT
         const isTools = input.includes('jobs');
         const isLong = input.includes('story');
         for (const server of options.listed ?? []) yield { kind: 'tools_listed', server, tools: 12, failed: false };
-        const reachServer = /use the (github|azure) tools/iu.exec(input)?.[1]?.toLowerCase();
+        // GitHub runs through the Jarvis door: the door, not the harness, records its call.
+        if (input.includes('gh_issue_read')) (grants.get(turn)!.results as { tool: string; outcome: 'ok' | 'error' }[]).push({ tool: 'gh_issue_read', outcome: options.failReach === true ? 'error' : 'ok' });
+        const reachServer = /use the (azure) tools/iu.exec(input)?.[1]?.toLowerCase();
         if (reachServer) {
           yield { kind: 'tool', server: reachServer };
           yield { kind: 'tool_done', server: reachServer, name: 'read', failed: options.failReach === true };
@@ -50,6 +53,11 @@ function fakeGateway(toolOutcome: 'ok' | 'error' | 'none', options: { claimToolT
   } as unknown as PiGateway;
 }
 
+const bridge = (count: number): GithubBridge => ({
+  tools: async () => Array.from({ length: count }, (_, index) => ({ name: `gh_t${index}`, description: 'x', inputSchema: {}, moduleId: 'github', execute: async () => ({}) })),
+  call: async () => ({ outcome: 'ok', result: {} }),
+});
+
 describe('PI live smoke', () => {
   it('passes the MCP check only when the tool ran and its own result was ok', async () => {
     expect((await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1 })).checks.tools_over_mcp).toBe(true);
@@ -70,15 +78,27 @@ describe('PI live smoke', () => {
     const none = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1 });
     expect(none.reach).toEqual([]);
     expect(Object.keys(none.checks).filter(key => key.startsWith('reach_'))).toEqual([]);
-    const both = await runPiSmoke(fakeGateway('ok', { listed: ['github', 'azure'] }), new AbortController().signal, { warmTurns: 1 });
+    const both = await runPiSmoke(fakeGateway('ok', { listed: ['azure'] }), new AbortController().signal, { warmTurns: 1, github: bridge(12) });
     expect(both.reach.map(({ server }) => server)).toEqual(['github', 'azure']);
     expect(both.checks).toMatchObject({ reach_github: true, reach_azure: true, mcp_listing: true });
-    expect(both.listed).toEqual([{ server: 'github', tools: 12, failed: false }, { server: 'azure', tools: 12, failed: false }]);
+    expect(both.listed).toEqual([{ server: 'azure', tools: 12, failed: false }, { server: 'github', tools: 12, failed: false }]);
   });
 
   it('fails a reach check when the harness reports the call as failed', async () => {
-    const report = await runPiSmoke(fakeGateway('ok', { listed: ['github'], failReach: true }), new AbortController().signal, { warmTurns: 1 });
-    expect(report.checks.reach_github).toBe(false);
+    const report = await runPiSmoke(fakeGateway('ok', { listed: ['azure'], failReach: true }), new AbortController().signal, { warmTurns: 1 });
+    expect(report.checks.reach_azure).toBe(false);
+  });
+
+  it('reports GitHub through the Jarvis door: listed by the bridge, checked by the door\'s own record of the call', async () => {
+    const good = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1, github: bridge(30) });
+    expect(good.listed).toEqual([{ server: 'github', tools: 30, failed: false }]);
+    expect(good.checks.reach_github).toBe(true);
+    const failed = await runPiSmoke(fakeGateway('ok', { failReach: true }), new AbortController().signal, { warmTurns: 1, github: bridge(30) });
+    expect(failed.checks.reach_github).toBe(false);
+    const empty = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1, github: bridge(0) });
+    expect(empty.listed).toEqual([{ server: 'github', tools: 0, failed: true }]);
+    expect(empty.reach).toEqual([]);
+    expect(empty.checks.reach_github).toBe(false);
   });
 
   it('fails the check of a server whose tool listing failed, instead of skipping it', async () => {

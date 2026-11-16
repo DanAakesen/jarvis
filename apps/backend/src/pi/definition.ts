@@ -2,6 +2,8 @@
 export const PI_MODEL = 'gpt-6.1-terra';
 export const PI_REASONING_EFFORT = 'low';
 export const PI_MCP_SERVER_LABEL = 'jarvis';
+/** GitHub's remote MCP server with every toolset. The backend, not the harness, connects to it; see github-bridge.ts. */
+export const PI_GITHUB_MCP_URL = 'https://api.githubcopilot.com/mcp/x/all';
 
 /** Exact agent-scoped feature header from azure-ai-projects 2.9.0 (same value as agents/jarvis/managed_copilot.py). */
 export const PI_PREVIEW_HEADER = [
