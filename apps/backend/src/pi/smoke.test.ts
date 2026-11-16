@@ -71,6 +71,13 @@ describe('PI live smoke', () => {
     expect((await runPiSmoke(fakeGateway('none', { claimToolText: true }), new AbortController().signal, { warmTurns: 1 })).checks.tools_over_mcp).toBe(false);
   });
 
+  it('reports which tools PI reached for on natural prompts, without making them a check', async () => {
+    const report = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1 });
+    expect(report.choices.map(({ label }) => label)).toEqual(['Azure question', 'GitHub question', 'Notes question', 'PC request']);
+    expect(report.choices.every(({ called }) => Array.isArray(called))).toBe(true);
+    expect(Object.keys(report.checks).some(key => key.startsWith('choice'))).toBe(false);
+  });
+
   it('gives a reach server a turn and a check only when the harness listed its tools', async () => {
     const none = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1 });
     expect(none.reach).toEqual([]);

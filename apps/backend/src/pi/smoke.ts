@@ -33,6 +33,8 @@ export interface PiSmokeReport {
   readonly listed: readonly { readonly server: string; readonly tools: number; readonly failed: boolean }[];
   /** One turn per attached reach server; absent servers get no turn and no check. */
   readonly reach: readonly { readonly server: 'github' | 'azure'; readonly turn: Measured }[];
+  /** Natural prompts with no tool named: which tools PI reached for. Report only; the smoke role refuses everything but its reads, so nothing acts. */
+  readonly choices: readonly { readonly label: string; readonly called: readonly string[]; readonly turn: Measured }[];
   readonly cancel: { readonly abortToCloseMs: number; readonly partialCharacters: number; readonly followUpOk: boolean };
   /** The PI leg of a voice turn: the same agent and conversation with the voice channel note. Voice Live's own audio time is not in it. */
   readonly voice: { readonly plain: Measured; readonly tools: Measured };
@@ -152,15 +154,27 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
   for (const server of ['github', 'azure'] as const) {
     if (listed.get(server) && !listed.get(server)!.failed) reach.push({ server, turn: strip(await measure(reachPrompts[server], { environment: server === 'azure' })) });
   }
+  // Tool choice: realistic questions that name no tool. What PI searches for and calls shows whether it picks the right door.
+  const choicePrompts = [
+    { label: 'Azure question', text: 'What is in my Jarvis resource group?' },
+    { label: 'GitHub question', text: 'Which pull requests are open in my Jarvis repository?' },
+    { label: 'Notes question', text: 'What do my notes say about the garden?' },
+    { label: 'PC request', text: 'Open Spotify on my PC and play something relaxing.' },
+  ] as const;
+  const choices: { label: string; called: string[]; turn: Measured }[] = [];
+  for (const prompt of choicePrompts) {
+    const turn = strip(await measure(prompt.text, { environment: true }));
+    choices.push({ label: prompt.label, called: turn.toolResults.map(result => result.tool), turn });
+  }
   const cancelled = await measure('Write a very long, detailed story of at least 400 words about a butler.', { abortAfterFirstText: true });
   const followUp = await measure('Reply with exactly: still here').then(turn => turn.characters > 0, () => false);
 
-  const all = [baseline, cold, ...warm, tools, voicePlain, voiceTools, ...reach.map(({ turn }) => turn), cancelled];
+  const all = [baseline, cold, ...warm, tools, voicePlain, voiceTools, ...reach.map(({ turn }) => turn), ...choices.map(({ turn }) => turn), cancelled];
   const warmMedian = [...warm].map(turn => turn.firstTextMs ?? Infinity).sort((a, b) => a - b)[Math.floor(warm.length / 2)] ?? Infinity;
   return {
     cold: strip(cold), warm: warm, tools: strip(tools), baseline: strip(baseline),
     voice: { plain: strip(voicePlain), tools: strip(voiceTools) },
-    listed: [...listed].map(([server, entry]) => ({ server, ...entry })), reach,
+    listed: [...listed].map(([server, entry]) => ({ server, ...entry })), reach, choices,
     cancel: { abortToCloseMs: cancelled.abortToCloseMs, partialCharacters: cancelled.characters, followUpOk: followUp },
     totalCostDkk: Number(all.reduce((sum, turn) => sum + turn.costDkk, 0).toFixed(4)),
     checks: {

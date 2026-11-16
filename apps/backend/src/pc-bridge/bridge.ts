@@ -542,7 +542,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
     tools: [
       {
         name: 'pc_open',
-        description: 'Open a website (target url with the full https address; it always opens in Dan’s Chrome, never Edge), any installed app by name (target app, e.g. spotify), a folder or file under C:\\Repo in VS Code, or a window on Dan’s PC. Use browser_do for work on a website.',
+        description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Open a website (target url with the full https address; it always opens in Dan’s Chrome, never Edge), any installed app by name (target app, e.g. spotify), a folder or file under C:\\Repo in VS Code, or a window on Dan’s PC. Use browser_do for work on a website.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -561,7 +561,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       {
         name: 'pc_close',
-        description: 'Close an app on Dan’s PC by its name (e.g. Visual Studio Code - Insiders, Spotify). The app is asked to close normally, so it can still offer to save unsaved work; no confirmation is needed.',
+        description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Close an app on Dan’s PC by its name (e.g. Visual Studio Code - Insiders, Spotify). The app is asked to close normally, so it can still offer to save unsaved work; no confirmation is needed.',
         inputSchema: {
           type: 'object',
           properties: { app: { type: 'string', minLength: 1, maxLength: 128 } },
@@ -572,7 +572,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       {
         name: 'pc_media',
-        description: 'Control Windows media playback or volume with play_pause, next, previous, volume_up, volume_down, or mute.',
+        description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Control Windows media playback or volume with play_pause, next, previous, volume_up, volume_down, or mute.',
         inputSchema: {
           type: 'object',
           properties: { action: { type: 'string', enum: mediaActions } },
@@ -686,7 +686,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       {
         name: 'pc_browser_act',
-        description: 'Act on a fresh Chrome snapshot with click, type, select, scroll, wait, a bounded keys sequence, or explicit type_focused text. Keyboard input goes only to the focused Chrome window, never sensitive fields; execute requested actions without asking for another approval.',
+        description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Act on a fresh Chrome snapshot with click, type, select, scroll, wait, a bounded keys sequence, or explicit type_focused text. Keyboard input goes only to the focused Chrome window, never sensitive fields; execute requested actions without asking for another approval.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -725,7 +725,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       },
       ...(options.pcActPlanner ? [{
         name: 'pc_act',
-        description: 'Control any foreground Windows app with one Jev decision per fresh snapshot. Sparse UI Automation trees use transient visual targets for clicks or scrolling, never typing; UI Automation typing is limited to explicit quoted, non-sensitive values. Website tasks use Chrome through browser_do, never Edge. Execute requested actions without another approval.',
+        description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Control any foreground Windows app with one Jev decision per fresh snapshot. Sparse UI Automation trees use transient visual targets for clicks or scrolling, never typing; UI Automation typing is limited to explicit quoted, non-sensitive values. Website tasks use Chrome through browser_do, never Edge. Execute requested actions without another approval.',
         inputSchema: {
           type: 'object',
           properties: { goal: { type: 'string', minLength: 1, maxLength: 4_000 } },
@@ -793,7 +793,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
       }] : []),
       ...(options.pcActPlanner ? [{
         name: 'codex_prompt',
-        description: 'Open the installed Codex desktop app, enter the exact non-sensitive prompt, and submit it through the existing PC control flow. The owner request authorizes submission without another approval.',
+        description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Open the installed Codex desktop app, enter the exact non-sensitive prompt, and submit it through the existing PC control flow. The owner request authorizes submission without another approval.',
         inputSchema: {
           type: 'object',
           properties: { prompt: { type: 'string', minLength: 1, maxLength: 3_000 } },
