@@ -112,7 +112,7 @@ import { createInboxRoutes } from './inbox/routes.js';
 import { createInboxMcpRoutes } from './inbox/mcp.js';
 import { createPiAuth } from './auth/pi-credential.js';
 import { createPiStore } from './database/pi-store.js';
-import { buildPiContext } from './pi/context.js';
+import { buildPiContext, buildPiEnvironment } from './pi/context.js';
 import { createPiGateway } from './pi/gateway.js';
 import { createPiRoutes } from './pi/routes.js';
 import { azureToolPrefix, createRemoteMcpBridge, githubToolPrefix } from './pi/remote-mcp.js';
@@ -569,8 +569,10 @@ try {
   const piAuth = createPiAuth(config.auth.tenantId, config.pi?.mcpSecret);
   const piRegistry = createPiTurnRegistry();
   const piStore = database ? createPiStore(database.pool) : undefined;
+  const piEnvironment = buildPiEnvironment(process.env);
   const piGateway = config.pi && config.foundryProjectEndpoint && credential && piStore && settingsStore
     ? createPiGateway({
+      environment: piEnvironment,
       projectEndpoint: config.foundryProjectEndpoint, agentName: config.pi.agentName, owner: config.auth.ownerObjectId,
       monthlyCapDkk: config.pi.monthlyCapDkk, timeZone: config.googleTimeZone ?? 'Europe/Copenhagen',
       store: piStore, registry: piRegistry,
@@ -582,6 +584,7 @@ try {
       context: async () => buildPiContext(
         await readSettings(settingsStore, await modelCatalogue.read()),
         await awayModeStore?.read() ?? defaultAwayModeState,
+        piEnvironment,
       ),
       recordUsage: usageStore?.recordFoundryUsage
         ? (usage) => usageStore.recordFoundryUsage!({ role: 'chat', ...usage }) : undefined,

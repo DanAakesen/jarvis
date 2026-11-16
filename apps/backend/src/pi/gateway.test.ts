@@ -44,6 +44,14 @@ function setup(replies: Array<(call: Call) => Response>, overrides: Partial<Para
 }
 
 describe('PI gateway', () => {
+  it('puts the environment note on a smoke turn only when asked, so measured turns stay comparable', () => {
+    const { gateway } = setup([], { environment: 'ENV NOTE' });
+    const kit = gateway.smokeKit;
+    expect(kit.format('jt-x', 'hi')).not.toContain('ENV NOTE');
+    expect(kit.format('jt-x', 'hi', 'environment')).toContain('ENV NOTE');
+    expect(setup([]).gateway.smokeKit.format('jt-x', 'hi', 'environment')).not.toContain('ENV NOTE');
+  });
+
   it('streams one long conversation, sends the persona once, and records tokens and DKK per turn', async () => {
     const { run, calls, store, usage, registry, conversations } = setup([
       () => sse(delta('Hello'), delta(' Dan'), completed(11_000, 9_000, 20)),

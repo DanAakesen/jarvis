@@ -31,7 +31,7 @@ function fakeGateway(toolOutcome: 'ok' | 'error' | 'none', options: { claimToolT
         for (const server of options.listed ?? []) yield { kind: 'tools_listed', server, tools: 12, failed: false };
         // GitHub runs through the Jarvis door: the door, not the harness, records its call.
         if (input.includes('gh_issue_read')) (grants.get(turn)!.results as { tool: string; outcome: 'ok' | 'error' }[]).push({ tool: 'gh_issue_read', outcome: options.failReach === true ? 'error' : 'ok' });
-        if (input.includes('azure resource groups list')) (grants.get(turn)!.results as { tool: string; outcome: 'ok' | 'error' }[]).push({ tool: 'az_group_list', outcome: options.failReach === true ? 'error' : 'ok' });
+        if (input.includes('azure resource group resources list')) (grants.get(turn)!.results as { tool: string; outcome: 'ok' | 'error' }[]).push({ tool: 'az_group_resource_list', outcome: options.failReach === true ? 'error' : 'ok' });
         if (isTools) {
           yield { kind: 'tool', server: 'jarvis' };
           if (toolOutcome !== 'none') (grants.get(turn)!.results as { tool: string; outcome: 'ok' | 'error' }[]).push({ tool: 'list_jobs', outcome: toolOutcome });
