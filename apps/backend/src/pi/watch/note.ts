@@ -11,7 +11,7 @@ export const MAX_WATCH_TEXT = 8_000;
 export const MAX_QUOTE = 1_500;
 
 export class WatchError extends Error {
-  constructor(readonly code: 'invalid' | 'refused' | 'not_found' | 'limit' | 'unavailable', message: string) {
+  constructor(readonly code: 'invalid' | 'refused' | 'not_found' | 'unavailable', message: string) {
     super(message);
     this.name = 'WatchError';
   }

@@ -61,6 +61,7 @@ def load_spec() -> dict:
     require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", spec["agentName"]) is not None, "agent_name_invalid")
     require(spec["reasoningEffort"] in {"none", "low", "medium", "high"}, "reasoning_effort_invalid")
     require(spec["mcp"]["requireApproval"] == "never", "approval_policy_unsupported")
+    require(spec["builtinTools"] in {"enabled", "disabled"}, "builtin_tools_invalid")
     labels = [spec["mcp"]["serverLabel"]] + [server["serverLabel"] for server in spec.get("reach", [])]
     require(len(labels) == len(set(labels)) and all(re.fullmatch(r"[a-z][a-z0-9_]{0,31}", label) for label in labels), "reach_label_invalid")
     return spec
@@ -94,14 +95,13 @@ def build_definition(spec: dict, instructions: str, server_url: str, skills: lis
         "model": spec["model"], "reasoning": {"effort": spec["reasoningEffort"]},
         "instructions": instructions,
         "tools": [
-            # Built-in shell, files and web stay off: everything goes through Jarvis tools and its guards.
-            {"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": False}},
+            # The harness built-ins (shell, filesystem read and write, web, sub-agents) follow the spec; "enabled" turns them all on.
+            {"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": spec["builtinTools"] == "enabled"}},
             {"type": "mcp", "server_label": spec["mcp"]["serverLabel"], "server_url": server_url,
              "require_approval": spec["mcp"]["requireApproval"],
              # The secret lives in this project connection and is injected as a header; the tool carries no headers.
              "project_connection_id": spec["mcp"]["connection"]},
-            # Reach servers are read-only by construction (a read-only URL and token for GitHub, the Reader role and the
-            # server's own read-only mode for Azure), so the harness is not asked to approve their calls.
+            # The harness is not asked to approve calls to the reach servers: the token and the role the owner chose are the limit.
             *[{"type": "mcp", "server_label": server["serverLabel"], "server_url": server["url"], "require_approval": "never",
                "project_connection_id": server["connection"]} for server in reach or []],
         ],
@@ -383,7 +383,7 @@ def verify(readback: dict, spec: dict, expected: str, reach: list[dict] | None =
     require(definition.get("instructions") == expected, "readback_instructions_mismatch")
     tools = definition.get("tools") or []
     toolset = [tool for tool in tools if tool.get("type") == "microsoft_copilot_toolset_preview"]
-    require(len(toolset) == 1 and (toolset[0].get("default_config") or {}).get("enabled") is False, "readback_builtins_enabled")
+    require(len(toolset) == 1 and (toolset[0].get("default_config") or {}).get("enabled") is (spec["builtinTools"] == "enabled"), "readback_builtins_mismatch")
     mcp = {tool.get("server_label"): tool for tool in tools if tool.get("type") == "mcp"}
     wanted = {spec["mcp"]["serverLabel"]: spec["mcp"]["connection"], **{s["serverLabel"]: s["connection"] for s in reach or []}}
     require(len([tool for tool in tools if tool.get("type") == "mcp"]) == len(wanted) and set(mcp) == set(wanted), "readback_mcp_mismatch")

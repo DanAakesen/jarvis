@@ -7,6 +7,6 @@
     { "kind": "github", "serverLabel": "github", "connection": "jarvis-pi-github", "url": "https://api.githubcopilot.com/mcp/x/all", "tokenEnv": "PI_GITHUB_TOKEN" },
     { "kind": "azure", "serverLabel": "azure", "connection": "jarvis-pi-azure" }
   ],
-  "builtinTools": "disabled",
+  "builtinTools": "enabled",
   "skills": ["jarvis-inbox-triage", "jarvis-workers", "jarvis-brain", "jarvis-watches"]
 }

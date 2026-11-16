@@ -17,10 +17,15 @@
 - Local checks: `cd apps/backend && npx vitest run src/voice src/pi src/logging.test.ts`; `npx tsc --noEmit -p tsconfig.json`; `npx eslint src`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; `swift test` in `apps/ios/Packages/JarvisCore` (Linux, the `swift:6.2` image). The relay test (`voice/relay-pi.test.ts`) drives the real relay against a local WebSocket standing in for Voice Live; it does not speak audio. SwiftUI changes compile only in the macOS `watch` job.
 - Not verifiable here: Voice Live accepting a session with no `tools` (the relay omits the keys instead of sending an empty list), real audio and echo behaviour with spoken replies, and what a real PI says in voice.
 
+## PI built-ins and wake actions (#1886, P15-175)
+
+- The PI agent runs with the harness built-ins on (shell, filesystem read and write, web, sub-agents): `builtinTools` in `agents/pi/definition.json`. After the Deploy that contains this change, run Deploy with `measure_pi` and compare first text and input tokens with the baseline in `docs/harness-trial/spike-results.md` (warm first text 1.1 to 1.3 s, about 17.7k input tokens). If first text gets more than twice as slow, set `builtinTools` to `"disabled"` and Deploy again.
+- A brain wake has every chat tool plus `message_dan`, `pi_note`, `inbox_trail` and `watch_look`, and acts on its own judgement. A wake's issue and task creation need no owner message (they become board tasks).
+
 ## PI standing watches (#1886, P15-175)
 
 - Needs everything from the brain section plus migration `0088_pi_watch_look.sql`. The watches live in the vault under `PI/Watches` (closed ones in `PI/Watches/Closed`); read or edit them like any note. A hand-edited note is picked up after the next restart; the hidden last line sets the next look.
-- Use: say "keep me updated on X" in chat or voice; "what are you watching" lists them with next look, looks today and the estimated cost; "change" and "stop" work in words. Limits: 10 open, 8 looks a day each, 5 minutes apart.
+- Use: say "keep me updated on X" in chat or voice; "what are you watching" lists them with next look, looks today and the estimated cost; "change" and "stop" work in words. There is no limit on open watches or looks; spend is bounded by the wakes (10 minutes apart, 12 a day) and the 100 DKK proactive budget. A wake can open and change watches too.
 - Foundry routine probe (manual, about 5 minutes): Deploy with input `probe_pi_wake`. It creates the throwaway agent `jarvis-pi-probe` (plain harness, no tools), tries a one-off timer routine, writes what it observed to the job log and summary, and deletes both. The reminder tool was probed and is not supported on a harness prompt agent.
 - Local checks: `cd apps/backend && npx vitest run src/pi`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; the SQL contract with the loopback SQL Server container.
 

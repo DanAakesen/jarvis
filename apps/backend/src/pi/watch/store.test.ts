@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createPiArea } from '../area.js';
 import { createMemoryPiStore } from '../store.js';
 import { memoryVault } from '../brain/brain.testkit.js';
-import { MAX_LOOKS_PER_WATCH_PER_DAY, MAX_OPEN_WATCHES, MIN_LOOK_GAP_MS, createWatches } from './store.js';
+import { createWatches } from './store.js';
 
 const signal = new AbortController().signal;
 
@@ -35,38 +35,18 @@ describe('standing watches in the vault', () => {
     expect((await t.watches.create({ title: 'Price', text: 'b' }, signal)).name).toBe('Price 2');
   });
 
-  it('allows at most ten open watches', async () => {
+  it('has no limit on open watches or on how often one is looked at', async () => {
     const t = setup();
-    for (let n = 0; n < MAX_OPEN_WATCHES; n += 1) await t.watches.create({ title: `Watch ${n}`, text: 'x' }, signal);
-    await expect(t.watches.create({ title: 'One more', text: 'x' }, signal)).rejects.toMatchObject({ code: 'limit' });
-    await t.watches.stop({ name: 'Watch 3', reason: 'done' }, signal);
-    await expect(t.watches.create({ title: 'One more', text: 'x' }, signal)).resolves.toMatchObject({ name: 'One more' });
-  });
-
-  it('refuses a next look that is too soon or too far away', async () => {
-    const t = setup();
-    await expect(t.watches.create({ title: 'A', text: 'x', nextLook: new Date(t.clock.t.getTime() + 60_000) }, signal)).rejects.toMatchObject({ code: 'invalid' });
-    await expect(t.watches.create({ title: 'A', text: 'x', nextLook: new Date(t.clock.t.getTime() + 500 * 24 * hours(1)) }, signal)).rejects.toMatchObject({ code: 'invalid' });
-  });
-
-  it('records a look with its next look, keeps the spacing and the daily count, and says which limit was hit', async () => {
-    const t = setup();
+    for (let n = 0; n < 12; n += 1) await t.watches.create({ title: `Watch ${n}`, text: 'x' }, signal);
+    expect(await t.watches.list(signal)).toHaveLength(12);
+    await expect(t.watches.create({ title: 'Bad', text: 'x', nextLook: new Date(Number.NaN) }, signal)).rejects.toMatchObject({ code: 'invalid' });
     await t.watches.create({ title: 'Build', text: 'x', nextLook: new Date(t.clock.t.getTime() + hours(1)) }, signal);
     const run = t.run();
-    await t.watches.look({ name: 'Build', result: 'still running', nextLook: new Date(t.clock.t.getTime() + hours(1)) }, run, signal);
+    await t.watches.look({ name: 'Build', result: 'still running', nextLook: new Date(t.clock.t.getTime() + 60_000) }, run, signal);
     expect(run.looked).toEqual(['Build']);
     expect(t.vault.files.get('PI/Watches/Build.md')).toContain('looked: still running');
-    await expect(t.watches.look({ name: 'Build', result: 'again', nextLook: null }, t.run('r2'), signal)).rejects.toThrow('less than 5 minutes');
-    expect((await t.watches.nextDueAt(signal))!.getTime()).toBeGreaterThanOrEqual(t.clock.t.getTime() + MIN_LOOK_GAP_MS);
-    for (let n = 1; n < MAX_LOOKS_PER_WATCH_PER_DAY; n += 1) {
-      t.advance(MIN_LOOK_GAP_MS + 1_000);
-      await t.watches.look({ name: 'Build', result: `look ${n}`, nextLook: null }, t.run(`r${n + 2}`), signal);
-    }
-    t.advance(MIN_LOOK_GAP_MS + 1_000);
-    await expect(t.watches.look({ name: 'Build', result: 'ninth', nextLook: null }, t.run('rx'), signal)).rejects.toThrow('8 times today');
-    // The limit moved the next look to tomorrow morning, so the watch is not due again today.
-    expect((await t.watches.nextDueAt(signal))!.getTime()).toBeGreaterThan(t.clock.t.getTime() + hours(8));
-    expect(t.vault.files.get('PI/Watches/Build.md')).toContain('daily look limit reached');
+    for (let n = 0; n < 12; n += 1) await t.watches.look({ name: 'Build', result: `look ${n}`, nextLook: null }, t.run(`r${n}`), signal);
+    expect((await t.watches.list(signal)).find(({ name }) => name === 'Build')?.looksToday).toBe(13);
     await expect(t.watches.look({ name: 'Nothing', result: 'x', nextLook: null }, t.run('ry'), signal)).rejects.toMatchObject({ code: 'not_found' });
   });
 
@@ -94,20 +74,6 @@ describe('standing watches in the vault', () => {
     expect(t.vault.files.get('PI/Watches/Stuck.md')).toContain('no look was recorded');
   });
 
-  it('keeps a next look that a look limit already moved, instead of pulling it back to an hour ahead', async () => {
-    const t = setup();
-    await t.watches.create({ title: 'Busy', text: 'x', nextLook: new Date(t.clock.t.getTime() + hours(1)) }, signal);
-    for (let n = 0; n < MAX_LOOKS_PER_WATCH_PER_DAY; n += 1) {
-      t.advance(MIN_LOOK_GAP_MS + 1_000);
-      await t.watches.look({ name: 'Busy', result: `look ${n}`, nextLook: new Date(t.clock.t.getTime() + 600_000) }, t.run(`r${n}`), signal);
-    }
-    t.advance(MIN_LOOK_GAP_MS + 1_000);
-    await expect(t.watches.look({ name: 'Busy', result: 'ninth', nextLook: null }, t.run('rn'), signal)).rejects.toMatchObject({ code: 'limit' });
-    const tomorrow = await t.watches.nextDueAt(signal);
-    await t.watches.afterRun({ runId: 'rn', costDkk: 0.1, events: 0, run: t.run('rn'), due: ['Busy'] }, signal);
-    expect(await t.watches.nextDueAt(signal)).toEqual(tomorrow);
-  });
-
   it('does not report a look as recorded when the ledger cannot count it, and changes nothing', async () => {
     const t = setup();
     await t.watches.create({ title: 'Ledger', text: 'x', nextLook: new Date(t.clock.t.getTime() + hours(1)) }, signal);
@@ -125,7 +91,7 @@ describe('standing watches in the vault', () => {
     const watches = createWatches({ area: createPiArea({ vault: t.vault }), store: t.store, now: () => t.clock.t, changed: () => { hints += 1; } });
     await watches.create({ title: 'Hinted', text: 'x', nextLook: new Date(t.clock.t.getTime() + hours(1)) }, signal);
     await watches.update({ name: 'Hinted', change: 'sooner', nextLook: new Date(t.clock.t.getTime() + 10 * 60_000) }, signal);
-    t.advance(MIN_LOOK_GAP_MS + 1_000);
+    t.advance(60_000);
     await watches.look({ name: 'Hinted', result: 'ok', nextLook: null }, t.run(), signal);
     await watches.stop({ name: 'Hinted', reason: 'done' }, signal);
     expect(hints).toBe(4);

@@ -24,7 +24,7 @@ const calls: string[] = [];
 const probes: JarvisTool[] = ['list_projects', 'create_issue'].map((name) => ({
   name, description: `Probe ${name}. Keyword: probe.`,
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-  execute: async (_input, request) => { calls.push(`${name}:${String(request.headers['x-jarvis-message-id'])}`); return { ok: true }; },
+  execute: async (_input, request) => { calls.push(`${name}:${String(request.headers['x-jarvis-message-id'])}:${String(request.jarvisPi)}`); return { ok: true }; },
 }));
 
 function setup() {
@@ -66,26 +66,34 @@ function setup() {
 }
 
 describe('a brain wake over the Jarvis MCP server', () => {
-  it('finds only read tools and its own tools, and runs a read without any owner message', async () => {
+  it('finds the chat tools and its own tools, and runs one without any owner message', async () => {
     const { tool, wake } = setup();
     const grant = wake();
     const found = await tool('find_tools', { turn: grant.turn, query: 'probe list_projects message note' });
-    const names = (found.result.tools as Array<{ name: string }>).map(({ name }) => name);
+    const names = [...(found.result.tools as Array<{ name: string }>), ...(found.result.otherMatches as Array<{ name: string }>)].map(({ name }) => name);
     expect(names).toContain('list_projects');
     expect(names).toContain('message_dan');
-    expect(names).not.toContain('create_issue');
+    expect(names).toContain('create_issue');
     const run = await tool('call_tool', { turn: grant.turn, name: 'list_projects', arguments: {} });
     expect(run.outcome).toBe('ok');
-    expect(calls).toEqual(['list_projects:undefined']);
+    expect(calls).toEqual(['list_projects:undefined:wake']);
   });
 
-  it('refuses a write tool, even one forced into the discovered set', async () => {
+  it('runs a write tool in a wake as the PI agent, with no owner message and no approval step', async () => {
     const { tool, wake } = setup();
     const grant = wake();
-    grant.discovered.add('create_issue');
-    const refused = await tool('call_tool', { turn: grant.turn, name: 'create_issue', arguments: {} });
-    expect(refused.outcome).toBe('refused');
-    expect(calls).toEqual([]);
+    await tool('find_tools', { turn: grant.turn, query: 'probe create_issue' });
+    const done = await tool('call_tool', { turn: grant.turn, name: 'create_issue', arguments: {} });
+    expect(done.outcome).toBe('ok');
+    expect(calls).toEqual(['create_issue:undefined:wake']);
+  });
+
+  it('marks a chat turn as the PI agent\'s own call and keeps its owner message', async () => {
+    const { tool, chat } = setup();
+    const grant = chat();
+    await tool('find_tools', { turn: grant.turn, query: 'probe list_projects' });
+    await tool('call_tool', { turn: grant.turn, name: 'list_projects', arguments: {} });
+    expect(calls).toEqual(['list_projects:41:turn']);
   });
 
   it('lets the wake message Dan and keep a note, and records both on the run', async () => {
@@ -126,7 +134,7 @@ describe('chat and the brain stay apart', () => {
     expect((await tool('call_tool', { turn: grant.turn, name: 'message_dan', arguments: { text: 'hi' } })).outcome).toBe('refused');
   });
 
-  it('refuses the brain header on the tool route for anyone but the PI agent, and brain tools outside a live wake', async () => {
+  it('refuses the brain and PI headers on the tool route for anyone but the PI agent, and brain tools outside a live wake', async () => {
     const { app } = setup();
     const response = await app.inject({
       method: 'POST', url: '/tools/list_projects', payload: {},
@@ -138,5 +146,10 @@ describe('chat and the brain stay apart', () => {
       headers: { authorization: bearer(ownerToken), 'content-type': 'application/json', 'x-jarvis-brain': 'run-1' },
     });
     expect(message.statusCode).toBe(403);
+    const pi = await app.inject({
+      method: 'POST', url: '/tools/list_projects', payload: {},
+      headers: { authorization: bearer(ownerToken), 'content-type': 'application/json', 'x-jarvis-pi': 'wake' },
+    });
+    expect(pi.statusCode).toBe(403);
   });
 });

@@ -7,7 +7,7 @@ import { createDecisionLog } from '../brain/decision-log.js';
 import { MAX_WAKES_PER_DAY, MIN_WAKE_GAP_MS, createBrain } from '../brain/runner.js';
 import { memoryConversations, memoryVault, scriptedGateway, type ScriptedWake } from '../brain/brain.testkit.js';
 import { createMemoryPiStore } from '../store.js';
-import { MAX_LOOKS_PER_WATCH_PER_DAY, createWatches } from './store.js';
+import { createWatches } from './store.js';
 
 const owner = '00000000-0000-4000-8000-000000000001';
 const signal = () => new AbortController().signal;
@@ -103,7 +103,7 @@ describe('standing watches inside the brain loop', () => {
     expect(await t.watches.nextDueAt(signal())).toBeNull();
   });
 
-  it('runs three watches for a week within their limits, with no report storm and the cost visible per watch', async () => {
+  it('runs three watches for a week within the wake guards, with no report storm and the cost visible per watch', async () => {
     // A daily topic, an hourly price and an events-only build. The stand-in model looks at every due watch, picks the
     // cadence the note asks for, and reports only the price once, when it "changes".
     const cadence: Record<string, number> = { Topic: hours(24), Price: hours(1) };
@@ -111,10 +111,7 @@ describe('standing watches inside the brain loop', () => {
     const t = setup(async (wake) => {
       for (const name of Object.keys(cadence)) {
         if (!new RegExp(`${name} \\[DUE NOW\\]`, 'u').test(wake.body)) continue;
-        // A real model reads a refusal; the limit has already moved the watch's next look.
-        await t.watches.look({ name, result: 'checked', nextLook: new Date(t.clock.t.getTime() + cadence[name]!) }, wake.run, signal()).catch((error: unknown) => {
-          if ((error as { code?: string }).code !== 'limit') throw error;
-        });
+        await t.watches.look({ name, result: 'checked', nextLook: new Date(t.clock.t.getTime() + cadence[name]!) }, wake.run, signal());
         if (name === 'Price' && !priceReported && t.clock.t.getTime() > new Date('2026-11-18T00:00:00Z').getTime()) {
           priceReported = true;
           await t.comms.send({ text: 'The price dropped.' }, wake.run, signal());
@@ -131,7 +128,8 @@ describe('standing watches inside the brain loop', () => {
     expect(by.Build!.costMonthDkk).toBe(0);
     expect(by.Topic!.costMonthDkk).toBeGreaterThan(0);
     expect(by.Price!.costMonthDkk).toBeGreaterThan(by.Topic!.costMonthDkk);
-    expect(by.Price!.looksToday).toBeLessThanOrEqual(MAX_LOOKS_PER_WATCH_PER_DAY);
+    // One look per wake at most, so the wake guards (not a per-watch limit) bound the looks in a day.
+    expect(by.Price!.looksToday).toBeLessThanOrEqual(MAX_WAKES_PER_DAY);
     expect(t.pushes).toHaveLength(1);
     // Wakes per day stay under the daily limit, spaced at least ten minutes, and one wake covered both watches when they fell due together.
     const times = t.gateway.wakes.map((wake) => /\| (\d{4}-\d\d-\d\d \d\d:\d\d)/u.exec(wake.body)![1]!);

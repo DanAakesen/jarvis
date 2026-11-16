@@ -19,12 +19,13 @@ class DefinitionTest(unittest.TestCase):
     def definition(self):
         return pi.build_definition(self.spec, self.instructions, "https://backend.example/pi/mcp", self.skills)
 
-    def test_reasoning_effort_is_in_the_definition_and_builtins_are_off(self):
+    def test_reasoning_effort_is_in_the_definition_and_builtins_are_on(self):
         definition = self.definition()
         self.assertEqual(definition["reasoning"], {"effort": "low"})
         self.assertEqual(definition["harness"], {"type": "microsoft_copilot_preview"})
         toolset = [tool for tool in definition["tools"] if tool["type"] == "microsoft_copilot_toolset_preview"]
-        self.assertEqual(toolset, [{"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": False}}])
+        self.assertEqual(self.spec["builtinTools"], "enabled")
+        self.assertEqual(toolset, [{"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": True}}])
 
     def test_jarvis_tools_arrive_only_over_mcp_without_harness_approval(self):
         mcp = [tool for tool in self.definition()["tools"] if tool["type"] == "mcp"]
@@ -138,14 +139,14 @@ class DefinitionTest(unittest.TestCase):
         self.assertEqual(pi.SKILL_FEATURES, "Skills=V1Preview")
         self.assertIn("MicrosoftCopilot=V1Preview", pi.AGENT_FEATURES)
 
-    def test_verify_rejects_a_readback_with_builtins_enabled(self):
+    def test_verify_rejects_a_readback_whose_builtins_differ_from_the_spec(self):
         readback = {"definition": self.definition()}
         pi.verify(readback, self.spec, self.instructions)
         with_headers = json.loads(json.dumps(readback))
         with_headers["definition"]["tools"][1]["headers"] = {"Authorization": "x"}
         with self.assertRaises(pi.Blocked):
             pi.verify(with_headers, self.spec, self.instructions)
-        readback["definition"]["tools"][0]["default_config"]["enabled"] = True
+        readback["definition"]["tools"][0]["default_config"]["enabled"] = False
         with self.assertRaises(pi.Blocked):
             pi.verify(readback, self.spec, self.instructions)
 

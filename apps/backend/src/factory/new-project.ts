@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { isPiWake } from '../core/pi-authority.js';
 import { readSettings } from '../core/settings.js';
 import { ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import type { CreateProject } from './projects.js';
@@ -39,7 +40,9 @@ Clone https://github.com/DanAakesen/jarvis.git into a separate temporary directo
 If the description does not provide enough information to choose modules or write either document accurately, do not guess or open a PR. End your response with exactly one first line in this form: JARVIS_NEEDS_ATTENTION: <one specific question for Dan>.`;
 }
 
-function messageId(request: FastifyRequest): string {
+function messageId(request: FastifyRequest): string | undefined {
+  // A wake has no conversation message: its scaffolding task is a board task without an origin.
+  if (isPiWake(request)) return undefined;
   const value = request.headers['x-jarvis-message-id'];
   if (typeof value !== 'string' || !/^[1-9]\d{0,18}$/u.test(value) ||
     BigInt(value) > 9_223_372_036_854_775_807n) {
@@ -126,8 +129,7 @@ export const createProjectTool: JarvisTool = {
           visibility: defaults.visibility,
           defaultBranch: defaults.defaultBranch,
         }, defaults.templatesRepository),
-        source: 'chat',
-        originMessageId,
+        ...(originMessageId === undefined ? { source: 'board' as const } : { source: 'chat' as const, originMessageId }),
       });
     } catch {
       throw new ToolRefusal(
