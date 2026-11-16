@@ -27,6 +27,22 @@ class DefinitionTest(unittest.TestCase):
         self.assertEqual(self.spec["builtinTools"], "enabled")
         self.assertEqual(toolset, [{"type": "microsoft_copilot_toolset_preview", "default_config": {"enabled": True}}])
 
+    def test_an_experiment_switches_one_thing_off_and_changes_the_fingerprint_but_never_the_default(self):
+        reach = []
+        full = pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", self.skills, reach)
+        spec, skills = pi.apply_experiment(self.spec, self.skills, "builtins_off")
+        self.assertEqual((spec["builtinTools"], skills), ("disabled", self.skills))
+        toolset = [tool for tool in pi.build_definition(spec, self.instructions, "https://b/pi/mcp", skills)["tools"] if tool["type"] == "microsoft_copilot_toolset_preview"]
+        self.assertEqual(toolset[0]["default_config"], {"enabled": False})
+        self.assertNotEqual(full, pi.fingerprint(spec, self.instructions, "https://b/pi/mcp", skills, reach))
+        spec, skills = pi.apply_experiment(self.spec, self.skills, "skills_off")
+        self.assertEqual((spec["builtinTools"], skills), ("enabled", []))
+        self.assertNotEqual(full, pi.fingerprint(spec, self.instructions, "https://b/pi/mcp", skills, reach))
+        self.assertEqual(pi.apply_experiment(self.spec, self.skills, "none"), (self.spec, self.skills))
+        self.assertEqual(self.spec["builtinTools"], "enabled")
+        with self.assertRaises(pi.Blocked):
+            pi.apply_experiment(self.spec, self.skills, "everything_off")
+
     def test_jarvis_tools_arrive_only_over_mcp_without_harness_approval(self):
         mcp = [tool for tool in self.definition()["tools"] if tool["type"] == "mcp"]
         self.assertEqual(len(mcp), 1)

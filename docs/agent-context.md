@@ -22,6 +22,12 @@
 - The PI agent runs with the harness built-ins on (shell, filesystem read and write, web, sub-agents): `builtinTools` in `agents/pi/definition.json`. After the Deploy that contains this change, run Deploy with `measure_pi` and compare first text and input tokens with the baseline in `docs/harness-trial/spike-results.md` (warm first text 1.1 to 1.3 s, about 17.7k input tokens). If first text gets more than twice as slow, set `builtinTools` to `"disabled"` and Deploy again.
 - A brain wake has every chat tool plus `message_dan`, `pi_note`, `inbox_trail` and `watch_look`, and acts on its own judgement. A wake's issue and task creation need no owner message (they become board tasks).
 
+## PI latency experiments (#1886, P15-175)
+
+- Measurement variants of the PI agent, one thing per Deploy: run Deploy by hand with `measure_pi` and `pi_experiment` set to `builtins_off` (harness shell, filesystem, web and sub-agents off) or `skills_off` (no skills). The `pi-agent` summary shows `Experiment: <name>`. **Deploy again with `pi_experiment` = `none` afterwards** to define the full agent again; a push to main does the same.
+- Baseline (Deploy 43911904900, GitHub through the door, built-ins on): about 14.1k input tokens per turn, warm first text 2.0 to 2.8 s, voice plain 1.7 s, voice with a tool 1.8 s, github reach 1.7 s (118 GitHub tools). Target: warm first text under about 1.5 s with every capability.
+- What we control in the static prompt, estimated at 4 characters per token: instructions 8.5k characters (about 2.1k tokens), the four skill descriptions 0.97k characters (about 0.25k tokens; skill bodies, 8.8k characters, are read only when a skill is used), the two door tools about 0.4k characters plus schemas (about 0.2k tokens). That is about 2.6k of the 14.1k tokens; the rest is the harness's own prompt and the built-in tool definitions. So shortening skill descriptions cannot move the number; the experiments above show what the built-ins and the skills cost.
+
 ## PI standing watches (#1886, P15-175)
 
 - Needs everything from the brain section plus migration `0088_pi_watch_look.sql`. The watches live in the vault under `PI/Watches` (closed ones in `PI/Watches/Closed`); read or edit them like any note. A hand-edited note is picked up after the next restart; the hidden last line sets the next look.
