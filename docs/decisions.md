@@ -13138,3 +13138,9 @@ with explicit Yes/No and the note's SHA. Reuse the vault's existing Git-backed
 delete rather than inventing a trash store: committed files remain in Git history,
 but unsaved drafts do not. Unknown outcomes require a refresh, not an automatic retry.
 Native gesture and visual acceptance is still pending.
+
+## 2026-11-15 P15-181: Single vault layout, cut over together with the vault clean-up
+
+- Decision: Jarvis uses only the new vault paths: `Personal/Task inbox.md`, `Work/Task inbox.md` and `Personal/Health/Gym log/`. The `gym-log` frontmatter type is kept. There is no dual support, no layout detection and no compatibility shim; a first draft of this change that accepted both layouts was dropped.
+- The vault mirror excludes the new `_agent-activity` segment. The existing `_agent-log` rule stays until vault PR #5 has merged (the vault still has that folder until then) and is removed afterwards. `General/Archive/Agent activity log/` is not excluded: its 19 historical logs are tracked and excluding them would make the mirror treat them as deleted.
+- Rollout: this merges and the backend deploys, then the vault clean-up PRs merge in the same cutover. A short window in which the vault and Jarvis disagree about paths is accepted.

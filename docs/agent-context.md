@@ -1758,8 +1758,8 @@ push switched on and a subscribed device, and they share the one alert flag.
 
 What now happens, exactly:
 
-- Todos: eligible proactive tasks go only to an existing `Personal/Inbox.md` or
-  `Work/Inbox.md`; every new task starts `- [ ] (proactive)`. Project/software,
+- Todos: eligible proactive tasks go only to an existing `Personal/Task inbox.md` or
+  `Work/Task inbox.md`; every new task starts `- [ ] (proactive)`. Project/software,
   Factory, PR/build/check and engineering suggestions are excluded across all
   sources. Ambiguous scope, missing identity or an unavailable/unwritable
   destination means no write and a content-free skip reason. Stable source/action
@@ -2269,8 +2269,8 @@ defaults off in code; since P13-15 only `infra/main.bicep` sets it, and
 pause/Todos switches and independent writer flag are the controls.
 The writer also requires the SQL pool for durable receipt and daily-cap storage.
 The hook keeps the P13-07 bounded limits and uses read-only task discovery for
-duplicates; its only write destinations are `Personal/Inbox.md` and
-`Work/Inbox.md`. It does not create or delete files and logs no suggestion text
+duplicates; its only write destinations are `Personal/Task inbox.md` and
+`Work/Task inbox.md`. It does not create or delete files and logs no suggestion text
 or vault path. SQL receipts are covered by the isolated schema integration suite.
 
 Focused checks:

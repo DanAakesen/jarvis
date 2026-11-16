@@ -179,7 +179,7 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
         case (.post, "/api/vault/tasks"):
             let item: [String: Any] = ["id": nodeID(tasks.count + 100), "text": body["text"] ?? "Synthetic task", "done": false,
                 "dueDate": body["due"] ?? NSNull(), "dueTime": body["time"] ?? NSNull(), "dueAt": NSNull(),
-                "priority": body["priority"] ?? "normal", "path": body["scope"] as? String == "work" ? "Work/Inbox.md" : "Personal/Inbox.md",
+                "priority": body["priority"] ?? "normal", "path": body["scope"] as? String == "work" ? "Work/Task inbox.md" : "Personal/Task inbox.md",
                 "line": tasks.count + 1, "heading": NSNull(), "version": String(repeating: "a", count: 64)]
             tasks.append(item)
             return try json(item.merging(["commit": String(repeating: "b", count: 40)]) { _, new in new })

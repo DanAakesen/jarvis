@@ -216,7 +216,7 @@ export interface GymLogWriterOptions {
 
 export function gymLogPath(day: string): string {
   if (!dayPattern.test(day)) throw new RangeError('Invalid gym log day');
-  return `Health/Gym log/${day}.md`;
+  return `Personal/Health/Gym log/${day}.md`;
 }
 
 export function createGymLogWriter(options: GymLogWriterOptions) {

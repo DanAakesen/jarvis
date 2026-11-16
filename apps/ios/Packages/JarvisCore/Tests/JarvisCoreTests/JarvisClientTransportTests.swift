@@ -257,6 +257,22 @@ final class JarvisClientTransportTests: XCTestCase {
         ]
     }
 
+    func testGymLogNotesLiveOnlyUnderPersonalHealth() async throws {
+        let utc = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(JarvisGymLogNote.parse(path: "Personal/Health/Gym log/2026-11-16-1000-legs.md", timeZone: utc)?.session, .legs)
+        XCTAssertNil(JarvisGymLogNote.parse(path: "Personal/Gym log/2026-11-16-1000-legs.md", timeZone: utc))
+
+        let transport = FakeHTTPTransport([.response(jsonResponse(status: 201, body: [
+            "path": "Personal/Health/Gym log/2026-11-16-1000-legs.md", "commit": String(repeating: "c", count: 40),
+            "url": "https://github.com/example/vault/blob/master/note.md",
+        ]))])
+        let store = JarvisVaultGymLogStore(client: JarvisNotesClient(client: try makeClient(transport: transport)), timeZone: utc)
+        try await store.save(JarvisGymLogEntry(performedAt: Date(timeIntervalSince1970: 1_794_823_200), session: .legs))
+        let requests = await transport.recordedRequests()
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(requests.first?.body)) as? [String: String])
+        XCTAssertEqual(body["path"], "Personal/Health/Gym log/2026-11-16-1000-legs.md")
+    }
+
     private func makeClient(
         transport: FakeHTTPTransport,
         tokenStore: FakeTokenStore = FakeTokenStore(),

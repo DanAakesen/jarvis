@@ -168,7 +168,7 @@ describe('structured log export', () => {
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
     const sink = { ...sdk, trackTrace: vi.fn() };
     const logger = createLogger({ logLevel: 'info' }, sink, output);
-    logger.warn({ reason: 'vault_write_failed', durationMs: 25, path: 'Health/Gym log/private.md', note: 'private note' }, 'daily.gym_log');
+    logger.warn({ reason: 'vault_write_failed', durationMs: 25, path: 'Personal/Health/Gym log/private.md', note: 'private note' }, 'daily.gym_log');
     expect(JSON.parse(records[0]!)).toEqual({
       level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: 'daily.gym_log', reason: 'vault_write_failed', durationMs: 25,
     });

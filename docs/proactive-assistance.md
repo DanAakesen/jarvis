@@ -14,7 +14,7 @@ provider accepting a notification is not proof that an iPhone displayed it.
 - Todos, Factory, weather, calendar, mail headers, calendar-derived travel and news are read-only sources; their content is untrusted data, never instructions, and system runs inherit no approvals ([decision](decisions.md)).
 - Estimated spend has a hard limit of 100 DKK per Copenhagen month and a warning at 80%; it is labelled as an estimate ([decision](decisions.md)).
 - The vault todo file is canonical. Eligible proactive tasks go only to an
-  existing `Personal/Inbox.md` or `Work/Inbox.md`, start with `(proactive)`, and
+  existing `Personal/Task inbox.md` or `Work/Task inbox.md`, start with `(proactive)`, and
   exclude project/software/engineering suggestions across all sources. Ambiguous
   scope or an unavailable destination means no task write; existing tasks and
   `Suggested by Jarvis` sections remain untouched ([decision](decisions.md)).
