@@ -88,7 +88,7 @@ import { createGitHubReleaseGraphReader } from './github/release-graph.js';
 import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
 import { isVaultDefaultBranchPush } from './github/webhook-mapping.js';
-import { alertEvent, githubEvent } from './proactive/events/producers.js';
+import { alertEvent, githubEvent, workerEvent } from './proactive/events/producers.js';
 import type { ProactiveEventSink } from './proactive/events/types.js';
 import { createGitHubIssueClient } from './github/issues.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
@@ -291,6 +291,11 @@ try {
       if (event) enqueueProactiveEvent(event);
     })
     : undefined;
+  // Worker results are signals too: a finished, stuck or cancelled coding session reaches the same queue as mail and builds.
+  eventHub.subscribe((taskEvent) => {
+    const event = workerEvent(taskEvent, new Date());
+    if (event) enqueueProactiveEvent(event);
+  });
   const awayModeStore = database
     ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({
       type: 'mode_changed',

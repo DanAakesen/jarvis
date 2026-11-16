@@ -68,6 +68,7 @@ env:
   ENTRA_JARVIS_AGENT_OBJECT_ID: ${{ vars.ENTRA_JARVIS_AGENT_OBJECT_ID }}
   GITHUB_APP_ID: ${{ vars.JARVIS_GITHUB_APP_ID }}
   JARVIS_PC_BRIDGE_CLIENT_ID: ${{ vars.JARVIS_PC_BRIDGE_CLIENT_ID }}
+  JARVIS_AZURE_MCP_CLIENT_ID: ${{ vars.JARVIS_AZURE_MCP_CLIENT_ID }}
   JARVIS_GOOGLE_TIME_ZONE: ${{ vars.JARVIS_GOOGLE_TIME_ZONE }}
   JARVIS_VAULT_MIRROR_ENABLED: ${{ vars.JARVIS_VAULT_MIRROR_ENABLED }}
   JARVIS_VAULT_MIRROR_WRITE_BACK: ${{ vars.JARVIS_VAULT_MIRROR_WRITE_BACK }}
@@ -578,22 +579,31 @@ jobs:
             echo "BACKEND_FQDN=$(jq -er .backendFqdn.value "$RUNNER_TEMP/infra-outputs.json")"
             echo "FOUNDRY_ACCOUNT=$(jq -er .foundryAccountName.value "$RUNNER_TEMP/infra-outputs.json")"
             echo "FOUNDRY_PROJECT=$(jq -er .foundryProjectName.value "$RUNNER_TEMP/infra-outputs.json")"
+            echo "AZURE_MCP_URL=$(jq -r '.azureMcpUrl.value // ""' "$RUNNER_TEMP/infra-outputs.json")"
           } >>"$GITHUB_ENV"
-      - name: Define the PI agent, skills and MCP connection, and give the backend its name and MCP secret
+      - name: Define the PI agent, skills and MCP connections, and give the backend its name and MCP secret
         id: provision
+        env:
+          # The owner's fine-grained, read-only GitHub token. Absent: the GitHub server is left out and the summary says so.
+          PI_GITHUB_READ_TOKEN: ${{ secrets.PI_GITHUB_READ_TOKEN }}
         run: |
           python .github/scripts/provision_pi_agent.py --project-endpoint "$FOUNDRY_ADMIN" --backend-fqdn "$BACKEND_FQDN" \
             --foundry-account "$FOUNDRY_ACCOUNT" --foundry-project "$FOUNDRY_PROJECT" \
             --backend-app "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
-            --output "$RUNNER_TEMP/pi-agent.json"
+            --azure-mcp-url "$AZURE_MCP_URL" --azure-mcp-client-id "${JARVIS_AZURE_MCP_CLIENT_ID:-}" \
+            --output "$RUNNER_TEMP/pi-agent.json" || status=$?
+          # A reach server whose connection failed fails this step, but only after the agent is defined and written down here.
+          [[ -s "$RUNNER_TEMP/pi-agent.json" ]] || exit "${status:-1}"
           {
             echo "### PI agent"
             echo
             echo "- Agent: \`$(jq -r .agent "$RUNNER_TEMP/pi-agent.json")\` version \`$(jq -r .version "$RUNNER_TEMP/pi-agent.json")\` (new version created: $(jq -r .created "$RUNNER_TEMP/pi-agent.json"))"
             echo "- MCP connection: \`$(jq -r .connection "$RUNNER_TEMP/pi-agent.json")\` (written this run: $(jq -r .connectionWritten "$RUNNER_TEMP/pi-agent.json"))"
             echo "- Skills: $(jq -r '.skills | to_entries | map("\(.key) v\(.value)") | join(", ")' "$RUNNER_TEMP/pi-agent.json")"
+            echo "- Reach: $(jq -r '.reach | to_entries | map("\(.key): \(.value)") | join("; ")' "$RUNNER_TEMP/pi-agent.json")"
             echo "- Selected only when the iOS test switch is set to PI; the default chat path is unchanged."
           } >>"$GITHUB_STEP_SUMMARY"
+          exit "${status:-0}"
       - name: Wait for the backend with the PI settings
         if: ${{ inputs.measure_pi == true }}
         run: |

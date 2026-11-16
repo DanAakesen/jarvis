@@ -1,3 +1,7 @@
+## PI reach — 16 November 2026 (#1886, P15-175)
+
+No visible UI. PI says in plain words when a read-only server is not attached ("I have no GitHub tools in this session") and never claims to have looked; Azure and GitHub results arrive as ordinary chat text.
+
 ## PI test switch in iOS — 15 November 2026 (#1885, P15-174)
 
 A temporary, clearly marked test control, deleted at cutover. Settings, General, section "Test switch": the shared segmented bar chooses Current engine or PI engine (stored on the device, default Current), an explanation says it affects chat only and has no fallback, and while PI is chosen live rows show status, agent and model, month spend against the cap, warm or cold, the monthly cap (default 100 DKK) and what is left this month (shown in red text at 0), and the last turn (first text ms, tokens including cached, DKK) with a refresh button. The Chat header shows a small "PI test" pill (icon plus text, new shared `JarvisStatusPill`) while PI is chosen. PI failures show the server's own sentence in the chat error banner. Not inspected on a device or simulator by me; the macOS CI compile is the check.

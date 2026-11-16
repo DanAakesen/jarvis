@@ -4,7 +4,7 @@ import {
   type ConversationAgent, type ConversationAgentChunk, type ConversationAgentInput,
 } from '../core/chat-agent.js';
 import { foundryTokenCosts } from '../core/usage-pricing.js';
-import { PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
+import { PI_MCP_SERVER_LABEL, PI_MODEL, PI_PREVIEW_HEADER, PI_REASONING_EFFORT } from './definition.js';
 import { PiGatewayError } from './errors.js';
 import { formatTurn, formatWarmup } from './prompt.js';
 import type { PiStore, PiStoredTurn, PiTurnRecord } from './store.js';
@@ -14,7 +14,11 @@ export interface PiUsage { readonly inputTokens: number; readonly cachedTokens: 
 
 export type PiEvent =
   | { readonly kind: 'delta'; readonly text: string }
-  | { readonly kind: 'tool' }
+  | { readonly kind: 'tool'; readonly server: string }
+  /** An MCP call finished. `failed` is the harness's own report, for servers whose results we do not record ourselves. */
+  | { readonly kind: 'tool_done'; readonly server: string; readonly name: string; readonly failed: boolean }
+  /** The harness listed a server's tools at the start of a response: the proof that a server is attached and reachable. */
+  | { readonly kind: 'tools_listed'; readonly server: string; readonly tools: number; readonly failed: boolean }
   | { readonly kind: 'done'; readonly usage: PiUsage; readonly responseId: string | null };
 
 export interface PiWarmResult {
@@ -82,6 +86,8 @@ const repeatedFailurePauseMs = 30 * 60_000;
 const monthStart = (now: Date) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 const count = (value: unknown): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100_000_000 ? value : 0;
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+/** A server label or tool name from the provider, kept short and plain before it reaches a log or a report. */
+const label = (value: unknown): string => typeof value === 'string' && /^[A-Za-z0-9_.-]{1,64}$/u.test(value) ? value : '';
 
 /** A stalled provider stream must not outlive a cancel or the turn deadline, whether or not the transport reacts to the signal. */
 function readUnlessAborted(reader: ReadableStreamDefaultReader<Uint8Array>, signal: AbortSignal): Promise<Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>> {
@@ -213,10 +219,22 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
             yield { kind: 'delta', text: payload.delta };
           } else if (type === 'response.output_item.added' && isObject(payload.item)) {
             const itemType = payload.item.type;
-            if (itemType === 'mcp_call') yield { kind: 'tool' };
+            if (itemType === 'mcp_call') yield { kind: 'tool', server: label(payload.item.server_label) };
             else if (itemType === 'mcp_approval_request' || itemType === 'function_call') {
               throw new PiGatewayError('pi_failed', 'PI asked for an approval or client tool the gateway does not answer. The agent definition must run Jarvis tools without harness approval.');
             }
+          } else if (type === 'response.output_item.done' && isObject(payload.item)) {
+            const item = payload.item;
+            if (item.type === 'mcp_call') {
+              yield { kind: 'tool_done', server: label(item.server_label), name: label(item.name), failed: item.error !== undefined && item.error !== null };
+            } else if (item.type === 'mcp_list_tools') {
+              yield {
+                kind: 'tools_listed', server: label(item.server_label), tools: Array.isArray(item.tools) ? item.tools.length : 0,
+                failed: item.error !== undefined && item.error !== null,
+              };
+            }
+          } else if (type === 'response.mcp_list_tools.failed') {
+            yield { kind: 'tools_listed', server: '', tools: 0, failed: true };
           } else if (type === 'response.completed' && isObject(payload.response)) {
             const usage = isObject(payload.response.usage) ? payload.response.usage : {};
             const details = isObject(usage.input_tokens_details) ? usage.input_tokens_details : {};
@@ -379,6 +397,10 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
           streamedCharacters += event.text.length;
           segment += event.text;
           yield event.text;
+        } else if (event.kind === 'tools_listed') {
+          if (event.failed) log('pi.mcp_list_failed', { server: event.server });
+        } else if (event.kind === 'tool_done') {
+          if (event.failed && event.server !== PI_MCP_SERVER_LABEL) log('pi.mcp_call_failed', { server: event.server, tool: event.name });
         } else if (event.kind === 'tool') {
           sawTool = true;
           // Text before a tool call is a progress note, as with the current engine; very long text stays in the answer.

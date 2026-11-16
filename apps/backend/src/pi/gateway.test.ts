@@ -83,6 +83,28 @@ describe('PI gateway', () => {
     ]);
   });
 
+  it('reads the provider\'s own report of reach servers: listed tools and call results, with plain labels only', async () => {
+    const logs: Array<[string, Record<string, unknown>]> = [];
+    const listed = frame({ type: 'response.output_item.done', item: { type: 'mcp_list_tools', server_label: 'github', tools: [{}, {}, {}] } });
+    const listFailed = frame({ type: 'response.output_item.done', item: { type: 'mcp_list_tools', server_label: 'azure', tools: [], error: 'unreachable' } });
+    const failed = frame({ type: 'response.output_item.done', item: { type: 'mcp_call', server_label: 'github', name: 'get_issue', error: { code: 'x' } } });
+    const odd = frame({ type: 'response.output_item.done', item: { type: 'mcp_call', server_label: 'bad label with spaces', name: 'x', error: null } });
+    const { run } = setup([() => sse(listed, listFailed, tool, failed, odd, delta('ok'), completed(5, 0, 5))], { log: (event, fields) => logs.push([event, fields]) });
+    expect(await run('look')).toEqual(['ok']);
+    expect(logs.filter(([event]) => event !== 'pi.turn')).toEqual([
+      ['pi.mcp_list_failed', { server: 'azure' }], ['pi.mcp_call_failed', { server: 'github', tool: 'get_issue' }],
+    ]);
+    const events: Array<{ kind: string }> = [];
+    const fresh = setup([() => sse(listed, failed, odd, completed(1, 0, 1))]);
+    for await (const event of fresh.gateway.smokeKit.respond('conv_1', 'x', new AbortController().signal)) events.push(event);
+    expect(events).toEqual([
+      { kind: 'tools_listed', server: 'github', tools: 3, failed: false },
+      { kind: 'tool_done', server: 'github', name: 'get_issue', failed: true },
+      { kind: 'tool_done', server: '', name: 'x', failed: false },
+      expect.objectContaining({ kind: 'done' }),
+    ]);
+  });
+
   it('stops before sending anything once the monthly cap is reached', async () => {
     const { run, calls, store } = setup([]);
     await store.recordTurn({ kind: 'chat', messageId: null, model: 'm', inputTokens: 0, cachedTokens: 0, outputTokens: 0, costDkk: 1.5, firstTextMs: 1, totalMs: 1, outcome: 'ok' }, new AbortController().signal);

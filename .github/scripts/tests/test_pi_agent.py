@@ -43,8 +43,10 @@ class DefinitionTest(unittest.TestCase):
         self.assertNotIn("{{", self.instructions)
 
     def test_skills_are_repository_files_pinned_by_version(self):
-        self.assertEqual([skill["name"] for skill in self.skills], ["jarvis-inbox-triage"])
-        self.assertEqual(self.definition()["skills"], [{"type": "skill_reference", "name": "jarvis-inbox-triage", "version": "1"}])
+        self.assertEqual([skill["name"] for skill in self.skills], ["jarvis-inbox-triage", "jarvis-workers"])
+        self.assertEqual(self.definition()["skills"], [
+            {"type": "skill_reference", "name": "jarvis-inbox-triage", "version": "1"},
+            {"type": "skill_reference", "name": "jarvis-workers", "version": "1"}])
 
     def test_fingerprint_changes_with_instructions_url_and_skill_content_only(self):
         base = pi.fingerprint(self.spec, self.instructions, "https://b/pi/mcp", self.skills)
@@ -146,6 +148,112 @@ class DefinitionTest(unittest.TestCase):
             pi.verify(readback, self.spec, self.instructions)
 
 
+class ReachTest(unittest.TestCase):
+    token = "github_pat_" + "A" * 60
+    project = "/subscriptions/s/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/a/projects/p"
+
+    def setUp(self):
+        self.spec = pi.load_spec()
+        self.args = argparse.Namespace(azure_mcp_url="https://azure-mcp.example", azure_mcp_client_id="11111111-2222-3333-4444-555555555555")
+
+    def tearDown(self):
+        pi.REDACT.clear()
+
+    def test_missing_inputs_leave_a_server_out_and_say_who_must_provide_what(self):
+        with mock.patch.dict("os.environ", {}, clear=True):
+            attached, status = pi.resolve_reach(self.spec, argparse.Namespace(azure_mcp_url="", azure_mcp_client_id=""))
+        self.assertEqual(attached, [])
+        self.assertIn("PI_GITHUB_READ_TOKEN", status["github"])
+        self.assertIn("JARVIS_AZURE_MCP_CLIENT_ID", status["azure"])
+
+    def test_only_a_fine_grained_github_token_is_accepted_and_it_is_redacted(self):
+        with mock.patch.dict("os.environ", {"PI_GITHUB_READ_TOKEN": "ghp_" + "A" * 36}, clear=True), self.assertRaises(pi.Blocked):
+            pi.resolve_reach(self.spec, self.args)
+        with mock.patch.dict("os.environ", {"PI_GITHUB_READ_TOKEN": self.token}, clear=True):
+            attached, _ = pi.resolve_reach(self.spec, self.args)
+        self.assertEqual([server["serverLabel"] for server in attached], ["github", "azure"])
+        self.assertIn(self.token, pi.REDACT)
+
+    def test_reach_tools_are_read_only_servers_behind_connections_with_no_headers(self):
+        with mock.patch.dict("os.environ", {"PI_GITHUB_READ_TOKEN": self.token}, clear=True):
+            attached, _ = pi.resolve_reach(self.spec, self.args)
+        instructions = pi.instructions_text()
+        skills = [dict(pi.parse_skill(name), version="1") for name in self.spec["skills"]]
+        definition = pi.build_definition(self.spec, instructions, "https://b/pi/mcp", skills, attached)
+        tools = {tool["server_label"]: tool for tool in definition["tools"] if tool["type"] == "mcp"}
+        self.assertEqual(set(tools), {"jarvis", "github", "azure"})
+        self.assertEqual(tools["github"]["server_url"], "https://api.githubcopilot.com/mcp/readonly")
+        self.assertEqual(tools["github"]["project_connection_id"], "jarvis-pi-github")
+        self.assertEqual(tools["azure"]["server_url"], "https://azure-mcp.example")
+        for tool in tools.values():
+            self.assertEqual(tool["require_approval"], "never")
+            self.assertNotIn("headers", tool)
+        self.assertNotIn(self.token, json.dumps(definition))
+        pi.verify({"definition": definition}, self.spec, instructions, attached)
+        with self.assertRaises(pi.Blocked):
+            pi.verify({"definition": definition}, self.spec, instructions, attached[:1])
+        base = pi.fingerprint(self.spec, instructions, "https://b/pi/mcp", skills)
+        self.assertNotEqual(base, pi.fingerprint(self.spec, instructions, "https://b/pi/mcp", skills, attached))
+
+    def test_connections_hold_the_github_token_and_the_azure_audience_but_never_both_in_metadata(self):
+        stored = {}
+
+        def fake(method, path, body=None):
+            if method == "GET":
+                raise pi.Blocked("arm_get_failed:x:not_found")
+            stored[path.rsplit("/", 1)[-1]] = body["properties"]
+            return {}
+
+        with mock.patch.dict("os.environ", {"PI_GITHUB_READ_TOKEN": self.token}, clear=True), mock.patch.object(pi, "arm_request", fake):
+            attached, _ = pi.resolve_reach(self.spec, self.args)
+            for server in attached:
+                self.assertTrue(pi.connect_reach(self.project, server))
+        github, azure = stored["jarvis-pi-github"], stored["jarvis-pi-azure"]
+        self.assertEqual(github["credentials"], {"keys": {"Authorization": "Bearer " + self.token}})
+        self.assertNotIn(self.token, json.dumps(github["metadata"]))
+        self.assertEqual((azure["authType"], azure["audience"]), ("ProjectManagedIdentity", "api://11111111-2222-3333-4444-555555555555"))
+        self.assertNotIn("credentials", azure)
+
+    def test_a_connection_that_cannot_be_written_is_left_out_and_fails_the_job_after_the_agent_is_defined(self):
+        calls = []
+        stored = {}
+
+        class Fake(pi.Az):
+            def rest(self, method, path, body=None, *, content_type="application/json"):
+                calls.append((method, path))
+                if method == "GET" and path == "/agents/jarvis-pi":
+                    raise pi.Blocked("foundry_get_failed:/agents/jarvis-pi:not_found")
+                if method == "POST" and path.startswith("/skills/"):
+                    return {"version": 1}
+                if method == "POST" and path == "/agents/jarvis-pi/versions":
+                    stored["definition"] = body["definition"]
+                    return {"version": 1}
+                if method == "GET" and path == "/agents/jarvis-pi/versions/1":
+                    return {"status": "active", "definition": stored["definition"]}
+                return {}
+
+        def fake_arm(method, path, body=None):
+            if method == "GET":
+                raise pi.Blocked("arm_get_failed:x:not_found")
+            if path.endswith("jarvis-pi-azure"):
+                raise pi.Blocked("arm_put_failed:jarvis-pi-azure:bad_request")
+            return {}
+
+        args = argparse.Namespace(project_endpoint="https://p.example/api/projects/x", backend_fqdn="b.example", foundry_account="acct",
+                                  foundry_project="proj", backend_app="app", resource_group="rg", subscription="sub",
+                                  azure_mcp_url="https://azure-mcp.example", azure_mcp_client_id="11111111-2222-3333-4444-555555555555",
+                                  output=None)
+        with mock.patch.dict("os.environ", {"PI_GITHUB_READ_TOKEN": self.token}, clear=True), mock.patch.object(pi, "Az", Fake), \
+                mock.patch.object(pi, "configure_backend", return_value="S" * 43), mock.patch.object(pi, "arm_request", fake_arm):
+            result = pi.provision(args)
+        labels = [tool["server_label"] for tool in stored["definition"]["tools"] if tool["type"] == "mcp"]
+        self.assertEqual(labels, ["jarvis", "github"])
+        self.assertEqual(result["reach"]["github"], "attached")
+        self.assertIn("not attached", result["reach"]["azure"])
+        self.assertEqual(len(result["problems"]), 1)
+        self.assertTrue(result["created"])
+
+
 class ErrorReportTest(unittest.TestCase):
     secret = "Q" * 43
 
@@ -195,6 +303,21 @@ class SmokeReportTest(unittest.TestCase):
         self.assertIn("list_jobs=ok", text)
         self.assertIn("**FAIL**", text)
         self.assertEqual(text.count("| pass |"), 3)
+        self.assertIn("MCP servers the harness listed tools for: none reported.", text)
+
+    def test_render_shows_listed_servers_reach_turns_and_only_their_checks(self):
+        data = {"cold": self.turn(4000), "warm": [self.turn(1900, 10000)],
+                "tools": dict(self.turn(2500), toolResults=[{"tool": "list_jobs", "outcome": "ok"}]),
+                "listed": [{"server": "github", "tools": 41, "failed": False}, {"server": "azure", "tools": 0, "failed": True}],
+                "reach": [{"server": "github", "turn": dict(self.turn(3000), text="Issue 700", reachCalls=[{"server": "github", "name": "get_issue", "failed": False}])}],
+                "cancel": {"abortToCloseMs": 120, "partialCharacters": 31, "followUpOk": True}, "totalCostDkk": 0.4,
+                "checks": {"streaming": True, "tools_over_mcp": True, "cancellation": True, "warm_faster_than_cold": True, "reach_github": False}}
+        text = report.render(data)
+        self.assertIn("github: 41 tools, azure: FAILED to list", text)
+        self.assertIn("| reach: github | 3000 ms |", text)
+        self.assertIn("get_issue=ok", text)
+        self.assertIn("read-only GitHub server answered a read and the harness reported no error | **FAIL**", text)
+        self.assertNotIn("Azure server answered", text)
 
 
 if __name__ == "__main__":

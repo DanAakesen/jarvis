@@ -6,7 +6,7 @@ import type { PiTurnGrant } from './turns.js';
 const usage: PiUsage = { inputTokens: 11_000, cachedTokens: 9_000, outputTokens: 20 };
 
 /** A fake gateway: `toolOutcome` is what the MCP server would have recorded for the tool turn. */
-function fakeGateway(toolOutcome: 'ok' | 'error' | 'none', options: { claimToolText?: boolean } = {}): PiGateway {
+function fakeGateway(toolOutcome: 'ok' | 'error' | 'none', options: { claimToolText?: boolean; listed?: readonly string[]; failReach?: boolean } = {}): PiGateway {
   const grants = new Map<string, PiTurnGrant>();
   let count = 0;
   return {
@@ -27,8 +27,14 @@ function fakeGateway(toolOutcome: 'ok' | 'error' | 'none', options: { claimToolT
         const turn = /(jt-[A-Za-z0-9_-]{22})/u.exec(input)![1]!;
         const isTools = input.includes('jobs');
         const isLong = input.includes('story');
+        for (const server of options.listed ?? []) yield { kind: 'tools_listed', server, tools: 12, failed: false };
+        const reachServer = /use the (github|azure) tools/iu.exec(input)?.[1]?.toLowerCase();
+        if (reachServer) {
+          yield { kind: 'tool', server: reachServer };
+          yield { kind: 'tool_done', server: reachServer, name: 'read', failed: options.failReach === true };
+        }
         if (isTools) {
-          yield { kind: 'tool' };
+          yield { kind: 'tool', server: 'jarvis' };
           if (toolOutcome !== 'none') (grants.get(turn)!.results as { tool: string; outcome: 'ok' | 'error' }[]).push({ tool: 'list_jobs', outcome: toolOutcome });
         }
         const pieces = isTools && !options.claimToolText ? ['No jobs.'] : ['one ', 'two ', 'three ', 'four ', 'five '];
@@ -58,6 +64,26 @@ describe('PI live smoke', () => {
 
   it('fails the MCP check when the server saw no tool run at all', async () => {
     expect((await runPiSmoke(fakeGateway('none', { claimToolText: true }), new AbortController().signal, { warmTurns: 1 })).checks.tools_over_mcp).toBe(false);
+  });
+
+  it('gives a reach server a turn and a check only when the harness listed its tools', async () => {
+    const none = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1 });
+    expect(none.reach).toEqual([]);
+    expect(Object.keys(none.checks).filter(key => key.startsWith('reach_'))).toEqual([]);
+    const both = await runPiSmoke(fakeGateway('ok', { listed: ['github', 'azure'] }), new AbortController().signal, { warmTurns: 1 });
+    expect(both.reach.map(({ server }) => server)).toEqual(['github', 'azure']);
+    expect(both.checks).toMatchObject({ reach_github: true, reach_azure: true });
+    expect(both.listed).toEqual([{ server: 'github', tools: 12, failed: false }, { server: 'azure', tools: 12, failed: false }]);
+  });
+
+  it('fails a reach check when the harness reports the call as failed', async () => {
+    const report = await runPiSmoke(fakeGateway('ok', { listed: ['github'], failReach: true }), new AbortController().signal, { warmTurns: 1 });
+    expect(report.checks.reach_github).toBe(false);
+  });
+
+  it('does not count a Jarvis call as reach', async () => {
+    const report = await runPiSmoke(fakeGateway('ok', { listed: ['github'] }), new AbortController().signal, { warmTurns: 1 });
+    expect(report.tools.reachCalls).toEqual([]);
   });
 
   it('counts only list_jobs with an ok outcome', () => {
