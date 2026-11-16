@@ -1,3 +1,20 @@
+## PI built-ins: what they cost (16 November 2026, Deploys 43911904900, 43917007448 and 43917784950)
+
+The harness built-ins (shell, filesystem read and write, web, sub-agents) are on. GitHub reaches PI through the Jarvis MCP door (118 GitHub tools found through `find_tools`, one `gh_issue_read` call checked by the smoke), so its tool list is not in the prompt. One thing was switched off per Deploy to see the cost of the built-ins.
+
+| Measure | Built-ins on (43911904900) | Built-ins off (43917007448) |
+| --- | ---: | ---: |
+| Fixed-prompt input tokens | about 14.1k | 7.7k |
+| Warm first text | 2.0 to 2.8 s (turn 2: 2.8 s, turns 3 and 4: 2.0 to 2.1 s) | 1.1 to 1.3 s |
+| Voice plain, first text | 1.7 s | 1.4 s |
+| Voice with a tool, first text | 1.8 s | 1.5 s |
+
+Other numbers from 43911904900: cold 3.7 s, tool turn 3.3 s, github reach 1.7 s, smoke 1.55 DKK at list price.
+
+Earlier full-server baselines, for the history of this change: GitHub attached as a harness tool (Deploy 43901841128) about 31k input and warm first text 2.4 to 5.7 s; the same with built-ins on (Deploy 43905474658) about 37.5k input, warm first text 3.5 to 4.3 s, voice plain 4.1 s and voice with a tool 8.9 s. Moving GitHub into the door removed about 23k tokens and about 7 s from the voice tool turn.
+
+Reading: the built-ins cost about 6.4k tokens a turn and about 0.8 s on warm chat first text (about 0.3 s on voice). The four skill descriptions are about 0.25k tokens, so the `skills_off` variant was not run. The decision is in `docs/decisions.md`, 16 November 2026: built-ins stay on.
+
 ## PI voice leg and prompt size (16 November 2026, Deploy run 43831735508, `measure_pi` after #1908)
 
 Observed through the gateway on agent `jarvis-pi` with the voice instructions and the brain, watches and workers skills. Reach servers were not attached, so no reach rows.

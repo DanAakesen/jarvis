@@ -1,3 +1,20 @@
+## 16 November 2026 — The harness built-ins stay on; what they cost was measured (#1886, P15-175)
+
+Owner direction, as before: no restrictions on PI. The built-ins (shell, filesystem read and write, web, sub-agents) were turned on in #1914 and their cost was measured with one variant per Deploy (the `pi_experiment` input from #1916).
+
+| Measured | Built-ins on | Built-ins off (Deploy 43917007448) |
+| --- | ---: | ---: |
+| Fixed-prompt input tokens per turn | about 14.1k | 7.7k |
+| Warm first text (chat) | 2.0 to 2.8 s | 1.1 to 1.3 s |
+| Voice plain, first text | 1.7 s | 1.4 s |
+| Voice with a tool, first text | 1.8 s | 1.5 s |
+
+| Choice | Why |
+| --- | --- |
+| Built-ins stay **on**, no partial removal | They cost about 6.4k input tokens a turn, about 0.8 s on warm chat first text and about 0.3 s on voice. The dispatcher decided, in line with the owner's unrestricted goal, that the capability is worth it. The full agent was restored by Deploy 43917784950 (experiment `none`). The switch remains `builtinTools` in `agents/pi/definition.json`, and `pi_experiment` on Deploy for measuring |
+| The `skills_off` variant was not run | The four skill descriptions are about 0.25k tokens (the bodies are read only when a skill is used), so the result could not matter |
+| The target of warm first text under about 1.5 s is not met with built-ins on | Accepted. Voice, the latency-sensitive path, is 1.7 to 1.8 s |
+
 ## 16 November 2026 — PI has no hard-coded restrictions: wakes act, built-ins on, no watch limits (#1886, P15-175)
 
 Owner, 16 November 2026, recorded as given: "If you keep adding restrictions we will never succeed with getting it to do what we want." This follows the entry below (full GitHub server, Azure Contributor) and removes what was left in PI's own path. The earlier statements that a wake can only read, that Workers and watches need Dan's own message, and that the built-ins are off are superseded.
