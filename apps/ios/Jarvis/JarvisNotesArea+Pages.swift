@@ -329,6 +329,8 @@ extension JarvisNotesArea {
             }
             .jarvisRowSurface(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
         }
+        // Few results sit against the dock, not at the top of the 220 pt window.
+        .defaultScrollAnchor(.bottom, for: .alignment)
         .frame(maxHeight: 220)
     }
 
