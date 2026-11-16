@@ -40,7 +40,7 @@ struct JarvisChatScreen: View {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(ChatEngineSelection.key) private var chatEngine: ChatEngine = .current
+    @AppStorage(ChatEngineSelection.key) private var chatEngine: ChatEngine = .pi
     @StateObject private var model: JarvisChatModel
     @State private var presentedSheet: ChatSheet?
     @State private var pendingActivityTaskID: String?

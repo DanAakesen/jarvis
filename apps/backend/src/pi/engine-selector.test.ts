@@ -11,10 +11,10 @@ const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestatica
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function setup(options: { piAgent?: ConversationAgent; withPiAgentOption?: boolean } = {}) {
+function setup(options: { piAgent?: ConversationAgent; withPiAgentOption?: boolean; runtimeTest?: string } = {}) {
   const messages: ConversationMessage[] = [];
   const store = {
-    getSession: async (id: string) => ({ id, channel: 'chat', language: 'en', startedAt: new Date(), endedAt: null }),
+    getSession: async (id: string) => ({ id, channel: 'chat', language: 'en', startedAt: new Date(), endedAt: null, ...(options.runtimeTest ? { runtimeTest: options.runtimeTest } : {}) }),
     addMessage: async (input: { sessionId: string; role: 'dan' | 'jarvis'; text: string; model: string | null }) => {
       const message = { id: String(messages.length + 1), sessionId: input.sessionId, role: input.role, text: input.text, model: input.model, at: new Date() };
       messages.push(message);
@@ -45,13 +45,27 @@ function setup(options: { piAgent?: ConversationAgent; withPiAgentOption?: boole
   return { turn, messages };
 }
 
-describe('PI test selector on the chat turn', () => {
-  it('keeps the default path on the current engine', async () => {
+describe('PI is the default engine on the chat turn', () => {
+  it('runs a turn without an engine on PI', async () => {
     const { turn, messages } = setup({ piAgent: { stream: async function* () { yield 'from PI'; } } });
     const result = await turn({ text: 'hi' });
     expect(result.events.map((event) => event.name)).toEqual(['user', 'delta', 'done']);
+    expect(result.events[1]!.data.text).toBe('from PI');
+    expect(messages.at(-1)).toMatchObject({ role: 'jarvis', model: 'pi' });
+  });
+
+  it('keeps the old engine reachable only by naming it', async () => {
+    const { turn, messages } = setup({ piAgent: { stream: async function* () { yield 'from PI'; } } });
+    const result = await turn({ text: 'hi', engine: 'current' });
     expect(result.events[1]!.data.text).toBe('from the current engine');
     expect(messages.at(-1)).toMatchObject({ role: 'jarvis', model: null });
+  });
+
+  it('keeps an isolated runtime-test session off PI', async () => {
+    let piCalls = 0;
+    const { turn } = setup({ piAgent: { stream: async function* () { piCalls += 1; yield 'from PI'; } }, runtimeTest: 'copilot' });
+    await turn({ text: 'hi' });
+    expect(piCalls).toBe(0);
   });
 
   it('streams from PI only when the turn asks for it, and labels the saved reply', async () => {
@@ -83,7 +97,7 @@ describe('PI test selector on the chat turn', () => {
     expect(result.events.at(-1)).toEqual({ name: 'error', data: { error: 'PI has used 250.00 of its 250 DKK monthly cap, so it stopped.', code: 'pi_budget_exhausted' } });
   });
 
-  it('rejects any engine other than pi', async () => {
+  it('rejects any engine other than pi or current', async () => {
     const { turn } = setup();
     expect((await turn({ text: 'hi', engine: 'copilot' })).status).toBe(400);
   });

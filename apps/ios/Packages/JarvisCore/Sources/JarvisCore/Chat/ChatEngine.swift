@@ -1,19 +1,19 @@
 import Foundation
 
-/// TEST-ONLY chat engine switch. Delete this file, `PiStatus.swift` and their call sites at cutover.
-/// `current` is the existing engine; `pi` is the managed Microsoft Copilot harness agent behind the backend.
+/// TEST-ONLY chat engine switch. Delete this file, `PiStatus.swift` and their call sites at phase 8.
+/// `current` is the old engine; `pi` is the managed Microsoft Copilot harness agent behind the backend.
 /// There is no runtime fallback: a failing `pi` turn reports an honest error and never reroutes to `current`.
 public enum ChatEngine: String, Codable, Sendable, CaseIterable, Hashable {
     case current
     case pi
 }
 
-/// Persists the owner's engine choice. The default is `current`; unknown stored values read as `current`.
+/// Persists the owner's engine choice. The default is `pi`; unknown stored values read as `pi`.
 public enum ChatEngineSelection {
     public static let key = "jarvis.test.chatEngine"
 
     public static func load(from defaults: UserDefaults = .standard) -> ChatEngine {
-        defaults.string(forKey: key).flatMap(ChatEngine.init(rawValue:)) ?? .current
+        defaults.string(forKey: key).flatMap(ChatEngine.init(rawValue:)) ?? .pi
     }
 
     public static func save(_ engine: ChatEngine, to defaults: UserDefaults = .standard) {

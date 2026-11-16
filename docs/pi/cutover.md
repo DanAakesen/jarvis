@@ -24,18 +24,19 @@ flowchart LR
 | Reach | After the owner provides `PI_GITHUB_READ_TOKEN` and runs `infra/setup-azure-mcp.ps1` | Reads work on real questions; or PI says plainly it is not attached | `docs/agent-context.md`, "PI reach" |
 | Cost | Settings status rows, `measure_pi` summary | A plain turn about 0.05 DKK, a tool turn about 0.17 DKK, month inside the cap | `docs/pi/plan.md` section 8 |
 
-**Known gaps to decide on before the flip (not bugs):** voice with PI has no camera or screen sharing yet; the Watch keeps its current engine until the flip (the flip makes the server default PI, so the Watch follows it); the web app has no PI switch and also follows the server default; the 07:00 and 18:00 proactive slots are not replaced by anything in PI (section 4.3, decision A).
+**Known gaps to decide on before the flip (not bugs):** voice with PI has no camera or screen sharing yet (this also affects web voice after the flip); the Watch and the web app follow the server default once it is PI; the 07:00 and 18:00 proactive slots are not replaced by anything in PI (section 4.3, decision A).
 
 ## 2. The flip (phase 7) as one small, separate change
 
-Prepared as its own **draft pull request, stacked on this one, that must not merge until the owner says so in writing**. It changes only the default:
+Prepared as its own **draft pull request, stacked on the cutover documents, that must not merge until the owner says so in writing**. It changes only the default:
 
 | Change | Detail |
 | --- | --- |
-| Server default | The conversation turn route and the voice socket treat a missing `engine` as PI. The value `current` selects the old path explicitly, and is what the isolated runtime-test sessions and nothing else send |
-| iOS default | `ChatEngineSelection.load()` defaults to PI; the chat client and voice client send `current` only when the owner picks it |
+| Server default, chat | `POST /conversation/sessions/:id/turns` treats a missing `engine` as PI. `engine: "current"` selects the old path explicitly. An isolated runtime-test session is the old path by definition and is never sent to PI |
+| Server default, voice | `/voice` without `engine` runs on PI; `/voice?engine=current` is the old voice path |
+| iOS default | `ChatEngineSelection.load()` defaults to PI and the chat and voice clients send the owner's choice explicitly (`current` or `pi`); the Watch bridge sends none and follows the server |
 | What stays | The old path, its code, the test switch and every Foundry resource. The flip is one revert away from today |
-| What follows the default without a code change | The Watch and the web app (they send no engine) |
+| What follows the default without a code change | The Watch (chat and voice) and the web app (chat, and voice without camera or screen sharing: the relay answers `not_supported`, so web camera and shared-screen voice stop working until PI supports them) |
 
 Rollback: revert the flip commit and redeploy the previous release. There is no code that switches back at runtime.
 

@@ -181,13 +181,22 @@ describe('voice relay on the PI engine', () => {
     expect(upstreamEvents).toEqual([]);
   });
 
-  it('leaves the current voice path exactly as it was when the switch is not on PI', async () => {
+  it('leaves the current voice path exactly as it was when it is named explicitly', async () => {
     const { connect, responses, upstreamEvents } = await harness(undefined);
-    connect('');
+    connect('?engine=current');
     await until(() => responses().length === 1, 'the greeting');
     const update = upstreamEvents.find(event => event.type === 'session.update')!;
-    expect(update.session.tools.map((tool: { name: string }) => tool.name)).toEqual(['find_tools', 'call_tool']);
-    expect(update.session.tool_choice).toBe('auto');
+    expect(update.session!.tools!.map(tool => tool.name)).toEqual(['find_tools', 'call_tool']);
+    expect(update.session!.tool_choice).toBe('auto');
+  });
+
+  it('runs a voice session without an engine on PI', async () => {
+    const { connect, responses, upstreamEvents } = await harness(undefined);
+    const session = connect('');
+    await until(() => session.closed() !== undefined, 'the close');
+    expect(session.closed()).toMatchObject({ code: 1011 });
+    expect(upstreamEvents).toEqual([]);
+    expect(responses()).toEqual([]);
   });
 
   it('refuses an unknown engine', async () => {

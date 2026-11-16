@@ -569,8 +569,8 @@ return {
       Params: { sessionId: string };
       Body: {
         text: string;
-        /** Test-only: 'pi' streams this turn from the PI agent instead of the current engine. */
-        engine?: 'pi';
+        /** 'current' selects the old engine; a turn without it runs on PI (test switch, removed with the old path). */
+        engine?: 'pi' | 'current';
         attachmentIds?: string[];
         screenContext?: string;
         visualContext?: VisualContext;
@@ -590,7 +590,7 @@ return {
           type: 'object',
           properties: {
             text: { type: 'string', minLength: 1, maxLength: 20_000 },
-            engine: { type: 'string', enum: ['pi'] },
+            engine: { type: 'string', enum: ['pi', 'current'] },
             attachmentIds: {
               type: 'array',
               minItems: 0,
@@ -619,11 +619,8 @@ return {
       const turnStartedAt = performance.now();
       const turnStartedAtMs = Date.now();
       const store = app.conversationStore;
-      const piRequested = request.body.engine === 'pi';
-      // A turn that asks for PI never falls back: an unconfigured PI ends the turn with its own honest error.
-      const agent = piRequested ? (app.piAgent ?? createUnconfiguredPiAgent()) : app.conversationAgent;
+      const explicitEngine = request.body.engine;
       if (!store) return reply.code(503).send({ error: 'Conversation storage unavailable' });
-      if (!agent) return reply.code(503).send({ error: 'Chat is unavailable until the Jarvis agent is configured' });
       const { sessionId } = request.params;
       if (!validId(sessionId)) return reply.code(400).send({ error: 'Invalid conversation session ID' });
       const text = request.body.text.trim();
@@ -654,9 +651,14 @@ return {
       const session = await store.getSession(sessionId);
       if (!session || session.endedAt !== null) return reply.code(404).send({ error: 'Active chat session not found' });
       if (session.channel !== 'chat') return reply.code(400).send({ error: 'Session is not a chat session' });
-      if (piRequested && session.runtimeTest) {
+      if (explicitEngine === 'pi' && session.runtimeTest) {
         return reply.code(400).send({ error: 'The PI test switch applies to normal chat, not to an isolated runtime test session.' });
       }
+      // PI is the default engine. 'current' selects the old path explicitly, and an isolated runtime-test session is the old path by definition.
+      // A turn on PI never falls back: an unconfigured PI ends the turn with its own honest error.
+      const piRequested = explicitEngine === 'pi' || (explicitEngine === undefined && !session.runtimeTest);
+      const agent = piRequested ? (app.piAgent ?? createUnconfiguredPiAgent()) : app.conversationAgent;
+      if (!agent) return reply.code(503).send({ error: 'Chat is unavailable until the Jarvis agent is configured' });
       const runtimeOption = session.runtimeTest ? (await runtimeTests())[session.runtimeTest] : undefined;
       if (runtimeOption && !runtimeOption.available) {
         return reply.code(503).send({ error: runtimeTestUnavailableMessage(runtimeOption) });

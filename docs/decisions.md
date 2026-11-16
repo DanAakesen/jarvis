@@ -1,3 +1,7 @@
+## PROPOSED, NOT IN EFFECT — PI cutover flip: PI becomes the default, with the old path behind an explicit value (#1887, P15-176, part 3, draft pull request)
+
+Becomes a decision only when the owner approves it in writing. The flip is the only change in its pull request: the server treats a missing `engine` as PI (chat and voice), `current` is the explicit old path, and the iOS test switch defaults to PI. Settings, General, "Engine test switch" stays until phase 8; its explanation then says PI is the default, and the Chat header's "PI test" pill shows by default until phase 8.
+
 ## 16 November 2026 — PI phase 7: the cutover is prepared as a separate flip, and the deletion waits for his written word (#1887, P15-176)
 
 Owner, 16 November 2026: "Just dont delete the old harness." Earlier rules still hold: no fallbacks, no shims, no dual or shadow paths, "build this, test it, and then when we're happy with it, then we delete everything that we don't need anymore."

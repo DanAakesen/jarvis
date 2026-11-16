@@ -3,6 +3,10 @@
 - Consult the apple-hig skill (justinwetch/HIGAgentSkills, MIT) for iOS UI sizes, padding, Dynamic Type and accessibility. Clone it into a scratch directory outside the repository each time and never commit it.
 - Notes redesign checks: `cd apps/ios/Packages/JarvisCore && swift test` (Linux, `swift:6.2` image works locally); `cd apps/backend && npx vitest run src/vault`. The SwiftUI screens compile only in the macOS `watch` job (`watch-build.yml`), which also captures the Notes states as screenshots (`notes-*.png` in the `watch-build-logs` artifact; continue-on-error, 14-minute bound). Launch with `--ui-test-navigation --screenshot-screen=notes --ui-test-task-list-board --screenshot-notes-state=<state>` (simulator only; states are listed in `JarvisNotesArea+Chrome.swift`).
 
+## PI cutover flip: draft, not in effect (#1887, P15-176, part 3)
+
+The flip is its own pull request and changes only the default (section 2 of `docs/pi/cutover.md`); it is not on the owner's approval list until he writes it on #1887. Test after merging and deploying it: a chat message and a voice session with no switch change both run on PI; "Current engine" in Settings still reaches the old path; a runtime-test session still works. Roll back by reverting the flip commit.
+
 ## PI cutover: flip, roll back, delete (#1887, P15-176)
 
 - Everything is in `docs/pi/cutover.md`. Nothing is deleted and the default is unchanged until the owner approves in writing on #1887.

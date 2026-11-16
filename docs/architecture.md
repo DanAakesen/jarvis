@@ -11,6 +11,10 @@
   line, and reports an unconfirmed write as 503; covered by `src/vault/task-delete.test.ts`.
 - CI: the macOS `watch` job compiles the iPhone app and captures the Notes states (continue-on-error, bounded).
 
+## PI cutover flip (draft, not in effect) — #1887, P15-176
+
+If merged: a chat turn without `engine` runs on PI (`engine: "current"` selects the old agent; an isolated runtime-test session always runs on the old agent), `/voice` without `engine` runs the PI voice path (`?engine=current` the old one), iOS sends the owner's choice explicitly and defaults to PI, the Watch bridge and the web app send none and follow the server. The old path and the test switch stay until phase 8. Revert the flip commit to return to today.
+
 ## PI voice (test switch) — 16 November 2026 (#1887, P15-176)
 
 Voice Live stays the realtime speech layer. A voice socket opened as `/voice?engine=pi` (the iOS test switch) runs the PI engine; without the query the relay is exactly as before, and any other value closes the socket (1008).
