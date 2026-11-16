@@ -21,11 +21,12 @@ struct VoiceScreenView: View {
     @State private var screenShareProblem: String?
     @State private var captionFrame: CGRect = .zero
     @State private var captionFollow = ChatFollowState()
+    @State private var orbFrame: CGRect = .zero
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                JarvisScreenBackground()
+                JarvisNeuralBackground(activity: orbActivity, effects: .full, orb: .screen(orbFrame))
 
                 VStack(spacing: JarvisDesignTokens.voiceContentSpacing) {
                     Spacer(minLength: 0)
@@ -157,19 +158,21 @@ struct VoiceScreenView: View {
         !model.userCaption.isEmpty || !model.assistantCaption.isEmpty || !model.sentMedia.isEmpty
     }
 
+    private var orbActivity: JarvisOrbActivity {
+        JarvisOrbActivity(voiceState: model.voiceState, isMuted: model.showsConnectionRecovery || model.isMuted)
+    }
+
     private func voiceOrb(diameter: CGFloat) -> some View {
-        JarvisOrb(
-            activity: JarvisOrbActivity(
-                voiceState: model.voiceState,
-                isMuted: model.showsConnectionRecovery || model.isMuted
-            ),
-            size: diameter
-        )
+        JarvisOrb(activity: orbActivity, size: diameter)
         .jarvisCarryOver(.orb)
         .frame(
             width: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2,
             height: diameter + JarvisDesignTokens.voiceOrbHaloInset * 2
         )
+        // The background fans out from the orb itself, not its halo.
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+            orbFrame = $0.insetBy(dx: JarvisDesignTokens.voiceOrbHaloInset, dy: JarvisDesignTokens.voiceOrbHaloInset)
+        }
         .accessibilityElement()
         .accessibilityLabel("\(JarvisVoiceLocalization.string(.orb)). \(connectionTitle ?? model.statusText)")
         .modifier(VoiceMinimizeAction(

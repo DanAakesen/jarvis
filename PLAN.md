@@ -5,6 +5,39 @@ JarvisCore logic with tests, new pages/reader/editor/sheets, recovery flows, fix
 or review findings, rebase on main after PR #1896 (vault layout) lands, owner review. Not in scope (see decisions): rename, move, bulk
 select, manual sort, undo, Danish catalog. No TestFlight build is part of this work.
 
+## One living neural background — 15 November 2026 (#1892, P15-179; absorbs #1891; PR #1893)
+
+**Status: built; Linux tests pass; observed in the macOS simulator; device judgement still the owner's.** One shared background
+(the opening's sparse network) replaces the Ember image and colour glows on every screen. Neurons fire out from the orb
+along the links and return, driven by the orb's own state and levels: full effects on Voice, Chat (live orb under the
+window and composer, new `tool` activity) and the opening; `.calm` elsewhere; still for sheets, the drawer, the privacy cover,
+Reduce Motion and the new Settings > General > Background motion switch. The gate has one background for every state, so
+Face ID failing keeps it (#1891). Opening off switch unchanged. Design, decision and architecture: `DESIGN.md`,
+`docs/decisions.md`, `docs/architecture.md`.
+
+Done: JarvisCore `Neural/` (network and routes, animator, scene, SwiftUI painter), `JarvisNeuralBackground` and
+`JarvisNeuralStage` in the design system, Voice, Chat, gate and opening wired, 11 new Linux tests (107 pass in total),
+capture workflow `neural-background-capture.yml`.
+
+Observed (macOS CI, iPhone Pro simulator, run 43759749766, images in `docs/ui/neural-background-2026-11-15/`): the compile
+and all captures pass. Voice (listening, thinking, speaking), chat (thinking, tool, speaking, listening), the opening, the
+gate (Face ID failed, waiting, sign-in) and Settings and Health, dark and light, all show the network. Signals visibly leave the
+orb and travel the links (cyan out, amber for tool work); pairs of frames 0.7 s apart differ on every animated screen
+(hundreds of thousands of changed pixels on Voice, 150 to 220 thousand on chat, about 200 thousand on the gate and
+opening). **Face ID failed keeps the background.** The first run (43756890893) showed the opening and gate frozen apart from
+the bar: their overlay window never received a scene phase. Fixed by reporting the gate's pause state as the scene phase;
+the second run shows them moving. Chat text stays readable over the orb in dark mode; light mode is denser and reads less
+cleanly under long text, which the owner should judge. The gate's sign-in title overlaps the lower orb by design tokens
+(`gateOrbCenterTop` 296, `gateSignInTitleTop` 368), unchanged here. Not observed: frame rate (the simulator cannot say),
+battery, thermal behaviour, VoiceOver, Reduce Motion by hand (covered by unit tests of the still pose), the Settings
+switch by hand, and a pause behind sheets (calm signals keep running behind a presented sheet; they are two faint
+20 fps signals at most). Needs a device: 60 fps on an iPhone 16 Pro Max class, battery, daylight look.
+
+Run 43762776242: the `watch` job failed only because capture steps hit their 8-minute bound (simulator launches took 2.5 to
+5 minutes, screenshots 1 to 2); compile steps passed. Response: the background draws a cheap path in the Simulator and in
+Low Power Mode, and the screenshot steps are `continue-on-error` with a 12-minute bound (compile steps stay strict).
+Next: owner review of the captures and a TestFlight build.
+
 ## PI phases 0 to 2 together: PI agent, Jarvis MCP, chat in the iOS app behind a test switch — 15 November 2026 (#1885, P15-174, PR #1890)
 
 **Status: built and tested offline; not yet run live.** The owner asked for phases 0, 1 and 2 as one piece so he can test chat on PI in the iOS app. It replaces #1874, #1875 and #1876 (phase 0's quality round, routines and long-session items are out: the owner does not want to test long sessions). Everything is inert until the owner sets the test switch to PI in iOS Settings.
