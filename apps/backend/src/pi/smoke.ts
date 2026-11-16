@@ -13,6 +13,10 @@ interface Measured {
   readonly reachCalls: readonly { readonly server: string; readonly name: string; readonly failed: boolean }[];
   readonly characters: number;
   readonly text: string;
+  /** True when the reply read as speech: no markdown or list marks and a short word count. Judged on the whole reply. */
+  readonly spokenShape: boolean;
+  /** True when PI wrote a sentence before its first tool call (what Voice Live speaks while the tool runs). */
+  readonly textBeforeTool: boolean;
   readonly usage: PiUsage;
   readonly costDkk: number;
   readonly aborted: boolean;
@@ -27,6 +31,8 @@ export interface PiSmokeReport {
   /** One turn per attached reach server; absent servers get no turn and no check. */
   readonly reach: readonly { readonly server: 'github' | 'azure'; readonly turn: Measured }[];
   readonly cancel: { readonly abortToCloseMs: number; readonly partialCharacters: number; readonly followUpOk: boolean };
+  /** The PI leg of a voice turn: the same agent and conversation with the voice channel note. Voice Live's own audio time is not in it. */
+  readonly voice: { readonly plain: Measured; readonly tools: Measured };
   readonly totalCostDkk: number;
   readonly checks: Record<string, boolean>;
 }
@@ -38,6 +44,12 @@ export function toolRanOk(results: Measured['toolResults']): boolean {
 
 const noUsage: PiUsage = { inputTokens: 0, cachedTokens: 0, outputTokens: 0 };
 
+/** A reply that can be read aloud as it stands: plain words, no markup or list marks, a few sentences at most. */
+export function isSpokenShape(text: string): boolean {
+  const body = text.trim();
+  return body.length > 0 && !/[*#|`[\]<>]|^\s*(?:[-•]|\d+[.)])\s/mu.test(body) && !body.includes('\n') && body.split(/\s+/u).length <= 70;
+}
+
 /**
  * Live proof for the Deploy workflow: one scratch conversation (never the owner's), a cold turn, warm turns, a tool turn
  * through the Jarvis MCP server under the read-only smoke role, and a cancelled turn followed by a normal one. It reports
@@ -48,7 +60,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
   const conversationId = await kit.createConversation(signal);
   const listed = new Map<string, { tools: number; failed: boolean }>();
 
-  async function measure(text: string, config: { abortAfterFirstText?: boolean } = {}): Promise<Measured & { abortToCloseMs: number }> {
+  async function measure(text: string, config: { abortAfterFirstText?: boolean; voice?: boolean } = {}): Promise<Measured & { abortToCloseMs: number }> {
     const controller = new AbortController();
     const turnSignal = AbortSignal.any([signal, controller.signal]);
     const grant = kit.openGrant(turnSignal);
@@ -57,13 +69,14 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
     let lastTextMs: number | null = null;
     let deltas = 0;
     let toolCalls = 0;
+    let textBeforeTool = false;
     const toolResults: Measured['toolResults'][number][] = [];
     let output = '';
     const reachCalls: Measured['reachCalls'][number][] = [];
     let usage = noUsage;
     let abortedAt: number | null = null;
     try {
-      for await (const event of kit.respond(conversationId, kit.format(grant.turn, text), turnSignal) as AsyncIterable<PiEvent>) {
+      for await (const event of kit.respond(conversationId, kit.format(grant.turn, text, config.voice ? 'voice' : undefined), turnSignal) as AsyncIterable<PiEvent>) {
         const at = performance.now() - started;
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(at);
@@ -71,7 +84,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
           deltas += 1;
           output += event.text;
           if (config.abortAfterFirstText && abortedAt === null) { abortedAt = performance.now(); controller.abort(); }
-        } else if (event.kind === 'tool') toolCalls += 1;
+        } else if (event.kind === 'tool') { toolCalls += 1; if (toolCalls === 1) textBeforeTool = output.trim().length > 0; }
         else if (event.kind === 'tool_done') {
           if (event.server !== PI_MCP_SERVER_LABEL) reachCalls.push({ server: event.server, name: event.name, failed: event.failed });
         } else if (event.kind === 'tools_listed') listed.set(event.server, { tools: event.tools, failed: event.failed });
@@ -91,7 +104,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
       outputTokens: usage.outputTokens, costDkk, firstTextMs, totalMs, outcome: abortedAt === null ? 'ok' : 'cancelled',
     }, AbortSignal.timeout(10_000)).catch(() => undefined);
     return { firstTextMs, lastTextMs, totalMs, deltas, toolCalls, toolResults, reachCalls, characters: output.length, text: output.slice(0, 200), usage, costDkk,
-      aborted: abortedAt !== null, abortToCloseMs: closedMs };
+      spokenShape: isSpokenShape(output), textBeforeTool, aborted: abortedAt !== null, abortToCloseMs: closedMs };
   }
 
   // A reply of a few dozen words, so streaming can be told from one buffered chunk; one short sentence cannot.
@@ -102,6 +115,12 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
   }
   const tools = await measure(
     'Use find_tools to look up "jobs", then run list_jobs with call_tool and empty arguments, then say in one sentence how many jobs are running.',
+  );
+  // The PI leg of voice turns, in the same warm conversation: what Dan says is short, and what PI says must be speakable.
+  const voicePlain = await measure('Dan asks by voice: what is a good name for a goldfish?', { voice: true });
+  const voiceTools = await measure(
+    'Dan asks by voice: use find_tools to look up "jobs", then run list_jobs with call_tool and empty arguments, and tell me how many jobs are running.',
+    { voice: true },
   );
   const strip = (turn: Measured & { abortToCloseMs?: number }): Measured => {
     const { abortToCloseMs, ...rest } = turn;
@@ -120,10 +139,11 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
   const cancelled = await measure('Write a very long, detailed story of at least 400 words about a butler.', { abortAfterFirstText: true });
   const followUp = await measure('Reply with exactly: still here').then(turn => turn.characters > 0, () => false);
 
-  const all = [cold, ...warm, tools, ...reach.map(({ turn }) => turn), cancelled];
+  const all = [cold, ...warm, tools, voicePlain, voiceTools, ...reach.map(({ turn }) => turn), cancelled];
   const warmMedian = [...warm].map(turn => turn.firstTextMs ?? Infinity).sort((a, b) => a - b)[Math.floor(warm.length / 2)] ?? Infinity;
   return {
     cold: strip(cold), warm: warm, tools: strip(tools),
+    voice: { plain: strip(voicePlain), tools: strip(voiceTools) },
     listed: [...listed].map(([server, entry]) => ({ server, ...entry })), reach,
     cancel: { abortToCloseMs: cancelled.abortToCloseMs, partialCharacters: cancelled.characters, followUpOk: followUp },
     totalCostDkk: Number(all.reduce((sum, turn) => sum + turn.costDkk, 0).toFixed(4)),
@@ -134,6 +154,9 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
       tools_over_mcp: toolRanOk(tools.toolResults),
       cancellation: cancelled.aborted && cancelled.abortToCloseMs < 5_000 && followUp,
       warm_faster_than_cold: warmMedian < (cold.firstTextMs ?? 0),
+      // Voice: the reply reads as speech, and a voice turn can use a tool as the server recorded it.
+      voice_spoken_shape: voicePlain.spokenShape && voiceTools.spokenShape,
+      voice_tools_over_mcp: toolRanOk(voiceTools.toolResults),
       // A reach check exists only for a server the harness reported on: a server that listed its tools must also answer a read
       // without an error, and one whose listing failed fails its check. A server that is not attached has no check at all.
       ...Object.fromEntries(['github', 'azure'].flatMap((server) => {

@@ -27,6 +27,13 @@ REACH_CHECKS = {
 }
 
 
+# Present only when the report carries the voice turns (the PI leg of a voice turn: Voice Live's own audio time is not in it).
+VOICE_CHECKS = {
+    "voice_spoken_shape": "voice-channel replies read as speech (plain words, no markdown or lists, short)",
+    "voice_tools_over_mcp": "a voice turn ran a Jarvis tool through the MCP server and its own result was ok",
+}
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):  # never forward the bearer token
         return None
@@ -42,6 +49,8 @@ def render(report: dict) -> str:
     turns = [("cold, new conversation", report["cold"])] + [
         (f"warm turn {index + 2}", turn) for index, turn in enumerate(report["warm"])
     ] + [("tool turn (MCP)", report["tools"])] + [
+        (f"voice: {label}", turn) for label, turn in (("plain", report.get("voice", {}).get("plain")), ("with a tool", report.get("voice", {}).get("tools"))) if turn
+    ] + [
         (f"reach: {entry['server']}", entry["turn"]) for entry in report.get("reach", [])
     ]
     scale = max([turn["firstTextMs"] or 0 for _, turn in turns] + [1000])
@@ -66,9 +75,13 @@ def render(report: dict) -> str:
     for entry in report.get("reach", []):
         calls = ", ".join(f"{call['name'] or 'call'}={'failed' if call['failed'] else 'ok'}" for call in entry["turn"].get("reachCalls", []))
         lines.append(f"Reach {entry['server']}: {calls or 'no call'}; reply: {entry['turn']['text']!r}")
+    voice = report.get("voice")
+    if voice:
+        lines += ["", f"Voice (PI leg only): plain reply {voice['plain']['text']!r}; tool turn reply {voice['tools']['text']!r}, "
+                      f"PI wrote a sentence before the tool call: {'yes' if voice['tools'].get('textBeforeTool') else 'no'}."]
     lines += ["", "| Check | Result |", "| --- | --- |"]
     lines += [f"| {CHECKS[key]} | {'pass' if report['checks'].get(key) else '**FAIL**'} |" for key in CHECKS]
-    lines += [f"| {text} | {'pass' if report['checks'].get(key) else '**FAIL**'} |" for key, text in REACH_CHECKS.items() if key in report.get("checks", {})]
+    lines += [f"| {text} | {'pass' if report['checks'].get(key) else '**FAIL**'} |" for key, text in {**VOICE_CHECKS, **REACH_CHECKS}.items() if key in report.get("checks", {})]
     return "\n".join(lines) + "\n"
 
 
@@ -108,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     args.summary.write_text(rendered, encoding="utf-8")
     # The step summary needs a sign-in to read; the log shows the same numbers to anyone who can open the run.
     print(rendered)
-    required = [*CHECKS, *(key for key in REACH_CHECKS if key in report.get("checks", {}))]
+    required = [*CHECKS, *(key for key in (*VOICE_CHECKS, *REACH_CHECKS) if key in report.get("checks", {}))]
     failed = [key for key in required if not report.get("checks", {}).get(key)]
     if failed:
         print("::error::PI smoke checks failed: " + ", ".join(failed), file=sys.stderr)

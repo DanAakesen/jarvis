@@ -11,6 +11,48 @@
   line, and reports an unconfirmed write as 503; covered by `src/vault/task-delete.test.ts`.
 - CI: the macOS `watch` job compiles the iPhone app and captures the Notes states (continue-on-error, bounded).
 
+## PI voice (test switch) — 16 November 2026 (#1887, P15-176)
+
+Voice Live stays the realtime speech layer. A voice socket opened as `/voice?engine=pi` (the iOS test switch) runs the PI engine; without the query the relay is exactly as before, and any other value closes the socket (1008).
+
+```mermaid
+sequenceDiagram
+    participant A as iOS app
+    participant R as Voice relay (/voice?engine=pi)
+    participant V as Voice Live
+    participant G as PI gateway
+    participant P as PI agent (one conversation, shared with chat)
+    A->>R: connect (owner token, engine=pi)
+    R->>G: warm (skips when fresh, over the cap or after failures)
+    R->>V: session.update (speech-only prompt, no tools)
+    A->>V: audio (through the relay)
+    V-->>R: final transcript
+    R->>R: store Dan's message (owner message for tool proof)
+    R->>G: stream(text, channel voice, message id)
+    G->>P: turn with the voice note
+    P-->>G: sentence before a tool call
+    G-->>R: acknowledgment
+    R->>V: response.create (read this text, tools off)
+    P-->>G: answer
+    G-->>R: text
+    R->>V: response.create (read this text, tools off)
+    V-->>A: audio
+```
+
+| Piece | Where | Notes |
+| --- | --- | --- |
+| PI voice turns | `apps/backend/src/voice/pi-voice.ts` | `createPiVoiceTurns`: one turn at a time; a newer utterance cancels the turn in flight and waits for it to release the gateway; 90 s deadline; speaks the first progress note at once and the answer at the end; failures become one honest spoken sentence (`PiGatewayError.userMessage`, never provider text); cancelled and superseded turns say nothing |
+| Relay switch | `apps/backend/src/voice/relay.ts` | `piVoiceRequested` is set from the query; owner only; the PI agent must be configured (otherwise close 1011 "PI is not set up ... No other engine was used"). On PI: no tool-budget rung ladder, no partial-speech reflex or speech recognizer, no calendar, food or camera paths, typed `conversation.item.create` or `response.create` from the client closes the socket (1008), camera and screen frames get `jarvis.screen.context.unavailable` with reason `not_supported`, a Voice Live function call closes the socket (it has none). Status announcements for finished tasks and research still speak when no PI turn is in flight |
+| Voice Live session | `voice/realtime.ts` (`capabilityMode: 'pi'`) | Identity kernel plus a short "you are only the voice" prompt; no `tools`, no `tool_choice`. Turn detection is unchanged (the relay still creates every response) |
+| Voice channel for the agent | `ConversationAgentInput.channel: 'voice'`, `pi/prompt.ts` (`voiceChannelNote`), `agents/pi/instructions.md` (Voice) | The gateway adds the note to the turn; the Deploy `pi-agent` job publishes the new instructions as a new agent version |
+| Authority | unchanged | The voice turn's grant carries the stored voice message id, so a write still proves Dan's own words; the MCP door, approvals and receipts are the chat ones |
+| Ledger and cap | unchanged | Voice turns are `chat` turns in `dbo.pi_turn` and count against the same monthly cap; `pi.turn` logs `channel: voice` |
+| Logs | `voice.pi_turn`, `pi.turn` (registered in `logging.ts` with numeric fields only) | `transcriptToFirstTextMs`, `transcriptToDoneMs`, outcome (`ok`, `failed`, `timeout`, `cancelled`, `superseded`), whether a progress note was spoken. No text |
+| Deploy measurement | `pi/smoke.ts`, `.github/scripts/pi_smoke_report.py` | `measure_pi` adds two voice-channel turns (plain, with a Jarvis tool) in the smoke conversation and the checks `voice_spoken_shape` and `voice_tools_over_mcp`; reports first text, total and DKK. It is the PI leg only |
+| iOS | `VoiceEndpoint.url(baseURL:engine:)`, `VoiceSessionClient(engine:)`, `VoiceScreenModel` | The test switch (`ChatEngineSelection`) is read when a session starts and kept for its reconnects; the Watch bridge does not pass an engine |
+
+Not done on purpose: camera and screen sharing with PI, Watch voice on PI, a canned "one moment" line, a second fast path. Rollback: switch the iOS test switch to Current, or revert the pull request; the Deploy `pi-agent` job restores the previous instructions with the revert.
+
 ## PI standing watches (#1886, P15-175, part 3)
 
 "Keep me updated on X" is a free-text note in the vault, looked at by the brain loop. Our own ticker is the waker; the vault is the truth.

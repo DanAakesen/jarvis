@@ -1,3 +1,20 @@
+## PI phase 6: voice on the PI agent — 16 November 2026 (#1887, P15-176, part 1)
+
+Owner, 16 November 2026 (binding): "Start PI phase 6 now. I need to go to bed so get everything done in the next 8 hours. Just dont delete the old harness. Just implement the full issue 3 and make a testflight build ready so i can test everything." So: voice now, the cutover is prepared but **not done**, and **nothing old is deleted** (the hard stop in #1887 between stage 1 and stage 2 is replaced by the owner's written approval of the deletion).
+
+| Part | State |
+| --- | --- |
+| Voice Live on PI: every spoken turn goes to the one PI agent in the one long conversation shared with chat | **Built, tested offline (relay integration test with a real local WebSocket as Voice Live), not run live.** Selected by the iOS test switch only; the current voice path is untouched |
+| One switch for chat and voice (iOS Settings, "Engine test switch") | **Built.** A voice session reads the choice when it starts |
+| Deploy measurement of the PI leg of a voice turn (first text, total, DKK, speakable-reply check, voice tool turn) | **Built in the `measure_pi` smoke; not yet run.** The numbers go into the pull request when the dispatcher runs Deploy with `measure_pi` |
+| Real audio latency (speech stop to first audio) and per-turn cost with Voice Live | **Open: the owner's phone test.** The relay logs `voice.pi_turn` (transcript to first PI text and to the end of the PI turn) and `voice.turn_timing` (first audio) |
+
+**How a spoken turn runs.** The relay no longer lets the Voice Live model pick among about 150 tools. On the PI engine Voice Live has no tools and a short "voice only" prompt. When the final transcript of an utterance arrives, the relay stores it as Dan's message (as before), starts a PI turn with the voice channel note and the stored message id (so tools still prove the write against Dan's own words), speaks PI's own sentence before a tool call as soon as it exists (the natural acknowledgement; PI writes it), and speaks the answer with `response.create` (tools off) when the turn ends. A newer utterance cancels the turn in flight (the newest wins); a barge-in is Voice Live's own and stops speech as before; the session ending stops the turn. Errors are spoken in PI's honest words ("No other engine was used"). The PI conversation is warmed while Voice Live connects, so the accepted first-turn wait (3.3 s cold, 1.1 to 1.3 s warm, measured 16 November) overlaps the connection.
+
+**Known limits, stated in the pull request.** With PI, voice has no camera or screen sharing yet (the relay answers `not_supported`), no typed requests through the voice socket, and the Watch keeps the current engine. If PI is not set up on the backend or is over its monthly cap, the voice session ends or says so; it never switches engine. The old path stays exactly as it is and is selected by leaving the switch on "Current".
+
+Next: Deploy with `measure_pi`, the owner's phone test of voice on PI, then the cutover pull requests (checklist and deletion inventory in `docs/pi/cutover.md`).
+
 ## Notes, Tasks and Graph redesign — 15 November 2026 (#1894, P15-180, PR #1899)
 
 Status: implemented on the branch; waiting for CI (macOS compile) and review. Done: design pack committed, backend task delete,

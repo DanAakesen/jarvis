@@ -321,6 +321,21 @@ class SmokeReportTest(unittest.TestCase):
         self.assertIn("read-only GitHub server answered a read and the harness reported no error | **FAIL**", text)
         self.assertNotIn("Azure server answered", text)
         self.assertIn("every MCP server the harness reported returned its tools | **FAIL**", text)
+    def test_render_shows_voice_turns_and_their_checks_only_when_present(self):
+        base = {"cold": self.turn(4000), "warm": [self.turn(1900, 10000)],
+                "tools": dict(self.turn(2500), toolResults=[{"tool": "list_jobs", "outcome": "ok"}]),
+                "cancel": {"abortToCloseMs": 120, "partialCharacters": 31, "followUpOk": True}, "totalCostDkk": 0.4}
+        checks = {"streaming": True, "tools_over_mcp": True, "cancellation": True, "warm_faster_than_cold": True}
+        self.assertNotIn("voice", report.render(dict(base, checks=checks)).lower())
+        data = dict(base, voice={"plain": dict(self.turn(1200, 10000), text="Fido."),
+                                 "tools": dict(self.turn(1300, 10000), text="Two jobs.", textBeforeTool=True)},
+                    checks=dict(checks, voice_spoken_shape=True, voice_tools_over_mcp=False))
+        text = report.render(data)
+        self.assertIn("| voice: plain | 1200 ms |", text)
+        self.assertIn("| voice: with a tool | 1300 ms |", text)
+        self.assertIn("PI wrote a sentence before the tool call: yes", text)
+        self.assertIn("voice-channel replies read as speech (plain words, no markdown or lists, short) | pass", text)
+        self.assertIn("a voice turn ran a Jarvis tool through the MCP server and its own result was ok | **FAIL**", text)
 
 
 if __name__ == "__main__":

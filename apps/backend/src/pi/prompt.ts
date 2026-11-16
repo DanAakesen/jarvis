@@ -1,3 +1,7 @@
+/** Trusted note the voice relay adds to a turn: the reply is read aloud by Voice Live, word for word. */
+export const voiceChannelNote =
+  '[Channel: voice. Dan hears this reply spoken and can interrupt it. Answer in one to three short spoken sentences: plain words, no markdown, lists, tables, links or code, and say numbers, dates and times the way a person says them. Anything long goes to chat; offer that instead of reading it out.]';
+
 export function formatLocalTime(now: Date, timeZone: string): string {
   return `${now.toLocaleString('sv-SE', { timeZone, hour12: false }).slice(0, 16)} ${timeZone}`;
 }

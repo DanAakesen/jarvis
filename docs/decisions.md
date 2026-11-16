@@ -1,3 +1,20 @@
+## 16 November 2026 — PI phase 6: voice runs through the PI agent, the relay drives it (#1887, P15-176)
+
+Owner words, quoted: "Start PI phase 6 now. I need to go to bed so get everything done in the next 8 hours. Just dont delete the old harness. Just implement the full issue 3 and make a testflight build ready so i can test everything." Earlier (15 November): "I know when I start voice I need to wait a few seconds, I do that for ChatGPT as well." Rules unchanged: no fallbacks, no compatibility shims, no transition code, no dual or shadow paths, LLM-only decisions.
+
+| Choice | Why |
+| --- | --- |
+| **The relay starts the PI turn from the final transcript; Voice Live gets no tools and only reads PI's words.** This replaces the plan's `ask_pi` function tool | A function call would add a Voice Live model round trip before PI even starts, would rely on the realtime model choosing to call it every turn (or on a `tool_choice` value not verified against Voice Live), and could paraphrase Dan's words. The relay already stores Dan's utterance as the owner message the tools prove writes against, so starting the turn there is exact and faster. "Speak this text, tools off" is the pattern the relay already uses for status updates, so it is proven against Voice Live |
+| The voice tools are PI's tools: the same Jarvis MCP catalogue (`find_tools`, `call_tool`), the same guards, approvals and receipts | One toolbox, one authority path. Voice Live's own tool lookup (`find_tools`, `call_tool` over the relay, the discovery rung ladder) is not used on the PI engine; it is deleted with the old path in phase 8 |
+| PI's own sentence before a tool call is spoken at once; PI's answer after it | The acknowledgement is natural because the model writes it, from the same rule as in chat. The relay adds no canned "one moment" text, because what to say is the model's decision. Only one such note is spoken per turn; later progress notes stay out of the voice |
+| The newest utterance cancels a turn in flight and the new turn waits until the cancelled one has released the single-flight conversation | Dan interrupts and corrects; an answer to a sentence he has already replaced is noise. A chat turn and a voice turn cannot overlap on the one conversation (the gateway refuses with a plain sentence) |
+| The voice channel is a trusted per-turn note (`[Channel: voice ...]`) plus a Voice section in the agent instructions: one to three short spoken sentences, plain words, no markdown | The speech layer reads the reply word for word, so the shape has to come from the model, not from a text filter in the relay |
+| A PI failure, the monthly cap, an unset PI or a 90 second voice deadline are spoken or end the session with PI's own honest sentence | No fallback to the old voice path; the old path is reached only by leaving the test switch on Current |
+| On the PI engine the relay drops partial-speech reflexes, calendar and food-estimate side paths, typed requests and camera or screen frames | Each would act or answer around PI. Camera and screen sharing with PI are a later feature; the relay answers `not_supported` instead of ignoring them |
+| The PI conversation is warmed when the voice socket opens (the gateway skips the warm-up when fresh, over the cap or after failures) | The few seconds the owner accepts overlap the connection and the greeting |
+| The first Deploy measurement covers the PI leg of a voice turn; real audio latency is the owner's phone test, logged by `voice.pi_turn` and `voice.turn_timing` | A CI run cannot speak into Voice Live. The numbers are labelled as the PI leg so they are not mistaken for end-to-end |
+| The old harness is **not** deleted. The hard stop of #1887 between stage 1 and stage 2 is kept in the form the owner set: nothing old is removed until he approves the deletion in writing (`docs/pi/cutover.md` lists exactly what goes) | Owner instruction, 16 November 2026 |
+
 ## 15 November 2026 — Notes, Tasks and Graph redesign: Vault Folders implemented (#1894, P15-180)
 
 Dan selected **Vault Folders** (pinned notes, vault folders, source-linked tasks, folder-cluster graph) and approved

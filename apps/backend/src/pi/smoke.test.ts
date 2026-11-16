@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PiEvent, PiGateway, PiUsage } from './gateway.js';
-import { runPiSmoke, toolRanOk } from './smoke.js';
+import { isSpokenShape, runPiSmoke, toolRanOk } from './smoke.js';
 import type { PiTurnGrant } from './turns.js';
 
 const usage: PiUsage = { inputTokens: 11_000, cachedTokens: 9_000, outputTokens: 20 };
@@ -98,6 +98,22 @@ describe('PI live smoke', () => {
   it('does not count a Jarvis call as reach', async () => {
     const report = await runPiSmoke(fakeGateway('ok', { listed: ['github'] }), new AbortController().signal, { warmTurns: 1 });
     expect(report.tools.reachCalls).toEqual([]);
+  });
+
+  it('measures the voice leg of PI in the same conversation and checks the replies read as speech', async () => {
+    const report = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1 });
+    expect(report.voice.plain.firstTextMs).not.toBeNull();
+    expect(report.voice.tools.toolCalls).toBe(1);
+    expect(report.checks).toMatchObject({ voice_spoken_shape: true, voice_tools_over_mcp: true });
+    const failed = await runPiSmoke(fakeGateway('error'), new AbortController().signal, { warmTurns: 1 });
+    expect(failed.checks.voice_tools_over_mcp).toBe(false);
+  });
+
+  it('tells speech from chat formatting', () => {
+    expect(isSpokenShape('You have two meetings today, the first at nine.')).toBe(true);
+    for (const text of ['', '- one\n- two', 'Here is **bold** text', 'See [this](http://x)', 'First line\nSecond line', 'word '.repeat(80)]) {
+      expect(isSpokenShape(text)).toBe(false);
+    }
   });
 
   it('counts only list_jobs with an ok outcome', () => {

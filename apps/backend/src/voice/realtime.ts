@@ -30,7 +30,12 @@ Speech recognition mishears names (Jarvis, Codex, Copilot): map to the closest p
 When asking for a reminder, no date means today, Europe/Copenhagen.`;
 
 export type RealtimeInstructionMode = 'full' | 'compact';
-export type RealtimeCapabilityMode = 'direct' | 'discovery' | 'lazy';
+/** `pi` is the PI engine: Voice Live has no tools and only speaks what the PI agent answered. */
+export type RealtimeCapabilityMode = 'direct' | 'discovery' | 'lazy' | 'pi';
+
+export const PI_VOICE_SPEECH_INSTRUCTIONS = `You are only the voice of Jarvis. You never answer, decide, look anything up or invent anything yourself: Jarvis's own agent does all of that and hands you the exact words.
+
+When you are asked to speak a reply, say exactly that text, in the language it is written in, with natural intonation, and nothing else: add nothing, leave nothing out, do not comment on it. When you are asked to greet Dan or to say a short status, do that briefly in your own words. You have no tools. Dan speaks Danish and English.`;
 
 const MAX_TOOL_ARGUMENT_BYTES = 65_536;
 const MAX_TOOL_RESULT_BYTES = 1_048_576;
@@ -358,12 +363,15 @@ export function createRealtimeSessionUpdate(
     proactiveEnabled, proactivePreferencesEnabled, ownerRemindersEnabled,
   );
   const instructions = instructionMode === 'compact' ? compactVoiceInstructions : fullInstructions;
+  const pi = capabilityMode === 'pi';
   return {
     type: 'session.update',
     session: {
-      instructions: `${capabilityMode === 'direct'
-        ? instructions
-        : `${instructions}\n\n${voiceCapabilityGuidance(capabilityMode, capabilityMode === 'lazy' ? capabilityIndex(tools) : '')}`}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call. Earlier refusals in history do not change this channel. Backend permissions still apply. For every meal estimate, show actual returned protein (g), calories (kcal) and fat (g) as a bulleted list; unknown stays unknown. When Dan asks to log an estimate, use health_food_review log_estimate directly without another approval. Questions or previews only require lookup. Never claim a write without a committed tool receipt.`,
+      instructions: pi
+        ? `${composeIdentityInstructions(identity)}\n\n${PI_VOICE_SPEECH_INSTRUCTIONS}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call.`
+        : `${capabilityMode === 'direct'
+          ? instructions
+          : `${instructions}\n\n${voiceCapabilityGuidance(capabilityMode, capabilityMode === 'lazy' ? capabilityIndex(tools) : '')}`}\n\nTrusted runtime channel: browser voice, on mobile or desktop; NOT a telephone call. Earlier refusals in history do not change this channel. Backend permissions still apply. For every meal estimate, show actual returned protein (g), calories (kcal) and fat (g) as a bulleted list; unknown stays unknown. When Dan asks to log an estimate, use health_food_review log_estimate directly without another approval. Questions or previews only require lookup. Never claim a write without a committed tool receipt.`,
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },
@@ -376,10 +384,12 @@ export function createRealtimeSessionUpdate(
       max_response_output_tokens: voiceTuning.maxSpokenReplyTokens,
       input_audio_transcription: { model: transcriptionModel },
       voice: { name: ENGLISH_REALTIME_VOICE, type: 'azure-standard' },
-      tools: capabilityMode === 'discovery'
-        ? voiceCapabilityToolDefinitions()
-        : capabilityMode === 'lazy' ? lookupToolDefinitions() : directToolDefinitions(tools),
-      tool_choice: 'auto',
+      ...(pi ? {} : {
+        tools: capabilityMode === 'discovery'
+          ? voiceCapabilityToolDefinitions()
+          : capabilityMode === 'lazy' ? lookupToolDefinitions() : directToolDefinitions(tools),
+        tool_choice: 'auto',
+      }),
     },
   };
 }

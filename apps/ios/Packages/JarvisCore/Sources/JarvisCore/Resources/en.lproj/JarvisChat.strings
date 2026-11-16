@@ -170,11 +170,11 @@
 "chat.transcript.jumpToLatest" = "Jump to latest";
 
 // TEST-ONLY chat engine switch (PI). Remove at cutover.
-"chat.engine.engineTitle" = "Chat engine test switch";
-"chat.engine.engineChoiceLabel" = "Chat engine";
+"chat.engine.engineTitle" = "Engine test switch";
+"chat.engine.engineChoiceLabel" = "Engine for chat and voice";
 "chat.engine.engineCurrent" = "Current engine";
 "chat.engine.enginePi" = "PI engine";
-"chat.engine.engineExplanation" = "Temporary test switch, removed later. It affects chat only: voice and Watch always use the current engine. If PI fails, chat shows the error and never falls back to the current engine.";
+"chat.engine.engineExplanation" = "Temporary test switch, removed later. It applies to chat and to voice on this iPhone; a voice session picks it up when it starts. The Watch always uses the current engine. With PI, voice has no camera or screen sharing yet. If PI fails, chat and voice say so and never fall back to the current engine.";
 "chat.engine.engineIndicator" = "PI test";
 "chat.engine.engineIndicatorLabel" = "The PI test engine answers in this chat";
 "chat.engine.engineStatusLoading" = "Loading PI status";
