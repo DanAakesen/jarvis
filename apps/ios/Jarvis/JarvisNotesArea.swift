@@ -69,6 +69,10 @@ struct JarvisNotesArea: View {
     @State var tree: VaultNoteTree?
     @State var folderOrder = JarvisFolderOrder()
     @State var folderOrderSave: Task<Void, Never>?
+    @State var folderOrderRevision = 0
+    @State var pendingFolderOrderSaves = 0
+    @State var folderOrderSaveFailed = false
+    @State var folderOrderStale = false
     @State var pinnedPaths: [String] = []
     @State var pinnedTaskIDs: [String] = []
     @State var directoryNotes: [String: [VaultNoteSummary]] = [:]
@@ -368,9 +372,7 @@ struct JarvisNotesArea: View {
             case .directory:
                 await loadDirectory(selectedFolder, offset: 0, force: force)
             case .folderOrder:
-                let loaded = try await client.folderOrder()
-                guard !Task.isCancelled, loadRequest == request, selectedTab == tab else { return }
-                folderOrder = loaded
+                try await readFolderOrder(client)
             case .tasks:
                 let repository: JarvisRepository<VaultTaskList> = await JarvisAppCache.repository(.tasks, scope: "open") {
                     try await client.fetchOpenTasks(validator: $0)
@@ -417,22 +419,55 @@ struct JarvisNotesArea: View {
         }
     }
 
-    /// Shows the new order at once and stores it on the backend, one save after another so the last move wins. A failed
-    /// save puts back what the backend holds and says so.
+    /// A read never overwrites a move made while it was in flight: it is dropped and read again once the saves are done.
+    @MainActor
+    func readFolderOrder(_ client: JarvisNotesClient) async throws {
+        let revision = folderOrderRevision
+        let loaded = try await client.folderOrder()
+        if folderOrderRevision == revision && pendingFolderOrderSaves == 0 {
+            folderOrder = loaded
+        } else if pendingFolderOrderSaves > 0 {
+            folderOrderStale = true
+        } else {
+            try await readFolderOrder(client)
+        }
+    }
+
+    /// Shows the new order at once and stores it on the backend, one save after another so the last move wins. When
+    /// a save fails, the saves queued behind it are skipped, and once the queue is empty the stored order is read back,
+    /// shown, and the failure is reported.
     func saveFolderOrder(_ paths: [String]) {
         guard let client else { return }
         let parent = selectedFolder
         folderOrder.set(paths, in: parent)
         noteSort = .manual
+        folderOrderRevision += 1
+        pendingFolderOrderSaves += 1
         let previous = folderOrderSave
         folderOrderSave = Task {
             await previous?.value
+            if !folderOrderSaveFailed {
+                do {
+                    try await client.setFolderOrder(parent: parent, folders: paths)
+                } catch {
+                    folderOrderSaveFailed = true
+                }
+            }
+            pendingFolderOrderSaves -= 1
+            guard pendingFolderOrderSaves == 0 else { return }
+            let failed = folderOrderSaveFailed
+            folderOrderSaveFailed = false
+            guard failed || folderOrderStale else { return }
+            folderOrderStale = false
+            var report: String? = failed ? copy[.folderOrderFailed] : nil
             do {
-                try await client.setFolderOrder(parent: parent, folders: paths)
+                try await readFolderOrder(client)
             } catch {
-                if let stored = try? await client.folderOrder() { folderOrder = stored }
-                sheet = nil
-                notice = copy[.folderOrderFailed]
+                report = message(for: error)
+            }
+            if failed { sheet = nil }
+            if let report {
+                notice = report
                 noticePresented = true
             }
         }
