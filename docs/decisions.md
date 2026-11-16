@@ -2632,7 +2632,7 @@ colour alone must not carry scope.
 ## Notes map shows note categories only (22 October 2026; #1085)
 
 On the owner's request the Notes map lists and draws only the note categories (People,
-Work, Personal, General). Notes in the vault root or in system folders (`_agent-log`,
+Work, Personal, General). Notes in the vault root or in system folders (`_agent-activity`,
 `Templates`, anything else) are dropped in the browser when the graph loads: no stars,
 links, search matches or legend entries, with link counts and the Tasks count recomputed.
 The vault and the backend response are unchanged.
@@ -13199,5 +13199,11 @@ The owner approved raising the resource group monthly budget from 300 to 600 DKK
 ## 2026-11-15 P15-181: Single vault layout, cut over together with the vault clean-up
 
 - Decision: Jarvis uses only the new vault paths: `Personal/Task inbox.md`, `Work/Task inbox.md` and `Personal/Health/Gym log/`. The `gym-log` frontmatter type is kept. There is no dual support, no layout detection and no compatibility shim; a first draft of this change that accepted both layouts was dropped.
-- The vault mirror excludes the new `_agent-activity` segment. The existing `_agent-log` rule stays until vault PR #5 has merged (the vault still has that folder until then) and is removed afterwards. `General/Archive/Agent activity log/` is not excluded: its 19 historical logs are tracked and excluding them would make the mirror treat them as deleted.
+- The vault mirror excludes the new `_agent-activity` segment. The existing `_agent-log` rule stayed until vault PR #5 merged and has since been removed (see 2026-11-16 below). `General/Archive/Agent activity log/` is not excluded: its 19 historical logs are tracked and excluding them would make the mirror treat them as deleted.
 - Rollout: this merges and the backend deploys, then the vault clean-up PRs merge in the same cutover. A short window in which the vault and Jarvis disagree about paths is accepted.
+
+## 2026-11-16 Vault mirror: drop the `_agent-log` exclusion (#1895)
+
+- Decision: after vault PR #5 merged, the vault folder `_agent-log` no longer exists. The mirror policy (`apps/vault-mirror/src/engine/policy.ts`) now excludes only the `_agent-activity` segment, the local, gitignored live write log. There is no old-path rule or fallback left.
+- `General/Archive/Agent activity log/` holds the 19 historical logs. It is intentionally publishable, is not excluded, and stays tracked in the mirror.
+- Tests assert that `_agent-activity` paths (including nested and case-folded) are never approved and that `General/Archive/Agent activity log/` is approved.

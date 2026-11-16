@@ -152,7 +152,7 @@ Inventory sizes describe original bytes. Read bytes and hashes are checked befor
 planning outgoing content; output text uses LF with a matching hash and size.
 All inventory records must be regular non-executable git mode `100644`.
 
-Approval applies the private policy: no dot-prefixed, `_agent-log` or `_agent-activity` segment,
+Approval applies the private policy: no dot-prefixed, or `_agent-activity` segment,
 no excluded prefix, an allowed first directory (root files skip this check),
 an allowed extension, and no excluded filename or filename-pattern match.
 Comparisons ignore case; regexes compile with only `i`. Unsafe relative paths
