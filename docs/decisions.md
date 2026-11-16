@@ -1,3 +1,15 @@
+## 16 November 2026 — PI reach is unrestricted: full GitHub server, Azure Contributor, no hard-coded approval rules (#1886, P15-175)
+
+Owner, 16 November 2026, recorded as given: "I dont see a use case where jarvis will only read? the whole idea is that its unrestricted and can serve me." and, on a proposed ask-before-irreversible-actions rule: "If you keep adding restrictions we will never succeed with getting it to do what we want." This supersedes the read-only choices of the "PI phase 3" entry below.
+
+| Choice | Why |
+| --- | --- |
+| GitHub through the full remote server `https://api.githubcopilot.com/mcp/x/all`, repository secret `PI_GITHUB_TOKEN` (the earlier read-only secret name is gone, no fallback). A classic token is still refused (a technical need: only a fine-grained token can be limited to chosen repositories) | Verified on 16 November 2026 in `github/github-mcp-server` `docs/remote-server.md`: the server URL is `https://api.githubcopilot.com/mcp/`, authentication is `Authorization: Bearer <token>`, `/readonly` or the `X-MCP-Readonly` header would restrict it (neither is used). The bare `/mcp/` URL serves only the default toolsets (context, repos, issues, pull_requests, users), which lack Actions (workflow dispatch) and Copilot (coding sessions). `/x/all` is the documented all-toolsets URL, so PI can do everything the token allows. The token is the only limit, and the owner sets it. |
+| The token: fine-grained, resource owner `DanAakesen`, chosen repositories, Read and write on Contents, Issues, Pull requests and Actions, Metadata read, no administration and no secrets permission, expiry up to one year | The owner's choice of reach. Widening it is the owner's call, made by editing the token, not code |
+| Azure MCP without `--read-only`; its identity gets Contributor on the Jarvis resource group instead of Reader | PI can act in Azure. Contributor on `rg-jarvis` is where it stops; widening beyond that resource group is the owner's call. The old Reader assignment is left in place by the incremental deployment and is harmless |
+| No approval, confirmation or safety rule is written into PI's instructions or skills for GitHub or Azure | PI uses its own judgement like any capable model; nothing about what it may or may not do is hard-coded. Kept only: never printing a token, redacting secrets, the existing cost cap |
+| The Deploy summary keeps `not attached: <reason>` when the secret or the Azure variable is missing | Unchanged: a missing input is said, not hidden |
+
 ## 16 November 2026 — PI phase 7: the cutover is prepared as a separate flip, and the deletion waits for his written word (#1887, P15-176)
 
 Owner, 16 November 2026: "Just dont delete the old harness." Earlier rules still hold: no fallbacks, no shims, no dual or shadow paths, "build this, test it, and then when we're happy with it, then we delete everything that we don't need anymore."
@@ -83,13 +95,15 @@ Owner rules, quoted from the brief: no fallbacks, no dual or shadow paths, no tr
 | Timer review alone is skipped in quiet hours | A review at night would cost money and the morning one covers it |
 | Not built: the owner's test switch for Watch, any call, the Now card, voice | Out of scope or parked by the owner |
 
-## 16 November 2026 — PI phase 3: reach is read-only by construction, and a missing input is said, not hidden (#1886, P15-175)
+## 16 November 2026 — PI phase 3: reach, and a missing input is said, not hidden (#1886, P15-175)
+
+The read-only choices in this entry were replaced the same day by the entry above; what stays is the attach logic and "not attached: reason".
 
 Owner brief, quoted: reach is "GitHub MCP (read-only by default, scoped token that only the owner can create; say clearly what the owner must provide), Azure MCP (Reader, read-only; any container scales to zero) and Workers (start and follow coding sessions) as tools of the PI agent". Rules: no fallbacks, no dual paths, no transition code.
 
 | Choice | Why |
 | --- | --- |
-| GitHub through the remote read-only MCP URL and a fine-grained token, repository secret `PI_GITHUB_READ_TOKEN`; a classic token is refused | A fine-grained token can be limited to chosen repositories and read permissions; only the owner can create it. The read-only URL and the token permissions are two independent locks. Writes still go through Jarvis tools (`create_issue` and the rest), which keep approvals and receipts |
+| GitHub through the remote read-only MCP URL and a fine-grained read token (superseded: see the entry above); a classic token is refused | A fine-grained token can be limited to chosen repositories and read permissions; only the owner can create it. The read-only URL and the token permissions are two independent locks. Writes still go through Jarvis tools (`create_issue` and the rest), which keep approvals and receipts |
 | Azure MCP in a container that scales to zero, started `--read-only`, with its own identity holding only Reader, guarded by an Entra app role held only by the Foundry project identity | Reader cannot write or read secrets or cost; the server's read-only flag is a third lock; the unauthenticated call is refused (observed locally, 401). Never the flag that disables incoming authentication |
 | The Entra app is created by an owner-run script (`infra/setup-azure-mcp.ps1`), not by the Deploy workflow | The deploy identity has no Microsoft Graph rights by design; creating apps stays with the owner, as in `bootstrap.ps1` |
 | Azure image pinned to `3.0.0` | An update is a reviewed change; the unpinned `latest` of the Microsoft sample would change behaviour silently |

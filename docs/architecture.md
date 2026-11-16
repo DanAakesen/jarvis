@@ -137,16 +137,16 @@ Not covered: the call channel, the Now card, tiers (owner decision: none for now
 
 ## PI reach: GitHub, Azure and Workers (#1886, P15-175, part 1)
 
-The PI agent gets three kinds of reach. Jarvis tools stay the only way to **change** anything: GitHub and Azure are read-only by construction, and Workers are driven through Jarvis tools that already carry owner-message proof, approvals and receipts.
+The PI agent gets three kinds of reach. GitHub (the full server) and Azure (Contributor on the Jarvis resource group) can read and act, limited only by the token and the role the owner chose; Workers are driven through Jarvis tools that carry owner-message proof, approvals and receipts.
 
 ```mermaid
 flowchart LR
     PI["PI agent<br/>managed harness, built-ins off"]
     JM["Jarvis MCP /pi/mcp<br/>find_tools, call_tool"]
-    GH["GitHub MCP, remote<br/>/mcp/readonly"]
-    AZ["Azure MCP 3.0.0<br/>container, scales to zero<br/>--read-only, Reader only"]
+    GH["GitHub MCP, remote, full<br/>/mcp/x/all"]
+    AZ["Azure MCP 3.0.0<br/>container, scales to zero<br/>Contributor on rg-jarvis"]
     PI -->|"connection jarvis-pi-mcp<br/>static secret + per-turn grant"| JM
-    PI -->|"connection jarvis-pi-github<br/>fine-grained read-only token"| GH
+    PI -->|"connection jarvis-pi-github<br/>fine-grained token"| GH
     PI -->|"connection jarvis-pi-azure<br/>project identity, Entra app role"| AZ
     JM --> W["Workers<br/>create_issue, start_issue, get_work_status,<br/>steer_task, list_tasks"]
     W -->|"task events"| Q[("Event queue<br/>source: worker")]
@@ -156,8 +156,8 @@ flowchart LR
 | --- | --- | --- |
 | Reach declaration | `agents/pi/definition.json` (`reach`) | One entry per server: label, connection, URL. The same file feeds the provisioner and a test |
 | Attach logic | `.github/scripts/provision_pi_agent.py` (`resolve_reach`, `connect_reach`, `verify`) | A server is attached only when its input exists. A missing input is reported as "not attached: <what the owner must provide>"; a connection that cannot be written leaves the server out, is reported, and fails the job after the agent is defined. Nothing is silent and nothing is retried in a different way |
-| GitHub | remote server `https://api.githubcopilot.com/mcp/readonly`, connection `jarvis-pi-github` (custom keys, `Authorization: Bearer <token>`) | The token is the repository secret `PI_GITHUB_READ_TOKEN`: fine-grained only (the script refuses a classic token), read-only repository permissions chosen by the owner. The read-only URL and the token's own permissions both enforce read-only |
-| Azure | `Microsoft.App/containerApps` `ca-jarvis-azmcp-*` in `infra/main.bicep` (created only when `azureMcpClientId` is set), image `mcr.microsoft.com/azure-sdk/azure-mcp:3.0.0`, args `--transport http --outgoing-auth-strategy UseHostingEnvironmentIdentity --mode all --read-only --namespace group --namespace monitor --namespace containerapps`, minimum replicas 0 | Incoming calls need an Entra token carrying the app role `Mcp.Tools.ReadWrite.All`, held only by the Foundry project's identity (set up by `infra/setup-azure-mcp.ps1`). Outgoing calls use the container's own system identity with the **Reader** role on `rg-jarvis`; Reader cannot read cost data or secrets. The unauthenticated call returns 401 (observed) |
+| GitHub | remote server `https://api.githubcopilot.com/mcp/x/all` (the all-toolsets URL; the bare `/mcp/` serves only the default toolsets, without Actions and Copilot), connection `jarvis-pi-github` (custom keys, `Authorization: Bearer <token>`) | The token is the repository secret `PI_GITHUB_TOKEN`: fine-grained only (the script refuses a classic token, which cannot be limited to chosen repositories). Its permissions, set by the owner, are the only limit |
+| Azure | `Microsoft.App/containerApps` `ca-jarvis-azmcp-*` in `infra/main.bicep` (created only when `azureMcpClientId` is set), image `mcr.microsoft.com/azure-sdk/azure-mcp:3.0.0`, args `--transport http --outgoing-auth-strategy UseHostingEnvironmentIdentity --mode all --namespace group --namespace monitor --namespace containerapps`, minimum replicas 0 | Incoming calls need an Entra token carrying the app role `Mcp.Tools.ReadWrite.All`, held only by the Foundry project's identity (set up by `infra/setup-azure-mcp.ps1`). Outgoing calls use the container's own system identity with the **Contributor** role on `rg-jarvis`; widening beyond that resource group is the owner's call. The unauthenticated call returns 401 (observed) |
 | Azure connection | `jarvis-pi-azure`, auth type `ProjectManagedIdentity`, audience `api://<client id>` | **Unproven live.** Learn lists project-identity authentication for agent MCP tools, but one Microsoft sample note says it works through a toolbox only. The first Deploy with the server settles it; if Foundry refuses it, the error code is in the job output |
 | Workers | Jarvis tools in `factory/tools.ts`; procedure in `agents/pi/skills/jarvis-workers/SKILL.md` | Starting, steering and retrying need the current owner message, so a Worker can only start from Dan's own words in a chat turn, never from text the agent read. Results come back as queue events (below) and as the existing chat notice |
 | Worker results as signals | `workerEvent` in `proactive/events/producers.ts`, subscribed to the task event hub in `index.ts` | Source `worker`, kinds `task.done`, `task.needs_attention`, `task.cancelled`, `task.pull_request_opened` (the queue only accepts lowercase kinds; a test normalises each one), one dedupe key per task and state. They enter the existing queue; the queue has no consumer until the brain (next pull request) |

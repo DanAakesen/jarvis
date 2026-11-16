@@ -1,14 +1,14 @@
 <#
 .SYNOPSIS
-    Creates the Entra app that guards the read-only Azure MCP server of the PI agent and lets the Foundry project call it.
+    Creates the Entra app that guards the Azure MCP server of the PI agent and lets the Foundry project call it.
 
 .DESCRIPTION
     Run from Windows PowerShell 5.1 as the owner, signed in to Azure CLI (az login) and GitHub CLI (gh auth login),
     BEFORE the first Deploy that should attach the Azure MCP server. It is idempotent.
 
     1. App registration 'jarvis-azure-mcp' with the identifier URI api://<appId> and the application role
-       Mcp.Tools.ReadWrite.All (the role name the Azure MCP server checks; the server itself is started read-only,
-       and its identity has only the Reader role).
+       Mcp.Tools.ReadWrite.All (the role name the Azure MCP server checks). The Deploy gives the server's own identity the
+       Contributor role on the Jarvis resource group; widening beyond that is the owner's call.
     2. Its service principal, and the role assigned to the Foundry project's managed identity, so only the project
        can call the server.
     3. The repository variable JARVIS_AZURE_MCP_CLIENT_ID, which the Deploy workflow reads to create the container
@@ -82,7 +82,7 @@ $roleId = if ($role) { $role.id } else { [guid]::NewGuid().ToString() }
 $roles = @(@($app.appRoles) | Where-Object { $_ -and $_.value -ne $roleValue } |
     Select-Object id, value, allowedMemberTypes, isEnabled, displayName, description) + @(@{
     id = $roleId; value = $roleValue; allowedMemberTypes = @('Application'); isEnabled = $true
-    displayName = 'Azure MCP tools'; description = 'Call the read-only Azure MCP server of Jarvis'
+    displayName = 'Azure MCP tools'; description = 'Call the Azure MCP server of Jarvis'
 })
 Invoke-Graph PATCH "/applications/$($app.id)" @{
     identifierUris = @("api://$($app.appId)")
@@ -105,4 +105,4 @@ if (-not $assigned) {
 Write-Host "Repository variable JARVIS_AZURE_MCP_CLIENT_ID on $GitHubRepo"
 Invoke-Native { & gh variable set JARVIS_AZURE_MCP_CLIENT_ID --repo $GitHubRepo --body $app.appId }
 if ($LASTEXITCODE -ne 0) { throw 'GitHub CLI could not set JARVIS_AZURE_MCP_CLIENT_ID.' }
-Write-Host 'Done. Run the Deploy workflow: it creates the container (scale to zero, Reader only) and attaches the server to PI.'
+Write-Host 'Done. Run the Deploy workflow: it creates the container (scale to zero, Contributor on the Jarvis resource group) and attaches the server to PI.'
