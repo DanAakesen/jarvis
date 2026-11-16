@@ -1,3 +1,17 @@
+## PI phases 3 to 5: reach, the brain loop and standing watches — 16 November 2026 (#1886, P15-175)
+
+Delivered as three stacked pull requests in the order of the issue. Owner rules for all three: no fallbacks, no dual or shadow paths, no transition code; the old one-shot proactive pipeline stays switched off and is deleted in #1887; decisions are the model's, free-form.
+
+| Part | Pull request | State |
+| --- | --- | --- |
+| 1 Reach: read-only GitHub MCP, read-only Azure MCP (Reader, scales to zero), Workers as a skill plus Worker results as queue events | Reach | **Built and tested offline; nothing attached live yet.** Needs two things only the owner can supply (below), then one Deploy |
+| 2 Brain loop and cost guards | Brain | Not started |
+| 3 Standing watches | Watches | Not started |
+
+**Reach, what the owner must provide.** (a) A GitHub **fine-grained** personal access token limited to the repositories PI may read, with read-only repository permissions (Contents, Issues, Pull requests, Actions, Metadata), stored as the repository secret `PI_GITHUB_READ_TOKEN`. Classic tokens are refused. (b) Run `infra/setup-azure-mcp.ps1` once from a PC signed in to Azure CLI and GitHub CLI: it creates the Entra app that guards the Azure MCP server, lets only the Foundry project call it, and sets the variable `JARVIS_AZURE_MCP_CLIENT_ID`. The first Deploy after merge outputs the project identity the script reads, so the order is: merge, Deploy, run the script, Deploy. Until then the summary of the Deploy `pi-agent` job says which server is "not attached" and why; PI says so too instead of pretending.
+
+Proven so far (16 November, Linux): the Azure MCP Server 3.0.0 image starts with `--transport http --read-only --outgoing-auth-strategy UseHostingEnvironmentIdentity` and answers `401` with a bearer challenge to an unauthenticated call; the Bicep builds (0.49); the backend suite (472 tests) and the Python suite (38 tests) pass and lint is clean, with new tests for the definition, the connections, "left out and visible", the smoke, the stream parsing and the Worker producer. **Unproven until the first live run:** that Foundry accepts a `ProjectManagedIdentity` connection (category `RemoteTool`) for a prompt-agent MCP tool, that the harness lists both servers' tools, and the cold start of a scaled-to-zero Azure MCP container when a conversation starts. The smoke now lists the servers the harness reports and runs one read per attached server, and its numbers are printed in the job log as well as the summary (the summary needs a sign-in).
+
 ## One living neural background — 15 November 2026 (#1892, P15-179; absorbs #1891; PR #1893)
 
 **Status: built; Linux tests pass; observed in the macOS simulator; device judgement still the owner's.** One shared background
@@ -53,9 +67,9 @@ Next: merge, let Deploy define the agent, dispatch Deploy with `measure_pi`, the
 | Phase | Issue | State |
 | --- | --- | --- |
 | 0 to 2 Prove, Jarvis MCP, chat in the iOS app behind a test selector | P15-174 (#1885), replaces P15-165 to P15-167 (#1874 to #1876) | Not started; needs Azure access |
-| 3 Reach: GitHub, Azure, Workers | P15-168 (#1877) | Not started |
-| 4 Brain, shadow then live | P15-169 (#1878) | Not started |
-| 5 Standing watches | P15-170 (#1879) | Not started |
+| 3 Reach: GitHub, Azure, Workers | P15-175 (#1886), replaces P15-168 (#1877) | Built, not live (see the section above) |
+| 4 Brain loop: tested by replaying recorded events and by the owner behind the test switch; no shadow run | P15-175 (#1886), replaces P15-169 (#1878) | Not started |
+| 5 Standing watches | P15-175 (#1886), replaces P15-170 (#1879) | Not started |
 | 6 Voice on the same agent (every turn through the PI agent; start wait accepted) | P15-171 (#1880) | Not started |
 | 7 Cutover: PI is the default | P15-172 (#1881) | Not started |
 | 8 Delete the old path (gate and inventory in the plan) | P15-173 (#1882) | Not started |

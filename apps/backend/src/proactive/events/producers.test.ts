@@ -1,12 +1,39 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GithubWebhookMapping } from '../../github/webhook-mapping.js';
 import type { ProactiveSource, SourceFact } from '../types.js';
-import { createMemoryEventQueueStore } from './event-queue.js';
-import { alertEvent, factEvent, githubEvent } from './producers.js';
+import { createMemoryEventQueueStore, normalizeEvent } from './event-queue.js';
+import { alertEvent, factEvent, githubEvent, workerEvent } from './producers.js';
 import { createSourceChangePoller, createTimerProducer, detectCostSpike } from './scheduled-producers.js';
 import type { ProactiveEventInput } from './types.js';
 
 const NOW = new Date('2026-11-15T10:00:00.000Z');
+
+describe('Worker producer', () => {
+  const base = { id: '1', summary: null, payload: {}, payloadTruncated: false, at: '2026-11-15T09:00:00.000Z', taskId: 'T-7' };
+
+  it('reports the four states the chat already announces, once per task and state', () => {
+    const done = workerEvent({ ...base, type: 'state_changed', source: 'backend', payload: { to: 'Done', pullRequestUrl: 'https://github.com/DanAakesen/jarvis/pull/9' } }, NOW)!;
+    expect(done).toMatchObject({ source: 'worker', kind: 'task.done', dedupeKey: 'worker:T-7:Done', occurredAt: new Date('2026-11-15T09:00:00.000Z') });
+    expect(done.summary).toBe('Task T-7 is done (PR: https://github.com/DanAakesen/jarvis/pull/9).');
+    expect(done.detail).toEqual({ taskId: 'T-7', state: 'Done', pullRequestUrl: 'https://github.com/DanAakesen/jarvis/pull/9' });
+    expect(workerEvent({ ...base, type: 'state_changed', source: 'backend', payload: { to: 'NeedsAttention' } }, NOW)!.kind).toBe('task.needs_attention');
+    expect(workerEvent({ ...base, type: 'pull_request_opened', source: 'backend', payload: { url: 'https://github.com/DanAakesen/jarvis/pull/9' } }, NOW)!.kind).toBe('task.pull_request_opened');
+  });
+
+  it('only makes kinds the queue accepts, so no Worker result is dropped at the door', () => {
+    for (const to of ['Done', 'NeedsAttention', 'Cancelled']) {
+      const event = workerEvent({ ...base, type: 'state_changed', source: 'backend', payload: { to } }, NOW)!;
+      expect(() => normalizeEvent(event)).not.toThrow();
+    }
+    expect(() => normalizeEvent(workerEvent({ ...base, type: 'pull_request_opened', source: 'backend', payload: { url: 'https://github.com/DanAakesen/jarvis/pull/9' } }, NOW)!)).not.toThrow();
+  });
+
+  it('leaves progress noise and events from other sources out of the queue', () => {
+    expect(workerEvent({ ...base, type: 'state_changed', source: 'backend', payload: { to: 'Running' } }, NOW)).toBeUndefined();
+    expect(workerEvent({ ...base, type: 'log', source: 'runner', payload: {} }, NOW)).toBeUndefined();
+    expect(workerEvent({ ...base, type: 'state_changed', source: 'runner', payload: { to: 'Done' } }, NOW)).toBeUndefined();
+  });
+});
 
 describe('GitHub and alert producers', () => {
   const workflow: GithubWebhookMapping = {

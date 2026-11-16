@@ -1,3 +1,15 @@
+## PI reach: GitHub, Azure, Workers (#1886, P15-175)
+
+What only the owner can do, in order:
+
+1. Create a GitHub **fine-grained** personal access token (resource owner: the account, repositories: only those PI may read, repository permissions read-only: Contents, Issues, Pull requests, Actions, Metadata) and store it as the repository secret `PI_GITHUB_READ_TOKEN`. Without it the Deploy `pi-agent` summary says "github: not attached: the owner has not provided the PI_GITHUB_READ_TOKEN secret".
+2. After the Deploy that contains this change has run once (it outputs `foundryProjectPrincipalId`), run `infra/setup-azure-mcp.ps1` from Windows PowerShell signed in with `az login` and `gh auth login`. It creates the Entra app `jarvis-azure-mcp`, lets only the Foundry project identity call it and sets the repository variable `JARVIS_AZURE_MCP_CLIENT_ID`. Then Deploy again: it creates the container (scale to zero, Reader on `rg-jarvis`) and attaches the server. Without the variable the summary says "azure: not attached: the Azure MCP container is not deployed".
+3. Deploy with `measure_pi`: the report lists the servers the harness reports, runs one read per attached server and prints the numbers in the job log.
+
+Reading the result: `reach` in the `pi-agent` summary says `attached`, `not attached: <reason>` or `not attached: the connection could not be written (<Foundry code>)`; the last also fails the job. Remove everything again by deleting the variable and the secret and deploying; the container and role go with the next infrastructure deployment (the resources are conditional).
+
+Local checks: `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; `cd apps/backend && npx vitest run src/pi src/proactive`; `bicep build infra/main.bicep`. Not verifiable here: Foundry accepting the Azure connection type, the harness listing the servers' tools, the cold start of the scaled-to-zero container.
+
 ## PI chat engine: deploy and test (#1885, P15-174)
 
 - The Deploy workflow's `pi-agent` job runs on every Deploy after `smoke`: it creates the skills and the `jarvis-pi` agent version (only when `agents/pi/**`, the secret or the backend URL changed), pins the endpoint, creates the `pi-mcp-secret` Container App secret once and sets `JARVIS_PI_AGENT_NAME` and `JARVIS_PI_MCP_SECRET` on the backend. Nothing else waits on it. It needs the deploy identity's existing Foundry roles and Container Apps access; no new role or credential.

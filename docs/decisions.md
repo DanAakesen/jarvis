@@ -1,3 +1,18 @@
+## 16 November 2026 — PI phase 3: reach is read-only by construction, and a missing input is said, not hidden (#1886, P15-175)
+
+Owner brief, quoted: reach is "GitHub MCP (read-only by default, scoped token that only the owner can create; say clearly what the owner must provide), Azure MCP (Reader, read-only; any container scales to zero) and Workers (start and follow coding sessions) as tools of the PI agent". Rules: no fallbacks, no dual paths, no transition code.
+
+| Choice | Why |
+| --- | --- |
+| GitHub through the remote read-only MCP URL and a fine-grained token, repository secret `PI_GITHUB_READ_TOKEN`; a classic token is refused | A fine-grained token can be limited to chosen repositories and read permissions; only the owner can create it. The read-only URL and the token permissions are two independent locks. Writes still go through Jarvis tools (`create_issue` and the rest), which keep approvals and receipts |
+| Azure MCP in a container that scales to zero, started `--read-only`, with its own identity holding only Reader, guarded by an Entra app role held only by the Foundry project identity | Reader cannot write or read secrets or cost; the server's read-only flag is a third lock; the unauthenticated call is refused (observed locally, 401). Never the flag that disables incoming authentication |
+| The Entra app is created by an owner-run script (`infra/setup-azure-mcp.ps1`), not by the Deploy workflow | The deploy identity has no Microsoft Graph rights by design; creating apps stays with the owner, as in `bootstrap.ps1` |
+| Azure image pinned to `3.0.0` | An update is a reviewed change; the unpinned `latest` of the Microsoft sample would change behaviour silently |
+| A server whose input is missing is **left out and reported** ("not attached: the owner has not provided X"); a connection that fails to write leaves the server out and fails the Deploy job after the agent is defined | The owner asked for explicit statements when something is unusable. This is configuration, not a runtime fallback: PI never swaps one engine or path for another |
+| Workers get a skill and queue events, not new tools | The Jarvis tools to start, follow, steer and judge work already exist with owner-message proof. A Worker therefore starts only from Dan's own words; text read from mail, web or a repository never starts one |
+| Worker results (`done`, `needs attention`, `cancelled`, `pull request opened`) enter the event queue with source `worker` | The brain hears exactly what the chat notice says. No consumer until the brain pull request, so nothing runs in parallel with the old pipeline |
+| Smoke: the cold turn asks for about 60 words | The first live smoke failed its streaming check on a one-sentence reply, which cannot show streaming. The check is unchanged; the prompt is fixed and the report now shows the number of pieces per turn. The numbers are also printed in the job log because the step summary needs a sign-in |
+
 ## 15 November 2026 — One living neural background (#1892, P15-179; absorbs #1891)
 
 Owner direction, recorded as given: "Now the new background does not match the in app background. So let's change the in app background to match this new background with the orb." "Actually we could do the exact same on voice and chat. Just on chat the window and composer overlays the background." The lines and dots "should not be static. These are like neurons, so when Jarvis works and thinks it fires these off and they come back, like a brain. This is what I want on voice and chat. And if possible this should also go on the loading screen. For all other screens let's keep a more calm but the same background, just with less, not zero, but less animation."

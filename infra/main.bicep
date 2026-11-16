@@ -41,6 +41,16 @@ param inboxNudgesEnabled bool = false
 
 @description('The public client ID reserved for Dan’s local PC bridge. Empty disables bridge sign-in.')
 param pcBridgeClientId string = ''
+
+@description('Client ID of the Entra app that guards the read-only Azure MCP server of the PI agent (created by infra/setup-azure-mcp.ps1). Empty leaves the server out.')
+param azureMcpClientId string = ''
+
+@description('Azure MCP Server image. Pinned, so an update is a reviewed change. The server is started read-only.')
+param azureMcpImage string = 'mcr.microsoft.com/azure-sdk/azure-mcp:3.0.0'
+
+@description('Azure MCP namespaces to expose; the server advises at most three.')
+@maxLength(3)
+param azureMcpNamespaces array = ['group', 'monitor', 'containerapps']
 @description('Dan’s IANA time zone used for Google Calendar day boundaries. Empty disables Google mail and calendar tools.')
 param jarvisGoogleTimeZone string = ''
 
@@ -110,9 +120,24 @@ var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 var cognitiveServicesUserRoleId = 'a97b65f3-24c7-4388-baec-2e87135dc908'
 var cognitiveServicesContributorRoleId = '25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68'
 var foundryDeploymentReaderRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
+var readerRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var backendAppName = 'ca-jarvis-backend-${suffix}'
 var deployBackendApp = !empty(backendImage)
+var deployAzureMcp = !empty(azureMcpClientId)
+var azureMcpAppName = 'ca-jarvis-azmcp-${suffix}'
+var azureMcpNamespaceArgs = [for namespace in azureMcpNamespaces: ['--namespace', namespace]]
+var azureMcpArgs = flatten(concat([
+  [
+    '--transport'
+    'http'
+    '--outgoing-auth-strategy'
+    'UseHostingEnvironmentIdentity'
+    '--mode'
+    'all'
+    '--read-only'
+  ]
+], azureMcpNamespaceArgs))
 var deployVaultMirror = vaultMirrorEnabled && !empty(vaultMirrorImage)
 var nativePushSecretNames = nativePushEnabled ? ['apns-team-id', 'apns-key-id', 'apns-signing-key'] : []
 
@@ -1079,6 +1104,120 @@ resource backendAppScaleAssignment 'Microsoft.Authorization/roleAssignments@2022
   }
 }
 
+// Read-only Azure MCP server for the PI agent. Scales to zero, so it costs nothing while PI does not look at Azure. Incoming
+// calls need an Entra token with the app role only the Foundry project's identity holds; outgoing calls use this app's own
+// identity, which has the Reader role on this resource group and nothing else, and the server itself refuses writes.
+resource azureMcpApp 'Microsoft.App/containerApps@2024-03-01' = if (deployAzureMcp) {
+  name: azureMcpAppName
+  location: resourceGroup().location
+  tags: {
+    project: 'jarvis'
+    purpose: 'azure-mcp-read-only'
+  }
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {
+    managedEnvironmentId: containerAppsEnvironment.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        targetPort: 8080
+        allowInsecure: false
+        transport: 'http'
+        traffic: [
+          {
+            weight: 100
+            latestRevision: true
+          }
+        ]
+      }
+    }
+    template: {
+      containers: [
+        {
+          name: 'azure-mcp'
+          image: azureMcpImage
+          // The image's entry point already runs `server start`. Never add the flag that disables incoming authentication.
+          args: azureMcpArgs
+          resources: {
+            cpu: json('0.25')
+            memory: '0.5Gi'
+          }
+          env: [
+            {
+              name: 'ASPNETCORE_ENVIRONMENT'
+              value: 'Production'
+            }
+            {
+              name: 'ASPNETCORE_URLS'
+              value: 'http://+:8080'
+            }
+            {
+              name: 'AZURE_TOKEN_CREDENTIALS'
+              value: 'managedidentitycredential'
+            }
+            {
+              name: 'AZURE_MCP_INCLUDE_PRODUCTION_CREDENTIALS'
+              value: 'true'
+            }
+            {
+              name: 'AZURE_MCP_COLLECT_TELEMETRY'
+              value: 'false'
+            }
+            {
+              name: 'AzureAd__Instance'
+              value: environment().authentication.loginEndpoint
+            }
+            {
+              name: 'AzureAd__TenantId'
+              value: tenant().tenantId
+            }
+            {
+              name: 'AzureAd__ClientId'
+              value: azureMcpClientId
+            }
+            // TLS ends at the Container Apps ingress; the server only sees plain HTTP inside the pod.
+            {
+              name: 'AZURE_MCP_DANGEROUSLY_DISABLE_HTTPS_REDIRECTION'
+              value: 'true'
+            }
+            {
+              name: 'AZURE_MCP_DANGEROUSLY_ENABLE_FORWARDED_HEADERS'
+              value: 'true'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 1
+        rules: [
+          {
+            name: 'http'
+            http: {
+              metadata: {
+                concurrentRequests: '10'
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
+
+resource azureMcpReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (deployAzureMcp) {
+  name: guid(resourceGroup().id, azureMcpAppName, readerRoleId)
+  scope: resourceGroup()
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', readerRoleId)
+    principalId: azureMcpApp!.identity.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource vaultMirrorJob 'Microsoft.App/jobs@2024-03-01' = if (deployVaultMirror) {
   name: 'job-jarvis-vault-mirror'
   location: resourceGroup().location
@@ -1215,6 +1354,8 @@ output backendFqdn string = deployBackendApp ? backendApp!.properties.configurat
 output applicationInsightsConnectionString string = appInsights.properties.ConnectionString
 output containerRegistryName string = registry.name
 output containerRegistryLoginServer string = registry.properties.loginServer
+output azureMcpUrl string = deployAzureMcp ? 'https://${azureMcpApp!.properties.configuration.ingress.fqdn}' : ''
+output foundryProjectPrincipalId string = foundryProject.identity.principalId
 output foundryAccountName string = foundryAccount.name
 output foundryProjectName string = foundryProject.name
 output foundryAdminEndpoint string = 'https://${foundryAccount.name}.services.ai.azure.com/api/projects/${foundryProject.name}'
