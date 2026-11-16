@@ -5,6 +5,18 @@
 folder order loaded and saved through the backend, two simulator captures. Not in scope: the folder chooser's order, Apple Watch,
 moving pins to the backend. No TestFlight build.
 
+## Build 111 bugs — 16 November 2026 (#1922, P15-184)
+
+Owner's approach, binding: model-driven nudging in instructions and tool descriptions, no restrictions, no gates, no fallbacks; the default chat engine is not changed (cutover draft #1910).
+
+| Item | State |
+| --- | --- |
+| Smart tool choice (PC only when asked) | **Built, not measured live.** Guidance in `agents/pi/instructions.md` ("Choosing tools"), the `find_tools` description, the PC and browser tool descriptions and the old engine's instructions. The Deploy smoke (`measure_pi`) now runs four natural prompts (Azure, GitHub, notes, "open Spotify on my PC") and reports which tools PI reached for. The smoke role refuses everything but its reads, so nothing acts. Measure by running Deploy with `measure_pi` |
+| Azure not used, PC browser opened | The backend log showed plain voice sessions and old-engine chat: Azure tools are attached to PI only, so on the old engine the model had nothing to answer with and reached for the PC. The fix for that is the PI cutover (#1910), not a patch; the old engine now tells the model to say so instead of opening a site on the PC |
+| Voice stuck on "Connecting" | **Cause not proven.** Backend side is clean: logs of both sessions show ready in under 0.5 s and the greeting spoken, but no speech from the phone. The app shows "Connecting" only before the socket handshake returns, or while no microphone frame has arrived. The handshake waited for a pong with no read outstanding and no timeout; it now starts reading with the handshake and fails visibly after 15 s. Needs the owner's phone test |
+| Follow-up error (`model_response_incomplete`) | The provider ended the stream with a failed or incomplete event; our code dropped the provider code. It is now logged (closed list of content-free codes), the app shows the server's own message, and the error offers Retry |
+| Crash when closing a voice session (new from the owner) | **Fixed in code, needs the owner's phone test.** The TestFlight crash log (build 111) shows `CheckedContinuation.resume` trapping twice in `URLSessionWebSocketTransport.connect`: the ping completion handler fires again when the socket closes. The continuation is now resumed through `ResumeOnce` (unit-tested). This also removes the doubled handshake callback that can leave voice on "Connecting" |
+
 ## 3D Notes graph: design brief — 16 November 2026 (#1924, P15-186)
 
 **Status: step 1 (design brief) written; waiting for review. No implementation.** `docs/ui/graph-3d/brief.md` covers what the graph shows, the interactions, the motion language tied to the neural background, a performance budget, the rendering options with a recommendation (projected 3D in `Canvas`, gated by a measured device spike, Metal if it misses the budget; nothing measured yet), and 12 open questions. Next: the owner makes the designs and answers the questions; then the spike, then the build.

@@ -76,6 +76,10 @@ def render(report: dict) -> str:
     for entry in report.get("reach", []):
         calls = ", ".join(f"{call['name'] or 'call'}={'failed' if call['failed'] else 'ok'}" for call in entry["turn"].get("reachCalls", []))
         lines.append(f"Reach {entry['server']}: {calls or 'no call'}; reply: {entry['turn']['text']!r}")
+    choices = report.get("choices", [])
+    if choices:
+        lines += ["", "Tool choice (natural prompts, no tool named; the smoke role refuses everything except its reads, so nothing acts):", ""]
+        lines += [f"- {entry['label']}: called {', '.join(entry['called']) or 'no Jarvis, GitHub or Azure tool'}; reply: {entry['turn']['text']!r}" for entry in choices]
     voice = report.get("voice")
     if voice:
         lines += ["", f"Voice (PI leg only): plain reply {voice['plain']['text']!r}; tool turn reply {voice['tools']['text']!r}, "

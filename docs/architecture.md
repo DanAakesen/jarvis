@@ -14,6 +14,10 @@
   (`noteSort`) is a device preference in `@AppStorage`.
 - Tests: `src/vault/folder-order.test.ts`, the SQL contract in `database.integration.test.ts` (loopback SQL Server), and the JarvisCore tests.
 
+## Tool choice and voice start (#1922, P15-184)
+
+Which tools PI uses is steered by text only: `agents/pi/instructions.md` ("Choosing tools"), the `find_tools` description in `apps/backend/src/pi/mcp.ts`, and the PC and browser tool descriptions (`pc-bridge/bridge.ts`, `core/browser-agent.ts`). The old engine reads the same idea from `core/capability-instructions.ts`. The Deploy smoke (`pi/smoke.ts`) reports the tools reached for on four natural prompts. In the iOS voice start path, `URLSessionWebSocketTransport.connect` reads from the first moment and gives up after 15 s; the chat model keeps the failed turn's text so the error can offer Retry.
+
 ## Notes, Tasks and Graph pages — 15 November 2026 (#1894, P15-180)
 
 - iOS: `JarvisNotesArea` (state and loading, plus `+Pages` and `+Chrome` extensions) hosts the three pages, header menu and dock;
