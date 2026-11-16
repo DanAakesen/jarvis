@@ -1093,7 +1093,7 @@ motion. The full one-page layout is design-led (#1085) and follows once a design
 exists.
 
 The map shows only the note categories (People, Work, Personal, General). Notes in
-the vault root or in system folders such as `_agent-log` and `Templates` are left
+the vault root or in system folders such as `_agent-activity` and `Templates` are left
 off the map altogether (stars, links, search matches and legend), so no grey stars
 remain. The legend lists the same categories. It includes a default-on **Tasks** toggle and the number of notes with
 open tasks on the map. Its accessible name gives that count as notes with open
