@@ -28,6 +28,7 @@ export interface ProductionModules {
   readonly health: BackendModule | undefined;
   readonly proactive?: BackendModule | undefined;
   readonly backendLogs?: BackendModule | undefined;
+  readonly notesFolderOrder?: BackendModule | undefined;
 }
 
 export function createProductionModules(modules: ProductionModules): BackendModule[] {
@@ -59,5 +60,6 @@ export function createProductionModules(modules: ProductionModules): BackendModu
     ...(modules.health ? [modules.health] : []),
     ...(modules.proactive ? [modules.proactive] : []),
     ...(modules.backendLogs ? [modules.backendLogs] : []),
+    ...(modules.notesFolderOrder ? [modules.notesFolderOrder] : []),
   ];
 }

@@ -1,3 +1,19 @@
+## Manual folder order (16 November 2026, #1920, P15-183)
+
+- Pins are device-local, so the folder order is not stored like them. It is owner data that must follow the owner to the Windows
+  app, so the backend keeps it in `dbo.notes_folder_order` (migration `0089`; `owner_object_id`, `parent_path`, `folder_path`,
+  `position`), one ordered list per parent folder (`""` is the vault root). It is display metadata only: nothing in the vault is
+  renamed, moved or prefixed, and a folder deleted in the vault just stops matching.
+- Routes (owner only, `vault/folder-order.ts`): `GET /notes/folder-order` returns `{ orders: [{ parent, folders }] }`;
+  `PUT /notes/folder-order` with `{ parent, folders }` replaces that parent's whole list in one serialised transaction. The body is
+  refused (400) unless every folder is a unique, safe, direct child of `parent` (at most 500). A store failure is a 503, never a
+  silent success.
+- iOS: `JarvisFolderOrder` (JarvisCore) ranks folders (listed ones first in stored order, the rest after them in their default order);
+  `JarvisNotesClient.folderOrder()` and `setFolderOrder(parent:folders:)`; `JarvisNotesArea` loads it with the folder tree and saves
+  each move in turn so the last move wins. `JarvisReorderSheet` serves both Reorder pins and Reorder folders. The chosen sort
+  (`noteSort`) is a device preference in `@AppStorage`.
+- Tests: `src/vault/folder-order.test.ts`, the SQL contract in `database.integration.test.ts` (loopback SQL Server), and the JarvisCore tests.
+
 ## Notes, Tasks and Graph pages — 15 November 2026 (#1894, P15-180)
 
 - iOS: `JarvisNotesArea` (state and loading, plus `+Pages` and `+Chrome` extensions) hosts the three pages, header menu and dock;

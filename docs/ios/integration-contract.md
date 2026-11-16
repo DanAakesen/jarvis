@@ -125,6 +125,7 @@ Its Danish/English interface language is an app-owned local preference (`jarvis.
 | Screen action | Existing route and contract |
 |---|---|
 | Load the vault folders | `GET /notes/tree` returns `directories`, `rootNoteCount`, `truncated` and `updatedAt`. |
+| Read or change the manual folder order | `GET /notes/folder-order` returns `orders` (`parent`, `folders`); `PUT /notes/folder-order` with `{ parent, folders }` replaces one parent's order. Owner only; display metadata, never a file move. |
 | List notes or load one folder in the tree | `GET /notes?limit=50&offset=N`, optionally with `directory=PATH`, `folder=NAME` or `query=TEXT`. Results are sorted by path, not recency. |
 | Open a note in the editor | `GET /notes/note?path=PATH` returns `path`, Markdown `content`, the current `sha` and a GitHub URL. |
 | Create a note | `POST /notes` with `{path, content}` returns `path`, `commit` and `url`. |

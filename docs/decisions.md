@@ -1,3 +1,20 @@
+## 16 November 2026 — Manual folder order is owner data in the backend, not device state (#1920, P15-183)
+
+The owner asked for a manual sort of the vault folders ("iOS app: manual sort please"); Obsidian has none.
+
+| Choice | Why |
+| --- | --- |
+| The order is stored by the backend per owner and parent folder (`dbo.notes_folder_order`, migration 0089), keyed by folder path | Pins are device-local, but the owner wants one order on the phone and later on Windows. The smallest backend piece is one table and two owner-only routes |
+| It is display metadata only: no rename, no move, no number prefix, nothing written to the vault | Folders are the owner's vault structure; a view preference must never change it |
+| Unlisted folders sort after the ordered ones, alphabetically; a listed folder that is gone is ignored; saving a parent replaces its whole list | Deleted or renamed folders cannot break the order, and a new folder simply appears at the end. Stale rows are dropped the next time the owner reorders that parent |
+| Manual is a third Sort by choice and Reorder folders is a menu action; reordering switches to Manual. Notes in a folder keep Updated or Title (Manual lists them by title); pinned notes keep Reorder pins | He asked for notes to keep their sort; pins already have their own order |
+| A failed save closes the sheet, shows the stored order and says so | No false success and no second copy of the order on the device |
+| The selected sort is a device preference (`@AppStorage`) | Without it the manual order would be invisible after every relaunch; the order itself is not device state |
+| The folder chooser (destination picker) keeps its alphabetical order for now | Not asked for; one follow-up if wanted |
+
+This replaces "Manual note sort" in the 15 November list of things not built, for folders. Notes themselves still have no manual order.
+
+
 ## 16 November 2026 — PI knows its environment: a runtime note, not committed identifiers (#1886, P15-175)
 
 After #1918 every smoke check passed except the Azure read: PI called `group_list` and Azure answered that it needs a subscription ID or name. That is missing context, not a restriction.
@@ -103,7 +120,7 @@ semantic colors. The design pack and its HANDOFF are in `docs/ui/notes-subpages-
 
 Shipped behaviour (the earlier concept text claimed more than the vault supports; this is what is true):
 - **Supported and built:** pin/unpin (local, per account), pin reorder (local display order, in a sheet), Updated/Title sort,
-  folder scope, task sort (due date or priority) and Work/Personal filter, delete note (existing route, version-checked),
+  folder scope, Manual folder order (#1920), task sort (due date or priority) and Work/Personal filter, delete note (existing route, version-checked),
   delete task (new `DELETE /vault/tasks`, removes exactly the identified line and returns a conflict if the line or note
   changed), edit and complete tasks, new note/task, staged new folder, search with scopes, linked notes from real graph edges.
 - **Not built, and why:** Rename and Move to folder (no route; a path change would break links and task identity), bulk Select items,

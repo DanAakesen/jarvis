@@ -49,7 +49,12 @@ extension JarvisNotesArea {
                 Picker(copy[.sortBy], selection: $noteSort) {
                     Text(copy[.sortUpdated]).tag(JarvisNoteSort.updated)
                     Text(copy[.sortTitle]).tag(JarvisNoteSort.title)
+                    Text(copy[.sortManual]).tag(JarvisNoteSort.manual)
                 }
+                Button { sheet = .reorderFolders } label: {
+                    Label(copy[.reorderFolders], systemImage: "folder")
+                }
+                .disabled(folderItems.count < 2)
                 Button { sheet = .reorderPins } label: {
                     Label(copy[.reorderPins], systemImage: "arrow.up.arrow.down")
                 }
@@ -235,6 +240,12 @@ extension JarvisNotesArea {
         case "new-folder": sheet = .newFolder
         case "folder-scope": sheet = .folderScope
         case "graph-list": selectedTab = .graph; try? await Task.sleep(for: .seconds(1)); sheet = .graphList
+        case "folders-manual":
+            saveFolderOrder(["Work", "Personal", "Attachments"])
+        case "folders-reorder":
+            saveFolderOrder(["Work", "Personal", "Attachments"])
+            try? await Task.sleep(for: .seconds(1))
+            sheet = .reorderFolders
         case "pins":
             await setPinned("Work/Projects/release.md", pinned: true)
             await setPinned("Personal/weekend.md", pinned: true)

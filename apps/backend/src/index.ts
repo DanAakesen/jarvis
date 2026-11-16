@@ -171,6 +171,8 @@ import { createWorkspacesModule } from './core/workspaces.js';
 import { WorkspaceItemsStore } from './database/workspace-items-store.js';
 import { createWorkspacePinsModule } from './core/workspace-pins.js';
 import { WorkspacePinStore } from './database/workspace-pin-store.js';
+import { createNotesFolderOrderModule } from './vault/folder-order.js';
+import { createNotesFolderOrderStore } from './database/notes-folder-order-store.js';
 import { createWeatherModule } from './core/weather.js';
 import { assessVaultIndex, createSystemStatusReader } from './system-status.js';
 import { createVaultMirrorStatusReader } from './vault-mirror-status.js';
@@ -1049,6 +1051,9 @@ try {
     ? createWorkspacesModule(workspaceItemsStore, workspaceHtmlArtifactStore, workspaceArtifacts)
     : undefined;
   const workspacePinsModule = workspacePinStore ? createWorkspacePinsModule(workspacePinStore) : undefined;
+  const notesFolderOrderModule = database
+    ? createNotesFolderOrderModule(createNotesFolderOrderStore(database.pool))
+    : undefined;
   let visionWatch: VisionWatchService | undefined;
   let screenVision: ScreenVisionService | undefined;
   let screenVisionModule: BackendModule | undefined;
@@ -1192,6 +1197,7 @@ try {
     weather: weatherModule,
     workspaces: workspacesModule,
     workspacePins: workspacePinsModule,
+    notesFolderOrder: notesFolderOrderModule,
     screenVision: screenVisionModule,
     visionWatch: visionWatchModule,
     voiceRelay: voiceRelayModule,

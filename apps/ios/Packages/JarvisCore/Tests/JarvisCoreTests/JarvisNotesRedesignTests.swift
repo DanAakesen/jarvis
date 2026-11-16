@@ -41,10 +41,48 @@ final class JarvisNotesRedesignTests: XCTestCase {
 
     func testPinReorderingMatchesOnMoveSemantics() {
         let pins = ["a", "b", "c", "d"]
-        XCTAssertEqual(JarvisPinOrder.moved(pins, "c", by: -1), ["a", "c", "b", "d"])
-        XCTAssertEqual(JarvisPinOrder.moved(pins, "a", by: -1), pins)
-        XCTAssertEqual(JarvisPinOrder.moved(pins, from: IndexSet(integer: 0), to: 3), ["b", "c", "a", "d"])
-        XCTAssertEqual(JarvisPinOrder.moved(pins, from: IndexSet(integer: 3), to: 0), ["d", "a", "b", "c"])
+        XCTAssertEqual(JarvisManualOrder.moved(pins, "c", by: -1), ["a", "c", "b", "d"])
+        XCTAssertEqual(JarvisManualOrder.moved(pins, "a", by: -1), pins)
+        XCTAssertEqual(JarvisManualOrder.moved(pins, from: IndexSet(integer: 0), to: 3), ["b", "c", "a", "d"])
+        XCTAssertEqual(JarvisManualOrder.moved(pins, from: IndexSet(integer: 3), to: 0), ["d", "a", "b", "c"])
+    }
+
+    func testManualFolderOrderPutsListedFoldersFirstAndNewOnesLast() {
+        let folders = JarvisNotesPresentation.childFolders(in: "", paths: ["Archive", "General", "Personal", "Work", "Ideas"])
+        var order = JarvisFolderOrder()
+        XCTAssertEqual(order.ordered(folders, in: "").map(\.path), ["Archive", "General", "Ideas", "Personal", "Work"])
+        // "Gone" was deleted or renamed; "Archive" and "Ideas" are new since the order was saved.
+        order.set(["Work", "Personal", "Gone", "General"], in: "")
+        XCTAssertEqual(order.ordered(folders, in: "").map(\.path), ["Work", "Personal", "General", "Archive", "Ideas"])
+        order.set([], in: "")
+        XCTAssertEqual(order.ordered(folders, in: "").map(\.path), ["Archive", "General", "Ideas", "Personal", "Work"])
+    }
+
+    func testManualFolderOrderIsPerParent() {
+        let nested = JarvisNotesPresentation.childFolders(in: "Work", paths: ["Work/A", "Work/B", "Work/C", "Personal/X"])
+        var order = JarvisFolderOrder()
+        order.set(["Work/C", "Work/A"], in: "Work")
+        XCTAssertEqual(order.ordered(nested, in: "Work").map(\.path), ["Work/C", "Work/A", "Work/B"])
+        XCTAssertEqual(order.ordered(nested, in: "Personal").map(\.path), ["Work/A", "Work/B", "Work/C"])
+    }
+
+    func testFolderOrderOnlyStoresUniqueDirectChildren() {
+        XCTAssertTrue(JarvisFolderOrder.isValid(["Work", "Personal"], in: ""))
+        XCTAssertTrue(JarvisFolderOrder.isValid(["Work/A"], in: "Work"))
+        XCTAssertFalse(JarvisFolderOrder.isValid(["Work/A"], in: ""))
+        XCTAssertFalse(JarvisFolderOrder.isValid(["Personal"], in: "Work"))
+        XCTAssertFalse(JarvisFolderOrder.isValid(["Work", "Work"], in: ""))
+        XCTAssertFalse(JarvisFolderOrder.isValid([".hidden"], in: ""))
+        XCTAssertFalse(JarvisFolderOrder.isValid((0...JarvisFolderOrder.maximumFolders).map { "f\($0)" }, in: ""))
+    }
+
+    func testManualSortListsNotesByTitle() {
+        let notes = [
+            VaultNoteSummary(path: "b.md", title: "B", folder: "", directory: "", updatedAt: "2026-11-02T00:00:00Z"),
+            VaultNoteSummary(path: "a.md", title: "A", folder: "", directory: "", updatedAt: "2026-11-01T00:00:00Z"),
+        ]
+        XCTAssertEqual(JarvisNotesPresentation.sorted(notes, by: .manual).map(\.title), ["A", "B"])
+        XCTAssertEqual(JarvisNotesPresentation.sorted(notes, by: .updated).map(\.title), ["B", "A"])
     }
 
     func testFolderPickerListsNestedFoldersAndSearchesThem() {

@@ -8,6 +8,7 @@ import { createWatchCredentialStore, WatchCredentials } from '../auth/watch-cred
 import { createInboxIndexStore } from './inbox-index-store.js';
 import { createInboxOpsStore } from './inbox-ops-store.js';
 import { createPiStore } from './pi-store.js';
+import { createNotesFolderOrderStore } from './notes-folder-order-store.js';
 import { createInboxCaptureCredentialStore, InboxCaptureCredentialLimit, InboxCaptureCredentials } from '../auth/inbox-capture-credential.js';
 
 const configuration = loadDatabaseConfig();
@@ -249,6 +250,43 @@ describe('real SQL Server migration contract', () => {
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_watch_look', N'U') AS id")).recordset).toEqual([{ id: null }]);
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_message', N'U') AS id")).recordset).toEqual([{ id: null }]);
       expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.pi_turn', N'U') AS id")).recordset).toEqual([{ id: null }]);
+    });
+  });
+  describe('manual folder order', () => {
+    it('keeps one ordered list per owner and parent, replaces it whole and rejects broken rows', async () => {
+      const schema = await readFile(new URL('../../../../db/migrations/0089_notes_folder_order.sql', import.meta.url), 'utf8');
+      const down = await readFile(new URL('../../../../db/migrations/down/0089_notes_folder_order.sql', import.meta.url), 'utf8');
+      await pool.request().batch(schema);
+      const store = createNotesFolderOrderStore(pool);
+      const owner = randomUUID();
+      const other = randomUUID();
+      const signal = new AbortController().signal;
+      try {
+        await store.replace(owner, '', ['Work', 'Personal', 'Økonomi'], signal);
+        await store.replace(owner, 'Work', ['Work/Projects', 'Work/Archive'], signal);
+        await store.replace(other, '', ['Other'], signal);
+        expect(await store.read(owner, signal)).toEqual([
+          { parent: '', folders: ['Work', 'Personal', 'Økonomi'] },
+          { parent: 'Work', folders: ['Work/Projects', 'Work/Archive'] },
+        ]);
+        await store.replace(owner, '', ['Personal', 'Work'], signal);
+        expect((await store.read(owner, signal))[0]).toEqual({ parent: '', folders: ['Personal', 'Work'] });
+        expect(await store.read(other, signal)).toEqual([{ parent: '', folders: ['Other'] }]);
+        await Promise.all([
+          store.replace(owner, 'Work', ['Work/A', 'Work/B'], signal),
+          store.replace(owner, 'Work', ['Work/B', 'Work/A'], signal),
+        ]);
+        const work = (await store.read(owner, signal)).find((row) => row.parent === 'Work');
+        expect([['Work/A', 'Work/B'], ['Work/B', 'Work/A']]).toContainEqual(work?.folders);
+        await store.replace(owner, 'Work', [], signal);
+        expect((await store.read(owner, signal)).map((row) => row.parent)).toEqual(['']);
+        await expect(pool.request().query(`INSERT dbo.notes_folder_order VALUES ('${owner}', N'', N'Work', -1)`)).rejects.toThrow();
+        await expect(store.replace(owner, '', ['Same', 'Same'], signal)).rejects.toThrow();
+        expect((await store.read(owner, signal))[0]).toEqual({ parent: '', folders: ['Personal', 'Work'] });
+      } finally {
+        await pool.request().batch(down);
+      }
+      expect((await pool.request().query("SELECT OBJECT_ID(N'dbo.notes_folder_order', N'U') AS id")).recordset).toEqual([{ id: null }]);
     });
   });
   describe('inbox capture credentials', () => {
