@@ -1,3 +1,13 @@
+## 16 November 2026 — PI knows its environment: a runtime note, not committed identifiers (#1886, P15-175)
+
+After #1918 every smoke check passed except the Azure read: PI called `group_list` and Azure answered that it needs a subscription ID or name. That is missing context, not a restriction.
+
+| Choice | Why |
+| --- | --- |
+| The backend builds an environment note at startup (`buildPiEnvironment`) from its own settings: the Azure subscription and the Jarvis resource group are parsed from `BACKEND_CONTAINER_APP_RESOURCE_ID`, plus the GitHub defaults (account DanAakesen, default repository DanAakesen/jarvis, vault DanAakesen/vault). It goes into the trusted context block with the first turn, again when it changes, and into every brain wake | PI can call Azure tools on the first turn without asking. The public repository holds no subscription ID: it exists only in the running backend and in the Foundry conversation |
+| `agents/pi/instructions.md` gets a short "My environment" section: the stack and the repository layout, no identifiers | PI is useful on the first turn: it knows what Jarvis is made of and where things are |
+| The smoke's Azure turn carries the note and lists the resources in the Jarvis resource group using the defaults | It exercises a tool end to end with the real defaults |
+
 ## 16 November 2026 — Azure reaches PI through the Jarvis door too, not as a harness tool (#1886, P15-175)
 
 Deploy 43924888427 attached the Azure MCP server to the harness (a `ProjectManagedIdentity` connection to the scale-to-zero container) and the smoke's very first call failed after about 28 s with "PI stopped before it finished the reply": every earlier measure_pi run had passed, so Azure was the new thing. Foundry's own error was not visible (the gateway discarded it), but the shape is known: the harness fails the whole turn when an MCP server's tool list does not come back, and a cold container plus a project-identity token (marked "unproven live" since the design) is where that happens. This would have broken PI chat for everything, to keep one optional server.

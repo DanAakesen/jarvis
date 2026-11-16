@@ -63,7 +63,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
   const conversationId = await kit.createConversation(signal);
   const listed = new Map<string, { tools: number; failed: boolean }>();
 
-  async function measure(text: string, config: { abortAfterFirstText?: boolean; voice?: boolean; conversation?: string } = {}): Promise<Measured & { abortToCloseMs: number }> {
+  async function measure(text: string, config: { abortAfterFirstText?: boolean; voice?: boolean; environment?: boolean; conversation?: string } = {}): Promise<Measured & { abortToCloseMs: number }> {
     const controller = new AbortController();
     const turnSignal = AbortSignal.any([signal, controller.signal]);
     const grant = kit.openGrant(turnSignal);
@@ -79,7 +79,7 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
     let usage = noUsage;
     let abortedAt: number | null = null;
     try {
-      for await (const event of kit.respond(config.conversation ?? conversationId, kit.format(grant.turn, text, config.voice ? 'voice' : undefined), turnSignal) as AsyncIterable<PiEvent>) {
+      for await (const event of kit.respond(config.conversation ?? conversationId, kit.format(grant.turn, text, config.voice ? 'voice' : config.environment ? 'environment' : undefined), turnSignal) as AsyncIterable<PiEvent>) {
         const at = performance.now() - started;
         if (event.kind === 'delta') {
           firstTextMs ??= Math.round(at);
@@ -146,10 +146,11 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
   }
   const reachPrompts = {
     github: 'Use find_tools to look up "github issue read", then call the GitHub tool gh_issue_read with owner "DanAakesen", repo "jarvis", issue_number 700 and method "get", then say the issue title in one sentence.',
-    azure: 'Use find_tools to look up "azure resource groups list", then call the Azure tool that lists resource groups and say how many there are in one sentence.',
+    // The environment note carries the default subscription and the Jarvis resource group, as a real first turn would.
+    azure: 'Use find_tools to look up "azure resource group resources list", then call the Azure tool that lists the resources in the Jarvis resource group, using the default subscription and resource group from the environment note without asking, and say how many resources there are in one sentence.',
   } as const;
   for (const server of ['github', 'azure'] as const) {
-    if (listed.get(server) && !listed.get(server)!.failed) reach.push({ server, turn: strip(await measure(reachPrompts[server])) });
+    if (listed.get(server) && !listed.get(server)!.failed) reach.push({ server, turn: strip(await measure(reachPrompts[server], { environment: server === 'azure' })) });
   }
   const cancelled = await measure('Write a very long, detailed story of at least 400 words about a butler.', { abortAfterFirstText: true });
   const followUp = await measure('Reply with exactly: still here').then(turn => turn.characters > 0, () => false);

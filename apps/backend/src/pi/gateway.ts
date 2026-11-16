@@ -51,6 +51,8 @@ export interface PiGatewayOptions {
   readonly getToken: (scope: string, signal: AbortSignal) => Promise<string>;
   /** The owner-specific persona block; it is re-read each turn and sent only when it changed. */
   readonly context: (signal: AbortSignal) => Promise<string>;
+  /** The environment note (Azure subscription and resource group, GitHub defaults); the smoke sends it on the turn that needs it. */
+  readonly environment?: string | undefined;
   readonly recordUsage?: ((usage: { model: string; inputTokens: number; outputTokens: number; eventId: string }) => Promise<void>) | undefined;
   readonly fetcher?: typeof fetch;
   readonly now?: () => Date;
@@ -94,7 +96,7 @@ export interface PiGateway extends ConversationAgent {
     openGrant(signal: AbortSignal): PiTurnGrant;
     closeGrant(turn: string): void;
     recordSmoke(turn: PiTurnRecord, signal: AbortSignal): Promise<void>;
-    format(turn: string, text: string, channel?: 'voice'): string;
+    format(turn: string, text: string, channel?: 'voice' | 'environment'): string;
     cost(usage: PiUsage): number;
     now(): Date;
   };
@@ -553,7 +555,8 @@ export function createPiGateway(options: PiGatewayOptions): PiGateway {
       closeGrant: (turn) => options.registry.close(turn),
       recordSmoke: (turn, signal) => options.store.recordTurn(turn, signal),
       format: (turn, text, channel) => formatTurn({
-        turn, now: now(), timeZone: options.timeZone, text, ...(channel === 'voice' ? { notes: [voiceChannelNote] } : {}),
+        turn, now: now(), timeZone: options.timeZone, text,
+        ...(channel === 'voice' ? { notes: [voiceChannelNote] } : channel === 'environment' && options.environment ? { notes: [options.environment] } : {}),
       }),
       cost: costOf,
       now,

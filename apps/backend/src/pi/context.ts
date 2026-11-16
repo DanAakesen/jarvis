@@ -14,12 +14,31 @@ const styles: Record<Settings['personality']['responseStyle'], string> = {
   detailed: 'include relevant explanation and context, avoiding repetition',
 };
 
+const containerAppId = /^\/subscriptions\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})\/resourceGroups\/([A-Za-z0-9._()-]{1,90})\/providers\/Microsoft\.App\/containerApps\/([A-Za-z0-9-]{1,60})$/iu;
+
+/**
+ * Where PI lives, read from the backend's own environment so no identifier is committed: the Azure subscription and the Jarvis
+ * resource group (parsed from the backend Container App's resource ID), and the GitHub defaults. Empty when the backend does not
+ * know them. Azure tools need a subscription and a resource group; with this note PI never has to ask for them.
+ */
+export function buildPiEnvironment(env: Readonly<Record<string, string | undefined>>): string {
+  const match = containerAppId.exec(env.BACKEND_CONTAINER_APP_RESOURCE_ID ?? '');
+  const lines = [
+    'Environment note from the backend (facts about my own setup, not from Dan; use them as defaults and never ask Dan for them):',
+    ...(match ? [
+      `- Azure: subscription ID ${match[1]}, the Jarvis resource group "${match[2]}" (everything of mine lives there: the backend Container App "${match[3]}", the Azure MCP container, Foundry, SQL, storage, Key Vault, Static Web App). Pass them to Azure tools as the subscription and resource group unless Dan names others.`,
+    ] : []),
+    '- GitHub: Dan\'s account is DanAakesen. My own code is DanAakesen/jarvis (the default repository), his vault is DanAakesen/vault. Other repositories he owns are reachable when the token covers them; search or list them before saying one is missing.',
+  ];
+  return lines.join('\n');
+}
+
 /**
  * The owner-specific part of the persona. The fixed identity, truthfulness kernel and chat rules live in the agent
  * definition (agents/pi/instructions.md), so the cached prompt prefix stays stable; this block is sent with the first
  * turn and again only when it changes. Owner-written text is quoted as data.
  */
-export function buildPiContext(settings: Settings, presence: AwayModeState): string {
+export function buildPiContext(settings: Settings, presence: AwayModeState, environment = ''): string {
   const { personality } = settings;
   const custom = personality.modeInstructions[presence.mode];
   return [
@@ -29,5 +48,6 @@ export function buildPiContext(settings: Settings, presence: AwayModeState): str
     `Owner style preference: ${JSON.stringify(personality.customInstructions)}`,
     modeContext(presence),
     `Instruction for the current mode: ${JSON.stringify(custom)}`,
+    ...(environment ? [environment] : []),
   ].join('\n');
 }
