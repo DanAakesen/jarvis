@@ -1,0 +1,59 @@
+name: iOS crash logs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  crash-logs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: ios-testflight
+    steps:
+      - name: Print TestFlight crash feedback
+        env:
+          APP_STORE_CONNECT_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+        run: |
+          pip install --quiet pyjwt cryptography
+          python - <<'PY'
+          import json, os, re, time, urllib.request
+          import jwt
+
+          token = jwt.encode(
+              {"iss": os.environ["APP_STORE_CONNECT_ISSUER_ID"], "iat": int(time.time()),
+               "exp": int(time.time()) + 600, "aud": "appstoreconnect-v1"},
+              os.environ["APP_STORE_CONNECT_KEY_P8"], algorithm="ES256",
+              headers={"kid": os.environ["APP_STORE_CONNECT_KEY_ID"]})
+
+          def get(path):
+              req = urllib.request.Request("https://api.appstoreconnect.apple.com" + path,
+                                           headers={"Authorization": "Bearer " + token})
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  return json.load(r)
+
+          app = "6828835965"
+          subs = get(f"/v1/apps/{app}/betaFeedbackCrashSubmissions?limit=20&sort=-createdDate")
+          for s in subs.get("data", []):
+              a = s["attributes"]
+              print("=" * 70)
+              print(a.get("createdDate"), "| comment:", a.get("comment"), "| device:", a.get("deviceModel"), a.get("osVersion"))
+              try:
+                  log = get(f"/v1/betaFeedbackCrashSubmissions/{s['id']}/crashLog")["data"]["attributes"].get("logText", "")
+              except Exception as e:
+                  print("no crash log:", e)
+                  continue
+              lines = log.splitlines()
+              keep = re.compile(r"^(Exception Type|Exception Codes|Termination|Triggered by Thread|Crashed Thread|Version|Last Exception|Application Specific)")
+              for l in lines[:60]:
+                  if keep.match(l):
+                      print(l)
+              m = re.search(r"Thread (\d+) Crashed", log)
+              if m:
+                  block = re.search(rf"(Thread {m.group(1)} Crashed.*?)\n\n", log, re.S)
+                  if block:
+                      print("\n".join(block.group(1).splitlines()[:30]))
+          PY
