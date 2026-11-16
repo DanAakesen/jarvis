@@ -62,7 +62,7 @@ export function workerEvent(event: TaskEventMessage, now: Date): ProactiveEventI
   if (!notification) return undefined;
   const at = Date.parse(event.at);
   return {
-    source: 'worker', kind: `task.${notification.state}`,
+    source: 'worker', kind: `task.${notification.state.replace(/([a-z])([A-Z])/gu, '$1_$2').toLowerCase()}`,
     dedupeKey: `worker:${event.taskId}:${notification.state}`,
     summary: oneLine(taskStatusMessage(event.taskId, notification.state, notification.url), 400),
     detail: { taskId: event.taskId, state: notification.state, ...(notification.url ? { pullRequestUrl: notification.url } : {}) },
