@@ -8,7 +8,7 @@ import { createGitHubVaultClient, VaultWriteConflictError } from './github-clien
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const sha = 'a'.repeat(40);
-const path = 'Personal/Inbox.md';
+const path = 'Personal/Task inbox.md';
 const content = '# Inbox\n\n- [ ] Pay rent 📅 2026-11-20\n- [ ] Call back\n';
 const headers = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
 const apps: ReturnType<typeof buildApp>[] = [];
