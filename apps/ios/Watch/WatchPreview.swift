@@ -114,7 +114,7 @@ import SwiftUI
                 done: false, dueDate: dueDate, dueTime: dueTime,
                 dueAt: value.mode == .auto ? ISO8601DateFormatter().string(from: due) : nil,
                 priority: fields?.priority ?? .normal,
-                path: fields?.scope == .work ? "Work/Inbox.md" : "Personal/Inbox.md",
+                path: fields?.scope == .work ? "Work/Task inbox.md" : "Personal/Task inbox.md",
                 line: 12, heading: "Tasks", version: String(repeating: "e", count: 64),
                 notes: fields?.notes ?? "Ask about the next check-up.", timeZone: value.timeZone, remindAtDue: false)
             personalTasks.append(task)
@@ -190,7 +190,7 @@ import SwiftUI
             let date = calendar.date(byAdding: .day, value: days, to: now) ?? now
             return .init(id: String(repeating: key, count: 64), text: text, done: false,
                 dueDate: JarvisTodayTaskLists.dayKey(date), dueTime: time, dueAt: nil,
-                priority: priority, path: "Personal/Inbox.md", line: days + 5, heading: "Tasks",
+                priority: priority, path: "Personal/Task inbox.md", line: days + 5, heading: "Tasks",
                 version: String(repeating: key, count: 64), notes: notes,
                 timeZone: "Europe/Copenhagen", remindAtDue: false)
         }

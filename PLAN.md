@@ -1,3 +1,65 @@
+## Single vault layout, cut over with the vault clean-up — 15 November 2026 (#1895, P15-181)
+
+**Status: built and tested; waiting for review and the cutover.** Jarvis moves to the new vault paths only: `Personal/Task inbox.md`, `Work/Task inbox.md` and `Personal/Health/Gym log/` (`gym-log` type kept). No old paths, detection or fallbacks remain. The vault mirror excludes `_agent-activity` and keeps `_agent-log` until vault PR #5 has merged.
+
+| Part | State |
+| --- | --- |
+| Backend (task create, proactive todos, gym log writer, lift delete), iOS gym store and preview fixtures on the new paths; tests and docs updated | Done |
+| Vault mirror excludes `_agent-activity`; `test/policy.test.ts` | Done |
+| Cutover: merge this, deploy the backend, then merge vault PRs #4 and #5 | **Open**; a short inconsistent window is accepted |
+| Remove the `_agent-log` mirror rule after vault PR #5 has merged | **Open** |
+
+## PI phases 3 to 5: reach, the brain loop and standing watches — 16 November 2026 (#1886, P15-175)
+
+Delivered as three stacked pull requests in the order of the issue. Owner rules for all three: no fallbacks, no dual or shadow paths, no transition code; the old one-shot proactive pipeline stays switched off and is deleted in #1887; decisions are the model's, free-form.
+
+| Part | Pull request | State |
+| --- | --- | --- |
+| 1 Reach: read-only GitHub MCP, read-only Azure MCP (Reader, scales to zero), Workers as a skill plus Worker results as queue events | Reach | **Built and tested offline; nothing attached live yet.** Needs two things only the owner can supply (below), then one Deploy |
+| 2 Brain loop and cost guards | Brain | **Built and tested offline and against SQL Server 2022; not run live.** Replay of 38 real events, mechanics tests, SQL contract. The owner turns it on behind "PI brain (test)" in Settings after merge and Deploy |
+| 3 Standing watches | Watches | **Built and tested offline and against SQL Server 2022; not run live.** First live smoke ran 16 November (see the PI results section in `docs/harness-trial/spike-results.md`); the reminder tool is not supported on a harness agent, so the ticker stays the waker |
+
+**Brain, what was built and observed.** The brain reads the event queue, wakes the PI agent in a scratch conversation under exact guards (owner switch, pause, 10 minutes between wakes, 12 wakes a day, the 100 DKK proactive budget stop with notices at 80 percent and at the stop), lets it read, tell Dan (a chat message that always pushes; at most 8 a day, no repeats), keep notes under `PI/` and add inbox trail lines, and writes every decision to `PI/Log/<day>.md`. Replay of 38 real Actions results (15 to 16 November) through the real producers, queue, loop, tools and log with a scripted model: 21 wakes, each event in exactly one wake, 3 messages (the 3 failed Deploys of main); backend suite and the SQL contract on SQL Server 2022 pass. **Not proven:** the model's judgement (the owner judges it behind the test switch), real cost per wake, the iOS rows (Apple CI only), and the push on a real device. Until the owner turns the switch on, nothing is claimed and nothing is spent.
+
+**Watches, what was built and observed.** A watch is a free-text note in `PI/Watches` with one exact field, the next look; Dan opens, changes and stops them in chat or voice, a wake looks and may stop a watch (its own stop condition) but cannot open or change one. Our ticker wakes the brain when a look is due; one wake covers every due watch and every queued event. Limits: 10 open, 8 looks a day each, 5 minutes apart, and a limit moves the next look so it cannot loop. Replay of a simulated week (a daily topic, an hourly price capped at 8 looks a day, an events-only build) through the real loop, with a scripted model: 84 wakes (12 a day, the daily cap), about 7.5 DKK on the shared proactive ledger of which the hourly watch is about 4.8, one message. Cost per watch is an estimate (a wake is split evenly over what woke it) and is shown by `watch_list`. **Not proven:** a real model's cadence choices and reporting judgement, and Foundry routines as a waker (the reminder tool is rejected on a harness prompt agent; routines untested).
+
+**Reach, what the owner must provide.** (a) A GitHub **fine-grained** personal access token limited to the repositories PI may read, with read-only repository permissions (Contents, Issues, Pull requests, Actions, Metadata), stored as the repository secret `PI_GITHUB_READ_TOKEN`. Classic tokens are refused. (b) Run `infra/setup-azure-mcp.ps1` once from a PC signed in to Azure CLI and GitHub CLI: it creates the Entra app that guards the Azure MCP server, lets only the Foundry project call it, and sets the variable `JARVIS_AZURE_MCP_CLIENT_ID`. The first Deploy after merge outputs the project identity the script reads, so the order is: merge, Deploy, run the script, Deploy. Until then the summary of the Deploy `pi-agent` job says which server is "not attached" and why; PI says so too instead of pretending.
+
+Proven so far (16 November, Linux): the Azure MCP Server 3.0.0 image starts with `--transport http --read-only --outgoing-auth-strategy UseHostingEnvironmentIdentity` and answers `401` with a bearer challenge to an unauthenticated call; the Bicep builds (0.49); the backend suite (472 tests) and the Python suite (38 tests) pass and lint is clean, with new tests for the definition, the connections, "left out and visible", the smoke, the stream parsing and the Worker producer. **Unproven until the first live run:** that Foundry accepts a `ProjectManagedIdentity` connection (category `RemoteTool`) for a prompt-agent MCP tool, that the harness lists both servers' tools, and the cold start of a scaled-to-zero Azure MCP container when a conversation starts. The smoke now lists the servers the harness reports and runs one read per attached server, and its numbers are printed in the job log as well as the summary (the summary needs a sign-in).
+
+## One living neural background — 15 November 2026 (#1892, P15-179; absorbs #1891; PR #1893)
+
+**Status: built; Linux tests pass; observed in the macOS simulator; device judgement still the owner's.** One shared background
+(the opening's sparse network) replaces the Ember image and colour glows on every screen. Neurons fire out from the orb
+along the links and return, driven by the orb's own state and levels: full effects on Voice, Chat (live orb under the
+window and composer, new `tool` activity) and the opening; `.calm` elsewhere; still for sheets, the drawer, the privacy cover,
+Reduce Motion and the new Settings > General > Background motion switch. The gate has one background for every state, so
+Face ID failing keeps it (#1891). Opening off switch unchanged. Design, decision and architecture: `DESIGN.md`,
+`docs/decisions.md`, `docs/architecture.md`.
+
+Done: JarvisCore `Neural/` (network and routes, animator, scene, SwiftUI painter), `JarvisNeuralBackground` and
+`JarvisNeuralStage` in the design system, Voice, Chat, gate and opening wired, 11 new Linux tests (107 pass in total),
+capture workflow `neural-background-capture.yml`.
+
+Observed (macOS CI, iPhone Pro simulator, run 43759749766, images in `docs/ui/neural-background-2026-11-15/`): the compile
+and all captures pass. Voice (listening, thinking, speaking), chat (thinking, tool, speaking, listening), the opening, the
+gate (Face ID failed, waiting, sign-in) and Settings and Health, dark and light, all show the network. Signals visibly leave the
+orb and travel the links (cyan out, amber for tool work); pairs of frames 0.7 s apart differ on every animated screen
+(hundreds of thousands of changed pixels on Voice, 150 to 220 thousand on chat, about 200 thousand on the gate and
+opening). **Face ID failed keeps the background.** The first run (43756890893) showed the opening and gate frozen apart from
+the bar: their overlay window never received a scene phase. Fixed by reporting the gate's pause state as the scene phase;
+the second run shows them moving. Chat text stays readable over the orb in dark mode; light mode is denser and reads less
+cleanly under long text, which the owner should judge. The gate's sign-in title overlaps the lower orb by design tokens
+(`gateOrbCenterTop` 296, `gateSignInTitleTop` 368), unchanged here. Not observed: frame rate (the simulator cannot say),
+battery, thermal behaviour, VoiceOver, Reduce Motion by hand (covered by unit tests of the still pose), the Settings
+switch by hand, and a pause behind sheets (calm signals keep running behind a presented sheet; they are two faint
+20 fps signals at most). Needs a device: 60 fps on an iPhone 16 Pro Max class, battery, daylight look.
+
+Run 43762776242: the `watch` job failed only because capture steps hit their 8-minute bound (simulator launches took 2.5 to
+5 minutes, screenshots 1 to 2); compile steps passed. Response: the background draws a cheap path in the Simulator and in
+Low Power Mode, and the screenshot steps are `continue-on-error` with a 12-minute bound (compile steps stay strict).
+Next: owner review of the captures and a TestFlight build.
+
 ## PI phases 0 to 2 together: PI agent, Jarvis MCP, chat in the iOS app behind a test switch — 15 November 2026 (#1885, P15-174, PR #1890)
 
 **Status: built and tested offline; not yet run live.** The owner asked for phases 0, 1 and 2 as one piece so he can test chat on PI in the iOS app. It replaces #1874, #1875 and #1876 (phase 0's quality round, routines and long-session items are out: the owner does not want to test long sessions). Everything is inert until the owner sets the test switch to PI in iOS Settings.
@@ -20,9 +82,9 @@ Next: merge, let Deploy define the agent, dispatch Deploy with `measure_pi`, the
 | Phase | Issue | State |
 | --- | --- | --- |
 | 0 to 2 Prove, Jarvis MCP, chat in the iOS app behind a test selector | P15-174 (#1885), replaces P15-165 to P15-167 (#1874 to #1876) | Not started; needs Azure access |
-| 3 Reach: GitHub, Azure, Workers | P15-168 (#1877) | Not started |
-| 4 Brain, shadow then live | P15-169 (#1878) | Not started |
-| 5 Standing watches | P15-170 (#1879) | Not started |
+| 3 Reach: GitHub, Azure, Workers | P15-175 (#1886), replaces P15-168 (#1877) | Built, not live (see the section above) |
+| 4 Brain loop: tested by replaying recorded events and by the owner behind the test switch; no shadow run | P15-175 (#1886), replaces P15-169 (#1878) | Built, not live (pull request 2 of the section above) |
+| 5 Standing watches | P15-175 (#1886), replaces P15-170 (#1879) | Built, not live (pull request 3 of the section above) |
 | 6 Voice on the same agent (every turn through the PI agent; start wait accepted) | P15-171 (#1880) | Not started |
 | 7 Cutover: PI is the default | P15-172 (#1881) | Not started |
 | 8 Delete the old path (gate and inventory in the plan) | P15-173 (#1882) | Not started |

@@ -1,3 +1,32 @@
+## PI standing watches (#1886, P15-175)
+
+- Needs everything from the brain section plus migration `0088_pi_watch_look.sql`. The watches live in the vault under `PI/Watches` (closed ones in `PI/Watches/Closed`); read or edit them like any note. A hand-edited note is picked up after the next restart; the hidden last line sets the next look.
+- Use: say "keep me updated on X" in chat or voice; "what are you watching" lists them with next look, looks today and the estimated cost; "change" and "stop" work in words. Limits: 10 open, 8 looks a day each, 5 minutes apart.
+- Foundry routine probe (manual, about 5 minutes): Deploy with input `probe_pi_wake`. It creates the throwaway agent `jarvis-pi-probe` (plain harness, no tools), tries a one-off timer routine, writes what it observed to the job log and summary, and deletes both. The reminder tool was probed and is not supported on a harness prompt agent.
+- Local checks: `cd apps/backend && npx vitest run src/pi`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; the SQL contract with the loopback SQL Server container.
+
+## PI brain: turn it on and watch it (#1886, P15-175)
+
+- Needs: PI configured (the Deploy `pi-agent` job), `JARVIS_PROACTIVE_ENABLED` (it is already on in Bicep), the vault (the decision log lives there), migration `0087_pi_brain.sql` (applied by the normal migration step), and `JARVIS_PROACTIVE_EVENTS_ENABLED` **off** (the old pipeline; both on stops the backend at startup).
+- Switch: iOS Settings, General, "PI brain (test)", or `PUT /pi/brain {"enabled": true}` with the owner token. Off by default; turning it on wakes the brain at once if events are waiting. `GET /pi/brain` shows availability, pause, budget, wakes and cost this month, messages today, the last wake and decision-log entries waiting for the vault.
+- Budget: the proactive page's monthly budget (default 100 DKK). The brain stops before a wake that could pass it and tells Dan once at 80 percent and once at the stop.
+- Read what it did: `PI/Log/<day>.md` in the vault (every wake: events, tools, what Dan was told, cost, the model's statement), `proactive.events` is not used; the brain logs `pi.brain` (outcome, counts, DKK, never message text) and `pi.brain_run`.
+- Rollback: turn the switch off, or revert the commit. The migration has a down script that removes the brain's tables and `brain` turns.
+- Local checks: `cd apps/backend && npx vitest run src/pi src/proactive`; the SQL contract (`PI conversation and turn ledger`) with the loopback SQL Server container from `database-ci.yml`; `swift test` in `apps/ios/Packages/JarvisCore` (Linux) and the Apple build for the Settings rows (CI only, not run here).
+- Limits to know: while the app is open on another screen a new message appears when the chat refreshes (the app is told to); a backgrounded phone gets the push. The foreground banner for a chat reply is suppressed by the app by design.
+
+## PI reach: GitHub, Azure, Workers (#1886, P15-175)
+
+What only the owner can do, in order:
+
+1. Create a GitHub **fine-grained** personal access token (resource owner: the account, repositories: only those PI may read, repository permissions read-only: Contents, Issues, Pull requests, Actions, Metadata) and store it as the repository secret `PI_GITHUB_READ_TOKEN`. Without it the Deploy `pi-agent` summary says "github: not attached: the owner has not provided the PI_GITHUB_READ_TOKEN secret".
+2. After the Deploy that contains this change has run once (it outputs `foundryProjectPrincipalId`), run `infra/setup-azure-mcp.ps1` from Windows PowerShell signed in with `az login` and `gh auth login`. It creates the Entra app `jarvis-azure-mcp`, lets only the Foundry project identity call it and sets the repository variable `JARVIS_AZURE_MCP_CLIENT_ID`. Then Deploy again: it creates the container (scale to zero, Reader on `rg-jarvis`) and attaches the server. Without the variable the summary says "azure: not attached: the Azure MCP container is not deployed".
+3. Deploy with `measure_pi`: the report lists the servers the harness reports, runs one read per attached server and prints the numbers in the job log.
+
+Reading the result: `reach` in the `pi-agent` summary says `attached`, `not attached: <reason>` or `not attached: the connection could not be written (<Foundry code>)`; the last also fails the job. Remove everything again by deleting the variable and the secret and deploying; the container and role go with the next infrastructure deployment (the resources are conditional).
+
+Local checks: `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`; `cd apps/backend && npx vitest run src/pi src/proactive`; `bicep build infra/main.bicep`. Not verifiable here: Foundry accepting the Azure connection type, the harness listing the servers' tools, the cold start of the scaled-to-zero container.
+
 ## PI chat engine: deploy and test (#1885, P15-174)
 
 - The Deploy workflow's `pi-agent` job runs on every Deploy after `smoke`: it creates the skills and the `jarvis-pi` agent version (only when `agents/pi/**`, the secret or the backend URL changed), pins the endpoint, creates the `pi-mcp-secret` Container App secret once and sets `JARVIS_PI_AGENT_NAME` and `JARVIS_PI_MCP_SECRET` on the backend. Nothing else waits on it. It needs the deploy identity's existing Foundry roles and Container Apps access; no new role or credential.
@@ -70,6 +99,13 @@
   Settings > General > Opening screen (`UserDefaults` key `jarvis.opening.enabled`, default on).
 - **Apple simulator evidence.** The Watch workflow captures opening, measured-progress, orb-gallery and widget-gallery
   states in separate timeout-bounded steps, so one slow simulator capture does not prevent later gallery artifacts.
+- **Neural background (P15-179).** The only background is `JarvisNeuralBackground` (design system); never draw another
+  one in a screen file. Model, animator and painter are in `JarvisCore/Neural`; `swift test --filter JarvisNeuralTests` covers
+  routes, firing by state, calm versus full, still poses and continuity (Linux). Simulator-only launch arguments:
+  `--screenshot-chat-state=listening|thinking|tool|speaking` (with `--screenshot-chat-fixture`), `--screenshot-gate=lock-failed|lock-waiting|sign-in`,
+  plus the existing `--screenshot-voice-fixture --screenshot-voice-state=...` and `--opening-preview`. The
+  `Neural background capture` workflow builds the app and uploads those captures (artifact `neural-background-captures`).
+  Settings > General > Background motion is the `jarvis.background.motion` key.
 - **Icons.** Regenerate from `docs/ui/opening-final-2026-11-14/cognitive-lattice-transparent.png`: iPhone and Watch
   `AppIcon.appiconset/JarvisAppIcon.png` (Watch orb larger for the round mask) and the web icons in `apps/web/public`.
 
@@ -1722,8 +1758,8 @@ push switched on and a subscribed device, and they share the one alert flag.
 
 What now happens, exactly:
 
-- Todos: eligible proactive tasks go only to an existing `Personal/Inbox.md` or
-  `Work/Inbox.md`; every new task starts `- [ ] (proactive)`. Project/software,
+- Todos: eligible proactive tasks go only to an existing `Personal/Task inbox.md` or
+  `Work/Task inbox.md`; every new task starts `- [ ] (proactive)`. Project/software,
   Factory, PR/build/check and engineering suggestions are excluded across all
   sources. Ambiguous scope, missing identity or an unavailable/unwritable
   destination means no write and a content-free skip reason. Stable source/action
@@ -2233,8 +2269,8 @@ defaults off in code; since P13-15 only `infra/main.bicep` sets it, and
 pause/Todos switches and independent writer flag are the controls.
 The writer also requires the SQL pool for durable receipt and daily-cap storage.
 The hook keeps the P13-07 bounded limits and uses read-only task discovery for
-duplicates; its only write destinations are `Personal/Inbox.md` and
-`Work/Inbox.md`. It does not create or delete files and logs no suggestion text
+duplicates; its only write destinations are `Personal/Task inbox.md` and
+`Work/Task inbox.md`. It does not create or delete files and logs no suggestion text
 or vault path. SQL receipts are covered by the isolated schema integration suite.
 
 Focused checks:

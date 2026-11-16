@@ -1,3 +1,50 @@
+## PI live smoke and wake-up probe (16 November 2026, #1886)
+
+Observed by the Deploy run with `measure_pi` and `probe_pi_wake` after the PI stack merged. Agent `jarvis-pi` version 2 (skills inbox-triage v4, workers v1, brain v1, watches v1; connection `jarvis-pi-mcp`).
+
+### Latency through the gateway
+
+| Turn | First text | Total | Input | Cached | Output | DKK |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Cold, new conversation | 3294 ms | 4167 ms | 7532 | 0 | 94 | 0.0526 |
+| Warm, turn 2 | 1079 ms | 1413 ms | 7704 | 7529 | 12 | 0.0511 |
+| Warm, turn 3 | 1275 ms | 1484 ms | 7795 | 7701 | 12 | 0.0517 |
+| Warm, turn 4 | 1150 ms | 1464 ms | 7884 | 7792 | 11 | 0.0522 |
+| Tool turn (Jarvis MCP, `list_jobs` ok, 2 tool calls) | 1219 ms | 5406 ms | 24939 | 24291 | 123 | 0.1681 |
+
+```text
+First text through the gateway (1 block = 0.5 s)
+cold, new conversation |██████▌    3.3 s
+warm turn 2            |██▏        1.1 s
+warm turn 3            |██▌        1.3 s
+warm turn 4            |██▎        1.2 s
+tool turn              |██▍        1.2 s
+```
+
+Smoke total 0.3757 DKK (list price, cached discount ignored, so DKK is an upper bound). All four checks passed: text streams in pieces, a Jarvis tool ran over MCP with an `ok` result, a cancelled turn stopped and the conversation still worked, a warm turn started faster than the cold one.
+
+What this changes against the plan (section 6):
+
+- Warm first text through the gateway is **1.1 to 1.3 s**, better than the 2 s local-runner figure and the 2.5 s target; cold is 3.3 s, inside the 3.4 to 4.4 s range.
+- The fixed prompt is about **7.5k input tokens**, not 11k, and caching works inside the conversation (about 99 percent cached from turn 2).
+- A plain turn costs about **0.05 DKK**, against the 0.075 DKK assumed. A tool turn is about 0.17 DKK (assumed 0.2).
+- Not measured here: the iOS network leg, the idle cache lifetime, and p95 (one run, four warm turns).
+
+### Reach servers
+
+The harness listed tools for **no MCP server other than Jarvis**: GitHub was not attached (the `PI_GITHUB_READ_TOKEN` secret is missing) and the Azure MCP container is not deployed. The reach turns therefore did not run and nothing about GitHub or Azure reach is proven yet.
+
+### Wake-up features on a harness agent
+
+| Feature | Result |
+| --- | --- |
+| Reminder tool `reminder_preview` | **Not supported** on a harness prompt agent. Foundry rejected the definition with `bad_request`: "Tool type 'reminder_preview' is not supported for an agent with kind 'prompt' and harness type 'github_copilot_preview'". It is documented for hosted agents only |
+| Foundry routines (timer) | **Still untested as a waker.** The agent definition failed before a routine could be created, so the run shows only the cleanup step (ok) |
+
+Conclusion: the managed harness has no working self-wake that we can use. Our own ticker and the vault stay the waker; that is what the watches were built on. The probe now only checks a routine on a plain harness agent, as a possible later swap for the timer part. It is not a dependency.
+
+Also seen: the harness reports itself as `github_copilot_preview` (answering the open question in the plan: it is the same harness as `microsoft_copilot_preview`).
+
 # Spike results: managed Copilot-harness agent in Foundry
 
 Spike for [#1851](https://github.com/DanAakesen/jarvis/issues/1851) (P15-158), part of the [Copilot-harness trial](README.md) (#1837). Written 15 Nov 2026.

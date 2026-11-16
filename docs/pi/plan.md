@@ -4,6 +4,8 @@ Plan for [#1872](https://github.com/DanAakesen/jarvis/issues/1872) (P15-164). Pl
 
 Owner, 15 Nov 2026: "I'm interacting with the harness and agent loop via the chat and voice. So if we keep that out, I'm not sure I will get the full benefit and the full user experience. So I think we need to do a full plan combined of four and one. And also that five seconds start. I think there must be something we can do to optimize that." And: "this is what a mature harness will do and this is why I've been trying to explain to you the reasons to change to Copilot Harness because building this ourself is quite a task."
 
+**Update 16 Nov 2026 (#1886):** phases 3 to 5 are merged and deployed. First live smoke through the gateway: warm first text 1.1 to 1.3 s, cold 3.3 s, about 7.5k input tokens, about 0.05 DKK per plain turn and 0.17 DKK per tool turn; all four checks pass. GitHub and Azure reach are **not attached yet** (token and Azure MCP missing), so reach is unproven live. The reminder tool is not supported on a harness prompt agent: our ticker and the vault stay the waker. Details: `docs/harness-trial/spike-results.md`.
+
 **Update 15 Nov 2026 (#1885, P15-174, PR #1890):** at the owner's request phases 0, 1 and 2 were built together as one piece so he can test chat on PI in the iOS app behind a test switch. The long-session, quality-scoring and routines items of phase 0 are out. What was built and what is still unproven: `PLAN.md` and `docs/architecture.md` (section "PI chat engine"). Measured latency used for the build (from the owner's dispatcher, not yet in `spike-results.md`): new conversation first text 3.7 to 4.4 s, same-conversation turn 2 and later about 1.9 s with a cached prompt, effort none or low must be set in the agent definition and gives true streaming, per-request reasoning, `service_tier` and `prompt_cache_key` are rejected, tools are about 6.4k of the 11k prompt tokens.
 
 ## The plan on one page
@@ -192,7 +194,7 @@ sequenceDiagram
 | Reporting | A normal PI chat message through the comms channels, so the push guarantee applies. The look is logged to the vault whether or not Dan is told |
 | Control | "List, change or stop my watches" in chat or voice. Tools: `watch_list`, `watch_update`, `watch_stop`. A watch ends on Dan's word or on its own stop condition, which the model reports |
 | Source of truth | The vault note. Nothing about a watch lives only in Foundry |
-| Foundry routines | Evaluated in phase 5 as a possible replacement for the **timer part only**. Not a dependency, and the vault stays the truth |
+| Foundry routines | Evaluated in phase 5 as a possible replacement for the **timer part only**. Not a dependency, and the vault stays the truth. Built 16 November 2026 (#1886): the ticker is the waker. **Tested 16 November 2026: the reminder tool is not supported on a harness prompt agent; routines remain untested as a waker** (see `docs/harness-trial/spike-results.md`) |
 
 Why our own ticker and not Foundry routines: the ticker and queue already exist and carry mail, calendar, webhook, budget and Worker events; routines are preview, have a 5 minute minimum, cover GitHub issues only, and would put the schedule in a place Dan cannot list or stop from chat without extra code.
 
@@ -297,7 +299,7 @@ flowchart TB
 | What failure looks like | A visible error to Dan with a retry. Transient errors may be retried on the **same** path with idempotency keys, and never replay a write that already started. A turn deadline and a budget cap end a turn with a clear message |
 | Rollback | Redeploy the previous release, or revert the commit. The agent definition lives in the repository, so a revert also restores the previous agent version |
 | Test-only selector | The existing Test agent runtime selector (`core/runtime-session.ts`, `core/runtime-test-availability.ts`) is allowed only to test PI beside the old path. It is deleted in phase 8 |
-| Shadow runs | The brain's shadow run beside the old proactive pipeline (phase 4) is a **test** and is removed with it |
+| Shadow runs | **Superseded 16 November 2026 (owner, #1886): no shadow run.** The old pipeline ships switched off and is not run beside the brain; the brain is proven by replaying recorded events and by the owner behind a test switch, and the old pipeline is deleted in #1887 |
 | The honest cost of this choice | The harness is in **public preview, no SLA, "not recommended for production workloads"**. With no fallback code, a Foundry outage is a PI outage. Until phase 8, redeploying the previous release restores the old path by hand; after phase 8 nothing does, so the deletion gate makes the owner decide on that risk explicitly |
 
 ## 6. Latency: the 5 second start
@@ -391,7 +393,7 @@ The acknowledgement has a home today: the acknowledgement chunk (`ConversationAg
 flowchart LR
     P012["0 to 2 together, one issue<br/>PI agent, Jarvis MCP, chat<br/>behind a test selector"] --> G2{"Gate A<br/>owner tests chat<br/>in the iOS app"}
     G2 --> P3["3 Reach<br/>GitHub, Azure, Workers"] --> G3{"Gate 3"}
-    G3 --> P4["4 Brain<br/>shadow, then live"] --> G4{"Gate 4"}
+    G3 --> P4["4 Brain<br/>replay tests, owner test switch"] --> G4{"Gate 4"}
     G4 --> P5["5 Standing watches"] --> G5{"Gate 5"}
     G5 --> P6["6 Voice<br/>same agent"] --> G6{"Gate 6"}
     G6 --> P7["7 Cutover<br/>PI is the default"] --> G7{"Deletion gate"}
@@ -405,7 +407,7 @@ Phases 0, 1 and 2 are **one issue** ([P15-174](https://github.com/DanAakesen/jar
 | --- | --- | --- | --- | --- |
 | 0 to 2 Prove, Jarvis MCP, chat | [P15-174](https://github.com/DanAakesen/jarvis/issues/1885) (replaces P15-165 to P15-167, #1874 to #1876) | The PI agent on the managed harness, defined and deployed by the repository's pipeline (production Terra deployment, effort none or low in the definition, skills and instructions as code). The Jarvis tools as an MCP server behind the existing auth and guards with a trustworthy per-turn authority path; approvals and receipts keep working. A thin gateway that streams the agent's replies to the iOS chat, with a monthly model cap, per-turn tokens and DKK in the usage store, and honest errors. A **test-only chat engine selector** in the iOS app (Settings), current engine or PI. Warm conversation, instant acknowledgement, cancellation. Latency measured through the gateway and the iOS path | The owner tests chat on PI in the iOS app and is happy with quality and speed; per-turn authority proven (a forged turn reference is refused, writes prove the current owner message); approvals, streaming and cancellation work; first text through the gateway in a warm conversation near the target (about 2.5 s p50); no write replayed in fault tests; cost per turn inside the cap | Revert the PR; selector off. The old path is still the default |
 | 3 Reach | [P15-168](https://github.com/DanAakesen/jarvis/issues/1877) | GitHub MCP and Azure MCP (read first), Workers started and watched through tools, Worker results as signals | Reads work on real questions; writes only through Jarvis tools; a Worker round trip works | Revert the PR; detach the MCP servers |
-| 4 Brain | [P15-169](https://github.com/DanAakesen/jarvis/issues/1878) | Brain loop on skills, event batches, vault decision log, channel decision, push guarantee. A **shadow run** beside the current pipeline (no outreach), then live | Shadow: useful-outreach rate at least equal to the current pipeline by Dan's thumbs; spend inside the 100 DKK budget; no duplicates. Live: two weeks clean | Revert the PR; the old pipeline is still the default until phase 7 |
+| 4 Brain | [P15-169](https://github.com/DanAakesen/jarvis/issues/1878) | Brain loop on skills, event batches, vault decision log, channel decision, push guarantee. ~~A shadow run beside the current pipeline~~ (superseded: replay tests and the owner's test switch, see `docs/decisions.md`, 16 November 2026) | Replay of recorded events passes (each event in one wake, limits hold, every wake logged); the owner uses the brain behind the test switch and is happy with what it tells him; spend inside the 100 DKK budget; no duplicates | Revert the PR; the old pipeline is still the default until phase 7 |
 | 5 Watches | [P15-170](https://github.com/DanAakesen/jarvis/issues/1879) | `PI/Watches/` notes, `watch_*` tools, ticker wake, open watches in Get context, guards, per-watch spend, list and stop in chat. **Evaluates Foundry routines and the reminder tool on a harness agent** (can they wake it; not a dependency) | A build watch, a topic watch and a price watch run for a week; Dan lists, changes and stops them in chat; spend per watch visible and inside budget; no report storm | Revert the PR; open watch notes stay in the vault as plain notes |
 | 6 Voice | [P15-171](https://github.com/DanAakesen/jarvis/issues/1880) | Voice Live stays the speech layer; **every voice turn goes through the PI agent** (`ask_pi`). The owner accepts the 3.5 to 4.4 s wait when voice starts; no separate fast direct path. The warm conversation makes later turns fast. Same Session, barge-in cancel, status lines, watches by voice | Voice turns reach the PI agent and answers are spoken; later turns about as fast as warm chat; interruption works; voice and chat share context | Revert the PR |
 | 7 Cutover | [P15-172](https://github.com/DanAakesen/jarvis/issues/1881) | PI becomes the default for chat, voice and brain. The old path stays in the code, switched off by default and with no code that switches back to it | Gates A and 3 to 6 passed; two weeks of daily use with no revert; cost within plan | Revert the cutover commit and redeploy the previous release |
@@ -446,7 +448,7 @@ Each phase ships dark behind its own flag and is verified before the next starts
 | Budget hard stop, daily push cap, never send mail | Whether to interrupt, with what, through which channel |
 | Vault path guard, secret filter, receipts | What a finding is; how to structure an idea; when and whether to follow up; what a watch should report |
 
-The cheap rules filter (`proactive/events/rules.ts`) mixes both. Mechanics stay; the "is it routine" judgement moves to the model **only after the shadow run shows no loss** and cost stays in budget, because each wake costs at least about 0.075 DKK.
+The cheap rules filter (`proactive/events/rules.ts`) mixes both. Mechanics stay; the "is it routine" judgement moved to the model in #1886 (owner decision: LLM-only, no shadow run); cost is held by exact limits on wakes and money, because each wake costs at least about 0.075 DKK.
 
 ## 8. Cost in DKK per month
 
@@ -545,7 +547,7 @@ Rules that keep it cheap: the model picks the slowest cadence that serves the pu
 | Usage and budget | `database/usage-store.ts`, `core/usage-pricing.ts`, `proactive/budget.ts` | Cached-token field, per-turn id, chat cap | 0, 2 |
 | Agent definition | `agents/jarvis/managed_copilot_definition.py`; `.github/workflows/deploy.yml`; skills in the repository | Effort, model, instructions, skills, MCP servers as code | 0, 2 |
 | Reach | `factory/tools.ts`, `factory/task-status-notifications.ts`, `factory/dispatcher.ts`, `runner/`; `infra/main.bicep` | Workers through MCP; results as events; Azure MCP container and Reader role | 3 |
-| Brain | `proactive/engine.ts`, `proactive/scheduler.ts`, `proactive/events/{pipeline,reasoner,rules,channels}.ts`, `inbox/{nudge,review,proactive-hook}.ts` | Brain loop on the agent, shadow mode, decision log, channel decision | 4 |
+| Brain | `proactive/engine.ts`, `proactive/scheduler.ts`, `proactive/events/{pipeline,reasoner,rules,channels}.ts`, `inbox/{nudge,review,proactive-hook}.ts` | Brain loop on the agent (`pi/brain/*`, consumer injected into `proactive/events/wiring.ts`), decision log, chat message as the one channel | 4 |
 | Watches | New `watch/` module on the pattern of `inbox/{store,note,item-index,mcp}.ts`; `proactive/scheduler.ts`; `core/web-research.ts`; a migration for the rebuildable watch index | `PI/Watches/` notes, `watch_*` tools, due-time wake, guards, per-watch spend | 5 |
 | Vault trail | `vault/index.ts`, `vault/github-client.ts` | A `PI/` area outside task scope for decisions and watches | 4, 5 |
 | Push | `push/*`, `proactive/push-delivery.ts`, `proactive/native-delivery.ts` | Push guarantee for chat messages from the brain | 4 |
@@ -559,7 +561,7 @@ Rules that keep it cheap: the model picks the slowest cadence that serves the pu
 | --- | --- | --- |
 | 1 | One logical session; silent brain runs use a scratch conversation | Keeps the session useful and cost bounded |
 | 2 | Chat messages PI starts always push; replies inside a live turn do not. The 6 pushes a day cap and the low-tier card from #1858 stay as exact guards | The drawing says push always; the cap and card exist and protect attention |
-| 3 | Queue, dedupe, caps and budget stay as mechanics; routine judgement moves to the model after a shadow run | LLM-only decisions without losing cost control |
+| 3 | Queue, dedupe, caps and budget stay as mechanics; routine judgement moves to the model (no shadow run, owner decision 16 November 2026) | LLM-only decisions without losing cost control |
 | 4 | Gateway calls the managed agent directly (no hosted-agent hop) | Lever 8; the local runner already called the harness directly, so end-to-end gateway time is measured in P15-174 |
 | 5 | The unlabelled box in the Brain loop is the outgoing message | Not stated in the drawing |
 | 6 | Chat and voice model cap of 250 DKK a month | Proposal; no cap exists yet |
