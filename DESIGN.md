@@ -1,3 +1,17 @@
+## PI standing watches — 16 November 2026 (#1886, P15-175)
+
+No new screen: watches are listed, changed and stopped in chat or by voice, in plain sentences (name, next look, looks today, an estimated cost in DKK with the word "estimate"). The reply to "keep me updated on X" is one sentence: what is watched and when the first look is. A report from a watch is an ordinary Jarvis chat message and push, only when something changed that matters; there is never a "still waiting" message. The Watch is parked and was not touched.
+
+## PI brain test switch in iOS — 16 November 2026 (#1886, P15-175)
+
+A second section under the PI engine switch in Settings, General, titled "PI brain (test)", with the same temporary status as the engine switch. A native toggle turns the brain on or off (saved on the backend, so it holds on every device); it is disabled, with the status row saying why, while the app has no backend, a request is running, or the backend has no brain ("Not set up on this backend"). Rows show the status (On, Off, Paused in proactive settings), the proactive budget used against its limit with plain text for "Almost used" and "Used: the brain has stopped" (red text for the stop, never colour alone), wakes and DKK this month, messages today, the last wake (outcome, time, DKK) and, only when above zero, decision-log entries waiting for the vault. A refresh button uses the shared labelled button; a loading row and a red error line cover the other states. Not inspected on a device or simulator: it compiles only in the Apple CI.
+
+A message from the brain is an ordinary Jarvis chat message and an ordinary reply push; there is no new card, tier or channel.
+
+## PI reach — 16 November 2026 (#1886, P15-175)
+
+No visible UI. PI says in plain words when a read-only server is not attached ("I have no GitHub tools in this session") and never claims to have looked; Azure and GitHub results arrive as ordinary chat text.
+
 ## PI test switch in iOS — 15 November 2026 (#1885, P15-174)
 
 A temporary, clearly marked test control, deleted at cutover. Settings, General, section "Test switch": the shared segmented bar chooses Current engine or PI engine (stored on the device, default Current), an explanation says it affects chat only and has no fallback, and while PI is chosen live rows show status, agent and model, month spend against the cap, warm or cold, the monthly cap (default 100 DKK) and what is left this month (shown in red text at 0), and the last turn (first text ms, tokens including cached, DKK) with a refresh button. The Chat header shows a small "PI test" pill (icon plus text, new shared `JarvisStatusPill`) while PI is chosen. PI failures show the server's own sentence in the chat error banner. Not inspected on a device or simulator by me; the macOS CI compile is the check.
@@ -709,7 +723,7 @@ icon and the favicon. `docs/ui/cognitive-lattice-inventory.md` lists every surfa
 
 Shown on every **cold start**, never on a warm resume, over a static launch screen of the same dark colour
 (`LaunchBackground`). Composition from `jarvis-opening-selected.png`: the lattice orb centred, the white
-**Jarvis** name beneath, a dim, static background of seven small cyan nodes joined by long angular lines that run off the screen edges, two of
+**Jarvis** name beneath, a dim background (now alive: see "One living neural background") of seven small cyan nodes joined by long angular lines that run off the screen edges, two of
 them passing behind the orb (the orb's disc is cut out, so nothing is drawn over the sphere; the background stays
 clearly quieter than the orb). Every node has a link running toward the orb, lines and nodes carry a faint additive
 glow, and each line fades to about 40% as it nears the sphere, and a slim bar near the
@@ -722,6 +736,39 @@ It ends when authentication and the first fresh Home data are ready (a forced To
 or 8 seconds after authentication, whichever is first, then crossfades to Home over 0.3 s (0.15 s with
 Reduce Motion) without shrinking the orb. Sign-in, Face ID failure and retry screens take over through the same
 crossfade. Quick off switch: Settings > General > Opening screen (or `--no-opening` in debug builds).
+
+## One living neural background (P15-179 / #1892; 15 November 2026)
+
+Owner direction, TestFlight build 108: the in-app background must match the opening screen's network, the chat orb must
+be alive with the states, and the lines and dots must not be static but fire "like a brain" when Jarvis works.
+
+- **One component, no copies.** The opening screen's sparse network (seven dim cyan nodes, long angular links running
+  behind the orb and off-screen) is the background of the whole app. `JarvisNeuralBackgroundView` (JarvisCore) draws it
+  and `JarvisNeuralBackground` (design system) is the only way a screen asks for it. It replaces the earlier Ember
+  image and the four colour glows; `JarvisScreenBackground` is now the still pose of the same background. The page
+  colour is the opening's near-black navy in dark mode and the page cream in light mode, with deeper teal lines.
+- **Neurons.** A signal leaves the orb along the links to a background node, lights it and comes back (cyan out, warmer
+  on the way back). Rate, brightness, direction and speed follow the orb's own state and level contracts: a slow trickle
+  at rest, quicker while thinking, quickest on tool work (warmer signals, branching pairs), following the playback level
+  while speaking, and running *into* the orb while listening (following the input level). Muted, reconnecting and
+  offline are quieter and lose colour like the orb. States ease in and out; a signal in flight is never dropped.
+- **Where.** Full effects on Voice, Chat and the opening/loading screen. Chat shows the live orb in the upper part of the
+  screen, a little quieter (orb at 42% in dark and 62% in light mode, lines at 70%), with the message window and composer over it; it follows the
+  turn: thinking, tool (an unfinished tool call), speaking (reply streaming), listening only while dictating.
+  Every other screen gets the same network `.calm`: two faint, slow signals at most, no orb, the lines dissolving into a
+  faint ember where the orb would be. Sheets, the drawer and the privacy cover draw the still pose.
+- **Gate.** One background for sign-in and every lock state, so Face ID failing no longer loses it; the states crossfade
+  over 0.3 s. The lock states no longer show blurred Home behind them.
+- **Quality.** Real drawing in two Canvases (the network once per size and theme, the signals on a timeline at 60 fps
+  for full effects and 20 fps calm), clipped around the orb's disc. It pauses while the app is inactive or the gate
+  covers it, and Reduce Motion, the Settings switch (General > Background motion) and `.still` draw one fixed pose. No
+  microphone is implied: the opening drives the network with the working state, never listening.
+- **Cheap path.** In the Simulator (software rendering) and on a device in Low Power Mode the background skips its soft
+  additive glow passes and draws at 20 fps (full) or 10 fps (calm); a device on normal power draws the quality path at
+  60 fps. Simulator captures therefore show the crisp lines, nodes and signals without the glow.
+- **Overlay window.** The gate and opening live in their own window, outside the app's scene, so SwiftUI never reported a
+  scene phase there and the orb and background stood still. The overlay now reports the gate's own pause state as its
+  scene phase, so both run, and still pause when the app is inactive.
 
 ## Shared control geometry (16 October 2026; local candidate)
 
@@ -2978,7 +3025,7 @@ Native screenshot acceptance is tracked in
 P15-38 / #1478 makes the approved Chat backdrop shared across native screens
 and app-owned sheets. The 1 November reconciliation reuses main's
 `JarvisScreenBackground` in `JarvisDesignSystem.swift`, which already supplies
-the gate's `JarvisGateAmbientBackground` wrapper, instead of the earlier competing
+the gate's ambient wrapper, instead of the earlier competing
 renderer and decorative orb. Keep main's glow rendering and foreground orbs.
 Shared forms/lists use glass rows, with the board's solid
 surface fallback for Reduce Transparency; the sidebar is glass over the

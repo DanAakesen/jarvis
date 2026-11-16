@@ -33,7 +33,8 @@ import { createReminderTicker } from './reminder-ticker.js';
 import { createVaultPushReminderPass } from './vault-push-reminders.js';
 import type { SystemPushOutcome, SystemPushRequest } from './push-delivery.js';
 import type { ActivityAlert } from '../alerts.js';
-import { createEventPath } from './events/wiring.js';
+import { createEventPath, type EventConsumer } from './events/wiring.js';
+import type { EventQueueStore } from './events/event-queue.js';
 import type { ProactiveEventSink } from './events/types.js';
 
 const uuidPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/iu;
@@ -70,6 +71,8 @@ export interface ProactiveCompositionOptions extends ContextDependencies {
   vaultMirrorStatusReader?: NonNullable<ProactiveEngineOptions['vaultMirrorStatusReader']>;
   /** The event-driven path (#1858). Off until the owner turns it on; the 07:00 and 18:00 checks run either way. */
   eventsEnabled?: boolean;
+  /** The PI brain as the reader of the event queue, built once the queue exists. Cannot be combined with `eventsEnabled`. */
+  brain?: (queue: EventQueueStore) => EventConsumer;
   /** Writes a card to the Now feed; the low tier needs it. */
   nowCardFeed?: { record(alert: ActivityAlert): Promise<boolean> };
   /** Hands producers outside this module (webhook, alerts) the queue's entrance. */
@@ -204,6 +207,7 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
   });
   const events = createEventPath({
     enabled: options.eventsEnabled === true,
+    brain: options.brain,
     ownerObjectId: options.ownerObjectId,
     pool: options.pool,
     store,
@@ -244,6 +248,6 @@ export function registerProactive<Logger extends FastifyBaseLogger>(
     now,
     run,
     worstCaseDkk: () => model.worstCaseDkk(),
-    ...(events ? { outreach: events.outreach } : {}),
+    ...(events?.outreach ? { outreach: events.outreach } : {}),
   });
 }

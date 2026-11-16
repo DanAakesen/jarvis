@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ConversationAgentChunk } from '../core/chat-agent.js';
 import { PiGatewayError } from './errors.js';
 import { createPiGateway, createUnconfiguredPiAgent } from './gateway.js';
-import { createMemoryPiStore } from './store.js';
+import { chatTurnKinds, createMemoryPiStore } from './store.js';
 import { createPiTurnRegistry } from './turns.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
@@ -81,6 +81,61 @@ describe('PI gateway', () => {
     expect(await run('look')).toEqual([
       'Checking.', { type: 'acknowledgment', text: 'Checking.' }, 'Still on it.', { type: 'commentary', text: 'Still on it.' }, 'Done.',
     ]);
+  });
+
+  it('reads the provider\'s own report of reach servers: listed tools and call results, with plain labels only', async () => {
+    const logs: Array<[string, Record<string, unknown>]> = [];
+    const listed = frame({ type: 'response.output_item.done', item: { type: 'mcp_list_tools', server_label: 'github', tools: [{}, {}, {}] } });
+    const listFailed = frame({ type: 'response.output_item.done', item: { type: 'mcp_list_tools', server_label: 'azure', tools: [], error: 'unreachable' } });
+    const failed = frame({ type: 'response.output_item.done', item: { type: 'mcp_call', server_label: 'github', name: 'get_issue', error: { code: 'x' } } });
+    const odd = frame({ type: 'response.output_item.done', item: { type: 'mcp_call', server_label: 'bad label with spaces', name: 'x', error: null } });
+    const { run } = setup([() => sse(listed, listFailed, tool, failed, odd, delta('ok'), completed(5, 0, 5))], { log: (event, fields) => logs.push([event, fields]) });
+    expect(await run('look')).toEqual(['ok']);
+    expect(logs.filter(([event]) => event !== 'pi.turn')).toEqual([
+      ['pi.mcp_list_failed', { server: 'azure' }], ['pi.mcp_call_failed', { server: 'github', tool: 'get_issue' }],
+    ]);
+    const events: Array<{ kind: string }> = [];
+    const fresh = setup([() => sse(listed, failed, odd, completed(1, 0, 1))]);
+    for await (const event of fresh.gateway.smokeKit.respond('conv_1', 'x', new AbortController().signal)) events.push(event);
+    expect(events).toEqual([
+      { kind: 'tools_listed', server: 'github', tools: 3, failed: false },
+      { kind: 'tool_done', server: 'github', name: 'get_issue', failed: true },
+      { kind: 'tool_done', server: '', name: 'x', failed: false },
+      expect.objectContaining({ kind: 'done' }),
+    ]);
+  });
+
+  it('runs a brain wake in its own scratch conversation, bills it as a brain turn, and leaves the chat cap and conversation alone', async () => {
+    const { gateway, store, registry, calls, usage, conversations } = setup([() => sse(delta('Nothing for Dan.'), completed(12_000, 0, 40))]);
+    let opened: string | undefined;
+    const original = registry.open.bind(registry);
+    registry.open = (input) => { const grant = original(input); opened = grant.turn; expect(grant.brain?.runId).toBe('run-1'); return grant; };
+    const result = await gateway.runBrain({ runId: 'run-1', body: 'WAKE BODY' }, new AbortController().signal);
+    expect(result).toMatchObject({ ok: true, text: 'Nothing for Dan.', outcome: 'ok', estimated: false });
+    expect(result.usage).toEqual({ inputTokens: 12_000, cachedTokens: 0, outputTokens: 40 });
+    expect(result.costDkk).toBeGreaterThan(0);
+    // A new conversation of its own; the owner's stored chat conversation was never bound.
+    expect(conversations()).toBe(1);
+    expect(await store.getConversation(owner, new AbortController().signal)).toBeNull();
+    const sent = (calls.find(call => call.url.includes('/responses'))!.body!.input as Array<{ content: string }>)[0]!.content;
+    expect(sent).toContain('CONTEXT BLOCK');
+    expect(sent).toContain(`[Turn ${opened}`);
+    expect(sent).toContain('WAKE BODY');
+    expect(registry.size).toBe(0);
+    expect(store.turns.map(turn => turn.kind)).toEqual(['brain']);
+    expect(usage).toHaveLength(1);
+    // Over the chat cap or not, a brain wake does not touch it: chat spend is chat, warm-up and smoke only.
+    expect(await store.spendSince(new Date(0), chatTurnKinds, new AbortController().signal)).toEqual({ costDkk: 0, turns: 0 });
+  });
+
+  it('returns a failed brain wake with what was billed instead of throwing, and never retries it', async () => {
+    const { gateway, store, calls } = setup([() => sse(delta('Looking'), frame({ type: 'response.failed', response: {} }))]);
+    const result = await gateway.runBrain({ runId: 'run-2', body: 'WAKE' }, new AbortController().signal);
+    expect(result).toMatchObject({ ok: false, outcome: 'failed', estimated: true });
+    expect(result.error).toMatchObject({ code: 'pi_failed' });
+    expect(result.costDkk).toBeGreaterThan(0);
+    expect(store.turns.at(-1)).toMatchObject({ kind: 'brain', outcome: 'failed' });
+    expect(calls.filter(call => call.url.includes('/responses'))).toHaveLength(1);
   });
 
   it('stops before sending anything once the monthly cap is reached', async () => {

@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { isBrainOnlyTool } from '../pi/brain/policy.js';
 import { gmailAccessGuard } from './gmail-access-policy.js';
 
 // Kept as HTTP compatibility endpoints for older clients, but no longer
@@ -8,7 +9,8 @@ const legacyConfirmationTools = new Set([
   'calendar_get_pending_change', 'calendar_confirm_change', 'mail_confirm_action',
 ]);
 export function isCurrentAssistantTool(name: string): boolean {
-  return !legacyConfirmationTools.has(name);
+  // The brain's own tools exist for background wakes only; chat and voice never see them.
+  return !legacyConfirmationTools.has(name) && !isBrainOnlyTool(name);
 }
 
 export interface JarvisTool {

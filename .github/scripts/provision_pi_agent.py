@@ -5,12 +5,17 @@ that holds the MCP secret (Foundry refuses credentials in an MCP tool's own head
 that carries the instructions, the Jarvis MCP server (by connection) and the skill references, pins the endpoint to
 that version, and gives the backend the agent name and the MCP secret. It is idempotent: when nothing changed it creates nothing.
 It invokes no model and prints no definition, because the definition carries the MCP credential.
+
+Reach: the read-only GitHub MCP server (a fine-grained token the owner creates) and the Azure MCP server (Reader, scale to
+zero) are attached when their inputs exist. A server whose input is missing is left out and reported as not attached; a
+server whose connection cannot be written is left out and fails the job after the agent is defined, so nothing is hidden.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 import re
 import secrets
 import subprocess
@@ -30,6 +35,8 @@ SECRET_NAME = "pi-mcp-secret"
 ARM = "https://management.azure.com"
 CONNECTIONS_API = "2025-04-01-preview"
 FINGERPRINT_KEY = "jarvis_pi_fingerprint"
+GITHUB_TOKEN_PATTERN = re.compile(r"github_pat_[A-Za-z0-9_]{50,255}")
+UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}")
 
 
 class Blocked(Exception):
@@ -54,6 +61,8 @@ def load_spec() -> dict:
     require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", spec["agentName"]) is not None, "agent_name_invalid")
     require(spec["reasoningEffort"] in {"none", "low", "medium", "high"}, "reasoning_effort_invalid")
     require(spec["mcp"]["requireApproval"] == "never", "approval_policy_unsupported")
+    labels = [spec["mcp"]["serverLabel"]] + [server["serverLabel"] for server in spec.get("reach", [])]
+    require(len(labels) == len(set(labels)) and all(re.fullmatch(r"[a-z][a-z0-9_]{0,31}", label) for label in labels), "reach_label_invalid")
     return spec
 
 
@@ -79,7 +88,7 @@ def parse_skill(name: str) -> dict:
             "sha256": sha256(raw)}
 
 
-def build_definition(spec: dict, instructions: str, server_url: str, skills: list[dict]) -> dict:
+def build_definition(spec: dict, instructions: str, server_url: str, skills: list[dict], reach: list[dict] | None = None) -> dict:
     return {
         "kind": "prompt", "harness": {"type": "microsoft_copilot_preview"},
         "model": spec["model"], "reasoning": {"effort": spec["reasoningEffort"]},
@@ -91,15 +100,20 @@ def build_definition(spec: dict, instructions: str, server_url: str, skills: lis
              "require_approval": spec["mcp"]["requireApproval"],
              # The secret lives in this project connection and is injected as a header; the tool carries no headers.
              "project_connection_id": spec["mcp"]["connection"]},
+            # Reach servers are read-only by construction (a read-only URL and token for GitHub, the Reader role and the
+            # server's own read-only mode for Azure), so the harness is not asked to approve their calls.
+            *[{"type": "mcp", "server_label": server["serverLabel"], "server_url": server["url"], "require_approval": "never",
+               "project_connection_id": server["connection"]} for server in reach or []],
         ],
         "skills": [{"type": "skill_reference", "name": skill["name"], "version": skill["version"]} for skill in skills],
     }
 
 
-def fingerprint(spec: dict, instructions: str, server_url: str, skills: list[dict]) -> str:
+def fingerprint(spec: dict, instructions: str, server_url: str, skills: list[dict], reach: list[dict] | None = None) -> str:
     """Everything that makes a new agent version necessary, hashed; skill versions are not part of it, their content is."""
     return sha256(canonical({
         "spec": spec, "instructions": instructions, "server_url": server_url,
+        "reach": [[server["serverLabel"], server["url"], server["connection"]] for server in reach or []],
         "skills": [[skill["name"], skill["sha256"]] for skill in skills],
     }))
 
@@ -297,26 +311,71 @@ def wait_active(azure: Az, name: str, version: str) -> dict:
     raise Blocked("agent_activation_timeout")
 
 
-def ensure_connection(project_id: str, spec: dict, server_url: str, secret: str) -> bool:
-    """Create or update the project connection that injects the MCP secret. True when it was written."""
-    name = spec["mcp"]["connection"]
+def upsert_connection(project_id: str, name: str, properties: dict, marker: dict, compare: list[str]) -> bool:
+    """Create or update a project connection. True when it was written; an identical one is left alone."""
     path = f"{project_id}/connections/{name}"
-    marker = {"jarvis_secret_sha256": sha256(secret), "jarvis_purpose": "pi-mcp"}
     try:
         current = arm_request("GET", path).get("properties") or {}
-        if current.get("target") == server_url and all((current.get("metadata") or {}).get(k) == v for k, v in marker.items()):
+        if all(current.get(key) == properties[key] for key in compare) and \
+                all((current.get("metadata") or {}).get(k) == v for k, v in marker.items()):
             return False
     except Blocked as error:
         if ":not_found" not in str(error):
             raise
-    arm_request("PUT", path, {"properties": {
-        "category": "CustomKeys", "authType": "CustomKeys", "target": server_url, "isSharedToAll": False,
-        "credentials": {"keys": {"Authorization": f"Bearer jp.{secret}"}}, "metadata": marker,
-    }})
+    arm_request("PUT", path, {"properties": {**properties, "metadata": marker}})
     return True
 
 
-def verify(readback: dict, spec: dict, expected: str) -> None:
+def ensure_connection(project_id: str, spec: dict, server_url: str, secret: str) -> bool:
+    """Create or update the project connection that injects the Jarvis MCP secret. True when it was written."""
+    return upsert_connection(project_id, spec["mcp"]["connection"], {
+        "category": "CustomKeys", "authType": "CustomKeys", "target": server_url, "isSharedToAll": False,
+        "credentials": {"keys": {"Authorization": f"Bearer jp.{secret}"}}},
+        {"jarvis_secret_sha256": sha256(secret), "jarvis_purpose": "pi-mcp"}, ["target"])
+
+
+def resolve_reach(spec: dict, args: argparse.Namespace) -> tuple[list[dict], dict[str, str]]:
+    """The reach servers whose inputs exist, and a plain-words status for every declared one."""
+    attached: list[dict] = []
+    status: dict[str, str] = {}
+    for server in spec.get("reach", []):
+        label = server["serverLabel"]
+        if server["kind"] == "github":
+            token = os.environ.get(server["tokenEnv"], "").strip()
+            if not token:
+                status[label] = f"not attached: the owner has not provided the {server['tokenEnv']} secret"
+                continue
+            # Only a fine-grained token can be limited to chosen repositories and to read permissions.
+            require(GITHUB_TOKEN_PATTERN.fullmatch(token) is not None, "github_token_not_fine_grained")
+            REDACT.append(token)
+            attached.append({**server, "secret": token})
+        elif server["kind"] == "azure":
+            url = (getattr(args, "azure_mcp_url", "") or "").strip()
+            client = (getattr(args, "azure_mcp_client_id", "") or "").strip()
+            if not url or not client:
+                status[label] = "not attached: the Azure MCP container is not deployed (needs the JARVIS_AZURE_MCP_CLIENT_ID variable and a deploy)"
+                continue
+            require(url.startswith("https://") and UUID_PATTERN.fullmatch(client) is not None, "azure_mcp_input_invalid")
+            attached.append({**server, "url": url, "audience": f"api://{client}"})
+        else:
+            raise Blocked("reach_kind_unknown")
+    return attached, status
+
+
+def connect_reach(project_id: str, server: dict) -> bool:
+    """Write the connection one reach server needs. GitHub gets a read-only token header; Azure uses the project's identity."""
+    if server["kind"] == "github":
+        return upsert_connection(project_id, server["connection"], {
+            "category": "CustomKeys", "authType": "CustomKeys", "target": server["url"], "isSharedToAll": False,
+            "credentials": {"keys": {"Authorization": f"Bearer {server['secret']}"}}},
+            {"jarvis_secret_sha256": sha256(server["secret"]), "jarvis_purpose": "pi-github-mcp"}, ["target"])
+    return upsert_connection(project_id, server["connection"], {
+        "category": "RemoteTool", "authType": "ProjectManagedIdentity", "target": server["url"],
+        "audience": server["audience"], "isSharedToAll": False},
+        {"jarvis_audience": server["audience"], "jarvis_purpose": "pi-azure-mcp"}, ["target", "audience"])
+
+
+def verify(readback: dict, spec: dict, expected: str, reach: list[dict] | None = None) -> None:
     definition = readback.get("definition") or {}
     require(definition.get("harness") == {"type": "microsoft_copilot_preview"}, "readback_harness_mismatch")
     require(definition.get("model") == spec["model"], "readback_model_mismatch")
@@ -325,9 +384,12 @@ def verify(readback: dict, spec: dict, expected: str) -> None:
     tools = definition.get("tools") or []
     toolset = [tool for tool in tools if tool.get("type") == "microsoft_copilot_toolset_preview"]
     require(len(toolset) == 1 and (toolset[0].get("default_config") or {}).get("enabled") is False, "readback_builtins_enabled")
-    mcp = [tool for tool in tools if tool.get("type") == "mcp"]
-    require(len(mcp) == 1 and mcp[0].get("require_approval") == "never", "readback_mcp_mismatch")
-    require(mcp[0].get("project_connection_id") == spec["mcp"]["connection"] and not mcp[0].get("headers"), "readback_mcp_connection_mismatch")
+    mcp = {tool.get("server_label"): tool for tool in tools if tool.get("type") == "mcp"}
+    wanted = {spec["mcp"]["serverLabel"]: spec["mcp"]["connection"], **{s["serverLabel"]: s["connection"] for s in reach or []}}
+    require(len([tool for tool in tools if tool.get("type") == "mcp"]) == len(wanted) and set(mcp) == set(wanted), "readback_mcp_mismatch")
+    for label, connection in wanted.items():
+        require(mcp[label].get("require_approval") == "never", "readback_mcp_mismatch")
+        require(mcp[label].get("project_connection_id") == connection and not mcp[label].get("headers"), "readback_mcp_connection_mismatch")
 
 
 def provision(args: argparse.Namespace) -> dict:
@@ -335,6 +397,7 @@ def provision(args: argparse.Namespace) -> dict:
     name = spec["agentName"]
     instructions = instructions_text()
     skills = [parse_skill(skill) for skill in spec["skills"]]
+    candidates, reach_status = resolve_reach(spec, args)
     azure = Az(args.project_endpoint)
     state = current_state(azure, name)
     secret = configure_backend(args.backend_app, args.resource_group, args.subscription, name)
@@ -343,21 +406,32 @@ def provision(args: argparse.Namespace) -> dict:
     project_id = (f"/subscriptions/{args.subscription}/resourceGroups/{args.resource_group}/providers/"
                   f"Microsoft.CognitiveServices/accounts/{args.foundry_account}/projects/{args.foundry_project}")
     connection_written = ensure_connection(project_id, spec, server_url, secret)
-    wanted = fingerprint(spec, instructions, server_url, skills)
+    reach: list[dict] = []
+    problems: list[str] = []
+    for server in candidates:
+        try:
+            connect_reach(project_id, server)
+            reach.append(server)
+            reach_status[server["serverLabel"]] = "attached"
+        except Blocked as error:
+            # Left out of the agent and reported; the job fails after the agent is defined, so it cannot go unnoticed.
+            reach_status[server["serverLabel"]] = f"not attached: the connection could not be written ({error})"
+            problems.append(f"{server['serverLabel']}: {error}")
+    wanted = fingerprint(spec, instructions, server_url, skills, reach)
     unchanged = bool(state and state["pinned"] and state["metadata"].get(FINGERPRINT_KEY) == wanted and state.get("status") == "active")
     ensure_skills(azure, skills, unchanged, state["skills"] if state else {})
+    result = {"agent": name, "connection": spec["mcp"]["connection"], "connectionWritten": connection_written,
+              "skills": {s["name"]: s["version"] for s in skills}, "reach": reach_status, "problems": problems}
     if unchanged:
-        return {"agent": name, "version": state["pinned"], "created": False, "connection": spec["mcp"]["connection"],
-                "connectionWritten": connection_written, "skills": {s["name"]: s["version"] for s in skills}}
-    definition = build_definition(spec, instructions, server_url, skills)
+        return {**result, "version": state["pinned"], "created": False}
+    definition = build_definition(spec, instructions, server_url, skills, reach)
     metadata = {FINGERPRINT_KEY: wanted}
     # Versions-first: this creates the agent when it does not exist yet, so there is no separate POST /agents.
     version = as_version(azure.rest("POST", f"/agents/{name}/versions", {"metadata": metadata, "definition": definition}).get("version"))
     require(isinstance(version, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", version) is not None, "agent_version_unknown")
-    verify(wait_active(azure, name, version), spec, instructions)
+    verify(wait_active(azure, name, version), spec, instructions, reach)
     pin(azure, name, version)
-    return {"agent": name, "version": version, "created": True, "connection": spec["mcp"]["connection"],
-            "connectionWritten": connection_written, "skills": {s["name"]: s["version"] for s in skills}}
+    return {**result, "version": version, "created": True}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -369,6 +443,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--backend-app", required=True)
     parser.add_argument("--resource-group", required=True)
     parser.add_argument("--subscription", required=True)
+    parser.add_argument("--azure-mcp-url", default="")
+    parser.add_argument("--azure-mcp-client-id", default="")
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
@@ -381,7 +457,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     args.output.write_text(json.dumps(result) + "\n", encoding="utf-8")
     print("pi_agent_ready " + json.dumps(result))
-    return 0
+    for problem in result["problems"]:
+        print(f"::error::PI reach server left out: {problem}", file=sys.stderr)
+    return 1 if result["problems"] else 0
 
 
 if __name__ == "__main__":

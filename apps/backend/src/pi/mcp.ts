@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { piMcpPath, type PiAuth } from '../auth/pi-credential.js';
 import { isCurrentAssistantTool, type RegisteredTool } from '../core/tool-registry.js';
 import { searchVoiceTools, shortenVoiceDescription } from '../voice/voice-tools.js';
+import { brainMayRun, brainSeesTool } from './brain/policy.js';
 import { piTurnPattern, type PiTurnRegistry } from './turns.js';
 
 const maxFullResults = 3;
@@ -53,7 +54,7 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     }, async (input) => {
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: 'find_tools', outcome: 'refused', result: { refused: unknownTurn } }, true);
-      const matches = searchVoiceTools(app.jarvisTools, input.query);
+      const matches = searchVoiceTools(app.jarvisTools, input.query, grant.brain ? brainSeesTool : undefined);
       const full = matches.slice(0, maxFullResults);
       for (const tool of full) grant.discovered.add(tool.name);
       return text({
@@ -74,8 +75,13 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
       const grant = registry.resolve(input.turn);
       if (!grant) return text({ tool: input.name, outcome: 'refused', result: { refused: unknownTurn } }, true);
       const tool = app.jarvisTools.get(input.name);
-      if (!tool || !isCurrentAssistantTool(tool.name) || !grant.discovered.has(tool.name)) {
+      const visible = tool && (grant.brain ? brainSeesTool(tool.name) : isCurrentAssistantTool(tool.name));
+      if (!tool || !visible || !grant.discovered.has(tool.name)) {
         return text({ tool: input.name, outcome: 'refused', result: { refused: notFound } });
+      }
+      if (grant.brain && !brainMayRun(tool, input.arguments)) {
+        grant.results.push({ tool: tool.name, outcome: 'refused' });
+        return text({ tool: tool.name, outcome: 'refused', result: { refused: 'A background wake can only read, or use its own message, note and trail tools. Nothing was done.' } });
       }
       const abort = AbortSignal.any([signal, grant.signal, ctx.mcpReq.signal]);
       try {
@@ -86,7 +92,9 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
             authorization: `Bearer ${auth.dispatch.token}`,
             'content-type': 'application/json',
             // The stored owner message of this turn, from the grant. Tools prove the write against it.
-            ...(grant.smoke === true ? { 'x-jarvis-smoke': 'true' } : { 'x-jarvis-message-id': grant.messageId }),
+            // A brain wake has no owner message: it carries its run id, and the route lets only the brain's tools through.
+            ...(grant.smoke === true ? { 'x-jarvis-smoke': 'true' }
+              : grant.brain ? { 'x-jarvis-brain': grant.brain.runId } : { 'x-jarvis-message-id': grant.messageId }),
           },
           payload: JSON.stringify(input.arguments),
           signal: abort,

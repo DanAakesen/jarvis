@@ -9,6 +9,17 @@ import { randomBytes } from 'node:crypto';
  * message and session server-side; nothing the model sends can change either. A grant ends with its turn, so a
  * reference replayed later, forged, or lifted from another session resolves to nothing.
  */
+/** What the brain did in one wake, recorded by the tools themselves (never taken from model text). */
+export interface PiBrainRun {
+  readonly runId: string;
+  /** Chat messages sent to Dan in this run. */
+  readonly sent: { readonly title: string | null; readonly text: string; readonly messageId: string }[];
+  /** Notes written to the vault area in this run: path only, never content. */
+  readonly wrote: string[];
+  /** Standing watches this run recorded a look at. */
+  readonly looked: string[];
+}
+
 export interface PiTurnGrant {
   readonly turn: string;
   readonly ownerObjectId: string;
@@ -17,6 +28,11 @@ export interface PiTurnGrant {
   readonly messageId: string;
   /** The deploy smoke: tools run under the existing read-only smoke role, with no owner message. */
   readonly smoke?: boolean;
+  /**
+   * A brain wake: there is no owner message, so only the read-only brain tools and the brain's own few writes
+   * (message to Dan, notes in its vault area) are reachable, never a tool that needs Dan's words.
+   */
+  readonly brain?: PiBrainRun;
   /** Tools find_tools returned in this turn; call_tool refuses anything else, as the current agent does. */
   readonly discovered: Set<string>;
   /** What each tool this turn actually ran returned, recorded by the MCP server itself, never taken from model text. */
@@ -27,6 +43,8 @@ export interface PiTurnGrant {
 export interface PiTurnRegistry {
   open(input: Omit<PiTurnGrant, 'turn' | 'discovered' | 'results'>): PiTurnGrant;
   resolve(turn: unknown): PiTurnGrant | undefined;
+  /** The live grant of a brain wake, by run id. Brain-only tools prove they run inside a real wake with it. */
+  findBrain(runId: unknown): PiTurnGrant | undefined;
   close(turn: string): void;
   readonly size: number;
 }
@@ -49,6 +67,11 @@ export function createPiTurnRegistry(): PiTurnRegistry {
       if (typeof turn !== 'string' || !piTurnPattern.test(turn)) return undefined;
       const grant = grants.get(turn);
       return grant && !grant.signal.aborted ? grant : undefined;
+    },
+    findBrain(runId) {
+      if (typeof runId !== 'string') return undefined;
+      for (const grant of grants.values()) if (grant.brain?.runId === runId && !grant.signal.aborted) return grant;
+      return undefined;
     },
     close(turn) { grants.delete(turn); },
     get size() { return grants.size; },
