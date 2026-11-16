@@ -391,6 +391,17 @@ class SmokeReportTest(unittest.TestCase):
         self.assertIn("GitHub tool answered a read through the Jarvis door | **FAIL**", text)
         self.assertNotIn("Azure server answered", text)
         self.assertIn("every remote server (GitHub, Azure) listed its tools | **FAIL**", text)
+    def test_render_lists_what_each_natural_prompt_called(self):
+        data = {"cold": self.turn(4000), "warm": [self.turn(1900, 10000)],
+                "tools": dict(self.turn(2500), toolResults=[{"tool": "list_jobs", "outcome": "ok"}]),
+                "choices": [{"label": "Azure question", "called": ["az_group_resource_list"], "turn": dict(self.turn(2000), text="Three apps")},
+                            {"label": "PC request", "called": [], "turn": self.turn(1500)}],
+                "cancel": {"abortToCloseMs": 120, "partialCharacters": 31, "followUpOk": True}, "totalCostDkk": 0.4,
+                "checks": {"streaming": True, "tools_over_mcp": True, "cancellation": True, "warm_faster_than_cold": True}}
+        text = report.render(data)
+        self.assertIn("- Azure question: called az_group_resource_list; reply: 'Three apps'", text)
+        self.assertIn("- PC request: called no Jarvis, GitHub or Azure tool", text)
+
     def test_render_shows_the_fixed_prompt_row_when_the_report_has_one(self):
         base = {"cold": self.turn(4000), "warm": [self.turn(1900, 10000)],
                 "tools": dict(self.turn(2500), toolResults=[{"tool": "list_jobs", "outcome": "ok"}]),

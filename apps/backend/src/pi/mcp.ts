@@ -68,7 +68,7 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
     const server = new McpServer({ name: 'jarvis', version: '1.0.0' });
     server.registerTool('find_tools', {
       title: 'Find Jarvis tools',
-      description: 'Jarvis tools are not listed. Look one up by a few keywords to get its description and argument schema, then use call_tool. Pass the turn reference from the current message.',
+      description: 'Jarvis tools are not listed. Look one up by a few keywords naming what the thing is (azure resource, github issue, calendar, note) to get its description and argument schema, then use call_tool. Dan’s PC tools (pc_, browser_do) are there for when he asks me to use his PC. Pass the turn reference from the current message.',
       inputSchema: findSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     }, async (input, ctx) => {

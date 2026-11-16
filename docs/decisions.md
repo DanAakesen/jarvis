@@ -1,3 +1,14 @@
+## 16 November 2026 — Build 111 bugs: nudge the model, restrict nothing (#1922, P15-184)
+
+| Choice | Why |
+| --- | --- |
+| PC control is steered by wording only: a "Choosing tools" section in the PI instructions, a line in the `find_tools` description, a "use when Dan asks to use his PC" lead on the PC and browser tool descriptions, and a matching line in the old engine's instructions. No gate, no approval step, every tool stays available | Owner: "I want it to be intentional ... it should be smart about its tool selection", with the agreed approach of model-driven nudging, not restrictions |
+| The Azure question that opened a browser ran on the old engine, which has no `az_` tools. The default engine is not changed here | Owner decision: the cutover (#1910) needs his written word. The old engine is told to say so plainly when it lacks a tool |
+| The Deploy smoke reports tool choice on natural prompts and does not fail on it | A model's choices are measured and read, not asserted; the smoke role refuses every action but its reads, so a PC request cannot act |
+| The voice WebSocket handshake starts reading at once and fails after 15 s | A pong is only handed over while a receive is outstanding, and nothing bounded the wait, so a stalled handshake showed "Connecting" for ever. Failure is now visible (existing error and retry), not a fallback |
+| The WebSocket ping handler resumes its continuation through `ResumeOnce` | The build 111 crash log showed `CheckedContinuation.resume` trapping a second time in `URLSessionWebSocketTransport.connect` every time a voice session closed: the ping handler fires again on close. Root cause, not a guard around the symptom |
+| A failed chat turn shows the server's own plain message and a Retry button; the backend logs the provider's error code from a closed list | The cause of `model_response_incomplete` was invisible; the app dropped the user's message and the server text |
+
 ## 16 November 2026 — PI knows its environment: a runtime note, not committed identifiers (#1886, P15-175)
 
 After #1918 every smoke check passed except the Azure read: PI called `group_list` and Azure answered that it needs a subscription ID or name. That is missing context, not a restriction.

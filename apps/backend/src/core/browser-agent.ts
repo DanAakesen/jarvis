@@ -1387,7 +1387,7 @@ export function createBrowserAgentModule(agent: BrowserAgent): BackendModule {
     tools: [
       {
         name: 'browser_do',
-        description: 'Use Jev for website navigation and bounded tasks in Dan’s Chrome, opening requested URLs in a foreground tab. Use only fresh, observed elements; requested actions execute without another confirmation. Stops on unsafe input, low confidence, time or step limits.',
+        description: 'Use when Dan asks to use his PC; questions about Azure, GitHub, notes or Jarvis are answered with their own tools instead. Use Jev for website navigation and bounded tasks in Dan’s Chrome, opening requested URLs in a foreground tab. Use only fresh, observed elements; requested actions execute without another confirmation. Stops on unsafe input, low confidence, time or step limits.',
         inputSchema: {
           type: 'object',
           properties: {
