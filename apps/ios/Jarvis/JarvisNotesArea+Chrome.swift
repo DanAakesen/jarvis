@@ -129,9 +129,10 @@ extension JarvisNotesArea {
         // Rows scroll under the dock; a fading backdrop keeps their text from colliding with the controls.
         .background(alignment: .bottom) {
             LinearGradient(
-                colors: [.clear, JarvisDesignTokens.pageBackground.opacity(0.94)],
-                startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.45)
+                stops: [.init(color: .clear, location: 0), .init(color: JarvisDesignTokens.pageBackground.opacity(0.96), location: 0.3)],
+                startPoint: .top, endPoint: .bottom
             )
+            .padding(.top, -56)
             .ignoresSafeArea(edges: .bottom)
             .allowsHitTesting(false)
             .accessibilityHidden(true)

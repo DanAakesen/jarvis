@@ -38,6 +38,13 @@ public struct VaultNote: Codable, Equatable, Sendable, Identifiable {
     public let sha: String
     public let url: String
 
+    public init(path: String, content: String, sha: String, url: String) {
+        self.path = path
+        self.content = content
+        self.sha = sha
+        self.url = url
+    }
+
     public var id: String { path }
 }
 

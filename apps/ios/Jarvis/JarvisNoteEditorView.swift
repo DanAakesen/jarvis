@@ -337,7 +337,7 @@ struct JarvisNoteEditorSheet: View {
             if isCreating {
                 failure = .exists
             } else {
-                await presentConflict(path: path, submitted: submitted)
+                await presentConflict(path: path, submitted: submitted, reported: Self.reportedLatest(error, path: path, url: baseline?.url))
             }
         case .outcomeUnknown: failure = .unconfirmed
         case .notFound: failure = .missing
@@ -349,9 +349,11 @@ struct JarvisNoteEditorSheet: View {
 
     /// A conflict keeps the draft. If the latest version already holds exactly this draft, the save did land.
     @MainActor
-    private func presentConflict(path: String, submitted: String) async {
+    private func presentConflict(path: String, submitted: String, reported: VaultNote?) async {
         do {
-            let latest = try await client.readNote(path: path)
+            // The vault's own conflict reply carries the newer version; a fresh read is the fallback.
+            let latest: VaultNote
+            if let reported { latest = reported } else { latest = try await client.readNote(path: path) }
             if latest.content == submitted {
                 await finish(path: path)
             } else {
@@ -360,6 +362,11 @@ struct JarvisNoteEditorSheet: View {
         } catch {
             failure = .unconfirmed
         }
+    }
+
+    private static func reportedLatest(_ error: Error, path: String, url: String?) -> VaultNote? {
+        guard case let JarvisNotesClientError.noteConflict(sha?, content?) = error, let url else { return nil }
+        return VaultNote(path: path, content: content, sha: sha, url: url)
     }
 
     /// Retry first checks what the vault holds, so a write that actually succeeded is never repeated or reported as a failure.
