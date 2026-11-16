@@ -47,6 +47,13 @@ on:
         default: false
         required: false
 
+      pi_experiment:
+        description: Measurement only. Define the PI agent with one thing switched off, then run measure_pi. The next Deploy without it restores the full agent
+        type: choice
+        options: [none, builtins_off, skills_off]
+        default: none
+        required: false
+
       probe_pi_wake:
         description: Probe whether a Foundry routine can invoke a harness agent on a throwaway agent; about 5 minutes
         type: boolean
@@ -592,12 +599,13 @@ jobs:
         env:
           # The owner's fine-grained GitHub token, handed to the backend. Absent: GitHub is not attached and the summary says so.
           PI_GITHUB_TOKEN: ${{ secrets.PI_GITHUB_TOKEN }}
+          PI_EXPERIMENT: ${{ inputs.pi_experiment || 'none' }}
         run: |
           python .github/scripts/provision_pi_agent.py --project-endpoint "$FOUNDRY_ADMIN" --backend-fqdn "$BACKEND_FQDN" \
             --foundry-account "$FOUNDRY_ACCOUNT" --foundry-project "$FOUNDRY_PROJECT" \
             --backend-app "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" \
             --azure-mcp-url "$AZURE_MCP_URL" --azure-mcp-client-id "${JARVIS_AZURE_MCP_CLIENT_ID:-}" \
-            --output "$RUNNER_TEMP/pi-agent.json" || status=$?
+            --experiment "$PI_EXPERIMENT" --output "$RUNNER_TEMP/pi-agent.json" || status=$?
           # A reach server whose connection failed fails this step, but only after the agent is defined and written down here.
           [[ -s "$RUNNER_TEMP/pi-agent.json" ]] || exit "${status:-1}"
           {
@@ -607,6 +615,7 @@ jobs:
             echo "- MCP connection: \`$(jq -r .connection "$RUNNER_TEMP/pi-agent.json")\` (written this run: $(jq -r .connectionWritten "$RUNNER_TEMP/pi-agent.json"))"
             echo "- Skills: $(jq -r '.skills | to_entries | map("\(.key) v\(.value)") | join(", ")' "$RUNNER_TEMP/pi-agent.json")"
             echo "- Reach: $(jq -r '.reach | to_entries | map("\(.key): \(.value)") | join("; ")' "$RUNNER_TEMP/pi-agent.json")"
+            echo "- Experiment: $(jq -r .experiment "$RUNNER_TEMP/pi-agent.json") (anything but none is a measurement variant: Deploy again without it to restore the full agent)"
             echo "- Selected only when the iOS test switch is set to PI; the default chat path is unchanged."
           } >>"$GITHUB_STEP_SUMMARY"
           exit "${status:-0}"

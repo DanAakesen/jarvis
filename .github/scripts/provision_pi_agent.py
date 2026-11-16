@@ -93,6 +93,22 @@ def parse_skill(name: str) -> dict:
             "sha256": sha256(raw)}
 
 
+EXPERIMENTS = ("none", "builtins_off", "skills_off")
+
+
+def apply_experiment(spec: dict, skills: list[dict], experiment: str) -> tuple[dict, list[dict]]:
+    """A measurement variant of the agent: one thing switched off, to see what it costs per turn. Never the default.
+
+    The next Deploy without an experiment defines the full agent again (the fingerprint differs, so a new version is made).
+    """
+    require(experiment in EXPERIMENTS, "experiment_unknown")
+    if experiment == "builtins_off":
+        return {**spec, "builtinTools": "disabled"}, skills
+    if experiment == "skills_off":
+        return spec, []
+    return spec, skills
+
+
 def build_definition(spec: dict, instructions: str, server_url: str, skills: list[dict], reach: list[dict] | None = None) -> dict:
     return {
         "kind": "prompt", "harness": {"type": "microsoft_copilot_preview"},
@@ -427,6 +443,8 @@ def provision(args: argparse.Namespace) -> dict:
     name = spec["agentName"]
     instructions = instructions_text()
     skills = [parse_skill(skill) for skill in spec["skills"]]
+    experiment = getattr(args, "experiment", "none") or "none"
+    spec, skills = apply_experiment(spec, skills, experiment)
     candidates, reach_status = resolve_reach(spec, args)
     github_token, github_status = resolve_github(spec)
     azure = Az(args.project_endpoint)
@@ -455,7 +473,7 @@ def provision(args: argparse.Namespace) -> dict:
     unchanged = bool(state and state["pinned"] and state["metadata"].get(FINGERPRINT_KEY) == wanted and state.get("status") == "active")
     ensure_skills(azure, skills, unchanged, state["skills"] if state else {})
     result = {"agent": name, "connection": spec["mcp"]["connection"], "connectionWritten": connection_written,
-              "skills": {s["name"]: s["version"] for s in skills}, "reach": reach_status, "problems": problems}
+              "skills": {s["name"]: s["version"] for s in skills}, "reach": reach_status, "problems": problems, "experiment": experiment}
     if unchanged:
         return {**result, "version": state["pinned"], "created": False}
     definition = build_definition(spec, instructions, server_url, skills, reach)
@@ -479,6 +497,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--subscription", required=True)
     parser.add_argument("--azure-mcp-url", default="")
     parser.add_argument("--azure-mcp-client-id", default="")
+    parser.add_argument("--experiment", default="none", choices=EXPERIMENTS)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args(argv)
     try:
