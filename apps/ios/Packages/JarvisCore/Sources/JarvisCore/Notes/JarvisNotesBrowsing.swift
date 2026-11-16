@@ -106,18 +106,17 @@ extension JarvisCache {
         await write(data: data, validator: nil, key: "pinnedNotePaths", session: originalSession)
     }
 
-    /// Task pins are local preferences too, keyed by the task's id. A pin lapses if the task's line moves.
+    /// Task pins are local preferences too, keyed by `VaultTask.pinKey`.
     public func pinnedTaskIDs() async -> [String] {
         guard let originalSession = session(),
               let entry = await read("pinnedTaskIDs"), isCurrent(originalSession),
               let ids = try? JSONDecoder().decode([String].self, from: entry.data) else { return [] }
         var seen = Set<String>()
-        return ids.filter { $0.range(of: #"^[a-f0-9]{64}$"#, options: .regularExpression) != nil && seen.insert($0).inserted }
+        return ids.filter { !$0.isEmpty && $0.utf16.count <= 400 && seen.insert($0).inserted }
     }
 
     public func setTaskPinned(id: String, pinned: Bool) async {
-        guard id.range(of: #"^[a-f0-9]{64}$"#, options: .regularExpression) != nil,
-              let originalSession = session() else { return }
+        guard !id.isEmpty, id.utf16.count <= 400, let originalSession = session() else { return }
         var ids = await pinnedTaskIDs().filter { $0 != id }
         guard isCurrent(originalSession) else { return }
         if pinned { ids.insert(id, at: 0) }

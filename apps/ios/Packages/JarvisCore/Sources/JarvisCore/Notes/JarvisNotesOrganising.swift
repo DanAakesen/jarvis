@@ -129,6 +129,12 @@ public enum JarvisFolderPicker {
     }
 }
 
+extension VaultTask {
+    /// Pins follow the task's note and its exact line text (the version), not its line number, so deleting or
+    /// inserting a line elsewhere never moves a pin onto a different task. Editing the task's words lapses its pin.
+    public var pinKey: String { "\(path)#\(version)" }
+}
+
 extension JarvisNotesLogic {
     /// Sections for the Tasks page. Pinned tasks lead, in their pinned order, and are not repeated below.
     public static func taskSections(
@@ -138,13 +144,13 @@ extension JarvisNotesLogic {
         let open = tasks.filter { task in
             !task.done && (scope == .all || (scope == .work) == (task.scope == .work))
         }
-        let byID = Dictionary(open.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let byKey = Dictionary(open.map { ($0.pinKey, $0) }, uniquingKeysWith: { first, _ in first })
         var seen = Set<String>()
-        let pinnedTasks = pinned.compactMap { id -> VaultTask? in
-            guard let task = byID[id], seen.insert(id).inserted else { return nil }
+        let pinnedTasks = pinned.compactMap { key -> VaultTask? in
+            guard let task = byKey[key], seen.insert(key).inserted else { return nil }
             return task
         }
-        let rest = open.filter { !seen.contains($0.id) }
+        let rest = open.filter { !seen.contains($0.pinKey) }
         var sections: [JarvisTaskSection] = []
         if !pinnedTasks.isEmpty { sections.append(JarvisTaskSection(kind: .pinned, tasks: pinnedTasks)) }
         switch sort {

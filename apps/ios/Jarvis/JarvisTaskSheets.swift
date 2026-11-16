@@ -485,14 +485,12 @@ struct JarvisTaskEditorSheet: View {
     @ViewBuilder
     private func banner(_ current: Problem) -> some View {
         switch current {
+        // A changed or unconfirmed write blocks Save for good: sending it again could duplicate a task that
+        // already landed, so the owner cancels, refreshes and checks the list first.
         case .changed:
-            JarvisInlineBanner(message: copy.taskChanged, identifier: "taskeditor.failure") {
-                JarvisLabelledButton(title: copy[.continueEditing], isCompact: true) { problem = nil }
-            }
+            JarvisInlineBanner(message: copy.taskChanged, identifier: "taskeditor.failure") { EmptyView() }
         case .unknown:
-            JarvisInlineBanner(message: copy.unknownWrite, identifier: "taskeditor.failure") {
-                JarvisLabelledButton(title: copy[.continueEditing], isCompact: true) { problem = nil }
-            }
+            JarvisInlineBanner(message: copy.unknownWrite, identifier: "taskeditor.failure") { EmptyView() }
         case let .failed(message):
             JarvisInlineBanner(message: message, identifier: "taskeditor.failure") {
                 JarvisLabelledButton(title: copy[.continueEditing], isCompact: true) { problem = nil }

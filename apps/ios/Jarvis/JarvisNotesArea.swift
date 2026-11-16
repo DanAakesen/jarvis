@@ -624,7 +624,7 @@ struct JarvisNotesArea: View {
             do {
                 try await client.deleteTask(task)
                 await JarvisAppCache.invalidateAll(.tasks)
-                await setTaskPinned(task.id, pinned: false)
+                await setTaskPinned(task.pinKey, pinned: false)
                 successConfirmation = JarvisSuccessConfirmation(message: copy[.taskDeleted])
                 refreshVersion += 1
             } catch JarvisNotesClientError.taskConflict {

@@ -241,14 +241,14 @@ extension JarvisNotesArea {
                                  JarvisTaskFormat.due(date: task.dueDate, time: task.dueTime, today: today, language: language) ?? ""]
                 .filter { !$0.isEmpty }.joined(separator: ", "),
             identifier: "notes.task.row.\(task.id)",
-            pinTitle: pinnedTaskIDs.contains(task.id) ? copy.unpin : copy.pin,
-            pinImage: pinnedTaskIDs.contains(task.id) ? "pin.slash" : "pin",
+            pinTitle: pinnedTaskIDs.contains(task.pinKey) ? copy.unpin : copy.pin,
+            pinImage: pinnedTaskIDs.contains(task.pinKey) ? "pin.slash" : "pin",
             deleteTitle: copy[.deleteTask],
             isDisabled: isBusy,
             extraActionTitle: task.done ? nil : copy.complete,
             onExtra: { Task { await completeTask(task) } },
             onOpen: { sheet = .task(task) },
-            onPin: { Task { await setTaskPinned(task.id, pinned: !pinnedTaskIDs.contains(task.id)) } },
+            onPin: { Task { await setTaskPinned(task.pinKey, pinned: !pinnedTaskIDs.contains(task.pinKey)) } },
             onDelete: { pendingDeletion = .task(task) }
         ) {
             JarvisTaskRowContent(

@@ -14,7 +14,7 @@ Shipped behaviour (the earlier concept text claimed more than the vault supports
   Manual note sort, Undo after delete (no restore route), standalone folders (a folder exists only once its first note is saved),
   moving a task between scopes (scope comes from the source note), and any new reminder. The Date & time sheet only states the
   reminder the backend already sends (about one hour before a high-priority task with a time).
-- **Task pins** are keyed by the task id; if the task's line moves, the pin lapses. This is display metadata only.
+- **Task pins** are keyed by the source note and the exact line text, so they follow the task when other lines move; editing the task's words lapses its pin. This is display metadata only.
 - **No durable offline drafts.** Drafts live in memory for the editor's session; interactive dismissal is blocked while there are unsaved
   edits or a save is running. A device restart or a killed app loses an unsaved draft.
 - **One sheet at a time** (apple-hig) is relaxed where the design returns to the same draft.

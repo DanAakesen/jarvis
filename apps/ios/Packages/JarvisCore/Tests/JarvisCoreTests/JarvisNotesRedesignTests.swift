@@ -65,4 +65,21 @@ final class JarvisNotesRedesignTests: XCTestCase {
         XCTAssertEqual(rows.map(\.kind), [.same, .removed, .added, .same])
         XCTAssertNil(JarvisLineDiff.rows(latest: "a", draft: "b", maximumLines: 0))
     }
+
+    func testTaskPinsFollowTheTaskNotItsLineNumber() {
+        func task(_ text: String, line: Int) -> VaultTask {
+            VaultTask(id: String(repeating: "\(line)", count: 64).prefix(64).description, text: text, done: false, dueDate: nil,
+                      dueTime: nil, dueAt: nil, priority: .normal, path: "Work/Inbox.md", line: line, heading: nil,
+                      version: String(text.utf8.count) + String(repeating: "b", count: 63))
+        }
+        let pinned = task("Pay rent", line: 5)
+        // The task above it was deleted, so the pinned task moved up and another took its old line number.
+        let moved = task("Pay rent", line: 4)
+        let other = task("Call back", line: 5)
+        let sections = JarvisNotesLogic.taskSections(
+            [moved, other], today: "2026-11-15", sort: .due, scope: .all, pinned: [pinned.pinKey]
+        )
+        XCTAssertEqual(sections.first?.kind, .pinned)
+        XCTAssertEqual(sections.first?.tasks.map(\.text), ["Pay rent"])
+    }
 }
