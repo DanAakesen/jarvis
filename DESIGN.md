@@ -1,3 +1,11 @@
+## 3D graph: Folder clusters (16 November 2026; owner approved; #1924)
+
+Dan approved Graph 2, **Folder clusters**: spatial groups of connected note nodes, scope colours, depth through perspective and fading, task rings on notes, and a selected-note preview above the existing Notes/Tasks/Graph and Search/+ dock. The approved visual reference is [Folder clusters](docs/ui/graph-3d/approved-folder-clusters.png). This is visual approval, not implemented or device-verified animation, rendering performance, or accessibility.
+
+For #1925, Dan approved option 1, **Bottom panel**, for Voice only. Use the right-hand Voice composition in [the reference board](docs/ui/jarvis-window-sheet/voice-bottom-panel-reference.png): the lattice orb and status remain above the content panel, with microphone, plus, CC and hang-up controls accessible below it. The left-hand Chat composition is not approved.
+
+Chat uses the approved **Conversational blocks** design: generative UI embedded in Jarvis's replies instead of a sheet. A forecast can appear in one reply and an on-demand chart in a later reply. Both scroll with the conversation and remain available in its history. Keep the existing composer. The [approved reference](docs/ui/chat-generative/approved-conversational-blocks.png) is identified by name: Dan called it "number 2 conversation blocks", while the image heading says 3. Date the forecast and its issue time so historic content is distinguishable from current information. The selected visual direction and history requirement are not implemented or runtime-verified by these design images. See the [combined handover](docs/ui/approved-handover-2026-11-16.md).
+
 ## App polish from build 111 (16 November 2026; owner testing; #1923)
 
 - **Rows.** One row surface for every list: the clear glass of the glass buttons (`jarvisRowSurface`, built on `jarvisGlassSurface`), in the row's own
