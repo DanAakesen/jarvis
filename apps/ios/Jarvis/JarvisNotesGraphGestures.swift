@@ -7,7 +7,9 @@ import UIKit
 /// The strip at the leading edge is left to the system back swipe.
 /// API: UIPanGestureRecognizer, UIPinchGestureRecognizer, UIRotationGestureRecognizer, UIGestureRecognizerDelegate.
 struct JarvisGraphGestureLayer: UIViewRepresentable {
-    /// The first finger of a gesture lands: stop any glide.
+    /// A finger lands, before any recogniser has decided what it is: stop any glide so hit testing sees a still graph.
+    var onTouchDown: () -> Void
+    /// The first recogniser of a gesture begins.
     var onBegan: () -> Void
     /// Two-finger drag since the last call, in points.
     var onOrbit: (CGSize) -> Void
@@ -42,6 +44,11 @@ struct JarvisGraphGestureLayer: UIViewRepresentable {
         coordinator.tap.addTarget(coordinator, action: #selector(Coordinator.handleTap(_:)))
         coordinator.longPress.addTarget(coordinator, action: #selector(Coordinator.handleLongPress(_:)))
         coordinator.longPress.minimumPressDuration = 0.45
+        // Recognises the instant a finger lands and never blocks the others.
+        coordinator.touchDown.addTarget(coordinator, action: #selector(Coordinator.handleTouchDown(_:)))
+        coordinator.touchDown.minimumPressDuration = 0
+        coordinator.touchDown.allowableMovement = .greatestFiniteMagnitude
+        coordinator.touchDown.cancelsTouchesInView = false
 
         for recogniser in coordinator.recognisers {
             recogniser.delegate = coordinator
@@ -62,10 +69,11 @@ struct JarvisGraphGestureLayer: UIViewRepresentable {
         let rotation = UIRotationGestureRecognizer()
         let tap = UITapGestureRecognizer()
         let longPress = UILongPressGestureRecognizer()
+        let touchDown = UILongPressGestureRecognizer()
         private var active = 0
         private var orbitVelocity = CGSize.zero
 
-        var recognisers: [UIGestureRecognizer] { [orbit, pan, pinch, rotation, tap, longPress] }
+        var recognisers: [UIGestureRecognizer] { [orbit, pan, pinch, rotation, tap, longPress, touchDown] }
 
         init(_ parent: JarvisGraphGestureLayer) {
             self.parent = parent
@@ -82,6 +90,11 @@ struct JarvisGraphGestureLayer: UIViewRepresentable {
             let velocity = orbitVelocity
             orbitVelocity = .zero
             parent.onEnded(velocity)
+        }
+
+        @objc func handleTouchDown(_ recogniser: UILongPressGestureRecognizer) {
+            guard recogniser.state == .began else { return }
+            parent.onTouchDown()
         }
 
         @objc func handleOrbit(_ recogniser: UIPanGestureRecognizer) {
@@ -157,6 +170,7 @@ struct JarvisGraphGestureLayer: UIViewRepresentable {
         func gestureRecognizer(
             _ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
         ) -> Bool {
+            if gestureRecognizer === touchDown || other === touchDown { return true }
             let together: [UIGestureRecognizer] = [orbit, pinch, rotation]
             return together.contains { $0 === gestureRecognizer } && together.contains { $0 === other }
         }

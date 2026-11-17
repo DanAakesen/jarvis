@@ -170,6 +170,12 @@ struct JarvisNotesGraphView: View {
 
     private func gestureLayer(_ prepared: Prepared) -> some View {
         JarvisGraphGestureLayer(
+            onTouchDown: {
+                // A finger on the glass stops a glide or flight at once; a tap then tests the graph the owner sees.
+                guard driver.controller.isMoving else { return }
+                driver.controller.beginInteraction()
+                driver.invalidate()
+            },
             onBegan: {
                 driver.controller.beginInteraction()
                 driver.isInteracting = true

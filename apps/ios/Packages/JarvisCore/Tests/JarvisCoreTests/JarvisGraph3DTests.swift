@@ -150,6 +150,18 @@ final class JarvisGraph3DTests: XCTestCase {
         XCTAssertFalse(still.isMoving)
     }
 
+    func testATouchDownStopsAGlideWhereItIs() {
+        var controller = JarvisGraphCameraController()
+        controller.release(yawVelocity: 3, pitchVelocity: 1, allowsInertia: true)
+        controller.advance(by: 0.05)
+        XCTAssertTrue(controller.isMoving)
+        controller.beginInteraction()
+        let held = controller.camera
+        XCTAssertFalse(controller.isMoving)
+        controller.advance(by: 0.5)
+        XCTAssertEqual(controller.camera, held)
+    }
+
     func testFlightEasesToItsTargetAndATouchTakesOver() {
         var controller = JarvisGraphCameraController()
         let target = JarvisGraphCamera(yaw: 1.2, pitch: 0.1, zoom: 2, panX: 40, panY: 10)
