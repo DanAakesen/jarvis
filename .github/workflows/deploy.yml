@@ -628,6 +628,18 @@ jobs:
           done
           echo "::error::Backend /health did not return 200."
           exit 1
+      - name: Wake the Azure MCP server (manual only)
+        if: ${{ inputs.measure_pi == true && env.AZURE_MCP_URL != '' }}
+        run: |
+          # The server scales to zero. A request wakes it and the ingress holds the request until it answers, so the time printed
+          # here is the cold start. Any HTTP answer means it is up (without a token it answers 401); the backend does the real listing.
+          for attempt in 1 2 3; do
+            result=$(curl --silent --output /dev/null --max-time 230 --write-out '%{http_code} after %{time_total}s' -X POST \
+              -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' \
+              --data '{"jsonrpc":"2.0","id":1,"method":"ping"}' "$AZURE_MCP_URL" || true)
+            echo "Azure MCP server, attempt $attempt: ${result:-no answer}"
+            case "$result" in 000*|"") ;; *) break ;; esac
+          done
       - name: PI live smoke (manual only; spends model tokens)
         if: ${{ inputs.measure_pi == true }}
         run: |

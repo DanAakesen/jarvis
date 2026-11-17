@@ -85,3 +85,40 @@ describe('the GitHub bridge', () => {
     expect(await down.call('gh_x', {}, signal())).toMatchObject({ outcome: 'error' });
   });
 });
+
+describe('a server that scales from zero', () => {
+  it('reports starting while the first list loads and ready after, and warm() starts it without a search', async () => {
+    const slow = server();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const bridge = createRemoteMcpBridge({
+      url: 'https://az.example', prefix: 'az_', label: 'Azure', token: async () => 't',
+      fetch: (async (url: string, init: RequestInit) => { await gate; return slow.fetchStub(url, init); }) as unknown as typeof fetch,
+    });
+    expect(bridge.status()).toEqual({ state: 'starting' });
+    bridge.warm();
+    expect(await bridge.tools(signal(), 10)).toEqual([]);
+    expect(bridge.status()).toEqual({ state: 'starting' });
+    release();
+    expect((await bridge.tools(signal(), 2_000)).map(({ name }) => name)).toEqual(['az_issue_write']);
+    expect(bridge.status()).toEqual({ state: 'ready' });
+  });
+
+  it('names a failed first list and tries again at the next search instead of caching the failure', async () => {
+    const ok = server();
+    let calls = 0;
+    const bridge = createRemoteMcpBridge({
+      url: 'https://az.example', prefix: 'az_', label: 'Azure', token: async () => 't',
+      fetch: (async (url: string, init: RequestInit) => {
+        calls += 1;
+        if (calls === 1) return new Response('no', { status: 401 });
+        return ok.fetchStub(url, init);
+      }) as unknown as typeof fetch,
+    });
+    expect(await bridge.tools(signal(), 2_000)).toEqual([]);
+    expect(bridge.status()).toEqual({ state: 'unreachable', reason: 'the server answered HTTP 401' });
+    expect((await bridge.tools(signal(), 2_000)).map(({ name }) => name)).toEqual(['az_issue_write']);
+    expect(bridge.status()).toEqual({ state: 'ready' });
+  });
+});
+

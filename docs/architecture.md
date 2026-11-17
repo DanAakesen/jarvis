@@ -1,3 +1,9 @@
+## Remote MCP catalogues wake at startup (P15-208, #1910)
+
+- `createRemoteMcpBridge` (`apps/backend/src/pi/remote-mcp.ts`) exposes `status()` (`ready`, `starting`, `unreachable` with a reason), `warm()` and `label`. `createPiRoutes` calls `warm()` for every bridge as the backend starts, and `/pi/warm` does too. The refresh runs up to 200 s; a failed first list is not cached.
+- `find_tools` (`pi/mcp.ts`) adds a `note` when a bridge is not ready. The smoke lists the bridges in parallel and reports a failure reason.
+- Deploy (`measure_pi`) sends one request to the Azure MCP server before the smoke and prints the HTTP code and time (the cold start).
+
 ## Voice visuals and the phone as the active device (17 November 2026, P15-205, #1939)
 
 - Showing in voice: a spoken PI turn gets a per-turn note (`voiceChannelNote`) that the phone shows what Jarvis puts on screen; PI reaches `workspace_command` through the door (`find_tools`, `call_tool`) and creates a view. `show_in_chat` checks the session channel (`conversationStore.getSession`) and refuses any session but a typed chat one.

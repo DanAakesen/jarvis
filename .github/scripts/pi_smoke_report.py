@@ -71,7 +71,7 @@ def render(report: dict) -> str:
                   f"{results or 'none'}, reply: {report['tools']['text']!r}",
               f"Smoke cost: {report['totalCostDkk']:.4f} DKK (list price, cached discount ignored).", ""]
     listed = report.get("listed", [])
-    servers = ", ".join(f"{item['server'] or 'unknown'}: {'FAILED to list' if item['failed'] else str(item['tools']) + ' tools'}" for item in listed)
+    servers = ", ".join(f"{item['server'] or 'unknown'}: {('FAILED to list' + (' (' + item['reason'] + ')' if item.get('reason') else '')) if item['failed'] else str(item['tools']) + ' tools'}" for item in listed)
     lines += [f"Remote servers whose tools were listed: {servers or 'none reported'}.", ""]
     for entry in report.get("reach", []):
         calls = ", ".join(f"{call['name'] or 'call'}={'failed' if call['failed'] else 'ok'}" for call in entry["turn"].get("reachCalls", []))

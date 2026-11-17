@@ -6,6 +6,7 @@ import { coreModule } from '../core/index.js';
 import type { JarvisTool } from '../core/tool-registry.js';
 import { createPiRoutes } from './routes.js';
 import { createPiTurnRegistry } from './turns.js';
+import type { RemoteMcpBridge } from './remote-mcp.js';
 
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
 const secret = 'A'.repeat(43);
@@ -26,13 +27,13 @@ const probe: JarvisTool = {
   }),
 };
 
-function setup() {
+function setup(bridges: RemoteMcpBridge[] = []) {
   const registry = createPiTurnRegistry();
   const auth = createPiAuth(config.auth.tenantId, secret);
   const recorded: Array<{ messageId: string; tool: string }> = [];
   const app = buildApp(config, undefined, {
     modules: [coreModule, { id: 'probe', tools: [probe], registerRoutes: async () => {} },
-      { id: 'pi', tools: [], registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250 }) }],
+      { id: 'pi', tools: [], registerRoutes: createPiRoutes({ gateway: { stream: async function* () {} } as never, registry, auth, monthlyCapDkk: 250, bridges }) }],
     auth: async (token) => {
       if (token === deployToken) return { kind: 'jarvis-deploy', objectId: config.auth.deployObjectId, tenantId: config.auth.tenantId };
       if (token !== ownerToken) throw new Error('rejected');
@@ -102,6 +103,21 @@ describe('PI MCP server', () => {
     expect(smuggled.body?.outcome).toBe('refused');
     expect(grant.results.at(-1)).toEqual({ tool: 'probe_echo', outcome: 'refused' });
     expect(recorded).toHaveLength(1);
+  });
+
+  it('says a remote server is still loading, or could not be reached, instead of leaving the model to call it not attached', async () => {
+    let status: ReturnType<RemoteMcpBridge['status']> = { state: 'starting' };
+    const azure: RemoteMcpBridge = { prefix: 'az_', label: 'Azure', status: () => status, warm: () => {}, tools: async () => [], call: async () => ({ outcome: 'ok', result: {} }) };
+    const { registry, tool } = setup([azure]);
+    const grant = registry.open({ ownerObjectId: config.auth.ownerObjectId, sessionId: '7', messageId: '42', signal: live() });
+    const loading = await tool('find_tools', { turn: grant.turn, query: 'azure resource group' });
+    expect(loading.body?.result.note).toMatch(/Azure tools are still loading.*attached, just not loaded yet/u);
+    status = { state: 'unreachable', reason: 'no answer within 200 seconds' };
+    const down = await tool('find_tools', { turn: grant.turn, query: 'azure resource group' });
+    expect(down.body?.result.note).toMatch(/Azure could not be reached \(no answer within 200 seconds\)/u);
+    status = { state: 'ready' };
+    const ready = await tool('find_tools', { turn: grant.turn, query: 'azure resource group' });
+    expect(ready.body?.result.note).toBeUndefined();
   });
 
   it('shows chat the system-health tool without its smoke-only operation selector', async () => {
