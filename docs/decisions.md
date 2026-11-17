@@ -13342,6 +13342,18 @@ Use bounded, sequenced 250 ms Watch microphone packets instead of stop-and-wait.
 
 Direct Watch voice is a practical follow-up using the portable voice client and audio engine, but requires a separate voice-scoped WebSocket credential, session and budget limits, expiry handling and device/network/power qualification. The existing dictation-only credential must not be widened.
 
+## 17 November 2026 — Watch dictation never reached Speech; measure capture (P15-202 / #1943)
+
+The owner heard nothing from the Watch: dictation reported a timeout and live voice never heard him. Backend logs (Log Analytics, 14:49Z) for two 10 s dictations: `audio_received` at 0.7 s and 2.6 s with 489,082 bytes / 10,189 ms (real 24 kHz audio, so capture and upload worked), the speech token acquired at the same moment, then no `recognizer_started`, `session_started`, speech or error row for 6.5 to 9.4 s until the Watch disconnected. The SDK reports start only after its Speech connection opens, so that connection never opened. The Watch transcriber was the only Speech caller using a fixed `speechRecognitionLanguage` on the universal v2 endpoint; the live partial recognizer, probed live on 6 October (L111), uses language identification there.
+
+Decisions:
+- The Watch transcriber uses language identification for Danish and English (the same call as the live recognizer). This also lets Danish dictation work. Not yet proven live: it is the most probable cause, and the next device test decides.
+- Bound the recognizer start to 6 s. A start that does not finish returns 503 with the logged stage `recognizer_start_timeout` instead of holding the request until the client gives up. New stages `recognizer_starting`, `recognizer_start_failed`, `service_connected` and `service_disconnected` show where a hang stops (numeric and fixed labels only; the log allow-list carries them).
+- The Watch's direct window with a reachable phone is 10 s plus the clip length (up to the server's 22 s ceiling) and the overall wait is 30 s plus the clip length (up to 120 s). A fixed 10 s window cannot succeed for a 10 s recording. This refines the 14 November 10 s rule; the server's 20 s deadline is unchanged.
+- Measure the captured PCM16 peak on the Watch (`WatchCaptureLevel`, tested). Dictation with no audio or only digital silence is not uploaded; the Watch says the microphone captured no sound. Live voice ends with the same message after 10 s of unmuted silence rather than showing a listening session that cannot hear. The converter follows each buffer's actual format. The peak is logged (`WatchVoice` category).
+
+Open: live voice shows no Watch voice socket in the backend logs (only dictation credential renewals), so the cause of "cannot hear me" in live voice is not explained; the capture-level check and the `WatchVoice` logs are the next evidence. Nothing here is verified on a Watch.
+
 ## Notes deletion and swipe thresholds — 13 November 2026
 
 The owner requested immediate pinning on a normal swipe and confirmation before
