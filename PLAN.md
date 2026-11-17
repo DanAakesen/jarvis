@@ -1,3 +1,18 @@
+## Tool activity redesign in Chat — 17 November 2026 (#1941, P15-200)
+
+**Status: built and checked on Linux (JarvisCore tests, Swift syntax parse); the SwiftUI views compile only in the macOS CI job and have not been run on a device. No build cut.** Implements [docs/ui/tool-activity/HANDOFF.md](docs/ui/tool-activity/HANDOFF.md).
+
+| Step | State |
+| --- | --- |
+| Tool kind from the tool identifier (`ChatToolKind`: read, edit, command, web, configuration, deployment, generic) and real status (`ChatToolStatus`) in JarvisCore, with Linux tests | Done, tests pass |
+| Compact tree rows with the chevron right after the label, tool icon kept across states, no counts, no Done or Queued text (`JarvisToolActivityRow.swift`, `JarvisChatToolActivityList.swift`) | Done in code |
+| Running: highlight tracing the icon outline (1.4 s loop) and shimmer on the action text only; success turns orange; failure red with "Failed"; refusal grey with "Not allowed" | Done in code |
+| Reduce Motion: static rows, running shown by a trailing ellipsis; VoiceOver says "name, status" | Done in code; not heard on a device |
+| Header rows ("Working", "Tool activity") lose their counts and use right-closed, down-open chevrons | Done in code |
+| Automatic expansion while active, collapse on the final reply, manual reopening of history, identifiers and scroll following | Unchanged code paths |
+| Queued state | **Not built:** the event stream has only started and finished, so no call is ever queued |
+| Owner checks on a device: motion at native size and the 1.4 s timing, long names, a mixed group, a state change mid-animation, scroll position while following, VoiceOver, Reduce Motion | **Open** |
+
 ## Voice bottom panel — 17 November 2026 (#1925, P15-191; stacked on P15-190)
 
 **Status: built; waiting for CI (macOS compile, simulator capture `polish-voice-panel`) and the owner's TestFlight check. No build cut.** Part 2 of #1925.

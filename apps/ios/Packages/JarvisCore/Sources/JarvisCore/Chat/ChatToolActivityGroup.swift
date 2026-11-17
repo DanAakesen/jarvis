@@ -7,11 +7,21 @@ public struct ChatToolActivityGroup: Equatable, Sendable, Identifiable {
         public let id: String
         public let toolName: String
         public let outcome: ChatToolOutcome?
+        public var kind: ChatToolKind { ChatToolKind(toolName: toolName) }
+        public var status: ChatToolStatus { ChatToolStatus(outcome: outcome) }
     }
 
     public var id: String { calls[0].id }
     public var toolName: String { calls[0].toolName }
     public private(set) var calls: [Call]
+    public var kind: ChatToolKind { ChatToolKind(toolName: toolName) }
+
+    /// Running while any child runs; otherwise failure outranks refusal, and success needs every child to succeed.
+    public var status: ChatToolStatus {
+        let statuses = calls.map { ChatToolStatus(outcome: $0.outcome) }
+        for status in [ChatToolStatus.running, .failed, .refused] where statuses.contains(status) { return status }
+        return .succeeded
+    }
 
     public static func grouping(_ activity: [ChatToolActivity]) -> [Self] {
         group(activity.map { Call(id: $0.id, toolName: $0.toolName, outcome: $0.outcome) })
