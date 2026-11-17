@@ -9,7 +9,6 @@ struct WatchChatView: View {
     @State private var editingDraft = false
     /// The reader reopened the composer while browsing history; any new scroll away from the end clears it.
     @State private var reopened = false
-    @State private var distanceFromEnd: CGFloat = 0
     @State private var reading = false
     @AccessibilityFocusState private var messageFocused: Bool
     @ScaledMetric(relativeTo: .body) private var clearance: CGFloat = 56
@@ -35,13 +34,6 @@ struct WatchChatView: View {
             composerLayer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .top) {
-            #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--watch-chat-metrics") {
-                Text("end \(Int(distanceFromEnd)) \(reading ? "reading" : "ready")").font(.system(size: 9)).foregroundStyle(.green)
-            }
-            #endif
-        }
         .navigationTitle("").navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $editingDraft) {
             NavigationStack { WatchTextEditor(title: "Message", text: $model.draft) }
@@ -104,7 +96,6 @@ struct WatchChatView: View {
             .onScrollGeometryChange(for: CGFloat.self) { geometry in
                 max(0, geometry.contentSize.height - geometry.visibleRect.maxY)
             } action: { _, distance in
-                distanceFromEnd = distance
                 // Hysteresis keeps the composer from flickering around the threshold.
                 let next = reading ? distance > Self.readingDistance / 3 : distance > Self.readingDistance
                 guard next != reading else { return }
