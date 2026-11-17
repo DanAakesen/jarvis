@@ -131,7 +131,7 @@ describe('GitHub through the Jarvis door', () => {
   const bridge = () => {
     const called: string[] = [];
     const github: RemoteMcpBridge = {
-      prefix: 'gh_',
+      prefix: 'gh_', label: 'GitHub', status: () => ({ state: 'ready' }), warm: () => {},
       tools: async () => [ghTool],
       call: async (name, args) => { called.push(`${name}:${JSON.stringify(args)}`); return { outcome: 'ok', result: { number: 7 } }; },
     };
@@ -154,7 +154,7 @@ describe('GitHub through the Jarvis door', () => {
   it('routes each remote tool to its own server by prefix', async () => {
     const calls: string[] = [];
     const make = (prefix: string, name: string): RemoteMcpBridge => ({
-      prefix,
+      prefix, label: prefix, status: () => ({ state: 'ready' }), warm: () => {},
       tools: async () => [{ name: `${prefix}${name}`, description: `${prefix} tool ${name}`, inputSchema: { type: 'object' }, moduleId: 'remote', execute: async () => ({}) }],
       call: async (called) => { calls.push(called); return { outcome: 'ok', result: { from: prefix } }; },
     });

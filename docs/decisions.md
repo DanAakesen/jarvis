@@ -1,3 +1,53 @@
+## 17 November 2026 — The PI smoke runs as three requests, not one (#1910, P15-209)
+
+After the Azure MCP wake-up fix, `measure_pi` still failed with HTTP 504. The backend log showed the Azure read inside the smoke completing in 7.3 s, so Azure reach worked; the whole smoke (cold turn, warm turns, tool and voice turns, GitHub, Azure and four tool-choice turns, each one to fifteen seconds) now takes about four minutes, and the Container Apps ingress ends one request at 240 s.
+
+| Choice | Why |
+| --- | --- |
+| `POST /pi/smoke` requires `part`: `core` (baseline, cold, warm, tool and cancelled turns), `voice` (the PI leg of a voice turn) or `reach` (GitHub, Azure, tool choice). Each part has its own scratch conversation and reports its own checks and cost | No request approaches 240 s, and the checks and what they measure are unchanged. The voice turns now start a fresh conversation instead of following the warm turns; the voice checks do not depend on that |
+| The workflow script calls the parts one after another and merges checks and cost into the one summary | One summary, one pass or fail, as before. A failing part names itself in the error. There is no unsplit path |
+| Each part is cut off at 220 s inside the backend and 235 s in the script | A part that is slow fails visibly under 240 s instead of as a 504 with no detail |
+
+
+## 17 November 2026 — The Azure MCP server's cold start must not look like "Azure is not attached" (#1910, P15-208)
+
+Two `measure_pi` Deploys on main failed after the voice-visuals merge: the first on `reach_azure` and `mcp_listing` (GitHub and the other checks passed), the second as "HTTP 504, no detail". The agent was v15 with Azure and GitHub attached, and an earlier run had listed 17 Azure tools and read 22 resources.
+
+**What the Deploy logs show.** In the first run the model answered "the Azure tools aren't attached" and the smoke recorded "azure: FAILED to list" while GitHub listed 118 tools. The second run's PI step ran from 21:01:47 to 21:05:49, 242 s: the smoke is one request and the Container Apps ingress ends a request at 240 s. In the earlier passing run the Azure turn took 50 s, so a cold start was already tens of seconds.
+
+**Cause, from the code (the build environment has no Azure access; the container logs below were read by the owner's session).** The Azure MCP server scales to zero (0.25 CPU, 0.5 GiB). The backend loaded its tool list only when a search asked: that search waited 8 s and returned nothing, so PI said Azure was not attached. The background refresh was cancelled after 90 s, before a slow cold start could finish, and the failure was then cached for 60 s with an empty list, so a search or the smoke in that minute saw "no tools" without trying again. The smoke then waited up to 100 s per server one after the other, which can push it past 240 s. No change in #1933, #1934, #1936 or #1953 touches this path; what changed is that the earlier run found the server already awake.
+
+| Choice | Why |
+| --- | --- |
+| The backend starts loading each remote catalogue when it starts (`bridge.warm()`), and `/pi/warm` calls the same | The wake happens at deploy and when the app opens PI, not inside the owner's first question. The list is kept 30 minutes, so Azure questions after that do not need the server awake |
+| The refresh may run 200 s, not 90 s | The ingress holds a request for a stopped app up to 240 s; cancelling earlier killed a start that was about to finish |
+| A failed first list is not cached; the next search retries (single-flight). With a list in hand, a failed refresh keeps it and retries in a minute | The 60 s empty cache turned one slow start into a minute of "no tools" |
+| `find_tools` adds a note when a server is still loading or unreachable (with a reason that never repeats server text); the PI instructions say what to do with it | A server PI has not heard from yet is not "not attached". This is information for the model, not a gate: nothing is blocked or routed elsewhere |
+| The smoke lists both servers at once and reports the failure reason; the Deploy sends one request to the Azure MCP server first and prints the HTTP code and time | Keeps the smoke inside the ingress limit and turns the next run into evidence: the printed time is the cold start, the reason says timeout, HTTP status or connection |
+
+**Container log evidence (added after the owner's session read `ContainerAppConsoleLogs_CL`, 17 November).** In the first failing run the Azure MCP container started at 20:54:36Z and listened on :8080 two seconds later; its first MCP request arrived at 20:54:45Z and finished as HTTP 499 after 5.6 s, which means the client closed the request. There was no server error, crash or out-of-memory line. So the server is ready within seconds and the failure is a client that gave up on the first, slow call (the first request on a fresh .NET process). Which client timeout fired was not identified from the logs; waking the server at backend start, a refresh that is retried at the next search instead of cached as empty, and the model being told the server is still loading cover it whichever it was.
+
+To confirm: run `measure_pi`. If Azure still fails to list, the smoke line now says why, and `ContainerAppConsoleLogs_CL` for `ca-jarvis-azmcp-*` is the next place to look (an out-of-memory restart at 0.5 GiB would show there and would call for more memory, not a longer wait).
+
+
+## 17 November 2026 — Voice visuals reach the phone through `workspace_command`; the panel belongs to the session; one eased orb (#1939, P15-205)
+
+Build 112 findings: visuals in voice did not work, Jarvis did not know it could show them, a card was on screen when voice started, the orb moved without an easing, `show_in_chat` failed, Show data and some buttons did not work, and the owner feared a route to the web workspace.
+
+| Finding | Root cause (from the code) | Choice |
+| --- | --- | --- |
+| Jarvis did not know it could show visuals in voice | The PI instructions said a voice turn "uses none of this" and to search by what a thing is, never how it looks; the per-turn voice note said only to keep answers short and offer chat; the `workspace_command` description opened with its target rules, and `find_tools` gives only the top three matches their full description (the rest are cut to 240 characters), so a search that did not rank it first never showed the visual use | The model is told, never gated: the voice note (every spoken turn), the PI Voice section, the lead of the `workspace_command` description and the realtime voice instruction say the phone shows what Jarvis puts on screen, and name the tool. Nothing decides for the model when to show something |
+| Visuals could go to a browser tab | `target: active` is the device that reported its snapshot last; the phone reported only when it connected | `WorkspaceRuntime.reportActive()` runs when Voice opens and starts, so the phone is the latest reporter |
+| `show_in_chat` in a spoken turn | A PI voice turn carries no voice header, so the tool queued a block in a voice session that no reply would ever take | The tool checks the session's channel and refuses anything but a typed chat session, pointing to `workspace_command`. One check replaces the voice-header check |
+| Card at voice start, with an "Open web app" link | **Inferred from the code, not reproduced:** content presented earlier stayed in `presentedView` (for example when a sheet could not show over another and was never dismissed) and the Voice page rendered it as the panel; knowledge-graph and code views, which the backend pushes when "show work" is on, had no iPhone renderer and showed an unsupported card whose link opened the web app | Starting a new voice session drops what was open (content presented while a session is minimised still carries over into the panel). The two views now draw natively (code with line numbers; the graph card gives the count and opens the Notes graph). The web link, `JARVIS_WEB_APP_URL`, its Info.plist key and `makeWebAppURL` are removed; no iPhone path opens the web app |
+| Orb moved without an easing | The orb's size followed a measured height set inside an animation on the way in, but reset without one on the way out, so it snapped back; expanding the panel was not animated at all | One animation on the page, keyed to the panel height, covers open, resize and close; the expand button animates with the same curve. `JarvisDesignTokens.voicePanelMotion` is `.smooth(duration: 0.55)`: eased, keeps velocity when interrupted. Reduce Motion: no animation |
+| Header | Title, expand and close sat on one row with the title first | A row of its own: close and expand at the top left, then the title the content gives; the content scrolls below it |
+| Buttons Jarvis said it could not do | The phone only opened `/usage` and `/settings`, refused move, resize, place, arrange and the bulk window operations, and ignored `taskId` and the `knowledge` page | Every route in the contract opens its native screen (a task route opens that task; project and release routes open the Factory page, which has no deep link to them); on a phone a view is one at a time, so move, resize, place and arrange bring the named view forward, minimise-all and close-all hide it, restore-all brings the last back; `knowledge` opens the Notes graph |
+| Show data | Open state lived in the block view, which a lazy list discards when it scrolls away | The open state is held in the chat model by block id. Forecasts get View data and Copy data; every renderable block has Copy data |
+
+Not fixed, stated plainly: the cause of the `show_in_chat` failure row could not be established. A PI turn runs the tool correctly through the real door for a forecast, a two-panel chart, a list and a table (new test), and its refusals name the field. The `call-tool` action type has no executor on the web or the phone; it still reads as unavailable. Browser sessions and the web app are unchanged.
+
+
 ## 17 November 2026 — Tool activity: icon from the tool identifier, state from real events only (#1941, P15-204)
 
 - **Icon by tool type.** `ChatToolKind` maps the stable tool identifier (exact names first, then whole words such as `deployment`, `browser`, `write`) to document, pencil, terminal, globe, gear, cloud or, when nothing fits, the generic tools glyph. It never reads the localized label, and an unknown tool keeps the generic glyph rather than borrowing another tool's icon. The same icon is used in every state.

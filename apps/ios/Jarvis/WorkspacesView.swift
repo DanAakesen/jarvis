@@ -629,6 +629,6 @@ private enum LoadState: Equatable {
 
 #Preview {
     NavigationStack {
-        WorkspacesView(runtime: WorkspaceRuntime(client: nil, webAppURL: nil))
+        WorkspacesView(runtime: WorkspaceRuntime(client: nil))
     }
 }

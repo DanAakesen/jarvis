@@ -1,3 +1,45 @@
+## PI smoke in three requests (#1910, P15-209)
+
+**Status: built; backend and workflow-script tests pass locally. Not yet confirmed by a `measure_pi` Deploy.** The Azure fix (P15-208) worked inside the smoke (the Azure read ran and completed in 7.3 s), but `measure_pi` still failed with HTTP 504: the whole smoke takes about four minutes and the ingress ends one request at 240 s.
+
+| Step | State |
+| --- | --- |
+| `POST /pi/smoke` takes `{ part: core | voice | reach }`; the checks are unchanged and each part reports its own | Done |
+| The workflow script calls the three parts one after another and merges them into the same summary | Done |
+| Confirm with a `measure_pi` Deploy | **Open** |
+
+## Azure MCP cold start (#1910, P15-208)
+
+**Status: built; backend (tests, typecheck, lint) and workflow scripts pass locally. Not yet confirmed by a `measure_pi` Deploy.** From two failed `measure_pi` runs on main (the Azure listing failed, then the smoke hit the ingress's 240 s limit) and the owner's "Jarvis is still not able to reach Azure".
+
+| Step | State |
+| --- | --- |
+| The backend wakes the Azure MCP server as it starts (and `/pi/warm` does the same), so the first search no longer finds it asleep | Done |
+| The catalogue refresh is no longer cancelled at 90 s (now 200 s, inside the ingress's 240 s hold); a failed first list is not cached, the next search retries | Done |
+| A search says when a server is still loading or could not be reached, so PI no longer reports Azure as "not attached" | Done; PI instructions updated |
+| The smoke lists both servers at once and prints why a listing failed; the Deploy wakes the server first and prints the cold-start time | Done |
+| Confirm with a `measure_pi` Deploy; read the printed cold-start time and listing reason | **Open** |
+
+Cause not proven: no Azure log access from the build environment (see decisions).
+
+## Voice visuals and chat-block reliability — 17 November 2026 (#1939, P15-205)
+
+**Status: built; backend (typecheck, lint, 602 tests), contracts and JarvisCore (`swift test`, 180 tests) pass locally. The SwiftUI compiles only in the macOS `watch` job and none of it has been seen on a device. No build cut.** From the owner's build 112 testing.
+
+| Step | State |
+| --- | --- |
+| Jarvis knows it can show visuals in voice: the per-turn voice note, the PI Voice instructions, the `workspace_command` description and the realtime voice instructions now say so (no gate, no approval step) | Done; `show_in_chat` in a spoken turn is refused with a pointer to the screen |
+| The phone reports itself as the active device when Voice opens, so `target: active` reaches the phone and not a browser tab | Done in code; not seen on a device |
+| Voice panel: nothing from before the session is shown at start; header row of its own (close and expand top left, title from the content); the knowledge-graph and code views draw natively | Done in code |
+| Orb retreat and return: one eased, interruptible spring in both directions; Reduce Motion has no animation | Done in code; not seen in motion |
+| `show_in_chat`: root cause not provable from here (no backend log access); the tool, route and PI door pass an end-to-end test for forecast, chart, list and table blocks | See decisions; the open question is below |
+| Show data on forecasts and Copy on every block; open state survives scrolling | Done in code |
+| Actions: every contract route opens its native screen (task routes open that task), `knowledge` opens the Notes graph, window moves, places and arranges bring the view forward, close-all and minimise-all hide it | Done; `call-tool` actions still have no executor on any client |
+| No path to the web app: the "Open web app" link, `JARVIS_WEB_APP_URL` and its plumbing are removed | Done |
+| Owner checks on a device: a voice visual from a spoken request, the panel's header and both buttons, the orb in motion (open, close, interrupt), Show data after scrolling, a task route button | **Open** |
+
+Open: the build 112 "Show in chat tool failed" row. If it returns after this, `tool.invalid_arguments` and `pi.stream_failed` in the backend logs name the cause.
+
 ## Tool activity redesign in Chat — 17 November 2026 (#1941, P15-204)
 
 **Status: built and checked on Linux (JarvisCore tests, Swift syntax parse); the SwiftUI views compile only in the macOS CI job and have not been run on a device. No build cut.** Implements [docs/ui/tool-activity/HANDOFF.md](docs/ui/tool-activity/HANDOFF.md).

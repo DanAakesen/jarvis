@@ -1,3 +1,17 @@
+## Remote MCP catalogues wake at startup (P15-208, #1910)
+
+- `createRemoteMcpBridge` (`apps/backend/src/pi/remote-mcp.ts`) exposes `status()` (`ready`, `starting`, `unreachable` with a reason), `warm()` and `label`. `createPiRoutes` calls `warm()` for every bridge as the backend starts, and `/pi/warm` does too. The refresh runs up to 200 s; a failed first list is not cached.
+- `find_tools` (`pi/mcp.ts`) adds a `note` when a bridge is not ready. The smoke lists the bridges in parallel and reports a failure reason.
+- Deploy (`measure_pi`) sends one request to the Azure MCP server before the smoke and prints the HTTP code and time (the cold start).
+
+## Voice visuals and the phone as the active device (17 November 2026, P15-205, #1939)
+
+- Showing in voice: a spoken PI turn gets a per-turn note (`voiceChannelNote`) that the phone shows what Jarvis puts on screen; PI reaches `workspace_command` through the door (`find_tools`, `call_tool`) and creates a view. `show_in_chat` checks the session channel (`conversationStore.getSession`) and refuses any session but a typed chat one.
+- `WorkspaceRuntime.reportActive()` posts the phone's snapshot when Voice opens or starts, so `target: active` (the latest reporter) is the phone. `VoiceScreenView` drops `presentedView` when a new session starts; content presented while a session was minimised carries over.
+- Navigation requests are typed (`WorkspaceNavigation`: a destination, the Notes graph, or a Factory task) and applied by `ContentView`; `GeneratedViewRoute` (JarvisCore) parses the contract's `open-route` values. The command interpreter maps place, move, resize and arrange to focus and minimise-all, close-all and restore-all to hide, forget and restore (`WorkspaceCommandIntent.dismissAll`, `.restoreLast`).
+- The iPhone has no path to the web app: `JARVIS_WEB_APP_URL`, `WorkspaceRuntime.webAppURL` and the unsupported-card link are removed. Knowledge-graph and code views have native renderers in `GeneratedWorkspaceView.swift`.
+- Chat block data tables: open state is `JarvisChatModel.expandedBlockDataIDs`.
+
 ## Voice bottom panel (17 November 2026, #1925, P15-191)
 
 - No backend change. The workspace command path is unchanged (`workspace_command` → SSE → `WorkspaceRuntime.presentedView`).
@@ -2506,12 +2520,9 @@ injects a CSP that blocks fetch/XHR connections, forms, frames and external scri
 script-message handler or file scheme. Scripts therefore have no native app
 bridge or app data access. The web
 `window.jarvis` actions are not implemented on iOS, so in-app ask/pin/link actions
-remain unavailable. Knowledge-graph, code and unknown-version views remain
-unsupported cards.
-The optional `JARVIS_WEB_APP_URL` is restricted to an HTTPS origin and only
-opens the web-app root because the contract has no item deep link. The app uses
-an existing Keychain session when configured; native sign-in remains a separate
-unimplemented flow. The backend's active-client choice and post-reconnect command
+remain unavailable. Knowledge-graph and code views have native renderers (P15-205);
+unknown-version views show a plain unavailable note. The iPhone has no link to the
+web app. The backend's active-client choice and post-reconnect command
 replay remain unverified, so opening from Workspaces does not assume the command
 targets the phone.
 

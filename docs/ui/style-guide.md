@@ -227,7 +227,7 @@ Neural states *(pending #1893)*: `neural-background-2026-11-15/voice-states.png`
 - **Tokens (web):** `--motion-press` 140ms, `--motion-state` 260ms, `--motion-panel` 420ms, `--motion-fade` 160ms,
   `--motion-ambient` 34s; easing `--ease-standard` `cubic-bezier(.2, .65, .3, 1)`, `--ease-enter` `cubic-bezier(.16, 1, .3, 1)`.
   `data-motion="calm"` slows these by 1.5×; `data-motion="reduced"` sets them to 0.
-- **Tokens (iOS):** filter animation 0.18s, sidebar spring response 0.36 and damping 0.88, opening crossfade 0.3s
+- **Tokens (iOS):** filter animation 0.18s, Voice panel orb retreat and return `.smooth` 0.55s (`voicePanelMotion`), sidebar spring response 0.36 and damping 0.88, opening crossfade 0.3s
   (0.15s with Reduce Motion), opening bar cycle 1.5s.
 - **Decision:** motion needs a stated purpose: feedback, state change, hierarchy or continuity. Acknowledge a press
   immediately. Prefer transform and opacity. No perpetual decoration and no parallax.
