@@ -73,6 +73,11 @@ final class GeneratedViewPresentationTests: XCTestCase {
         XCTAssertEqual(data.location, "o&r · a.ts")
     }
 
+    func testWindowsAndOldMacLineEndingsEachMakeOneRow() throws {
+        let data = try code(#"{"repo":"","path":"a","content":"one\r\ntwo\rthree\n"}"#)
+        XCTAssertEqual(data.displayLines.map(\.text), ["one", "two", "three"])
+    }
+
     func testAnEscapedEscapeIsDecodedOnce() throws {
         let data = try code(#"{"repo":"","path":"a","content":"&amp;lt;"}"#)
         XCTAssertEqual(data.displayLines.first?.text, "&lt;")

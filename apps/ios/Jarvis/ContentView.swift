@@ -234,6 +234,9 @@ struct ContentView: View {
                 }
                 .onChange(of: workspaceRuntime.requestedNavigation) { _, request in
                     guard request != nil, let request = workspaceRuntime.consumeRequestedNavigation() else { return }
+                    // Following a native link leaves the content that offered it, or its sheet would keep covering the destination.
+                    // On Voice the panel stays: a page change from there already dismisses it.
+                    if navigation.currentDestination != .voice { workspaceRuntime.userDismissedView() }
                     switch request {
                     case .destination(let destination):
                         navigate(to: destination)

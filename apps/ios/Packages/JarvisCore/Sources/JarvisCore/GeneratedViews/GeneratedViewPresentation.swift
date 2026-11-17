@@ -15,7 +15,11 @@ extension GeneratedCodeData {
     /// line numbers in that same numbering.
     public var displayLines: [GeneratedCodeLine] {
         let first = max(startLine ?? 1, 1)
-        var rows = Self.unescaped(content).split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        // Swift treats "\r\n" as one character, so line endings are made "\n" first, as the validator counts them.
+        let text = Self.unescaped(content)
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        var rows = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         if rows.last == "" { rows.removeLast() }
         return rows.enumerated().map { offset, text in
             let number = first + offset
