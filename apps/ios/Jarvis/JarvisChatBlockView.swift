@@ -411,7 +411,8 @@ private struct ChatBlockChartPanelView: View {
                 AreaMark(
                     x: .value(chart.xLabel, point.label),
                     y: .value(panel.title, point.value),
-                    series: .value(JarvisChatLocalization.string(.blockSeries, language: language), point.run)
+                    series: .value(JarvisChatLocalization.string(.blockSeries, language: language), point.run),
+                    stacking: .unstacked
                 )
                 .foregroundStyle(color(point.seriesIndex).opacity(JarvisDesignTokens.chartAreaOpacity))
             }
