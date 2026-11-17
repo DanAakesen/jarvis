@@ -7,6 +7,8 @@ const sdk = vi.hoisted(() => {
     stream: { write: vi.fn(), close: vi.fn() },
     audioConfig: { close: vi.fn() },
     startAutomatically: true,
+    languages: undefined as string[] | undefined,
+    connection: undefined as { connected?: () => void; disconnected?: () => void } | undefined,
   };
   class FakeRecognizer {
     recognized?: (_sender: unknown, event: { result: { reason: number; text: string } }) => void;
@@ -20,6 +22,7 @@ const sdk = vi.hoisted(() => {
     stopContinuousRecognitionAsync = vi.fn();
     close = vi.fn();
     constructor() { state.recognizer = this; }
+    static FromConfig() { return new FakeRecognizer(); }
   }
   return { state, FakeRecognizer };
 });
@@ -33,6 +36,8 @@ vi.mock('microsoft-cognitiveservices-speech-sdk', () => ({
   AudioStreamFormat: { getWaveFormatPCM: vi.fn() },
   AudioInputStream: { createPushStream: () => sdk.state.stream },
   AudioConfig: { fromStreamInput: () => sdk.state.audioConfig },
+  AutoDetectSourceLanguageConfig: { fromLanguages: (languages: string[]) => { sdk.state.languages = languages; return {}; } },
+  Connection: { fromRecognizer: () => { sdk.state.connection = {}; return sdk.state.connection; } },
   SpeechRecognizer: sdk.FakeRecognizer,
   ResultReason: { RecognizedSpeech: 1 },
   CancellationReason: { EndOfStream: 1 },
@@ -47,13 +52,15 @@ describe('Watch transcription', () => {
   beforeEach(() => {
     sdk.state.recognizer = undefined;
     sdk.state.config = undefined;
+    sdk.state.languages = undefined;
+    sdk.state.connection = undefined;
     sdk.state.startAutomatically = true;
     vi.clearAllMocks();
   });
 
   afterEach(() => { vi.useRealTimers(); });
 
-  it('uses English continuous recognition and completes on end of stream without waiting for sessionStopped', async () => {
+  it('uses language identification for Danish and English and completes on end of stream without waiting for sessionStopped', async () => {
     const token = vi.fn(async () => 'private-token');
     const stages: string[] = [];
     const reasons: string[] = [];
@@ -64,13 +71,13 @@ describe('Watch transcription', () => {
     await vi.waitFor(() => expect(sdk.state.recognizer).toBeDefined());
     const recognizer = sdk.state.recognizer!;
     expect(token).toHaveBeenCalledWith(SPEECH_AUTH_SCOPE, expect.any(AbortSignal));
-    expect(sdk.state.config?.speechRecognitionLanguage).toBe('en-GB');
+    expect(sdk.state.languages).toEqual(['da-DK', 'en-GB']);
     expect(sdk.state.config?.setProperty).toHaveBeenCalledWith('SPEECH-TransmitLengthBeforThrottleMs', '60000');
     recognizer.recognized?.(null, { result: { reason: 1, text: ' private speech ' } });
     recognizer.recognized?.(null, { result: { reason: 1, text: ' next segment ' } });
     recognizer.canceled?.(null, { reason: 1 });
     await expect(promise).resolves.toBe('private speech next segment');
-    expect(stages).toEqual(['token_requested', 'token_acquired', 'recognizer_started', 'audio_written', 'first_recognized',
+    expect(stages).toEqual(['token_requested', 'token_acquired', 'recognizer_starting', 'recognizer_started', 'audio_written', 'first_recognized',
       'recognizer_cancelled', 'cleanup_started', 'cleanup_finished']);
     expect(reasons).toEqual(['end_of_stream']);
     expect(recognizer.stopContinuousRecognitionAsync).toHaveBeenCalledOnce();
@@ -181,7 +188,7 @@ describe('Watch transcription', () => {
     recognizer.speechEndDetected?.();
     recognizer.canceled?.(null, { reason: 2, errorCode: 4 });
     await expect(promise).rejects.toThrow('Speech recognition failed');
-    expect(stages.map(([stage]) => stage)).toEqual(['token_requested', 'token_acquired', 'recognizer_started',
+    expect(stages.map(([stage]) => stage)).toEqual(['token_requested', 'token_acquired', 'recognizer_starting', 'recognizer_started',
       'audio_written', 'session_started', 'speech_start_detected', 'first_recognizing', 'speech_end_detected',
       'recognizer_cancelled', 'cleanup_started', 'cleanup_finished']);
     expect(stages).toContainEqual(['recognizer_cancelled', 'provider_cancelled', 4]);
@@ -212,5 +219,38 @@ describe('Watch transcription', () => {
     sdk.state.recognizer!.sessionStopped?.();
     await vi.advanceTimersByTimeAsync(2_000);
     await assertion;
+  });
+
+  it('fails with a logged stage when the Speech connection never starts', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    sdk.state.startAutomatically = false;
+    const stages: string[] = [];
+    const promise = createAzureWatchTranscriber(endpoint, async () => 'token')(
+      Buffer.from([0, 0]), new AbortController().signal, (stage) => stages.push(stage),
+    );
+    const assertion = expect(promise).rejects.toThrow('Speech recognition could not start');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sdk.state.recognizer).toBeDefined();
+    sdk.state.connection?.connected?.();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(stages).not.toContain('recognizer_start_timeout');
+    await vi.advanceTimersByTimeAsync(1_100);
+    await assertion;
+    expect(stages).toContain('recognizer_start_timeout');
+    expect(sdk.state.stream.write).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed start', async () => {
+    sdk.state.startAutomatically = false;
+    const stages: string[] = [];
+    const promise = createAzureWatchTranscriber(endpoint, async () => 'token')(
+      Buffer.from([0, 0]), new AbortController().signal, (stage) => stages.push(stage),
+    );
+    const assertion = expect(promise).rejects.toThrow('Speech recognition could not start');
+    await vi.waitFor(() => expect(sdk.state.recognizer).toBeDefined());
+    const [, failure] = sdk.state.recognizer!.startContinuousRecognitionAsync.mock.calls[0] as unknown as [() => void, () => void];
+    failure();
+    await assertion;
+    expect(stages).toContain('recognizer_start_failed');
   });
 });

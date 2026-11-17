@@ -221,6 +221,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       'token_acquired', 'recognizer_started', 'audio_written', 'session_started', 'speech_start_detected',
       'speech_end_detected', 'first_recognizing', 'first_recognized', 'recognizer_stopped',
       'recognizer_cancelled', 'cleanup_started', 'cleanup_finished', 'deadline_exceeded', 'completed',
+      'recognizer_starting', 'recognizer_start_failed', 'recognizer_start_timeout', 'service_connected', 'service_disconnected',
     ];
     if (typeof input.stage === 'string' && stages.includes(input.stage)) fields.stage = input.stage;
     if (typeof input.lastStage === 'string' && stages.includes(input.lastStage)) fields.lastStage = input.lastStage;
