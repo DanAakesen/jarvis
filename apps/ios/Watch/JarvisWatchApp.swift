@@ -174,25 +174,22 @@ struct WatchRoot: View {
             if reachable { Task { await model.reconcileVoice() } }
         }
     }
+    /// Menu page: one Chat row and Factory, the menu button bottom right. The top right stays free for the system time.
     private var actionPage: some View {
         ScrollView {
             VStack(spacing: 8) {
-                HStack {
-                    Text("Jarvis").font(.system(.headline, design: .rounded))
-                    Spacer()
-                    Button { path.append(.menu) } label: { Image(systemName: "line.3.horizontal").foregroundStyle(WatchStyle.amber).frame(width: 36, height: 36).modifier(WatchSurface(radius: 18)) }
-                        .buttonStyle(.plain).accessibilityLabel("Menu")
-                }
-                JarvisWatchAction(title: model.voiceID == nil ? "Voice" : "Resume voice", kind: .voice) {
-                    path.append(.chat); Task { await model.startVoice() }
-                }
-                JarvisWatchAction(title: "Dictate", kind: .dictate) {
-                    path.append(.chat); pendingDictation = true
-                }
+                Text("Jarvis").font(.system(.headline, design: .rounded))
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 4)
+                JarvisWatchAction(title: "Chat", kind: .chat) { path.append(.chat) }
                 JarvisWatchAction(title: "Factory", kind: .factory) { path.append(.factory) }
                 if !connection.reachable { Text("iPhone unavailable. Voice and sending need a connection.").font(.caption).foregroundStyle(.secondary) }
             }
-        }.watchCaptureReady("actions")
+        }
+        .overlay(alignment: .bottomTrailing) {
+            WatchIconButton(systemName: "line.3.horizontal", label: "Menu") { path.append(.menu) }
+                .padding(.trailing, 4).padding(.bottom, 14)
+        }
+        .watchCaptureReady("actions")
     }
     private func dictate() {
         Task { await model.startDictation() }

@@ -13403,6 +13403,15 @@ Use bounded, sequenced 250 ms Watch microphone packets instead of stop-and-wait.
 
 Direct Watch voice is a practical follow-up using the portable voice client and audio engine, but requires a separate voice-scoped WebSocket credential, session and budget limits, expiry handling and device/network/power qualification. The existing dictation-only credential must not be widened.
 
+## 17 November 2026 — Watch Chat adaptive composer is built on the native navigation bar (P15-203 / #1942)
+
+The owner un-parked the Watch for the approved adaptive composer. Decisions:
+- Keep the system navigation bar for the back control and time (title emptied) instead of drawing a header: the content already scrolls beneath it with the system material, and the handover forbids a replacement clock.
+- The composer is an overlay with a fixed end margin on the scroll content, so expanding or collapsing never moves the message being read. Reading mode is entered by a scroll geometry flip (more than 80 pt from the newest message) or a new scroll while away; it is blocked while a draft, dictation, voice start or live voice is active. Sending or reaching the end restores the composer.
+- Neutral glass for the new floating controls is one Watch component (`watchGlass`, `WatchIconButton`, `WatchEdgeFade` in `WatchDesign.swift`); the orb stays `WatchOrb`. No networking, voice or draft behaviour changed. The old Voice and Dictate menu rows are gone; the `jarvis-watch://voice` and `dictate` links still open Chat and act.
+
+Open: the 80 pt threshold, transition length, large-text and smallest-watch layout, VoiceOver focus after Reply, and Crown scrolling are unverified on a Watch or simulator; "do not collapse under a finger" is covered only by the busy rules, not by touch tracking.
+
 ## 17 November 2026 — Watch dictation never reached Speech; measure capture (P15-202 / #1943)
 
 The owner heard nothing from the Watch: dictation reported a timeout and live voice never heard him. Backend logs (Log Analytics, 14:49Z) for two 10 s dictations: `audio_received` at 0.7 s and 2.6 s with 489,082 bytes / 10,189 ms (real 24 kHz audio, so capture and upload worked), the speech token acquired at the same moment, then no `recognizer_started`, `session_started`, speech or error row for 6.5 to 9.4 s until the Watch disconnected. The SDK reports start only after its Speech connection opens, so that connection never opened. The Watch transcriber was the only Speech caller using a fixed `speechRecognitionLanguage` on the universal v2 endpoint; the live partial recognizer, probed live on 6 October (L111), uses language identification there.

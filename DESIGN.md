@@ -112,6 +112,10 @@ A temporary, clearly marked test control, deleted at cutover. Settings, General,
 
 No new screens. A low-tier outreach is one row in the existing Now feed list (alert group) with the model's title and body; it links to the finding on the existing Proactive page, which keeps its useful and wrong buttons as the thumbs. Medium and high use the existing insight push. Thumbs on the push itself, and any iOS rendering of the new card, are not designed or verified here.
 
+## Watch Chat adaptive composer — 17 November 2026 (#1942)
+
+Implements the owner-approved option 3 ([handover](docs/ui/watch-chat/HANDOFF.md)). The menu page has one Chat row and Factory under a compact Jarvis title, with the menu button at the bottom right and the top right left to the system time. Chat is one continuous scroll view that passes beneath the native navigation bar (small back control, no title) and the floating controls. The composer has two shapes: ready (Message, microphone and the shared orb in one neutral glass capsule) and reading (a single Reply bubble at the bottom right). Scrolling away from the newest message shrinks it to the bubble only when nothing would be interrupted: a draft, dictation or voice keeps the full composer. Tapping Reply restores it without moving the text, because the end margin is fixed. Glass is the shared `watchGlass` modifier (solid with Reduce Transparency), transitions are interruptible and become a plain fade with Reduce Motion. Icon names are Back (system), Menu, Reply, Dictate and Start voice. Simulator captures come from the watch job (`menu.png`, `chat-ready.png`, `chat-reading.png`, synthetic messages); no device, VoiceOver, large-text or smallest-watch check has been made.
+
 ## Watch complications and home exploration — 10 November 2026
 
 Existing Watch Home and complications retain stale values with a compact localized saved-age label instead of replacing them with an expiry message. Installed-device layout and locked display remain unverified.
