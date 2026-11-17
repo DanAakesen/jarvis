@@ -17,7 +17,7 @@ struct WatchVoiceView: View {
     var body: some View {
         VStack(spacing: 4) {
             WatchOrb(activity: JarvisOrbActivity(watchVoiceStatus: model.voiceState, isMuted: model.muted), isAnimated: !reduceMotion)
-                .frame(width: 52, height: 52)
+                .frame(width: 44, height: 44)
             Text(label).font(.system(.footnote, design: .rounded, weight: .semibold)).foregroundStyle(WatchStyle.amber)
                 .multilineTextAlignment(.center)
                 .accessibilityLabel("Voice")
@@ -33,7 +33,9 @@ struct WatchVoiceView: View {
                 controls.dynamicTypeSize(...DynamicTypeSize.large)
             }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, 6).padding(.bottom, 2)
+        // The controls sit at the bottom edge and the transcript takes the space between, as in the approved view.
+        .ignoresSafeArea(.container, edges: .bottom)
         .navigationTitle("").navigationBarTitleDisplayMode(.inline)
     }
 
