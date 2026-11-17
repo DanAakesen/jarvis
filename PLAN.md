@@ -1,4 +1,4 @@
-## Tool activity redesign in Chat — 17 November 2026 (#1941, P15-200)
+## Tool activity redesign in Chat — 17 November 2026 (#1941, P15-204)
 
 **Status: built and checked on Linux (JarvisCore tests, Swift syntax parse); the SwiftUI views compile only in the macOS CI job and have not been run on a device. No build cut.** Implements [docs/ui/tool-activity/HANDOFF.md](docs/ui/tool-activity/HANDOFF.md).
 
@@ -12,6 +12,10 @@
 | Automatic expansion while active, collapse on the final reply, manual reopening of history, identifiers and scroll following | Unchanged code paths |
 | Queued state | **Not built:** the event stream has only started and finished, so no call is ever queued |
 | Owner checks on a device: motion at native size and the 1.4 s timing, long names, a mixed group, a state change mid-animation, scroll position while following, VoiceOver, Reduce Motion | **Open** |
+
+## Map and route card: design brief — 17 November 2026 (#1944, P15-200)
+
+**Status: design brief written; docs only, no app code, portal change or build.** `docs/ui/map-route-card/brief.md` records what exists (block contract from #1933/#1934, no MapKit use, no Maps entitlement, the Maps portal capability is the routing-app kind and not needed to show a map, no Apple Maps link built in code), what is feasible (snapshot or live map, route line, ETA, travel mode), the proposed `route` block, the exact portal and secret steps per option, Chat and Voice placement, history snapshot rules, location privacy, states, accessibility, three options and a recommendation (Option 3, a backend route tool with the route stored in the block), and nine open questions. **Next: the owner picks an option and makes the designs; Option 3 needs a Maps identifier and key created in the Apple Developer portal first.**
 
 ## Voice bottom panel — 17 November 2026 (#1925, P15-191; stacked on P15-190)
 

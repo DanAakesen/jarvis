@@ -1,4 +1,4 @@
-## Tool activity in Chat (17 November 2026, #1941; owner approved, motion proposed)
+## Tool activity in Chat (17 November 2026, #1941, P15-204; owner approved, motion proposed)
 
 [Compact tree](docs/ui/tool-activity/selected-compact-tree.png), implemented as in the handover: each row has a tool icon, the action label and, for a group, a chevron right after the label (right when closed, down when open). Icons come from the tool type: document, pencil, terminal, globe, gear, cloud, with the tools glyph as fallback, and stay the same in every state. No counts, Done or Queued text.
 

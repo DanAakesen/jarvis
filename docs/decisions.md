@@ -1,4 +1,4 @@
-## 17 November 2026 — Tool activity: icon from the tool identifier, state from real events only (#1941, P15-200)
+## 17 November 2026 — Tool activity: icon from the tool identifier, state from real events only (#1941, P15-204)
 
 - **Icon by tool type.** `ChatToolKind` maps the stable tool identifier (exact names first, then whole words such as `deployment`, `browser`, `write`) to document, pencil, terminal, globe, gear, cloud or, when nothing fits, the generic tools glyph. It never reads the localized label, and an unknown tool keeps the generic glyph rather than borrowing another tool's icon. The same icon is used in every state.
 - **State from events.** Started with no outcome is running; `ok` is success; `error` is failure; `refused` is refusal. A final reply never turns a running call into a success. A group is running while any child runs, then failed, then refused, and succeeded only when every child succeeded.
