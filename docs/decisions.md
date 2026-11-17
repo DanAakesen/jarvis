@@ -1,3 +1,14 @@
+## 17 November 2026 — Tool activity: icon from the tool identifier, state from real events only (#1941, P15-204)
+
+- **Icon by tool type.** `ChatToolKind` maps the stable tool identifier (exact names first, then whole words such as `deployment`, `browser`, `write`) to document, pencil, terminal, globe, gear, cloud or, when nothing fits, the generic tools glyph. It never reads the localized label, and an unknown tool keeps the generic glyph rather than borrowing another tool's icon. The same icon is used in every state.
+- **State from events.** Started with no outcome is running; `ok` is success; `error` is failure; `refused` is refusal. A final reply never turns a running call into a success. A group is running while any child runs, then failed, then refused, and succeeded only when every child succeeded.
+- **Colour.** Success uses the primary accent (orange). Failure is red and refusal is grey, so neither looks like success, and each also says "Failed" or "Not allowed" in text so colour is not the only cue. Running and success carry no visible text; VoiceOver gets "tool, status" from the existing localized strings.
+- **Motion.** Running draws a short bright arc sweeping around the icon outline and a brighter band across the action text, both on a 1.4 s loop driven from the clock (`TimelineView`), so a state change ends them in the same frame and no animation state can get stuck. The icon never scales, pulses or glows. Reduce Motion shows a static row with a trailing ellipsis on the running label.
+- **Queued is not built.** The backend sends `tool-call-started` and `tool-call-finished` only; showing "queued" would be invented. If a queued event is ever added, it gets a white static icon with no motion.
+- **Cancellation.** There is no cancelled outcome today; `refused` is the only non-failure stop and keeps its own grey state.
+- **Scope.** The counts in the "Working" and "Tool activity" headers and the "×N" and status summary in groups are removed as the handover requires. Expansion rules, identifiers and the transcript scroll follow code are unchanged.
+- **Not verified.** The 1.4 s timing and the trace at native icon size need a device look, as the handover says.
+
 ## 17 November 2026 — Graph selection pill is SwiftUI text; link lines get stronger (#1940, P15-201)
 
 - Decision: the selected note's name over the 3D graph is a SwiftUI view laid over the `Canvas`, not canvas text. Canvas text cannot wrap inside a measured border, which is why build 112 showed long titles wider than the pill. The pill wraps at up to 280 pt (less on a narrow scene) onto at most two lines, and its placement (above the note, clamped inside the scene, below the note at the top edge) is a pure function in `JarvisCore`, tested on Linux.
