@@ -1,3 +1,21 @@
+## Voice visuals and chat-block reliability — 17 November 2026 (#1939, P15-205)
+
+**Status: built; backend (typecheck, lint, 602 tests), contracts and JarvisCore (`swift test`, 180 tests) pass locally. The SwiftUI compiles only in the macOS `watch` job and none of it has been seen on a device. No build cut.** From the owner's build 112 testing.
+
+| Step | State |
+| --- | --- |
+| Jarvis knows it can show visuals in voice: the per-turn voice note, the PI Voice instructions, the `workspace_command` description and the realtime voice instructions now say so (no gate, no approval step) | Done; `show_in_chat` in a spoken turn is refused with a pointer to the screen |
+| The phone reports itself as the active device when Voice opens, so `target: active` reaches the phone and not a browser tab | Done in code; not seen on a device |
+| Voice panel: nothing from before the session is shown at start; header row of its own (close and expand top left, title from the content); the knowledge-graph and code views draw natively | Done in code |
+| Orb retreat and return: one eased, interruptible spring in both directions; Reduce Motion has no animation | Done in code; not seen in motion |
+| `show_in_chat`: root cause not provable from here (no backend log access); the tool, route and PI door pass an end-to-end test for forecast, chart, list and table blocks | See decisions; the open question is below |
+| Show data on forecasts and Copy on every block; open state survives scrolling | Done in code |
+| Actions: every contract route opens its native screen (task routes open that task), `knowledge` opens the Notes graph, window moves, places and arranges bring the view forward, close-all and minimise-all hide it | Done; `call-tool` actions still have no executor on any client |
+| No path to the web app: the "Open web app" link, `JARVIS_WEB_APP_URL` and its plumbing are removed | Done |
+| Owner checks on a device: a voice visual from a spoken request, the panel's header and both buttons, the orb in motion (open, close, interrupt), Show data after scrolling, a task route button | **Open** |
+
+Open: the build 112 "Show in chat tool failed" row. If it returns after this, `tool.invalid_arguments` and `pi.stream_failed` in the backend logs name the cause.
+
 ## Tool activity redesign in Chat — 17 November 2026 (#1941, P15-204)
 
 **Status: built and checked on Linux (JarvisCore tests, Swift syntax parse); the SwiftUI views compile only in the macOS CI job and have not been run on a device. No build cut.** Implements [docs/ui/tool-activity/HANDOFF.md](docs/ui/tool-activity/HANDOFF.md).

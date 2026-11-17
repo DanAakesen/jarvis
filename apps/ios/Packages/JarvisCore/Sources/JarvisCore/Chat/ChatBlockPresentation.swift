@@ -157,6 +157,11 @@ extension ChatBlockChart {
     public struct Table: Equatable, Sendable {
         public let header: [String]
         public let rows: [[String]]
+
+        public init(header: [String], rows: [[String]]) {
+            self.header = header
+            self.rows = rows
+        }
     }
 
     /// X labels of every panel, in the order they first appear.

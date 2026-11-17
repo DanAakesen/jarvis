@@ -16,7 +16,7 @@ struct VoiceContentSlot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var animation: Animation? {
-        reduceMotion ? nil : .smooth(duration: 0.3)
+        reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion
     }
 
     var body: some View {
@@ -32,9 +32,8 @@ struct VoiceContentSlot: View {
                     onClose: { runtime.userDismissedView() }
                 )
                 .onGeometryChange(for: CGRect.self) { $0.frame(in: .named("voiceScreen")) } action: { frame = $0 }
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { newHeight in
-                    withAnimation(animation) { height = newHeight }
-                }
+                // The Voice page animates the orb from this height, so it is reported as it is and never animated here.
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -59,6 +58,7 @@ private struct VoiceContentPanel: View {
     let onClose: () -> Void
 
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var notice: String?
     @State private var contentHeight: CGFloat = 0
     @State private var chromeHeight: CGFloat = 0
@@ -96,7 +96,6 @@ private struct VoiceContentPanel: View {
                 GeneratedViewContent(
                     view: presented.view,
                     runtime: runtime,
-                    webAppURL: runtime.webAppURL,
                     language: language,
                     previewImage: nil,
                     onAction: { notice = performGeneratedViewAction($0, runtime: runtime, language: language, openURL: openURL) }
@@ -119,8 +118,25 @@ private struct VoiceContentPanel: View {
         }
     }
 
+    /// A row of its own: close and expand at the top left, then the title the content gives. The content scrolls
+    /// below it and never reaches into it.
     private var header: some View {
         HStack(alignment: .center, spacing: JarvisDesignTokens.rowSpacing) {
+            JarvisIconButton(
+                title: text(.voicePanelClose),
+                systemImage: "xmark",
+                identifier: "voice.panel.close",
+                action: onClose
+            )
+            if canExpand {
+                JarvisIconButton(
+                    title: text(isExpanded ? .voicePanelCollapse : .voicePanelExpand),
+                    systemImage: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                    identifier: "voice.panel.expand"
+                ) {
+                    withAnimation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion) { isExpanded.toggle() }
+                }
+            }
             Text(title)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(.primary)
@@ -132,20 +148,8 @@ private struct VoiceContentPanel: View {
                     .controlSize(.small)
                     .accessibilityLabel(text(.voicePanelUpdating))
             }
-            if canExpand {
-                JarvisIconButton(
-                    title: text(isExpanded ? .voicePanelCollapse : .voicePanelExpand),
-                    systemImage: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
-                    identifier: "voice.panel.expand"
-                ) { isExpanded.toggle() }
-            }
-            JarvisIconButton(
-                title: text(.voicePanelClose),
-                systemImage: "xmark",
-                identifier: "voice.panel.close",
-                action: onClose
-            )
         }
+        .frame(minHeight: JarvisDesignTokens.chatMinimumTapTarget)
     }
 
     @ViewBuilder

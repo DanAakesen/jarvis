@@ -38,18 +38,25 @@ struct PresentedWorkspaceView: Equatable, Identifiable {
     var id: String { viewId }
 }
 
+/// Where a workspace command or an action in generated content sends the owner inside the app.
+enum WorkspaceNavigation: Equatable {
+    case destination(JarvisDestination)
+    case notesGraph
+    case factoryTask(String)
+}
+
 @MainActor
 final class WorkspaceRuntime: ObservableObject {
     let workspacesClient: JarvisWorkspacesClient?
-    let webAppURL: URL?
 
     @Published private(set) var connectionStatus: WorkspaceConnectionStatus
     @Published private(set) var presentedView: PresentedWorkspaceView?
-    @Published private(set) var requestedDestination: JarvisDestination?
+    @Published private(set) var requestedNavigation: WorkspaceNavigation?
 
     private let client: JarvisClient?
     private var workspaceClient: JarvisWorkspaceClient?
     private var knownViews: [String: GeneratedView] = [:]
+    private var lastPresentedViewId: String?
     private var trustedBlobHost: String?
     private var sessionGeneration = 0
 
@@ -57,11 +64,10 @@ final class WorkspaceRuntime: ObservableObject {
         .default
     }
 
-    init(client: JarvisClient?, webAppURL: URL?) {
+    init(client: JarvisClient?) {
         self.client = client
         workspacesClient = client.map(JarvisWorkspacesClient.init(client:))
         workspaceClient = client.map { JarvisWorkspaceClient(client: $0) }
-        self.webAppURL = webAppURL
         connectionStatus = client == nil ? .unavailable : .connecting
     }
 
@@ -102,9 +108,10 @@ final class WorkspaceRuntime: ObservableObject {
         sessionGeneration += 1
         workspaceClient = client.map { JarvisWorkspaceClient(client: $0) }
         knownViews.removeAll()
+        lastPresentedViewId = nil
         trustedBlobHost = nil
         presentedView = nil
-        requestedDestination = nil
+        requestedNavigation = nil
         connectionStatus = workspaceClient == nil ? .unavailable : .connecting
     }
 
@@ -112,13 +119,37 @@ final class WorkspaceRuntime: ObservableObject {
     /// Simulator captures only: shows synthetic content without a backend command.
     func presentFixture(viewId: String, view: GeneratedView) {
         knownViews[viewId] = view
-        presentedView = PresentedWorkspaceView(viewId: viewId, view: view)
+        present(viewId: viewId, view: view)
     }
 #endif
 
-    func consumeRequestedDestination() -> JarvisDestination? {
-        defer { requestedDestination = nil }
-        return requestedDestination
+    func consumeRequestedNavigation() -> WorkspaceNavigation? {
+        defer { requestedNavigation = nil }
+        return requestedNavigation
+    }
+
+    /// The knowledge-graph card's own action: the vault graph lives in Notes.
+    func openNotesGraph() {
+        requestedNavigation = .notesGraph
+    }
+
+    /// Tells the backend this phone is the device Dan is using now. Commands addressed to the active device go to
+    /// the one that reported last, so Voice calls this when it opens, or a browser tab could receive what Jarvis shows.
+    func reportActive() {
+        let generation = sessionGeneration
+        Task {
+            guard generation == sessionGeneration else { return }
+            do {
+                try await registerCurrentSnapshot()
+                guard generation == sessionGeneration else { return }
+                connectionStatus = .connected
+            } catch {
+                guard generation == sessionGeneration else { return }
+                // Before the stream is ready there is nothing to report to; the ready event reports the snapshot itself.
+                if let workspaceError = error as? JarvisWorkspaceClientError, workspaceError == .noActiveConnection { return }
+                updateConnectionStatus(for: error)
+            }
+        }
     }
 
     func userDismissedView() {
@@ -139,8 +170,8 @@ final class WorkspaceRuntime: ObservableObject {
     }
 
     func openRoute(_ route: String) -> Bool {
-        guard let destination = Self.routeDestination(for: route) else { return false }
-        requestedDestination = destination
+        guard let navigation = Self.routeNavigation(for: route) else { return false }
+        requestedNavigation = navigation
         return true
     }
 
@@ -154,26 +185,24 @@ final class WorkspaceRuntime: ObservableObject {
     func canPerform(_ action: GeneratedViewAction) -> Bool {
         switch action {
         case .openRoute(let route):
-            return Self.routeDestination(for: route) != nil
+            return Self.routeNavigation(for: route) != nil
         case .openLink(let value, _):
             return Self.isSafeWebLink(value)
         case .callTool:
             return false
         case .window(let windowAction):
             guard knownViews[windowAction.windowId] != nil else { return false }
-            switch windowAction.operation {
-            case .focus, .restore, .close, .minimise: return true
-            case .move, .resize: return false
-            }
+            // A phone shows one view at a time, so moving or resizing one brings it forward.
+            return true
         }
     }
 
     func perform(_ action: GeneratedViewWindowAction) -> Bool {
         guard canPerform(.window(action)) else { return false }
         switch action.operation {
-        case .focus, .restore:
+        case .focus, .restore, .move, .resize:
             guard let view = knownViews[action.windowId] else { return false }
-            presentedView = PresentedWorkspaceView(viewId: action.windowId, view: view)
+            present(viewId: action.windowId, view: view)
         case .close:
             guard knownViews[action.windowId] != nil else { return false }
             knownViews.removeValue(forKey: action.windowId)
@@ -181,8 +210,6 @@ final class WorkspaceRuntime: ObservableObject {
         case .minimise:
             guard knownViews[action.windowId] != nil else { return false }
             if presentedView?.viewId == action.windowId { presentedView = nil }
-        case .move, .resize:
-            return false
         }
         let generation = sessionGeneration
         Task {
@@ -242,19 +269,35 @@ final class WorkspaceRuntime: ObservableObject {
             return .error(reason: reason)
         case .supported(let intent):
             switch intent {
-            case .navigate(let page):
-                guard let destination = Self.destination(for: page) else {
+            case .navigate(let page, let taskId):
+                if page == "factory", let taskId {
+                    requestedNavigation = .factoryTask(taskId)
+                } else if page == "knowledge" {
+                    requestedNavigation = .notesGraph
+                } else if let destination = Self.destination(for: page) {
+                    requestedNavigation = .destination(destination)
+                } else {
                     return .refused(reason: JarvisWorkspaceLocalization.string(.destinationUnavailable, language: language))
                 }
-                requestedDestination = destination
             case .present(let viewId, let view):
                 knownViews[viewId] = view
-                presentedView = PresentedWorkspaceView(viewId: viewId, view: view)
+                present(viewId: viewId, view: view)
             case .focus(let viewId):
                 guard let view = knownViews[viewId] else {
                     return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
                 }
-                presentedView = PresentedWorkspaceView(viewId: viewId, view: view)
+                present(viewId: viewId, view: view)
+            case .dismissAll(let forget):
+                presentedView = nil
+                if forget {
+                    knownViews.removeAll()
+                    lastPresentedViewId = nil
+                }
+            case .restoreLast:
+                guard let viewId = lastPresentedViewId, let view = knownViews[viewId] else {
+                    return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
+                }
+                present(viewId: viewId, view: view)
             case .dismiss(let viewId):
                 guard knownViews[viewId] != nil else {
                     return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
@@ -263,6 +306,11 @@ final class WorkspaceRuntime: ObservableObject {
             }
             return .applied
         }
+    }
+
+    private func present(viewId: String, view: GeneratedView) {
+        lastPresentedViewId = viewId
+        presentedView = PresentedWorkspaceView(viewId: viewId, view: view)
     }
 
     private func registerCurrentSnapshot() async throws {
@@ -330,11 +378,16 @@ final class WorkspaceRuntime: ObservableObject {
         }
     }
 
-    private static func routeDestination(for route: String) -> JarvisDestination? {
-        switch route {
-        case "/usage": .usage
-        case "/settings": .settings
-        default: nil
+    /// Each route the generated-view contract allows opens its native screen. A task route opens that task; a
+    /// project or release route opens the Factory page, which has no deep link to them.
+    private static func routeNavigation(for route: String) -> WorkspaceNavigation? {
+        switch GeneratedViewRoute(route: route) {
+        case .home: .destination(.chat)
+        case .usage: .destination(.usage)
+        case .settings: .destination(.settings)
+        case .factoryTask(let id): .factoryTask(id)
+        case .factoryProject, .factoryRelease: .destination(.softwareFactory)
+        case nil: nil
         }
     }
 
