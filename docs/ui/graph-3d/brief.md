@@ -1,6 +1,6 @@
 # 3D Notes graph: design brief
 
-Issue #1924 (P15-186). Status: **design brief only. Nothing is implemented, and nothing may be built until the owner approves designs.**
+Issue #1924 (P15-186). Status: **design brief, written before the designs. The owner has since approved Graph 2, Folder clusters (`approved-folder-clusters.png`), and the first build is P15-190; this text describes the code as it was before that build.**
 
 This brief tells the owner what the screen must contain so he can make the designs himself with an image model. It also records the rendering options and a recommendation, so the build can start the day the designs are approved. Facts about today's code are labelled **Today**. Targets and advice are labelled **Proposal**. Anything the owner must decide is in section 11.
 

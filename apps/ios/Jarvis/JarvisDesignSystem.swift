@@ -209,6 +209,11 @@ enum JarvisDesignTokens {
         light: UIColor(red: 45.0 / 255, green: 179.0 / 255, blue: 93.0 / 255, alpha: 1),
         dark: UIColor(red: 61.0 / 255, green: 220.0 / 255, blue: 132.0 / 255, alpha: 1)
     )
+    /// The General folder's muted violet; the graph labels every cluster by name as well.
+    static let notesFolderGeneral = adaptiveColor(
+        light: UIColor(red: 111.0 / 255, green: 79.0 / 255, blue: 214.0 / 255, alpha: 1),
+        dark: UIColor(red: 182.0 / 255, green: 156.0 / 255, blue: 1, alpha: 1)
+    )
     /// Open task circles keep a warm orange ring that reads on both appearances; meaning is also in the label.
     static let notesTaskRing = adaptiveColor(
         light: UIColor(red: 200.0 / 255, green: 90.0 / 255, blue: 0, alpha: 1),
@@ -219,8 +224,6 @@ enum JarvisDesignTokens {
     static let labelledHorizontalPadding: CGFloat = 16
     static let labelledVerticalPadding: CGFloat = 10
     static let periodSelectorHorizontalInset: CGFloat = 10
-    static let notesGraphNodeRadius: CGFloat = 5
-    static let notesGraphEdgeWidth: CGFloat = 1
     static let notesInlineSpacing: CGFloat = 4
     static let segmentedBarSpacing: CGFloat = 12
     static let segmentedSelectionInset: CGFloat = 3
@@ -238,15 +241,6 @@ enum JarvisDesignTokens {
     static let notesEditorMinimumHeight: CGFloat = 120
     static let notesConflictPreviewMaximumHeight: CGFloat = 120
     static let notesConflictPanelRadius: CGFloat = 16
-    static let notesGraphSelectionStroke: CGFloat = 2
-    static let notesGraphNodeLabelWidth: CGFloat = 96
-    static let notesGraphLabelOffset: CGFloat = 18
-    static let notesGraphMinimumZoom: CGFloat = 0.65
-    static let notesGraphMaximumZoom: CGFloat = 4
-    static let notesGraphEmphasizedOpacity: Double = 0.38
-    static let notesGraphDimmedOpacity: Double = 0.12
-    static let notesGraphNeighbourOpacity: Double = 0.72
-    static let notesGraphNodeOpacity: Double = 0.46
     static let notesSearchSnippetLineLimit = 2
     static let settingsHorizontalInset = notesHorizontalInset
     static let settingsSectionSpacing = notesSectionSpacing

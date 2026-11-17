@@ -80,8 +80,8 @@ public struct JarvisNeuralBackgroundView: View {
 /// When the background draws its cheap path: no additive glow passes and fewer frames. The Simulator renders in
 /// software (a 60 fps canvas of blended glows starves it and its capture tooling), and Low Power Mode asks apps to
 /// spend less. A device on normal power always gets the quality path.
-enum JarvisNeuralRendering {
-    static var usesCheapPath: Bool {
+public enum JarvisNeuralRendering {
+    public static var usesCheapPath: Bool {
 #if targetEnvironment(simulator)
         true
 #else
