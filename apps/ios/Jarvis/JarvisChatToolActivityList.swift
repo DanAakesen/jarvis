@@ -25,68 +25,58 @@ struct JarvisChatToolActivityList: View {
 
     private func groupRow(_ group: ChatToolActivityGroup) -> some View {
         let isExpanded = expanded.contains(group.id)
-        return VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
+        let title = displayName(group.toolName)
+        return VStack(alignment: .leading, spacing: 0) {
             JarvisRowButton(identifier: "\(identifierPrefix).toolGroup.\(group.id)", action: {
                 withAnimation(reduceMotion ? nil : .default) {
                     if isExpanded { expanded.remove(group.id) } else { expanded.insert(group.id) }
                 }
             }) {
-                HStack(alignment: .firstTextBaseline, spacing: JarvisDesignTokens.chatMessageSpacing) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
-                        Text("\(displayName(group.toolName)) ×\(group.calls.count)")
-                        Text(summary(group)).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if group.calls.contains(where: { $0.outcome == .refused || $0.outcome == .error }) {
-                        Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
-                            .accessibilityHidden(true)
-                    }
-                }
-                .font(.caption)
+                JarvisToolActivityRow(kind: group.kind, status: group.status, title: title,
+                                      statusText: statusText(group.status), isExpanded: isExpanded)
             }
+            .accessibilityLabel(accessibilityLabel(title, group.status))
             .accessibilityValue(copy(isExpanded ? .menuExpanded : .menuCollapsed))
             if isExpanded {
-                ForEach(Array(group.calls.enumerated()), id: \.element.id) { index, call in
-                    callRow(call, title: "\(copy(.toolCall)) \(index + 1)")
-                        .padding(.leading, JarvisDesignTokens.chatHorizontalInset)
-                        .accessibilityIdentifier("\(identifierPrefix).toolCall.\(call.id)")
+                VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageDetailSpacing) {
+                    ForEach(Array(group.calls.enumerated()), id: \.element.id) { index, call in
+                        callRow(call, title: "\(copy(.toolCall)) \(index + 1)")
+                            .accessibilityIdentifier("\(identifierPrefix).toolCall.\(call.id)")
+                    }
                 }
+                .padding(.leading, JarvisDesignTokens.chatHorizontalInset)
             }
         }
     }
 
     private func callRow(_ call: ChatToolActivityGroup.Call, title: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: JarvisDesignTokens.chatMessageSpacing) {
-            Image(systemName: call.outcome == nil ? "ellipsis" : (call.outcome == .ok ? "checkmark.circle" : "exclamationmark.circle"))
-                .foregroundStyle(call.outcome == .refused || call.outcome == .error ? Color.orange : Color.secondary)
-                .accessibilityHidden(true)
-            Text(title)
-            Text(copy(statusKey(call.outcome))).foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+        JarvisToolActivityRow(kind: call.kind, status: call.status, title: title, statusText: statusText(call.status))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(accessibilityLabel(title, call.status))
+    }
+
+    /// Success and running are shown by the icon alone; problems also say so in text so colour is never the only cue.
+    private func statusText(_ status: ChatToolStatus) -> String? {
+        switch status {
+        case .failed: copy(.toolError)
+        case .refused: copy(.toolRefused)
+        case .running, .succeeded: nil
         }
-        .font(.caption)
-        .accessibilityElement(children: .combine)
     }
 
-    private func summary(_ group: ChatToolActivityGroup) -> String {
-        let outcomes: [ChatToolOutcome?] = [.refused, .error, nil, .ok]
-        return outcomes.compactMap { outcome in
-            let count = group.calls.filter { $0.outcome == outcome }.count
-            return count == 0 ? nil : "\(copy(statusKey(outcome))) \(count)"
-        }.joined(separator: " · ")
-    }
-
-    private func statusKey(_ outcome: ChatToolOutcome?) -> JarvisChatLocalizationKey {
-        switch outcome {
-        case .ok: .toolOK
+    private func accessibilityLabel(_ title: String, _ status: ChatToolStatus) -> String {
+        let state: JarvisChatLocalizationKey = switch status {
+        case .running: .toolRunning
+        case .succeeded: .toolOK
+        case .failed: .toolError
         case .refused: .toolRefused
-        case .error: .toolError
-        case nil: .toolRunning
         }
+        return "\(title), \(copy(state))"
     }
 
-    private func displayName(_ name: String) -> String { name.replacingOccurrences(of: "_", with: " ") }
+    private func displayName(_ name: String) -> String {
+        let words = name.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ")
+        return words.prefix(1).uppercased() + words.dropFirst()
+    }
     private func copy(_ key: JarvisChatLocalizationKey) -> String { JarvisChatLocalization.string(key, language: language) }
 }
