@@ -175,11 +175,13 @@ enum JarvisGraphPainter {
             let sourceCluster = layout.nodes[edge.source].cluster
             let sameCluster = sourceCluster == layout.nodes[edge.target].cluster
             let emphasised = frame.focus.isFocused && frame.focus.edges[index]
-            var opacity = (edge.kind == .link ? 0.30 : 0.13) * min(a.opacity, b.opacity)
-            if frame.focus.isFocused { opacity *= emphasised ? 2.4 : 0.3 }
+            let opacity = JarvisGraphLinkStyle.opacity(
+                kind: edge.kind, endpointOpacity: min(a.opacity, b.opacity),
+                isFocused: frame.focus.isFocused, isEmphasised: emphasised
+            )
             let key = EdgeKey(
                 colour: sameCluster ? sourceCluster : layout.clusters.count,
-                level: level(min(opacity, 0.8) / 0.8), thin: edge.kind == .similar, strong: emphasised
+                level: level(opacity / JarvisGraphLinkStyle.ceiling), thin: edge.kind == .similar, strong: emphasised
             )
             paths[key, default: Path()].move(to: CGPoint(x: a.x, y: a.y))
             paths[key, default: Path()].addLine(to: CGPoint(x: b.x, y: b.y))
@@ -187,8 +189,10 @@ enum JarvisGraphPainter {
         for (key, path) in paths.sorted(by: { $0.key.level < $1.key.level }) {
             context.stroke(
                 path,
-                with: .color(style.color(forCluster: key.colour).opacity(Double(key.level) / Double(levels) * 0.8)),
-                lineWidth: key.strong ? 1.5 : key.thin ? 0.6 : 1
+                with: .color(style.color(forCluster: key.colour).opacity(Double(key.level) / Double(levels) * JarvisGraphLinkStyle.ceiling)),
+                lineWidth: key.strong
+                    ? JarvisGraphLinkStyle.emphasisedWidth
+                    : key.thin ? JarvisGraphLinkStyle.similarWidth : JarvisGraphLinkStyle.linkWidth
             )
         }
     }
@@ -297,18 +301,6 @@ enum JarvisGraphPainter {
             let p = frame.projected[index]
             let text = Text(verbatim: title).font(.caption2).foregroundStyle(Color.primary.opacity(0.85))
             context.draw(context.resolve(text), at: CGPoint(x: p.x, y: p.y + p.radius + 9), anchor: .center)
-        }
-        if let selected = frame.selected, let title = style.selectedTitle, frame.projected.indices.contains(selected) {
-            let p = frame.projected[selected]
-            let resolved = context.resolve(Text(verbatim: title).font(.caption.weight(.semibold)).foregroundStyle(style.accent))
-            let measured = resolved.measure(in: CGSize(width: 200, height: 30))
-            let pill = CGSize(width: measured.width + 18, height: measured.height + 8)
-            let x = min(max(p.x, Double(pill.width) / 2 + 6), width - Double(pill.width) / 2 - 6)
-            let y = max(p.y - p.radius * 1.25 - 26, Double(pill.height) / 2 + 4)
-            let rect = CGRect(x: x - Double(pill.width) / 2, y: y - Double(pill.height) / 2, width: pill.width, height: pill.height)
-            context.fill(Path(roundedRect: rect, cornerRadius: pill.height / 2), with: .color(Color.black.opacity(0.55)))
-            context.stroke(Path(roundedRect: rect, cornerRadius: pill.height / 2), with: .color(style.accent.opacity(0.6)), lineWidth: 1)
-            context.draw(resolved, at: CGPoint(x: x, y: y), anchor: .center)
         }
     }
 }
