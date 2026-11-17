@@ -57,6 +57,15 @@ jobs:
           xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=chat
           sleep 2
           xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/chat.png"
+          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=actions
+          sleep 2
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/menu.png"
+          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=chat --watch-chat-long
+          sleep 2
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/chat-ready.png"
+          xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=chat --watch-chat-long --watch-chat-reading
+          sleep 3
+          xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/chat-reading.png"
           xcrun simctl launch --terminate-running-process "$WATCH_ID" com.danaakesen.jarvis.watchkitapp --watch-fixture --watch-screen=health
           sleep 2
           xcrun simctl io "$WATCH_ID" screenshot "$RUNNER_TEMP/watch-screenshots/health.png"

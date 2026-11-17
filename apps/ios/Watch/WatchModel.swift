@@ -50,6 +50,11 @@ final class WatchModel: ObservableObject {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") {
             messages = [.init(user: true, text: "What should I train today?"), .init(user: false, text: "Upper body: bench press, rows and shoulder press."), .init(user: true, text: "What weight for bench?"), .init(user: false, text: "Your last entry was 60 kg for 8 reps.")]
+            if ProcessInfo.processInfo.arguments.contains("--watch-chat-long") {
+                messages = [.init(user: false, text: "Hello Dan, nice to be talking with you."), .init(user: true, text: "What is next today?"),
+                            .init(user: false, text: "Your next meeting starts at 10:30. You have time to review the notes before you leave."),
+                            .init(user: false, text: "I can help you prepare."), .init(user: false, text: "Would you like me to summarise them?")]
+            }
         }
         #endif
         connection.onEvent = { [weak self] in self?.receive($0) }

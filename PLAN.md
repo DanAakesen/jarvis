@@ -5239,6 +5239,10 @@ Pipeline bounded, sequenced microphone and playback traffic; tolerate transient 
 
 Implemented the backend stage logging and speech-token cache, a 10 s direct window with phone fallback, voice start and reconnection recovery, and stale phone-state replacement. Decisions and findings are in docs/decisions.md. Next: native Watch and phone builds in CI, then a paired-Watch check of first-press voice, dictation latency from a cold backend, and a short phone-out-of-range gap during voice; read the new `watch_transcription.stage` events to confirm where direct dictation lost its result.
 
+## Watch Chat adaptive composer — 17 November 2026 (P15-203 / #1942)
+
+Implemented the owner-approved handover: one Chat row, bottom-right menu button, a single conversation scroll behind the system navigation bar, and a ready/reading composer with shared Watch glass components. Next: read the watch job's `menu.png`, `chat-ready.png` and `chat-reading.png`, then a paired Watch pass for large text, smallest case, VoiceOver, Crown scrolling, Reduce Motion/Transparency and the reading-mode threshold.
+
 ## Notes swipe and deletion — 13 November 2026 (#1819)
 
 Implemented version-checked owner deletion, shared row swipe thresholds, editor

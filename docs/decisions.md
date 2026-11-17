@@ -13335,6 +13335,15 @@ Use bounded, sequenced 250 ms Watch microphone packets instead of stop-and-wait.
 
 Direct Watch voice is a practical follow-up using the portable voice client and audio engine, but requires a separate voice-scoped WebSocket credential, session and budget limits, expiry handling and device/network/power qualification. The existing dictation-only credential must not be widened.
 
+## 17 November 2026 — Watch Chat adaptive composer is built on the native navigation bar (P15-203 / #1942)
+
+The owner un-parked the Watch for the approved adaptive composer. Decisions:
+- Keep the system navigation bar for the back control and time (title emptied) instead of drawing a header: the content already scrolls beneath it with the system material, and the handover forbids a replacement clock.
+- The composer is an overlay with a fixed end margin on the scroll content, so expanding or collapsing never moves the message being read. Reading mode is entered by a scroll geometry flip (more than 80 pt from the newest message) or a new scroll while away; it is blocked while a draft, dictation, voice start or live voice is active. Sending or reaching the end restores the composer.
+- Neutral glass for the new floating controls is one Watch component (`watchGlass`, `WatchIconButton`, `WatchEdgeFade` in `WatchDesign.swift`); the orb stays `WatchOrb`. No networking, voice or draft behaviour changed. The old Voice and Dictate menu rows are gone; the `jarvis-watch://voice` and `dictate` links still open Chat and act.
+
+Open: the 80 pt threshold, transition length, large-text and smallest-watch layout, VoiceOver focus after Reply, and Crown scrolling are unverified on a Watch or simulator; "do not collapse under a finger" is covered only by the busy rules, not by touch tracking.
+
 ## Notes deletion and swipe thresholds — 13 November 2026
 
 The owner requested immediate pinning on a normal swipe and confirmation before
