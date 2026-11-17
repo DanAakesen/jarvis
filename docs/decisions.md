@@ -1,3 +1,7 @@
+## 17 November 2026 — PI reaches `show_in_chat` through the door, not as its own tool (#1925, P15-190)
+
+Deploy run 44030138506 (`measure_pi`) failed in the PI smoke with "PI asked for an approval or client tool the gateway does not answer" (HTTP 502). The gateway raises that when the stream carries a `function_call` or `mcp_approval_request` item. The only change to PI between the last passing measure run and this one was one instruction line that said "I call `show_in_chat`" and "I call `weather`" as if they were tools of PI's own. PI's only MCP tools are `find_tools` and `call_tool`; naming another tool as directly callable invites a call the harness reports as a client function call. The line now says these are Jarvis tools reached through `find_tools` then `call_tool`, and that voice turns use none of it. **Cause inferred from the code and the diff, not proven from the provider stream; confirm with the next `measure_pi` run.** No gate or fallback was added; the definition (`requireApproval: never`) is unchanged.
+
 ## 17 November 2026 — Voice bottom panel: one presented view, shown where the owner is (#1925, P15-191)
 
 | Choice | Why |
