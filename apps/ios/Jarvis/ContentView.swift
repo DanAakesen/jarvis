@@ -269,6 +269,7 @@ struct ContentView: View {
             .coordinateSpace(name: "sidebar")
             .clipped()
             .environment(\.locale, language.locale)
+            .environment(\.jarvisWorkspaceRuntime, workspaceRuntime)
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     returnToChatAfterVoiceIfNeeded()

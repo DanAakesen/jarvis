@@ -1,6 +1,13 @@
 export { healthViewIds, healthModuleId, healthContractVersion } from './health.js';
 export { healthQuerySources, healthQuerySourcesV1, healthQuerySourcesV2, healthQuerySourcesV3, healthQuerySourcesV5, healthQuerySourcesV6, healthQuerySourcesV6WithoutTrainingTargets, healthCapabilitiesVersion, healthCapabilitiesAccept, healthQuerySchema, isHealthQuery } from './health.js';
 export { vaultMirrorStatusSchema, vaultMirrorStatusViewSchema } from './vault-mirror.js';
+import {
+  createChatBlockInputSchema, createChatBlockValidator,
+} from './chat-blocks.js';
+export {
+  chatBlockVersion, chatBlockTypes, chatBlockForecastSymbols, chatBlockChartKinds, chatBlockViewRenderers,
+  chatBlockLimits,
+} from './chat-blocks.js';
 
 export const generatedViewVersion = 1;
 export const systemSmokeCheckIds = Object.freeze([
@@ -840,6 +847,9 @@ export function isGeneratedView(value, options = {}) {
       !value.actions.every((action) => validAction(action, options.registeredTools))))) return false;
   return true;
 }
+
+export const chatBlockInputSchema = createChatBlockInputSchema(generatedViewSchema);
+export const isChatBlock = createChatBlockValidator(isGeneratedView);
 
 export function isWebResearchResult(value) {
   if (!isObject(value) ||

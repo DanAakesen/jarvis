@@ -12,6 +12,8 @@ struct JarvisChatRow: Identifiable, Equatable {
     var interrupted: Bool
     var toolCalls: [ChatHistoryToolCall]
     let attachments: [ChatHistoryAttachment]
+    /// Generated content that belongs to this reply; it is saved with the reply and never refetched.
+    var blocks: [ChatBlock] = []
 
     init(_ message: ChatHistoryMessage) {
         id = message.id
@@ -23,6 +25,7 @@ struct JarvisChatRow: Identifiable, Equatable {
         interrupted = message.interrupted
         toolCalls = message.toolCalls
         attachments = message.attachments.filter { !Self.isLiveFrame($0) }
+        blocks = message.blocks
     }
 
     /// Frames from older live sessions were stored as attachments; they are never shown in the history.
@@ -52,6 +55,7 @@ struct JarvisChatRow: Identifiable, Equatable {
         interrupted = false
         toolCalls = []
         self.attachments = attachments
+        blocks = message.blocks
     }
 }
 

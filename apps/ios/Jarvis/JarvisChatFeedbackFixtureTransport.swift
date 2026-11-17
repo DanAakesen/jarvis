@@ -7,6 +7,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     static var isEnabled: Bool {
 #if DEBUG && targetEnvironment(simulator)
         ProcessInfo.processInfo.arguments.contains("--ui-test-chat-feedback") || JarvisChatPhotoFixture.isEnabled
+            || JarvisChatBlockFixture.isEnabled
 #else
         false
 #endif
@@ -31,6 +32,7 @@ actor JarvisChatFeedbackFixtureTransport: HTTPTransport {
     init(base: any HTTPTransport) {
         self.base = base
         if JarvisChatPhotoFixture.isEnabled { history = JarvisChatPhotoFixture.history }
+        if JarvisChatBlockFixture.isEnabled { history = JarvisChatBlockFixture.history }
     }
 
     func send(_ request: HTTPRequest) async throws -> HTTPResponse {

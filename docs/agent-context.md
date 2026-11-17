@@ -1,3 +1,7 @@
+## Conversational blocks — 17 November 2026 (#1925, P15-190)
+
+- No migration (blocks live in `dbo.messages.metadata`). Checks: `cd packages/contracts && node --test`; `cd apps/backend && npx vitest run src/core/chat-blocks.test.ts src/core/weather.test.ts`, `npx tsc --noEmit -p tsconfig.json`, `npx eslint src`; the SQL contract `src/database/conversation-blocks.integration.test.ts` (applies all migrations to a loopback SQL Server 2022 container, see `database-ci.yml`; run with `npx vitest run --config src/database/vitest.config.mts <file>` and the CI fixture variables); `swift test` in `apps/ios/Packages/JarvisCore` (`ChatBlockTests`, Linux `swift:6.2` image). The SwiftUI (`JarvisChatBlockView.swift`) compiles only in the macOS `watch` job, which captures `polish-chat-blocks.png` from synthetic history (`--screenshot-chat-fixture --ui-test-chat-blocks`, simulator and debug only).
+
 ## Manual folder order — 16 November 2026 (#1920)
 
 - Needs migration `0089_notes_folder_order.sql` (applied by the normal startup migration step). Checks: `cd apps/backend && npx vitest run src/vault`; the SQL contract (`manual folder order`) with the loopback SQL Server container from `database-ci.yml`; `swift test` in `apps/ios/Packages/JarvisCore`. SwiftUI compiles only in the macOS `watch` job, which also captures `notes-folders-manual.png` and `notes-folders-reorder.png` (`--screenshot-notes-state=folders-manual` or `folders-reorder`).

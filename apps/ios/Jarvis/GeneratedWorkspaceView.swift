@@ -78,7 +78,7 @@ struct GeneratedWorkspaceSheet: View {
     }
 }
 
-private struct GeneratedViewContent: View {
+struct GeneratedViewContent: View {
     let view: GeneratedView
     let runtime: WorkspaceRuntime
     let webAppURL: URL?
