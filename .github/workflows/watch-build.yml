@@ -239,6 +239,8 @@ jobs:
           polish settings --screenshot-settings-fixture
           polish health --screenshot-health-fixture
           polish chat-keyboard --screenshot-chat-fixture --screenshot-chat-keyboard
+          polish chat-blocks --screenshot-chat-fixture --ui-test-chat-blocks
+          polish voice-panel --screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=listening --screenshot-voice-panel
           xcrun simctl ui "$PHONE_ID" appearance light
           polish notes-pinned-light "${NOTES[@]}" --screenshot-notes-state=pinned
           polish today-light --ui-test-navigation --ui-test-today

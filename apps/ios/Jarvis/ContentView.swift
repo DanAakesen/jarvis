@@ -224,6 +224,12 @@ struct ContentView: View {
                         if navigation.currentDestination == .voice { await voiceModel.start() }
                     }
                     guard !Task.isCancelled else { return }
+#if DEBUG && targetEnvironment(simulator)
+                    if ProcessInfo.processInfo.arguments.contains("--screenshot-voice-panel"),
+                       let view = Self.voicePanelFixture() {
+                        workspaceRuntime.presentFixture(viewId: "fixture-panel", view: view)
+                    }
+#endif
                     await workspaceRuntime.run()
                 }
                 .onChange(of: voiceModel.returnToChatRequested, initial: true) { _, _ in
@@ -238,7 +244,8 @@ struct ContentView: View {
                 }
                 .sheet(
                     item: Binding(
-                        get: { workspaceRuntime.presentedView },
+                        // On the Voice page the same content is a panel above the controls, never a sheet.
+                        get: { navigation.currentDestination == .voice ? nil : workspaceRuntime.presentedView },
                         set: { if $0 == nil { workspaceRuntime.userDismissedView() } }
                     )
                 ) { presented in
@@ -269,6 +276,7 @@ struct ContentView: View {
             .coordinateSpace(name: "sidebar")
             .clipped()
             .environment(\.locale, language.locale)
+            .environment(\.jarvisWorkspaceRuntime, workspaceRuntime)
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     returnToChatAfterVoiceIfNeeded()
@@ -442,6 +450,15 @@ struct ContentView: View {
         }
     }
 
+#if DEBUG && targetEnvironment(simulator)
+    private static func voicePanelFixture() -> GeneratedView? {
+        let json = """
+        {"version":1,"title":"Synthetic plan","renderer":"list","source":{"id":"now","status":"complete"},        "data":{"items":[{"title":"Confirm the date","description":"Synthetic item"},{"title":"Book transport","description":"Synthetic item"},{"title":"Update the address","description":"Synthetic item"}]}}
+        """
+        return try? JSONDecoder().decode(GeneratedView.self, from: Data(json.utf8))
+    }
+#endif
+
     private func navigate(to destination: JarvisDestination) {
         navigation.navigate(to: destination)
     }
@@ -456,8 +473,10 @@ struct ContentView: View {
         if previous == .notes && destination != .notes { notesSelectedTab = .notes }
         if destination == .voice {
             voiceModel.restore()
-        } else if previous == .voice && voiceModel.isSessionActive {
-            voiceModel.minimize()
+        } else if previous == .voice {
+            // The panel belongs to the Voice page; leaving it must not turn the content into a sheet.
+            workspaceRuntime.userDismissedView()
+            if voiceModel.isSessionActive { voiceModel.minimize() }
         }
         if navigationFixtureMode {
             switch destination {

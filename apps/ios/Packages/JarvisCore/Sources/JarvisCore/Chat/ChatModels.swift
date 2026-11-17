@@ -42,6 +42,23 @@ public struct ChatMessage: Codable, Equatable, Sendable {
     public let text: String
     public let model: String?
     public let at: String
+    /// Structured content saved with an assistant reply.
+    public let blocks: [ChatBlock]
+
+    private enum CodingKeys: String, CodingKey {
+        case id, sessionId, role, text, model, at, blocks
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        sessionId = try container.decode(String.self, forKey: .sessionId)
+        role = try container.decode(ConversationRole.self, forKey: .role)
+        text = try container.decode(String.self, forKey: .text)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        at = try container.decode(String.self, forKey: .at)
+        blocks = ChatBlock.decodeLossy(from: container, forKey: .blocks)
+    }
 }
 
 public struct ChatFoodInvitation: Codable, Equatable, Sendable {
@@ -155,6 +172,28 @@ public struct ChatHistoryMessage: Codable, Equatable, Sendable {
     public let at: String
     public let toolCalls: [ChatHistoryToolCall]
     public let attachments: [ChatHistoryAttachment]
+    public let blocks: [ChatBlock]
+
+    private enum CodingKeys: String, CodingKey {
+        case id, sessionId, channel, language, role, text, model, interrupted, voiceMinutes, at, toolCalls, attachments, blocks
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        sessionId = try container.decode(String.self, forKey: .sessionId)
+        channel = try container.decode(ConversationChannel.self, forKey: .channel)
+        language = try container.decode(ChatLanguage.self, forKey: .language)
+        role = try container.decode(ConversationRole.self, forKey: .role)
+        text = try container.decode(String.self, forKey: .text)
+        model = try container.decodeIfPresent(String.self, forKey: .model)
+        interrupted = try container.decode(Bool.self, forKey: .interrupted)
+        voiceMinutes = try container.decodeIfPresent(Double.self, forKey: .voiceMinutes)
+        at = try container.decode(String.self, forKey: .at)
+        toolCalls = try container.decode([ChatHistoryToolCall].self, forKey: .toolCalls)
+        attachments = try container.decode([ChatHistoryAttachment].self, forKey: .attachments)
+        blocks = ChatBlock.decodeLossy(from: container, forKey: .blocks)
+    }
 }
 
 public struct ChatHistoryPage: Codable, Equatable, Sendable {

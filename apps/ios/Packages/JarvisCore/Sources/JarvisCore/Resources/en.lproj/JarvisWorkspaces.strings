@@ -115,3 +115,10 @@
 "workspace.statusUnknown" = "Unknown";
 
 "workspace.pageSummary" = "Saved items in this view: {%ld}.";
+"workspace.voicePanel.close" = "Close content";
+"workspace.voicePanel.expand" = "Expand content";
+"workspace.voicePanel.collapse" = "Collapse content";
+"workspace.voicePanel.updating" = "Updating";
+"workspace.voicePanel.partial" = "Partial result.";
+"workspace.voicePanel.unavailable" = "This content is unavailable.";
+"workspace.voicePanel.shown" = "%@ shown";

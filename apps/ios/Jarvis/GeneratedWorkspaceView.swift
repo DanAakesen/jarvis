@@ -52,25 +52,7 @@ struct GeneratedWorkspaceSheet: View {
     }
 
     private func perform(_ action: GeneratedViewAction) {
-        switch action {
-        case .openRoute(let route):
-            if !runtime.openRoute(route) {
-                actionNotice = text(.destinationUnavailable)
-            }
-        case .openLink(let url, _):
-            guard let url = URL(string: url) else {
-                actionNotice = text(.invalidLink)
-                return
-            }
-            openURL(url)
-            actionNotice = nil
-        case .callTool:
-            actionNotice = text(.toolUnavailable)
-        case .window(let windowAction):
-            if !runtime.perform(windowAction) {
-                actionNotice = text(.windowActionUnavailable)
-            }
-        }
+        actionNotice = performGeneratedViewAction(action, runtime: runtime, language: language, openURL: openURL)
     }
 
     private func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
@@ -78,7 +60,32 @@ struct GeneratedWorkspaceSheet: View {
     }
 }
 
-private struct GeneratedViewContent: View {
+/// Runs an action from generated content and returns the notice to show when it cannot be done.
+@MainActor
+func performGeneratedViewAction(
+    _ action: GeneratedViewAction,
+    runtime: WorkspaceRuntime,
+    language: JarvisAppLanguage,
+    openURL: OpenURLAction
+) -> String? {
+    func text(_ key: JarvisWorkspaceLocalizationKey) -> String {
+        JarvisWorkspaceLocalization.string(key, language: language)
+    }
+    switch action {
+    case .openRoute(let route):
+        return runtime.openRoute(route) ? nil : text(.destinationUnavailable)
+    case .openLink(let value, _):
+        guard let url = URL(string: value) else { return text(.invalidLink) }
+        openURL(url)
+        return nil
+    case .callTool:
+        return text(.toolUnavailable)
+    case .window(let windowAction):
+        return runtime.perform(windowAction) ? nil : text(.windowActionUnavailable)
+    }
+}
+
+struct GeneratedViewContent: View {
     let view: GeneratedView
     let runtime: WorkspaceRuntime
     let webAppURL: URL?
@@ -790,7 +797,7 @@ private struct GeneratedActionControl: View {
     }
 }
 
-private extension GeneratedView {
+extension GeneratedView {
     func workspaceTitle(language: JarvisAppLanguage) -> String {
         switch self {
         case .table(let value): value.title
@@ -807,6 +814,25 @@ private extension GeneratedView {
         case .code(let value): value.title
         case .unsupportedVersion, .unknown:
             JarvisWorkspaceLocalization.string(.generatedView, language: language)
+        }
+    }
+
+    /// Where the content came from and whether it is still being produced, partial or unavailable.
+    var workspaceSource: GeneratedViewSource? {
+        switch self {
+        case .table(let value): value.source
+        case .list(let value): value.source
+        case .detail(let value): value.source
+        case .text(let value): value.source
+        case .timeline(let value): value.source
+        case .chart(let value): value.source
+        case .taskCard(let value): value.source
+        case .status(let value): value.source
+        case .image(let value): value.source
+        case .htmlApp(let value): value.source
+        case .knowledgeGraph(let value): value.source
+        case .code(let value): value.source
+        case .unsupportedVersion, .unknown: nil
         }
     }
 

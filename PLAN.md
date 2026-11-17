@@ -1,3 +1,32 @@
+## Voice bottom panel — 17 November 2026 (#1925, P15-191; stacked on P15-190)
+
+**Status: built; waiting for CI (macOS compile, simulator capture `polish-voice-panel`) and the owner's TestFlight check. No build cut.** Part 2 of #1925.
+
+| Step | State |
+| --- | --- |
+| Content Jarvis opens during a voice session shows as a panel below the orb and status, above the microphone, plus, CC and hang-up controls (`VoiceContentPanel.swift`) | Done in code; compiles only in the macOS `watch` job |
+| Close dismisses the panel and keeps the session; expand and collapse only when the content needs more room | Done in code |
+| The page keeps a small orb, the status and the four controls in view: the panel's height is capped and the orb area follows its measured height | Done in code |
+| Leaving the Voice page dismisses the panel (it never turns into a sheet); other pages keep the existing sheet | Done in code |
+| Loading, partial, unavailable and unsupported content, long content (scrolls inside the panel), Reduce Motion, larger text, VoiceOver announcement | Done in code; not seen on a device |
+| Simulator capture from synthetic content (`--screenshot-voice-panel`) | Added to the `watch` job; not run yet |
+| Owner checks on a device: opening and closing while listening, thinking and speaking, long content, CC, microphone and hang-up, interrupted animation | **Open** |
+
+## Conversational blocks in Chat — 17 November 2026 (#1925, P15-190)
+
+**Status: built and checked locally; waiting for CI (macOS compile, simulator capture `polish-chat-blocks`) and the owner's TestFlight check. No build cut.** Part 1 of #1925 (Chat); part 2 (Voice bottom panel, P15-191) is a separate stacked pull request.
+
+| Step | State |
+| --- | --- |
+| Typed block contract (`forecast`, `chart`, `view`) in `@jarvis/contracts`, with tests | Done |
+| Model tool `show_in_chat`; blocks are saved inside the assistant message (`dbo.messages.metadata`, no migration) and returned by `done` and history | Done; backend tests and the SQL contract (full migrations on a loopback SQL Server) pass |
+| `weather` can return values only (`report` false) and hourly temperature and rain probability (`hourly` true) | Done; unit tests with a fake provider |
+| iOS: `ChatBlock` models, lossy history decoding, inline renderers (forecast, multi-panel chart with selection and data table, existing generated views), unsupported fallback | Done; `swift test` (Linux) passes; the SwiftUI compiles only in the macOS `watch` job |
+| Simulator capture of the two approved replies from synthetic history (`--ui-test-chat-blocks`) | Added to the `watch` job; not run yet |
+| Owner checks on a device: scrolling, restart, larger text, VoiceOver, Reduce Motion and Transparency | **Open** |
+
+Not in scope here: the web chat does not render blocks (it shows the reply text only); the Voice panel; Apple Watch.
+
 ## Approved graph and generated-content designs — 16 November 2026 (#1924, #1925)
 
 Design selection and handover are complete: Graph 2 (Folder clusters), Voice option 1 (Bottom panel, Voice side only), and Chat Conversational blocks. References and acceptance checks: `docs/ui/approved-handover-2026-11-16.md`. Next implementation step: inspect the existing graph/renderer/history contracts, then implement the approved surfaces and verify native interaction and durable Chat blocks. No implementation, persistence or device acceptance is claimed by this design handover.

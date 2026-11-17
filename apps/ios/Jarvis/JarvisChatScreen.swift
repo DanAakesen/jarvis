@@ -495,6 +495,14 @@ struct JarvisChatScreen: View {
                 .accessibilityAction(named: copy(.turnShowTime)) { toggleTimestamp(row.id) }
             }
             if !row.replyTools.isEmpty { completedTools(row.replyTools, messageID: row.id) }
+            if !row.message.blocks.isEmpty {
+                VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
+                    ForEach(row.message.blocks) { block in
+                        JarvisChatBlockView(block: block, language: appLanguage)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
             if !row.message.attachments.isEmpty {
                 VStack(alignment: row.message.role == .dan ? .trailing : .leading,
                        spacing: JarvisDesignTokens.chatMessageSpacing) {

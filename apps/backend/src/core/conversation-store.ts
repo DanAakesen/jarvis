@@ -1,4 +1,5 @@
 import type { RuntimeTest } from './runtime-session.js';
+import type { ChatBlock } from '@jarvis/contracts';
 import type { VisualContext } from './visual-context.js';
 
 export type ConversationChannel = 'chat' | 'voice' | 'phone';
@@ -22,6 +23,8 @@ export interface ConversationMessage {
   readonly model: string | null;
   readonly at: Date;
   readonly metadata?: { readonly visualContext: VisualContext };
+  /** Structured content saved with an assistant reply; never changes after the reply is stored. */
+  readonly blocks?: readonly ChatBlock[];
 }
 
 export interface ConversationToolCall {
@@ -91,6 +94,7 @@ export interface ConversationStore {
     readonly attachmentOwnerObjectId?: string;
     readonly attachmentRetentionDays?: number;
     readonly visualContext?: VisualContext;
+    readonly blocks?: readonly ChatBlock[];
   }): Promise<ConversationMessage | null>;
   setVisualContext?(input: {
     readonly sessionId: string;

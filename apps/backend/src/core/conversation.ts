@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { RecoverableChat } from './recoverable-chat.js';
 import { registerSseShutdown } from './sse.js';
 import type { FastifyRequest } from 'fastify';
-import type { ConversationSearchPage } from '@jarvis/contracts';
+import { chatBlockLimits, type ConversationSearchPage } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import type {
   ConversationChannel,
@@ -51,6 +51,7 @@ import { readRuntimeTests, runtimeTestUnavailableMessage } from './runtime-test-
 import { PiGatewayError } from '../pi/errors.js';
 import { createUnconfiguredPiAgent } from '../pi/gateway.js';
 import { registerManagedRuntimeRoutes } from './managed-runtime-routes.js';
+import { showInChatTool } from './chat-blocks.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const chatReflexBudgetMs = 800;
@@ -262,6 +263,7 @@ const historySchema = {
             additionalProperties: false,
           },
           at: { type: 'string', format: 'date-time' },
+          blocks: { type: 'array', maxItems: chatBlockLimits.blocksPerMessage, items: { type: 'object', additionalProperties: true } },
           toolCalls: {
             type: 'array',
             items: {
@@ -392,7 +394,7 @@ async function runChatReflex(
 export function createConversationModule(frameStore?: FrameStore): BackendModule {
 return {
   id: 'conversation',
-  tools: [conversationSearchTool, attachmentListTool, attachmentReadTool],
+  tools: [conversationSearchTool, attachmentListTool, attachmentReadTool, showInChatTool],
   registerRoutes: async (app) => {
     registerManagedRuntimeRoutes(app);
     const runtimeTests = () => readRuntimeTests({
@@ -772,6 +774,7 @@ return {
       const source = (async function* () {
         yield streamEvent('user', userMessage);
         publishActivity('thinking');
+        app.chatBlocks.discard(sessionId);
         try {
           const classifier = request.requireSharedScreenContext ? undefined : app.reflexClassifier;
           const finishReflex = classifier ? registerChatReflex(userMessage.id) : undefined;
@@ -910,6 +913,7 @@ return {
               limit: maxSteeringMessages,
             });
             if (steeringMessages.length > 0) {
+              const partialBlocks = app.chatBlocks.take(sessionId);
               const partialMessage = partial.trim()
                 ? await store.addMessage({
                   sessionId,
@@ -917,6 +921,7 @@ return {
                   text: partial,
                   model: null,
                   interrupted: true,
+                  ...(partialBlocks.length > 0 ? { blocks: partialBlocks } : {}),
                 })
                 : null;
               if (partialMessage) yield streamEvent('interrupted', { ...partialMessage, interrupted: true });
@@ -949,11 +954,13 @@ return {
                 sessionId, messageId: userMessage.id, visualContext: metadata,
               });
             }
+            const replyBlocks = app.chatBlocks.take(sessionId);
             const assistantMessage = await store.addMessage({
               sessionId,
               role: 'jarvis',
               text: partial,
               model: piRequested ? 'pi' : null,
+              ...(replyBlocks.length > 0 ? { blocks: replyBlocks } : {}),
             });
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
@@ -1013,6 +1020,7 @@ return {
               ...(visualContext.turnId === undefined ? {} : { turnId: visualContext.turnId }) });
           }
           activeTurn.roundController = null;
+          app.chatBlocks.discard(sessionId);
           if (activeTurns.get(sessionId) === activeTurn) activeTurns.delete(sessionId);
           if (!activityFinished) publishActivity(controller.signal.aborted ? 'interrupted' : 'ended');
         }

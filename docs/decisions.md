@@ -1,3 +1,32 @@
+## 17 November 2026 — Voice bottom panel: one presented view, shown where the owner is (#1925, P15-191)
+
+| Choice | Why |
+| --- | --- |
+| The content Jarvis opens (`workspace_command` create/update/show, saved items) is still one `presentedView` in `WorkspaceRuntime`; on the Voice page it renders as a bottom panel, on every other page the existing sheet | The owner approved the panel for Voice only and no sheet for typed Chat blocks (which are now inline). The Workspaces page and background results still open as a sheet, because that is an explicit "open this" and has no message to live in. One content model, two presenters chosen by page, no second pipeline |
+| Leaving the Voice page dismisses the panel without forgetting the view | Otherwise the content would reappear as a sheet over Chat. Jarvis can `show` it again |
+| Close dismisses the panel only; the session, orb, status and the four controls stay. A connection recovery replaces the controls and hides the panel until it ends | Reference behaviour; recovery actions must stay reachable |
+| Expand and collapse are shown only when the content needs more room, and use the same button to return | The reference's open-detail affordance is kept only where it does something; the return path is the same control |
+| The panel is capped (about a third of the height, up to what remains after the controls, captions on screen and a small orb); the orb area follows the panel's measured height | The orb and status stay visible, the controls stay usable, and long content scrolls inside the panel. The drag-to-minimise gesture ignores drags that start in the panel |
+| The status line already shows the real session state (`statusText`); the reference's "Connecting" is not copied | Production must display actual state |
+| Source status shows in the panel: running (progress), partial and unavailable (reason) | No fabricated success; unsupported renderers keep their existing card |
+
+## 17 November 2026 — Conversational blocks are typed data inside the assistant message (#1925, P15-190)
+
+Dan's design principle for #1925: model-driven and free-form wherever possible, deterministic only where exact results are needed; no restrictions, gates, fallbacks or old-plus-new code paths; never execute model-produced code.
+
+| Choice | Why |
+| --- | --- |
+| A block is typed data, not code. Three types: `forecast`, `chart` (panels, each with one unit and its own scale) and `view` (an existing generated view: text, list, table, detail, timeline, task-card, status or image) | The existing renderers and `GeneratedView` contract already cover most results, so `view` reuses them. A forecast card and a multi-unit chart are the two things they could not express exactly (a chart there has one shared scale and no unit), so those two are new. Contract: `packages/contracts/src/chat-blocks.js` |
+| The model chooses the type through one tool, `show_in_chat`, nudged by instructions and the tool description; the backend validates the shape and size and stamps the id and, when the model gives none, the issue time | Model-driven where free-form, deterministic where exactness matters (validation, ids, time). No classifier or gate decides when a block appears |
+| Blocks are saved in the assistant message's `dbo.messages.metadata` JSON (`{ "blocks": [...] }`), written when the reply is stored | The durable conversation store already carries per-message metadata; no migration, no second store. History reads return them with the reply, so scroll, navigation, restart and reload all show the same stored block. Nothing refetches or regenerates it |
+| Pending blocks live in memory only for the length of one turn (`ChatBlockBuffer`), keyed by session, and are dropped when the turn fails | The turn that wrote the tool call owns the block; a failed turn leaves no orphan |
+| `weather` gained `report` (false returns values only, nothing opened) and `hourly` (temperature °C and rain probability %, null for a missing hour) | Without hourly values the approved chart cannot be real, and the default report would open a window that typed Chat no longer wants. The default behaviour is unchanged |
+| iOS decodes a block leniently: an unknown type or version, or data that does not fit, becomes a readable fallback (title and text alternative); an entry that is not a block at all is dropped | One bad block must never cost the message or the history page |
+| Forecast heading is built from the block's own place and date; each block shows its source and issue time; the chart has a data table and Copy data in its ellipsis menu, selected-point values, distinct markers per series, and a text alternative. Only charts have a menu | The heading cannot disagree with the values; no inert menu on blocks that have no action |
+| Inline `view` blocks carry only open-route and open-link actions | Windows and tool calls have no meaning inside a message |
+
+Not done: the web app shows the reply text only; the next model turn sees the reply text, not the block data (it fetches again on request, which is the explicit new request the design allows).
+
 ## 16 November 2026 — Voice bottom panel selected; Chat content lives in the conversation (#1925)
 
 Dan selected contextual option 1, Bottom panel, for Voice only. The [reference board](ui/jarvis-window-sheet/voice-bottom-panel-reference.png) contains both contexts; only its right-hand Voice design is approved. The orb and status remain above the panel and the four voice controls remain below.

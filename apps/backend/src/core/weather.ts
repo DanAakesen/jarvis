@@ -51,6 +51,8 @@ const inputSchema = {
   properties: {
     location: { type: 'string', minLength: 1, maxLength: 100, pattern: '\\S' },
     days: { type: 'integer', minimum: 1, maximum: maxForecastDays },
+    hourly: { type: 'boolean' },
+    report: { type: 'boolean' },
   },
   additionalProperties: false,
 } as const;
@@ -127,8 +129,10 @@ function validatePlace(value: unknown): WeatherPlace | null {
   };
 }
 
-function validInput(value: unknown): value is { location?: string; days?: number } {
-  if (!isObject(value) || Object.keys(value).some((key) => !['location', 'days'].includes(key))) return false;
+function validInput(value: unknown): value is { location?: string; days?: number; hourly?: boolean; report?: boolean } {
+  if (!isObject(value) || Object.keys(value).some((key) => !['location', 'days', 'hourly', 'report'].includes(key))) return false;
+  if ((value.hourly !== undefined && typeof value.hourly !== 'boolean') ||
+      (value.report !== undefined && typeof value.report !== 'boolean')) return false;
   return (value.location === undefined ||
       (typeof value.location === 'string' && value.location.trim().length > 0 && value.location.length <= 100 &&
         ![...value.location].some((character) => character.charCodeAt(0) < 0x20))) &&
@@ -136,12 +140,13 @@ function validInput(value: unknown): value is { location?: string; days?: number
       (Number.isSafeInteger(value.days) && (value.days as number) >= 1 && (value.days as number) <= maxForecastDays));
 }
 
-function forecastUrl(place: WeatherPlace, days: number): URL {
+function forecastUrl(place: WeatherPlace, days: number, hourly = false): URL {
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.set('latitude', String(place.latitude));
   url.searchParams.set('longitude', String(place.longitude));
   url.searchParams.set('current', 'temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m');
   url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max');
+  if (hourly) url.searchParams.set('hourly', 'temperature_2m,precipitation_probability');
   url.searchParams.set('forecast_days', String(days));
   url.searchParams.set('timezone', 'auto');
   return url;
@@ -149,7 +154,31 @@ function forecastUrl(place: WeatherPlace, days: number): URL {
 
 type WeatherReport = NonNullable<ReturnType<typeof forecastFrom>>;
 
-function forecastFrom(value: unknown, place: WeatherPlace, days: number) {
+function hourlyFrom(value: unknown, days: number) {
+  if (!isObject(value) || !Array.isArray(value.time) || !Array.isArray(value.temperature_2m) ||
+      !Array.isArray(value.precipitation_probability)) return null;
+  const count = days * 24;
+  const { time, temperature_2m: temperatures, precipitation_probability: chances } = value;
+  if (time.length < count || temperatures.length < count || chances.length < count) return null;
+  const times: string[] = [];
+  const temperatureC: (number | null)[] = [];
+  const precipitationProbabilityPercent: (number | null)[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const at = time[index];
+    const temperature = temperatures[index];
+    const chance = chances[index];
+    if (typeof at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/u.test(at) ||
+        (temperature !== null && !finiteNumber(temperature)) ||
+        (chance !== null && !(finiteNumber(chance) && chance >= 0 && chance <= 100))) return null;
+    times.push(at);
+    temperatureC.push(temperature);
+    precipitationProbabilityPercent.push(chance);
+  }
+  // A null stays null: a missing hour is reported as missing, never filled in.
+  return { times, temperatureC, precipitationProbabilityPercent };
+}
+
+function forecastFrom(value: unknown, place: WeatherPlace, days: number, hourly = false) {
   if (!isObject(value) || !isObject(value.current) || !isObject(value.daily)) return null;
   const current = value.current;
   if (typeof current.time !== 'string' || current.time.length > 64 || !finiteNumber(current.temperature_2m) ||
@@ -169,6 +198,8 @@ function forecastFrom(value: unknown, place: WeatherPlace, days: number) {
       !Array.isArray(precipitation) || [times, codes, highs, lows, precipitation].some((items) => items.length < days)) {
     return null;
   }
+  const hours = hourly ? hourlyFrom(value.hourly, days) : undefined;
+  if (hours === null) return null;
   const forecast = [];
   for (let index = 0; index < days; index += 1) {
     const date = times[index];
@@ -209,6 +240,7 @@ function forecastFrom(value: unknown, place: WeatherPlace, days: number) {
       windSpeedKmh: current.wind_speed_10m,
     },
     forecast,
+    ...(hours ? { hourly: hours } : {}),
   };
 }
 
@@ -300,16 +332,25 @@ export function createWeatherModule(
 
   const weatherTool = {
     name: 'weather',
-    description: 'Get current weather and a short forecast from Open-Meteo. Uses the saved home location unless a named place is provided, then opens a report in the workspace.',
+    description: 'Get current weather and a short forecast from Open-Meteo. Uses the saved home location unless a named place is provided. By default it opens a report in the workspace. Set report to false to get the values only, with nothing opened (the right choice in typed chat, where show_in_chat presents them). Set hourly to true to also get temperature (°C) and rain probability (%) for every hour of the forecast days, with null for a missing hour. Times are local to the place; days count from today.',
     inputSchema,
     sensitive: true,
     async execute(input: unknown, request: FastifyRequest, signal: AbortSignal) {
-      if (!validInput(input)) throw new ToolRefusal('Provide a place name and a forecast length from 1 to 7 days.');
-      const ownerId = request.server.ownerObjectId;
-      if (!workspaceItems) throw new ToolFailure('Weather result storage is unavailable.');
+      if (!validInput(input)) throw new ToolRefusal('Provide a place name, a forecast length from 1 to 7 days, and optional hourly and report flags.');
       signal.throwIfAborted();
       const days = input.days ?? 3;
       const location = input.location?.trim();
+      if (input.report === false) {
+        // Data only: nothing is saved or opened, so the caller can present the result itself.
+        const dataSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
+        const place = await placeFor(location, request, dataSignal);
+        const value = await requestJson(forecastUrl(place, days, input.hourly === true), dataSignal, forecastResponseLimit);
+        const data = forecastFrom(value, place, days, input.hourly === true);
+        if (!data) throw new ToolFailure('Open-Meteo returned an invalid weather forecast.');
+        return { ...data, issuedAt: new Date().toISOString(), confirmation: 'Forecast returned. No workspace report was opened.' };
+      }
+      const ownerId = request.server.ownerObjectId;
+      if (!workspaceItems) throw new ToolFailure('Weather result storage is unavailable.');
       const title = (location ? `Weather in ${location}` : 'Home weather forecast').slice(0, 80);
       const viewId = `weather-${randomUUID().replaceAll('-', '')}`;
       const controller = new AbortController();
@@ -336,8 +377,8 @@ export function createWeatherModule(
         const jobSignal = AbortSignal.any([controller.signal, AbortSignal.timeout(requestTimeoutMs)]);
         await tracker.progress(1, 'Getting current weather');
         const place = await placeFor(location, request, jobSignal);
-        const value = await requestJson(forecastUrl(place, days), jobSignal, forecastResponseLimit);
-        const report = forecastFrom(value, place, days);
+        const value = await requestJson(forecastUrl(place, days, input.hourly === true), jobSignal, forecastResponseLimit);
+        const report = forecastFrom(value, place, days, input.hourly === true);
         if (!report) throw new ToolFailure('Open-Meteo returned an invalid weather forecast.');
         await tracker.progress(2, 'Saving weather report');
         const html = reportHtml(report);

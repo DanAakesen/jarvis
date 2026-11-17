@@ -1,3 +1,11 @@
+## Voice bottom panel (17 November 2026, #1925; owner approved, Voice only)
+
+Generated content sits in one neutral glass panel (`jarvisGlassSurface`, radius 24) between the status line and the control bar. Header: one title, an expand or collapse button when the content needs room, and a close button (both `JarvisIconButton`). Body: the existing generated-view renderers in a scroll area that takes the content's height up to the panel's cap. The orb stays visible (it shrinks to its minimum before the panel is capped), captions stay above the panel, the four controls stay below. Opening and closing slide from the bottom with a fade; Reduce Motion uses the fade only. Partial and unavailable content says so in text with an icon. A VoiceOver announcement names the content when it appears.
+
+## Conversational blocks in Chat (17 November 2026, #1925; owner approved)
+
+Generated content is part of the assistant message: it scrolls with the thread, has no sheet handle, close button or dimming, and keeps its own date, place, units, source and issue time. Prose stays unboxed; a block is one neutral glass surface (`jarvisGlassSurface`) with one heading and body text. A forecast heading comes from its own place and date. A chart stacks one panel per unit, each with its own scale, shared time axis label, selected-point readout, series markers beyond colour, and a data table behind the ellipsis menu. Missing values are gaps and read "missing", never zero. Reduce Transparency uses the shared solid fallback; there is no animation to reduce. Larger text drops always-on point labels and raises the plot height. Unsupported content shows its title and text alternative with a note.
+
 ## 3D graph: Folder clusters (16 November 2026; owner approved; #1924)
 
 Dan approved Graph 2, **Folder clusters**: spatial groups of connected note nodes, scope colours, depth through perspective and fading, task rings on notes, and a selected-note preview above the existing Notes/Tasks/Graph and Search/+ dock. The approved visual reference is [Folder clusters](docs/ui/graph-3d/approved-folder-clusters.png). This is visual approval, not implemented or device-verified animation, rendering performance, or accessibility.

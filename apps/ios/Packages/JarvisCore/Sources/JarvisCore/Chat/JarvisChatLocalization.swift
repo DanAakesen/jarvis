@@ -214,6 +214,23 @@ public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case engineTokensLabel = "chat.engine.engineTokensLabel"
     case engineTokensFormat = "chat.engine.engineTokensFormat"
     case engineCostLabel = "chat.engine.engineCostLabel"
+    case blockSourceLine = "chat.block.sourceLine"
+    case blockPartial = "chat.block.partial"
+    case blockActions = "chat.block.actions"
+    case blockViewData = "chat.block.viewData"
+    case blockHideData = "chat.block.hideData"
+    case blockCopyData = "chat.block.copyData"
+    case blockCopied = "chat.block.copied"
+    case blockDataTable = "chat.block.dataTable"
+    case blockMissing = "chat.block.missing"
+    case blockNoValues = "chat.block.noValues"
+    case blockUnsupported = "chat.block.unsupported"
+    case blockSelected = "chat.block.selected"
+    case blockSelectHint = "chat.block.selectHint"
+    case blockHighLow = "chat.block.highLow"
+    case blockRainChance = "chat.block.rainChance"
+    case blockNotAvailable = "chat.block.notAvailable"
+    case blockSeries = "chat.block.series"
 }
 
 public enum JarvisChatLocalization {
