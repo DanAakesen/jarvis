@@ -19,6 +19,8 @@ import type {
   ConversationAttachmentReference,
 } from '../core/conversation-store.js';
 import { InvalidConversationAttachmentsError } from '../core/conversation-store.js';
+import { chatBlockLimits, isChatBlock, type ChatBlock } from '@jarvis/contracts';
+import { trustedBlobHostFromEnvironment } from '../core/generated-view-validation.js';
 import { normalizeVisualContext, persistedVisualContext } from '../core/visual-context.js';
 
 const conversationSearchSetupPath = fileURLToPath(
@@ -94,8 +96,15 @@ function sessionFromRow(row: SessionRow): ConversationSession {
 
 function messageFromRow(row: MessageRow): ConversationMessage {
   let visualContext;
+  let blocks: ChatBlock[] = [];
   try {
-    visualContext = row.metadata ? normalizeVisualContext(JSON.parse(row.metadata).visualContext, true) : undefined;
+    const metadata = row.metadata ? JSON.parse(row.metadata) as { visualContext?: unknown; blocks?: unknown } : undefined;
+    visualContext = metadata?.visualContext === undefined ? undefined : normalizeVisualContext(metadata.visualContext, true);
+    if (row.role === 'jarvis' && Array.isArray(metadata?.blocks)) {
+      const trustedBlobHost = trustedBlobHostFromEnvironment();
+      blocks = metadata.blocks.filter((block): block is ChatBlock =>
+        isChatBlock(block, trustedBlobHost ? { trustedBlobHost } : {}));
+    }
   } catch { /* Ignore malformed legacy metadata. */ }
   return {
     id: row.id,
@@ -105,6 +114,7 @@ function messageFromRow(row: MessageRow): ConversationMessage {
     model: row.model,
     at: row.at,
     ...(visualContext ? { metadata: { visualContext } } : {}),
+    ...(blocks.length > 0 ? { blocks } : {}),
   };
 }
 
@@ -177,6 +187,15 @@ async function addMessageWithAttachments(
 }
 
 function messageMetadata(input: Parameters<ConversationStore['addMessage']>[0]): string | null {
+  if (input.blocks !== undefined) {
+    const trustedBlobHost = trustedBlobHostFromEnvironment();
+    const options = trustedBlobHost ? { trustedBlobHost } : {};
+    if (input.role !== 'jarvis' || input.visualContext !== undefined || input.blocks.length < 1 ||
+        input.blocks.length > chatBlockLimits.blocksPerMessage || !input.blocks.every((block) => isChatBlock(block, options))) {
+      throw new TypeError('Invalid message blocks');
+    }
+    return JSON.stringify({ blocks: input.blocks });
+  }
   if (input.visualContext === undefined) return null;
   const visualContext = normalizeVisualContext(input.visualContext, true);
   if (input.role !== 'dan' || !visualContext) throw new TypeError('Invalid visual context');

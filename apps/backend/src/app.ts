@@ -82,6 +82,7 @@ import type { WatchCredentials } from './auth/watch-credential.js';
 import { installInboxCaptureLimits } from './auth/inbox-rate-limit.js';
 import type { InboxCaptureCredentials } from './auth/inbox-capture-credential.js';
 import type { PiAuth } from './auth/pi-credential.js';
+import { ChatBlockBuffer } from './core/chat-blocks.js';
 
 export interface BuildAppOptions {
   readonly watchTranscriber?: WatchTranscriber;
@@ -397,6 +398,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);
   app.decorate('usageStore', options.usageStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
+  app.decorate('chatBlocks', new ChatBlockBuffer());
   app.decorate('proactiveConversationContext', options.proactiveConversationContext ?? null);
   app.decorate('conversationRuntimeTests', options.conversationRuntimeTests ?? null);
   app.decorate('managedRuntime', options.managedRuntime ?? null);

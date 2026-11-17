@@ -690,6 +690,74 @@ export function isGeneratedView(
   value: unknown,
   options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
 ): value is GeneratedView;
+export const chatBlockVersion: 1;
+export const chatBlockTypes: readonly ['forecast', 'chart', 'view'];
+export const chatBlockForecastSymbols: readonly [
+  'clear', 'partly-cloudy', 'cloudy', 'fog', 'drizzle', 'rain', 'snow', 'thunder', 'wind',
+];
+export const chatBlockChartKinds: readonly ['line', 'bar', 'area'];
+export const chatBlockViewRenderers: readonly [
+  'text', 'list', 'table', 'detail', 'timeline', 'task-card', 'status', 'image',
+];
+export const chatBlockLimits: Readonly<{
+  blocksPerMessage: number; bytes: number; panels: number; seriesPerPanel: number; pointsPerSeries: number;
+}>;
+export type ChatBlockForecastSymbol = typeof chatBlockForecastSymbols[number];
+export interface ChatBlockSource {
+  /** Where the data came from, for example a weather provider. */
+  label: string;
+  url?: string;
+  /** When the content was issued (RFC 3339). The server stamps it when a submitted block omits it. */
+  issuedAt: string;
+  status?: 'complete' | 'partial';
+  reason?: string;
+}
+export interface ChatBlockChartPoint { x: number | string; y: number | null }
+export interface ChatBlockChartSeries { name: string; points: ChatBlockChartPoint[] }
+/** One panel has one unit and one value scale; units are never mixed on a scale. */
+export interface ChatBlockChartPanel {
+  title: string;
+  unit: string;
+  kind: 'line' | 'bar' | 'area';
+  series: ChatBlockChartSeries[];
+}
+export interface ChatBlockForecastData {
+  place: string;
+  /** Calendar date, YYYY-MM-DD, in the place's own time zone. */
+  date: string;
+  conditions: string;
+  symbol: ChatBlockForecastSymbol;
+  highC?: number;
+  lowC?: number;
+  rainChancePercent?: number;
+}
+interface ChatBlockBase {
+  version: 1;
+  id: string;
+  title: string;
+  source: ChatBlockSource;
+  /** Text alternative that states what the block shows. */
+  summary: string;
+}
+export type ChatBlock =
+  | (ChatBlockBase & { type: 'forecast'; data: ChatBlockForecastData })
+  | (ChatBlockBase & { type: 'chart'; data: { xLabel: string; panels: ChatBlockChartPanel[] } })
+  | (ChatBlockBase & { type: 'view'; data: { view: GeneratedView } });
+/** What a model submits: no id, and the issue time is optional. */
+export type ChatBlockInput = ChatBlock extends infer Block
+  ? Block extends ChatBlock
+    ? Omit<Block, 'id' | 'source'> & { source: Omit<ChatBlockSource, 'issuedAt'> & { issuedAt?: string } }
+    : never
+  : never;
+export const chatBlockInputSchema: Readonly<Record<string, unknown>>;
+export function isChatBlock(
+  value: unknown,
+  options?: { stored?: true; trustedBlobHost?: string; registeredTools?: readonly string[] },
+): value is ChatBlock;
+export function isChatBlock(
+  value: unknown,
+  options: { stored: false; trustedBlobHost?: string; registeredTools?: readonly string[] },
+): value is ChatBlockInput;
 export const workspaceCommandSchema: Readonly<Record<string, unknown>>;
 export const webResearchResultSchema: Readonly<Record<string, unknown>>;
 export function isWebResearchResult(value: unknown): value is WebResearchResult;

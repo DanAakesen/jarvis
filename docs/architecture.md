@@ -1,3 +1,31 @@
+## Conversational blocks (17 November 2026, #1925, P15-190)
+
+```mermaid
+sequenceDiagram
+  participant M as Model (chat turn)
+  participant T as show_in_chat tool
+  participant B as ChatBlockBuffer (memory, per session)
+  participant C as conversation turn
+  participant S as dbo.messages.metadata
+  participant A as iPhone chat
+  M->>T: block (type, title, source, summary, data)
+  T->>T: validate with isChatBlock, stamp id and issue time
+  T->>B: add(session, block)
+  M-->>C: reply text
+  C->>B: take(session)
+  C->>S: INSERT reply with metadata.blocks
+  C-->>A: done {text, blocks}
+  A->>S: history (later, restart, reload)
+  S-->>A: same stored blocks
+```
+
+- Contract `packages/contracts/src/chat-blocks.js` (`isChatBlock`, `chatBlockInputSchema`); iOS mirror `ChatBlock` in JarvisCore. A block is at most 64 KiB, a reply at most 8 blocks.
+- The tool is registered by the conversation module and reaches both chat engines through the same `/tools` dispatch (header `x-jarvis-message-id` names the turn's message, which gives the session). It refuses voice calls and calls without a chat reply to attach to.
+- Persistence reuses `dbo.messages.metadata` for assistant messages (the column already holds a user message's visual context). `getHistory` and the `done` event return `blocks`; the history response schema allows them. The read path keeps only blocks that still validate.
+- Nothing refetches: a historic block renders from its stored JSON. A new request creates a new block.
+- `weather` with `report: false` returns values without a job or window; `hourly: true` adds hourly temperature and rain probability.
+- Voice is unchanged by this part: it still uses `workspace_command` views.
+
 ## App polish: page chrome, row surface, swipe back (16 November 2026, #1923, P15-185)
 
 - iOS only, no backend or data change. `JarvisSwipeBack.swift`: `jarvisSwipeBack()` re-enables the `UINavigationController` interactive pop gesture (delegate on the

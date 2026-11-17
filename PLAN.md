@@ -1,3 +1,18 @@
+## Conversational blocks in Chat — 17 November 2026 (#1925, P15-190)
+
+**Status: built and checked locally; waiting for CI (macOS compile, simulator capture `polish-chat-blocks`) and the owner's TestFlight check. No build cut.** Part 1 of #1925 (Chat); part 2 (Voice bottom panel, P15-191) is a separate stacked pull request.
+
+| Step | State |
+| --- | --- |
+| Typed block contract (`forecast`, `chart`, `view`) in `@jarvis/contracts`, with tests | Done |
+| Model tool `show_in_chat`; blocks are saved inside the assistant message (`dbo.messages.metadata`, no migration) and returned by `done` and history | Done; backend tests and the SQL contract (full migrations on a loopback SQL Server) pass |
+| `weather` can return values only (`report` false) and hourly temperature and rain probability (`hourly` true) | Done; unit tests with a fake provider |
+| iOS: `ChatBlock` models, lossy history decoding, inline renderers (forecast, multi-panel chart with selection and data table, existing generated views), unsupported fallback | Done; `swift test` (Linux) passes; the SwiftUI compiles only in the macOS `watch` job |
+| Simulator capture of the two approved replies from synthetic history (`--ui-test-chat-blocks`) | Added to the `watch` job; not run yet |
+| Owner checks on a device: scrolling, restart, larger text, VoiceOver, Reduce Motion and Transparency | **Open** |
+
+Not in scope here: the web chat does not render blocks (it shows the reply text only); the Voice panel; Apple Watch.
+
 ## Approved graph and generated-content designs — 16 November 2026 (#1924, #1925)
 
 Design selection and handover are complete: Graph 2 (Folder clusters), Voice option 1 (Bottom panel, Voice side only), and Chat Conversational blocks. References and acceptance checks: `docs/ui/approved-handover-2026-11-16.md`. Next implementation step: inspect the existing graph/renderer/history contracts, then implement the approved surfaces and verify native interaction and durable Chat blocks. No implementation, persistence or device acceptance is claimed by this design handover.
