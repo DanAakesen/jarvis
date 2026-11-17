@@ -1,3 +1,13 @@
+## Graph polish from build 112 — 17 November 2026 (#1940, P15-201)
+
+**Status: built and unit-tested on Linux; waiting for CI (macOS compile, simulator captures) and the owner's TestFlight check. No build cut.** Two fixes from the owner's build 112 test. (1) The selected note's name pill over the graph is now real SwiftUI text instead of canvas text: a long title wraps to two lines (then truncates) and the pill's border grows with it; it stays above the note, inside the scene, and drops below the note when there is no room above. The preview row above the dock wraps its title the same way. (2) Link lines are clearer: a link's resting opacity went from 0.30 to 0.50 and its width from 1.0 to 1.2 pt, similarity lines from 0.13 to 0.20 and 0.6 to 0.7 pt, emphasised links (selection or search) reach the 0.8 ceiling at 1.7 pt, dimmed links sit at 0.3 of resting. Links stay under a note's full strength so two close notes still read as two dots. The numbers live in `JarvisGraphLinkStyle` and the pill placement in `JarvisGraphPillPlacement` (`JarvisCore/Graph3D`, 3 new tests). Reduce Motion, the Background motion switch and the cheap path are unchanged: the still pose is drawn once and includes the pill and the stronger links.
+
+Not verified: the line strength was set from the painter's maths and the previous build's values, not yet seen on a real vault in light and dark; the owner's check decides whether 0.50 is right or needs one more step. Apple Watch untouched.
+
+## Map and route card: design brief — 17 November 2026 (#1944, P15-200)
+
+**Status: design brief written; docs only, no app code, portal change or build.** `docs/ui/map-route-card/brief.md` records what exists (block contract from #1933/#1934, no MapKit use, no Maps entitlement, the Maps portal capability is the routing-app kind and not needed to show a map, no Apple Maps link built in code), what is feasible (snapshot or live map, route line, ETA, travel mode), the proposed `route` block, the exact portal and secret steps per option, Chat and Voice placement, history snapshot rules, location privacy, states, accessibility, three options and a recommendation (Option 3, a backend route tool with the route stored in the block), and nine open questions. **Next: the owner picks an option and makes the designs; Option 3 needs a Maps identifier and key created in the Apple Developer portal first.**
+
 ## Voice bottom panel — 17 November 2026 (#1925, P15-191; stacked on P15-190)
 
 **Status: built; waiting for CI (macOS compile, simulator capture `polish-voice-panel`) and the owner's TestFlight check. No build cut.** Part 2 of #1925.
