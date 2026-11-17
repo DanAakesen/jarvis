@@ -1,3 +1,14 @@
+## 17 November 2026 — The PI smoke runs as three requests, not one (#1910, P15-209)
+
+After the Azure MCP wake-up fix, `measure_pi` still failed with HTTP 504. The backend log showed the Azure read inside the smoke completing in 7.3 s, so Azure reach worked; the whole smoke (cold turn, warm turns, tool and voice turns, GitHub, Azure and four tool-choice turns, each one to fifteen seconds) now takes about four minutes, and the Container Apps ingress ends one request at 240 s.
+
+| Choice | Why |
+| --- | --- |
+| `POST /pi/smoke` requires `part`: `core` (baseline, cold, warm, tool and cancelled turns), `voice` (the PI leg of a voice turn) or `reach` (GitHub, Azure, tool choice). Each part has its own scratch conversation and reports its own checks and cost | No request approaches 240 s, and the checks and what they measure are unchanged. The voice turns now start a fresh conversation instead of following the warm turns; the voice checks do not depend on that |
+| The workflow script calls the parts one after another and merges checks and cost into the one summary | One summary, one pass or fail, as before. A failing part names itself in the error. There is no unsplit path |
+| Each part is cut off at 220 s inside the backend and 235 s in the script | A part that is slow fails visibly under 240 s instead of as a 504 with no detail |
+
+
 ## 17 November 2026 — The Azure MCP server's cold start must not look like "Azure is not attached" (#1910, P15-208)
 
 Two `measure_pi` Deploys on main failed after the voice-visuals merge: the first on `reach_azure` and `mcp_listing` (GitHub and the other checks passed), the second as "HTTP 504, no detail". The agent was v15 with Azure and GitHub attached, and an earlier run had listed 17 Azure tools and read 22 resources.

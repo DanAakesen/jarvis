@@ -4,7 +4,7 @@ import { PiGatewayError } from './errors.js';
 import type { PiGateway, PiStatus } from './gateway.js';
 import { createPiMcpRoutes } from './mcp.js';
 import type { RemoteMcpBridge } from './remote-mcp.js';
-import { runPiSmoke } from './smoke.js';
+import { piSmokeParts, runPiSmoke, type PiSmokePart } from './smoke.js';
 import type { PiTurnRegistry } from './turns.js';
 import type { BrainControl } from './brain/control.js';
 import { PI_MODEL, PI_REASONING_EFFORT } from './definition.js';
@@ -86,14 +86,14 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
     for (const bridge of options.bridges ?? []) bridge.warm();
     await app.register(createPiMcpRoutes({ registry: options.registry, auth: options.auth, bridges: options.bridges }));
 
-    app.post('/pi/smoke', { config: { jarvisDeploySmoke: true }, schema: { body: { type: ['object', 'null'], additionalProperties: false } } },
+    app.post<{ Body: { part: PiSmokePart } }>('/pi/smoke', { config: { jarvisDeploySmoke: true }, schema: { body: { type: 'object', required: ['part'], additionalProperties: false, properties: { part: { enum: [...piSmokeParts] } } } } },
       async (request, reply) => {
         reply.header('Cache-Control', 'no-store');
         if (!request.deployPrincipal) return reply.code(403).send({ error: 'Forbidden' });
         try {
           const status = await gateway.status(AbortSignal.timeout(10_000));
           if (!status.enabled) return reply.code(409).send({ error: 'PI is over its monthly cap; the smoke did not run.', code: 'pi_budget_exhausted' });
-          return await runPiSmoke(gateway, AbortSignal.timeout(280_000), { bridges: options.bridges });
+          return await runPiSmoke(gateway, AbortSignal.timeout(220_000), { bridges: options.bridges, part: request.body.part });
         } catch (error) {
           request.log.warn({ code: error instanceof PiGatewayError ? error.code : 'unknown' }, 'pi.smoke_failed');
           return reply.code(502).send(errorBody(error));

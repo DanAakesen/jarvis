@@ -1,7 +1,8 @@
 """Run the PI live smoke on the deployed backend and turn its measurements into a job summary.
 
-The backend does the work (POST /pi/smoke, deployment identity only): a scratch conversation, a cold turn, warm turns, a
-tool turn through the Jarvis MCP server, and a cancelled turn. This script only calls it and shows what it observed.
+The backend does the work (POST /pi/smoke, deployment identity only), in three parts so that no request nears the ingress limit:
+core (cold, warm, tool and cancelled turns), voice, and reach (GitHub, Azure and tool choice). This script calls the parts one
+after another, merges what they observed and shows it.
 """
 from __future__ import annotations
 
@@ -13,6 +14,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+# The backend runs the smoke in these parts, one request each (see runPiSmoke).
+PARTS = ("core", "voice", "reach")
 CHECKS = {
     "streaming": "text streams in several pieces, not one chunk",
     "tools_over_mcp": "a Jarvis tool ran through the MCP server and its own result was ok",
@@ -102,28 +105,34 @@ def main(argv: list[str] | None = None) -> int:
     if not token:
         print("::error::The deployment identity returned no token for the PI smoke.", file=sys.stderr)
         return 1
-    request = urllib.request.Request(
-        f"https://{args.backend_fqdn}/pi/smoke", data=b"{}", method="POST",
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.build_opener(NoRedirect).open(request, timeout=295) as response:
-            report = json.loads(response.read(1_048_576))
-    except urllib.error.HTTPError as error:
-        body = error.read(4096).decode("utf-8", "replace")
+    # The whole smoke takes about four minutes, longer than the 240 s the ingress allows one request, so it runs as three requests.
+    report: dict = {"checks": {}, "totalCostDkk": 0.0}
+    for part in PARTS:
+        request = urllib.request.Request(
+            f"https://{args.backend_fqdn}/pi/smoke", data=json.dumps({"part": part}).encode(), method="POST",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        )
         try:
-            detail = json.loads(body)
-        except ValueError:
-            detail = {}
-        message = detail.get("error", "no detail") if isinstance(detail, dict) else "no detail"
-        if isinstance(detail, dict) and isinstance(detail.get("detail"), str):
-            message += f" (provider code: {detail['detail']})"
-        print(f"::error::The PI smoke failed with HTTP {error.code}: {message}", file=sys.stderr)
-        args.summary.write_text(f"### PI live smoke\n\nFailed with HTTP {error.code}: {message}\n", encoding="utf-8")
-        return 1
-    except (urllib.error.URLError, TimeoutError, ValueError):
-        print("::error::The PI smoke did not return a report.", file=sys.stderr)
-        return 1
+            with urllib.request.build_opener(NoRedirect).open(request, timeout=235) as response:
+                answer = json.loads(response.read(1_048_576))
+        except urllib.error.HTTPError as error:
+            body = error.read(4096).decode("utf-8", "replace")
+            try:
+                detail = json.loads(body)
+            except ValueError:
+                detail = {}
+            message = detail.get("error", "no detail") if isinstance(detail, dict) else "no detail"
+            if isinstance(detail, dict) and isinstance(detail.get("detail"), str):
+                message += f" (provider code: {detail['detail']})"
+            print(f"::error::The PI smoke ({part}) failed with HTTP {error.code}: {message}", file=sys.stderr)
+            args.summary.write_text(f"### PI live smoke\n\nThe {part} part failed with HTTP {error.code}: {message}\n", encoding="utf-8")
+            return 1
+        except (urllib.error.URLError, TimeoutError, ValueError):
+            print(f"::error::The PI smoke ({part}) did not return a report.", file=sys.stderr)
+            return 1
+        report["checks"].update(answer.pop("checks", {}))
+        report["totalCostDkk"] = round(report["totalCostDkk"] + answer.pop("totalCostDkk", 0), 4)
+        report.update(answer)
     rendered = render(report)
     args.summary.write_text(rendered, encoding="utf-8")
     # The step summary needs a sign-in to read; the log shows the same numbers to anyone who can open the run.

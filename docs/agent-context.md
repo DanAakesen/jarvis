@@ -1,3 +1,7 @@
+## PI smoke parts — 17 November 2026 (#1910, P15-209)
+
+- `POST /pi/smoke` needs `{ "part": "core" | "voice" | "reach" }`. `.github/scripts/pi_smoke_report.py` calls the three in turn and merges them; run it through Deploy `measure_pi`. Checks: `cd apps/backend && npx vitest run src/pi`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`.
+
 ## Azure MCP cold start — 17 November 2026 (#1910, P15-208)
 
 - Checks: `cd apps/backend && npx vitest run src/pi && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`. Instruction text changed: deploy the PI agent, then run `measure_pi` and read "Wake the Azure MCP server" (cold-start time) and the "azure: FAILED to list (reason)" line if it fails.

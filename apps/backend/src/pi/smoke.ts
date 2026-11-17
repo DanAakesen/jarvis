@@ -23,23 +23,43 @@ interface Measured {
   readonly aborted: boolean;
 }
 
-export interface PiSmokeReport {
+/**
+ * The smoke is three requests, each well inside the 240 s the ingress allows a request, because the whole of it takes about four
+ * minutes. Each part reports its own checks; the workflow calls them one after another and merges the answers.
+ */
+export const piSmokeParts = ['core', 'voice', 'reach'] as const;
+export type PiSmokePart = typeof piSmokeParts[number];
+
+interface PiSmokePartReport {
+  readonly part: PiSmokePart;
+  readonly totalCostDkk: number;
+  readonly checks: Record<string, boolean>;
+}
+
+export interface PiSmokeCoreReport extends PiSmokePartReport {
+  readonly part: 'core';
   /** The fixed prompt: first call of a new conversation with a trivial reply. Not a check; it explains the growth of longer turns. */
   readonly baseline: Measured;
   readonly cold: Measured;
   readonly warm: readonly Measured[];
   readonly tools: Measured;
+  readonly cancel: { readonly abortToCloseMs: number; readonly partialCharacters: number; readonly followUpOk: boolean };
+}
+
+/** The PI leg of a voice turn: the same agent and conversation with the voice channel note. Voice Live's own audio time is not in it. */
+export interface PiSmokeVoiceReport extends PiSmokePartReport {
+  readonly part: 'voice';
+  readonly voice: { readonly plain: Measured; readonly tools: Measured };
+}
+
+export interface PiSmokeReachReport extends PiSmokePartReport {
+  readonly part: 'reach';
   /** Servers the harness listed tools for in this run, with the tool count: proof that each is attached and reachable. */
   readonly listed: readonly { readonly server: string; readonly tools: number; readonly failed: boolean; readonly reason?: string }[];
   /** One turn per attached reach server; absent servers get no turn and no check. */
   readonly reach: readonly { readonly server: 'github' | 'azure'; readonly turn: Measured }[];
   /** Natural prompts with no tool named: which tools PI reached for. Report only; the smoke role refuses everything but its reads, so nothing acts. */
   readonly choices: readonly { readonly label: string; readonly called: readonly string[]; readonly turn: Measured }[];
-  readonly cancel: { readonly abortToCloseMs: number; readonly partialCharacters: number; readonly followUpOk: boolean };
-  /** The PI leg of a voice turn: the same agent and conversation with the voice channel note. Voice Live's own audio time is not in it. */
-  readonly voice: { readonly plain: Measured; readonly tools: Measured };
-  readonly totalCostDkk: number;
-  readonly checks: Record<string, boolean>;
 }
 
 /** True only when list_jobs ran through call_tool and its own result was `ok`. */
@@ -56,11 +76,17 @@ export function isSpokenShape(text: string): boolean {
 }
 
 /**
- * Live proof for the Deploy workflow: one scratch conversation (never the owner's), a cold turn, warm turns, a tool turn
- * through the Jarvis MCP server under the read-only smoke role, and a cancelled turn followed by a normal one. It reports
+ * Live proof for the Deploy workflow, one part at a time: scratch conversations (never the owner's). `core`: a cold turn, warm turns, a tool turn
+ * through the Jarvis MCP server under the read-only smoke role, and a cancelled turn followed by a normal one. `voice`: the PI leg of
+ * voice turns. `reach`: the GitHub and Azure servers and tool choice. It reports
  * what it observed; the workflow, not this code, decides how to present it.
  */
-export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: { warmTurns?: number; bridges?: readonly RemoteMcpBridge[] | undefined } = {}): Promise<PiSmokeReport> {
+interface PiSmokeOptions { readonly warmTurns?: number; readonly bridges?: readonly RemoteMcpBridge[] | undefined }
+export function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: PiSmokeOptions & { readonly part: 'core' }): Promise<PiSmokeCoreReport>;
+export function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: PiSmokeOptions & { readonly part: 'voice' }): Promise<PiSmokeVoiceReport>;
+export function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: PiSmokeOptions & { readonly part: 'reach' }): Promise<PiSmokeReachReport>;
+export function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: PiSmokeOptions & { readonly part: PiSmokePart }): Promise<PiSmokeCoreReport | PiSmokeVoiceReport | PiSmokeReachReport>;
+export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: PiSmokeOptions & { readonly part: PiSmokePart }): Promise<PiSmokeCoreReport | PiSmokeVoiceReport | PiSmokeReachReport> {
   const kit = gateway.smokeKit;
   const conversationId = await kit.createConversation(signal);
   const listed = new Map<string, { tools: number; failed: boolean; reason?: string }>();
@@ -116,33 +142,67 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
       spokenShape: isSpokenShape(output), textBeforeTool, aborted: abortedAt !== null, abortToCloseMs: closedMs };
   }
 
-  // The fixed prompt on its own: a new conversation and a reply that needs no skill or tool. Its input tokens are what every
-  // conversation starts with; anything a longer turn adds beyond it (skills loaded, tool results) is the conversation's own growth.
-  const baseline = await measure('Reply with exactly: ready', { conversation: await kit.createConversation(signal) });
-  // A reply of a few dozen words, so streaming can be told from one buffered chunk; one short sentence cannot.
-  const cold = await measure('In about 60 words, introduce yourself as PI, Jarvis on the Copilot harness, and say what you can do for Dan.');
-  const warm: Measured[] = [];
-  for (let index = 0; index < (options.warmTurns ?? 3); index += 1) {
-    warm.push(await measure(`Reply with one short sentence about the number ${index + 2}.`));
-  }
-  const tools = await measure(
-    'Use find_tools to look up "jobs", then run list_jobs with call_tool and empty arguments, then say in one sentence how many jobs are running.',
-  );
-  // The PI leg of voice turns, in the same warm conversation: what Dan says is short, and what PI says must be speakable.
-  const voicePlain = await measure('Dan asks by voice: what is a good name for a goldfish?', { voice: true });
-  const voiceTools = await measure(
-    'Dan asks by voice: use find_tools to look up "jobs", then run list_jobs with call_tool and empty arguments, and tell me how many jobs are running.',
-    { voice: true },
-  );
   const strip = (turn: Measured & { abortToCloseMs?: number }): Measured => {
     const { abortToCloseMs, ...rest } = turn;
     void abortToCloseMs;
     return rest;
   };
+  const cost = (turns: readonly Measured[]) => Number(turns.reduce((sum, turn) => sum + turn.costDkk, 0).toFixed(4));
+
+  if (options.part === 'core') {
+    // The fixed prompt on its own: a new conversation and a reply that needs no skill or tool. Its input tokens are what every
+    // conversation starts with; anything a longer turn adds beyond it (skills loaded, tool results) is the conversation's own growth.
+    const baseline = await measure('Reply with exactly: ready', { conversation: await kit.createConversation(signal) });
+    // A reply of a few dozen words, so streaming can be told from one buffered chunk; one short sentence cannot.
+    const cold = await measure('In about 60 words, introduce yourself as PI, Jarvis on the Copilot harness, and say what you can do for Dan.');
+    const warm: Measured[] = [];
+    for (let index = 0; index < (options.warmTurns ?? 3); index += 1) {
+      warm.push(await measure(`Reply with one short sentence about the number ${index + 2}.`));
+    }
+    const tools = await measure(
+      'Use find_tools to look up "jobs", then run list_jobs with call_tool and empty arguments, then say in one sentence how many jobs are running.',
+    );
+    const cancelled = await measure('Write a very long, detailed story of at least 400 words about a butler.', { abortAfterFirstText: true });
+    const followUp = await measure('Reply with exactly: still here').then(turn => turn.characters > 0, () => false);
+    const warmMedian = [...warm].map(turn => turn.firstTextMs ?? Infinity).sort((a, b) => a - b)[Math.floor(warm.length / 2)] ?? Infinity;
+    return {
+      part: 'core',
+      cold: strip(cold), warm, tools: strip(tools), baseline: strip(baseline),
+      cancel: { abortToCloseMs: cancelled.abortToCloseMs, partialCharacters: cancelled.characters, followUpOk: followUp },
+      totalCostDkk: cost([baseline, cold, ...warm, tools, cancelled]),
+      checks: {
+        // Real streaming: several deltas, with the last arriving well after the first.
+        streaming: cold.deltas > 3 && (cold.lastTextMs ?? 0) - (cold.firstTextMs ?? 0) > 100,
+        // The tool must have run and succeeded as the server saw it: model text or an mcp_call item alone prove nothing.
+        tools_over_mcp: toolRanOk(tools.toolResults),
+        cancellation: cancelled.aborted && cancelled.abortToCloseMs < 5_000 && followUp,
+        warm_faster_than_cold: warmMedian < (cold.firstTextMs ?? 0),
+      },
+    };
+  }
+
+  if (options.part === 'voice') {
+    // The PI leg of voice turns: what Dan says is short, and what PI says must be speakable.
+    const voicePlain = await measure('Dan asks by voice: what is a good name for a goldfish?', { voice: true });
+    const voiceTools = await measure(
+      'Dan asks by voice: use find_tools to look up "jobs", then run list_jobs with call_tool and empty arguments, and tell me how many jobs are running.',
+      { voice: true },
+    );
+    return {
+      part: 'voice',
+      voice: { plain: strip(voicePlain), tools: strip(voiceTools) },
+      totalCostDkk: cost([voicePlain, voiceTools]),
+      checks: {
+        // Voice: the reply reads as speech, and a voice turn can use a tool as the server recorded it.
+        voice_spoken_shape: voicePlain.spokenShape && voiceTools.spokenShape,
+        voice_tools_over_mcp: toolRanOk(voiceTools.toolResults),
+      },
+    };
+  }
+
   // A reach server gets a turn only when the harness listed its tools; a server that is not attached is reported as such.
   const reach: { server: 'github' | 'azure'; turn: Measured }[] = [];
-  // The smoke waits for a server that is starting from zero (a search never does), all servers at once: the whole smoke is one
-  // request that the ingress ends after 240 s.
+  // The servers are waited for at once (a server starting from zero can take a minute; a search never waits for it).
   await Promise.all((options.bridges ?? []).map(async (bridge) => {
     const found = await bridge.tools(signal, 100_000).catch(() => []);
     const status = bridge.status();
@@ -170,27 +230,11 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
     const turn = strip(await measure(prompt.text, { environment: true }));
     choices.push({ label: prompt.label, called: turn.toolResults.map(result => result.tool), turn });
   }
-  const cancelled = await measure('Write a very long, detailed story of at least 400 words about a butler.', { abortAfterFirstText: true });
-  const followUp = await measure('Reply with exactly: still here').then(turn => turn.characters > 0, () => false);
-
-  const all = [baseline, cold, ...warm, tools, voicePlain, voiceTools, ...reach.map(({ turn }) => turn), ...choices.map(({ turn }) => turn), cancelled];
-  const warmMedian = [...warm].map(turn => turn.firstTextMs ?? Infinity).sort((a, b) => a - b)[Math.floor(warm.length / 2)] ?? Infinity;
   return {
-    cold: strip(cold), warm: warm, tools: strip(tools), baseline: strip(baseline),
-    voice: { plain: strip(voicePlain), tools: strip(voiceTools) },
+    part: 'reach',
     listed: [...listed].map(([server, entry]) => ({ server, ...entry })), reach, choices,
-    cancel: { abortToCloseMs: cancelled.abortToCloseMs, partialCharacters: cancelled.characters, followUpOk: followUp },
-    totalCostDkk: Number(all.reduce((sum, turn) => sum + turn.costDkk, 0).toFixed(4)),
+    totalCostDkk: cost([...reach.map(({ turn }) => turn), ...choices.map(({ turn }) => turn)]),
     checks: {
-      // Real streaming: several deltas, with the last arriving well after the first.
-      streaming: cold.deltas > 3 && (cold.lastTextMs ?? 0) - (cold.firstTextMs ?? 0) > 100,
-      // The tool must have run and succeeded as the server saw it: model text or an mcp_call item alone prove nothing.
-      tools_over_mcp: toolRanOk(tools.toolResults),
-      cancellation: cancelled.aborted && cancelled.abortToCloseMs < 5_000 && followUp,
-      warm_faster_than_cold: warmMedian < (cold.firstTextMs ?? 0),
-      // Voice: the reply reads as speech, and a voice turn can use a tool as the server recorded it.
-      voice_spoken_shape: voicePlain.spokenShape && voiceTools.spokenShape,
-      voice_tools_over_mcp: toolRanOk(voiceTools.toolResults),
       // A reach check exists only for a server the harness reported on: a server that listed its tools must also answer a read
       // without an error, and one whose listing failed fails its check. A server that is not attached has no check at all.
       ...Object.fromEntries(['github', 'azure'].flatMap((server) => {
