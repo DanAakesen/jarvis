@@ -90,14 +90,14 @@ public struct JarvisGraphProjector: Sendable {
 
     static let perspectiveDistance = 3.4
     static let farOpacity = 0.38
-    static let minimumRadius = 2.5
+    static let minimumRadius = 1.8
     static let maximumRadius = 16.0
 
     public init(layoutRadius: Double, camera: JarvisGraphCamera, viewport: JarvisGraphViewport) {
         self.layoutRadius = max(layoutRadius, 0.001)
         self.camera = camera
         self.viewport = viewport
-        unit = 0.36 * min(viewport.width, viewport.height) / self.layoutRadius
+        unit = 0.46 * min(viewport.width, viewport.height) / self.layoutRadius
         cosYaw = cos(camera.yaw)
         sinYaw = sin(camera.yaw)
         cosPitch = cos(camera.pitch)
@@ -130,13 +130,15 @@ public struct JarvisGraphProjector: Sendable {
     public func project(_ layout: JarvisGraphLayout, time: Double = 0, mode: JarvisGraphMotionMode = .still) -> [JarvisGraphProjectedNode] {
         let amplitude = JarvisGraphLife.driftAmplitude(layoutRadius: layout.radius)
         let zoomScale = camera.zoom.squareRoot()
+        // Big vaults draw smaller dots so clusters stay readable instead of filling in.
+        let density = min(1, max(0.45, (120.0 / Double(max(layout.nodes.count, 1))).squareRoot()))
         return layout.nodes.indices.map { index in
             let node = layout.nodes[index]
             let position = mode.drifts
                 ? node.position + JarvisGraphLife.drift(of: node, time: time, amplitude: amplitude, mode: mode)
                 : node.position
             let p = project(position)
-            let base = 2.6 + 4.2 * node.weight
+            let base = (2.4 + 4.0 * node.weight) * density
             return JarvisGraphProjectedNode(
                 index: index, x: p.x, y: p.y, depth: p.depth,
                 radius: min(max(base * p.perspective * zoomScale, Self.minimumRadius), Self.maximumRadius),

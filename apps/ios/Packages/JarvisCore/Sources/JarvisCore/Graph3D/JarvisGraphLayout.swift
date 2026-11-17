@@ -176,19 +176,25 @@ public struct JarvisGraphLayout: Equatable, Sendable {
         )
     }
 
-    /// Cluster centres on a Fibonacci spiral over a slightly flattened sphere, far enough apart that clusters do not
-    /// overlap. One cluster sits at the origin.
+    /// Cluster centres on a Fibonacci spiral over a slightly flattened sphere, scaled so the closest pair of clusters
+    /// just clears each other. One cluster sits at the origin.
     static func clusterCentres(radii: [Double]) -> [JarvisVec3] {
         let count = radii.count
         guard count > 1 else { return [.zero] }
-        let widest = radii.max() ?? 1
-        let distance = widest * (count == 2 ? 1.3 : max(1.8, 0.8 * Double(count).squareRoot()))
-        return (0..<count).map { index in
+        let directions = (0..<count).map { index -> JarvisVec3 in
             let y = 1 - 2 * (Double(index) + 0.5) / Double(count)
             let ring = (1 - y * y).squareRoot()
             let angle = Double(index) * 2.399963229728653
-            return JarvisVec3(ring * cos(angle), y * 0.75, ring * sin(angle)) * distance
+            return JarvisVec3(ring * cos(angle), y * 0.75, ring * sin(angle))
         }
+        var scale = 0.0
+        for a in 0..<count {
+            for b in (a + 1)..<count {
+                let gap = (directions[a] - directions[b]).length
+                if gap > 1e-9 { scale = max(scale, 1.12 * (radii[a] + radii[b]) / gap) }
+            }
+        }
+        return directions.map { $0 * scale }
     }
 
     /// Real edges only: unknown ends and self links are dropped, a pair is drawn once and an explicit link wins over a
