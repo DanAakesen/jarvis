@@ -30,7 +30,7 @@ export interface PiSmokeReport {
   readonly warm: readonly Measured[];
   readonly tools: Measured;
   /** Servers the harness listed tools for in this run, with the tool count: proof that each is attached and reachable. */
-  readonly listed: readonly { readonly server: string; readonly tools: number; readonly failed: boolean }[];
+  readonly listed: readonly { readonly server: string; readonly tools: number; readonly failed: boolean; readonly reason?: string }[];
   /** One turn per attached reach server; absent servers get no turn and no check. */
   readonly reach: readonly { readonly server: 'github' | 'azure'; readonly turn: Measured }[];
   /** Natural prompts with no tool named: which tools PI reached for. Report only; the smoke role refuses everything but its reads, so nothing acts. */
@@ -63,7 +63,7 @@ export function isSpokenShape(text: string): boolean {
 export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, options: { warmTurns?: number; bridges?: readonly RemoteMcpBridge[] | undefined } = {}): Promise<PiSmokeReport> {
   const kit = gateway.smokeKit;
   const conversationId = await kit.createConversation(signal);
-  const listed = new Map<string, { tools: number; failed: boolean }>();
+  const listed = new Map<string, { tools: number; failed: boolean; reason?: string }>();
 
   async function measure(text: string, config: { abortAfterFirstText?: boolean; voice?: boolean; environment?: boolean; conversation?: string } = {}): Promise<Measured & { abortToCloseMs: number }> {
     const controller = new AbortController();
@@ -141,11 +141,15 @@ export async function runPiSmoke(gateway: PiGateway, signal: AbortSignal, option
   };
   // A reach server gets a turn only when the harness listed its tools; a server that is not attached is reported as such.
   const reach: { server: 'github' | 'azure'; turn: Measured }[] = [];
-  for (const bridge of options.bridges ?? []) {
-    // The smoke waits for a server that is starting from zero; a search never does.
+  // The smoke waits for a server that is starting from zero (a search never does), all servers at once: the whole smoke is one
+  // request that the ingress ends after 240 s.
+  await Promise.all((options.bridges ?? []).map(async (bridge) => {
     const found = await bridge.tools(signal, 100_000).catch(() => []);
-    listed.set(bridge.prefix === azureToolPrefix ? 'azure' : 'github', { tools: found.length, failed: found.length === 0 });
-  }
+    const status = bridge.status();
+    listed.set(bridge.prefix === azureToolPrefix ? 'azure' : 'github', {
+      tools: found.length, failed: found.length === 0, ...(status.state === 'unreachable' ? { reason: status.reason } : status.state === 'starting' && found.length === 0 ? { reason: 'still starting after the wait' } : {}),
+    });
+  }));
   const reachPrompts = {
     github: 'Use find_tools to look up "github issue read", then call the GitHub tool gh_issue_read with owner "DanAakesen", repo "jarvis", issue_number 700 and method "get", then say the issue title in one sentence.',
     // The environment note carries the default subscription and the Jarvis resource group, as a real first turn would.

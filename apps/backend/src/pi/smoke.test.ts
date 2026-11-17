@@ -51,6 +51,9 @@ function fakeGateway(toolOutcome: 'ok' | 'error' | 'none', options: { claimToolT
 
 const bridge = (count: number, prefix = 'gh_'): RemoteMcpBridge => ({
   prefix,
+  label: prefix === 'az_' ? 'Azure' : 'GitHub',
+  status: () => (count === 0 ? { state: 'unreachable', reason: 'no answer within 200 seconds' } : { state: 'ready' }),
+  warm: () => {},
   tools: async () => Array.from({ length: count }, (_, index) => ({ name: `gh_t${index}`, description: 'x', inputSchema: {}, moduleId: 'github', execute: async () => ({}) })),
   call: async () => ({ outcome: 'ok', result: {} }),
 });
@@ -100,7 +103,7 @@ describe('PI live smoke', () => {
     const failed = await runPiSmoke(fakeGateway('ok', { failReach: true }), new AbortController().signal, { warmTurns: 1, bridges: [bridge(30)] });
     expect(failed.checks.reach_github).toBe(false);
     const empty = await runPiSmoke(fakeGateway('ok'), new AbortController().signal, { warmTurns: 1, bridges: [bridge(0)] });
-    expect(empty.listed).toEqual([{ server: 'github', tools: 0, failed: true }]);
+    expect(empty.listed).toEqual([{ server: 'github', tools: 0, failed: true, reason: 'no answer within 200 seconds' }]);
     expect(empty.reach).toEqual([]);
     expect(empty.checks.reach_github).toBe(false);
   });

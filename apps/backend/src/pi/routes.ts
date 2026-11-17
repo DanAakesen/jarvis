@@ -52,7 +52,7 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
         return reply.code(503).send({ error: 'PI is not set up on this backend yet. No other engine was used.', code: 'pi_not_configured' });
       }
       // Starts a remote server that scales to zero (Azure) and reads the catalogues now, so the first search does not wait for them.
-      for (const bridge of options.bridges ?? []) void bridge.tools(AbortSignal.timeout(100_000), 100_000).catch(() => undefined);
+      for (const bridge of options.bridges ?? []) bridge.warm();
       const controller = new AbortController();
       request.raw.once('aborted', () => controller.abort());
       try { return await options.gateway.warm(AbortSignal.any([controller.signal, AbortSignal.timeout(120_000)])); } catch (error) {
@@ -82,6 +82,8 @@ export function createPiRoutes(options: PiModuleOptions): FastifyPluginAsync {
 
     if (!options.gateway) return;
     const gateway = options.gateway;
+    // Wake a server that scales from zero (Azure) as the backend starts, so its first search does not find it asleep.
+    for (const bridge of options.bridges ?? []) bridge.warm();
     await app.register(createPiMcpRoutes({ registry: options.registry, auth: options.auth, bridges: options.bridges }));
 
     app.post('/pi/smoke', { config: { jarvisDeploySmoke: true }, schema: { body: { type: ['object', 'null'], additionalProperties: false } } },

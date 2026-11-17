@@ -83,6 +83,20 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
         get: (name) => app.jarvisTools.get(name) ?? remoteTools.find((tool) => tool.name === name),
       };
       const matches = searchVoiceTools(catalogue, input.query, grant.brain ? isWakeTool : undefined);
+      // A server that is still loading, or could not be loaded, has no tools in the catalogue. Say which, so the model never
+      // reports a server it simply has not heard from yet as "not attached".
+      const notes = (noMatch: boolean) => {
+        const lines = [
+          ...(noMatch ? ['No matching tool. Say so plainly.'] : []),
+          ...bridges.flatMap((bridge) => {
+            const status = bridge.status();
+            if (status.state === 'starting') return [`${bridge.label} tools are still loading (the server wakes from sleep and can take a minute or two). Search again shortly; ${bridge.label} is attached, just not loaded yet.`];
+            if (status.state === 'unreachable') return [`${bridge.label} could not be reached (${status.reason}). Say so plainly; do not claim to have looked.`];
+            return [];
+          }),
+        ];
+        return lines.length > 0 ? { note: lines.join(' ') } : {};
+      };
       const full = matches.slice(0, maxFullResults);
       for (const tool of full) grant.discovered.add(tool.name);
       return text({
@@ -90,7 +104,7 @@ export function createPiMcpRoutes(options: { readonly registry: PiTurnRegistry; 
           tools: full.map(tool => ({ name: tool.name, description: tool.description, parameters: shapeSchema(tool) })),
           otherMatches: matches.slice(maxFullResults, maxFullResults + maxOtherResults)
             .map(tool => ({ name: tool.name, description: shortenVoiceDescription(tool.description) })),
-          ...(matches.length === 0 ? { note: 'No matching tool. Say so plainly.' } : {}),
+          ...notes(matches.length === 0),
         },
       });
     });

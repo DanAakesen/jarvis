@@ -1,3 +1,8 @@
+## Azure MCP cold start — 17 November 2026 (#1910, P15-208)
+
+- Checks: `cd apps/backend && npx vitest run src/pi && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0`; `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests`. Instruction text changed: deploy the PI agent, then run `measure_pi` and read "Wake the Azure MCP server" (cold-start time) and the "azure: FAILED to list (reason)" line if it fails.
+- Not verifiable here: the Azure MCP container's own logs (no Azure access from the build environment).
+
 ## Voice visuals and chat blocks — 17 November 2026 (#1939, P15-205)
 
 - Checks: `cd apps/backend && npx tsc --noEmit -p tsconfig.json && npx eslint src --max-warnings 0 && npx vitest run` (`src/pi/show-in-chat-route.test.ts` runs `show_in_chat` through the real PI door); `cd packages/contracts && node --test`; `cd apps/ios/Packages/JarvisCore && swift test` (a Swift 6.2 Linux toolchain works). The SwiftUI compiles only in the macOS `watch` job.
