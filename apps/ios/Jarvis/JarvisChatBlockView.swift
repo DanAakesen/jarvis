@@ -19,10 +19,10 @@ extension EnvironmentValues {
 struct JarvisChatBlockView: View {
     let block: ChatBlock
     let language: JarvisAppLanguage
+    @Binding var showsData: Bool
 
     @Environment(\.jarvisWorkspaceRuntime) private var runtime
     @Environment(\.openURL) private var openURL
-    @State private var showsData = false
     @State private var notice: String?
 
     private var locale: Locale { language.locale }
@@ -39,8 +39,8 @@ struct JarvisChatBlockView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            if showsData, case .chart(let chart) = block.content {
-                ChatBlockDataTable(table: chart.table(locale: locale, missing: text(.blockMissing)), language: language)
+            if showsData, let table = dataTable {
+                ChatBlockDataTable(table: table, language: language)
             }
             footer
         }
@@ -78,7 +78,6 @@ struct JarvisChatBlockView: View {
                 GeneratedViewContent(
                     view: view,
                     runtime: runtime,
-                    webAppURL: runtime.webAppURL,
                     language: language,
                     previewImage: nil,
                     onAction: perform
@@ -118,22 +117,53 @@ struct JarvisChatBlockView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            if case .chart = block.content {
+            if !isUnsupported {
                 JarvisMenuButton(
                     title: text(.blockActions),
                     systemImage: "ellipsis",
                     identifier: "chat.block.menu.\(block.id)"
                 ) {
-                    Button {
-                        showsData.toggle()
-                    } label: {
-                        Label(text(showsData ? .blockHideData : .blockViewData), systemImage: "tablecells")
+                    if dataTable != nil {
+                        Button {
+                            showsData.toggle()
+                        } label: {
+                            Label(text(showsData ? .blockHideData : .blockViewData), systemImage: "tablecells")
+                        }
                     }
                     Button(action: copyData) {
                         Label(text(.blockCopyData), systemImage: "doc.on.doc")
                     }
                 }
             }
+        }
+    }
+
+    private var isUnsupported: Bool {
+        if case .unsupported = block.content { return true }
+        return false
+    }
+
+    /// The values behind a chart or a forecast as rows. A list or table block already shows its rows.
+    private var dataTable: ChatBlockChart.Table? {
+        switch block.content {
+        case .chart(let chart):
+            return chart.table(locale: locale, missing: text(.blockMissing))
+        case .forecast(let forecast):
+            let date = ChatBlockFormatting.forecastDate(forecast.date, locale: locale) ?? forecast.date
+            let labels = ForecastDataLabels(
+                place: text(.blockFieldPlace),
+                date: text(.blockFieldDate),
+                conditions: text(.blockFieldConditions),
+                high: text(.blockFieldHigh),
+                low: text(.blockFieldLow),
+                rainChance: text(.blockFieldRainChance)
+            )
+            return ChatBlockChart.Table(
+                header: [text(.blockFieldHeader), text(.blockValueHeader)],
+                rows: forecast.dataRows(labels: labels, dateText: date, locale: locale, missing: text(.blockMissing))
+            )
+        case .view, .unsupported:
+            return nil
         }
     }
 

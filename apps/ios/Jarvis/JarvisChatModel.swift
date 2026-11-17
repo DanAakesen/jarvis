@@ -101,6 +101,9 @@ final class JarvisChatModel: ObservableObject {
     private var thinkingPhrase = ""
     @Published var isCancelling = false
     @Published var resolvingConfirmationDecisions = [String: ConfirmationDecision]()
+    /// Blocks whose data table is open. Held here, not in the block view, so it survives the list recycling the
+    /// view when it scrolls away and the reply being replaced by its stored copy.
+    @Published var expandedBlockDataIDs = Set<String>()
     @Published var dismissingActivityIDs = Set<String>()
     @Published var dismissingBackgroundTaskIDs = Set<String>()
     @Published var historyError: String?

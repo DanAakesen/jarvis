@@ -117,6 +117,8 @@ struct VoiceScreenView: View {
                 }
             }
             .coordinateSpace(name: "voiceScreen")
+            // One eased, interruptible curve moves the orb back when content arrives and returns it when it goes.
+            .animation(reduceMotion ? nil : JarvisDesignTokens.voicePanelMotion, value: panelHeight)
             .onPreferenceChange(VoiceCaptionFrameKey.self) { captionFrame = $0 }
             .contentShape(Rectangle())
             .simultaneousGesture(minimizeGesture(in: geometry.size))
@@ -127,6 +129,9 @@ struct VoiceScreenView: View {
                 #if targetEnvironment(simulator)
                 if ProcessInfo.processInfo.arguments.contains("--screenshot-voice-activity-fixture") { return }
                 #endif
+                // The panel shows what Jarvis presents during this session, never what was open before it.
+                workspaceRuntime?.userDismissedView()
+                workspaceRuntime?.reportActive()
                 await model.start()
             }
         }

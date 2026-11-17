@@ -1,3 +1,9 @@
+## Voice panel header and orb motion (17 November 2026, #1939, P15-205; from owner feedback on build 112)
+
+The panel has a header row of its own that the content never uses: close and, when the content needs room, expand at the top left (both `JarvisIconButton`), then one title, which comes from the content. The content scrolls below the row. Nothing is shown when a new voice session starts; the panel appears only for what Jarvis presents during the session (content presented while it was minimised carries over).
+
+The orb steps back when content arrives and returns when it goes, with one eased spring (`JarvisDesignTokens.voicePanelMotion`, smooth, 0.55 s) in both directions and for expanding and collapsing. It is not linear, it keeps its velocity when interrupted by a new arrival or a close, and Reduce Motion removes it. Code views show line numbers with matched lines marked by a bold chevron and a faint surface; a knowledge-graph view is one line of search, one line of count and an Open Notes button. Chat blocks: the ellipsis opens View data and Copy data on a forecast or chart and Copy data on other blocks; an open data table stays open while scrolling. Not yet seen on a device.
+
 ## Tool activity in Chat (17 November 2026, #1941, P15-204; owner approved, motion proposed)
 
 [Compact tree](docs/ui/tool-activity/selected-compact-tree.png), implemented as in the handover: each row has a tool icon, the action label and, for a group, a chevron right after the label (right when closed, down when open). Icons come from the tool type: document, pencil, terminal, globe, gear, cloud, with the tools glyph as fallback, and stay the same in every state. No counts, Done or Queued text.
@@ -10,7 +16,7 @@
 
 ## Voice bottom panel (17 November 2026, #1925; owner approved, Voice only)
 
-Generated content sits in one neutral glass panel (`jarvisGlassSurface`, radius 24) between the status line and the control bar. Header: one title, an expand or collapse button when the content needs room, and a close button (both `JarvisIconButton`). Body: the existing generated-view renderers in a scroll area that takes the content's height up to the panel's cap. The orb stays visible (it shrinks to its minimum before the panel is capped), captions stay above the panel, the four controls stay below. Opening and closing slide from the bottom with a fade; Reduce Motion uses the fade only. Partial and unavailable content says so in text with an icon. A VoiceOver announcement names the content when it appears.
+Generated content sits in one neutral glass panel (`jarvisGlassSurface`, radius 24) between the status line and the control bar. Header: close and, when the content needs room, expand at the top left, then one title from the content (all `JarvisIconButton`; see the header and motion section above). Body: the existing generated-view renderers in a scroll area that takes the content's height up to the panel's cap. The orb stays visible (it shrinks to its minimum before the panel is capped), captions stay above the panel, the four controls stay below. Opening and closing slide from the bottom with a fade; Reduce Motion uses the fade only. Partial and unavailable content says so in text with an icon. A VoiceOver announcement names the content when it appears.
 
 ## Conversational blocks in Chat (17 November 2026, #1925; owner approved)
 

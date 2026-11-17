@@ -196,6 +196,9 @@ enum JarvisDesignTokens {
     static let voiceMinimizeDragDistance: CGFloat = 32
     static let voiceMinimizeSpringResponse: CGFloat = 0.38
     static let voiceMinimizeSpringDamping: CGFloat = 0.9
+    /// The orb stepping back for generated content and returning: one eased, critically damped spring, never linear.
+    /// It keeps its velocity when interrupted, and Reduce Motion replaces it with no animation.
+    static let voicePanelMotion: Animation = .smooth(duration: 0.55)
     static let voiceStatusSpacing: CGFloat = 12
     static let voiceEndActionColor = Color.red
     static let notesHorizontalInset: CGFloat = 16
