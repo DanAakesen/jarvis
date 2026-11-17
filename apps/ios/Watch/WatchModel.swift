@@ -51,6 +51,11 @@ final class WatchModel: ObservableObject {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--watch-fixture") {
             messages = [.init(user: true, text: "What should I train today?"), .init(user: false, text: "Upper body: bench press, rows and shoulder press."), .init(user: true, text: "What weight for bench?"), .init(user: false, text: "Your last entry was 60 kg for 8 reps.")]
+            if let state = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("--watch-voice-fixture=") }) {
+                voiceID = UUID(); muted = state.hasSuffix("muted")
+                voiceState = state.hasSuffix("speaking") ? "Speaking" : "Listening"
+                messages = [.init(user: false, text: state.hasSuffix("listening") ? "Your next meeting starts at 10:30." : "You have time to review your notes.")]
+            }
             if ProcessInfo.processInfo.arguments.contains("--watch-chat-long") {
                 messages = [.init(user: false, text: "Hello Dan, nice to be talking with you."), .init(user: true, text: "What is next today?"),
                             .init(user: false, text: "Your next meeting starts at 10:30. You have time to review the notes before you leave."),
@@ -432,6 +437,9 @@ final class WatchModel: ObservableObject {
         }
     }
     func reconcileVoice() async {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("--watch-voice-fixture=") }) { return }
+        #endif
         guard !busy, !startingVoice, voiceRecovery == nil else { return }
         _ = try? await hasActiveVoice()
     }

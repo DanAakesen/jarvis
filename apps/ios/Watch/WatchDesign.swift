@@ -38,6 +38,26 @@ struct WatchIconButton: View {
         }.buttonStyle(.plain).accessibilityLabel(label)
     }
 }
+/// Glass capsule button with an icon and a label; the label drops out at accessibility text sizes so the icon keeps a native hit target.
+struct WatchLabelledButton: View {
+    var title: String
+    var systemName: String
+    var tint: Color = WatchStyle.amber
+    var action: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemName).font(.system(size: 16, weight: .semibold))
+                if !typeSize.isAccessibilitySize {
+                    Text(title).font(.system(.footnote, design: .rounded, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                }
+            }
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity, minHeight: 44).watchGlass(in: Capsule()).contentShape(Capsule())
+        }.buttonStyle(.plain).accessibilityLabel(title)
+    }
+}
 /// Soft black scrim that keeps floating controls readable over scrolling text; solid when transparency is reduced.
 struct WatchEdgeFade: View {
     var edge: VerticalEdge

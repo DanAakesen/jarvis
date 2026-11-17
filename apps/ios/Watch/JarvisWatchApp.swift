@@ -180,7 +180,10 @@ struct WatchRoot: View {
             VStack(spacing: 8) {
                 Text("Jarvis").font(.system(.headline, design: .rounded))
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 4)
-                JarvisWatchAction(title: "Chat", kind: .chat) { path.append(.chat) }
+                // A session kept alive after Back stays reachable from here, where Chat shows it with Mute and End.
+                JarvisWatchAction(title: model.voiceID == nil ? "Chat" : "Resume voice", kind: model.voiceID == nil ? .chat : .voice) {
+                    path.append(.chat)
+                }
                 JarvisWatchAction(title: "Factory", kind: .factory) { path.append(.factory) }
                 if !connection.reachable { Text("iPhone unavailable. Voice and sending need a connection.").font(.caption).foregroundStyle(.secondary) }
             }
