@@ -1,3 +1,7 @@
+## Voice bottom panel — 17 November 2026 (#1925, P15-191)
+
+- iOS only. `swift test` in `apps/ios/Packages/JarvisCore` (strings for the panel are in `JarvisWorkspaces.strings`). The SwiftUI (`VoiceContentPanel.swift`, `VoiceScreen.swift`) compiles only in the macOS `watch` job, which captures `polish-voice-panel.png` (`--screenshot-chat-fixture --screenshot-voice-fixture --screenshot-voice-state=listening --screenshot-voice-panel`, simulator and debug only; the content is synthetic).
+
 ## Conversational blocks — 17 November 2026 (#1925, P15-190)
 
 - No migration (blocks live in `dbo.messages.metadata`). Checks: `cd packages/contracts && node --test`; `cd apps/backend && npx vitest run src/core/chat-blocks.test.ts src/core/weather.test.ts`, `npx tsc --noEmit -p tsconfig.json`, `npx eslint src`; the SQL contract `src/database/conversation-blocks.integration.test.ts` (applies all migrations to a loopback SQL Server 2022 container, see `database-ci.yml`; run with `npx vitest run --config src/database/vitest.config.mts <file>` and the CI fixture variables); `swift test` in `apps/ios/Packages/JarvisCore` (`ChatBlockTests`, Linux `swift:6.2` image). The SwiftUI (`JarvisChatBlockView.swift`) compiles only in the macOS `watch` job, which captures `polish-chat-blocks.png` from synthetic history (`--screenshot-chat-fixture --ui-test-chat-blocks`, simulator and debug only).

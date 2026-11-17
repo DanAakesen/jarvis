@@ -1,3 +1,17 @@
+## Voice bottom panel — 17 November 2026 (#1925, P15-191; stacked on P15-190)
+
+**Status: built; waiting for CI (macOS compile, simulator capture `polish-voice-panel`) and the owner's TestFlight check. No build cut.** Part 2 of #1925.
+
+| Step | State |
+| --- | --- |
+| Content Jarvis opens during a voice session shows as a panel below the orb and status, above the microphone, plus, CC and hang-up controls (`VoiceContentPanel.swift`) | Done in code; compiles only in the macOS `watch` job |
+| Close dismisses the panel and keeps the session; expand and collapse only when the content needs more room | Done in code |
+| The page keeps a small orb, the status and the four controls in view: the panel's height is capped and the orb area follows its measured height | Done in code |
+| Leaving the Voice page dismisses the panel (it never turns into a sheet); other pages keep the existing sheet | Done in code |
+| Loading, partial, unavailable and unsupported content, long content (scrolls inside the panel), Reduce Motion, larger text, VoiceOver announcement | Done in code; not seen on a device |
+| Simulator capture from synthetic content (`--screenshot-voice-panel`) | Added to the `watch` job; not run yet |
+| Owner checks on a device: opening and closing while listening, thinking and speaking, long content, CC, microphone and hang-up, interrupted animation | **Open** |
+
 ## Conversational blocks in Chat — 17 November 2026 (#1925, P15-190)
 
 **Status: built and checked locally; waiting for CI (macOS compile, simulator capture `polish-chat-blocks`) and the owner's TestFlight check. No build cut.** Part 1 of #1925 (Chat); part 2 (Voice bottom panel, P15-191) is a separate stacked pull request.
