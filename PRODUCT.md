@@ -1,3 +1,13 @@
+## App polish from build 111 — 16 November 2026 (#1923, P15-185)
+
+- Graph search: the clear (X) sits inside the search field with no background of its own, and the matching notes sit directly above the dock, as far from it as
+  the dock's two rows are from each other.
+- A swipe on a pinned note or task unpins it, however far it goes; it never opens the delete confirmation. Delete stays in the reader, the task sheet and the named accessibility action.
+- The task circle is vertically centred on its row.
+- A swipe from the left edge goes back, like the top-left back button: out of a note, a Factory task or a Settings detail, and one folder up in Notes.
+- The orb is behind every page, not only Chat. Every list row uses the same glass as the glass buttons.
+- Opening the keyboard in Chat scrolls so the latest message stays above it.
+
 ## Manual folder order in Notes — 16 November 2026 (#1920, P15-183)
 
 The owner can put his vault folders in his own order, for example Work, Personal, General first. Choose Manual in the Notes header

@@ -1,3 +1,13 @@
+## 16 November 2026 — App polish from build 111 (#1923, P15-185)
+
+| Choice | Why |
+| --- | --- |
+| Every list row takes its background from one shared surface, the glass of the glass buttons | Owner: all list rows should look like the two glass buttons. One modifier, so a later change reaches every list. Cards and fields are not rows and keep the material. HIG favours regular glass for text-heavy areas; the rows keep the buttons' light fill and Reduce Transparency still gives a solid fill |
+| The orb sits behind every page through `jarvisPageBackground()`; sheets and forms do not get one | Owner: the orb on all pages. The page chrome owns it, so no screen draws its own. Calm effects on pages, full in Chat |
+| A pinned row's swipe only unpins, at any length | Assumption, to be confirmed: a long swipe on a pinned note opened the delete confirmation, so it did not look like "swipe unpins". Delete is still in the reader, the task sheet and the accessibility action. No new limit on what can be deleted |
+| Edge-swipe back uses the system gesture for pushed pages and the same edge for Notes folders; the back button stays | Standard iOS behaviour; supplements the button as HIG advises. Pages hide the navigation bar, which turned the system gesture off |
+| Opening the Chat keyboard always resumes following the latest message | The owner expects the newest message above the keyboard, also after scrolling up |
+
 ## 16 November 2026 — Manual folder order is owner data in the backend, not device state (#1920, P15-183)
 
 The owner asked for a manual sort of the vault folders ("iOS app: manual sort please"); Obsidian has none.

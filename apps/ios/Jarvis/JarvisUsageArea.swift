@@ -70,7 +70,7 @@ struct JarvisUsageArea: View {
                 language: language
             )
         }
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .toolbar(.hidden, for: .navigationBar)
         .task(id: LoadKey(period: period, token: reloadToken)) { await reload() }
         .onChange(of: chartSelection) { _, newValue in

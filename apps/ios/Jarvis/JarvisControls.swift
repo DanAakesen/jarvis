@@ -26,9 +26,10 @@ struct JarvisGlassBackground: ViewModifier {
     var tint: Color?
     var isCircle = false
     var isInteractive = false
+    var customShape: AnyShape?
 
     private var shape: AnyShape {
-        if isCircle { AnyShape(Circle()) } else if let cornerRadius { AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)) } else { AnyShape(Capsule()) }
+        if let customShape { customShape } else if isCircle { AnyShape(Circle()) } else if let cornerRadius { AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)) } else { AnyShape(Capsule()) }
     }
 
     func body(content: Content) -> some View {
@@ -45,6 +46,11 @@ extension View {
     /// accent surfaces such as the user bubble.
     func jarvisGlassSurface(cornerRadius: CGFloat? = nil, tint: Color? = nil) -> some View {
         modifier(JarvisGlassBackground(cornerRadius: cornerRadius, tint: tint))
+    }
+
+    /// The same glass in any shape: list rows use it with their own corner pattern, so rows and buttons share one look.
+    func jarvisGlassSurface<S: Shape>(in shape: S) -> some View {
+        modifier(JarvisGlassBackground(customShape: AnyShape(shape)))
     }
 
     /// Interactive glass in a capsule for the shared labelled buttons and tabs.
@@ -810,14 +816,21 @@ struct JarvisSearchField: View {
                 .accessibilityLabel(accessibilityTitle ?? placeholder)
                 .accessibilityIdentifier(identifier)
             if !text.isEmpty {
-                JarvisIconButton(
-                    title: clearTitle,
-                    systemImage: "xmark.circle.fill",
-                    identifier: "\(identifier).clear"
-                ) { text = "" }
+                // Part of the field, not a second glass control: a bare glyph in a 44 pt target at the trailing edge.
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: JarvisDesignTokens.iconButtonGlyphSize))
+                        .foregroundStyle(.secondary)
+                        .frame(width: JarvisDesignTokens.chatMinimumTapTarget, height: JarvisDesignTokens.chatMinimumTapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(clearTitle)
+                .accessibilityIdentifier("\(identifier).clear")
             }
         }
-        .padding(.horizontal, JarvisDesignTokens.labelledHorizontalPadding)
+        .padding(.leading, JarvisDesignTokens.labelledHorizontalPadding)
+        .padding(.trailing, text.isEmpty ? JarvisDesignTokens.labelledHorizontalPadding : 0)
         .frame(minHeight: JarvisDesignTokens.iconButtonDiameter)
         .frame(maxWidth: .infinity)
         .jarvisGlassSurface()
@@ -1092,9 +1105,10 @@ struct JarvisOrb: View {
     var size: CGFloat = JarvisDesignTokens.gateOrbSize
     var isStatic = false
     var isPaused = false
+    var adaptsToLowPower = false
 
     var body: some View {
-        JarvisLatticeOrbView(activity: activity, isStatic: isStatic, isPaused: isPaused)
+        JarvisLatticeOrbView(activity: activity, isStatic: isStatic, isPaused: isPaused, adaptsToLowPower: adaptsToLowPower)
             .aspectRatio(1, contentMode: .fit)
             .frame(width: size, height: size)
             .clipShape(Circle())

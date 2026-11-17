@@ -23,6 +23,18 @@ final class ChatFollowStateTests: XCTestCase {
         XCTAssertFalse(state.shouldShowJumpToLatest)
     }
 
+    func testOpeningTheKeyboardResumesFollowingEvenAfterScrollingUp() {
+        var state = ChatFollowState()
+        state.interactionBegan()
+        state.interactionEnded(distanceFromBottom: 400)
+        state.selectionChanged(messageID: "m1", isSelected: true)
+        XCTAssertFalse(state.shouldFollow)
+
+        state.keyboardOpened()
+        XCTAssertTrue(state.shouldFollow)
+        XCTAssertFalse(state.shouldShowJumpToLatest)
+    }
+
     func testReachingLatestClearsNewMessageIndicator() {
         var state = ChatFollowState()
         state.messageArrived()

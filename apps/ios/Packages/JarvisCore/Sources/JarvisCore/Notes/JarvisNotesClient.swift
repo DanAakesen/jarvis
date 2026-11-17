@@ -198,8 +198,10 @@ public enum JarvisNotesLogic {
     public static let pinSwipeDistance = 72.0
     public static let deleteSwipeDistance = 160.0
 
-    public static func swipeAction(distance: Double) -> SwipeAction {
-        if distance >= deleteSwipeDistance { return .delete }
+    /// A pinned row has one swipe action, unpin, at any length past the short detent: overshooting it must never
+    /// ask to delete the note (`allowsDelete` is false there).
+    public static func swipeAction(distance: Double, allowsDelete: Bool = true) -> SwipeAction {
+        if allowsDelete, distance >= deleteSwipeDistance { return .delete }
         if distance >= pinSwipeDistance { return .pin }
         return .none
     }

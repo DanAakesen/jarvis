@@ -44,7 +44,7 @@ struct JarvisStatusArea: View {
                 language: language
             )
         }
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .toolbar(.hidden, for: .navigationBar)
         .task(id: reloadToken) { await refresh(force: reloadToken > 0) }
         .task { await keepClockFresh() }

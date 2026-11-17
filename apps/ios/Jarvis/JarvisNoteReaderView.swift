@@ -194,7 +194,7 @@ struct JarvisNoteReaderView: View {
             .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
             .padding(.vertical, JarvisDesignTokens.notesSectionSpacing)
         }
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden()
         .task {

@@ -25,9 +25,16 @@ extension JarvisNotesArea {
         }
     }
 
+    private var parentFolder: String { JarvisNotesPresentation.parentFolder(of: selectedFolder) ?? "" }
+
+    /// The back button and the edge swipe both lead one folder up; neither exists at the vault root.
+    var canNavigateUp: Bool { selectedTab == .notes && !selectedFolder.isEmpty }
+
+    func navigateUp() { navigateToFolder(parentFolder) }
+
     private var backButton: AnyView? {
-        guard selectedTab == .notes, !selectedFolder.isEmpty else { return nil }
-        let parent = JarvisNotesPresentation.parentFolder(of: selectedFolder) ?? ""
+        guard canNavigateUp else { return nil }
+        let parent = parentFolder
         let parentName = parent.isEmpty ? copy.vaultRoot : (parent.split(separator: "/").last.map(String.init) ?? parent)
         return AnyView(
             JarvisIconButton(
@@ -234,6 +241,10 @@ extension JarvisNotesArea {
         case "tasks": selectedTab = .tasks
         case "graph": selectedTab = .graph
         case "search": searchText = "plan"
+        case "graph-search": selectedTab = .graph; try? await Task.sleep(for: .seconds(1)); searchText = "plan"
+        case "pinned":
+            await setPinned("Work/Projects/release.md", pinned: true)
+            await setPinned("Personal/weekend.md", pinned: true)
         case "reader": await openNote(path: "Personal/weekend.md")
         case "new-note": sheet = .newNote(folder: "Personal", staged: [])
         case "new-task": sheet = .newTask

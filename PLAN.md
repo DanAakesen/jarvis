@@ -1,3 +1,9 @@
+## App polish batch from build 111 — 16 November 2026 (#1923, P15-185)
+
+**Status: built, waiting for CI and the owner's TestFlight check. No build cut.** One pull request covers the seven items: graph search clear button and
+result spacing, swipe to unpin, centred task circle, edge-swipe back, the orb on every page, one glass row surface, and the chat keyboard following the
+latest message. Simulator captures run in the `watch` job (`polish-*`). Open: the owner confirms the pinned-row swipe reading and the glass rows on a device.
+
 ## Manual folder order in Notes — 16 November 2026 (#1920, P15-183)
 
 **Status: built and tested; waiting for CI (macOS compile and captures) and review.** Backend: migration `0089`, owner-only

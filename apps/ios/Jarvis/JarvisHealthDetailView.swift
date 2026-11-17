@@ -59,7 +59,7 @@ struct JarvisHealthDetailView: View {
 
     var body: some View {
         detailList(currentData ?? JarvisHealthDetailData())
-        .jarvisAmbientBackground()
+        .jarvisPageBackground()
         .navigationTitle(kind.title(language: language))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.visible, for: .navigationBar)

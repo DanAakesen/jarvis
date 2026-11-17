@@ -73,6 +73,7 @@ struct JarvisChatScreen: View {
     @State private var expandedTools = Set<String>()
     @State private var selectedTimestampID: String?
     @State private var sendRevision = 0
+    @State private var keyboardRevision = 0
     @State private var liveToolsExpanded = true
 
     private var reduceMotion: Bool {
@@ -212,6 +213,13 @@ struct JarvisChatScreen: View {
             if let initialActivitySheet {
                 presentedSheet = .activity(initialActivitySheet)
             }
+#if targetEnvironment(simulator)
+            // Simulator captures only: `--screenshot-chat-keyboard` opens the keyboard to show the latest message above it.
+            if ProcessInfo.processInfo.arguments.contains("--screenshot-chat-keyboard") {
+                try? await Task.sleep(for: .seconds(2))
+                composerFocused = true
+            }
+#endif
             await model.watchActivity()
         }
     }
@@ -450,10 +458,14 @@ struct JarvisChatScreen: View {
                         errors: [model.historyError, model.actionError]
                     ),
                     sendRevision: sendRevision,
+                    keyboardRevision: keyboardRevision,
                     jumpToLatestTitle: JarvisChatLocalization.string(.jumpToLatest, language: appLanguage)
                 ))
                 .onChange(of: model.isSending) { _, sending in
                     if sending { liveToolsExpanded = true }
+                }
+                .onChange(of: composerFocused) { _, focused in
+                    if focused { keyboardRevision += 1 }
                 }
             }
         }

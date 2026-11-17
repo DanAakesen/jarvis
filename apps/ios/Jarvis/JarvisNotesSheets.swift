@@ -324,7 +324,7 @@ struct JarvisReorderSheet: View {
                             if !item.location.isEmpty { Text(item.location).font(.caption).foregroundStyle(.secondary) }
                         }
                         .frame(minHeight: JarvisDesignTokens.controlMinimumHeight, alignment: .leading)
-                        .listRowBackground(JarvisGlassSurface())
+                        .listRowBackground(JarvisGlassRowBackground())
                         .accessibilityElement(children: .combine)
                         .accessibilityValue(position(of: path))
                         .accessibilityAction(named: Text(copy[.moveUp])) { move(path, by: -1) }

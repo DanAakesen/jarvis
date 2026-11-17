@@ -133,6 +133,7 @@ extension JarvisNotesArea {
             pinTitle: isPinned ? copy.unpin : copy.pin,
             pinImage: isPinned ? "pin.slash" : "pin",
             deleteTitle: copy[.deleteNote],
+            isPinned: isPinned,
             isDisabled: openingNotePaths.contains(note.path),
             onOpen: { Task { await openNote(path: note.path) } },
             onPin: { Task { await setPinned(note.path, pinned: !isPinned) } },
@@ -252,6 +253,7 @@ extension JarvisNotesArea {
             pinTitle: pinnedTaskIDs.contains(task.pinKey) ? copy.unpin : copy.pin,
             pinImage: pinnedTaskIDs.contains(task.pinKey) ? "pin.slash" : "pin",
             deleteTitle: copy[.deleteTask],
+            isPinned: pinnedTaskIDs.contains(task.pinKey),
             isDisabled: isBusy,
             extraActionTitle: task.done ? nil : copy.complete,
             onExtra: { Task { await completeTask(task) } },
@@ -294,7 +296,8 @@ extension JarvisNotesArea {
                         if isSearching, let hits = graphSearch?.hits, !hits.isEmpty { graphSearchRows(hits) }
                     }
                     .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)
-                    .padding(.bottom, JarvisDesignTokens.notesSectionSpacing)
+                    // The dock's own top padding is the gap, so the results sit as far above the dock's first row as
+                    // its two rows sit apart.
                 }
             } else if failedReads.contains(.graph) {
                 stateView(
@@ -332,8 +335,10 @@ extension JarvisNotesArea {
                     }
                 }
             }
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
+            .jarvisRowSurface(RoundedRectangle(cornerRadius: JarvisDesignTokens.surfaceRadius))
         }
+        // Few results sit against the dock, not at the top of the 220 pt window.
+        .defaultScrollAnchor(.bottom, for: .alignment)
         .frame(maxHeight: 220)
     }
 
