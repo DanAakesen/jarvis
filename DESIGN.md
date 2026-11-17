@@ -10,6 +10,15 @@
 - **Swipe back.** The system edge swipe for pushed pages (kept alive although pages hide the navigation bar) and the same edge swipe for Notes folders. The back button stays
   (HIG: supplement standard gestures, do not replace them). The sidebar opens by a swipe in the other direction.
 
+## Reorder folders (16 November 2026, #1920)
+
+Manual is a third choice in the Notes header menu's Sort by; Reorder folders sits beside Reorder pins. Both open the same
+sheet: a glass list in edit mode with the system drag handles, a Done button, and Move up / Move down VoiceOver actions on
+every row (each row also reads "n of m"). VoiceOver focus stays on the row that was moved. Reordering turns Manual on, so the
+result is visible at once. If a save fails, the sheet closes, the stored order is shown and an alert says so. Nothing new is
+drawn: the sheet, rows and buttons are the shared Jarvis components. Simulator captures: `notes-folders-manual.png` and
+`notes-folders-reorder.png` in the `watch-build-logs` artifact.
+
 ## Notes, Tasks and Graph: Vault Folders (15 November 2026; owner approved; #1894)
 
 Dan selected **Vault Folders** and approved its subpages (`docs/ui/notes-subpages-2026-11-15/`, HANDOFF.md is the

@@ -35,15 +35,23 @@ extension JarvisNotesArea {
             .map(summary(for:))
     }
 
-    var pinnedItems: [JarvisPinnedItem] {
+    var pinnedItems: [JarvisReorderItem] {
         pinnedPaths.map {
             let note = summary(for: $0)
-            return JarvisPinnedItem(path: note.path, title: note.title, location: JarvisNoteTitle.location(path: note.path))
+            return JarvisReorderItem(path: note.path, title: note.title, location: JarvisNoteTitle.location(path: note.path))
         }
     }
 
-    private var childFolders: [VaultFolderNode] {
-        JarvisNotesPresentation.childFolders(in: selectedFolder, paths: tree?.directories ?? [])
+    /// Manual sort lists the folders in the owner's order; every other sort keeps them alphabetical.
+    var childFolders: [VaultFolderNode] {
+        let folders = JarvisNotesPresentation.childFolders(in: selectedFolder, paths: tree?.directories ?? [])
+        return noteSort == .manual ? folderOrder.ordered(folders, in: selectedFolder) : folders
+    }
+
+    var folderItems: [JarvisReorderItem] {
+        let location = selectedFolder.isEmpty ? copy.vaultRoot : selectedFolder.replacingOccurrences(of: "/", with: " / ")
+        let folders = JarvisNotesPresentation.childFolders(in: selectedFolder, paths: tree?.directories ?? [])
+        return folderOrder.ordered(folders, in: selectedFolder).map { JarvisReorderItem(path: $0.path, title: $0.name, location: location) }
     }
 
     private var listedNotes: [VaultNoteSummary] {

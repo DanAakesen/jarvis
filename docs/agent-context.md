@@ -1,3 +1,7 @@
+## Manual folder order — 16 November 2026 (#1920)
+
+- Needs migration `0089_notes_folder_order.sql` (applied by the normal startup migration step). Checks: `cd apps/backend && npx vitest run src/vault`; the SQL contract (`manual folder order`) with the loopback SQL Server container from `database-ci.yml`; `swift test` in `apps/ios/Packages/JarvisCore`. SwiftUI compiles only in the macOS `watch` job, which also captures `notes-folders-manual.png` and `notes-folders-reorder.png` (`--screenshot-notes-state=folders-manual` or `folders-reorder`).
+
 ## iOS UI guidance — 15 November 2026 (#1894)
 
 - Consult the apple-hig skill (justinwetch/HIGAgentSkills, MIT) for iOS UI sizes, padding, Dynamic Type and accessibility. Clone it into a scratch directory outside the repository each time and never commit it.

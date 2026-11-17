@@ -185,9 +185,13 @@
 "notes.sortBy" = "Sort by";
 "notes.sortUpdated" = "Updated";
 "notes.sortTitle" = "Title";
+"notes.sortManual" = "Manual";
 "notes.sortDue" = "Due date";
 "notes.sortPriority" = "Priority";
 "notes.reorderPins" = "Reorder pins";
+"notes.reorderFolders" = "Reorder folders";
+"notes.folderOrderFailed" = "Could not save the folder order. The previous order is shown.";
+"notes.positionOf" = "%1$ld of %2$ld";
 "notes.selectItems" = "Select items";
 "notes.more" = "More";
 "notes.list" = "List";

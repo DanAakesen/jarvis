@@ -58,6 +58,7 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
         Note(path: "Personal/weekend.md", title: "Weekend — synthetic", content: "---\ntags: [synthetic]\n---\n# Weekend\n\nKeep decisions and next steps together.\n\n## Plan\n\n- [ ] Check the list\n- [ ] Plan the day\n\nSee also [[release]].\n"),
     ]
     private var inventory = ["Work", "Work/Projects", "Personal", "Attachments/Scans"]
+    private var folderOrder: [String: [String]] = [:]
     private let timestamp = "2026-11-05T09:00:00Z"
     private var readCounts: [String: Int] = [:]
     private var conflictApplied = false
@@ -127,6 +128,15 @@ private actor JarvisNotesPreviewTransport: HTTPTransport {
         case (.get, "/api/notes/tree"):
             return try json(["directories": inventory, "rootNoteCount": notes.filter { $0.directory.isEmpty }.count,
                              "truncated": false, "updatedAt": timestamp])
+        case (.get, "/api/notes/folder-order"):
+            return try json(["orders": folderOrder.map { ["parent": $0.key, "folders": $0.value] }])
+        case (.put, "/api/notes/folder-order"):
+            guard let parent = body["parent"] as? String, let folders = body["folders"] as? [String],
+                  JarvisFolderOrder.isValid(folders, in: parent) else {
+                return try json(["error": "Synthetic folder order refused"], status: 400)
+            }
+            folderOrder[parent] = folders.isEmpty ? nil : folders
+            return try json(["parent": parent, "folders": folders])
         case (.get, "/api/notes"):
             let matches = notes.filter {
                 if let directory = query["directory"] { return $0.directory == directory }
