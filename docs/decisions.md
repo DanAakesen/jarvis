@@ -13335,6 +13335,17 @@ Use bounded, sequenced 250 ms Watch microphone packets instead of stop-and-wait.
 
 Direct Watch voice is a practical follow-up using the portable voice client and audio engine, but requires a separate voice-scoped WebSocket credential, session and budget limits, expiry handling and device/network/power qualification. The existing dictation-only credential must not be widened.
 
+## 17 November 2026 — Watch microphone: measure, then report silence (P15-202 / #1943)
+
+The owner heard nothing from the Watch: live voice starts but never hears him, and dictation reports a timeout. Reading the Watch capture, the WatchConnectivity audio path, the phone bridge and the backend route found no format, size or sequencing defect, so the cause is not proven. Decisions:
+
+- Measure the captured PCM16 peak on the Watch (`WatchCaptureLevel`, portable and tested). Dictation with no audio or only digital silence (peak below 8 of 32 767) is not uploaded; the Watch says the microphone captured no sound and keeps the draft untouched. This replaces a 30 s wait that ended in a generic timeout.
+- Live voice ends with the same message after 10 s of unmuted audio that never exceeds that floor, rather than showing a connected, listening session that cannot hear. It is not a fallback and no state is invented.
+- The converter follows the format of each captured buffer, so a hardware format change after engine start cannot produce garbage or silence.
+- Log the peak with the existing 5 s voice-link line and once per dictation (`WatchVoice` category) so the next device test shows whether the Watch delivers silence.
+
+Open: not verified on a Watch. If the peak is healthy, the fault is downstream (see the backend `watch_transcription.stage` rows); the decision on the 10 s direct window and phone fallback timing then needs revisiting.
+
 ## Notes deletion and swipe thresholds — 13 November 2026
 
 The owner requested immediate pinning on a normal swipe and confirmation before

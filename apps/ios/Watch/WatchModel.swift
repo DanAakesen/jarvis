@@ -32,6 +32,7 @@ final class WatchModel: ObservableObject {
     private var audioBackpressure = WatchVoiceBackpressure(now: Date())
     private var lastAudioMetrics = Date()
     private var audioSequence: UInt64 = 0
+    private var captureLevel = WatchCaptureLevel()
     private var heartbeat: Task<Void, Never>?
     private var historyRequest = UUID()
     private var turn: UUID?
@@ -179,6 +180,7 @@ final class WatchModel: ObservableObject {
             captureTerminationLogged = false
             audioBackpressure = WatchVoiceBackpressure(now: Date()); lastAudioMetrics = Date()
             audioSequence = 0
+            captureLevel = WatchCaptureLevel()
             capture = Task { [weak self] in
                 var batch = Data()
                 for await bytes in stream {
@@ -192,6 +194,13 @@ final class WatchModel: ObservableObject {
                         batch.removeAll(keepingCapacity: true)
                         self.audioBackpressure.progressed(at: Date())
                         continue
+                    }
+                    self.captureLevel.add(pcm: bytes)
+                    if self.captureLevel.isDeaf {
+                        self.voiceLogger.error("Voice microphone silent: samples=\(self.captureLevel.samples) peak=\(self.captureLevel.peak) capture_drops=\(self.audio.droppedCaptureChunks)")
+                        self.error = WatchMicrophoneFailure.silent.message
+                        await self.endVoice(captureEndReason: "microphone_silent")
+                        return
                     }
                     batch.append(bytes)
                     guard batch.count >= 12_000 else { continue } // ~250 ms at 24 kHz PCM16.
@@ -210,7 +219,7 @@ final class WatchModel: ObservableObject {
                                 self.audioBackpressure.progressed(at: Date())
                                 let milliseconds = Int(Date().timeIntervalSince(started) * 1_000)
                                 if Date().timeIntervalSince(self.lastAudioMetrics) >= 5 {
-                                    self.voiceLogger.info("Voice link: rtt_ms=\(milliseconds) in_flight=\(self.audioSends.count) packet_drops=\(self.audioBackpressure.drops) capture_drops=\(self.audio.droppedCaptureChunks)")
+                                    self.voiceLogger.info("Voice link: rtt_ms=\(milliseconds) in_flight=\(self.audioSends.count) packet_drops=\(self.audioBackpressure.drops) capture_drops=\(self.audio.droppedCaptureChunks) capture_peak=\(self.captureLevel.peak)")
                                     self.lastAudioMetrics = Date()
                                 }
                             case .failure:
@@ -280,6 +289,7 @@ final class WatchModel: ObservableObject {
         guard dictationGeneration == epoch else { return }
         do {
             dictationAudio.removeAll()
+            captureLevel = WatchCaptureLevel()
             let stream = try await startAudioCapture(tolerateDrops: false) { self.dictationGeneration == epoch }
             dictationState = .listening
             dictationCapture = Task { [weak self] in
@@ -290,6 +300,7 @@ final class WatchModel: ObservableObject {
                         return false
                     }
                     self.dictationAudio.append(bytes)
+                    self.captureLevel.add(pcm: bytes)
                 }
                 guard let self, self.dictationGeneration == epoch, self.dictationState == .finishing,
                       !self.audio.didDropCapture else {
@@ -319,6 +330,10 @@ final class WatchModel: ObservableObject {
         }
         audio.stop()
         guard await dictationCapture?.value == true, dictationGeneration == epoch else { return }
+        voiceLogger.info("Dictation captured: samples=\(self.captureLevel.samples) peak=\(self.captureLevel.peak)")
+        // Silent or empty audio cannot be transcribed; say so instead of waiting for a timeout.
+        if !captureLevel.hasAudio { failDictation(WatchMicrophoneFailure.noAudio); return }
+        if captureLevel.isSilent { failDictation(WatchMicrophoneFailure.silent); return }
         do {
             let recording = dictationAudio
             dictationAudio.removeAll()
@@ -391,6 +406,7 @@ final class WatchModel: ObservableObject {
     private func failDictation(_ failure: Error) {
         cancelDictation()
         if let failure = failure as? WatchDictationError { error = failure.message; return }
+        if let failure = failure as? WatchMicrophoneFailure { error = failure.message + " Tap Message to type."; return }
         error = "Dictation failed. " + ((failure as? WatchFailure)?.message ?? "Try again.") + " Tap Message to type."
     }
     private func hasActiveVoice() async throws -> Bool {

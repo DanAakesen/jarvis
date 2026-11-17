@@ -184,8 +184,18 @@ final class VoiceAudioEngine: @unchecked Sendable {
         ownsActiveSession = true
     }
 
+    // Hardware formats can change after the engine starts (route or voice-processing changes); convert from the buffer's real format.
+    private func captureConverter(for format: AVAudioFormat) -> AVAudioConverter? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard captureContinuation != nil else { return nil }
+        if let converter, converter.inputFormat == format { return converter }
+        converter = AVAudioConverter(from: format, to: targetFormat)
+        return converter
+    }
+
     private func convert(_ input: AVAudioPCMBuffer) -> Data? {
-        guard let converter,
+        guard let converter = captureConverter(for: input.format),
               let output = AVAudioPCMBuffer(
                 pcmFormat: targetFormat,
                 frameCapacity: AVAudioFrameCount(

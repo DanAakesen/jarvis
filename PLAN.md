@@ -5239,6 +5239,10 @@ Pipeline bounded, sequenced microphone and playback traffic; tolerate transient 
 
 Implemented the backend stage logging and speech-token cache, a 10 s direct window with phone fallback, voice start and reconnection recovery, and stale phone-state replacement. Decisions and findings are in docs/decisions.md. Next: native Watch and phone builds in CI, then a paired-Watch check of first-press voice, dictation latency from a cold backend, and a short phone-out-of-range gap during voice; read the new `watch_transcription.stage` events to confirm where direct dictation lost its result.
 
+## Watch microphone hears nothing — 17 November 2026 (P15-202 / #1943)
+
+Owner report on build 112: live voice no longer fails but cannot hear him, and dictation ends in "transcription timed out". The Watch now measures the captured audio (`WatchCaptureLevel`), refuses to upload silent or empty dictation, ends live voice with a real message after 10 s of digital silence, and converts microphone audio from the buffer's actual format. The root cause is not proven: this Linux runner has no Watch, Azure or backend log access. Next: install the build on a paired Watch, read the `WatchVoice` unified-log lines (`capture_peak`, `Dictation captured: samples peak`) and the backend `watch_transcription.stage` rows to see whether the Watch delivers silence or the service is slow.
+
 ## Notes swipe and deletion — 13 November 2026 (#1819)
 
 Implemented version-checked owner deletion, shared row swipe thresholds, editor
