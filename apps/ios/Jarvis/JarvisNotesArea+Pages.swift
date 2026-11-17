@@ -290,9 +290,10 @@ extension JarvisNotesArea {
                             graph: scoped,
                             copy: copy,
                             onOpen: { node in await openNote(path: node.path) },
-                            searchMatches: Set(graphSearch?.hits.map(\.nodeId) ?? [])
+                            onShowList: { sheet = .graphList },
+                            searchMatches: Set(graphSearch?.hits.map(\.nodeId) ?? []),
+                            recenterToken: graphResetVersion
                         )
-                        .id(graphResetVersion)
                         if isSearching, let hits = graphSearch?.hits, !hits.isEmpty { graphSearchRows(hits) }
                     }
                     .padding(.horizontal, JarvisDesignTokens.notesHorizontalInset)

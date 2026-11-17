@@ -75,6 +75,8 @@ Which tools PI uses is steered by text only: `agents/pi/instructions.md` ("Choos
 - Backend: `DELETE /vault/tasks` (owner only) takes `{path,line,text,version}`, refuses a changed line with 409, removes only that
   line, and reports an unconfirmed write as 503; covered by `src/vault/task-delete.test.ts`.
 - CI: the macOS `watch` job compiles the iPhone app and captures the Notes states (continue-on-error, bounded).
+- Graph tab (#1924, P15-190): no new route or boundary. `JarvisCore/Graph3D` turns the existing `knowledge/graph` response into a deterministic 3D layout,
+  camera and motion schedule (pure, Linux-tested); the app's `JarvisNotesGraphView` draws it in a `Canvas` and receives touches through one UIKit gesture layer.
 
 ## PI voice (test switch) — 16 November 2026 (#1887, P15-176)
 
