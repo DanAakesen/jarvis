@@ -164,10 +164,12 @@ describe('PI MCP server', () => {
   it('lets only the deployment identity start the live smoke, and only on its own route', async () => {
     const { app } = setup();
     const call = (token: string, method: 'GET' | 'POST', url: string) => app.inject({
-      method, url, payload: method === 'POST' ? {} : undefined, headers: { authorization: bearer(token) },
+      method, url, payload: method === 'POST' ? { part: 'voice' } : undefined, headers: { authorization: bearer(token) },
     });
     expect((await call(ownerToken, 'POST', '/pi/smoke')).statusCode).toBe(403);
     expect((await call(deployToken, 'POST', '/pi/smoke')).statusCode).not.toBe(403);
+    const noPart = await app.inject({ method: 'POST', url: '/pi/smoke', payload: {}, headers: { authorization: bearer(deployToken) } });
+    expect(noPart.statusCode).toBe(400);
     expect((await call(deployToken, 'GET', '/pi/status')).statusCode).toBe(403);
     expect((await call(deployToken, 'POST', '/pi/warm')).statusCode).toBe(403);
   });

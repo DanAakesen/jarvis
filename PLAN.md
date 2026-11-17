@@ -1,3 +1,13 @@
+## PI smoke in three requests (#1910, P15-209)
+
+**Status: built; backend and workflow-script tests pass locally. Not yet confirmed by a `measure_pi` Deploy.** The Azure fix (P15-208) worked inside the smoke (the Azure read ran and completed in 7.3 s), but `measure_pi` still failed with HTTP 504: the whole smoke takes about four minutes and the ingress ends one request at 240 s.
+
+| Step | State |
+| --- | --- |
+| `POST /pi/smoke` takes `{ part: core | voice | reach }`; the checks are unchanged and each part reports its own | Done |
+| The workflow script calls the three parts one after another and merges them into the same summary | Done |
+| Confirm with a `measure_pi` Deploy | **Open** |
+
 ## Azure MCP cold start (#1910, P15-208)
 
 **Status: built; backend (tests, typecheck, lint) and workflow scripts pass locally. Not yet confirmed by a `measure_pi` Deploy.** From two failed `measure_pi` runs on main (the Azure listing failed, then the smoke hit the ingress's 240 s limit) and the owner's "Jarvis is still not able to reach Azure".
