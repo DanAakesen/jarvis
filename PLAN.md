@@ -5257,6 +5257,10 @@ Implemented the approved focused view on top of the adaptive composer (stacked o
 
 Implemented the owner-approved handover: one Chat row, bottom-right menu button, a single conversation scroll behind the system navigation bar, and a ready/reading composer with shared Watch glass components. Next: read the watch job's `menu.png`, `chat-ready.png` and `chat-reading.png`, then a paired Watch pass for large text, smallest case, VoiceOver, Crown scrolling, Reduce Motion/Transparency and the reading-mode threshold.
 
+## Watch microphone hears nothing — 17 November 2026 (P15-202 / #1943)
+
+Owner report on build 112: live voice no longer fails but cannot hear him, and dictation ends in "transcription timed out". Backend logs for two 10 s dictation attempts (14:49Z) show the clip arrived intact (489,082 bytes, 10,189 ms) and the speech token was acquired, but the Speech recognizer never started and nothing was logged until the Watch gave up, so dictation is a backend Speech-connection problem, not a capture failure. The Watch transcriber now uses the language identification that the live partial recognizer proved on this endpoint (L111) instead of a fixed `en-GB`, bounds the recognizer start to 6 s and logs where it stops; the Watch's direct window and overall wait grow with the clip; capture is measured so silent audio is reported instead of uploaded. Live voice: the logs show no Watch voice socket at all, which is not explained yet. Next: deploy, test a 10 s dictation on the Watch and read the `watch_transcription.stage` rows (`service_connected`, `recognizer_started`, `recognizer_start_timeout`); trace a Watch live-voice start on a paired phone.
+
 ## Notes swipe and deletion — 13 November 2026 (#1819)
 
 Implemented version-checked owner deletion, shared row swipe thresholds, editor
