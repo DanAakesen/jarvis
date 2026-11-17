@@ -334,4 +334,54 @@ final class JarvisGraph3DTests: XCTestCase {
         XCTAssertEqual(JarvisGraphTaskSummary(openTaskCount: 0), .none)
         XCTAssertEqual(JarvisGraphTaskSummary(openTaskCount: nil), .unavailable)
     }
+
+    // MARK: Link lines and the selection pill
+
+    func testLinksAreClearButNeverOutshineTheNotes() {
+        func opacity(_ kind: KnowledgeGraphEdge.Kind, _ fade: Double = 1, focused: Bool = false, emphasised: Bool = false) -> Double {
+            JarvisGraphLinkStyle.opacity(kind: kind, endpointOpacity: fade, isFocused: focused, isEmphasised: emphasised)
+        }
+        // Clearer than the 0.30 of build 112, and still well under a note's full strength.
+        XCTAssertGreaterThan(opacity(.link), 0.30 * 1.5)
+        XCTAssertLessThan(opacity(.link), 0.6)
+        XCTAssertGreaterThan(opacity(.link), opacity(.similar))
+        XCTAssertGreaterThan(opacity(.link), opacity(.link, JarvisGraphProjector.farOpacity))
+        XCTAssertEqual(opacity(.link, focused: true, emphasised: true), JarvisGraphLinkStyle.ceiling)
+        XCTAssertLessThan(opacity(.link, focused: true), opacity(.link) / 2)
+        XCTAssertEqual(opacity(.link, 4), opacity(.link, 1))
+        XCTAssertGreaterThan(JarvisGraphLinkStyle.emphasisedWidth, JarvisGraphLinkStyle.linkWidth)
+        XCTAssertGreaterThan(JarvisGraphLinkStyle.linkWidth, JarvisGraphLinkStyle.similarWidth)
+    }
+
+    func testPillWrapsAtTheSceneWidthAndSitsAboveTheNote() {
+        XCTAssertEqual(JarvisGraphPillPlacement.maximumWidth(sceneWidth: 390), JarvisGraphPillPlacement.widestPill)
+        XCTAssertEqual(JarvisGraphPillPlacement.maximumWidth(sceneWidth: 200), 188)
+        XCTAssertEqual(JarvisGraphPillPlacement.maximumWidth(sceneWidth: 4), 0)
+
+        let centred = JarvisGraphPillPlacement.origin(
+            noteX: 195, noteY: 300, noteRadius: 6, pillWidth: 120, pillHeight: 44, sceneWidth: 390, sceneHeight: 520
+        )
+        XCTAssertEqual(centred.x, 135, accuracy: 0.001)
+        XCTAssertLessThan(centred.y + 44, 300 - 6 * 1.25, "A taller pill grows upwards and keeps clear of the note")
+        let taller = JarvisGraphPillPlacement.origin(
+            noteX: 195, noteY: 300, noteRadius: 6, pillWidth: 120, pillHeight: 26, sceneWidth: 390, sceneHeight: 520
+        )
+        XCTAssertEqual(taller.y + 26, centred.y + 44, accuracy: 0.001)
+    }
+
+    func testPillStaysInsideTheSceneAndDropsBelowAtTheTop() {
+        let left = JarvisGraphPillPlacement.origin(
+            noteX: 4, noteY: 300, noteRadius: 6, pillWidth: 280, pillHeight: 44, sceneWidth: 390, sceneHeight: 520
+        )
+        XCTAssertEqual(left.x, JarvisGraphPillPlacement.edgeMargin)
+        let right = JarvisGraphPillPlacement.origin(
+            noteX: 390, noteY: 300, noteRadius: 6, pillWidth: 280, pillHeight: 44, sceneWidth: 390, sceneHeight: 520
+        )
+        XCTAssertEqual(right.x, 390 - 280 - JarvisGraphPillPlacement.edgeMargin)
+
+        let top = JarvisGraphPillPlacement.origin(
+            noteX: 195, noteY: 30, noteRadius: 6, pillWidth: 200, pillHeight: 44, sceneWidth: 390, sceneHeight: 520
+        )
+        XCTAssertGreaterThan(top.y, 30, "No room above, so the pill sits under the note instead of covering it")
+    }
 }
