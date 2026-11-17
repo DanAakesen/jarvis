@@ -39,7 +39,7 @@ jobs:
       - name: Capture isolated Watch previews
         # Screenshots are evidence, not a gate: a flaky simulator launch must not turn the build red.
         continue-on-error: true
-        timeout-minutes: 5
+        timeout-minutes: 12
         run: |
           set -euo pipefail
           WATCH_ID="$(xcrun simctl list devices available --json | jq -r '[.devices[][] | select(.name | contains("Apple Watch")) | select(.name | contains("Ultra"))][0].udid // empty')"
