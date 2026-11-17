@@ -323,7 +323,8 @@ final class WatchModel: ObservableObject {
         let epoch = dictationGeneration
         dictationState = .finishing
         dictationTimeout?.cancel(); dictationTimeout = nil
-        transcriptionDeadline.start { [weak self] in
+        let clipSeconds = WatchDictationDeadline.clipSeconds(bytes: dictationAudio.count)
+        transcriptionDeadline.start(duration: WatchDictationDeadline.duration(clipSeconds: clipSeconds)) { [weak self] in
             guard let self, self.dictationGeneration == epoch, self.dictationState == .finishing else { return }
             self.cancelDictation()
             self.error = WatchDictationError.timedOut.message
@@ -351,6 +352,7 @@ final class WatchModel: ObservableObject {
     }
     private func transcribeDictation(_ recording: Data, epoch: UUID) async throws -> String {
         guard !recording.isEmpty else { throw WatchFailure.failed }
+        let clipSeconds = WatchDictationDeadline.clipSeconds(bytes: recording.count)
         let direct: (@MainActor () async throws -> String)?
         do {
             if connection.credentialStorageFailed { throw WatchFailure.credentialStorage }
@@ -361,8 +363,7 @@ final class WatchModel: ObservableObject {
         // A slow direct request leaves the phone most of the overall deadline; without a reachable phone it keeps the full window.
         return try await WatchDictationRouting.transcribe(direct: direct, phone: {
             try await self.transcribeViaPhone(recording, epoch: epoch)
-        }, directWindow: connection.reachable
-            ? WatchDictationDeadline.directWithPhoneFallbackDuration : WatchDictationDeadline.directDuration)
+        }, directWindow: WatchDictationDeadline.directWindow(clipSeconds: clipSeconds, phoneFallback: connection.reachable))
     }
     private func transcribeViaPhone(_ recording: Data, epoch: UUID) async throws -> String {
         try Task.checkCancellation()
