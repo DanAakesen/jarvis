@@ -19,18 +19,24 @@ struct WatchChatView: View {
 
     /// Drafting, dictation and voice keep their controls on screen; only an idle composer may shrink.
     private var composerBusy: Bool {
-        !model.draft.isEmpty || model.voiceID != nil || model.startingVoice || model.dictationState != .idle
+        !model.draft.isEmpty || model.startingVoice || model.dictationState != .idle
     }
     private var expanded: Bool { composerOpen || composerBusy }
-    private var hasStatusRow: Bool { model.startingVoice || model.dictationState != .idle || model.voiceID != nil }
+    private var hasStatusRow: Bool { model.startingVoice || model.dictationState != .idle }
     private var composerDisabled: Bool {
         model.busy || model.startingVoice || model.voiceID != nil || model.dictationState != .idle
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            conversation
-            composerLayer
+        Group {
+            if model.voiceID != nil {
+                WatchVoiceView()
+            } else {
+                ZStack(alignment: .bottom) {
+                    conversation
+                    composerLayer
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("").navigationBarTitleDisplayMode(.inline)
@@ -219,18 +225,6 @@ struct WatchChatView: View {
                         .accessibilityLabel("Cancel dictation")
                 }
             }.font(.caption2).buttonStyle(.plain)
-        }
-        if model.voiceID != nil {
-            HStack {
-                WatchOrb(activity: JarvisOrbActivity(watchVoiceStatus: model.voiceState, isMuted: model.muted), isAnimated: true)
-                    .frame(width: 30, height: 30)
-                Text(model.voiceState).font(.caption2)
-                Spacer()
-                Button { Task { await model.setMuted() } } label: {
-                    Image(systemName: model.muted ? "mic.slash" : "mic").frame(width: 30, height: 32)
-                }.accessibilityLabel(model.muted ? "Unmute" : "Mute")
-                Button("End") { Task { await model.endVoice() } }.foregroundStyle(.red).frame(minHeight: 32)
-            }.buttonStyle(.plain)
         }
     }
 }

@@ -13335,6 +13335,10 @@ Use bounded, sequenced 250 ms Watch microphone packets instead of stop-and-wait.
 
 Direct Watch voice is a practical follow-up using the portable voice client and audio engine, but requires a separate voice-scoped WebSocket credential, session and budget limits, expiry handling and device/network/power qualification. The existing dictation-only credential must not be widened.
 
+## 17 November 2026 — Watch focused voice view reuses the session state (P15-204 / #1945)
+
+Decisions: the view is a presentation of the existing session (`voiceID`, `voiceState`, `muted`); no voice ownership, networking or teardown changed. Muted overrides the label, with the underlying state kept in the accessibility value, because Jarvis can speak while the microphone is muted. The transcript is the latest real message (nothing is invented when there is none). Back is unchanged and keeps the session; to avoid an invisible microphone the menu's Chat row reads Resume voice while a session is live. End uses the existing `endVoice` teardown and Chat returns with history and draft intact. The voice status row of the composer is removed. Open: not verified on a Watch; session events (Thinking, Reconnecting, failed) are shown as the model reports them.
+
 ## 17 November 2026 — Watch Chat adaptive composer is built on the native navigation bar (P15-203 / #1942)
 
 The owner un-parked the Watch for the approved adaptive composer. Decisions:
