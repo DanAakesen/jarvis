@@ -1,6 +1,6 @@
 ## Voice panel header and orb motion (17 November 2026, #1939, P15-205; from owner feedback on build 112)
 
-The panel has a header row of its own that the content never uses: close and, when the content needs room, expand at the top left (both `JarvisIconButton`), then one title, which comes from the content. The content scrolls below the row. Nothing is shown when a voice session starts; the panel appears only for what Jarvis presents during the session.
+The panel has a header row of its own that the content never uses: close and, when the content needs room, expand at the top left (both `JarvisIconButton`), then one title, which comes from the content. The content scrolls below the row. Nothing is shown when a new voice session starts; the panel appears only for what Jarvis presents during the session (content presented while it was minimised carries over).
 
 The orb steps back when content arrives and returns when it goes, with one eased spring (`JarvisDesignTokens.voicePanelMotion`, smooth, 0.55 s) in both directions and for expanding and collapsing. It is not linear, it keeps its velocity when interrupted by a new arrival or a close, and Reduce Motion removes it. Code views show line numbers with matched lines marked by a bold chevron and a faint surface; a knowledge-graph view is one line of search, one line of count and an Open Notes button. Chat blocks: the ellipsis opens View data and Copy data on a forecast or chart and Copy data on other blocks; an open data table stays open while scrolling. Not yet seen on a device.
 

@@ -1,7 +1,7 @@
 ## Voice visuals and the phone as the active device (17 November 2026, P15-205, #1939)
 
 - Showing in voice: a spoken PI turn gets a per-turn note (`voiceChannelNote`) that the phone shows what Jarvis puts on screen; PI reaches `workspace_command` through the door (`find_tools`, `call_tool`) and creates a view. `show_in_chat` checks the session channel (`conversationStore.getSession`) and refuses any session but a typed chat one.
-- `WorkspaceRuntime.reportActive()` posts the phone's snapshot when Voice opens or starts, so `target: active` (the latest reporter) is the phone. `ContentView.prepareNavigation` and `VoiceScreenView` also drop `presentedView` on entry.
+- `WorkspaceRuntime.reportActive()` posts the phone's snapshot when Voice opens or starts, so `target: active` (the latest reporter) is the phone. `VoiceScreenView` drops `presentedView` when a new session starts; content presented while a session was minimised carries over.
 - Navigation requests are typed (`WorkspaceNavigation`: a destination, the Notes graph, or a Factory task) and applied by `ContentView`; `GeneratedViewRoute` (JarvisCore) parses the contract's `open-route` values. The command interpreter maps place, move, resize and arrange to focus and minimise-all, close-all and restore-all to hide, forget and restore (`WorkspaceCommandIntent.dismissAll`, `.restoreLast`).
 - The iPhone has no path to the web app: `JARVIS_WEB_APP_URL`, `WorkspaceRuntime.webAppURL` and the unsupported-card link are removed. Knowledge-graph and code views have native renderers in `GeneratedWorkspaceView.swift`.
 - Chat block data tables: open state is `JarvisChatModel.expandedBlockDataIDs`.

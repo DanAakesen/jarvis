@@ -474,8 +474,8 @@ struct ContentView: View {
     private func prepareNavigation(to destination: JarvisDestination, from previous: JarvisDestination) {
         if previous == .notes && destination != .notes { notesSelectedTab = .notes }
         if destination == .voice {
-            // The panel shows what Jarvis presents during a voice session, never what was open before it started.
-            workspaceRuntime.userDismissedView()
+            // Content Jarvis presented while a session was minimised carries over into the panel; a new session
+            // drops stale content when it starts (VoiceScreenView).
             workspaceRuntime.reportActive()
             voiceModel.restore()
         } else if previous == .voice {

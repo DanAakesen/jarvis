@@ -62,8 +62,6 @@
 "workspace.htmlApp" = "HTML app";
 "workspace.htmlAppLoading" = "Loading HTML app";
 "workspace.htmlAppLoadFailed" = "The HTML app could not be loaded.";
-"workspace.knowledgeGraph" = "Knowledge graph";
-"workspace.codeView" = "Code view";
 "workspace.generatedView" = "Generated view";
 "workspace.unsupportedVersion" = "Unsupported version";
 "workspace.unsupportedView" = "Unsupported view";
@@ -87,7 +85,6 @@
 "workspace.knowledgeGraph.query" = "Search: %@";
 "workspace.knowledgeGraph.count" = "Notes found: %d";
 "workspace.openNotes" = "Open Notes";
-"workspace.unsupportedOnPhone" = "%@, %@, unsupported on iPhone";
 "workspace.actionUnavailable" = "Action unavailable";
 "workspace.actionUnavailableOnPhone" = "%@ unavailable on iPhone";
 "workspace.openUsage" = "Open Usage";
