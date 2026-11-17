@@ -1,10 +1,13 @@
 import Foundation
 
 public enum WorkspaceCommandIntent: Equatable, Sendable {
-    case navigate(page: String)
+    case navigate(page: String, taskId: String?)
     case present(viewId: String, view: GeneratedView)
     case focus(viewId: String)
     case dismiss(viewId: String)
+    /// Hides what is on screen; `forget` also drops the views so they cannot be shown again.
+    case dismissAll(forget: Bool)
+    case restoreLast
 }
 
 public enum WorkspaceCommandInterpretation: Equatable, Sendable {
@@ -29,7 +32,12 @@ public enum WorkspaceCommandInterpreter {
             guard case .string(let page)? = command.fields["page"], navigationPages.contains(page) else {
                 return .refused(reason: JarvisWorkspaceLocalization.string(.unsupportedDestination, language: language))
             }
-            return .supported(.navigate(page: page))
+            var taskId: String?
+            if page == "factory", case .string(let value)? = command.fields["taskId"],
+               value.range(of: #"^[1-9][0-9]{0,18}$"#, options: .regularExpression) != nil {
+                taskId = value
+            }
+            return .supported(.navigate(page: page, taskId: taskId))
         case "create", "update":
             guard case .string(let viewId)? = command.fields["viewId"], validViewID(viewId),
                   let value = command.fields["view"] else {
@@ -45,18 +53,32 @@ public enum WorkspaceCommandInterpreter {
             } catch {
                 return .error(reason: JarvisWorkspaceLocalization.string(.validationFailed, language: language))
             }
-        case "show", "focus", "restore":
+        // A phone shows one view at a time, so naming a view, placing, moving or resizing it all bring it forward.
+        case "show", "focus", "restore", "place", "move", "resize":
             guard case .string(let viewId)? = command.fields["viewId"], validViewID(viewId) else {
                 return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
             }
             return .supported(.focus(viewId: viewId))
+        case "arrange":
+            guard case .array(let items)? = command.fields["viewIds"],
+                  let viewId = items.compactMap({ item -> String? in
+                      if case .string(let value) = item, validViewID(value) { return value }
+                      return nil
+                  }).first else {
+                return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
+            }
+            return .supported(.focus(viewId: viewId))
+        case "minimise-all":
+            return .supported(.dismissAll(forget: false))
+        case "close-all":
+            return .supported(.dismissAll(forget: true))
+        case "restore-all":
+            return .supported(.restoreLast)
         case "close", "minimise":
             guard case .string(let viewId)? = command.fields["viewId"], validViewID(viewId) else {
                 return .refused(reason: JarvisWorkspaceLocalization.string(.viewUnavailable, language: language))
             }
             return .supported(.dismiss(viewId: viewId))
-        case "move", "resize":
-            return .refused(reason: JarvisWorkspaceLocalization.string(.positioningUnsupported, language: language))
         default:
             return .refused(reason: JarvisWorkspaceLocalization.string(.operationUnsupported, language: language))
         }

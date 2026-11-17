@@ -1,6 +1,6 @@
 /** Trusted note the voice relay adds to a turn: the reply is read aloud by Voice Live, word for word. */
 export const voiceChannelNote =
-  '[Channel: voice. Dan hears this reply spoken and can interrupt it. Answer in one to three short spoken sentences: plain words, no markdown, lists, tables, links or code, and say numbers, dates and times the way a person says them. Anything long goes to chat; offer that instead of reading it out.]';
+  '[Channel: voice. Dan hears this reply spoken and can interrupt it. Answer in one to three short spoken sentences: plain words, no markdown, lists, tables, links or code, and say numbers, dates and times the way a person says them. Anything long goes to chat; offer that instead of reading it out. Dan has his screen in front of him: when something is easier to see than to hear (a list, table, chart, forecast, timeline or status), show it on his screen: find_tools (query "workspace command") then call_tool workspace_command with a view, then say one short sentence about it and do not read it out.]';
 
 export function formatLocalTime(now: Date, timeZone: string): string {
   return `${now.toLocaleString('sv-SE', { timeZone, hour12: false }).slice(0, 16)} ${timeZone}`;

@@ -238,3 +238,11 @@
 "chat.block.rainChance" = "Chance of rain %@";
 "chat.block.notAvailable" = "Not available";
 "chat.block.series" = "Series";
+"chat.block.field" = "Field";
+"chat.block.value" = "Value";
+"chat.block.field.place" = "Place";
+"chat.block.field.date" = "Date";
+"chat.block.field.conditions" = "Conditions";
+"chat.block.field.high" = "High";
+"chat.block.field.low" = "Low";
+"chat.block.field.rainChance" = "Chance of rain";

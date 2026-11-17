@@ -21,11 +21,11 @@ const forecastInput = {
   data: { place: 'Copenhagen', date: '2026-11-20', conditions: 'Mostly cloudy', symbol: 'cloudy' as const, highC: 9, lowC: 5 },
 };
 
-function setup(agentTurn: (app: ReturnType<typeof buildApp>) => AsyncGenerator<string>) {
+function setup(agentTurn: (app: ReturnType<typeof buildApp>) => AsyncGenerator<string>, channel: 'chat' | 'voice' = 'chat') {
   const messages: (ConversationMessage & { blocks?: unknown })[] = [];
   const running: { app?: ReturnType<typeof buildApp> } = {};
   const store = {
-    getSession: async (id: string) => ({ id, channel: 'chat', language: 'en', startedAt: new Date(), endedAt: null }),
+    getSession: async (id: string) => ({ id, channel, language: 'en', startedAt: new Date(), endedAt: null }),
     getMessageSessionId: async () => '7',
     addMessage: async (input: { sessionId: string; role: 'dan' | 'jarvis'; text: string; model: string | null; blocks?: unknown }) => {
       const message = {
@@ -102,8 +102,14 @@ describe('show_in_chat', () => {
     const signal = new AbortController().signal;
     const bad = { ...forecastInput, data: { ...forecastInput.data, lowC: 30 } };
     await expect(showInChatTool.execute(bad, toolRequest(app, { 'x-jarvis-message-id': '1' }), signal)).rejects.toBeInstanceOf(ToolRefusal);
-    await expect(showInChatTool.execute(forecastInput, toolRequest(app, { 'x-jarvis-voice-item-id': 'item_1' }), signal)).rejects.toThrow(/voice/u);
     await expect(showInChatTool.execute(forecastInput, toolRequest(app, {}), signal)).rejects.toThrow(/no chat reply/u);
+    expect(app.chatBlocks.take('7')).toEqual([]);
+  });
+
+  it('refuses a spoken turn, which has no typed reply to hold a block, and points to the screen', async () => {
+    const { app } = setup(async function* () { yield 'unused'; }, 'voice');
+    await expect(showInChatTool.execute(forecastInput, toolRequest(app, { 'x-jarvis-message-id': '1' }), new AbortController().signal))
+      .rejects.toThrow(/workspace_command/u);
     expect(app.chatBlocks.take('7')).toEqual([]);
   });
 });

@@ -498,7 +498,17 @@ struct JarvisChatScreen: View {
             if !row.message.blocks.isEmpty {
                 VStack(alignment: .leading, spacing: JarvisDesignTokens.chatMessageSpacing) {
                     ForEach(row.message.blocks) { block in
-                        JarvisChatBlockView(block: block, language: appLanguage)
+                        JarvisChatBlockView(
+                            block: block,
+                            language: appLanguage,
+                            showsData: Binding(
+                                get: { model.expandedBlockDataIDs.contains(block.id) },
+                                set: { isOpen in
+                                    if isOpen { model.expandedBlockDataIDs.insert(block.id) }
+                                    else { model.expandedBlockDataIDs.remove(block.id) }
+                                }
+                            )
+                        )
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

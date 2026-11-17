@@ -41,7 +41,7 @@ struct ContentView: View {
     /// `onColdStartData` is passed only on a cold start: Home then loads fresh data once and reports when it has
     /// settled, so the opening screen can end. It is never called by a timer.
     init(
-        client: JarvisClient? = nil, webAppURL: URL? = nil, sessionEpoch: Int = 0,
+        client: JarvisClient? = nil, sessionEpoch: Int = 0,
         onColdStartData: (@MainActor () -> Void)? = nil
     ) {
         self.sessionEpoch = sessionEpoch
@@ -115,10 +115,7 @@ struct ContentView: View {
         chatClient = resolvedClient
         startupError = resolvedStartupError
         _workspaceRuntime = StateObject(
-            wrappedValue: WorkspaceRuntime(
-                client: resolvedClient,
-                webAppURL: webAppURL ?? JarvisComposition.makeWebAppURL()
-            )
+            wrappedValue: WorkspaceRuntime(client: resolvedClient)
         )
         let todayNotesClient = Self.makeNotesClient(fixtureMode: fixtureMode)
         _notesClient = State(initialValue: todayNotesClient)
@@ -235,12 +232,17 @@ struct ContentView: View {
                 .onChange(of: voiceModel.returnToChatRequested, initial: true) { _, _ in
                     returnToChatAfterVoiceIfNeeded()
                 }
-                .onChange(of: workspaceRuntime.requestedDestination) { _, destination in
-                    guard destination != nil,
-                          let destination = workspaceRuntime.consumeRequestedDestination() else {
-                        return
+                .onChange(of: workspaceRuntime.requestedNavigation) { _, request in
+                    guard request != nil, let request = workspaceRuntime.consumeRequestedNavigation() else { return }
+                    switch request {
+                    case .destination(let destination):
+                        navigate(to: destination)
+                    case .notesGraph:
+                        notesSelectedTab = .graph
+                        navigate(to: .notes)
+                    case .factoryTask(let id):
+                        navigation.openFactoryTask(id)
                     }
-                    navigate(to: destination)
                 }
                 .sheet(
                     item: Binding(
@@ -472,6 +474,9 @@ struct ContentView: View {
     private func prepareNavigation(to destination: JarvisDestination, from previous: JarvisDestination) {
         if previous == .notes && destination != .notes { notesSelectedTab = .notes }
         if destination == .voice {
+            // The panel shows what Jarvis presents during a voice session, never what was open before it started.
+            workspaceRuntime.userDismissedView()
+            workspaceRuntime.reportActive()
             voiceModel.restore()
         } else if previous == .voice {
             // The panel belongs to the Voice page; leaving it must not turn the content into a sheet.

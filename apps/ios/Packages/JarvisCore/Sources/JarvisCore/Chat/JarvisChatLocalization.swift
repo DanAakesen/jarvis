@@ -231,6 +231,14 @@ public enum JarvisChatLocalizationKey: String, CaseIterable, Sendable {
     case blockRainChance = "chat.block.rainChance"
     case blockNotAvailable = "chat.block.notAvailable"
     case blockSeries = "chat.block.series"
+    case blockFieldHeader = "chat.block.field"
+    case blockValueHeader = "chat.block.value"
+    case blockFieldPlace = "chat.block.field.place"
+    case blockFieldDate = "chat.block.field.date"
+    case blockFieldConditions = "chat.block.field.conditions"
+    case blockFieldHigh = "chat.block.field.high"
+    case blockFieldLow = "chat.block.field.low"
+    case blockFieldRainChance = "chat.block.field.rainChance"
 }
 
 public enum JarvisChatLocalization {
