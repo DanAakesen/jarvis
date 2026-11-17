@@ -143,9 +143,37 @@ struct JarvisNotesGraphView: View {
                 mode: activeMode
             )
             let style = style(for: prepared)
-            Canvas { context, canvasSize in
-                JarvisGraphPainter.paint(&context, size: canvasSize, frame: frame, style: style)
+            ZStack {
+                Canvas { context, canvasSize in
+                    JarvisGraphPainter.paint(&context, size: canvasSize, frame: frame, style: style)
+                }
+                selectionPill(frame: frame, style: style)
             }
+        }
+    }
+
+    /// The selected note's name follows the note. Real text, not canvas text, so a long title wraps to two lines and the
+    /// pill grows with it.
+    @ViewBuilder
+    private func selectionPill(frame: JarvisGraphFrame, style: JarvisGraphStyle) -> some View {
+        if let selected = frame.selected, let title = style.selectedTitle, frame.projected.indices.contains(selected) {
+            let note = frame.projected[selected]
+            JarvisGraphPillLayout(noteX: note.x, noteY: note.y, noteRadius: note.radius) {
+                Text(verbatim: title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(style.accent)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .padding(.horizontal, JarvisDesignTokens.notesSectionSpacing)
+                    .padding(.vertical, JarvisDesignTokens.notesChipSpacing - 2)
+                    .background(RoundedRectangle(cornerRadius: JarvisGraphPillMetrics.cornerRadius).fill(Color.black.opacity(0.55)))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: JarvisGraphPillMetrics.cornerRadius)
+                            .strokeBorder(style.accent.opacity(0.6), lineWidth: 1)
+                    )
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
     }
 
@@ -319,7 +347,8 @@ struct JarvisNotesGraphView: View {
                     .foregroundStyle(JarvisDesignTokens.primaryAccent)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: JarvisPageHeaderMetrics.rowLineSpacing) {
-                    Text(node.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(1)
+                    Text(node.title).font(.subheadline.weight(.semibold)).foregroundStyle(.primary).lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(location.isEmpty ? copy.vaultRoot : location).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: JarvisDesignTokens.notesInlineSpacing)
@@ -345,5 +374,37 @@ struct JarvisNotesGraphView: View {
             }
             Text(copy.graphTasks(summary)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
+    }
+}
+
+private enum JarvisGraphPillMetrics {
+    /// A one-line pill is a capsule; two lines keep the same corner so the border hugs the text.
+    static let cornerRadius: CGFloat = 14
+}
+
+/// Places the selection pill over the scene: wraps its text at the widest allowed width, then lets
+/// `JarvisGraphPillPlacement` keep it above the note and inside the scene.
+private struct JarvisGraphPillLayout: Layout {
+    let noteX: Double
+    let noteY: Double
+    let noteRadius: Double
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let pill = subviews.first else { return }
+        let widest = JarvisGraphPillPlacement.maximumWidth(sceneWidth: Double(bounds.width))
+        let size = pill.sizeThatFits(ProposedViewSize(width: widest, height: nil))
+        let origin = JarvisGraphPillPlacement.origin(
+            noteX: noteX, noteY: noteY, noteRadius: noteRadius,
+            pillWidth: Double(size.width), pillHeight: Double(size.height),
+            sceneWidth: Double(bounds.width), sceneHeight: Double(bounds.height)
+        )
+        pill.place(
+            at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y), anchor: .topLeading,
+            proposal: ProposedViewSize(width: size.width, height: size.height)
+        )
     }
 }
